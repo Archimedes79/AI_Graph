@@ -86,9 +86,35 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   };
 
   const nt = node.node_type;
-  const isInput = ['text_input', 'file_input', 'image_input', 'directory_input'].includes(nt);
+  const isInput = ['text_input', 'file_input', 'directory_input'].includes(nt);
   const isAI = nt === 'ai';
   const isCode = nt === 'code';
+
+  const handleGenerateSelectorCode = async () => {
+    if (!node.description) {
+      setGenMessage('Please describe which files to select first.');
+      return;
+    }
+    setGenerating(true);
+    setGenMessage('Generating file selector…');
+    try {
+      const result = await generateCode({
+        description: node.description,
+        language: 'python',
+        context: '`inputs["files"]` is the full list of file paths found in the directory.',
+        inputs: ['files'],
+        outputs: ['files'],
+        ai_model: node.config.ai_model,
+        ai_provider: node.config.ai_provider,
+      });
+      setConfig('selector_code', result.code);
+      setGenMessage('✅ Selector generated!');
+    } catch (e: any) {
+      setGenMessage(`❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error'}`);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   return (
     <div
@@ -157,15 +183,20 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
               {isInput && (
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                    {nt === 'text_input' ? 'Text Value' : 'File / Directory Path'}
+                    {nt === 'text_input' ? 'Default Text (shown in the run dialog)' : 'Default Path (shown in the run dialog)'}
                   </label>
                   <input
                     className="w-full rounded-lg px-3 py-2 text-sm"
                     style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
                     value={node.config.value ?? ''}
                     onChange={(e) => setConfig('value', e.target.value)}
-                    placeholder={nt === 'text_input' ? 'Enter text…' : '/path/to/file'}
+                    placeholder={nt === 'text_input' ? 'Enter default text…' : '/path/to/file'}
                   />
+                  <p className="text-xs mt-2" style={{ color: '#475569' }}>
+                    Whenever the graph runs, a dialog asks the user for this value
+                    (pre-filled with the default above) — in the editor, the CLI, and
+                    deployed runs.
+                  </p>
                   {nt === 'directory_input' && (
                     <label className="flex items-center gap-2 mt-2 text-sm" style={{ color: '#94a3b8' }}>
                       <input
@@ -177,6 +208,43 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                       />
                       Recursive
                     </label>
+                  )}
+
+                  {nt === 'directory_input' && (
+                    <div className="mt-4 pt-4" style={{ borderTop: '1px solid #2d3148' }}>
+                      <label className="flex items-center gap-2 text-sm mb-2" style={{ color: '#94a3b8' }}>
+                        <input
+                          type="checkbox"
+                          checked={node.config.select_all_files}
+                          onChange={(e) => setConfig('select_all_files', e.target.checked)}
+                        />
+                        Select all files
+                      </label>
+                      {!node.config.select_all_files && (
+                        <>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
+                              File Selector Code — run(inputs) receives {'{'}"files"{'}'} and must return {'{'}"files"{'}'}
+                            </label>
+                            <button
+                              onClick={handleGenerateSelectorCode}
+                              disabled={generating}
+                              className="text-xs px-2 py-1 rounded"
+                              style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
+                            >
+                              {generating ? '…' : '✨ Generate'}
+                            </button>
+                          </div>
+                          <textarea
+                            className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
+                            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 140 }}
+                            value={node.config.selector_code}
+                            onChange={(e) => setConfig('selector_code', e.target.value)}
+                            spellCheck={false}
+                          />
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -196,6 +264,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                         onChange={(e) => setConfig('ai_provider', e.target.value as AIProvider)}
                       >
                         <option value="ollama">Ollama (local)</option>
+                        <option value="lmstudio">LM Studio (local)</option>
                         <option value="openai">OpenAI</option>
                         <option value="anthropic">Anthropic</option>
                       </select>
@@ -276,6 +345,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                         onChange={(e) => setConfig('ai_provider', e.target.value)}
                       >
                         <option value="ollama">Ollama</option>
+                        <option value="lmstudio">LM Studio</option>
                         <option value="openai">OpenAI</option>
                         <option value="anthropic">Anthropic</option>
                       </select>
@@ -319,6 +389,66 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                     value={node.config.output_label}
                     onChange={(e) => setConfig('output_label', e.target.value)}
                   />
+
+                  <div className="mt-4 pt-4" style={{ borderTop: '1px solid #2d3148' }}>
+                    <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                      Write result to disk
+                    </label>
+                    <select
+                      className="w-full rounded-lg px-3 py-2 text-sm"
+                      style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                      value={node.config.write_mode}
+                      onChange={(e) => setConfig('write_mode', e.target.value)}
+                    >
+                      <option value="none">Don't write to disk (show in Results panel only)</option>
+                      <option value="file">Write to a single file</option>
+                      <option value="directory">Write to a directory (one file per value)</option>
+                    </select>
+
+                    {node.config.write_mode !== 'none' && (
+                      <>
+                        <label className="block text-xs font-medium mb-1 mt-3" style={{ color: '#94a3b8' }}>
+                          {node.config.write_mode === 'file' ? 'Output file path' : 'Output directory path'}
+                        </label>
+                        <input
+                          className="w-full rounded-lg px-3 py-2 text-sm"
+                          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                          value={node.config.value ?? ''}
+                          onChange={(e) => setConfig('value', e.target.value)}
+                          placeholder={node.config.write_mode === 'file' ? '/path/to/output.txt' : '/path/to/output-dir'}
+                          disabled={node.config.prompt_at_runtime}
+                        />
+                        <label className="flex items-center gap-2 mt-2 text-sm" style={{ color: '#94a3b8' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!node.config.prompt_at_runtime}
+                            onChange={(e) => setConfig('prompt_at_runtime', e.target.checked)}
+                          />
+                          Ask for path when running (web, CLI, and deployed runs)
+                        </label>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Text Output node */}
+              {nt === 'text_output' && (
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                    Window Title
+                  </label>
+                  <input
+                    className="w-full rounded-lg px-3 py-2 text-sm"
+                    style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                    value={node.config.output_label}
+                    onChange={(e) => setConfig('output_label', e.target.value)}
+                  />
+                  <p className="text-xs mt-2" style={{ color: '#475569' }}>
+                    When the graph runs, the connected value is shown to the user in its own text
+                    window (in the editor, printed to the console for CLI runs, and for deployed
+                    runs).
+                  </p>
                 </div>
               )}
 

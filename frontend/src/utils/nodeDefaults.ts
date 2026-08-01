@@ -2,6 +2,9 @@ import type { GraphNode, NodeType, NodeConfig } from '../types/graph';
 
 const defaultConfig = (): NodeConfig => ({
   value: '',
+  prompt_at_runtime: false,
+  select_all_files: true,
+  selector_code: 'def run(inputs):\n    # inputs["files"] is the full list of file paths in the directory\n    return {"files": inputs.get("files", [])}\n',
   ai_provider: 'ollama',
   ai_model: 'llama3',
   system_prompt: '',
@@ -9,6 +12,7 @@ const defaultConfig = (): NodeConfig => ({
   language: 'python',
   code: '',
   output_label: 'Result',
+  write_mode: 'none',
   separator: '\n',
   extra: {},
 });
@@ -40,22 +44,6 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
         outputs: [
           { id: 'content', name: 'Content', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
           { id: 'path', name: 'Path', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
-        ],
-        config: cfg,
-      };
-
-    case 'image_input':
-      return {
-        id,
-        node_type: 'image_input',
-        label: 'Image Input',
-        description: 'Load an image as base64',
-        position: { x: 0, y: 0 },
-        inputs: [{ id: 'path', name: 'Path', kind: 'input', data_type: 'text', multi: false, required: false, description: '' }],
-        outputs: [
-          { id: 'base64', name: 'Base64', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
-          { id: 'mime_type', name: 'MIME Type', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
-          { id: 'name', name: 'Name', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
         ],
         config: cfg,
       };
@@ -114,6 +102,18 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
         config: { ...cfg, output_label: 'Result' },
       };
 
+    case 'text_output':
+      return {
+        id,
+        node_type: 'text_output',
+        label: 'Text Output',
+        description: 'Show text to the user in a text window when the graph runs',
+        position: { x: 0, y: 0 },
+        inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+        outputs: [],
+        config: { ...cfg, output_label: 'Text Output' },
+      };
+
     case 'merge':
       return {
         id,
@@ -158,11 +158,11 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
 export const NODE_TYPE_LABELS: Record<NodeType, string> = {
   text_input: 'Text Input',
   file_input: 'File Input',
-  image_input: 'Image Input',
   directory_input: 'Directory',
   ai: 'AI Node',
   code: 'Code Node',
   output: 'Output',
+  text_output: 'Text Output',
   merge: 'Merge',
   split: 'Split',
 };
@@ -170,11 +170,11 @@ export const NODE_TYPE_LABELS: Record<NodeType, string> = {
 export const NODE_TYPE_COLORS: Record<NodeType, string> = {
   text_input: '#1e3a5f',
   file_input: '#1e3a5f',
-  image_input: '#1e3a5f',
   directory_input: '#1e3a5f',
   ai: '#2d1b4e',
   code: '#1a3a2a',
   output: '#3a2000',
+  text_output: '#0f3a3a',
   merge: '#1a2a3a',
   split: '#3a1a1a',
 };
@@ -182,11 +182,11 @@ export const NODE_TYPE_COLORS: Record<NodeType, string> = {
 export const NODE_TYPE_ICON: Record<NodeType, string> = {
   text_input: '📝',
   file_input: '📄',
-  image_input: '🖼️',
   directory_input: '📁',
   ai: '🤖',
   code: '⚙️',
   output: '📤',
+  text_output: '🪟',
   merge: '🔀',
   split: '✂️',
 };

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Graph, ExecutionResult } from '../types/graph';
+import type { Graph, ExecutionResult, RuntimeRequirement } from '../types/graph';
 
 const api = axios.create({
   baseURL: '/api',
@@ -17,6 +17,9 @@ export const exportGraph = (id: string) => api.get(`/graphs/${id}/export`).then(
 // Execution
 export const executeGraph = (graph: Graph): Promise<ExecutionResult> =>
   api.post('/execute/', graph).then((r) => r.data);
+
+export const getRuntimeRequirements = (graph: Graph): Promise<RuntimeRequirement[]> =>
+  api.post('/execute/requirements', graph).then((r) => r.data);
 
 // AI generation
 export const generateCode = (body: {

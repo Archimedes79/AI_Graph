@@ -1,13 +1,11 @@
 """
-File-system service – handles directory listing, file reading, image encoding.
+File-system service – handles directory listing, file reading, and writing.
 """
 
 from __future__ import annotations
 
-import base64
 import logging
 import mimetypes
-import os
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -35,23 +33,6 @@ def read_text_file(path: str) -> str:
     return p.read_text(encoding="utf-8", errors="replace")
 
 
-def read_image_base64(path: str) -> Dict[str, Any]:
-    """Read an image file and return base64 data with mime type."""
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"Image not found: {path}")
-    mime, _ = mimetypes.guess_type(str(p))
-    mime = mime or "application/octet-stream"
-    data = p.read_bytes()
-    return {
-        "path": str(p),
-        "name": p.name,
-        "mime_type": mime,
-        "base64": base64.b64encode(data).decode(),
-        "size_bytes": len(data),
-    }
-
-
 def write_text_file(path: str, content: str) -> str:
     """Write *content* to *path*, creating parent directories as needed."""
     p = Path(path)
@@ -59,6 +40,32 @@ def write_text_file(path: str, content: str) -> str:
     p.write_text(content, encoding="utf-8")
     logger.info("Wrote %d bytes to %s", len(content), path)
     return str(p)
+
+
+def write_output_directory(dir_path: str, values: Dict[str, Any]) -> List[str]:
+    """
+    Write each collected output value into its own file inside *dir_path*.
+    Lists are expanded into one file per item; scalars become a single file.
+    Returns the list of written file paths.
+    """
+    root = Path(dir_path)
+    root.mkdir(parents=True, exist_ok=True)
+
+    written: List[str] = []
+    index = 0
+    for port_id, value in values.items():
+        items = value if isinstance(value, list) else [value]
+        for item in items:
+            if item is None:
+                continue
+            name = f"{port_id}_{index}.txt" if len(items) > 1 or len(values) > 1 else f"{port_id}.txt"
+            out_path = root / name
+            out_path.write_text(str(item), encoding="utf-8")
+            written.append(str(out_path))
+            index += 1
+
+    logger.info("Wrote %d file(s) to %s", len(written), dir_path)
+    return written
 
 
 def file_info(path: str) -> Dict[str, Any]:

@@ -9,11 +9,17 @@ from typing import Dict
 
 from fastapi import APIRouter, HTTPException
 
-from app.models.graph import ExecutionResult, Graph
+from app.models.graph import ExecutionResult, Graph, RuntimeRequirement
 from app.services import graph_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/execute", tags=["execute"])
+
+
+@router.post("/requirements", response_model=list[RuntimeRequirement])
+async def get_requirements(graph: Graph):
+    """Return the file/directory paths that must be supplied before running."""
+    return graph_executor.get_runtime_requirements(graph)
 
 
 @router.post("/", response_model=ExecutionResult)

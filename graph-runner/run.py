@@ -21,7 +21,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 try:
     from app.models.graph import Graph
-    from app.services.graph_executor import execute_graph
+    from app.services.graph_executor import (
+        apply_runtime_values,
+        execute_graph,
+        get_runtime_requirements,
+        get_text_output_windows,
+    )
 except ImportError as exc:
     print(f"Error: Could not import backend modules. {exc}", file=sys.stderr)
     print(
@@ -53,17 +58,39 @@ async def run(graph_path: str, extra_inputs: dict) -> None:
 
     graph = Graph.model_validate_json(path.read_text(encoding="utf-8"))
 
-    # Inject extra inputs into text_input nodes whose value is unset
+    # Inject explicit CLI overrides into any node's config.value (by node ID)
     if extra_inputs:
         for node in graph.nodes:
-            if node.node_type == "text_input" and node.id in extra_inputs:
+            if node.id in extra_inputs:
                 node.config.value = extra_inputs[node.id]
+
+    # Prompt interactively for any remaining values the graph needs
+    resolved: dict = {}
+    for req in get_runtime_requirements(graph):
+        if req.node_id in extra_inputs:
+            continue
+        if req.kind == "text":
+            prompt_label = f"Text for '{req.label}'"
+        else:
+            verb = "Read" if req.direction == "input" else "Write"
+            prompt_label = f"{verb} {req.kind} for '{req.label}'"
+        default = req.current_value
+        suffix = f" [{default}]" if default else ""
+        answer = input(f"{prompt_label}{suffix}: ").strip()
+        resolved[req.node_id] = answer or default
+    apply_runtime_values(graph, resolved)
 
     print(f"Executing graph: {graph.metadata.name!r}", file=sys.stderr)
     result = await execute_graph(graph)
 
     output = result.model_dump()
     print(json.dumps(output, indent=2, default=str))
+
+    for window in get_text_output_windows(graph, result):
+        border = "=" * 60
+        print(f"\n{border}\n📄 TEXT OUTPUT: {window['label']}\n{border}", file=sys.stderr)
+        print(window["content"], file=sys.stderr)
+        print(border, file=sys.stderr)
 
     if result.status == "error":
         sys.exit(1)
@@ -81,7 +108,7 @@ def main() -> None:
         nargs="*",
         metavar="key=value",
         default=[],
-        help="Override text_input node values (by node ID)",
+        help="Override any node's value by node ID (text_input, file/directory paths, output paths)",
     )
     parser.add_argument(
         "--json-inputs",

@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import GraphCanvas from './components/GraphCanvas';
 import NodeEditor from './components/NodeEditor';
 import ResultsPanel from './components/ResultsPanel';
+import TextOutputWindows from './components/TextOutputWindows';
 
 import { useGraphStore } from './store/graphStore';
 import type { NodeType, Graph } from './types/graph';
@@ -91,6 +92,8 @@ export default function App() {
             onClose={() => setEditingNode(null)}
           />
         )}
+
+        <TextOutputWindows />
 
         <input
           ref={fileInputRef}

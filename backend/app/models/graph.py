@@ -20,11 +20,11 @@ from pydantic import BaseModel, Field
 class NodeType(str, Enum):
     TEXT_INPUT = "text_input"
     FILE_INPUT = "file_input"
-    IMAGE_INPUT = "image_input"
     DIRECTORY_INPUT = "directory_input"
     AI = "ai"
     CODE = "code"
     OUTPUT = "output"
+    TEXT_OUTPUT = "text_output"
     MERGE = "merge"
     SPLIT = "split"
 
@@ -46,6 +46,7 @@ class AIProvider(str, Enum):
     OLLAMA = "ollama"
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    LMSTUDIO = "lmstudio"
 
 
 # ---------------------------------------------------------------------------
@@ -69,8 +70,17 @@ class NodePosition(BaseModel):
 
 class NodeConfig(BaseModel):
     """Extra configuration that depends on node_type."""
-    # text_input / file_input / image_input / directory_input
-    value: Optional[str] = None           # literal value or path
+    # text_input / file_input / directory_input
+    value: Optional[str] = None           # literal value or path, also used as the
+                                           # dialog's pre-filled default
+
+    # output (file|directory write) only – text_input/file_input/directory_input
+    # always prompt via a dialog before execution.
+    prompt_at_runtime: bool = False
+
+    # directory_input – file selection
+    select_all_files: bool = True
+    selector_code: str = ""              # run(inputs: {files}) -> {files}
 
     # ai node
     ai_provider: AIProvider = AIProvider.OLLAMA
@@ -84,6 +94,7 @@ class NodeConfig(BaseModel):
 
     # output node
     output_label: str = "Result"
+    write_mode: str = "none"             # none | file | directory – write result(s) to disk at `value`
 
     # merge / split helpers
     separator: str = "\n"
@@ -157,6 +168,15 @@ class ExecutionResult(BaseModel):
     final_outputs: Dict[str, Any] = Field(default_factory=dict)
     error: Optional[str] = None
     duration_ms: Optional[float] = None
+
+
+class RuntimeRequirement(BaseModel):
+    """A file/directory path that must be supplied before the graph can run."""
+    node_id: str
+    label: str
+    kind: str       # "file" | "directory"
+    direction: str  # "input" | "output"
+    current_value: str = ""
 
 
 # ---------------------------------------------------------------------------

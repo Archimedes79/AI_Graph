@@ -68,15 +68,42 @@ def generate_runner_script(graph: Graph) -> str:
         sys.path.insert(0, str(Path(__file__).parent.parent))
 
         from app.models.graph import Graph
-        from app.services.graph_executor import execute_graph
+        from app.services.graph_executor import (
+            apply_runtime_values,
+            execute_graph,
+            get_runtime_requirements,
+            get_text_output_windows,
+        )
 
         GRAPH_JSON = {repr(graph_json)}
 
 
         async def main() -> None:
             graph = Graph.model_validate_json(GRAPH_JSON)
+
+            # Prompt interactively for any values the graph needs
+            resolved = {{}}
+            for req in get_runtime_requirements(graph):
+                if req.kind == "text":
+                    prompt_label = f"Text for '{{req.label}}'"
+                else:
+                    verb = "Read" if req.direction == "input" else "Write"
+                    prompt_label = f"{{verb}} {{req.kind}} for '{{req.label}}'"
+                default = req.current_value
+                suffix = f" [{{default}}]" if default else ""
+                answer = input(f"{{prompt_label}}{{suffix}}: ").strip()
+                resolved[req.node_id] = answer or default
+            apply_runtime_values(graph, resolved)
+
             result = await execute_graph(graph)
             print(json.dumps(result.model_dump(), indent=2, default=str))
+
+            for window in get_text_output_windows(graph, result):
+                border = "=" * 60
+                print(f"\n{{border}}\n📄 TEXT OUTPUT: {{window['label']}}\n{{border}}")
+                print(window["content"])
+                print(border)
+
             return result
 
 

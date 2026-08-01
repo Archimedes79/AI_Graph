@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +105,28 @@ async def _anthropic_complete(
         return data["content"][0]["text"]
 
 
+async def _lmstudio_complete(
+    prompt: str,
+    system: str,
+    model: str,
+    temperature: float,
+    timeout: float = 120.0,
+) -> str:
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+    payload = {"model": model, "messages": messages, "temperature": temperature}
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(
+            f"{LMSTUDIO_BASE_URL}/chat/completions",
+            json=payload,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+
+
 # ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
@@ -123,6 +146,8 @@ async def complete(
         return await _openai_complete(prompt, system, model, temperature)
     if provider == AIProvider.ANTHROPIC:
         return await _anthropic_complete(prompt, system, model, temperature)
+    if provider == AIProvider.LMSTUDIO:
+        return await _lmstudio_complete(prompt, system, model, temperature)
     raise ValueError(f"Unknown AI provider: {provider}")
 
 

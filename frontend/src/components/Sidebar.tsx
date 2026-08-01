@@ -5,7 +5,7 @@ import { NODE_TYPE_ICON, NODE_TYPE_LABELS } from '../utils/nodeDefaults';
 const CATEGORIES: { label: string; types: NodeType[] }[] = [
   {
     label: 'Inputs',
-    types: ['text_input', 'file_input', 'image_input', 'directory_input'],
+    types: ['text_input', 'file_input', 'directory_input'],
   },
   {
     label: 'Processing',
@@ -13,7 +13,7 @@ const CATEGORIES: { label: string; types: NodeType[] }[] = [
   },
   {
     label: 'Output',
-    types: ['output'],
+    types: ['output', 'text_output'],
   },
 ];
 

@@ -22,6 +22,7 @@ from app.models.graph import (
     GraphNode,
     NodeResult,
     NodeType,
+    RuntimeRequirement,
 )
 from app.services import ai_service, code_executor, file_service
 
@@ -109,14 +110,15 @@ async def _execute_node(
         content = file_service.read_text_file(path)
         return {"content": content, "path": path}
 
-    if nt == NodeType.IMAGE_INPUT:
-        path = cfg.value or inputs.get("path", "")
-        return file_service.read_image_base64(path)
-
     if nt == NodeType.DIRECTORY_INPUT:
         path = cfg.value or inputs.get("path", "")
         recursive = cfg.extra.get("recursive", False)
         files = file_service.list_directory(path, recursive=recursive)
+        if not cfg.select_all_files and cfg.selector_code.strip():
+            selected = await code_executor.execute_code(
+                cfg.selector_code, cfg.language or "python", {"files": files}
+            )
+            files = selected.get("files", files)
         return {"files": files, "count": len(files)}
 
     if nt == NodeType.AI:
@@ -139,7 +141,18 @@ async def _execute_node(
         return result
 
     if nt == NodeType.OUTPUT:
-        # Passthrough – just echo all inputs
+        result = dict(inputs)
+        if cfg.write_mode == "file" and cfg.value:
+            content = "\n".join(str(v) for v in inputs.values() if v is not None)
+            written = file_service.write_text_file(cfg.value, content)
+            result["written_path"] = written
+        elif cfg.write_mode == "directory" and cfg.value:
+            written = file_service.write_output_directory(cfg.value, inputs)
+            result["written_paths"] = written
+        return result
+
+    if nt == NodeType.TEXT_OUTPUT:
+        # Passthrough – the frontend/CLI/runner display these inputs in a text window
         return dict(inputs)
 
     if nt == NodeType.MERGE:
@@ -214,7 +227,7 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
     # Collect outputs of OUTPUT nodes as the final result
     final_outputs: Dict[str, Any] = {}
     for node in graph.nodes:
-        if node.node_type == NodeType.OUTPUT and node.id in node_outputs:
+        if node.node_type in (NodeType.OUTPUT, NodeType.TEXT_OUTPUT) and node.id in node_outputs:
             final_outputs[node.config.output_label or node.id] = node_outputs[node.id]
 
     has_error = any(r.status == ExecutionStatus.ERROR for r in node_results)
@@ -224,3 +237,86 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
         final_outputs=final_outputs,
         duration_ms=(time.monotonic() - start) * 1000,
     )
+
+
+# ---------------------------------------------------------------------------
+# Runtime prompting – used by the web UI (via requirements + manual apply),
+# the graph-runner CLI, and the generated deployment runner script.
+# ---------------------------------------------------------------------------
+
+def get_runtime_requirements(graph: Graph) -> List[RuntimeRequirement]:
+    """
+    Inspect the graph for input nodes (text/file/directory) which always prompt
+    the user via a dialog before execution, plus output nodes flagged with
+    `prompt_at_runtime`. Returns the list of values that must be supplied.
+    """
+    requirements: List[RuntimeRequirement] = []
+    for node in graph.nodes:
+        cfg = node.config
+        if node.node_type == NodeType.TEXT_INPUT:
+            requirements.append(
+                RuntimeRequirement(
+                    node_id=node.id, label=node.label, kind="text",
+                    direction="input", current_value=cfg.value or "",
+                )
+            )
+        elif node.node_type == NodeType.FILE_INPUT:
+            requirements.append(
+                RuntimeRequirement(
+                    node_id=node.id, label=node.label, kind="file",
+                    direction="input", current_value=cfg.value or "",
+                )
+            )
+        elif node.node_type == NodeType.DIRECTORY_INPUT:
+            requirements.append(
+                RuntimeRequirement(
+                    node_id=node.id, label=node.label, kind="directory",
+                    direction="input", current_value=cfg.value or "",
+                )
+            )
+        elif node.node_type == NodeType.OUTPUT and cfg.prompt_at_runtime and cfg.write_mode != "none":
+            requirements.append(
+                RuntimeRequirement(
+                    node_id=node.id, label=node.label, kind=cfg.write_mode,
+                    direction="output", current_value=cfg.value or "",
+                )
+            )
+    return requirements
+
+
+def apply_runtime_values(graph: Graph, values: Dict[str, str]) -> None:
+    """Apply resolved node_id -> path values onto the graph in place."""
+    node_map = {n.id: n for n in graph.nodes}
+    for node_id, value in values.items():
+        node = node_map.get(node_id)
+        if node is not None:
+            node.config.value = value
+
+
+def get_text_output_windows(graph: Graph, result: ExecutionResult) -> List[Dict[str, str]]:
+    """
+    Collect the rendered content of every TEXT_OUTPUT node so it can be shown
+    to the user (web modal, or printed to the console for CLI/deployed runs).
+    """
+    results_by_id = {r.node_id: r for r in result.node_results}
+    windows: List[Dict[str, str]] = []
+    for node in graph.nodes:
+        if node.node_type != NodeType.TEXT_OUTPUT:
+            continue
+        node_result = results_by_id.get(node.id)
+        if node_result is None or node_result.status != ExecutionStatus.SUCCESS:
+            continue
+        parts: List[str] = []
+        for value in node_result.outputs.values():
+            if isinstance(value, list):
+                parts.extend(str(v) for v in value)
+            elif value is not None:
+                parts.append(str(value))
+        windows.append(
+            {
+                "node_id": node.id,
+                "label": node.config.output_label or node.label,
+                "content": "\n".join(parts),
+            }
+        )
+    return windows

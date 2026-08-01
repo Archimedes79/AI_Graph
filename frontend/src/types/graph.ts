@@ -3,17 +3,17 @@
 export type NodeType =
   | 'text_input'
   | 'file_input'
-  | 'image_input'
   | 'directory_input'
   | 'ai'
   | 'code'
   | 'output'
+  | 'text_output'
   | 'merge'
   | 'split';
 
 export type PortKind = 'input' | 'output';
 export type DataType = 'text' | 'file' | 'image' | 'list' | 'any';
-export type AIProvider = 'ollama' | 'openai' | 'anthropic';
+export type AIProvider = 'ollama' | 'openai' | 'anthropic' | 'lmstudio';
 export type ExecutionStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped';
 
 export interface Port {
@@ -33,6 +33,9 @@ export interface NodePosition {
 
 export interface NodeConfig {
   value?: string;
+  prompt_at_runtime: boolean;
+  select_all_files: boolean;
+  selector_code: string;
   ai_provider: AIProvider;
   ai_model: string;
   system_prompt: string;
@@ -40,6 +43,7 @@ export interface NodeConfig {
   language: string;
   code: string;
   output_label: string;
+  write_mode: 'none' | 'file' | 'directory';
   separator: string;
   extra: Record<string, unknown>;
 }
@@ -77,6 +81,14 @@ export interface Graph {
   metadata: GraphMetadata;
   nodes: GraphNode[];
   edges: GraphEdge[];
+}
+
+export interface RuntimeRequirement {
+  node_id: string;
+  label: string;
+  kind: 'text' | 'file' | 'directory';
+  direction: 'input' | 'output';
+  current_value: string;
 }
 
 export interface NodeResult {

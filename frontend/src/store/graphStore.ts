@@ -18,6 +18,9 @@ export interface GraphStore {
   executionResult: ExecutionResult | null;
   isExecuting: boolean;
 
+  // Text Output node windows shown after a run
+  textOutputWindows: { nodeId: string; label: string; content: string }[];
+
   // UI state
   selectedNodeId: string | null;
   editingNodeId: string | null;
@@ -33,6 +36,8 @@ export interface GraphStore {
   setEditingNode: (nodeId: string | null) => void;
   setExecutionResult: (result: ExecutionResult | null) => void;
   setIsExecuting: (v: boolean) => void;
+  setTextOutputWindows: (windows: { nodeId: string; label: string; content: string }[]) => void;
+  closeTextOutputWindow: (nodeId: string) => void;
   loadGraph: (graph: Graph) => void;
   exportGraph: () => Graph;
 }
@@ -57,6 +62,7 @@ export const useGraphStore = create<GraphStore>()(
     metadata: defaultMetadata(),
     executionResult: null,
     isExecuting: false,
+    textOutputWindows: [],
     selectedNodeId: null,
     editingNodeId: null,
 
@@ -130,6 +136,16 @@ export const useGraphStore = create<GraphStore>()(
     setIsExecuting: (v) =>
       set((state) => {
         state.isExecuting = v;
+      }),
+
+    setTextOutputWindows: (windows) =>
+      set((state) => {
+        state.textOutputWindows = windows;
+      }),
+
+    closeTextOutputWindow: (nodeId) =>
+      set((state) => {
+        state.textOutputWindows = state.textOutputWindows.filter((w) => w.nodeId !== nodeId);
       }),
 
     loadGraph: (graph) => {

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
-import { executeGraph, downloadBundle, getDockerCompose } from '../utils/api';
+import { executeGraph, downloadBundle, getDockerCompose, getRuntimeRequirements } from '../utils/api';
+import type { Graph, RuntimeRequirement } from '../types/graph';
+import RuntimePromptModal from './RuntimePromptModal';
 
 interface ToolbarProps {
   onNewGraph: () => void;
@@ -14,20 +16,38 @@ export default function Toolbar({ onNewGraph, onSave, onLoad }: ToolbarProps) {
   const isExecuting = useGraphStore((s) => s.isExecuting);
   const setIsExecuting = useGraphStore((s) => s.setIsExecuting);
   const setExecutionResult = useGraphStore((s) => s.setExecutionResult);
+  const setTextOutputWindows = useGraphStore((s) => s.setTextOutputWindows);
   const exportGraph = useGraphStore((s) => s.exportGraph);
   const executionResult = useGraphStore((s) => s.executionResult);
 
   const [showDeploy, setShowDeploy] = useState(false);
   const [deployContent, setDeployContent] = useState('');
   const [deployLabel, setDeployLabel] = useState('');
+  const [pendingRequirements, setPendingRequirements] = useState<RuntimeRequirement[] | null>(null);
+  const [pendingGraph, setPendingGraph] = useState<Graph | null>(null);
 
-  const handleRun = async () => {
+  const runGraph = async (graph: Graph) => {
     setIsExecuting(true);
     setExecutionResult(null);
+    setTextOutputWindows([]);
     try {
-      const graph = exportGraph();
       const result = await executeGraph(graph);
       setExecutionResult(result);
+
+      const windows = graph.nodes
+        .filter((n) => n.node_type === 'text_output')
+        .map((n) => {
+          const nr = result.node_results.find((r) => r.node_id === n.id);
+          if (!nr || nr.status !== 'success') return null;
+          const content = Object.values(nr.outputs)
+            .flatMap((v) => (Array.isArray(v) ? v : [v]))
+            .filter((v) => v !== null && v !== undefined)
+            .map(String)
+            .join('\n');
+          return { nodeId: n.id, label: n.config.output_label || n.label, content };
+        })
+        .filter((w): w is { nodeId: string; label: string; content: string } => w !== null);
+      setTextOutputWindows(windows);
     } catch (e: any) {
       setExecutionResult({
         status: 'error',
@@ -38,6 +58,37 @@ export default function Toolbar({ onNewGraph, onSave, onLoad }: ToolbarProps) {
     } finally {
       setIsExecuting(false);
     }
+  };
+
+  const handleRun = async () => {
+    const graph = exportGraph();
+    try {
+      const requirements = await getRuntimeRequirements(graph);
+      if (requirements.length > 0) {
+        setPendingGraph(graph);
+        setPendingRequirements(requirements);
+        return;
+      }
+    } catch {
+      // If the requirements check itself fails, fall back to running directly.
+    }
+    await runGraph(graph);
+  };
+
+  const handlePromptSubmit = (values: Record<string, string>) => {
+    if (!pendingGraph) return;
+    const graph: Graph = JSON.parse(JSON.stringify(pendingGraph));
+    for (const node of graph.nodes) {
+      if (values[node.id] !== undefined) node.config.value = values[node.id];
+    }
+    setPendingRequirements(null);
+    setPendingGraph(null);
+    runGraph(graph);
+  };
+
+  const handlePromptCancel = () => {
+    setPendingRequirements(null);
+    setPendingGraph(null);
   };
 
   const handleDownloadBundle = async () => {
@@ -185,6 +236,14 @@ export default function Toolbar({ onNewGraph, onSave, onLoad }: ToolbarProps) {
             </pre>
           </div>
         </div>
+      )}
+
+      {pendingRequirements && (
+        <RuntimePromptModal
+          requirements={pendingRequirements}
+          onSubmit={handlePromptSubmit}
+          onCancel={handlePromptCancel}
+        />
       )}
     </>
   );
