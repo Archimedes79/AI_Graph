@@ -280,7 +280,8 @@ def test_generate_runner_script():
     graph = Graph(metadata=GraphMetadata(name="My Graph"))
     script = generate_runner_script(graph)
     assert "def main" in script
-    assert "execute_graph" in script
+    assert "execute_graph" not in script
+    assert "Graph.model_validate_json" not in script
 
 
 def test_generate_deployment_bundle_keys():
@@ -291,4 +292,4 @@ def test_generate_deployment_bundle_keys():
 
     graph = Graph(metadata=GraphMetadata(name="Test Bundle"))
     bundle = generate_deployment_bundle(graph)
-    assert set(bundle.keys()) == {"graph.json", "docker-compose.yml", "run_graph.py"}
+    assert set(bundle.keys()) == {"docker-compose.yml", "run_graph.py"}

@@ -21,9 +21,8 @@ router = APIRouter(prefix="/api/deploy", tags=["deploy"])
 async def create_bundle(graph: Graph):
     """
     Generate a deployment bundle (zip archive) containing:
-      - graph.json
+      - run_graph.py     – compiled, self-contained executable (no graph.json needed)
       - docker-compose.yml
-      - run_graph.py
     """
     bundle = deploy_service.generate_deployment_bundle(graph)
 

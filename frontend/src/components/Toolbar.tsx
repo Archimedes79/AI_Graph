@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
 import { executeGraph, downloadBundle, getDockerCompose, getRuntimeRequirements } from '../utils/api';
 import type { Graph, RuntimeRequirement } from '../types/graph';
-import RuntimePromptModal from './RuntimePromptModal';
+import GraphWindows from './GraphWindows';
 
 interface ToolbarProps {
   onNewGraph: () => void;
@@ -238,13 +238,11 @@ export default function Toolbar({ onNewGraph, onSave, onLoad }: ToolbarProps) {
         </div>
       )}
 
-      {pendingRequirements && (
-        <RuntimePromptModal
-          requirements={pendingRequirements}
-          onSubmit={handlePromptSubmit}
-          onCancel={handlePromptCancel}
-        />
-      )}
+      <GraphWindows
+        requirements={pendingRequirements}
+        onSubmit={handlePromptSubmit}
+        onCancel={handlePromptCancel}
+      />
     </>
   );
 }
