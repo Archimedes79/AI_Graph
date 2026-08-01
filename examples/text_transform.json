@@ -1,0 +1,98 @@
+{
+  "metadata": {
+    "name": "Text Transform Pipeline",
+    "version": "1.0.0",
+    "description": "Read text input, transform it with a code node (uppercase), then output",
+    "author": "AI-Graph",
+    "tags": ["example", "code", "transform"]
+  },
+  "nodes": [
+    {
+      "id": "node-text-1",
+      "node_type": "text_input",
+      "label": "Source Text",
+      "description": "The text to transform",
+      "position": { "x": 80, "y": 200 },
+      "inputs": [],
+      "outputs": [
+        { "id": "output", "name": "Output", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+      ],
+      "config": {
+        "value": "hello from ai-graph!",
+        "ai_provider": "ollama",
+        "ai_model": "llama3",
+        "system_prompt": "",
+        "temperature": 0.7,
+        "language": "python",
+        "code": "",
+        "output_label": "Result",
+        "separator": "\n",
+        "extra": {}
+      }
+    },
+    {
+      "id": "node-code-1",
+      "node_type": "code",
+      "label": "Uppercase Transform",
+      "description": "Convert the input text to uppercase",
+      "position": { "x": 380, "y": 200 },
+      "inputs": [
+        { "id": "input", "name": "Input", "kind": "input", "data_type": "any", "multi": true, "required": false, "description": "" }
+      ],
+      "outputs": [
+        { "id": "output", "name": "Output", "kind": "output", "data_type": "any", "multi": false, "required": false, "description": "" }
+      ],
+      "config": {
+        "value": null,
+        "ai_provider": "ollama",
+        "ai_model": "llama3",
+        "system_prompt": "",
+        "temperature": 0.7,
+        "language": "python",
+        "code": "def run(inputs):\n    text = str(inputs.get('input', ''))\n    return {'output': text.upper()}\n",
+        "output_label": "Result",
+        "separator": "\n",
+        "extra": {}
+      }
+    },
+    {
+      "id": "node-output-1",
+      "node_type": "output",
+      "label": "Transformed Result",
+      "description": "The final output",
+      "position": { "x": 680, "y": 200 },
+      "inputs": [
+        { "id": "value", "name": "Value", "kind": "input", "data_type": "any", "multi": true, "required": false, "description": "" }
+      ],
+      "outputs": [],
+      "config": {
+        "value": null,
+        "ai_provider": "ollama",
+        "ai_model": "llama3",
+        "system_prompt": "",
+        "temperature": 0.7,
+        "language": "python",
+        "code": "",
+        "output_label": "Uppercase Text",
+        "separator": "\n",
+        "extra": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "source_node_id": "node-text-1",
+      "source_port_id": "output",
+      "target_node_id": "node-code-1",
+      "target_port_id": "input"
+    },
+    {
+      "id": "edge-2",
+      "source_node_id": "node-code-1",
+      "source_port_id": "output",
+      "target_node_id": "node-output-1",
+      "target_port_id": "value"
+    }
+  ]
+}

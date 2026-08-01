@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* ReactFlow overrides */
+.react-flow__handle {
+  cursor: crosshair !important;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.react-flow__controls button {
+  background: #1a1d2e !important;
+  border-color: #2d3148 !important;
+  color: #e2e8f0 !important;
+}
+
+.react-flow__controls button:hover {
+  background: #2d3148 !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f1117;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2d3148;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3d4168;
+}
+
+/* Smooth transitions */
+button {
+  cursor: pointer;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
