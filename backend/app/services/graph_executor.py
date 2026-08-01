@@ -244,6 +244,13 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
 # the graph-runner CLI, and the generated deployment runner script.
 # ---------------------------------------------------------------------------
 
+_INPUT_NODE_KINDS = {
+    NodeType.TEXT_INPUT: "text",
+    NodeType.FILE_INPUT: "file",
+    NodeType.DIRECTORY_INPUT: "directory",
+}
+
+
 def get_runtime_requirements(graph: Graph) -> List[RuntimeRequirement]:
     """
     Inspect the graph for input nodes (text/file/directory) which always prompt
@@ -253,24 +260,11 @@ def get_runtime_requirements(graph: Graph) -> List[RuntimeRequirement]:
     requirements: List[RuntimeRequirement] = []
     for node in graph.nodes:
         cfg = node.config
-        if node.node_type == NodeType.TEXT_INPUT:
+        kind = _INPUT_NODE_KINDS.get(node.node_type)
+        if kind is not None:
             requirements.append(
                 RuntimeRequirement(
-                    node_id=node.id, label=node.label, kind="text",
-                    direction="input", current_value=cfg.value or "",
-                )
-            )
-        elif node.node_type == NodeType.FILE_INPUT:
-            requirements.append(
-                RuntimeRequirement(
-                    node_id=node.id, label=node.label, kind="file",
-                    direction="input", current_value=cfg.value or "",
-                )
-            )
-        elif node.node_type == NodeType.DIRECTORY_INPUT:
-            requirements.append(
-                RuntimeRequirement(
-                    node_id=node.id, label=node.label, kind="directory",
+                    node_id=node.id, label=node.label, kind=kind,
                     direction="input", current_value=cfg.value or "",
                 )
             )

@@ -19,6 +19,45 @@ logger = logging.getLogger(__name__)
 
 EXECUTION_TIMEOUT = int(os.getenv("CODE_EXEC_TIMEOUT", "30"))
 
+# Env vars a child interpreter needs to start up correctly, but nothing else -
+# in particular no API keys or other secrets from the backend's environment.
+_SUBPROCESS_ENV_ALLOWLIST = {
+    "PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC",
+    "TEMP", "TMP", "HOME", "USERPROFILE", "LANG", "LC_ALL",
+}
+
+
+def _sandboxed_env() -> Dict[str, str]:
+    """Minimal environment for a code-node subprocess: no secrets inherited."""
+    return {k: v for k, v in os.environ.items() if k.upper() in _SUBPROCESS_ENV_ALLOWLIST}
+
+
+async def _run_in_subprocess(cmd: list[str], inputs: Dict[str, Any], label: str) -> Dict[str, Any]:
+    """Run `cmd` (interpreter + script path already appended) with JSON inputs as argv, JSON output on stdout."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            json.dumps(inputs),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=_sandboxed_env(),
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=EXECUTION_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            raise TimeoutError(f"{label} execution timed out after {EXECUTION_TIMEOUT}s")
+
+        if proc.returncode != 0:
+            raise RuntimeError(stderr.decode().strip())
+
+        raw = stdout.decode().strip()
+        return json.loads(raw) if raw else {}
+    finally:
+        os.unlink(cmd[-1])
+
 
 async def execute_python(code: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -42,32 +81,7 @@ print(json.dumps(_outputs))
         f.write(wrapper)
         tmp_path = f.name
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            tmp_path,
-            json.dumps(inputs),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=EXECUTION_TIMEOUT
-            )
-        except asyncio.TimeoutError:
-            proc.kill()
-            raise TimeoutError(
-                f"Code execution timed out after {EXECUTION_TIMEOUT}s"
-            )
-
-        if proc.returncode != 0:
-            raise RuntimeError(stderr.decode().strip())
-
-        raw = stdout.decode().strip()
-        return json.loads(raw) if raw else {}
-
-    finally:
-        os.unlink(tmp_path)
+    return await _run_in_subprocess([sys.executable, tmp_path], inputs, "Code")
 
 
 async def execute_javascript(code: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -90,32 +104,7 @@ console.log(JSON.stringify(_outputs));
         f.write(wrapper)
         tmp_path = f.name
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "node",
-            tmp_path,
-            json.dumps(inputs),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=EXECUTION_TIMEOUT
-            )
-        except asyncio.TimeoutError:
-            proc.kill()
-            raise TimeoutError(
-                f"JavaScript execution timed out after {EXECUTION_TIMEOUT}s"
-            )
-
-        if proc.returncode != 0:
-            raise RuntimeError(stderr.decode().strip())
-
-        raw = stdout.decode().strip()
-        return json.loads(raw) if raw else {}
-
-    finally:
-        os.unlink(tmp_path)
+    return await _run_in_subprocess(["node", tmp_path], inputs, "JavaScript")
 
 
 async def execute_code(

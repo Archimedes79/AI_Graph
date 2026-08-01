@@ -156,17 +156,21 @@ def _node_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tuple[str, 
     return lines
 
 
+_INPUT_NODE_KINDS = {
+    NodeType.TEXT_INPUT: "text",
+    NodeType.FILE_INPUT: "file",
+    NodeType.DIRECTORY_INPUT: "directory",
+}
+
+
 def _requirements_literal(graph: Graph) -> List[dict]:
     """The list of {node_id, label, kind, direction, current_value} the compiled script must prompt for."""
     reqs: List[dict] = []
     for node in graph.nodes:
         cfg = node.config
-        if node.node_type == NodeType.TEXT_INPUT:
-            reqs.append({"node_id": node.id, "label": node.label, "kind": "text", "direction": "input", "current_value": cfg.value or ""})
-        elif node.node_type == NodeType.FILE_INPUT:
-            reqs.append({"node_id": node.id, "label": node.label, "kind": "file", "direction": "input", "current_value": cfg.value or ""})
-        elif node.node_type == NodeType.DIRECTORY_INPUT:
-            reqs.append({"node_id": node.id, "label": node.label, "kind": "directory", "direction": "input", "current_value": cfg.value or ""})
+        kind = _INPUT_NODE_KINDS.get(node.node_type)
+        if kind is not None:
+            reqs.append({"node_id": node.id, "label": node.label, "kind": kind, "direction": "input", "current_value": cfg.value or ""})
         elif node.node_type == NodeType.OUTPUT and cfg.prompt_at_runtime and cfg.write_mode != "none":
             reqs.append({"node_id": node.id, "label": node.label, "kind": cfg.write_mode, "direction": "output", "current_value": cfg.value or ""})
     return reqs
@@ -219,6 +223,17 @@ def _write_output_directory(dir_path, values):
 '''
 
 _CODE_RUNNER_HELPER = '''\
+_SUBPROCESS_ENV_ALLOWLIST = {
+    "PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC",
+    "TEMP", "TMP", "HOME", "USERPROFILE", "LANG", "LC_ALL",
+}
+
+
+def _sandboxed_env():
+    """Minimal environment for a code-node subprocess: no secrets inherited."""
+    return {k: v for k, v in os.environ.items() if k.upper() in _SUBPROCESS_ENV_ALLOWLIST}
+
+
 async def _run_code(code, language, inputs):
     lang = language.lower()
     if lang in ("python", "py"):
@@ -248,6 +263,7 @@ console.log(JSON.stringify(run(_inputs)));
         proc = await asyncio.create_subprocess_exec(
             *cmd, tmp_path, json.dumps(inputs),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            env=_sandboxed_env(),
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         if proc.returncode != 0:

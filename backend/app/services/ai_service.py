@@ -61,7 +61,7 @@ async def _openai_complete(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
     payload = {"model": model, "messages": messages, "temperature": temperature}
-    headers = {"Authorization": f"******"}
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             "https://api.openai.com/v1/chat/completions",

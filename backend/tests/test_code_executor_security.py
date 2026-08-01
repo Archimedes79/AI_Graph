@@ -2,15 +2,15 @@
 Regression tests for the Code Node execution sandbox (or lack thereof).
 
 `app.services.code_executor.execute_python` / `execute_javascript` run
-user-supplied code in a plain subprocess with only a wall-clock timeout:
-no filesystem jail, no environment scrubbing, no CPU/memory limits, and
-no restriction on spawning further processes or making network calls.
+user-supplied code in a plain subprocess with only a wall-clock timeout
+and a scrubbed environment: no filesystem jail and no CPU/memory limits,
+so a Code Node can still spawn further processes or make network calls,
+and can read any file the backend process user can read.
 
-These tests assert the *secure* behaviour we want once sandboxing is
-implemented. They are expected to FAIL today because the vulnerability
-is real, and are marked `xfail` so they don't break CI before a fix
-lands. Once the fix lands, remove the `xfail` marker; if it starts
-reporting XPASS, that's confirmation the mitigation works.
+The filesystem-sandbox test below asserts the *secure* behaviour we want
+once a real jail (container/chroot) is implemented. It is expected to
+FAIL today and is marked `xfail` so it doesn't break CI; once a fix
+lands, remove the `xfail` marker.
 """
 
 from __future__ import annotations
@@ -54,15 +54,6 @@ async def test_code_node_cannot_read_arbitrary_filesystem_path(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason=(
-        "code_executor does not scrub the environment before spawning the "
-        "subprocess (no `env=` passed to create_subprocess_exec), so a Code "
-        "Node inherits the full backend process environment, including "
-        "secrets such as OPENAI_API_KEY / ANTHROPIC_API_KEY."
-    ),
-    strict=False,
-)
 async def test_code_node_cannot_read_backend_secrets(monkeypatch):
     """A Code Node must not have access to the backend's secret env vars."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-super-secret-value")
