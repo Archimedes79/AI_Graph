@@ -58,7 +58,7 @@ see [AGENTS.md](AGENTS.md).
   - **Input** – one node type with a `text` / `file` / `directory` mode; in directory mode it only lists rooted file paths, it does not read content (the older `text_input` / `file_input` / `directory_input` names still load and map to the same element)
   - **AI Node** – send prompts to Ollama (local LLM), LM Studio, OpenAI, an OpenAI-compatible endpoint, or Anthropic
   - **Code Node** – execute generated or hand-written Python/JavaScript
-  - **Output** – capture results
+  - **Output** – capture results (the older `text_output` name still loads and is forced to `write_mode="window"`)
 - **Read-file inputs** – a `read_file_inputs` toggle on Code and AI nodes auto-resolves `file_path` inputs to actual content before running
 - **AI Code Generation** – describe what a node should do; the AI writes the code
 - **AI Prompt Generation** – describe the AI's role; get a system prompt generated
@@ -337,20 +337,28 @@ AI-Graph/
 │   │       ├── deploy_service.py   # assembles vendored-runtime deploy bundles (not codegen)
 │   │       ├── batching.py         # shared batch reconcile/merge helpers
 │   │       ├── ai_service.py, code_executor.py, file_service.py  # cross-cutting helpers
+│   ├── scripts/
+│   │   └── export_graph_schema.py  # dumps Graph's Pydantic JSON schema for gen:types
 │   ├── tests/            # Backend tests — prefer large workflow-level tests (see AGENTS.md)
 │   └── requirements.txt
 ├── frontend/             # React + TypeScript + ReactFlow frontend
+│   ├── scripts/
+│   │   ├── genTypes.mjs             # runs export_graph_schema.py, writes graph.generated.ts
+│   │   ├── checkTypesUpToDate.mjs   # `npm run gen:types:check`: fails if generated types drifted
+│   │   └── graphTypesLib.mjs        # shared JSON-schema -> TS conversion helpers
 │   └── src/
-│       ├── elements/     # ONE definition per node type / widget kind (create/ports/ConfigEditor)
+│       ├── elements/     # ONE folder per node type / widget kind: element def + ConfigEditor colocated
 │       │   ├── registry.ts   # NODE_ELEMENTS / GUI_WIDGET_ELEMENTS (legacy names alias here)
-│       │   └── code/codeElement.ts   # reference pattern for a node type
+│       │   ├── code/codeElement.ts + CodeEditor.tsx   # reference pattern for a node type
+│       │   ├── gui/widgets/input_picker/   # reference pattern for a widget kind
+│       │   └── shared/       # editors shared by more than one element (MergeSplitEditor removed; OutputFormatEditor, etc.)
 │       ├── components/
 │       │   ├── NodeEditor.tsx        # modal shell; resolves ConfigEditor via elements/registry.ts
-│       │   ├── nodes/editors/        # one file per node type: config panel component
-│       │   ├── GuiWidgetEditor.tsx   # widget list; resolves ConfigEditor via elements/registry.ts
-│       │   └── widgets/editors/      # one file per GUI widget kind: config panel component
+│       │   └── GuiWidgetEditor.tsx   # widget list; resolves ConfigEditor via elements/registry.ts
 │       ├── store/        # Zustand state management
-│       ├── types/        # TypeScript graph types (mirrors backend/app/models/graph.py)
+│       ├── types/
+│       │   ├── graph.ts            # re-exports graph.generated.ts + frontend-only types
+│       │   └── graph.generated.ts  # AUTO-GENERATED from backend/app/models/graph.py; do not hand-edit
 │       └── utils/        # API client, node defaults
 ├── graph-runner/         # CLI tool for executing graphs
 │   └── run.py
