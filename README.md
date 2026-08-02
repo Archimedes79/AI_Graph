@@ -1,38 +1,49 @@
 # AI-Graph
 
-**AI-Graph** is a no-code, node-based AI workflow orchestration platform. Build complex, AI-driven automation workflows without writing code by connecting nodes in a visual graph editor.
+**AI-Graph** is a no-code, node-based AI workflow orchestration platform: connect nodes
+on a visual canvas to build data/AI pipelines, describe a graph as a portable JSON DSL,
+generate or edit it with AI, run it locally, or compile it into a standalone deployable
+service — without hand-writing glue code.
 
----
+Nodes are connected through typed, explicit ports (data type, single-value-vs-batch,
+optional format) rather than opaque code, so what flows between them is always visible
+in the graph itself, not hidden inside a block's implementation.
 
-## Projektbeschreibung
+## Goals
 
-AI-Graph bietet eine grafische Oberfläche, in der Datenverarbeitungen als Graph aus verbundenen Blöcken erstellt werden. Ein Graph kann zusätzlich als JSON-DSL beschrieben, von einer AI erzeugt oder verändert und anschließend als eigenständige Anwendung deployed werden.
+- **No-code by default, code when you need it** — every AI/Code node's behavior starts
+  as a plain-text description; the AI can turn that into a system prompt or working
+  Python/JavaScript, and the generated code stays visible and editable, never hidden.
+- **Portable, explicit contracts** — graphs are a versioned JSON DSL with typed ports
+  (`data_type`, `multi`, `format`) so a node's inputs/outputs are never ambiguous.
+- **Run anywhere the graph was built** — the same graph runs in the editor, from the
+  `graph-runner` CLI, or compiled into a single dependency-free script; behavior must
+  stay identical across all three.
+- **Composable interfaces, not just pipelines** — `gui` nodes let a graph define its own
+  runtime interface (file pickers, text/chat windows, plots) from small, independent
+  widgets instead of a hard-coded form.
 
-### Blöcke
+## Use Cases
 
-- **Text Input** – Textwert als feste Eingabe oder zur Laufzeit abgefragt
-- **File Input** – eine einzelne Datei lesen und Inhalt sowie Pfad ausgeben
-- **Directory Input** – durchsucht ein Verzeichnis und gibt ausschließlich eine Liste gerooteter Dateipfade aus (`files`, Batch). Es liest keine Inhalte. Ein einfacher Dateityp-Filter (`extensions`, z. B. `.md, .txt`) grenzt die Liste vorab ein; welche der verbleibenden Dateien weitergereicht werden, kann zusätzlich per AI-Prompt (`selector_prompt`) auf editierbaren, prüfbaren Auswahlcode (`selector_code`) abgebildet werden.
-- **AI** – Prompts mit Ollama, LM Studio, einem OpenAI-kompatiblen Endpunkt, OpenAI oder Anthropic verarbeiten
-- **Code** – Eingänge mit Python oder JavaScript auf Ausgänge abbilden; AI kann den Code aus einer Beschreibung erzeugen
-- **Read File (Code) / Read File (AI)** – Presets für die normalen Code-/AI-Blöcke: Eingang `paths` ist als `file_path`-Batch deklariert, `read_file_inputs` ist aktiviert. Dadurch werden Pfade vor der Ausführung automatisch zu Dateiinhalt aufgelöst (Text, oder Base64 bei binärem Format) – der Code-Block muss also keinen eigenen Dateizugriff programmieren, der AI-Block erhält echten Inhalt statt eines Pfad-Strings.
-- **Merge / Split** – mehrere Werte zu einem Ergebnis zusammenführen (`merge_mode`: concat/sum/count/json_list) oder Text in eine Liste aufteilen
-- **Text Output / Output** – Ergebnisse anzeigen oder in Dateien und Verzeichnisse schreiben
+- **Document batch processing** — a Directory Input lists files (optionally filtered by
+  extension and an AI-generated selector), a Code/AI node extracts or summarizes each
+  file's content, and an Output node writes the results back to disk. The `Read File`
+  presets exist specifically for this: paths are auto-resolved to content before the
+  node runs.
+- **Data transformation pipeline** — Text/File Input → Code node (hand-written or
+  AI-generated `run(inputs)`) → Merge/Split → Output; see `examples/text_transform.json`.
+- **Local-LLM chat or report tool** — an AI node backed by Ollama/LM Studio (no cloud
+  dependency) fed by File/Directory Input, paired with a `gui` node's
+  `chat_window`/`text_window` widgets for a runnable front-end with zero UI code.
+- **Ad-hoc data dashboards** — a `gui` node's `plot_window` widget charts an upstream
+  node's output directly, with an optional AI-generated transform snippet reshaping raw
+  data into plot-ready points.
+- **Deploying a graph as a standalone tool** — once a graph works in the editor,
+  **🚀 Deploy** compiles it into one self-contained script (or a Docker Compose bundle)
+  that a non-technical user or CI job can run without the AI-Graph editor at all.
 
-Blöcke werden über typisierte Eingangs- und Ausgangsports (Connectors) verbunden. Jeder Port beschreibt explizit:
-
-- **Datentyp** – `text`, `file_path`, `binary`, `json`, `list` oder `any`
-- **Einzelwert oder Batch** (`multi`) – z. B. ein Directory-Input liefert immer eine Liste von Dateipfaden, kein Einzelwert
-- **Format** (optional) – ein MIME-/Formatname wie `application/json`, `text/csv` oder `image/png`; wird sowohl beim Empfang (Parsen von JSON/CSV, Lesen als Text vs. Binär) als auch beim Debug-Snapshot (Serialisierung) von den angrenzenden Blöcken berücksichtigt
-- **Debug-Verzeichnis** (optional) – schreibt jeden Wert, der über diesen Connector läuft, zur Laufzeit als Datei zur Inspektion
-
-Ein Connector wird per Einzelklick auf den Port bearbeitet (Format/Debug-Verzeichnis); ein Doppelklick auf den Node-Körper öffnet weiterhin den vollständigen Node-Editor – diese Trennung bleibt bewusst so, um beide Bearbeitungswege eindeutig zu halten.
-
-Ein Ausgang darf mit mehreren Eingängen verbunden werden, mehrere Ausgänge dürfen in einen Eingang laufen. Die Ausführung erfolgt in abhängigen Stufen: parallele Blöcke einer Stufe werden abgeschlossen, bevor die nächste Stufe beginnt. AI-/Code-Blöcke verarbeiten Batches standardmäßig einzeln (`batch_mode: per_item`); für Aggregationen über den gesamten Batch (z. B. Summen) kann `batch_mode: whole_list` gesetzt werden, damit der Block die volle Liste in einem Aufruf erhält.
-
-Jeder AI- oder Code-Block beschreibt seine Verarbeitung über Text. Diese Beschreibung kann direkt als AI-Prompt verwendet oder in ausführbaren Code übersetzt werden. Dadurch lassen sich auch komplexe Anwendungen ohne klassische Programmierkenntnisse modellieren; die Datenverträge des Graphen bleiben dabei explizit in den Ports und der JSON-DSL sichtbar.
-
-Noch gesondert zu spezifizieren sind unter anderem Berechtigungen für Dateizugriffe, Fehler- und Wiederholungsstrategien, Versionierung von AI-Modellen sowie die genaue Konfiguration externer Dienste beim Deployment.
+For where to make a given code change (which file to touch per node type/widget kind),
+see [AGENTS.md](AGENTS.md).
 
 ---
 
@@ -161,7 +172,7 @@ The AI can generate this function for you: just describe what the node should do
 
 ---
 
-## � GUI Nodes
+## 🧩 GUI Nodes
 
 A `gui` node is a composable interface node: it holds an ordered list of **widgets**
 (`config.gui_widgets`), and its ports are *always* derived from that list — you never
@@ -205,7 +216,7 @@ against the Graph schema. Use it from the "✨ AI Graph" toolbar action, or stan
 
 ---
 
-## �🤖 AI Providers
+## 🤖 AI Providers
 
 | Provider | Model | Env var needed |
 |---|---|---|
@@ -269,25 +280,42 @@ pip install -r requirements.txt pytest pytest-asyncio
 pytest tests/ -v
 ```
 
+Prefer adding to or extending an existing large, workflow-level test (a full graph run
+through `execute_graph`, or a compiled deploy script actually executed) over adding a new
+test file per node type — see [AGENTS.md](AGENTS.md#tests).
+
 ---
 
 ## 📁 Project Structure
 
 ```
 AI-Graph/
+├── AGENTS.md             # Codebase map for AI coding agents (which file to touch per node/widget kind)
 ├── backend/              # FastAPI Python backend
 │   ├── app/
 │   │   ├── main.py       # FastAPI app entry point
-│   │   ├── models/       # Graph DSL Pydantic models
+│   │   ├── models/       # Graph DSL Pydantic models (NodeType/GuiWidgetKind contracts)
 │   │   ├── routers/      # API routes (graph, execute, ai, deploy)
-│   │   └── services/     # Execution engine, AI, code runner, file ops
-│   ├── tests/            # Backend tests
+│   │   └── services/
+│   │       ├── graph_executor.py   # topology/batching/format resolution; dispatches to executors/
+│   │       ├── executors/          # one file per node type: live execution logic
+│   │       ├── gui_widgets/        # one file per GUI widget kind: live execution logic
+│   │       ├── deploy_service.py   # deploy-bundle assembly; dispatches to deploy/node_compilers/
+│   │       ├── deploy/
+│   │       │   ├── node_compilers/         # one file per node type: deploy-script codegen
+│   │       │   └── gui_widget_compilers/   # one file per GUI widget kind: deploy-script codegen
+│   │       ├── ai_service.py, code_executor.py, file_service.py  # cross-cutting helpers
+│   ├── tests/            # Backend tests — prefer large workflow-level tests (see AGENTS.md)
 │   └── requirements.txt
 ├── frontend/             # React + TypeScript + ReactFlow frontend
 │   └── src/
-│       ├── components/   # UI components (canvas, nodes, editor)
+│       ├── components/
+│       │   ├── NodeEditor.tsx        # modal shell; dispatches to nodes/editors/
+│       │   ├── nodes/editors/        # one file per node type: config panel
+│       │   ├── GuiWidgetEditor.tsx   # widget list; dispatches to widgets/editors/
+│       │   └── widgets/editors/      # one file per GUI widget kind: config panel
 │       ├── store/        # Zustand state management
-│       ├── types/        # TypeScript graph types
+│       ├── types/        # TypeScript graph types (mirrors backend/app/models/graph.py)
 │       └── utils/        # API client, node defaults
 ├── graph-runner/         # CLI tool for executing graphs
 │   └── run.py

@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -33,27 +34,32 @@ def _sandboxed_env() -> Dict[str, str]:
 
 
 async def _run_in_subprocess(cmd: list[str], inputs: Dict[str, Any], label: str) -> Dict[str, Any]:
-    """Run `cmd` (interpreter + script path already appended) with JSON inputs as argv, JSON output on stdout."""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            json.dumps(inputs),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+    """Run `cmd` (interpreter + script path already appended) with JSON inputs as argv, JSON output on stdout.
+
+    Dispatches a blocking `subprocess.run` to a worker thread rather than using
+    `asyncio.create_subprocess_exec`: uvicorn's `--reload` mode sets `use_subprocess=True`,
+    which forces a plain `SelectorEventLoop` on Windows, and that loop raises
+    `NotImplementedError` for asyncio subprocesses (only `ProactorEventLoop` supports
+    them there). `subprocess.run` works under any event loop.
+    """
+    def _blocking_run() -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [*cmd, json.dumps(inputs)],
+            capture_output=True,
             env=_sandboxed_env(),
+            timeout=EXECUTION_TIMEOUT,
         )
+
+    try:
         try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=EXECUTION_TIMEOUT
-            )
-        except asyncio.TimeoutError:
-            proc.kill()
+            completed = await asyncio.to_thread(_blocking_run)
+        except subprocess.TimeoutExpired:
             raise TimeoutError(f"{label} execution timed out after {EXECUTION_TIMEOUT}s")
 
-        if proc.returncode != 0:
-            raise RuntimeError(stderr.decode().strip())
+        if completed.returncode != 0:
+            raise RuntimeError(completed.stderr.decode().strip())
 
-        raw = stdout.decode().strip()
+        raw = completed.stdout.decode().strip()
         return json.loads(raw) if raw else {}
     finally:
         os.unlink(cmd[-1])
