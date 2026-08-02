@@ -1,0 +1,108 @@
+import React from 'react';
+import type { AIProvider, GraphNode } from '../../../types/graph';
+
+interface AIEditorProps {
+  node: GraphNode;
+  setConfig: (key: string, value: unknown) => void;
+  generating: boolean;
+  handleGeneratePrompt: () => void;
+}
+
+export default function AIEditor({ node, setConfig, generating, handleGeneratePrompt }: AIEditorProps) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+            Provider
+          </label>
+          <select
+            className="w-full rounded-lg px-3 py-2 text-sm"
+            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+            value={node.config.ai_provider}
+            onChange={(e) => setConfig('ai_provider', e.target.value as AIProvider)}
+          >
+            <option value="ollama">Ollama (local)</option>
+            <option value="lmstudio">LM Studio (local)</option>
+            <option value="openai">OpenAI</option>
+            <option value="openai_compatible">OpenAI-compatible endpoint</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+            Model
+          </label>
+          <input
+            className="w-full rounded-lg px-3 py-2 text-sm"
+            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+            value={node.config.ai_model}
+            onChange={(e) => setConfig('ai_model', e.target.value)}
+            placeholder="llama3"
+          />
+        </div>
+      </div>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
+            System Prompt
+          </label>
+          <button
+            onClick={handleGeneratePrompt}
+            disabled={generating}
+            className="text-xs px-2 py-1 rounded"
+            style={{ background: '#6366f1', color: 'white', opacity: generating ? 0.5 : 1 }}
+          >
+            {generating ? '…' : '✨ Generate from description'}
+          </button>
+        </div>
+        <textarea
+          className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
+          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 120 }}
+          value={node.config.system_prompt}
+          onChange={(e) => setConfig('system_prompt', e.target.value)}
+          placeholder="You are a helpful assistant…"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+          Temperature ({node.config.temperature})
+        </label>
+        <input
+          type="range"
+          min={0} max={2} step={0.05}
+          value={node.config.temperature}
+          onChange={(e) => setConfig('temperature', parseFloat(e.target.value))}
+          className="w-full"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+          Batch mode
+        </label>
+        <select
+          className="w-full rounded-lg px-3 py-2 text-sm"
+          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+          value={node.config.batch_mode}
+          onChange={(e) => setConfig('batch_mode', e.target.value)}
+        >
+          <option value="per_item">Per item (default)</option>
+          <option value="whole_list">Whole list at once (for totals/summaries)</option>
+        </select>
+      </div>
+      <div>
+        <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
+          <input
+            type="checkbox"
+            checked={!!node.config.read_file_inputs}
+            onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
+          />
+          Read file contents from paths
+        </label>
+        <p className="text-xs mt-1" style={{ color: '#475569' }}>
+          When enabled, any input port with data type 'File path' is automatically read from disk (text or base64) before this node runs.
+        </p>
+      </div>
+    </>
+  );
+}

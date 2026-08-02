@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import type { AIProvider, GuiWidget, GuiWidgetKind } from '../types/graph';
 import { createGuiWidget, GUI_WIDGET_KIND_LABELS } from '../utils/guiWidgets';
 import { generateCode } from '../utils/api';
+import FileOpenEditor from './widgets/editors/FileOpenEditor';
+import DirectoryOpenEditor from './widgets/editors/DirectoryOpenEditor';
+import TextChatEditor from './widgets/editors/TextChatEditor';
+import PlotWindowEditor from './widgets/editors/PlotWindowEditor';
 
 interface GuiWidgetEditorProps {
   widgets: GuiWidget[];
@@ -186,98 +190,28 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
               </div>
             </div>
 
-            {(widget.kind === 'file_open' || widget.kind === 'directory_open') && (
-              <div className="mb-2">
-                <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                  Default path
-                </label>
-                <input
-                  className="w-full rounded-lg px-2 py-1.5 text-sm"
-                  style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                  value={widget.value ?? ''}
-                  onChange={(e) => updateWidget(index, { value: e.target.value })}
-                  placeholder={widget.kind === 'file_open' ? '/path/to/file' : '/path/to/directory'}
-                />
-              </div>
+            {widget.kind === 'file_open' && (
+              <FileOpenEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
             )}
 
             {widget.kind === 'directory_open' && (
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                  Extensions filter (comma-separated, e.g. .md, .txt)
-                </label>
-                <input
-                  className="w-full rounded-lg px-2 py-1.5 text-sm font-mono"
-                  style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                  value={widget.extensions}
-                  onChange={(e) => updateWidget(index, { extensions: e.target.value })}
-                  placeholder="Leave empty for all file types"
-                />
-              </div>
+              <DirectoryOpenEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
             )}
 
             {(widget.kind === 'text_window' || widget.kind === 'chat_window') && (
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                  {widget.kind === 'text_window' ? 'Default text' : 'Simulated message (for preview)'}
-                </label>
-                <textarea
-                  className="w-full rounded-lg px-2 py-1.5 text-sm resize-none"
-                  style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 60 }}
-                  value={widget.value ?? ''}
-                  onChange={(e) => updateWidget(index, { value: e.target.value })}
-                />
-              </div>
+              <TextChatEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
             )}
 
             {widget.kind === 'plot_window' && (
-              <div className="mt-3 pt-3" style={{ borderTop: '1px solid #2d3148' }}>
-                <button
-                  onClick={() => toggleTransform(widget.id)}
-                  className="text-xs font-medium mb-1"
-                  style={{ color: '#94a3b8', background: 'transparent' }}
-                >
-                  {expandedTransform[widget.id] ? '▾' : '▸'} Data transform (optional)
-                </button>
-                {expandedTransform[widget.id] && (
-                  <div className="mt-2">
-                    <p className="text-xs mb-2" style={{ color: '#475569' }}>
-                      Leave empty to display raw incoming data.
-                    </p>
-                    <div className="flex items-center justify-between mb-1">
-                      <select
-                        className="rounded-lg px-2 py-1 text-xs"
-                        style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                        value={widget.language ?? 'python'}
-                        onChange={(e) => updateWidget(index, { language: e.target.value as 'python' | 'javascript' })}
-                      >
-                        <option value="python">Python</option>
-                        <option value="javascript">JavaScript</option>
-                      </select>
-                      <button
-                        onClick={() => handleGenerateTransform(widget)}
-                        disabled={generatingId === widget.id}
-                        className="text-xs px-2 py-1 rounded"
-                        style={{ background: '#22c55e', color: 'white', opacity: generatingId === widget.id ? 0.5 : 1 }}
-                      >
-                        {generatingId === widget.id ? '…' : '✨ Generate'}
-                      </button>
-                    </div>
-                    <textarea
-                      className="w-full rounded-lg px-2 py-1.5 text-sm resize-none font-mono"
-                      style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 100 }}
-                      value={widget.code ?? ''}
-                      onChange={(e) => updateWidget(index, { code: e.target.value })}
-                      spellCheck={false}
-                    />
-                    {transformErrors[widget.id] && (
-                      <div className="text-xs mt-1" style={{ color: '#f87171' }}>
-                        ❌ {transformErrors[widget.id]}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <PlotWindowEditor
+                widget={widget}
+                onUpdate={(patch) => updateWidget(index, patch)}
+                expanded={!!expandedTransform[widget.id]}
+                onToggleExpand={() => toggleTransform(widget.id)}
+                generating={generatingId === widget.id}
+                error={transformErrors[widget.id]}
+                onGenerate={() => handleGenerateTransform(widget)}
+              />
             )}
           </div>
         ))}

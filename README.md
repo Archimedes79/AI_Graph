@@ -189,7 +189,7 @@ attached across GUI edits.
 `run(inputs: dict) -> dict`, receiving `{"value": <raw incoming data>}` and returning
 `{"value": <plot-ready data>}` — a list of numbers, or a list of `{x, y}` /
 `{label, value}` objects. It runs through the same sandboxed `code_executor` as Code
-nodes (`app/services/gui_executor.py`). Leaving `code` empty passes the raw incoming
+nodes (`app/services/executors/gui.py`). Leaving `code` empty passes the raw incoming
 value straight through to the chart (a dependency-free inline SVG component,
 `frontend/src/components/PlotWidget.tsx`). The GUI widget editor
 (`frontend/src/components/GuiWidgetEditor.tsx`) can call the AI to generate this

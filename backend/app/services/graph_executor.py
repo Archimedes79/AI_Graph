@@ -30,7 +30,7 @@ from app.models.graph import (
     RuntimeRequirement,
     sync_gui_node_ports,
 )
-from app.services import ai_service, code_executor, file_service, gui_executor
+from app.services import ai_service, file_service
 
 logger = logging.getLogger(__name__)
 
@@ -418,142 +418,20 @@ def _topological_levels(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[
 # Individual node executors
 # ---------------------------------------------------------------------------
 
+# Imported here (rather than at module top) so the per-type executor modules
+# can `from app.services.graph_executor import _reconcile_outputs` without a
+# circular-import failure: by this point _reconcile_outputs already exists in
+# this module's namespace.
+from app.services import executors  # noqa: E402
+
+
 async def _execute_node(
     node: GraphNode,
     inputs: Dict[str, Any],
     effective_formats: Optional[Dict[str, Optional[str]]] = None,
 ) -> Dict[str, Any]:
     """Execute a single node and return its output dict."""
-    cfg = node.config
-    nt = node.node_type
-
-    if nt == NodeType.TEXT_INPUT:
-        return {"output": cfg.value or inputs.get("value", "")}
-
-    if nt == NodeType.FILE_INPUT:
-        path = str(Path(cfg.value or inputs.get("path", "")).expanduser().resolve())
-        content = file_service.read_text_file(path)
-        return {"content": content, "path": path}
-
-    if nt == NodeType.DIRECTORY_INPUT:
-        path = str(Path(cfg.value or inputs.get("path", "")).expanduser().resolve())
-        recursive = cfg.extra.get("recursive", False)
-        extensions = file_service.parse_extensions_filter(cfg.extra.get("extensions", ""))
-        files = file_service.list_directory(path, recursive=recursive, extensions=extensions)
-        selector_code = cfg.selector_code.strip()
-        if not cfg.select_all_files and not selector_code and cfg.selector_prompt.strip():
-            selector_code, _ = await ai_service.generate_code(
-                description=cfg.selector_prompt,
-                language=cfg.language or "python",
-                context='inputs["files"] contains rooted file paths. Return {"files": [...]} with selected paths.',
-                inputs=["files"],
-                outputs=["files"],
-                model=cfg.ai_model,
-                provider=cfg.ai_provider,
-            )
-        if not cfg.select_all_files and selector_code:
-            selected = await code_executor.execute_code(
-                selector_code, cfg.language or "python", {"files": files}
-            )
-            files = selected.get("files", files)
-        return {"files": files, "count": len(files)}
-
-    if nt == NodeType.AI:
-        prompt_parts = []
-        for port_id, val in inputs.items():
-            if val is not None:
-                prompt_parts.append(str(val) if not isinstance(val, str) else val)
-        prompt = "\n\n".join(prompt_parts)
-        response = await ai_service.complete(
-            prompt=prompt,
-            system=cfg.system_prompt,
-            model=cfg.ai_model,
-            temperature=cfg.temperature,
-            provider=cfg.ai_provider,
-        )
-        return _reconcile_outputs(node, {"output": response})
-
-    if nt == NodeType.CODE:
-        result = await code_executor.execute_code(cfg.code, cfg.language, inputs)
-        return _reconcile_outputs(node, result)
-
-    if nt == NodeType.OUTPUT:
-        result = dict(inputs)
-        fmt_map = effective_formats or {}
-        non_null_items = [(k, v) for k, v in inputs.items() if v is not None]
-
-        if cfg.write_mode == "file" and cfg.value:
-            if len(non_null_items) == 1:
-                key, value = non_null_items[0]
-                fmt = fmt_map.get(key)
-                if fmt and fmt.lower() != "text":
-                    written = file_service.write_formatted_file(cfg.value, value, fmt)
-                else:
-                    written = file_service.write_text_file(cfg.value, str(value))
-            else:
-                # Multiple ports/values: join as text unless they all share one
-                # explicit non-text format, in which case write them as a JSON array.
-                shared_formats = {(fmt_map.get(k) or "text").lower() for k, _ in non_null_items}
-                if non_null_items and len(shared_formats) == 1 and next(iter(shared_formats)) != "text":
-                    fmt = fmt_map.get(non_null_items[0][0])
-                    written = file_service.write_formatted_file(
-                        cfg.value, [v for _, v in non_null_items], fmt
-                    )
-                else:
-                    content = "\n".join(str(v) for v in inputs.values() if v is not None)
-                    written = file_service.write_text_file(cfg.value, content)
-            result["written_path"] = written
-        elif cfg.write_mode == "directory" and cfg.value:
-            multi_ports = {port.id for port in node.inputs if port.multi}
-            written = file_service.write_output_directory(cfg.value, inputs, fmt_map, multi_ports)
-            result["written_paths"] = written
-        return result
-
-    if nt == NodeType.TEXT_OUTPUT:
-        # Passthrough – the frontend/CLI/runner display these inputs in a text window
-        return dict(inputs)
-
-    if nt == NodeType.MERGE:
-        mode = cfg.merge_mode
-        if mode == "concat":
-            sep = cfg.separator
-            parts = []
-            for val in inputs.values():
-                if isinstance(val, list):
-                    parts.extend(str(v) for v in val)
-                elif val is not None:
-                    parts.append(str(val))
-            return {"output": sep.join(parts)}
-
-        flat: List[Any] = []
-        for val in inputs.values():
-            if isinstance(val, list):
-                flat.extend(v for v in val if v is not None)
-            elif val is not None:
-                flat.append(val)
-
-        if mode == "sum":
-            total = sum(float(v) for v in flat)
-            return {"output": int(total) if total.is_integer() else total}
-        if mode == "count":
-            return {"output": len(flat)}
-        if mode == "json_list":
-            return {"output": json.dumps(flat)}
-
-        logger.warning("Unknown merge_mode %r on node %s; falling back to concat", mode, node.id)
-        sep = cfg.separator
-        return {"output": sep.join(str(v) for v in flat)}
-
-    if nt == NodeType.SPLIT:
-        sep = cfg.separator
-        source = next(iter(inputs.values()), "")
-        parts = str(source).split(sep) if source else []
-        return {"items": parts, "count": len(parts)}
-
-    if nt == NodeType.GUI:
-        return await gui_executor.execute_gui_node(node, inputs)
-
-    raise ValueError(f"Unknown node type: {nt}")
+    return await executors.execute_node(node, inputs, effective_formats)
 
 
 async def _execute_batch_node(node: GraphNode, inputs: Dict[str, Any]) -> Dict[str, Any]:

@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import type { GraphNode, NodeType, AIProvider } from '../types/graph';
+import type { GraphNode } from '../types/graph';
 import { useGraphStore } from '../store/graphStore';
 import { generateCode, generatePrompt } from '../utils/api';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
-import GuiWidgetEditor from './GuiWidgetEditor';
+import InputEditor from './nodes/editors/InputEditor';
+import AIEditor from './nodes/editors/AIEditor';
+import CodeEditor from './nodes/editors/CodeEditor';
+import OutputEditor from './nodes/editors/OutputEditor';
+import TextOutputEditor from './nodes/editors/TextOutputEditor';
+import MergeSplitEditor from './nodes/editors/MergeSplitEditor';
+import GuiEditor from './nodes/editors/GuiEditor';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -197,422 +203,40 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
           {activeTab === 'config' && (
             <div className="space-y-4">
-              {/* Input nodes */}
               {isInput && (
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                    {nt === 'text_input' ? 'Default Text (shown in the run dialog)' : 'Default Path (shown in the run dialog)'}
-                  </label>
-                  <input
-                    className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                    value={node.config.value ?? ''}
-                    onChange={(e) => setConfig('value', e.target.value)}
-                    placeholder={nt === 'text_input' ? 'Enter default text…' : '/path/to/file'}
-                  />
-                  <p className="text-xs mt-2" style={{ color: '#475569' }}>
-                    Whenever the graph runs, a dialog asks the user for this value
-                    (pre-filled with the default above) — in the editor, the CLI, and
-                    deployed runs.
-                  </p>
-                  {nt === 'directory_input' && (
-                    <label className="flex items-center gap-2 mt-2 text-sm" style={{ color: '#94a3b8' }}>
-                      <input
-                        type="checkbox"
-                        checked={!!node.config.extra?.recursive}
-                        onChange={(e) =>
-                          setConfig('extra', { ...node.config.extra, recursive: e.target.checked })
-                        }
-                      />
-                      Recursive
-                    </label>
-                  )}
-
-                  {nt === 'directory_input' && (
-                    <div className="mt-2">
-                      <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                        File types (comma-separated, e.g. .md, .txt)
-                      </label>
-                      <input
-                        className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                        value={(node.config.extra?.extensions as string) ?? ''}
-                        onChange={(e) =>
-                          setConfig('extra', { ...node.config.extra, extensions: e.target.value })
-                        }
-                        placeholder="Leave empty for all file types"
-                      />
-                    </div>
-                  )}
-
-                  {nt === 'directory_input' && (
-                    <div className="mt-4 pt-4" style={{ borderTop: '1px solid #2d3148' }}>
-                      <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                        AI file-selection prompt
-                      </label>
-                      <textarea
-                        className="w-full rounded-lg px-3 py-2 text-sm resize-none"
-                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 80 }}
-                        value={node.config.selector_prompt}
-                        onChange={(e) => setConfig('selector_prompt', e.target.value)}
-                        placeholder="Select Markdown files that contain API documentation"
-                      />
-                      <label className="flex items-center gap-2 text-sm mb-2" style={{ color: '#94a3b8' }}>
-                        <input
-                          type="checkbox"
-                          checked={node.config.select_all_files}
-                          onChange={(e) => setConfig('select_all_files', e.target.checked)}
-                        />
-                        Select all files
-                      </label>
-                      {!node.config.select_all_files && (
-                        <>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
-                              File Selector Code — run(inputs) receives {'{'}"files"{'}'} and must return {'{'}"files"{'}'}
-                            </label>
-                            <button
-                              onClick={handleGenerateSelectorCode}
-                              disabled={generating}
-                              className="text-xs px-2 py-1 rounded"
-                              style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
-                            >
-                              {generating ? '…' : '✨ Generate'}
-                            </button>
-                          </div>
-                          <textarea
-                            className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-                            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 140 }}
-                            value={node.config.selector_code}
-                            onChange={(e) => setConfig('selector_code', e.target.value)}
-                            spellCheck={false}
-                          />
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <InputEditor
+                  node={node}
+                  setConfig={setConfig}
+                  generating={generating}
+                  handleGenerateSelectorCode={handleGenerateSelectorCode}
+                />
               )}
 
-              {/* AI node */}
               {isAI && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                        Provider
-                      </label>
-                      <select
-                        className="w-full rounded-lg px-3 py-2 text-sm"
-                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                        value={node.config.ai_provider}
-                        onChange={(e) => setConfig('ai_provider', e.target.value as AIProvider)}
-                      >
-                        <option value="ollama">Ollama (local)</option>
-                        <option value="lmstudio">LM Studio (local)</option>
-                        <option value="openai">OpenAI</option>
-                        <option value="openai_compatible">OpenAI-compatible endpoint</option>
-                        <option value="anthropic">Anthropic</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                        Model
-                      </label>
-                      <input
-                        className="w-full rounded-lg px-3 py-2 text-sm"
-                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                        value={node.config.ai_model}
-                        onChange={(e) => setConfig('ai_model', e.target.value)}
-                        placeholder="llama3"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
-                        System Prompt
-                      </label>
-                      <button
-                        onClick={handleGeneratePrompt}
-                        disabled={generating}
-                        className="text-xs px-2 py-1 rounded"
-                        style={{ background: '#6366f1', color: 'white', opacity: generating ? 0.5 : 1 }}
-                      >
-                        {generating ? '…' : '✨ Generate from description'}
-                      </button>
-                    </div>
-                    <textarea
-                      className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-                      style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 120 }}
-                      value={node.config.system_prompt}
-                      onChange={(e) => setConfig('system_prompt', e.target.value)}
-                      placeholder="You are a helpful assistant…"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                      Temperature ({node.config.temperature})
-                    </label>
-                    <input
-                      type="range"
-                      min={0} max={2} step={0.05}
-                      value={node.config.temperature}
-                      onChange={(e) => setConfig('temperature', parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                      Batch mode
-                    </label>
-                    <select
-                      className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                      value={node.config.batch_mode}
-                      onChange={(e) => setConfig('batch_mode', e.target.value)}
-                    >
-                      <option value="per_item">Per item (default)</option>
-                      <option value="whole_list">Whole list at once (for totals/summaries)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
-                      <input
-                        type="checkbox"
-                        checked={!!node.config.read_file_inputs}
-                        onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
-                      />
-                      Read file contents from paths
-                    </label>
-                    <p className="text-xs mt-1" style={{ color: '#475569' }}>
-                      When enabled, any input port with data type 'File path' is automatically read from disk (text or base64) before this node runs.
-                    </p>
-                  </div>
-                </>
+                <AIEditor
+                  node={node}
+                  setConfig={setConfig}
+                  generating={generating}
+                  handleGeneratePrompt={handleGeneratePrompt}
+                />
               )}
 
-              {/* Code node */}
               {isCode && (
-                <>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-3">
-                      <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
-                        Language
-                      </label>
-                      <select
-                        className="rounded px-2 py-1 text-sm"
-                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                        value={node.config.language}
-                        onChange={(e) => setConfig('language', e.target.value)}
-                      >
-                        <option value="python">Python</option>
-                        <option value="javascript">JavaScript</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <select
-                        className="rounded px-2 py-1 text-xs"
-                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                        value={node.config.ai_provider}
-                        onChange={(e) => setConfig('ai_provider', e.target.value)}
-                      >
-                        <option value="ollama">Ollama</option>
-                        <option value="lmstudio">LM Studio</option>
-                        <option value="openai">OpenAI</option>
-                        <option value="openai_compatible">OpenAI-compatible endpoint</option>
-                        <option value="anthropic">Anthropic</option>
-                      </select>
-                      <input
-                        className="rounded px-2 py-1 text-xs w-24"
-                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                        value={node.config.ai_model}
-                        onChange={(e) => setConfig('ai_model', e.target.value)}
-                        placeholder="llama3"
-                      />
-                      <button
-                        onClick={handleGenerateCode}
-                        disabled={generating}
-                        className="text-xs px-2 py-1 rounded"
-                        style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
-                      >
-                        {generating ? '…' : '✨ Generate'}
-                      </button>
-                    </div>
-                  </div>
-                  <textarea
-                    className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-                    style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 200 }}
-                    value={node.config.code}
-                    onChange={(e) => setConfig('code', e.target.value)}
-                    placeholder={`def run(inputs):\n    return {"output": inputs.get("input", "")}`}
-                    spellCheck={false}
-                  />
-                  <div>
-                    <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                      Batch mode
-                    </label>
-                    <select
-                      className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                      value={node.config.batch_mode}
-                      onChange={(e) => setConfig('batch_mode', e.target.value)}
-                    >
-                      <option value="per_item">Per item (default)</option>
-                      <option value="whole_list">Whole list at once (for totals/summaries)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
-                      <input
-                        type="checkbox"
-                        checked={!!node.config.read_file_inputs}
-                        onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
-                      />
-                      Read file contents from paths
-                    </label>
-                    <p className="text-xs mt-1" style={{ color: '#475569' }}>
-                      When enabled, any input port with data type 'File path' is automatically read from disk (text or base64) before this node runs.
-                    </p>
-                  </div>
-                </>
+                <CodeEditor
+                  node={node}
+                  setConfig={setConfig}
+                  generating={generating}
+                  handleGenerateCode={handleGenerateCode}
+                />
               )}
 
-              {/* Output node */}
-              {nt === 'output' && (
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                    Output Label
-                  </label>
-                  <input
-                    className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                    value={node.config.output_label}
-                    onChange={(e) => setConfig('output_label', e.target.value)}
-                  />
+              {nt === 'output' && <OutputEditor node={node} setConfig={setConfig} />}
 
-                  <div className="mt-4 pt-4" style={{ borderTop: '1px solid #2d3148' }}>
-                    <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                      Write result to disk
-                    </label>
-                    <select
-                      className="w-full rounded-lg px-3 py-2 text-sm"
-                      style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                      value={node.config.write_mode}
-                      onChange={(e) => setConfig('write_mode', e.target.value)}
-                    >
-                      <option value="none">Don't write to disk (show in Results panel only)</option>
-                      <option value="file">Write to a single file</option>
-                      <option value="directory">Write to a directory (one file per value)</option>
-                    </select>
+              {nt === 'text_output' && <TextOutputEditor node={node} setConfig={setConfig} />}
 
-                    {node.config.write_mode !== 'none' && (
-                      <>
-                        <label className="block text-xs font-medium mb-1 mt-3" style={{ color: '#94a3b8' }}>
-                          {node.config.write_mode === 'file' ? 'Output file path' : 'Output directory path'}
-                        </label>
-                        <input
-                          className="w-full rounded-lg px-3 py-2 text-sm"
-                          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                          value={node.config.value ?? ''}
-                          onChange={(e) => setConfig('value', e.target.value)}
-                          placeholder={node.config.write_mode === 'file' ? '/path/to/output.txt' : '/path/to/output-dir'}
-                          disabled={node.config.prompt_at_runtime}
-                        />
-                        <label className="flex items-center gap-2 mt-2 text-sm" style={{ color: '#94a3b8' }}>
-                          <input
-                            type="checkbox"
-                            checked={!!node.config.prompt_at_runtime}
-                            onChange={(e) => setConfig('prompt_at_runtime', e.target.checked)}
-                          />
-                          Ask for path when running (web, CLI, and deployed runs)
-                        </label>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
+              {(nt === 'merge' || nt === 'split') && <MergeSplitEditor node={node} setConfig={setConfig} />}
 
-              {/* Text Output node */}
-              {nt === 'text_output' && (
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                    Window Title
-                  </label>
-                  <input
-                    className="w-full rounded-lg px-3 py-2 text-sm"
-                    style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                    value={node.config.output_label}
-                    onChange={(e) => setConfig('output_label', e.target.value)}
-                  />
-                  <p className="text-xs mt-2" style={{ color: '#475569' }}>
-                    When the graph runs, the connected value is shown to the user in its own text
-                    window (in the editor, printed to the console for CLI runs, and for deployed
-                    runs).
-                  </p>
-                </div>
-              )}
-
-              {/* Merge/Split */}
-              {(nt === 'merge' || nt === 'split') && (
-                <div>
-                  {nt === 'merge' && (
-                    <div className="mb-3">
-                      <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                        Merge mode
-                      </label>
-                      <select
-                        className="w-full rounded-lg px-3 py-2 text-sm"
-                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                        value={node.config.merge_mode}
-                        onChange={(e) => setConfig('merge_mode', e.target.value)}
-                      >
-                        <option value="concat">Concatenate text (default)</option>
-                        <option value="sum">Sum numbers</option>
-                        <option value="count">Count values</option>
-                        <option value="json_list">JSON list</option>
-                      </select>
-                    </div>
-                  )}
-                  <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                    Separator
-                  </label>
-                  <input
-                    className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                    style={
-                      nt === 'merge' && node.config.merge_mode !== 'concat'
-                        ? { background: '#0f1117', color: '#475569', border: '1px solid #2d3148', opacity: 0.5 }
-                        : { background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }
-                    }
-                    value={node.config.separator}
-                    onChange={(e) => setConfig('separator', e.target.value)}
-                    placeholder="\n"
-                    disabled={nt === 'merge' && node.config.merge_mode !== 'concat'}
-                  />
-                  {nt === 'merge' && node.config.merge_mode !== 'concat' && (
-                    <p className="text-xs mt-1" style={{ color: '#475569' }}>
-                      Separator is unused in this merge mode.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* GUI node – widget list drives ports directly, no manual port editor */}
-              {isGui && (
-                <div>
-                  <p className="text-xs mb-3" style={{ color: '#475569' }}>
-                    Ports are generated automatically from the widgets below (see the Ports tab).
-                    Adding, removing, or reordering a widget updates ports immediately.
-                  </p>
-
-                  <GuiWidgetEditor
-                    widgets={node.config.gui_widgets}
-                    onChange={applyWidgets}
-                    aiModel={node.config.ai_model}
-                    aiProvider={node.config.ai_provider}
-                  />
-                </div>
-              )}
+              {isGui && <GuiEditor node={node} applyWidgets={applyWidgets} />}
 
               {genMessage && (
                 <div className="text-sm px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc' }}>
