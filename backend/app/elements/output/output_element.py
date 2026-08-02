@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.elements.base import NodeElement, NodeMap, Sources
+from app.elements.base import DeployNeeds, NodeElement, NodeMap, Sources
 from app.models.graph import GraphNode, NodeType
 from app.services import file_service
 from app.services.deploy.shared import collect_inputs_lines
@@ -61,7 +61,25 @@ class OutputElement(NodeElement):
             lines.append("if _out_path:")
             if cfg.write_mode == "file":
                 lines.append("    _content = '\\n'.join(str(v) for v in _inputs.values() if v is not None)")
-                lines.append(f"    results[{node.id!r}]['written_path'] = _write_text_file(_out_path, _content)")
+                lines.append(f"    results[{node.id!r}]['written_path'] = write_text_file(_out_path, _content)")
             else:
-                lines.append(f"    results[{node.id!r}]['written_paths'] = _write_output_directory(_out_path, _inputs)")
+                multi_port_ids = [p.id for p in node.inputs if p.multi]
+                lines.append(
+                    f"    results[{node.id!r}]['written_paths'] = write_output_directory("
+                    f"_out_path, _inputs, multi_ports={multi_port_ids!r})"
+                )
         return lines
+
+    def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
+        cfg = node.config
+        if cfg.prompt_at_runtime and cfg.write_mode != "none":
+            return [{
+                "node_id": node.id, "label": node.label, "kind": cfg.write_mode,
+                "direction": "output", "current_value": cfg.value or "",
+            }]
+        return []
+
+    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
+        # Matches the pre-refactor check exactly: any OUTPUT node pulls in the
+        # file helpers, regardless of its actual write_mode.
+        return DeployNeeds(files=True)

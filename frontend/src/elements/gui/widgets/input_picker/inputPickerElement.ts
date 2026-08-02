@@ -1,5 +1,5 @@
 import type { GuiWidgetElementDefinition } from '../../../types';
-import InputPickerEditor from '../../../../components/widgets/editors/InputPickerEditor';
+import InputPickerEditor from './InputPickerEditor';
 import InputPickerWidget from '../../../../components/gui/widgets/InputPickerWidget';
 
 export const inputPickerElement: GuiWidgetElementDefinition = {

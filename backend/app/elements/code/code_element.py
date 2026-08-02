@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.elements.base import NodeElement, NodeMap, Sources
+from app.elements.base import DeployNeeds, NodeElement, NodeMap, Sources
 from app.models.graph import GraphNode, NodeType
 from app.services import code_executor
 from app.services.batching import reconcile_outputs
@@ -36,11 +36,15 @@ class CodeElement(NodeElement):
         output_port_ids = [p.id for p in node.outputs]
         multi_port_ids = [p.id for p in node.outputs if p.multi]
         if cfg.batch_mode == "whole_list":
-            lines.append(f"_raw = await _run_code({cfg.code!r}, {(cfg.language or 'python')!r}, _inputs)")
-            lines.append(f"results[{node.id!r}] = _reconcile_outputs({output_port_ids!r}, _raw)")
+            lines.append(f"_raw = await execute_code({cfg.code!r}, {(cfg.language or 'python')!r}, _inputs)")
+            lines.append(f"results[{node.id!r}] = reconcile_outputs_by_ids({output_port_ids!r}, _raw)")
         else:
+            input_multi_port_ids = [p.id for p in node.inputs if p.multi]
             lines.append(
                 f"results[{node.id!r}] = await _run_code_batch({cfg.code!r}, {(cfg.language or 'python')!r}, "
-                f"_inputs, {output_port_ids!r}, {multi_port_ids!r})"
+                f"_inputs, {output_port_ids!r}, {multi_port_ids!r}, {input_multi_port_ids!r})"
             )
         return lines
+
+    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
+        return DeployNeeds(code_runner=True, read_file_inputs=node.config.read_file_inputs)

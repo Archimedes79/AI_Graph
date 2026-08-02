@@ -1,5 +1,5 @@
 import type { NodeElementDefinition } from '../types';
-import OutputEditor from '../../components/nodes/editors/OutputEditor';
+import OutputEditor from './OutputEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
 
 export const outputElement: NodeElementDefinition = {

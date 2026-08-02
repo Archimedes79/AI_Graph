@@ -1,5 +1,5 @@
 import type { NodeElementDefinition } from '../types';
-import MergeSplitEditor from '../../components/nodes/editors/MergeSplitEditor';
+import MergeSplitEditor from '../shared/MergeSplitEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
 
 export const mergeElement: NodeElementDefinition = {

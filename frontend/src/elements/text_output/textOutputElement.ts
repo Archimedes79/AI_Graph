@@ -1,5 +1,5 @@
 import type { NodeElementDefinition } from '../types';
-import TextOutputEditor from '../../components/nodes/editors/TextOutputEditor';
+import TextOutputEditor from './TextOutputEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
 
 export const textOutputElement: NodeElementDefinition = {

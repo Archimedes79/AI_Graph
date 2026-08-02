@@ -1,5 +1,5 @@
 import React from 'react';
-import type { GraphNode } from '../../../types/graph';
+import type { GraphNode } from '../../types/graph';
 
 interface OutputEditorProps {
   node: GraphNode;

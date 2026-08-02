@@ -51,12 +51,12 @@ see [AGENTS.md](AGENTS.md).
 
 - **Visual Graph Editor** – drag-and-drop node canvas powered by ReactFlow
 - **Node Types**:
-  - **Text / File / Directory Input** – load data from configured sources; Directory Input only lists rooted file paths, it does not read content
-  - **AI Node** – send prompts to Ollama (local LLM), OpenAI, an OpenAI-compatible endpoint, or Anthropic
+  - **Input** – one node type with a `text` / `file` / `directory` mode; in directory mode it only lists rooted file paths, it does not read content (the older `text_input` / `file_input` / `directory_input` names still load and map to the same element)
+  - **AI Node** – send prompts to Ollama (local LLM), LM Studio, OpenAI, an OpenAI-compatible endpoint, or Anthropic
   - **Code Node** – execute generated or hand-written Python/JavaScript
-  - **Read File (Code) / Read File (AI)** – presets that auto-resolve `file_path` inputs to actual content before running
   - **Output** – capture results
   - **Merge / Split** – fan-in and fan-out multiple connections, with concat/sum/count/json_list aggregation modes on Merge
+- **Read-file inputs** – a `read_file_inputs` toggle on Code and AI nodes auto-resolves `file_path` inputs to actual content before running
 - **AI Code Generation** – describe what a node should do; the AI writes the code
 - **AI Prompt Generation** – describe the AI's role; get a system prompt generated
 - **Fan-in / Fan-out** – connect one output to many inputs, or merge many into one
@@ -227,7 +227,7 @@ File Open → AI → Text Window graph built this way.
 `run(inputs: dict) -> dict`, receiving `{"value": <raw incoming data>}` and returning
 `{"value": <plot-ready data>}` — a list of numbers, or a list of `{x, y}` /
 `{label, value}` objects. It runs through the same sandboxed `code_executor` as Code
-nodes (`app/services/executors/gui.py`). Leaving `code` empty passes the raw incoming
+nodes (`backend/app/elements/gui/widgets/plot_window/plot_window_element.py`). Leaving `code` empty passes the raw incoming
 value straight through to the chart (a dependency-free inline SVG component,
 `frontend/src/components/PlotWidget.tsx`). The GUI widget editor
 (`frontend/src/components/GuiWidgetEditor.tsx`) can call the AI to generate this
@@ -248,6 +248,7 @@ against the Graph schema. Use it from the "✨ AI Graph" toolbar action, or stan
 | Provider | Model | Env var needed |
 |---|---|---|
 | **Ollama** (default) | llama3, mistral, … | `OLLAMA_BASE_URL` (default: localhost) |
+| LM Studio | any locally loaded model | `LMSTUDIO_BASE_URL` (default: `http://localhost:1234/v1`) |
 | OpenAI | gpt-4o, gpt-4-turbo, … | `OPENAI_API_KEY` |
 | Anthropic | claude-3-5-sonnet, … | `ANTHROPIC_API_KEY` |
 | OpenAI-compatible endpoint | Any compatible model | `OPENAI_COMPATIBLE_BASE_URL`, optional `OPENAI_COMPATIBLE_API_KEY` |
@@ -322,25 +323,29 @@ AI-Graph/
 │   ├── app/
 │   │   ├── main.py       # FastAPI app entry point
 │   │   ├── models/       # Graph DSL Pydantic models (NodeType/GuiWidgetKind contracts)
-│   │   ├── routers/      # API routes (graph, execute, ai, deploy)
+│   │   ├── routers/      # API routes (graph, execute, ai, deploy, files)
+│   │   ├── elements/     # ONE class per node type / widget kind, owning execute() + compile()
+│   │   │   ├── base.py       # NodeElement / GuiWidgetElement contracts
+│   │   │   ├── registry.py   # NodeType -> element, GuiWidgetKind -> element (legacy names alias here)
+│   │   │   ├── code/code_element.py          # reference pattern for a node type
+│   │   │   └── gui/          # gui_element.py (composite) + widgets/<kind>/<kind>_element.py
 │   │   └── services/
-│   │       ├── graph_executor.py   # topology/batching/format resolution; dispatches to executors/
-│   │       ├── executors/          # one file per node type: live execution logic
-│   │       ├── gui_widgets/        # one file per GUI widget kind: live execution logic
-│   │       ├── deploy_service.py   # deploy-bundle assembly; dispatches to deploy/node_compilers/
-│   │       ├── deploy/
-│   │       │   ├── node_compilers/         # one file per node type: deploy-script codegen
-│   │       │   └── gui_widget_compilers/   # one file per GUI widget kind: deploy-script codegen
+│   │       ├── graph_executor.py   # topology/batching/format resolution; dispatches via registry
+│   │       ├── deploy_service.py   # deploy-bundle assembly; dispatches via registry
+│   │       ├── batching.py         # shared batch reconcile/merge helpers
 │   │       ├── ai_service.py, code_executor.py, file_service.py  # cross-cutting helpers
 │   ├── tests/            # Backend tests — prefer large workflow-level tests (see AGENTS.md)
 │   └── requirements.txt
 ├── frontend/             # React + TypeScript + ReactFlow frontend
 │   └── src/
+│       ├── elements/     # ONE definition per node type / widget kind (create/ports/ConfigEditor)
+│       │   ├── registry.ts   # NODE_ELEMENTS / GUI_WIDGET_ELEMENTS (legacy names alias here)
+│       │   └── code/codeElement.ts   # reference pattern for a node type
 │       ├── components/
-│       │   ├── NodeEditor.tsx        # modal shell; dispatches to nodes/editors/
-│       │   ├── nodes/editors/        # one file per node type: config panel
-│       │   ├── GuiWidgetEditor.tsx   # widget list; dispatches to widgets/editors/
-│       │   └── widgets/editors/      # one file per GUI widget kind: config panel
+│       │   ├── NodeEditor.tsx        # modal shell; resolves ConfigEditor via elements/registry.ts
+│       │   ├── nodes/editors/        # one file per node type: config panel component
+│       │   ├── GuiWidgetEditor.tsx   # widget list; resolves ConfigEditor via elements/registry.ts
+│       │   └── widgets/editors/      # one file per GUI widget kind: config panel component
 │       ├── store/        # Zustand state management
 │       ├── types/        # TypeScript graph types (mirrors backend/app/models/graph.py)
 │       └── utils/        # API client, node defaults

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
+from types import ModuleType
 from typing import Dict, List, Tuple
 
 from app.models.graph import DataType, GraphNode
@@ -12,6 +15,33 @@ from app.models.graph import DataType, GraphNode
 # value at all (the port stays unpopulated, exactly like an unwired port).
 DEFERRED_LITERAL = "__deferred_literal__"
 DEFERRED_EMPTY = "__deferred_empty__"
+
+
+def extract_source(module: ModuleType, names: List[str]) -> str:
+    """
+    Return the literal source text of specific top-level statements (constant
+    assignments or function defs) named in *names*, from *module*, in that
+    order, joined by blank lines.
+
+    This is how deploy_service.py embeds real, portable functions (from
+    file_service.py / batching.py / code_executor.py / ai_service.py) into the
+    compiled runner script verbatim -- not a hand-copied string literal that
+    merely resembles the real implementation -- so the deployed bundle stays
+    byte-identical in behavior to live execution; a fix to one of those
+    functions is picked up here automatically, it can never silently drift.
+    """
+    source = inspect.getsource(module)
+    tree = ast.parse(source)
+    blocks: Dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            blocks[node.name] = ast.get_source_segment(source, node)
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            blocks[node.targets[0].id] = ast.get_source_segment(source, node)
+    missing = [name for name in names if name not in blocks]
+    if missing:
+        raise ValueError(f"extract_source: {missing!r} not found as top-level statements in {module.__name__}")
+    return "\n\n\n".join(blocks[name] for name in names)
 
 
 def collect_inputs_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tuple[str, str]]]) -> List[str]:
@@ -33,7 +63,7 @@ def collect_inputs_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tu
     return lines
 
 
-def _effective_format(
+def effective_format(
     node: GraphNode,
     port_id: str,
     sources: Dict[Tuple[str, str], List[Tuple[str, str]]],
@@ -65,7 +95,7 @@ def resolve_file_inputs_lines(
     if not node.config.read_file_inputs:
         return []
     file_ports = {
-        port.id: _effective_format(node, port.id, sources, node_map)
+        port.id: effective_format(node, port.id, sources, node_map)
         for port in node.inputs if port.data_type == DataType.FILE_PATH
     }
     return [f"_inputs = _resolve_file_inputs(_inputs, {file_ports!r})"]

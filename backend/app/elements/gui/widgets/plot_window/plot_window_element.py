@@ -28,7 +28,7 @@ class PlotWindowElement(GuiWidgetElement):
         lines = [f"_raw = _inputs.get({in_id!r})"]
         if widget.code:
             lines.append(
-                f"_inputs[{in_id!r}] = (await _run_code({widget.code!r}, {(widget.language or 'python')!r}, "
+                f"_inputs[{in_id!r}] = (await execute_code({widget.code!r}, {(widget.language or 'python')!r}, "
                 "{'value': _raw})).get('value', _raw)"
             )
         return lines

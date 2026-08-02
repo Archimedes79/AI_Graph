@@ -1,5 +1,5 @@
 import type { NodeElementDefinition } from '../types';
-import AIEditor from '../../components/nodes/editors/AIEditor';
+import AIEditor from './AIEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
 
 export const aiElement: NodeElementDefinition = {

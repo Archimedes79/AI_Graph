@@ -14,9 +14,11 @@ from __future__ import annotations
 import textwrap
 from typing import Dict, List, Tuple
 
+from app.elements.base import DeployNeeds
 from app.elements.registry import NODE_ELEMENTS
-from app.models.graph import Graph, GraphNode, GuiWidgetKind, NodeType
-from app.services.deploy.shared import DEFERRED_EMPTY, DEFERRED_LITERAL
+from app.models.graph import Graph, GraphNode, NodeType
+from app.services import ai_service, batching, code_executor, file_service
+from app.services.deploy.shared import DEFERRED_EMPTY, DEFERRED_LITERAL, extract_source
 
 # ---------------------------------------------------------------------------
 # Compile-time graph analysis
@@ -76,38 +78,18 @@ def _sources_by_target(graph: Graph) -> Dict[Tuple[str, str], List[Tuple[str, st
     return mapping
 
 
-_INPUT_NODE_KINDS = {
-    NodeType.TEXT_INPUT: "text",
-    NodeType.FILE_INPUT: "file",
-    NodeType.DIRECTORY_INPUT: "directory",
-}
-
-
 def _requirements_literal(graph: Graph) -> List[dict]:
-    """The list of {node_id, label, kind, direction, current_value[, widget_id]} the compiled script must prompt for."""
+    """
+    The list of {node_id, label, kind, direction, current_value[, widget_id]} the
+    compiled script must prompt for -- built from the exact same per-element
+    `runtime_requirements` the live editor's `graph_executor.get_runtime_requirements`
+    calls, so the two can never diverge on which nodes/widgets prompt at runtime.
+    """
     reqs: List[dict] = []
     for node in graph.nodes:
-        cfg = node.config
-        kind = _INPUT_NODE_KINDS.get(node.node_type)
-        if kind is not None:
-            reqs.append({"node_id": node.id, "label": node.label, "kind": kind, "direction": "input", "current_value": cfg.value or ""})
-        elif node.node_type == NodeType.OUTPUT and cfg.prompt_at_runtime and cfg.write_mode != "none":
-            reqs.append({"node_id": node.id, "label": node.label, "kind": cfg.write_mode, "direction": "output", "current_value": cfg.value or ""})
-        elif node.node_type == NodeType.GUI:
-            for widget in cfg.gui_widgets:
-                if widget.value:
-                    continue
-                # Determine if this widget is a file/directory picker
-                if widget.kind in (GuiWidgetKind.FILE_OPEN, GuiWidgetKind.INPUT_PICKER) and widget.mode != "directory":
-                    widget_kind = "file"
-                elif widget.kind == GuiWidgetKind.DIRECTORY_OPEN or (widget.kind == GuiWidgetKind.INPUT_PICKER and widget.mode == "directory"):
-                    widget_kind = "directory"
-                else:
-                    continue
-                reqs.append({
-                    "node_id": node.id, "label": widget.label or widget.id, "kind": widget_kind,
-                    "direction": "input", "current_value": "", "widget_id": widget.id,
-                })
+        element = NODE_ELEMENTS.get(node.node_type)
+        if element is not None:
+            reqs.extend(element.runtime_requirements(node))
     return reqs
 
 
@@ -115,68 +97,50 @@ def _requirements_literal(graph: Graph) -> List[dict]:
 # Self-contained runtime helper snippets (embedded verbatim, no app.* imports)
 # ---------------------------------------------------------------------------
 
-_FILE_HELPERS = '''\
-def _resolve_path(path):
-    return str(Path(path).expanduser().resolve())
+# ---------------------------------------------------------------------------
+# Self-contained runtime helper snippets. Each block below embeds the REAL
+# portable functions from the corresponding live-execution service module
+# verbatim, via extract_source() (see deploy/shared.py) reading their actual
+# source text at compile time -- never a hand-copied second version that
+# merely resembles the real implementation -- plus a little glue (aliases,
+# batch orchestration) that has no live-side counterpart to duplicate. A fix
+# to file_service.py / batching.py / code_executor.py / ai_service.py is
+# therefore picked up here automatically; the deployed bundle can never
+# silently drift from live execution.
+# ---------------------------------------------------------------------------
 
+_FILE_HELPERS = "\n\n\n".join([
+    "import base64, csv, io, logging, mimetypes",
+    "logger = logging.getLogger(__name__)",
+    extract_source(file_service, [
+        "resolve_path",
+        "list_directory",
+        "_normalize_extensions",
+        "read_text_file",
+        "read_binary_file_base64",
+        "serialize_text_value",
+        "_is_binary_format",
+        "_binary_extension",
+        "write_text_file",
+        "write_formatted_file",
+        "write_output_directory",
+    ]),
+])
 
-def _read_text_file(path):
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"File not found: {path}")
-    return p.read_text(encoding="utf-8", errors="replace")
-
-
-def _list_directory(path, recursive=False, extensions=None):
-    root = Path(path).expanduser().resolve()
-    if not root.exists():
-        raise FileNotFoundError(f"Directory not found: {path}")
-    candidates = root.rglob("*") if recursive else root.iterdir()
-    files = [p for p in candidates if p.is_file()]
-    if extensions:
-        allowed = {e if e.startswith('.') else f'.{e}' for e in extensions}
-        files = [p for p in files if p.suffix.lower() in allowed]
-    return [str(p) for p in files]
-
-
-def _write_text_file(path, content):
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(content, encoding="utf-8")
-    return str(p)
-
-
-def _write_output_directory(dir_path, values):
-    root = Path(dir_path)
-    root.mkdir(parents=True, exist_ok=True)
-    written = []
-    index = 0
-    for port_id, value in values.items():
-        items = value if isinstance(value, list) else [value]
-        for item in items:
-            if item is None:
-                continue
-            name = f"{port_id}_{index}.txt" if len(items) > 1 or len(values) > 1 else f"{port_id}.txt"
-            out_path = root / name
-            out_path.write_text(str(item), encoding="utf-8")
-            written.append(str(out_path))
-            index += 1
-    return written
-'''
-
+# `_resolve_file_inputs`/`_read_one_file` have no portable single-source
+# counterpart to embed: they mirror graph_executor.py's `_resolve_file_inputs`/
+# `_read_one` (app/services/graph_executor.py, ~lines 218-247), which operate on
+# GraphNode/Port objects rather than plain dicts and so aren't directly
+# portable. Left hand-copied for now -- small, self-contained, and outside
+# this task's 4 named unification domains -- but they do call the real
+# `read_text_file`/`read_binary_file_base64` embedded above instead of
+# redefining their own copies.
 _READ_FILE_INPUTS_HELPER = '''\
-def _read_binary_file_base64(path):
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"File not found: {path}")
-    return base64.b64encode(p.read_bytes()).decode("ascii")
-
-
 def _read_one_file(path, fmt):
     normalized = (fmt or "").lower()
     if normalized.startswith("image/") or normalized in ("binary", "application/octet-stream"):
-        return _read_binary_file_base64(path)
-    return _read_text_file(path)
+        return read_binary_file_base64(path)
+    return read_text_file(path)
 
 
 def _resolve_file_inputs(inputs, file_ports):
@@ -194,185 +158,77 @@ def _resolve_file_inputs(inputs, file_ports):
     return resolved
 '''
 
-_CODE_RUNNER_HELPER = '''\
-_SUBPROCESS_ENV_ALLOWLIST = {
-    "PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC",
-    "TEMP", "TMP", "HOME", "USERPROFILE", "LANG", "LC_ALL",
-}
+_BATCH_HELPERS = extract_source(batching, ["batch_items", "merge_batch_results", "reconcile_outputs_by_ids"])
 
-
-def _sandboxed_env():
-    """Minimal environment for a code-node subprocess: no secrets inherited."""
-    return {k: v for k, v in os.environ.items() if k.upper() in _SUBPROCESS_ENV_ALLOWLIST}
-
-
-async def _run_code(code, language, inputs):
-    lang = language.lower()
-    if lang in ("python", "py"):
-        wrapper = f"""
-import json, sys
-{code}
-_inputs = json.loads(sys.argv[1])
-print(json.dumps(run(_inputs)))
-"""
-        cmd = [sys.executable]
-        suffix = ".py"
-    elif lang in ("javascript", "js", "node"):
-        wrapper = f"""
-{code}
-const _inputs = JSON.parse(process.argv[2]);
-console.log(JSON.stringify(run(_inputs)));
-"""
-        cmd = ["node"]
-        suffix = ".js"
-    else:
-        raise ValueError(f"Unsupported code language: {language}")
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False, encoding="utf-8") as f:
-        f.write(wrapper)
-        tmp_path = f.name
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, tmp_path, json.dumps(inputs),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            env=_sandboxed_env(),
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-        if proc.returncode != 0:
-            raise RuntimeError(stderr.decode().strip())
-        raw = stdout.decode().strip()
-        return json.loads(raw) if raw else {}
-    finally:
-        os.unlink(tmp_path)
-
-
-async def _run_code_batch(code, language, inputs, output_port_ids=None, multi_port_ids=()):
-    items = _batch_items(inputs)
-    results = []
-    for item in items:
-        result = await _run_code(code, language, item)
-        results.append(_reconcile_outputs(output_port_ids, result))
-    return _merge_batch_results(results, multi_port_ids)
-'''
-
-_AI_HELPER = '''\
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
-
-
-async def _ai_complete(prompt, system, model, temperature, provider, timeout=120.0):
-    import httpx
-
-    if provider == "ollama":
-        payload = {"model": model, "prompt": prompt, "system": system, "stream": False,
-                   "options": {"temperature": temperature}}
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            r = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
-            r.raise_for_status()
-            return r.json().get("response", "")
-
-    if provider in ("openai", "anthropic", "lmstudio"):
-        messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
-        if provider == "openai":
-            if not OPENAI_API_KEY:
-                raise ValueError("OPENAI_API_KEY environment variable not set")
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                r = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    json={"model": model, "messages": messages, "temperature": temperature},
-                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-                )
-                r.raise_for_status()
-                return r.json()["choices"][0]["message"]["content"]
-        if provider == "anthropic":
-            if not ANTHROPIC_API_KEY:
-                raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-            payload = {"model": model, "max_tokens": 4096, "temperature": temperature,
-                       "messages": [{"role": "user", "content": prompt}]}
-            if system:
-                payload["system"] = system
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                r = await client.post(
-                    "https://api.anthropic.com/v1/messages", json=payload,
-                    headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"},
-                )
-                r.raise_for_status()
-                return r.json()["content"][0]["text"]
-        # lmstudio
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            r = await client.post(
-                f"{LMSTUDIO_BASE_URL}/chat/completions",
-                json={"model": model, "messages": messages, "temperature": temperature},
-            )
-            r.raise_for_status()
-            return r.json()["choices"][0]["message"]["content"]
-
-    raise ValueError(f"Unknown AI provider: {provider}")
-
-
-async def _ai_complete_batch(inputs, system, model, temperature, provider,
-                             output_port_ids=None, multi_port_ids=()):
-    items = _batch_items(inputs)
-    prompts = ["\\n\\n".join(str(value) for value in item.values() if value is not None) for item in items]
-    responses = await asyncio.gather(*(
-        _ai_complete(prompt, system, model, temperature, provider)
-        for prompt in prompts
-    ))
-    return _merge_batch_results(
-        [_reconcile_outputs(output_port_ids, {"output": response}) for response in responses],
-        multi_port_ids,
-    )
-'''
-
-_BATCH_HELPERS = '''\
-def _batch_items(inputs):
-    size = max((len(value) for value in inputs.values() if isinstance(value, list)), default=1)
-    return [
-        {key: value[index] if isinstance(value, list) and index < len(value) else value
-         for key, value in inputs.items()}
-        for index in range(size)
-    ]
-
-
-def _merge_batch_results(results, multi_port_ids=()):
-    """Collect one result per batch item; a single-item batch on a non-multi
-    output port keeps its scalar value instead of becoming a 1-element list."""
-    merged = {}
-    single = len(results) == 1
-    for result in results:
-        for key, value in result.items():
-            is_multi = key in multi_port_ids
-            if single and not is_multi:
-                merged[key] = value
-                continue
-            target = merged.setdefault(key, [])
-            if is_multi and isinstance(value, list):
-                target.extend(value)
-            else:
-                target.append(value)
-    return merged
-
-
+# Mirrors `batching.reconcile_outputs`'s warn callback with a stderr message
+# instead of a log line (the deploy script has no logger configured for it);
+# the actual matching/wrapping logic lives once, in `reconcile_outputs_by_ids`
+# above. Duplicated verbatim into both _CODE_RUNNER_HELPER and _AI_HELPER
+# (rather than a third shared block) since each is embedded independently and
+# neither always accompanies the other.
+_RECONCILE_GLUE = '''\
 def _reconcile_outputs(output_port_ids, result):
-    """Wrap a raw code/AI result under the sole declared output port id when its
-    keys match none of the declared ports; warn (without crashing) if there are
-    several declared ports and none of the keys match."""
-    if not result or not isinstance(result, dict) or not output_port_ids:
-        return result
-    port_ids = set(output_port_ids)
-    if port_ids & result.keys():
-        return result
-    if len(output_port_ids) == 1:
-        return {output_port_ids[0]: result}
-    print(
-        f"\\u26a0\\ufe0f  Output keys {list(result.keys())} match none of the declared "
-        f"output ports {output_port_ids}; values may be dropped downstream.",
-        file=sys.stderr,
-    )
-    return result
+    def _warn(keys, port_ids):
+        print(
+            f"\\u26a0\\ufe0f  Output keys {keys} match none of the declared "
+            f"output ports {port_ids}; values may be dropped downstream.",
+            file=sys.stderr,
+        )
+    return reconcile_outputs_by_ids(output_port_ids, result, warn=_warn)
 '''
+
+_CODE_RUNNER_HELPER = "\n\n\n".join([
+    "import logging, subprocess, textwrap",
+    "logger = logging.getLogger(__name__)",
+    extract_source(code_executor, [
+        "EXECUTION_TIMEOUT",
+        "_SUBPROCESS_ENV_ALLOWLIST",
+        "_sandboxed_env",
+        "_run_in_subprocess",
+        "execute_python",
+        "execute_javascript",
+        "execute_code",
+    ]),
+    _RECONCILE_GLUE,
+    textwrap.dedent('''\
+        async def _run_code_batch(code, language, inputs, output_port_ids=None,
+                                   multi_port_ids=(), input_multi_port_ids=()):
+            items = batch_items(inputs, input_multi_port_ids)
+            results = []
+            for item in items:
+                result = await execute_code(code, language, item)
+                results.append(_reconcile_outputs(output_port_ids, result))
+            return merge_batch_results(results, multi_port_ids)
+        '''),
+])
+
+_AI_HELPER = "\n\n\n".join([
+    "import logging",
+    "import httpx",
+    "logger = logging.getLogger(__name__)",
+    extract_source(ai_service, [
+        "OLLAMA_BASE_URL", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "LMSTUDIO_BASE_URL",
+        "OPENAI_COMPATIBLE_BASE_URL", "OPENAI_COMPATIBLE_API_KEY",
+        "_ollama_complete", "_openai_complete", "_anthropic_complete",
+        "_lmstudio_complete", "_openai_compatible_complete", "complete",
+    ]),
+    _RECONCILE_GLUE,
+    textwrap.dedent('''\
+        async def _ai_complete_batch(inputs, system, model, temperature, provider,
+                                      output_port_ids=None, multi_port_ids=(),
+                                      input_multi_port_ids=()):
+            items = batch_items(inputs, input_multi_port_ids)
+            prompts = ["\\n\\n".join(str(value) for value in item.values() if value is not None) for item in items]
+            responses = await asyncio.gather(*(
+                complete(prompt, system, model, temperature, provider)
+                for prompt in prompts
+            ))
+            return merge_batch_results(
+                [_reconcile_outputs(output_port_ids, {"output": response}) for response in responses],
+                multi_port_ids,
+            )
+        '''),
+])
 
 
 # ---------------------------------------------------------------------------
@@ -388,37 +244,25 @@ def generate_runner_script(graph: Graph) -> str:
     order = _topological_order(graph)
     sources = _sources_by_target(graph)
     node_map = {n.id: n for n in graph.nodes}
-    node_types = {n.node_type for n in graph.nodes}
 
-    needs_files = bool(node_types & {NodeType.FILE_INPUT, NodeType.DIRECTORY_INPUT, NodeType.OUTPUT})
-    needs_files = needs_files or any(
-        n.node_type == NodeType.GUI
-        and any(w.kind in (GuiWidgetKind.FILE_OPEN, GuiWidgetKind.DIRECTORY_OPEN, GuiWidgetKind.INPUT_PICKER) for w in n.config.gui_widgets)
-        for n in graph.nodes
-    )
-    needs_code_runner = bool(node_types & {NodeType.CODE}) or any(
-        n.node_type == NodeType.DIRECTORY_INPUT and not n.config.select_all_files and n.config.selector_code.strip()
-        for n in graph.nodes
-    )
-    needs_code_runner = needs_code_runner or any(
-        n.node_type == NodeType.GUI and any(w.code.strip() for w in n.config.gui_widgets)
-        for n in graph.nodes
-    )
-    needs_ai = NodeType.AI in node_types
-    needs_read_file_inputs = any(
-        n.config.read_file_inputs for n in graph.nodes if n.node_type in (NodeType.AI, NodeType.CODE)
-    )
-    needs_files = needs_files or needs_read_file_inputs
+    needs = DeployNeeds()
+    for node in graph.nodes:
+        element = NODE_ELEMENTS.get(node.node_type)
+        if element is not None:
+            needs = needs | element.deploy_needs(node)
 
-    imports = ["import asyncio", "import json", "import sys"]
+    needs_files = needs.files or needs.read_file_inputs
+    needs_code_runner = needs.code_runner
+    needs_ai = needs.ai
+    needs_read_file_inputs = needs.read_file_inputs
+
+    imports = ["from __future__ import annotations", "import asyncio", "import json", "import sys"]
     if needs_files:
         imports.append("from pathlib import Path")
     if needs_code_runner:
         imports += ["import os", "import tempfile"]
     elif needs_ai:
         imports.append("import os")
-    if needs_read_file_inputs:
-        imports.append("import base64")
 
     helper_blocks: List[str] = []
     if needs_files:

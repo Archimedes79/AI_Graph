@@ -1,5 +1,5 @@
 import type { NodeElementDefinition } from '../types';
-import InputEditor from '../../components/nodes/editors/InputEditor';
+import InputEditor from './InputEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
 import type { Port } from '../../types/graph';
 

@@ -1,5 +1,5 @@
 import type { NodeElementDefinition } from '../types';
-import GuiEditor from '../../components/nodes/editors/GuiEditor';
+import GuiEditor from './GuiEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
 
 export const guiElement: NodeElementDefinition = {

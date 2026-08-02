@@ -17,6 +17,8 @@ compares the result against a live `execute()` call for the same inputs.
 
 from __future__ import annotations
 
+import base64
+import json
 import sys
 import textwrap
 from pathlib import Path
@@ -324,6 +326,70 @@ async def test_node_element_contract(node_type: NodeType, element, tmp_path, mon
 
     # 6. Code conversion: execute() vs compile() consistency (no-op if not covered).
     await _assert_code_conversion(node_type, element, node)
+
+
+# ---------------------------------------------------------------------------
+# Extra per-element cases: behavior the minimal per-type fixture above never
+# exercises (a non-default config branch), consolidated here instead of a
+# standalone single-behavior test file per AGENTS.md's "Tests" section.
+# ---------------------------------------------------------------------------
+
+async def test_directory_input_applies_extension_filter(tmp_path):
+    """DirectoryInput's config.extra["extensions"] filter (was its own test file)."""
+    (tmp_path / "a.md").write_text("md a", encoding="utf-8")
+    (tmp_path / "b.md").write_text("md b", encoding="utf-8")
+    (tmp_path / "c.txt").write_text("txt c", encoding="utf-8")
+
+    node = GraphNode(
+        id="dir_filter", node_type=NodeType.DIRECTORY_INPUT, label="Dir",
+        inputs=[_port("path", PortKind.INPUT, DataType.FILE_PATH)],
+        outputs=[_port("files", PortKind.OUTPUT, DataType.FILE_PATH, multi=True),
+                 _port("count", PortKind.OUTPUT, DataType.TEXT)],
+        config=NodeConfig(value=str(tmp_path), select_all_files=True, extra={"extensions": ".md"}),
+    )
+    result = await NODE_ELEMENTS[NodeType.DIRECTORY_INPUT].execute(node, {})
+    assert sorted(Path(p).name for p in result["files"]) == ["a.md", "b.md"]
+    assert result["count"] == 2
+
+
+async def test_output_element_file_write_honors_json_format(tmp_path):
+    """OutputElement's write_mode="file" branch calls write_formatted_file for a
+    non-text format (was covered only by raw file_service unit tests)."""
+    node = GraphNode(
+        id="out_json", node_type=NodeType.OUTPUT, label="Out",
+        inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
+        config=NodeConfig(output_label="Result", write_mode="file", value=str(tmp_path / "result")),
+    )
+    result = await NODE_ELEMENTS[NodeType.OUTPUT].execute(
+        node, {"value": [1, 2, 3]}, effective_formats={"value": "json"},
+    )
+    written = Path(result["written_path"])
+    assert written.suffix == ".json"
+    assert json.loads(written.read_text(encoding="utf-8")) == [1, 2, 3]
+
+
+async def test_output_element_directory_write_honors_binary_and_csv_formats(tmp_path):
+    """OutputElement's write_mode="directory" branch honors per-port binary/csv
+    formats via write_output_directory (json/text combo already covered in
+    test_graph.py's execute_graph-level directory-write test)."""
+    raw = b"\x00\x01binarydata"
+    encoded = base64.b64encode(raw).decode("ascii")
+    node = GraphNode(
+        id="out_dir", node_type=NodeType.OUTPUT, label="Out",
+        inputs=[_port("blob", PortKind.INPUT, DataType.ANY),
+                _port("table", PortKind.INPUT, DataType.ANY)],
+        config=NodeConfig(output_label="Result", write_mode="directory", value=str(tmp_path / "out")),
+    )
+    result = await NODE_ELEMENTS[NodeType.OUTPUT].execute(
+        node,
+        {"blob": encoded, "table": [{"a": "1"}, {"a": "2"}]},
+        effective_formats={"blob": "binary", "table": "csv"},
+    )
+    written = {Path(p).stem.split("_")[0]: Path(p) for p in result["written_paths"]}
+    assert written["blob"].suffix == ".bin"
+    assert written["blob"].read_bytes() == raw
+    assert written["table"].suffix == ".csv"
+    assert "a" in written["table"].read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------

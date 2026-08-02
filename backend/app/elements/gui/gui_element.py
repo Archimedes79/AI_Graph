@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.elements.base import GuiWidgetElement, NodeElement, NodeMap, Sources
+from app.elements.base import GuiWidgetElement, NodeElement, NodeMap, DeployNeeds, Sources
 from app.models.graph import GraphNode, GuiWidgetKind, NodeType, gui_widget_ports, sync_gui_node_ports
 from app.services import code_executor
 from app.services.deploy.shared import collect_inputs_lines
@@ -70,3 +70,26 @@ class GuiElement(NodeElement):
             lines.extend(element.compile(node, widget))
         lines.append(f"results[{node.id!r}] = _gui_result")
         return lines
+
+    def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
+        widget_elements = _widget_elements()
+        reqs: List[Dict[str, Any]] = []
+        for widget in node.config.gui_widgets:
+            element = widget_elements.get(widget.kind)
+            req = element.runtime_requirement(widget) if element is not None else None
+            if req is None:
+                continue
+            reqs.append({
+                "node_id": node.id, "direction": "input", "current_value": "",
+                "widget_id": widget.id, **req,
+            })
+        return reqs
+
+    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
+        widget_elements = _widget_elements()
+        needs = DeployNeeds()
+        for widget in node.config.gui_widgets:
+            element = widget_elements.get(widget.kind)
+            if element is not None:
+                needs = needs | element.deploy_needs(widget)
+        return needs

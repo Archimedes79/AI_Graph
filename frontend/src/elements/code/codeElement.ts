@@ -1,5 +1,5 @@
 import type { NodeElementDefinition } from '../types';
-import CodeEditor from '../../components/nodes/editors/CodeEditor';
+import CodeEditor from './CodeEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
 
 /**

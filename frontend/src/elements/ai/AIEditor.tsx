@@ -1,5 +1,5 @@
 import React from 'react';
-import type { AIProvider, GraphNode } from '../../../types/graph';
+import type { AIProvider, GraphNode } from '../../types/graph';
 
 interface AIEditorProps {
   node: GraphNode;

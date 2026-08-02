@@ -166,19 +166,27 @@ async def complete(
     system: str = "",
     model: str = "llama3",
     temperature: float = 0.7,
-    provider: AIProvider = AIProvider.OLLAMA,
+    provider: str = "ollama",
 ) -> str:
-    """Call the requested AI provider and return the text completion."""
+    """
+    Call the requested AI provider and return the text completion.
+
+    *provider* is compared against plain provider-name strings (not the
+    `AIProvider` enum) so this function's body has no app-internal-model
+    dependency and can be embedded verbatim in the deploy bundle (see
+    deploy_service.py's `extract_source`); `AIProvider` is a `str` subclass, so
+    passing an enum member here still compares equal.
+    """
     logger.info("AI complete: provider=%s model=%s", provider, model)
-    if provider == AIProvider.OLLAMA:
+    if provider == "ollama":
         return await _ollama_complete(prompt, system, model, temperature)
-    if provider == AIProvider.OPENAI:
+    if provider == "openai":
         return await _openai_complete(prompt, system, model, temperature)
-    if provider == AIProvider.OPENAI_COMPATIBLE:
+    if provider == "openai_compatible":
         return await _openai_compatible_complete(prompt, system, model, temperature)
-    if provider == AIProvider.ANTHROPIC:
+    if provider == "anthropic":
         return await _anthropic_complete(prompt, system, model, temperature)
-    if provider == AIProvider.LMSTUDIO:
+    if provider == "lmstudio":
         return await _lmstudio_complete(prompt, system, model, temperature)
     raise ValueError(f"Unknown AI provider: {provider}")
 

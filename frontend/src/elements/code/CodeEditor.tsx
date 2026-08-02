@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { GraphNode } from '../../../types/graph';
+import type { GraphNode } from '../../types/graph';
 
 interface CodeEditorProps {
   node: GraphNode;
@@ -133,4 +133,3 @@ export default function CodeEditor({ node, setConfig, generating, handleGenerate
     </>
   );
 }
-

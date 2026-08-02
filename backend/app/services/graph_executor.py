@@ -24,7 +24,6 @@ from app.models.graph import (
     Graph,
     GraphEdge,
     GraphNode,
-    GuiWidgetKind,
     NodeResult,
     NodeType,
     RuntimeRequirement,
@@ -505,54 +504,25 @@ async def execute_graph(
 # the graph-runner CLI, and the generated deployment runner script.
 # ---------------------------------------------------------------------------
 
-_INPUT_NODE_KINDS = {
-    NodeType.TEXT_INPUT: "text",
-    NodeType.FILE_INPUT: "file",
-    NodeType.DIRECTORY_INPUT: "directory",
-}
-
-
 def get_runtime_requirements(graph: Graph) -> List[RuntimeRequirement]:
     """
     Inspect the graph for input nodes (text/file/directory) which always prompt
     the user via a dialog before execution, output nodes flagged with
-    `prompt_at_runtime`, and GUI-node file_open/directory_open widgets that have
-    no preset `value`. Returns the list of values that must be supplied.
+    `prompt_at_runtime`, and GUI-node picker widgets that have no preset
+    `value`. Returns the list of values that must be supplied.
+
+    Delegates per-node-type/per-widget-kind logic to each element's
+    `runtime_requirements`, the same method `deploy_service._requirements_literal`
+    dispatches through, so the editor and the compiled deploy bundle can never
+    disagree on which nodes/widgets prompt at runtime.
     """
     requirements: List[RuntimeRequirement] = []
     for node in graph.nodes:
-        cfg = node.config
-        kind = _INPUT_NODE_KINDS.get(node.node_type)
-        if kind is not None:
-            requirements.append(
-                RuntimeRequirement(
-                    node_id=node.id, label=node.label, kind=kind,
-                    direction="input", current_value=cfg.value or "",
-                )
-            )
-        elif node.node_type == NodeType.OUTPUT and cfg.prompt_at_runtime and cfg.write_mode != "none":
-            requirements.append(
-                RuntimeRequirement(
-                    node_id=node.id, label=node.label, kind=cfg.write_mode,
-                    direction="output", current_value=cfg.value or "",
-                )
-            )
-        elif node.node_type == NodeType.GUI:
-            for widget in cfg.gui_widgets:
-                if widget.value:
-                    continue
-                if widget.kind == GuiWidgetKind.FILE_OPEN:
-                    widget_kind = "file"
-                elif widget.kind == GuiWidgetKind.DIRECTORY_OPEN:
-                    widget_kind = "directory"
-                else:
-                    continue
-                requirements.append(
-                    RuntimeRequirement(
-                        node_id=node.id, label=widget.label or widget.id, kind=widget_kind,
-                        direction="input", current_value="", widget_id=widget.id,
-                    )
-                )
+        element = NODE_ELEMENTS.get(node.node_type)
+        if element is None:
+            continue
+        for req in element.runtime_requirements(node):
+            requirements.append(RuntimeRequirement(**req))
     return requirements
 
 

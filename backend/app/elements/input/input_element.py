@@ -7,9 +7,11 @@ import io
 import json
 from typing import Any, Dict, List
 
-from app.elements.base import NodeElement
+from app.elements.base import NodeElement, DeployNeeds
 from app.models.graph import GraphNode, NodeType
 from app.services import code_executor, file_service
+
+_RUNTIME_PROMPT_KINDS = {NodeType.TEXT_INPUT: "text", NodeType.FILE_INPUT: "file", NodeType.DIRECTORY_INPUT: "directory"}
 
 
 def _effective_mode(node: GraphNode) -> str:
@@ -102,14 +104,14 @@ class InputElement(NodeElement):
             recursive = cfg.extra.get("recursive", False)
             extensions = file_service.parse_extensions_filter(cfg.extra.get("extensions", ""))
             return [
-                f"_path = _resolve_path(_resolved.get({node.id!r}, {(cfg.value or '')!r}))",
-                f"_files = _list_directory(_path, recursive={recursive!r}, extensions={extensions!r})",
+                f"_path = resolve_path(_resolved.get({node.id!r}, {(cfg.value or '')!r}))",
+                f"_files = list_directory(_path, recursive={recursive!r}, extensions={extensions!r})",
                 f"results[{node.id!r}] = {{'files': _files, 'count': len(_files)}}",
             ]
 
         lines: List[str] = [
-            f"_path = _resolve_path(_resolved.get({node.id!r}, {(cfg.value or '')!r}))",
-            "_content = _read_text_file(_path)",
+            f"_path = resolve_path(_resolved.get({node.id!r}, {(cfg.value or '')!r}))",
+            "_content = read_text_file(_path)",
         ]
         fmt = cfg.parse_format or "text"
         if fmt == "json":
@@ -126,3 +128,20 @@ class InputElement(NodeElement):
             )
         lines.append(f"results[{node.id!r}] = {{'content': _content, 'path': str(_path)}}")
         return lines
+
+    def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
+        kind = _RUNTIME_PROMPT_KINDS.get(node.node_type)
+        if kind is None:
+            return []
+        return [{
+            "node_id": node.id, "label": node.label, "kind": kind,
+            "direction": "input", "current_value": node.config.value or "",
+        }]
+
+    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
+        mode = _effective_mode(node)
+        if mode == "text":
+            return DeployNeeds()
+        cfg = node.config
+        code_runner = mode == "directory" and not cfg.select_all_files and bool(cfg.selector_code.strip())
+        return DeployNeeds(files=True, code_runner=code_runner)

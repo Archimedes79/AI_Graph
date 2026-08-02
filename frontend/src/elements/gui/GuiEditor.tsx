@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import type { GraphNode } from '../../../types/graph';
-import GuiWidgetEditor from '../../GuiWidgetEditor';
-import GuiDesigner from '../../gui/GuiDesigner';
+import type { GraphNode } from '../../types/graph';
+import GuiWidgetEditor from '../../components/GuiWidgetEditor';
+import GuiDesigner from '../../components/gui/GuiDesigner';
 
 interface GuiEditorProps {
   node: GraphNode;

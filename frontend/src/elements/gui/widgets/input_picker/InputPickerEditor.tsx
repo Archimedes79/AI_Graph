@@ -1,5 +1,5 @@
 import React from 'react';
-import type { GuiWidget } from '../../../types/graph';
+import type { GuiWidget } from '../../../../types/graph';
 
 interface InputPickerEditorProps {
   widget: GuiWidget;

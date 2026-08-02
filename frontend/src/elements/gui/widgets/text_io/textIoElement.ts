@@ -1,7 +1,7 @@
 import type { GuiWidget, Port } from '../../../../types/graph';
 import type { GuiWidgetElementDefinition } from '../../../types';
 import TextIoWidget from '../../../../components/gui/widgets/TextIoWidget';
-import TextIoEditor from '../../../../components/widgets/editors/TextIoEditor';
+import TextIoEditor from './TextIoEditor';
 
 function effectiveMode(widget: GuiWidget): 'input' | 'output' | 'both' {
   if (widget.mode === 'input' || widget.mode === 'output' || widget.mode === 'both') return widget.mode;

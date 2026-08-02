@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.elements.base import NodeElement, NodeMap, Sources
+from app.elements.base import DeployNeeds, NodeElement, NodeMap, Sources
 from app.models.graph import GraphNode, NodeType
 from app.services import ai_service
 from app.services.batching import reconcile_outputs
@@ -45,16 +45,21 @@ class AIElement(NodeElement):
         if cfg.batch_mode == "whole_list":
             lines.append(r'_prompt = "\n\n".join(str(_v) for _v in _inputs.values() if _v is not None)')
             lines.append(
-                "_output = await _ai_complete(_prompt, "
+                "_output = await complete(_prompt, "
                 f"system={cfg.system_prompt!r}, model={cfg.ai_model!r}, "
                 f"temperature={cfg.temperature!r}, provider={cfg.ai_provider.value!r})"
             )
-            lines.append(f"results[{node.id!r}] = _reconcile_outputs({output_port_ids!r}, {{'output': _output}})")
+            lines.append(f"results[{node.id!r}] = reconcile_outputs_by_ids({output_port_ids!r}, {{'output': _output}})")
         else:
+            input_multi_port_ids = [p.id for p in node.inputs if p.multi]
             lines.append(
                 f"results[{node.id!r}] = await _ai_complete_batch(_inputs, "
                 f"system={cfg.system_prompt!r}, model={cfg.ai_model!r}, "
                 f"temperature={cfg.temperature!r}, provider={cfg.ai_provider.value!r}, "
-                f"output_port_ids={output_port_ids!r}, multi_port_ids={multi_port_ids!r})"
+                f"output_port_ids={output_port_ids!r}, multi_port_ids={multi_port_ids!r}, "
+                f"input_multi_port_ids={input_multi_port_ids!r})"
             )
         return lines
+
+    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
+        return DeployNeeds(ai=True, read_file_inputs=node.config.read_file_inputs)

@@ -1,5 +1,5 @@
 import type { GuiWidgetElementDefinition } from '../../../types';
-import PlotWindowEditor from '../../../../components/widgets/editors/PlotWindowEditor';
+import PlotWindowEditor from './PlotWindowEditor';
 import PlotWindowWidget from '../../../../components/gui/widgets/PlotWindowWidget';
 
 export const plotWindowElement: GuiWidgetElementDefinition = {

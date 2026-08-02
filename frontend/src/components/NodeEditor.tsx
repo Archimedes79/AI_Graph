@@ -5,7 +5,7 @@ import { generateCode, generatePrompt } from '../utils/api';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { inputPortsForMode } from '../elements/input/inputElement';
 import { NODE_ELEMENTS } from '../elements/registry';
-import OutputFormatEditor from './nodes/editors/OutputFormatEditor';
+import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 
 interface NodeEditorProps {
   nodeId: string;

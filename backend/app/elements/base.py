@@ -11,6 +11,7 @@ about the surrounding engine.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from app.models.graph import GraphNode, GuiWidget, GuiWidgetKind, NodeType, Port
@@ -19,6 +20,29 @@ from app.models.graph import GraphNode, GuiWidget, GuiWidgetKind, NodeType, Port
 # deploy_service.py and passed into every element's `compile`.
 Sources = Dict[Tuple[str, str], List[Tuple[str, str]]]
 NodeMap = Dict[str, GraphNode]
+
+
+@dataclass
+class DeployNeeds:
+    """
+    What compile-time imports/helper blocks one node's (or widget's) `compile()`
+    output requires from the deployed runner script -- aggregated across every
+    node via `|` to decide `generate_runner_script`'s imports and embedded
+    helper blocks. All fields default to False: most elements need nothing.
+    """
+
+    files: bool = False          # file_service helpers (resolve_path, read/write, ...)
+    code_runner: bool = False    # sandboxed Python/JS execute_code helper
+    ai: bool = False             # ai_service completion helper
+    read_file_inputs: bool = False  # implies `files` too; see generate_runner_script
+
+    def __or__(self, other: "DeployNeeds") -> "DeployNeeds":
+        return DeployNeeds(
+            files=self.files or other.files,
+            code_runner=self.code_runner or other.code_runner,
+            ai=self.ai or other.ai,
+            read_file_inputs=self.read_file_inputs or other.read_file_inputs,
+        )
 
 
 class NodeElement(ABC):
@@ -48,6 +72,21 @@ class NodeElement(ABC):
     @abstractmethod
     def compile(self, node: GraphNode, sources: Sources, node_map: NodeMap) -> List[str]:
         """Return the deploy-script source lines that reproduce `execute` at compile time."""
+
+    def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
+        """
+        Requirement dicts (`{node_id, label, kind, direction, current_value}`,
+        matching `RuntimeRequirement`'s fields) this node instance wants the user
+        prompted for before the graph runs -- web UI dialog, CLI, or the compiled
+        deploy script's stdin prompts. Default: none; most node types never
+        prompt for anything at runtime.
+        """
+        return []
+
+    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
+        """What this node instance's `compile()` output needs from the runner
+        script's imports/helper blocks. Default: nothing extra."""
+        return DeployNeeds()
 
 
 def widget_input_or_value(widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
@@ -89,3 +128,15 @@ class GuiWidgetElement(ABC):
     @abstractmethod
     def compile(self, node: GraphNode, widget: GuiWidget) -> List[str]:
         """Deploy-script lines for this one widget, mirroring `execute`."""
+
+    def runtime_requirement(self, widget: GuiWidget) -> Optional[Dict[str, Any]]:
+        """This widget's own requirement dict (`{label, kind}`), or None if it
+        never prompts at runtime. Default: never (only a picker widget with no
+        preset value does; see input_picker_element.py)."""
+        return None
+
+    def deploy_needs(self, widget: GuiWidget) -> DeployNeeds:
+        """Default: a widget needs the sandboxed code runner iff it carries a
+        non-empty data-transform snippet (see GuiWidget.code); most widget kinds
+        don't need to override this."""
+        return DeployNeeds(code_runner=bool(widget.code and widget.code.strip()))

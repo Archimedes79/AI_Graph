@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.elements.base import GuiWidgetElement, widget_input_or_value
+from app.elements.base import DeployNeeds, GuiWidgetElement, widget_input_or_value
 from app.models.graph import DataType, GraphNode, GuiWidget, GuiWidgetKind, Port, PortKind
 from app.services import file_service
 
@@ -57,12 +57,21 @@ class InputPickerElement(GuiWidgetElement):
             return [
                 f"_raw = _resolved.get({req_key!r}, {widget.value!r})",
                 "if _raw:",
-                "    _path = _resolve_path(_raw)",
-                f"    _gui_result[{out_id!r}] = _list_directory(_path, recursive=False, extensions={extensions!r})",
+                "    _path = resolve_path(_raw)",
+                f"    _gui_result[{out_id!r}] = list_directory(_path, recursive=False, extensions={extensions!r})",
                 "else:",
                 f"    _gui_result[{out_id!r}] = []",
             ]
         return [
             f"_raw = _resolved.get({req_key!r}, {widget.value!r})",
-            f"_gui_result[{out_id!r}] = _resolve_path(_raw) if _raw else None",
+            f"_gui_result[{out_id!r}] = resolve_path(_raw) if _raw else None",
         ]
+
+    def runtime_requirement(self, widget: GuiWidget) -> Optional[Dict[str, Any]]:
+        if widget.value:
+            return None
+        label = widget.label or widget.id
+        return {"label": label, "kind": "directory" if _is_directory(widget) else "file"}
+
+    def deploy_needs(self, widget: GuiWidget) -> DeployNeeds:
+        return DeployNeeds(files=True, code_runner=bool(widget.code and widget.code.strip()))
