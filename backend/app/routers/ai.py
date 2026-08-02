@@ -11,6 +11,8 @@ from fastapi import APIRouter, HTTPException
 from app.models.graph import (
     GenerateCodeRequest,
     GenerateCodeResponse,
+    GenerateGraphRequest,
+    GenerateGraphResponse,
     GeneratePromptRequest,
     GeneratePromptResponse,
 )
@@ -52,6 +54,23 @@ async def generate_prompt(req: GeneratePromptRequest):
         return GeneratePromptResponse(system_prompt=sp, explanation=explanation)
     except Exception as exc:
         logger.exception("generate_prompt failed")
+        raise HTTPException(500, str(exc)) from exc
+
+
+@router.post("/generate-graph", response_model=GenerateGraphResponse)
+async def generate_graph(req: GenerateGraphRequest):
+    """Ask the AI to author a full Graph DSL document from a natural-language description."""
+    try:
+        graph_dict, explanation = await ai_service.generate_graph(
+            description=req.description,
+            context=req.context,
+            model=req.ai_model,
+            provider=req.ai_provider,
+        )
+        # Constructing with graph=graph_dict validates it against the full Graph schema.
+        return GenerateGraphResponse(graph=graph_dict, explanation=explanation)
+    except Exception as exc:
+        logger.exception("generate_graph failed")
         raise HTTPException(500, str(exc)) from exc
 
 

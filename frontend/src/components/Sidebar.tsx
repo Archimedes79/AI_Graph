@@ -15,6 +15,10 @@ const CATEGORIES: { label: string; types: NodeType[] }[] = [
     label: 'Output',
     types: ['output', 'text_output'],
   },
+  {
+    label: 'Interactive',
+    types: ['gui'],
+  },
 ];
 
 interface SidebarProps {

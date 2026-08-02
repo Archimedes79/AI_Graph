@@ -1,0 +1,106 @@
+import React from 'react';
+
+interface PlotWidgetProps {
+  data: unknown;
+  width?: number;
+  height?: number;
+}
+
+interface PlotPoint {
+  label: string;
+  value: number;
+}
+
+/** Coerce a `plot_window` input value into `{label, value}` points, or `null` if it can't be charted. */
+function toPoints(data: unknown): PlotPoint[] | null {
+  let value = data;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!Array.isArray(value) || value.length === 0) return null;
+
+  const points: PlotPoint[] = [];
+  for (let i = 0; i < value.length; i++) {
+    const item = value[i];
+    if (typeof item === 'number') {
+      if (!Number.isFinite(item)) return null;
+      points.push({ label: String(i), value: item });
+      continue;
+    }
+    if (item && typeof item === 'object') {
+      const obj = item as Record<string, unknown>;
+      const rawValue = obj.y ?? obj.value;
+      const rawLabel = obj.x ?? obj.label ?? i;
+      if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+        points.push({ label: String(rawLabel), value: rawValue });
+        continue;
+      }
+    }
+    return null;
+  }
+  return points;
+}
+
+/** Minimal, dependency-free auto-scaled SVG chart for gui-node `plot_window` widgets. */
+export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidgetProps) {
+  const points = toPoints(data);
+
+  if (!points) {
+    return (
+      <div
+        className="text-xs px-2 py-1.5 rounded"
+        style={{ background: 'rgba(255,255,255,0.05)', color: '#64748b' }}
+      >
+        No chartable data
+      </div>
+    );
+  }
+
+  const values = points.map((p) => p.value);
+  const min = Math.min(0, ...values);
+  const max = Math.max(...values, min + 1e-6);
+  const range = max - min;
+
+  const padding = 4;
+  const plotW = width - padding * 2;
+  const plotH = height - padding * 2;
+  const scaleY = (v: number) => padding + plotH - ((v - min) / range) * plotH;
+  const useBars = points.length <= 12;
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 4 }}
+    >
+      <line x1={padding} x2={width - padding} y1={scaleY(0)} y2={scaleY(0)} stroke="#334155" strokeWidth={1} />
+      {useBars
+        ? points.map((p, i) => {
+            const barWidth = plotW / points.length;
+            const x = padding + i * barWidth + barWidth * 0.15;
+            const w = barWidth * 0.7;
+            const yZero = scaleY(0);
+            const yValue = scaleY(p.value);
+            const y = Math.min(yZero, yValue);
+            const h = Math.max(1, Math.abs(yValue - yZero));
+            return <rect key={i} x={x} y={y} width={w} height={h} fill="#6366f1" />;
+          })
+        : (
+          <polyline
+            fill="none"
+            stroke="#6366f1"
+            strokeWidth={1.5}
+            points={points
+              .map((p, i) => `${padding + (i / (points.length - 1)) * plotW},${scaleY(p.value)}`)
+              .join(' ')}
+          />
+        )}
+    </svg>
+  );
+}

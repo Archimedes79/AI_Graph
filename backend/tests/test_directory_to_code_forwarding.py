@@ -192,7 +192,10 @@ async def test_directory_to_code_to_merge_and_output_with_matching_port_name(tmp
     print("LITERAL MERGED STRING:", repr(merged_value))
 
     # Merge does NOT sum counts to 5; it string-joins Python dict reprs.
-    assert "5" not in merged_value
+    # (Checking for a bare "5" is unreliable: tmp_path embeds pytest's rotating
+    # "pytest-NN" temp-dir counter, which coincidentally contains "5" on many
+    # runs, so assert on the specific summed-value shape instead.)
+    assert "'count': 5" not in merged_value
     assert "{'count'" in merged_value
 
 

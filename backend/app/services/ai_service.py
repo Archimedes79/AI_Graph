@@ -270,6 +270,60 @@ async def generate_prompt(
     return sp, explanation
 
 
+async def generate_graph(
+    description: str,
+    context: str = "",
+    model: str = "llama3",
+    provider: AIProvider = AIProvider.OLLAMA,
+) -> tuple[dict, str]:
+    """
+    Ask the LLM to author a full Graph DSL document from a natural-language
+    description. Returns (graph_dict, explanation). The caller is responsible
+    for validating graph_dict against the Graph pydantic model.
+    """
+    system = (
+        "You are an expert at authoring Graph DSL documents for a visual node-based "
+        "AI workflow tool. When asked to design a graph, output ONLY a fenced ```json "
+        "code block containing a complete Graph DSL document, followed by a brief "
+        "explanation outside the block. Do not add extra prose before the code block.\n\n"
+        "The JSON document must have this exact shape:\n"
+        "{\n"
+        '  "metadata": {"name": str, "version": str, "description": str, "author": str, "tags": [str, ...]},\n'
+        '  "nodes": [\n'
+        "    {\n"
+        '      "id": str, "node_type": str, "label": str, "description": str,\n'
+        '      "position": {"x": number, "y": number},\n'
+        '      "inputs": [{"id": str, "name": str, "kind": "input", "data_type": str, "multi": bool, "required": bool}, ...],\n'
+        '      "outputs": [{"id": str, "name": str, "kind": "output", "data_type": str, "multi": bool, "required": bool}, ...],\n'
+        '      "config": {...}\n'
+        "    }, ...\n"
+        "  ],\n"
+        '  "edges": [{"id": str, "source_node_id": str, "source_port_id": str, "target_node_id": str, "target_port_id": str}, ...]\n'
+        "}\n\n"
+        "Valid node_type values: text_input, file_input, directory_input, ai, code, output, "
+        "text_output, merge, split, gui. "
+        "Every node must declare its own inputs and outputs port arrays, even if empty, and "
+        "every port id must be unique within its node. Edges must reference existing node ids "
+        "and port ids declared on those nodes."
+    )
+    prompt_parts = [
+        "Design a graph that does the following:",
+        description,
+    ]
+    if context:
+        prompt_parts.append(f"\nContext:\n{context}")
+    raw = await complete("\n".join(prompt_parts), system, model, 0.2, provider)
+
+    graph_dict = _extract_json_block(raw)
+    if graph_dict is None:
+        raise ValueError("Could not parse a Graph DSL JSON document from the AI response")
+
+    import re
+    match = re.search(r"```json\n(.*?)```", raw, re.DOTALL)
+    explanation = raw[match.end() :].strip() if match else ""
+    return graph_dict, explanation
+
+
 def _extract_code_block(text: str) -> str:
     """Extract the first fenced code block from markdown text."""
     import re
@@ -277,3 +331,18 @@ def _extract_code_block(text: str) -> str:
     if match:
         return match.group(1).strip()
     return ""
+
+
+def _extract_json_block(text: str) -> Optional[dict]:
+    """
+    Extract a fenced ```json code block and parse it as JSON. Falls back to
+    parsing the whole raw response as JSON if no fenced block is found.
+    Returns None if neither succeeds.
+    """
+    import re
+    match = re.search(r"```json\n(.*?)```", text, re.DOTALL)
+    candidate = match.group(1).strip() if match else text.strip()
+    try:
+        return json.loads(candidate)
+    except (json.JSONDecodeError, ValueError):
+        return None

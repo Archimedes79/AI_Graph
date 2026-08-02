@@ -9,7 +9,8 @@ export type NodeType =
   | 'output'
   | 'text_output'
   | 'merge'
-  | 'split';
+  | 'split'
+  | 'gui';
 
 export type PortKind = 'input' | 'output';
 export type DataType = 'text' | 'file_path' | 'binary' | 'json' | 'list' | 'any';
@@ -33,6 +34,21 @@ export interface NodePosition {
   y: number;
 }
 
+export type GuiWidgetKind = 'file_open' | 'directory_open' | 'text_window' | 'chat_window' | 'plot_window';
+
+export interface GuiWidget {
+  id: string;
+  kind: GuiWidgetKind;
+  label: string;
+  value?: string;
+  extensions: string;
+  size: 'small' | 'medium' | 'large';
+  // Optional data-transform snippet for display-only widgets (currently plot_window).
+  // Same run(inputs) -> dict contract as a CODE node; see backend GuiWidget.code docstring.
+  code?: string;
+  language?: 'python' | 'javascript';
+}
+
 export interface NodeConfig {
   value?: string;
   prompt_at_runtime: boolean;
@@ -51,6 +67,7 @@ export interface NodeConfig {
   separator: string;
   merge_mode: 'concat' | 'sum' | 'count' | 'json_list';
   read_file_inputs: boolean;
+  gui_widgets: GuiWidget[];
   extra: Record<string, unknown>;
 }
 
@@ -95,6 +112,7 @@ export interface RuntimeRequirement {
   kind: 'text' | 'file' | 'directory';
   direction: 'input' | 'output';
   current_value: string;
+  widget_id?: string;
 }
 
 export interface NodeResult {

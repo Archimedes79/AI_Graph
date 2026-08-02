@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import type { GraphNode, NodeType, AIProvider } from '../types/graph';
 import { useGraphStore } from '../store/graphStore';
 import { generateCode, generatePrompt } from '../utils/api';
+import { syncGuiNodePorts } from '../utils/guiWidgets';
+import GuiWidgetEditor from './GuiWidgetEditor';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -93,6 +95,19 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const isInput = ['text_input', 'file_input', 'directory_input'].includes(nt);
   const isAI = nt === 'ai';
   const isCode = nt === 'code';
+  const isGui = nt === 'gui';
+
+  // Widgets drive `inputs`/`outputs` directly, so every add/remove/reorder is
+  // persisted to the store immediately (not deferred to "Save") to keep port
+  // ids -- and therefore existing edges -- in sync with the widget list.
+  const applyWidgets = (nextWidgets: GraphNode['config']['gui_widgets']) => {
+    setNode((prev) => {
+      if (!prev) return prev;
+      const updated = syncGuiNodePorts({ ...prev, config: { ...prev.config, gui_widgets: nextWidgets } });
+      updateNode(nodeId, { config: updated.config, inputs: updated.inputs, outputs: updated.outputs });
+      return updated;
+    });
+  };
 
   const handleGenerateSelectorCode = async () => {
     if (!node.description) {
@@ -580,6 +595,23 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                       Separator is unused in this merge mode.
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* GUI node – widget list drives ports directly, no manual port editor */}
+              {isGui && (
+                <div>
+                  <p className="text-xs mb-3" style={{ color: '#475569' }}>
+                    Ports are generated automatically from the widgets below (see the Ports tab).
+                    Adding, removing, or reordering a widget updates ports immediately.
+                  </p>
+
+                  <GuiWidgetEditor
+                    widgets={node.config.gui_widgets}
+                    onChange={applyWidgets}
+                    aiModel={node.config.ai_model}
+                    aiProvider={node.config.ai_provider}
+                  />
                 </div>
               )}
 

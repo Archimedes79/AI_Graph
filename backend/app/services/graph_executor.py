@@ -24,11 +24,13 @@ from app.models.graph import (
     Graph,
     GraphEdge,
     GraphNode,
+    GuiWidgetKind,
     NodeResult,
     NodeType,
     RuntimeRequirement,
+    sync_gui_node_ports,
 )
-from app.services import ai_service, code_executor, file_service
+from app.services import ai_service, code_executor, file_service, gui_executor
 
 logger = logging.getLogger(__name__)
 
@@ -540,6 +542,9 @@ async def _execute_node(
         parts = str(source).split(sep) if source else []
         return {"items": parts, "count": len(parts)}
 
+    if nt == NodeType.GUI:
+        return await gui_executor.execute_gui_node(node, inputs)
+
     raise ValueError(f"Unknown node type: {nt}")
 
 
@@ -558,16 +563,11 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
     Execute the full graph and return an ExecutionResult.
     """
     start = time.monotonic()
+    # GUI node ports are derived data; regenerate them from `config.gui_widgets`
+    # before wiring/topology are inspected, so edges always see trustworthy ports.
+    for node in graph.nodes:
+        sync_gui_node_ports(node)
     node_map = {n.id: n for n in graph.nodes}
-
-    try:
-        graph.validate_explicit_wiring()
-    except ValueError as exc:
-        return ExecutionResult(
-            status=ExecutionStatus.ERROR,
-            error=str(exc),
-            duration_ms=(time.monotonic() - start) * 1000,
-        )
 
     try:
         levels = _topological_levels(graph.nodes, graph.edges)
@@ -665,8 +665,9 @@ _INPUT_NODE_KINDS = {
 def get_runtime_requirements(graph: Graph) -> List[RuntimeRequirement]:
     """
     Inspect the graph for input nodes (text/file/directory) which always prompt
-    the user via a dialog before execution, plus output nodes flagged with
-    `prompt_at_runtime`. Returns the list of values that must be supplied.
+    the user via a dialog before execution, output nodes flagged with
+    `prompt_at_runtime`, and GUI-node file_open/directory_open widgets that have
+    no preset `value`. Returns the list of values that must be supplied.
     """
     requirements: List[RuntimeRequirement] = []
     for node in graph.nodes:
@@ -686,16 +687,47 @@ def get_runtime_requirements(graph: Graph) -> List[RuntimeRequirement]:
                     direction="output", current_value=cfg.value or "",
                 )
             )
+        elif node.node_type == NodeType.GUI:
+            for widget in cfg.gui_widgets:
+                if widget.value:
+                    continue
+                if widget.kind == GuiWidgetKind.FILE_OPEN:
+                    widget_kind = "file"
+                elif widget.kind == GuiWidgetKind.DIRECTORY_OPEN:
+                    widget_kind = "directory"
+                else:
+                    continue
+                requirements.append(
+                    RuntimeRequirement(
+                        node_id=node.id, label=widget.label or widget.id, kind=widget_kind,
+                        direction="input", current_value="", widget_id=widget.id,
+                    )
+                )
     return requirements
 
 
 def apply_runtime_values(graph: Graph, values: Dict[str, str]) -> None:
-    """Apply resolved node_id -> path values onto the graph in place."""
+    """
+    Apply resolved runtime values onto the graph in place.
+
+    Widget-targeting convention: a key of `"{node_id}::{widget_id}"` sets the
+    matching GUI node's widget `value` (used for the file_open/directory_open
+    requirements returned by `get_runtime_requirements`). A plain `node_id` key
+    keeps the existing behaviour of writing `node.config.value` unchanged for
+    every other node type.
+    """
     node_map = {n.id: n for n in graph.nodes}
-    for node_id, value in values.items():
+    for key, value in values.items():
+        node_id, sep, widget_id = key.partition("::")
         node = node_map.get(node_id)
-        if node is not None:
-            node.config.value = value
+        if node is None:
+            continue
+        if sep:
+            widget = next((w for w in node.config.gui_widgets if w.id == widget_id), None)
+            if widget is not None:
+                widget.value = value
+            continue
+        node.config.value = value
 
 
 def get_text_output_windows(graph: Graph, result: ExecutionResult) -> List[Dict[str, str]]:

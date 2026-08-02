@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
-import { executeGraph, downloadBundle, getDockerCompose, getRuntimeRequirements } from '../utils/api';
+import { executeGraph, downloadBundle, getDockerCompose, getRuntimeRequirements, generateGraph } from '../utils/api';
 import type { Graph, RuntimeRequirement } from '../types/graph';
 import GraphWindows from './GraphWindows';
 
@@ -20,12 +20,19 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
   const setTextOutputWindows = useGraphStore((s) => s.setTextOutputWindows);
   const exportGraph = useGraphStore((s) => s.exportGraph);
   const executionResult = useGraphStore((s) => s.executionResult);
+  const loadGraph = useGraphStore((s) => s.loadGraph);
 
   const [showDeploy, setShowDeploy] = useState(false);
   const [deployContent, setDeployContent] = useState('');
   const [deployLabel, setDeployLabel] = useState('');
   const [pendingRequirements, setPendingRequirements] = useState<RuntimeRequirement[] | null>(null);
   const [pendingGraph, setPendingGraph] = useState<Graph | null>(null);
+
+  const [showAiGraph, setShowAiGraph] = useState(false);
+  const [aiDescription, setAiDescription] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiResult, setAiResult] = useState<{ graph: Graph; explanation?: string } | null>(null);
 
   const runGraph = async (graph: Graph) => {
     setIsExecuting(true);
@@ -105,6 +112,45 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
     setShowDeploy(true);
   };
 
+  const handleOpenAiGraph = () => {
+    setAiDescription('');
+    setAiError('');
+    setAiResult(null);
+    setShowAiGraph(true);
+  };
+
+  const handleCloseAiGraph = () => {
+    setShowAiGraph(false);
+    setAiResult(null);
+    setAiError('');
+  };
+
+  const handleGenerateGraph = async () => {
+    if (!aiDescription.trim()) {
+      setAiError('Please describe the graph you want first.');
+      return;
+    }
+    setAiGenerating(true);
+    setAiError('');
+    setAiResult(null);
+    try {
+      const result = await generateGraph({ description: aiDescription });
+      setAiResult(result);
+    } catch (e: any) {
+      setAiError(e?.response?.data?.detail ?? e?.message ?? 'Failed to generate graph.');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleConfirmAiGraph = () => {
+    if (!aiResult) return;
+    loadGraph(aiResult.graph);
+    setShowAiGraph(false);
+    setAiResult(null);
+    setAiError('');
+  };
+
   const statusColor = executionResult
     ? executionResult.status === 'success' ? '#22c55e' : '#ef4444'
     : '#475569';
@@ -155,6 +201,13 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
           style={{ background: '#2d3148', color: '#e2e8f0' }}
         >
           Paste JSON
+        </button>
+        <button
+          onClick={handleOpenAiGraph}
+          className="px-3 py-1.5 text-xs rounded-lg"
+          style={{ background: '#2d3148', color: '#e2e8f0' }}
+        >
+          ✨ AI Graph
         </button>
         <button
           onClick={onSave}
@@ -251,6 +304,86 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
         onSubmit={handlePromptSubmit}
         onCancel={handlePromptCancel}
       />
+
+      {/* AI Graph modal */}
+      {showAiGraph && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          onClick={handleCloseAiGraph}
+        >
+          <div
+            className="rounded-xl overflow-hidden shadow-2xl w-full max-w-2xl mx-4"
+            style={{ background: '#1a1d2e', border: '1px solid #2d3148' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex items-center justify-between px-5 py-3"
+              style={{ background: '#0f1117', borderBottom: '1px solid #2d3148' }}
+            >
+              <span className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>
+                ✨ Generate Graph with AI
+              </span>
+              <button onClick={handleCloseAiGraph} style={{ color: '#94a3b8' }}>✕</button>
+            </div>
+
+            <div className="p-5 flex flex-col gap-3">
+              <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
+                Describe the graph you want
+              </label>
+              <textarea
+                value={aiDescription}
+                onChange={(e) => setAiDescription(e.target.value)}
+                className="w-full rounded-lg p-3 text-sm resize-y outline-none"
+                style={{ minHeight: 100, background: '#0f1117', border: '1px solid #2d3148', color: '#e2e8f0' }}
+                placeholder="e.g. Read a text file, summarize it with AI, and show the result in a text window."
+                disabled={aiGenerating}
+              />
+
+              {aiError && (
+                <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: '#fca5a5' }}>
+                  ❌ {aiError}
+                </div>
+              )}
+
+              {aiResult && (
+                <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc' }}>
+                  {aiResult.explanation || 'Graph generated.'} ({aiResult.graph.nodes.length} node{aiResult.graph.nodes.length === 1 ? '' : 's'},{' '}
+                  {aiResult.graph.edges.length} edge{aiResult.graph.edges.length === 1 ? '' : 's'})
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-1">
+                <button
+                  onClick={handleCloseAiGraph}
+                  className="px-4 py-2 text-sm rounded-lg"
+                  style={{ background: '#2d3148', color: '#e2e8f0' }}
+                >
+                  Cancel
+                </button>
+                {aiResult ? (
+                  <button
+                    onClick={handleConfirmAiGraph}
+                    className="px-4 py-2 text-sm rounded-lg font-semibold"
+                    style={{ background: '#22c55e', color: 'white' }}
+                  >
+                    Load Graph
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleGenerateGraph}
+                    disabled={aiGenerating}
+                    className="px-4 py-2 text-sm rounded-lg font-semibold"
+                    style={{ background: '#6366f1', color: 'white', opacity: aiGenerating ? 0.7 : 1 }}
+                  >
+                    {aiGenerating ? '⏳ Generating…' : 'Generate'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

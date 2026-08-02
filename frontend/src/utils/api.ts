@@ -39,6 +39,14 @@ export const generatePrompt = (body: {
   ai_provider?: string;
 }) => api.post('/ai/generate-prompt', body).then((r) => r.data);
 
+export const generateGraph = (body: {
+  description: string;
+  context?: string;
+  ai_model?: string;
+  ai_provider?: string;
+}): Promise<{ graph: Graph; explanation?: string }> =>
+  api.post('/ai/generate-graph', body).then((r) => r.data);
+
 // Deployment
 export const downloadBundle = async (graph: Graph) => {
   const response = await api.post('/deploy/bundle', graph, { responseType: 'blob' });

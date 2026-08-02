@@ -18,6 +18,7 @@ const defaultConfig = (): NodeConfig => ({
   separator: '\n',
   merge_mode: 'concat',
   read_file_inputs: false,
+  gui_widgets: [],
   extra: {},
 });
 
@@ -145,6 +146,18 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
         config: { ...cfg, separator: '\n' },
       };
 
+    case 'gui':
+      return {
+        id,
+        node_type: 'gui',
+        label: 'GUI Node',
+        description: 'A composed panel of interactive widgets (file/directory pickers, text/chat windows)',
+        position: { x: 0, y: 0 },
+        inputs: [],
+        outputs: [],
+        config: { ...cfg, gui_widgets: [] },
+      };
+
     default:
       return {
         id,
@@ -169,6 +182,7 @@ export const NODE_TYPE_LABELS: Record<NodeType, string> = {
   text_output: 'Text Output',
   merge: 'Merge',
   split: 'Split',
+  gui: 'GUI Node',
 };
 
 export const NODE_TYPE_COLORS: Record<NodeType, string> = {
@@ -181,6 +195,7 @@ export const NODE_TYPE_COLORS: Record<NodeType, string> = {
   text_output: '#0f3a3a',
   merge: '#1a2a3a',
   split: '#3a1a1a',
+  gui: '#4a1d3a',
 };
 
 export const NODE_TYPE_ICON: Record<NodeType, string> = {
@@ -193,6 +208,7 @@ export const NODE_TYPE_ICON: Record<NodeType, string> = {
   text_output: '🪟',
   merge: '🔀',
   split: '✂️',
+  gui: '🖥️',
 };
 
 export interface NodePreset {

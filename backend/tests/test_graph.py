@@ -9,7 +9,6 @@ import json
 import pytest
 import asyncio
 from pathlib import Path
-from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Graph model tests
@@ -122,80 +121,84 @@ def test_graph_validation_allows_one_to_one_wiring():
     assert graph.edges[0].id == "e1"
 
 
-def test_graph_validation_rejects_implicit_fan_out_without_split():
+def test_graph_validation_allows_implicit_fan_out_without_split():
+    """Connectors may branch implicitly; a SPLIT node is not required."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
 
-    with pytest.raises(ValidationError, match="only split nodes may fan out"):
-        Graph(
-            metadata=GraphMetadata(name="Implicit Fan Out"),
-            nodes=[
-                GraphNode(
-                    id="source",
-                    node_type=NodeType.TEXT_INPUT,
-                    label="Source",
-                    outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
-                    config=NodeConfig(value="hello"),
-                ),
-                GraphNode(
-                    id="left",
-                    node_type=NodeType.OUTPUT,
-                    label="Left",
-                    inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
-                    config=NodeConfig(output_label="Left"),
-                ),
-                GraphNode(
-                    id="right",
-                    node_type=NodeType.OUTPUT,
-                    label="Right",
-                    inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
-                    config=NodeConfig(output_label="Right"),
-                ),
-            ],
-            edges=[
-                GraphEdge(id="e1", source_node_id="source", source_port_id="output", target_node_id="left", target_port_id="value"),
-                GraphEdge(id="e2", source_node_id="source", source_port_id="output", target_node_id="right", target_port_id="value"),
-            ],
-        )
+    graph = Graph(
+        metadata=GraphMetadata(name="Implicit Fan Out"),
+        nodes=[
+            GraphNode(
+                id="source",
+                node_type=NodeType.TEXT_INPUT,
+                label="Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="hello"),
+            ),
+            GraphNode(
+                id="left",
+                node_type=NodeType.OUTPUT,
+                label="Left",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                config=NodeConfig(output_label="Left"),
+            ),
+            GraphNode(
+                id="right",
+                node_type=NodeType.OUTPUT,
+                label="Right",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                config=NodeConfig(output_label="Right"),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="source", source_port_id="output", target_node_id="left", target_port_id="value"),
+            GraphEdge(id="e2", source_node_id="source", source_port_id="output", target_node_id="right", target_port_id="value"),
+        ],
+    )
+
+    assert len(graph.edges) == 2
 
 
-def test_graph_validation_rejects_implicit_fan_in_without_merge():
+def test_graph_validation_allows_implicit_fan_in_without_merge():
+    """Connectors may join implicitly; a MERGE node is not required."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
 
-    with pytest.raises(ValidationError, match="only merge nodes may fan in"):
-        Graph(
-            metadata=GraphMetadata(name="Implicit Fan In"),
-            nodes=[
-                GraphNode(
-                    id="left",
-                    node_type=NodeType.TEXT_INPUT,
-                    label="Left",
-                    outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
-                    config=NodeConfig(value="hello"),
-                ),
-                GraphNode(
-                    id="right",
-                    node_type=NodeType.TEXT_INPUT,
-                    label="Right",
-                    outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
-                    config=NodeConfig(value="world"),
-                ),
-                GraphNode(
-                    id="target",
-                    node_type=NodeType.OUTPUT,
-                    label="Target",
-                    inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
-                    config=NodeConfig(output_label="Result"),
-                ),
-            ],
-            edges=[
-                GraphEdge(id="e1", source_node_id="left", source_port_id="output", target_node_id="target", target_port_id="value"),
-                GraphEdge(id="e2", source_node_id="right", source_port_id="output", target_node_id="target", target_port_id="value"),
-            ],
-        )
+    graph = Graph(
+        metadata=GraphMetadata(name="Implicit Fan In"),
+        nodes=[
+            GraphNode(
+                id="left",
+                node_type=NodeType.TEXT_INPUT,
+                label="Left",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="hello"),
+            ),
+            GraphNode(
+                id="right",
+                node_type=NodeType.TEXT_INPUT,
+                label="Right",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="world"),
+            ),
+            GraphNode(
+                id="target",
+                node_type=NodeType.OUTPUT,
+                label="Target",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                config=NodeConfig(output_label="Result"),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="left", source_port_id="output", target_node_id="target", target_port_id="value"),
+            GraphEdge(id="e2", source_node_id="right", source_port_id="output", target_node_id="target", target_port_id="value"),
+        ],
+    )
+
+    assert len(graph.edges) == 2
 
 
 def test_graph_validation_allows_fan_out_from_split():

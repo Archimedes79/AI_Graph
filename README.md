@@ -161,7 +161,51 @@ The AI can generate this function for you: just describe what the node should do
 
 ---
 
-## 🤖 AI Providers
+## � GUI Nodes
+
+A `gui` node is a composable interface node: it holds an ordered list of **widgets**
+(`config.gui_widgets`), and its ports are *always* derived from that list — you never
+hand-edit a GUI node's inputs/outputs. Add, remove, or reorder widgets and the node's
+ports are regenerated to match (`sync_gui_node_ports` in `app/models/graph.py`, mirrored
+in `frontend/src/utils/guiWidgets.ts`). This is the core interface contract: **a GUI
+node's inputs and outputs always reflect exactly what its widgets are capable of.**
+
+| Widget kind | Ports it contributes |
+|---|---|
+| `file_open` | 1 output (file path) |
+| `directory_open` | 1 output (list of file paths, filtered by `extensions`) |
+| `text_window` | 1 input + 1 output (text passthrough; incoming wins over the widget's own `value`) |
+| `chat_window` | 1 input + 1 output (text passthrough) |
+| `plot_window` | 1 input only — display-only, no downstream port, like `text_output` |
+
+Each widget's ports are named `f"{widget.id}_in"` / `f"{widget.id}_out"`, so a widget's
+`id` must stay stable once assigned — that's the only thing keeping existing edges
+attached across GUI edits.
+
+### Plot window data transforms
+
+`plot_window` accepts an optional data-transform snippet (`widget.code` /
+`widget.language`), following the **same contract as a Code node**:
+`run(inputs: dict) -> dict`, receiving `{"value": <raw incoming data>}` and returning
+`{"value": <plot-ready data>}` — a list of numbers, or a list of `{x, y}` /
+`{label, value}` objects. It runs through the same sandboxed `code_executor` as Code
+nodes (`app/services/gui_executor.py`). Leaving `code` empty passes the raw incoming
+value straight through to the chart (a dependency-free inline SVG component,
+`frontend/src/components/PlotWidget.tsx`). The GUI widget editor
+(`frontend/src/components/GuiWidgetEditor.tsx`) can call the AI to generate this
+transform via the same `/api/ai/generate-code` endpoint used elsewhere — no separate
+endpoint is needed.
+
+### Generating whole graphs with AI
+
+`POST /api/ai/generate-graph` asks the AI to author a complete Graph DSL document
+(nodes, ports, edges) from a natural-language description, returned already validated
+against the Graph schema. Use it from the "✨ AI Graph" toolbar action, or standalone
+(e.g. from a script or CI) without touching the editor at all.
+
+---
+
+## �🤖 AI Providers
 
 | Provider | Model | Env var needed |
 |---|---|---|

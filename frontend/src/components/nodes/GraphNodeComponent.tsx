@@ -1,8 +1,9 @@
 import React, { memo, useCallback } from 'react';
-import { Handle, Position, NodeProps } from 'reactflow';
+import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import type { RFNodeData } from '../../types/graph';
 import { NODE_TYPE_COLORS, NODE_TYPE_ICON, NODE_TYPE_LABELS } from '../../utils/nodeDefaults';
 import { useGraphStore } from '../../store/graphStore';
+import PlotWidget from '../PlotWidget';
 
 const statusColors: Record<string, string> = {
   success: '#22c55e',
@@ -11,7 +12,7 @@ const statusColors: Record<string, string> = {
   pending: '#6b7280',
 };
 
-const GraphNodeComponent = memo(({ id, data }: NodeProps<RFNodeData>) => {
+const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const { graphNode, onEdit, onDelete } = data;
   const executionResult = useGraphStore((s) =>
     s.executionResult?.node_results.find((r) => r.node_id === id)
@@ -20,6 +21,7 @@ const GraphNodeComponent = memo(({ id, data }: NodeProps<RFNodeData>) => {
   const bgColor = NODE_TYPE_COLORS[graphNode.node_type] ?? '#1a1d2e';
   const icon = NODE_TYPE_ICON[graphNode.node_type] ?? '⬜';
   const statusColor = executionResult ? statusColors[executionResult.status] : undefined;
+  const isGui = graphNode.node_type === 'gui';
 
   const handleEdit = useCallback(() => onEdit(id), [id, onEdit]);
   const handleDelete = useCallback(
@@ -33,13 +35,21 @@ const GraphNodeComponent = memo(({ id, data }: NodeProps<RFNodeData>) => {
   return (
     <div
       className="rounded-lg overflow-hidden shadow-lg select-none"
-      style={{
-        background: bgColor,
-        border: `2px solid ${statusColor ?? '#2d3148'}`,
-        minWidth: 180,
-        maxWidth: 240,
-      }}
+      style={
+        isGui
+          ? { background: bgColor, border: `2px solid ${statusColor ?? '#2d3148'}`, width: '100%', height: '100%' }
+          : { background: bgColor, border: `2px solid ${statusColor ?? '#2d3148'}`, minWidth: 180, maxWidth: 240 }
+      }
     >
+      {isGui && (
+        <NodeResizer
+          isVisible={selected}
+          minWidth={220}
+          minHeight={140}
+          lineStyle={{ borderColor: '#6366f1' }}
+          handleStyle={{ background: '#6366f1', width: 8, height: 8 }}
+        />
+      )}
       {/* Header */}
       <div
         className="flex items-center justify-between px-3 py-2 cursor-pointer"
@@ -85,35 +95,47 @@ const GraphNodeComponent = memo(({ id, data }: NodeProps<RFNodeData>) => {
       {/* Ports */}
       <div className="px-3 py-2 flex flex-col gap-1">
         {/* Inputs */}
-        {graphNode.inputs.map((port, i) => (
-          <div key={port.id} className="relative flex items-center gap-1.5" style={{ marginLeft: -12 }}>
-            <Handle
-              type="target"
-              position={Position.Left}
-              id={port.id}
-              style={{
-                background: port.multi ? '#a78bfa' : '#6366f1',
-                border: '2px solid #312e81',
-                width: 10,
-                height: 10,
-                position: 'relative',
-                transform: 'none',
-                top: 'auto',
-                left: 'auto',
-                flexShrink: 0,
-              }}
-              title={port.description || port.name}
-              onClick={(event) => {
-                event.stopPropagation();
-                data.onPortEdit(id, port.id);
-              }}
-            />
-            <span className="text-xs" style={{ color: '#94a3b8' }}>
-              {port.name}
-              {port.multi && <span title="Multi-input"> ∞</span>}
-            </span>
-          </div>
-        ))}
+        {graphNode.inputs.map((port) => {
+          const plotWidget = isGui
+            ? graphNode.config.gui_widgets.find((w) => w.kind === 'plot_window' && `${w.id}_in` === port.id)
+            : undefined;
+          return (
+            <React.Fragment key={port.id}>
+              <div className="relative flex items-center gap-1.5" style={{ marginLeft: -12 }}>
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={port.id}
+                  style={{
+                    background: port.multi ? '#a78bfa' : '#6366f1',
+                    border: '2px solid #312e81',
+                    width: 10,
+                    height: 10,
+                    position: 'relative',
+                    transform: 'none',
+                    top: 'auto',
+                    left: 'auto',
+                    flexShrink: 0,
+                  }}
+                  title={port.description || port.name}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    data.onPortEdit(id, port.id);
+                  }}
+                />
+                <span className="text-xs" style={{ color: '#94a3b8' }}>
+                  {port.name}
+                  {port.multi && <span title="Multi-input"> ∞</span>}
+                </span>
+              </div>
+              {plotWidget && (
+                <div className="mt-1 mb-1" style={{ marginLeft: 0 }}>
+                  <PlotWidget data={executionResult?.inputs?.[port.id]} />
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
 
         {/* Config preview */}
         {graphNode.config.value && (

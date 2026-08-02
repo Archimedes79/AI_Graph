@@ -28,6 +28,7 @@ class NodeType(str, Enum):
     TEXT_OUTPUT = "text_output"
     MERGE = "merge"
     SPLIT = "split"
+    GUI = "gui"
 
 
 class PortKind(str, Enum):
@@ -71,6 +72,37 @@ class Port(BaseModel):
 class NodePosition(BaseModel):
     x: float = 0.0
     y: float = 0.0
+
+
+class GuiWidgetKind(str, Enum):
+    FILE_OPEN = "file_open"
+    DIRECTORY_OPEN = "directory_open"
+    TEXT_WINDOW = "text_window"
+    CHAT_WINDOW = "chat_window"
+    PLOT_WINDOW = "plot_window"
+
+
+class GuiWidget(BaseModel):
+    """
+    One element inside a GUI node. Ports are never edited by hand: they are
+    always regenerated from this list (see `sync_gui_node_ports`), so a
+    widget's `id` must stay stable once assigned -- it is the only thing
+    that keeps existing edges attached across GUI edits.
+    """
+    id: str
+    kind: GuiWidgetKind
+    label: str = ""
+    value: Optional[str] = None      # literal/default text, or a chosen file/directory path
+    extensions: str = ""             # directory_open extension filter, e.g. ".md, .txt"
+    size: Literal["small", "medium", "large"] = "medium"
+
+    # Optional data-transform snippet for display-only widgets (currently plot_window).
+    # Same contract as a CODE node: exposes run(inputs: dict) -> dict, executed via the
+    # sandboxed code_executor. Receives {"value": <raw incoming data>} and should return
+    # {"value": <plot-ready data>} -- a list of numbers, or a list of {x,y}/{label,value}
+    # objects. Empty string means the raw incoming value passes through unchanged.
+    code: str = ""
+    language: Literal["python", "javascript"] = "python"
 
 
 class NodeConfig(BaseModel):
@@ -119,6 +151,9 @@ class NodeConfig(BaseModel):
     # json_list: JSON-serialized flat list of all received values.
     merge_mode: Literal["concat", "sum", "count", "json_list"] = "concat"
 
+    # gui node – ordered list of composed widgets; ports are derived from this
+    gui_widgets: List[GuiWidget] = Field(default_factory=list)
+
     extra: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -131,6 +166,54 @@ class GraphNode(BaseModel):
     inputs: List[Port] = Field(default_factory=list)
     outputs: List[Port] = Field(default_factory=list)
     config: NodeConfig = Field(default_factory=NodeConfig)
+
+
+def gui_widget_ports(widget: GuiWidget) -> tuple[List[Port], List[Port]]:
+    """Return the (inputs, outputs) a single GUI widget contributes to its node."""
+    in_id, out_id = f"{widget.id}_in", f"{widget.id}_out"
+    label = widget.label or widget.id
+
+    if widget.kind == GuiWidgetKind.FILE_OPEN:
+        return [], [Port(id=out_id, name=label, kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=False, required=False)]
+
+    if widget.kind == GuiWidgetKind.DIRECTORY_OPEN:
+        return [], [Port(id=out_id, name=label, kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True, required=False)]
+
+    if widget.kind == GuiWidgetKind.TEXT_WINDOW:
+        return (
+            [Port(id=in_id, name=label, kind=PortKind.INPUT, data_type=DataType.ANY, multi=False, required=False)],
+            [Port(id=out_id, name=label, kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+        )
+
+    if widget.kind == GuiWidgetKind.CHAT_WINDOW:
+        return (
+            [Port(id=in_id, name=label, kind=PortKind.INPUT, data_type=DataType.TEXT, multi=True, required=False)],
+            [Port(id=out_id, name=label, kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+        )
+
+    if widget.kind == GuiWidgetKind.PLOT_WINDOW:
+        # Display-only, like text_output: accepts data to plot, no downstream port.
+        return [Port(id=in_id, name=label, kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)], []
+
+    raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
+
+
+def sync_gui_node_ports(node: GraphNode) -> None:
+    """
+    Regenerate a GUI node's inputs/outputs strictly from `config.gui_widgets`,
+    in order. No-op for non-GUI nodes. Call this after any widget-list edit
+    instead of hand-editing `inputs`/`outputs` directly.
+    """
+    if node.node_type != NodeType.GUI:
+        return
+    inputs: List[Port] = []
+    outputs: List[Port] = []
+    for widget in node.config.gui_widgets:
+        widget_inputs, widget_outputs = gui_widget_ports(widget)
+        inputs.extend(widget_inputs)
+        outputs.extend(widget_outputs)
+    node.inputs = inputs
+    node.outputs = outputs
 
 
 class GraphEdge(BaseModel):
@@ -198,6 +281,7 @@ class RuntimeRequirement(BaseModel):
     kind: str       # "file" | "directory"
     direction: str  # "input" | "output"
     current_value: str = ""
+    widget_id: Optional[str] = None  # set when the requirement is a GUI node's widget
 
 
 # ---------------------------------------------------------------------------
@@ -229,4 +313,17 @@ class GeneratePromptRequest(BaseModel):
 
 class GeneratePromptResponse(BaseModel):
     system_prompt: str
+    explanation: str = ""
+
+
+class GenerateGraphRequest(BaseModel):
+    """Ask the AI to author a full Graph DSL document, not just one node."""
+    description: str
+    context: str = ""
+    ai_provider: AIProvider = AIProvider.OLLAMA
+    ai_model: str = "llama3"
+
+
+class GenerateGraphResponse(BaseModel):
+    graph: Graph  # validated against the same DSL schema used everywhere else
     explanation: str = ""
