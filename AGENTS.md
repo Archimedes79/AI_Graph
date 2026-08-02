@@ -101,7 +101,7 @@ what `GuiWindow.tsx` renders) on the frontend.
 A widget kind therefore has **two** files (one per language), one class each, plus one
 registry line per language — adding a kind means adding those and touching nothing else.
 
-## GUI runtime window & designer (not per-widget-kind)
+## GUI runtime window & designer (not per-widget-kind)  
 
 - `frontend/src/components/gui/GuiWindow.tsx` — the floating runtime window shown per `gui` node; lays widgets out and feeds each one its live value.
 - `frontend/src/components/gui/GuiWindowLayer.tsx` — mounts one window per `gui` node.
