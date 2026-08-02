@@ -16,6 +16,11 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
+def resolve_path(raw: str) -> str:
+    """Expand '~' and resolve a config/widget/input-supplied path string to an absolute one."""
+    return str(Path(raw).expanduser().resolve())
+
+
 def list_directory(path: str, recursive: bool = False, extensions: Optional[List[str]] = None) -> List[str]:
     """Return rooted file paths inside *path*, optionally filtered by file extension."""
     root = Path(path).expanduser().resolve()

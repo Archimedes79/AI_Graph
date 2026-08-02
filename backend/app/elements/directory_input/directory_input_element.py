@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.elements.base import NodeElement, NodeMap, Sources
@@ -20,7 +19,7 @@ class DirectoryInputElement(NodeElement):
         effective_formats: Optional[Dict[str, Optional[str]]] = None,
     ) -> Dict[str, Any]:
         cfg = node.config
-        path = str(Path(cfg.value or inputs.get("path", "")).expanduser().resolve())
+        path = file_service.resolve_path(cfg.value or inputs.get("path", ""))
         recursive = cfg.extra.get("recursive", False)
         extensions = file_service.parse_extensions_filter(cfg.extra.get("extensions", ""))
         files = file_service.list_directory(path, recursive=recursive, extensions=extensions)
@@ -47,7 +46,7 @@ class DirectoryInputElement(NodeElement):
         recursive = bool(cfg.extra.get("recursive", False))
         extensions = file_service.parse_extensions_filter(cfg.extra.get("extensions", ""))
         lines = [
-            f"_path = str(Path(_resolved.get({node.id!r}, {(cfg.value or '')!r})).expanduser().resolve())",
+            f"_path = _resolve_path(_resolved.get({node.id!r}, {(cfg.value or '')!r}))",
             f"_files = _list_directory(_path, recursive={recursive!r}, extensions={extensions!r})",
         ]
         if not cfg.select_all_files and cfg.selector_code.strip():

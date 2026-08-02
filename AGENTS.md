@@ -35,6 +35,22 @@ that contains one-or-more sub-elements and synchronizes them — the object hier
 where the lowest level (a widget) again supports the same execute/compile contract as a
 top-level graph element.
 
+**Some concepts exist twice on purpose — reuse the shared helper, don't re-duplicate the
+logic.** A handful of things are exposed both as a standalone node type and as a `gui`
+widget kind (`file_input`/`file_open`, `directory_input`/`directory_open` — a file or
+directory chooser either standing alone or embedded in a GUI panel). Their elements
+independently call the same underlying operations, so the operations themselves live
+once in a shared spot and each element just calls them:
+`app.services.file_service.resolve_path`/`list_directory`/`read_text_file` (live
+execution) and the `_resolve_path`/`_list_directory`/`_read_text_file` runtime helpers
+embedded via `_FILE_HELPERS` in `deploy_service.py` (deploy codegen) are the shared,
+already-correct implementations — a new element needing "resolve this path" or "list
+this directory" should call these, not reimplement `Path(x).expanduser().resolve()`
+inline. `app.elements.base.widget_input_or_value(widget, inputs)` is the equivalent
+shared helper for a widget's "incoming wired value, falling back to its stored value"
+idiom (used by `file_open`/`directory_open`; widgets with different fallback precedence,
+e.g. `chat_window`, implement it inline instead since it's genuinely not the same rule).
+
 On the frontend, `frontend/src/elements/types.ts` defines the equivalent (React has no
 useful class story here, so these are plain objects, not classes):
 

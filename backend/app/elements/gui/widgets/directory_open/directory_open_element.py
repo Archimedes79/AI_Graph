@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from app.elements.base import GuiWidgetElement
+from app.elements.base import GuiWidgetElement, widget_input_or_value
 from app.models.graph import DataType, GraphNode, GuiWidget, GuiWidgetKind, Port, PortKind
 from app.services import file_service
 
@@ -20,12 +19,10 @@ class DirectoryOpenElement(GuiWidgetElement):
 
     def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> List[str]:
         """List a directory_open widget's chosen/overridden directory, honoring its extension filter."""
-        raw = inputs.get(f"{widget.id}_in")
-        if raw is None:
-            raw = widget.value
+        raw = widget_input_or_value(widget, inputs)
         if not raw:
             return []
-        path = str(Path(raw).expanduser().resolve())
+        path = file_service.resolve_path(raw)
         extensions = file_service.parse_extensions_filter(widget.extensions)
         return file_service.list_directory(path, recursive=False, extensions=extensions)
 
@@ -36,7 +33,7 @@ class DirectoryOpenElement(GuiWidgetElement):
         return [
             f"_raw = _resolved.get({req_key!r}, {widget.value!r})",
             "if _raw:",
-            "    _path = str(Path(_raw).expanduser().resolve())",
+            "    _path = _resolve_path(_raw)",
             f"    _gui_result[{out_id!r}] = _list_directory(_path, recursive=False, extensions={extensions!r})",
             "else:",
             f"    _gui_result[{out_id!r}] = []",

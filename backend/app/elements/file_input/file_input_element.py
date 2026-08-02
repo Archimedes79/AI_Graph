@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.elements.base import NodeElement, NodeMap, Sources
@@ -20,13 +19,13 @@ class FileInputElement(NodeElement):
         effective_formats: Optional[Dict[str, Optional[str]]] = None,
     ) -> Dict[str, Any]:
         cfg = node.config
-        path = str(Path(cfg.value or inputs.get("path", "")).expanduser().resolve())
+        path = file_service.resolve_path(cfg.value or inputs.get("path", ""))
         content = file_service.read_text_file(path)
         return {"content": content, "path": path}
 
     def compile(self, node: GraphNode, sources: Sources, node_map: NodeMap) -> List[str]:
         cfg = node.config
         return [
-            f"_path = str(Path(_resolved.get({node.id!r}, {(cfg.value or '')!r})).expanduser().resolve())",
+            f"_path = _resolve_path(_resolved.get({node.id!r}, {(cfg.value or '')!r}))",
             f"results[{node.id!r}] = {{'content': _read_text_file(_path), 'path': _path}}",
         ]

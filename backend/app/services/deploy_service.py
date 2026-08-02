@@ -115,6 +115,10 @@ def _requirements_literal(graph: Graph) -> List[dict]:
 # ---------------------------------------------------------------------------
 
 _FILE_HELPERS = '''\
+def _resolve_path(path):
+    return str(Path(path).expanduser().resolve())
+
+
 def _read_text_file(path):
     p = Path(path)
     if not p.exists():
