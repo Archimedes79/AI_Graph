@@ -104,6 +104,16 @@ python start.py --mode prod   # prod mode: one process serving API + built UI on
 
 `--mode prod` expects a built frontend (`cd frontend && npm run build` first); it then runs a single `uvicorn` process that serves both the API and the built UI from `frontend/dist`, making it the simplest way to deploy the editor itself to another server.
 
+To hand the editor to another server without cloning the repo or installing Node there, build a self-contained zip instead:
+
+```bash
+python start.py --mode package                    # builds the frontend, then zips everything needed
+python start.py --mode package --skip-build       # reuse an already-built frontend/dist
+python start.py --mode package --output my.zip    # custom output path
+```
+
+The zip contains `backend/app`, `backend/requirements.txt`, the built `frontend/dist`, `start.py` and `README.md`. On the target machine: unzip, `pip install -r backend/requirements.txt` (ideally in a venv), then `python start.py --mode prod`.
+
 ---
 
 ## 📖 Graph DSL
@@ -183,9 +193,13 @@ python run.py my_graph.json --inputs my-text-node-id="Custom input text"
 
 ## 🚢 Deployment
 
+There are two, independent kinds of "deploy" in AI-Graph:
+
+### Deploying a graph
+
 From the frontend toolbar, click **🚀 Deploy** to:
 
-- **Download Bundle** – get a zip containing `graph.json`, `docker-compose.yml`, and `run_graph.py`
+- **Download Bundle** – get a zip containing `run_graph.py` (self-contained runner, no `graph.json` or AI-Graph backend needed at runtime), `requirements.txt`, `Dockerfile`, `docker-compose.yml`, and a `README.md` with run instructions
 - **View Docker Compose** – preview the generated compose file
 
 Or use the API:
@@ -196,6 +210,10 @@ curl -X POST http://localhost:8000/api/deploy/bundle \
   -d @my_graph.json \
   --output bundle.zip
 ```
+
+### Deploying the editor itself
+
+See [Option 3 – `start.py` launcher](#option-3--startpy-launcher): `python start.py --mode package` builds a zip of the editor app (backend + built frontend) to run on another server.
 
 ---
 

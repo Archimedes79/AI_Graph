@@ -706,4 +706,27 @@ def test_generate_deployment_bundle_keys():
 
     graph = Graph(metadata=GraphMetadata(name="Test Bundle"))
     bundle = generate_deployment_bundle(graph)
-    assert set(bundle.keys()) == {"docker-compose.yml", "run_graph.py"}
+    assert set(bundle.keys()) == {
+        "docker-compose.yml", "run_graph.py", "requirements.txt", "Dockerfile", "README.md",
+    }
+    assert bundle["requirements.txt"].strip() == "# No third-party dependencies required."
+    assert "build: ." in bundle["docker-compose.yml"]
+
+
+def test_generate_deployment_bundle_requires_httpx_for_ai_node():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphMetadata, GraphNode, NodeType, Port, PortKind, DataType
+    from app.services.deploy_service import generate_deployment_bundle
+
+    graph = Graph(
+        metadata=GraphMetadata(name="AI Bundle"),
+        nodes=[
+            GraphNode(
+                id="ai", node_type=NodeType.AI, label="Answer",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
+            ),
+        ],
+    )
+    bundle = generate_deployment_bundle(graph)
+    assert bundle["requirements.txt"].strip() == "httpx"

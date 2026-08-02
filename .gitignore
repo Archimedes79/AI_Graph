@@ -38,3 +38,6 @@ Thumbs.db
 # Data
 data/
 *.log
+
+# Packaged editor deploy artifact (built by start.py --mode package)
+ai-graph-editor-package.zip
