@@ -10,7 +10,7 @@ union of its widgets' ports (see `sync_gui_node_ports`), and its `execute`/
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from app.elements.base import GuiWidgetElement, NodeElement, NodeMap, Sources
 from app.models.graph import GraphNode, GuiWidgetKind, NodeType, gui_widget_ports, sync_gui_node_ports
@@ -19,7 +19,7 @@ from app.services.deploy.shared import collect_inputs_lines
 
 
 def _widget_elements() -> Dict[GuiWidgetKind, GuiWidgetElement]:
-    # Local import: elements.registry imports elements.gui.element (this
+    # Local import: elements.registry imports elements.gui.gui_element (this
     # module) to build NODE_ELEMENTS, so importing registry at module level
     # here would be circular. Only the widget half of the registry is needed.
     from app.elements.registry import GUI_WIDGET_ELEMENTS

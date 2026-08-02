@@ -7,11 +7,10 @@ connected by Edges.  Each Node declares typed Ports (inputs / outputs).
 
 from __future__ import annotations
 
-from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------

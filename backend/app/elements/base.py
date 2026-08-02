@@ -54,7 +54,7 @@ class GuiWidgetElement(ABC):
     """
     Everything one `GuiWidgetKind` needs to behave as a `gui` node's
     sub-element -- the same three facets as NodeElement, one level down in the
-    object hierarchy. A `gui` node's own NodeElement (`elements/gui/element.py`)
+    object hierarchy. A `gui` node's own NodeElement (`elements/gui/gui_element.py`)
     is a Composite: its `execute`/`compile` dispatch to each of its widgets'
     GuiWidgetElement in turn (looked up in `registry.GUI_WIDGET_ELEMENTS`) and
     merge their results, which is what makes the gui node "an object hierarchy

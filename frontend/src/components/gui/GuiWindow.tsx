@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { GraphNode, GuiWidget } from '../../types/graph';
 import { useGraphStore } from '../../store/graphStore';
 import { GUI_GRID_COLUMNS, GUI_GRID_ROW_HEIGHT, layoutRowCount, resolveWidgetLayout } from './layout';
-import { GUI_WIDGET_RUNTIME_COMPONENTS } from './widgets';
+import { GUI_WIDGET_ELEMENTS } from '../../elements/registry';
 import { valueToText } from './widgetProps';
 
 interface GuiWindowProps {
@@ -114,7 +114,7 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
             }}
           >
             {placements.map(({ widget, x, y, w, h }) => {
-              const WidgetComponent = GUI_WIDGET_RUNTIME_COMPONENTS[widget.kind];
+              const WidgetComponent = GUI_WIDGET_ELEMENTS[widget.kind].RuntimeWidget;
               const incoming = nodeResult?.inputs?.[`${widget.id}_in`];
               const outgoing = nodeResult?.outputs?.[`${widget.id}_out`];
               const value = overrides[widget.id] ?? (incoming !== undefined ? incoming : widget.value ?? '');

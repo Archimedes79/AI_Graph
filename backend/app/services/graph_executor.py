@@ -31,7 +31,7 @@ from app.models.graph import (
     sync_gui_node_ports,
 )
 from app.elements.registry import NODE_ELEMENTS
-from app.services import ai_service, file_service
+from app.services import ai_service, file_service  # ai_service: tests monkeypatch this module attribute
 from app.services.batching import batch_inputs, merge_batch_outputs
 
 logger = logging.getLogger(__name__)
