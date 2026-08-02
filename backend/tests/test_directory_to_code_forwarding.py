@@ -540,3 +540,102 @@ async def test_merge_concat_mode_unaffected_by_new_modes(tmp_path):
     assert result.status == "success"
     merged_value = result.final_outputs["MergeResult"]["value"]
     assert isinstance(merged_value, str)
+
+
+# ---------------------------------------------------------------------------
+# Fix #3: pre-try helper exceptions (e.g. a missing file for read_file_inputs)
+# must produce an ERROR NodeResult instead of crashing execute_graph().
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_missing_file_input_yields_error_node_result_without_crashing():
+    """A FILE_PATH-typed value pointing at a nonexistent path, fed into a
+    read_file_inputs=True code node, used to raise FileNotFoundError from
+    _resolve_file_inputs *before* the node's try/except -- crashing the whole
+    execute_graph() call via asyncio.gather instead of yielding an ERROR result."""
+    graph = Graph(
+        metadata=GraphMetadata(name="MissingFileInput"),
+        nodes=[
+            GraphNode(
+                id="src", node_type=NodeType.TEXT_INPUT, label="Src",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=False)],
+                config=NodeConfig(value="Z:/definitely/missing.txt"),
+            ),
+            GraphNode(
+                id="dst", node_type=NodeType.CODE, label="Dst",
+                inputs=[Port(id="path", name="Path", kind=PortKind.INPUT, data_type=DataType.FILE_PATH, multi=False)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.ANY, multi=False)],
+                config=NodeConfig(
+                    read_file_inputs=True,
+                    batch_mode="whole_list",
+                    code="def run(inputs):\n    return {'output': inputs.get('path')}\n",
+                ),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="src", source_port_id="output", target_node_id="dst", target_port_id="path"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    _dump("Fix #3: missing file input does not crash execute_graph", result)
+
+    assert result.status == "error"
+
+    src_result = next(r for r in result.node_results if r.node_id == "src")
+    assert src_result.status == "success"
+
+    dst_result = next(r for r in result.node_results if r.node_id == "dst")
+    assert dst_result.status == "error"
+    assert dst_result.error
+    assert "missing.txt" in dst_result.error
+
+
+# ---------------------------------------------------------------------------
+# Fix #4: a failed fan-in source must not inject a None placeholder alongside
+# surviving values on a multi-input port.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_failed_fan_in_source_does_not_inject_none(tmp_path):
+    """Two sources feed the same multi-input port; one fails (nonexistent file).
+    The surviving value's list must not contain a None placeholder for the
+    failed source."""
+    graph = Graph(
+        metadata=GraphMetadata(name="FailedFanInSource"),
+        nodes=[
+            GraphNode(
+                id="good_src", node_type=NodeType.TEXT_INPUT, label="GoodSrc",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
+                config=NodeConfig(value="good"),
+            ),
+            GraphNode(
+                id="bad_src", node_type=NodeType.FILE_INPUT, label="BadSrc",
+                outputs=[Port(id="content", name="Content", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
+                config=NodeConfig(value=str(tmp_path / "does_not_exist.txt")),
+            ),
+            GraphNode(
+                id="code", node_type=NodeType.CODE, label="Echo",
+                inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.ANY, multi=False)],
+                config=NodeConfig(
+                    batch_mode="whole_list",
+                    code="def run(inputs):\n    return {'output': inputs.get('input')}\n",
+                ),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="good_src", source_port_id="output", target_node_id="code", target_port_id="input"),
+            GraphEdge(id="e2", source_node_id="bad_src", source_port_id="content", target_node_id="code", target_port_id="input"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    _dump("Fix #4: failed fan-in source does not inject None", result)
+
+    bad_src_result = next(r for r in result.node_results if r.node_id == "bad_src")
+    assert bad_src_result.status == "error"
+
+    code_result = next(r for r in result.node_results if r.node_id == "code")
+    assert code_result.status == "success"
+    assert code_result.outputs["output"] == ["good"]

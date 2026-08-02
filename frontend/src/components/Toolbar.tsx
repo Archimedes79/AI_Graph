@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
 import { executeGraph, downloadBundle, getDockerCompose, getRuntimeRequirements, generateGraph } from '../utils/api';
 import type { Graph, RuntimeRequirement } from '../types/graph';
+import { syncGuiNodePorts } from '../utils/guiWidgets';
 import GraphWindows from './GraphWindows';
 
 interface ToolbarProps {
@@ -88,6 +89,20 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
     const graph: Graph = JSON.parse(JSON.stringify(pendingGraph));
     for (const node of graph.nodes) {
       if (values[node.id] !== undefined) node.config.value = values[node.id];
+
+      if (node.node_type === 'gui') {
+        let widgetsChanged = false;
+        for (const widget of node.config.gui_widgets) {
+          const key = `${node.id}::${widget.id}`;
+          if (values[key] !== undefined) {
+            widget.value = values[key];
+            widgetsChanged = true;
+          }
+        }
+        // Widget values don't change port shape, but re-sync for consistency
+        // with how every other widget mutation is applied (see applyWidgets).
+        if (widgetsChanged) Object.assign(node, syncGuiNodePorts(node));
+      }
     }
     setPendingRequirements(null);
     setPendingGraph(null);

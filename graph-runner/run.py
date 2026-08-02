@@ -67,7 +67,8 @@ async def run(graph_path: str, extra_inputs: dict) -> None:
     # Prompt interactively for any remaining values the graph needs
     resolved: dict = {}
     for req in get_runtime_requirements(graph):
-        if req.node_id in extra_inputs:
+        key = f"{req.node_id}::{req.widget_id}" if req.widget_id else req.node_id
+        if key in extra_inputs:
             continue
         if req.kind == "text":
             prompt_label = f"Text for '{req.label}'"
@@ -87,7 +88,7 @@ async def run(graph_path: str, extra_inputs: dict) -> None:
                     file=sys.stderr,
                 )
                 sys.exit(1)
-        resolved[req.node_id] = answer or default
+        resolved[key] = answer or default
     apply_runtime_values(graph, resolved)
 
     print(f"Executing graph: {graph.metadata.name!r}", file=sys.stderr)

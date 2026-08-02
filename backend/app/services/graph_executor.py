@@ -77,22 +77,30 @@ def _collect_inputs(
 ) -> Dict[str, Any]:
     """
     Gather all upstream output values that are wired into *node_id*'s input ports.
-    Multi-input ports accumulate values into a list.
+    Multi-input ports accumulate values into a list. A port fed by more than one
+    edge always collects as a list, even if some of its sources failed/were
+    skipped -- those contribute nothing (not a `None` placeholder) so surviving
+    values aren't diluted, while a single edge whose source failed still yields
+    no entry at all (as opposed to a `None` value from a source that legitimately
+    succeeded with `None`).
     """
-    collected: Dict[str, Any] = {}
+    port_edges: Dict[str, List[GraphEdge]] = defaultdict(list)
     for edge in edges:
-        if edge.target_node_id != node_id:
-            continue
-        value = node_outputs.get(edge.source_node_id, {}).get(edge.source_port_id)
-        target_port = edge.target_port_id
-        if target_port in collected:
-            existing = collected[target_port]
-            if isinstance(existing, list):
-                existing.append(value)
-            else:
-                collected[target_port] = [existing, value]
-        else:
-            collected[target_port] = value
+        if edge.target_node_id == node_id:
+            port_edges[edge.target_port_id].append(edge)
+
+    collected: Dict[str, Any] = {}
+    for target_port, incoming in port_edges.items():
+        values = []
+        for edge in incoming:
+            source_outputs = node_outputs.get(edge.source_node_id)
+            if source_outputs is None:
+                continue
+            values.append(source_outputs.get(edge.source_port_id))
+        if len(incoming) > 1:
+            collected[target_port] = values
+        elif values:
+            collected[target_port] = values[0]
     return collected
 
 
@@ -593,14 +601,15 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
                     error=f"Required input '{blocked_port}' has no available value: upstream node(s) failed",
                 )
 
-            inputs = _collect_inputs(node_id, graph.edges, node_outputs)
-            effective_formats = _effective_input_formats(node, graph.edges, node_map)
-            inputs = _resolve_file_inputs(node, inputs, effective_formats)
-            source_formats = _collect_input_source_formats(node_id, graph.edges, node_map)
-            inputs = _decode_node_inputs(node, inputs, effective_formats, source_formats)
-            _snapshot_inputs(node, inputs)
+            inputs: Dict[str, Any] = {}
             node_start = time.monotonic()
             try:
+                inputs = _collect_inputs(node_id, graph.edges, node_outputs)
+                effective_formats = _effective_input_formats(node, graph.edges, node_map)
+                inputs = _resolve_file_inputs(node, inputs, effective_formats)
+                source_formats = _collect_input_source_formats(node_id, graph.edges, node_map)
+                inputs = _decode_node_inputs(node, inputs, effective_formats, source_formats)
+                _snapshot_inputs(node, inputs)
                 if node.node_type in (NodeType.AI, NodeType.CODE):
                     outputs = (
                         await _execute_node(node, inputs)

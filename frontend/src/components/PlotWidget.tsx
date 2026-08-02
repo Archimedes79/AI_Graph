@@ -46,6 +46,14 @@ function toPoints(data: unknown): PlotPoint[] | null {
   return points;
 }
 
+/** Auto-scale a set of values to an axis range that always includes 0 (so the baseline stays on-chart for all-negative or all-positive data), guarding against a zero-size range. */
+export function computeAxisRange(values: number[]): { min: number; max: number; range: number } {
+  const min = Math.min(0, ...values);
+  const rawMax = Math.max(0, ...values);
+  const max = rawMax > min ? rawMax : min + 1e-6;
+  return { min, max, range: max - min };
+}
+
 /** Minimal, dependency-free auto-scaled SVG chart for gui-node `plot_window` widgets. */
 export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidgetProps) {
   const points = toPoints(data);
@@ -62,9 +70,7 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
   }
 
   const values = points.map((p) => p.value);
-  const min = Math.min(0, ...values);
-  const max = Math.max(...values, min + 1e-6);
-  const range = max - min;
+  const { min, max, range } = computeAxisRange(values);
 
   const padding = 4;
   const plotW = width - padding * 2;

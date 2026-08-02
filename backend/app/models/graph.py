@@ -163,6 +163,8 @@ class GraphNode(BaseModel):
     label: str
     description: str = ""
     position: NodePosition = Field(default_factory=NodePosition)
+    width: Optional[float] = None    # persisted ReactFlow size, e.g. for resizable gui nodes
+    height: Optional[float] = None
     inputs: List[Port] = Field(default_factory=list)
     outputs: List[Port] = Field(default_factory=list)
     config: NodeConfig = Field(default_factory=NodeConfig)

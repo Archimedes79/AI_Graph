@@ -44,7 +44,7 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
     setExpandedTransform((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleGenerateTransform = async (index: number, widget: GuiWidget) => {
+  const handleGenerateTransform = async (widget: GuiWidget) => {
     setGeneratingId(widget.id);
     setTransformErrors((prev) => ({ ...prev, [widget.id]: '' }));
     try {
@@ -58,7 +58,12 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
         ai_model: aiModel,
         ai_provider: aiProvider,
       });
-      updateWidget(index, { code: result.code });
+      // Look up the widget's current position by stable id, not the index
+      // captured at click time -- the list may have been reordered/edited
+      // while this request was in flight.
+      const currentIndex = widgets.findIndex((w) => w.id === widget.id);
+      if (currentIndex === -1) return;
+      updateWidget(currentIndex, { code: result.code });
     } catch (e: any) {
       setTransformErrors((prev) => ({
         ...prev,
@@ -250,7 +255,7 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
                         <option value="javascript">JavaScript</option>
                       </select>
                       <button
-                        onClick={() => handleGenerateTransform(index, widget)}
+                        onClick={() => handleGenerateTransform(widget)}
                         disabled={generatingId === widget.id}
                         className="text-xs px-2 py-1 rounded"
                         style={{ background: '#22c55e', color: 'white', opacity: generatingId === widget.id ? 0.5 : 1 }}

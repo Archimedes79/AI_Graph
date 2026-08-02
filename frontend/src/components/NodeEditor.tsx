@@ -97,15 +97,14 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const isCode = nt === 'code';
   const isGui = nt === 'gui';
 
-  // Widgets drive `inputs`/`outputs` directly, so every add/remove/reorder is
-  // persisted to the store immediately (not deferred to "Save") to keep port
-  // ids -- and therefore existing edges -- in sync with the widget list.
+  // Widgets drive `inputs`/`outputs` directly, so every add/remove/reorder
+  // re-syncs ports immediately in local state (so the Ports/Preview tabs stay
+  // correct) -- but, like every other field, is only committed to the store
+  // by `save()`, so Cancel discards it.
   const applyWidgets = (nextWidgets: GraphNode['config']['gui_widgets']) => {
     setNode((prev) => {
       if (!prev) return prev;
-      const updated = syncGuiNodePorts({ ...prev, config: { ...prev.config, gui_widgets: nextWidgets } });
-      updateNode(nodeId, { config: updated.config, inputs: updated.inputs, outputs: updated.outputs });
-      return updated;
+      return syncGuiNodePorts({ ...prev, config: { ...prev.config, gui_widgets: nextWidgets } });
     });
   };
 

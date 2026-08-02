@@ -971,3 +971,45 @@ def test_generate_deployment_bundle_requires_httpx_for_ai_node():
     )
     bundle = generate_deployment_bundle(graph)
     assert bundle["requirements.txt"].strip() == "httpx"
+
+
+def test_generate_runner_script_compiles_gui_node(tmp_path):
+    """Regression: GUI nodes used to have no branch in deploy_service._node_lines,
+    so compiling any graph containing one raised 'Unknown node type: gui'."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import (
+        Graph, GraphEdge, GraphMetadata, GraphNode, GuiWidget, GuiWidgetKind,
+        NodeConfig, NodeType, Port, PortKind, DataType, sync_gui_node_ports,
+    )
+    from app.services.deploy_service import generate_runner_script
+
+    fixture = tmp_path / "note.txt"
+    fixture.write_text("hello", encoding="utf-8")
+
+    gui = GraphNode(
+        id="gui", node_type=NodeType.GUI, label="GUI",
+        config=NodeConfig(gui_widgets=[
+            GuiWidget(id="w1", kind=GuiWidgetKind.FILE_OPEN, label="File", value=str(fixture)),
+            GuiWidget(id="w2", kind=GuiWidgetKind.TEXT_WINDOW, label="Text", value="hello text"),
+        ]),
+    )
+    sync_gui_node_ports(gui)
+    downstream = GraphNode(
+        id="out", node_type=NodeType.OUTPUT, label="Out",
+        inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True)],
+        config=NodeConfig(output_label="Result"),
+    )
+
+    graph = Graph(
+        metadata=GraphMetadata(name="GUI Deploy Test"),
+        nodes=[gui, downstream],
+        edges=[
+            GraphEdge(id="e1", source_node_id="gui", source_port_id="w1_out", target_node_id="out", target_port_id="value"),
+        ],
+    )
+
+    script = generate_runner_script(graph)
+    assert "Unknown node type" not in script
+    assert "w1_out" in script
+    assert "w2_out" in script

@@ -3,6 +3,7 @@ import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType } from '../types/graph';
 import { nodeTypeDefaults, type NodePreset } from '../utils/nodeDefaults';
+import { syncGuiNodePorts } from '../utils/guiWidgets';
 
 type RFNode = Node<RFNodeData>;
 
@@ -63,7 +64,7 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
   const nodeId = rawNode.id ?? newId(nodeType);
   const defaults = nodeTypeDefaults(nodeType, nodeId);
 
-  return {
+  const node: GraphNode = {
     ...defaults,
     ...rawNode,
     id: nodeId,
@@ -83,6 +84,11 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
       },
     },
   };
+
+  // gui node ports are always derived from their widget list -- never trust
+  // hand-edited/imported/AI-generated `inputs`/`outputs`, mirroring the
+  // backend's defensive sync_gui_node_ports call in execute_graph.
+  return nodeType === 'gui' ? syncGuiNodePorts(node) : node;
 }
 
 function normalizeGraph(graph: Graph): Graph {
@@ -174,7 +180,21 @@ export const useGraphStore = create<GraphStore>()(
         const idx = state.rfNodes.findIndex((n: RFNode) => n.id === nodeId);
         if (idx !== -1) {
           const existing = state.rfNodes[idx].data.graphNode;
-          state.rfNodes[idx].data.graphNode = { ...existing, ...updates } as GraphNode;
+          const updated = { ...existing, ...updates } as GraphNode;
+          state.rfNodes[idx].data.graphNode = updated;
+
+          // Ports may have shrunk (e.g. a removed GUI widget) -- prune any
+          // edges that now dangle off a port id that no longer exists,
+          // mirroring the edge cleanup deleteNode already does.
+          if (updates.inputs || updates.outputs) {
+            const inputIds = new Set(updated.inputs.map((p) => p.id));
+            const outputIds = new Set(updated.outputs.map((p) => p.id));
+            state.rfEdges = state.rfEdges.filter((e: Edge) => {
+              if (e.target === nodeId && e.targetHandle && !inputIds.has(e.targetHandle)) return false;
+              if (e.source === nodeId && e.sourceHandle && !outputIds.has(e.sourceHandle)) return false;
+              return true;
+            });
+          }
         }
       });
     },
@@ -245,6 +265,8 @@ export const useGraphStore = create<GraphStore>()(
         id: gn.id,
         type: 'graphNode',
         position: { x: gn.position.x, y: gn.position.y },
+        width: gn.width,
+        height: gn.height,
         data: { graphNode: gn, ...callbacks },
       }));
 
@@ -273,6 +295,8 @@ export const useGraphStore = create<GraphStore>()(
       const nodes: GraphNode[] = rfNodes.map((rfn) => ({
         ...rfn.data.graphNode,
         position: { x: rfn.position.x, y: rfn.position.y },
+        width: rfn.width ?? rfn.data.graphNode.width,
+        height: rfn.height ?? rfn.data.graphNode.height,
       }));
 
       const edges: GraphEdge[] = rfEdges.map((rfe) => ({

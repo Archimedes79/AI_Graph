@@ -77,6 +77,8 @@ export interface GraphNode {
   label: string;
   description: string;
   position: NodePosition;
+  width?: number;
+  height?: number;
   inputs: Port[];
   outputs: Port[];
   config: NodeConfig;

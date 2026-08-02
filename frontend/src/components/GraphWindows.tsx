@@ -26,16 +26,21 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
 
   const [values, setValues] = useState<Record<string, string>>({});
 
+  // Widget-scoped requirements are keyed "{node_id}::{widget_id}", matching
+  // the backend's apply_runtime_values convention; plain node requirements
+  // use node_id alone.
+  const keyFor = (req: RuntimeRequirement) => (req.widget_id ? `${req.node_id}::${req.widget_id}` : req.node_id);
+
   useEffect(() => {
     if (requirements) {
-      setValues(Object.fromEntries(requirements.map((r) => [r.node_id, r.current_value || ''])));
+      setValues(Object.fromEntries(requirements.map((r) => [keyFor(r), r.current_value || ''])));
     }
   }, [requirements]);
 
   if (!requirements && outputWindows.length === 0) return null;
 
 // Only input-direction requirements are mandatory; output paths are optional.
-    const canSubmit = !!requirements && requirements.filter((r) => r.direction === 'input').every((r) => (values[r.node_id] ?? '').trim().length > 0);
+    const canSubmit = !!requirements && requirements.filter((r) => r.direction === 'input').every((r) => (values[keyFor(r)] ?? '').trim().length > 0);
 
   return (
     <>
@@ -59,7 +64,7 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
               {requirements.map((req) => (
-                <div key={req.node_id}>
+                <div key={keyFor(req)}>
                   <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
                     {KIND_ICON[req.kind] ?? '📄'}{' '}
                     {req.kind === 'text'
@@ -72,8 +77,8 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
                   <input
                     className={`w-full rounded-lg px-3 py-2 text-sm ${req.kind === 'text' ? '' : 'font-mono'}`}
                     style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                    value={values[req.node_id] ?? ''}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [req.node_id]: e.target.value }))}
+                    value={values[keyFor(req)] ?? ''}
+                    onChange={(e) => setValues((prev) => ({ ...prev, [keyFor(req)]: e.target.value }))}
                     placeholder={
                       req.kind === 'text' ? 'Enter text…' : req.kind === 'directory' ? '/path/to/directory' : '/path/to/file'
                     }

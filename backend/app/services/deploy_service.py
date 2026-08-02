@@ -14,7 +14,7 @@ from __future__ import annotations
 import textwrap
 from typing import Dict, List, Tuple
 
-from app.models.graph import DataType, Graph, GraphNode, NodeType
+from app.models.graph import DataType, Graph, GraphNode, GuiWidgetKind, NodeType, gui_widget_ports
 from app.services import file_service
 
 # ---------------------------------------------------------------------------
@@ -237,6 +237,52 @@ def _node_lines(
         lines.append(f"_items = str(_source).split({cfg.separator!r}) if _source else []")
         lines.append(f"results[{node.id!r}] = {{'items': _items, 'count': len(_items)}}")
 
+    elif nt == NodeType.GUI:
+        lines.extend(_collect_inputs_lines(node, sources))
+        lines.append("_gui_result = {}")
+        for widget in cfg.gui_widgets:
+            _, widget_outputs = gui_widget_ports(widget)
+            in_id, out_id = f"{widget.id}_in", f"{widget.id}_out"
+            if widget.kind == GuiWidgetKind.FILE_OPEN:
+                req_key = f"{node.id}::{widget.id}"
+                lines.append(f"_raw = _resolved.get({req_key!r}, {widget.value!r})")
+                lines.append(f"_gui_result[{out_id!r}] = str(Path(_raw).expanduser().resolve()) if _raw else None")
+            elif widget.kind == GuiWidgetKind.DIRECTORY_OPEN:
+                req_key = f"{node.id}::{widget.id}"
+                extensions = file_service.parse_extensions_filter(widget.extensions)
+                lines.append(f"_raw = _resolved.get({req_key!r}, {widget.value!r})")
+                lines.append("if _raw:")
+                lines.append("    _path = str(Path(_raw).expanduser().resolve())")
+                lines.append(
+                    f"    _gui_result[{out_id!r}] = _list_directory(_path, recursive=False, extensions={extensions!r})"
+                )
+                lines.append("else:")
+                lines.append(f"    _gui_result[{out_id!r}] = []")
+            elif widget.kind == GuiWidgetKind.TEXT_WINDOW:
+                lines.append(f"_raw = _inputs.get({in_id!r})")
+                lines.append(f"_gui_result[{out_id!r}] = _raw if _raw is not None else {(widget.value or '')!r}")
+            elif widget.kind == GuiWidgetKind.CHAT_WINDOW:
+                lines.append(f"if {widget.value!r}:")
+                lines.append(f"    _gui_result[{out_id!r}] = {widget.value!r}")
+                lines.append("else:")
+                lines.append(f"    _raw = _inputs.get({in_id!r})")
+                lines.append("    if isinstance(_raw, list):")
+                lines.append(f"        _gui_result[{out_id!r}] = chr(10).join(str(_x) for _x in _raw if _x is not None)")
+                lines.append("    else:")
+                lines.append(f"        _gui_result[{out_id!r}] = str(_raw) if _raw is not None else ''")
+            elif not widget_outputs:
+                # Display-only widget (plot_window): optionally transform the raw
+                # incoming value in place; there is no output port to carry it.
+                lines.append(f"_raw = _inputs.get({in_id!r})")
+                if widget.code:
+                    lines.append(
+                        f"_inputs[{in_id!r}] = (await _run_code({widget.code!r}, {(widget.language or 'python')!r}, "
+                        "{'value': _raw})).get('value', _raw)"
+                    )
+            else:
+                raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
+        lines.append(f"results[{node.id!r}] = _gui_result")
+
     else:
         raise ValueError(f"Unknown node type: {nt}")
 
@@ -251,7 +297,7 @@ _INPUT_NODE_KINDS = {
 
 
 def _requirements_literal(graph: Graph) -> List[dict]:
-    """The list of {node_id, label, kind, direction, current_value} the compiled script must prompt for."""
+    """The list of {node_id, label, kind, direction, current_value[, widget_id]} the compiled script must prompt for."""
     reqs: List[dict] = []
     for node in graph.nodes:
         cfg = node.config
@@ -260,6 +306,20 @@ def _requirements_literal(graph: Graph) -> List[dict]:
             reqs.append({"node_id": node.id, "label": node.label, "kind": kind, "direction": "input", "current_value": cfg.value or ""})
         elif node.node_type == NodeType.OUTPUT and cfg.prompt_at_runtime and cfg.write_mode != "none":
             reqs.append({"node_id": node.id, "label": node.label, "kind": cfg.write_mode, "direction": "output", "current_value": cfg.value or ""})
+        elif node.node_type == NodeType.GUI:
+            for widget in cfg.gui_widgets:
+                if widget.value:
+                    continue
+                if widget.kind == GuiWidgetKind.FILE_OPEN:
+                    widget_kind = "file"
+                elif widget.kind == GuiWidgetKind.DIRECTORY_OPEN:
+                    widget_kind = "directory"
+                else:
+                    continue
+                reqs.append({
+                    "node_id": node.id, "label": widget.label or widget.id, "kind": widget_kind,
+                    "direction": "input", "current_value": "", "widget_id": widget.id,
+                })
     return reqs
 
 
@@ -523,8 +583,17 @@ def generate_runner_script(graph: Graph) -> str:
     node_types = {n.node_type for n in graph.nodes}
 
     needs_files = bool(node_types & {NodeType.FILE_INPUT, NodeType.DIRECTORY_INPUT, NodeType.OUTPUT})
+    needs_files = needs_files or any(
+        n.node_type == NodeType.GUI
+        and any(w.kind in (GuiWidgetKind.FILE_OPEN, GuiWidgetKind.DIRECTORY_OPEN) for w in n.config.gui_widgets)
+        for n in graph.nodes
+    )
     needs_code_runner = bool(node_types & {NodeType.CODE}) or any(
         n.node_type == NodeType.DIRECTORY_INPUT and not n.config.select_all_files and n.config.selector_code.strip()
+        for n in graph.nodes
+    )
+    needs_code_runner = needs_code_runner or any(
+        n.node_type == NodeType.GUI and any(w.code.strip() for w in n.config.gui_widgets)
         for n in graph.nodes
     )
     needs_ai = NodeType.AI in node_types
@@ -595,6 +664,7 @@ def generate_runner_script(graph: Graph) -> str:
         "async def main():",
         "    _resolved = {}",
         "    for req in _REQUIREMENTS:",
+        '        _req_key = f\'{req["node_id"]}::{req["widget_id"]}\' if req.get("widget_id") else req["node_id"]',
         '        if req["kind"] == "text":',
         '            prompt_label = f"Text for \'{req[\'label\']}\'"',
         "        else:",
@@ -603,7 +673,7 @@ def generate_runner_script(graph: Graph) -> str:
         '        default = req["current_value"]',
         '        suffix = f" [{default}]" if default else ""',
         '        answer = input(f"{prompt_label}{suffix}: ").strip()',
-        '        _resolved[req["node_id"]] = answer or default',
+        '        _resolved[_req_key] = answer or default',
         "",
         "    results = {}",
         "    _text_windows = []",
