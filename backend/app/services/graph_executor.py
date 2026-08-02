@@ -233,6 +233,7 @@ def _decode_node_inputs(
     decoded: Dict[str, Any] = {}
     for key, value in inputs.items():
         port = ports.get(key)
+        effective_format = effective_formats.get(key)
         per_edge_formats = source_formats.get(key) if source_formats else None
         if (
             port is not None
@@ -243,8 +244,19 @@ def _decode_node_inputs(
             and len(per_edge_formats) == len(value)
         ):
             decoded[key] = [_decode_value(item, fmt) for item, fmt in zip(value, per_edge_formats)]
+        elif (
+            isinstance(value, list)
+            and per_edge_formats is not None
+            and len(per_edge_formats) == 1
+            and effective_format is not None
+            and per_edge_formats[0] == effective_format
+        ):
+            # A single structured upstream edge may already have decoded its own
+            # JSON/CSV payload (for example a JSON array). Preserve that list
+            # instead of recursively decoding each element again downstream.
+            decoded[key] = value
         else:
-            decoded[key] = _decode_value(value, effective_formats.get(key))
+            decoded[key] = _decode_value(value, effective_format)
     return decoded
 
 
@@ -547,6 +559,15 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
     """
     start = time.monotonic()
     node_map = {n.id: n for n in graph.nodes}
+
+    try:
+        graph.validate_explicit_wiring()
+    except ValueError as exc:
+        return ExecutionResult(
+            status=ExecutionStatus.ERROR,
+            error=str(exc),
+            duration_ms=(time.monotonic() - start) * 1000,
+        )
 
     try:
         levels = _topological_levels(graph.nodes, graph.edges)

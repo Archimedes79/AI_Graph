@@ -79,7 +79,21 @@ def _dir_to_code_graph(*, code: str, downstream_source_port: str, test_dir: str)
                 config=NodeConfig(value=test_dir, select_all_files=True),
             ),
             GraphNode(
+                id="dirDirect", node_type=NodeType.DIRECTORY_INPUT, label="DirDirect",
+                outputs=[
+                    Port(id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True),
+                    Port(id="count", name="Count", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False),
+                ],
+                config=NodeConfig(value=test_dir, select_all_files=True),
+            ),
+            GraphNode(
                 id="code", node_type=NodeType.CODE, label="CountBla",
+                inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.ANY, multi=True)],
+                config=NodeConfig(code=code),
+            ),
+            GraphNode(
+                id="codeDirect", node_type=NodeType.CODE, label="CountBlaDirect",
                 inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True)],
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.ANY, multi=True)],
                 config=NodeConfig(code=code),
@@ -103,9 +117,10 @@ def _dir_to_code_graph(*, code: str, downstream_source_port: str, test_dir: str)
         ],
         edges=[
             GraphEdge(id="e1", source_node_id="dir", source_port_id="files", target_node_id="code", target_port_id="input"),
+            GraphEdge(id="e1b", source_node_id="dirDirect", source_port_id="files", target_node_id="codeDirect", target_port_id="input"),
             GraphEdge(id="e2", source_node_id="code", source_port_id=downstream_source_port, target_node_id="merge", target_port_id="inputs"),
             GraphEdge(id="e3", source_node_id="merge", source_port_id="output", target_node_id="mergeOut", target_port_id="value"),
-            GraphEdge(id="e4", source_node_id="code", source_port_id=downstream_source_port, target_node_id="directOut", target_port_id="value"),
+            GraphEdge(id="e4", source_node_id="codeDirect", source_port_id=downstream_source_port, target_node_id="directOut", target_port_id="value"),
         ],
     )
 

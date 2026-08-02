@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ReactFlowProvider } from 'reactflow';
 
 import Toolbar from './components/Toolbar';
@@ -26,6 +26,33 @@ export default function App() {
   const setMetadata = useGraphStore((s) => s.setMetadata);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showJsonImport, setShowJsonImport] = useState(false);
+  const [jsonImportValue, setJsonImportValue] = useState('');
+  const [jsonImportError, setJsonImportError] = useState('');
+
+  const parseGraphJson = useCallback((raw: string): Graph => {
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Malformed JSON.';
+      throw new Error(`Invalid graph JSON: ${message}`);
+    }
+
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      !('nodes' in parsed) ||
+      !('edges' in parsed) ||
+      !Array.isArray((parsed as Graph).nodes) ||
+      !Array.isArray((parsed as Graph).edges)
+    ) {
+      throw new Error('Invalid graph JSON: expected nodes and edges arrays.');
+    }
+
+    return parsed as Graph;
+  }, []);
 
   // Add a node in the center of the canvas
   const handleAddNode = useCallback(
@@ -66,16 +93,33 @@ export default function App() {
     fileInputRef.current?.click();
   };
 
+  const handleOpenJsonImport = useCallback(() => {
+    setJsonImportValue(JSON.stringify(exportGraph(), null, 2));
+    setJsonImportError('');
+    setShowJsonImport(true);
+  }, [exportGraph]);
+
+  const handleImportGraph = useCallback(() => {
+    try {
+      const graph = parseGraphJson(jsonImportValue);
+      loadGraph(graph);
+      setShowJsonImport(false);
+      setJsonImportError('');
+    } catch (error) {
+      setJsonImportError(error instanceof Error ? error.message : 'Invalid graph JSON.');
+    }
+  }, [jsonImportValue, loadGraph, parseGraphJson]);
+
   const handleFileLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const graph: Graph = JSON.parse(ev.target?.result as string);
+        const graph = parseGraphJson(ev.target?.result as string);
         loadGraph(graph);
-      } catch {
-        alert('Invalid graph JSON file.');
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'Invalid graph JSON file.');
       }
     };
     reader.readAsText(file);
@@ -89,6 +133,7 @@ export default function App() {
           onNewGraph={handleNewGraph}
           onSave={handleSave}
           onLoad={handleLoadClick}
+          onInjectJson={handleOpenJsonImport}
         />
 
         <div className="flex flex-1 overflow-hidden">
@@ -119,6 +164,71 @@ export default function App() {
           className="hidden"
           onChange={handleFileLoad}
         />
+
+        {showJsonImport && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.7)' }}
+            onClick={() => setShowJsonImport(false)}
+          >
+            <div
+              className="rounded-xl overflow-hidden shadow-2xl w-full max-w-3xl mx-4"
+              style={{ background: '#1a1d2e', border: '1px solid #2d3148' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className="flex items-center justify-between px-5 py-3"
+                style={{ background: '#0f1117', borderBottom: '1px solid #2d3148' }}
+              >
+                <span className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>
+                  Load Graph JSON
+                </span>
+                <button onClick={() => setShowJsonImport(false)} style={{ color: '#94a3b8' }}>✕</button>
+              </div>
+
+              <div className="p-5 flex flex-col gap-3">
+                <textarea
+                  value={jsonImportValue}
+                  onChange={(e) => {
+                    setJsonImportValue(e.target.value);
+                    if (jsonImportError) setJsonImportError('');
+                  }}
+                  className="w-full rounded-lg p-4 text-sm font-mono resize-y outline-none"
+                  style={{
+                    minHeight: 320,
+                    background: '#0f1117',
+                    border: '1px solid #2d3148',
+                    color: '#e2e8f0',
+                  }}
+                  spellCheck={false}
+                />
+
+                {jsonImportError && (
+                  <div className="text-xs" style={{ color: '#fca5a5' }}>
+                    {jsonImportError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => setShowJsonImport(false)}
+                    className="px-3 py-1.5 text-xs rounded-lg"
+                    style={{ background: '#2d3148', color: '#e2e8f0' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleImportGraph}
+                    className="px-3 py-1.5 text-xs rounded-lg font-semibold"
+                    style={{ background: '#6366f1', color: 'white' }}
+                  >
+                    Load Graph
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ReactFlowProvider>
   );

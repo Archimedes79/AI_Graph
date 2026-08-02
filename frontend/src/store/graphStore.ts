@@ -50,6 +50,62 @@ function newId(prefix: string) {
   return `${prefix}-${nodeCounter++}-${Date.now()}`;
 }
 
+function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphMetadata {
+  return {
+    ...defaultMetadata(),
+    ...(metadata ?? {}),
+    tags: Array.isArray(metadata?.tags) ? metadata.tags : [],
+  };
+}
+
+function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
+  const nodeType = rawNode.node_type ?? 'text_input';
+  const nodeId = rawNode.id ?? newId(nodeType);
+  const defaults = nodeTypeDefaults(nodeType, nodeId);
+
+  return {
+    ...defaults,
+    ...rawNode,
+    id: nodeId,
+    node_type: nodeType,
+    position: {
+      ...defaults.position,
+      ...(rawNode.position ?? {}),
+    },
+    inputs: Array.isArray(rawNode.inputs) ? rawNode.inputs : defaults.inputs,
+    outputs: Array.isArray(rawNode.outputs) ? rawNode.outputs : defaults.outputs,
+    config: {
+      ...defaults.config,
+      ...(rawNode.config ?? {}),
+      extra: {
+        ...defaults.config.extra,
+        ...((rawNode.config?.extra as Record<string, unknown> | undefined) ?? {}),
+      },
+    },
+  };
+}
+
+function normalizeGraph(graph: Graph): Graph {
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes.map((node) => normalizeGraphNode(node)) : [];
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = Array.isArray(graph.edges)
+    ? graph.edges
+        .filter((edge) => nodeIds.has(edge.source_node_id) && nodeIds.has(edge.target_node_id))
+        .map((edge, index) => ({
+          ...edge,
+          id: edge.id || `edge-${index}-${Date.now()}`,
+          source_port_id: edge.source_port_id || 'output',
+          target_port_id: edge.target_port_id || 'input',
+        }))
+    : [];
+
+  return {
+    metadata: normalizeMetadata(graph.metadata),
+    nodes,
+    edges,
+  };
+}
+
 const defaultMetadata = (): GraphMetadata => ({
   name: 'Untitled Graph',
   version: '1.0.0',
@@ -178,20 +234,21 @@ export const useGraphStore = create<GraphStore>()(
       }),
 
     loadGraph: (graph) => {
+      const normalizedGraph = normalizeGraph(graph);
       const callbacks = {
         onEdit: (nid: string) => get().setEditingNode(nid),
         onDelete: (nid: string) => get().deleteNode(nid),
         onPortEdit: (nid: string, pid: string) => get().setEditingPort({ nodeId: nid, portId: pid }),
       };
 
-      const rfNodes: Node<RFNodeData>[] = graph.nodes.map((gn) => ({
+      const rfNodes: Node<RFNodeData>[] = normalizedGraph.nodes.map((gn) => ({
         id: gn.id,
         type: 'graphNode',
         position: { x: gn.position.x, y: gn.position.y },
         data: { graphNode: gn, ...callbacks },
       }));
 
-      const rfEdges: Edge[] = graph.edges.map((ge) => ({
+      const rfEdges: Edge[] = normalizedGraph.edges.map((ge) => ({
         id: ge.id,
         source: ge.source_node_id,
         sourceHandle: ge.source_port_id,
@@ -203,7 +260,7 @@ export const useGraphStore = create<GraphStore>()(
       }));
 
       set((state) => {
-        state.metadata = graph.metadata;
+        state.metadata = normalizedGraph.metadata;
         state.rfNodes = rfNodes as any;
         state.rfEdges = rfEdges;
         state.executionResult = null;

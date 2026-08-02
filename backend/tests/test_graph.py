@@ -9,6 +9,7 @@ import json
 import pytest
 import asyncio
 from pathlib import Path
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Graph model tests
@@ -88,6 +89,201 @@ def test_connector_debug_snapshot_uses_declared_format(tmp_path):
 
     snapshot = tmp_path / "node_payload_out_0.json"
     assert json.loads(snapshot.read_text()) == {"ok": True}
+
+
+def test_graph_validation_allows_one_to_one_wiring():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+
+    graph = Graph(
+        metadata=GraphMetadata(name="One To One"),
+        nodes=[
+            GraphNode(
+                id="source",
+                node_type=NodeType.TEXT_INPUT,
+                label="Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="hello"),
+            ),
+            GraphNode(
+                id="target",
+                node_type=NodeType.OUTPUT,
+                label="Target",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                config=NodeConfig(output_label="Result"),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="source", source_port_id="output", target_node_id="target", target_port_id="value"),
+        ],
+    )
+
+    assert graph.edges[0].id == "e1"
+
+
+def test_graph_validation_rejects_implicit_fan_out_without_split():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+
+    with pytest.raises(ValidationError, match="only split nodes may fan out"):
+        Graph(
+            metadata=GraphMetadata(name="Implicit Fan Out"),
+            nodes=[
+                GraphNode(
+                    id="source",
+                    node_type=NodeType.TEXT_INPUT,
+                    label="Source",
+                    outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                    config=NodeConfig(value="hello"),
+                ),
+                GraphNode(
+                    id="left",
+                    node_type=NodeType.OUTPUT,
+                    label="Left",
+                    inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                    config=NodeConfig(output_label="Left"),
+                ),
+                GraphNode(
+                    id="right",
+                    node_type=NodeType.OUTPUT,
+                    label="Right",
+                    inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                    config=NodeConfig(output_label="Right"),
+                ),
+            ],
+            edges=[
+                GraphEdge(id="e1", source_node_id="source", source_port_id="output", target_node_id="left", target_port_id="value"),
+                GraphEdge(id="e2", source_node_id="source", source_port_id="output", target_node_id="right", target_port_id="value"),
+            ],
+        )
+
+
+def test_graph_validation_rejects_implicit_fan_in_without_merge():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+
+    with pytest.raises(ValidationError, match="only merge nodes may fan in"):
+        Graph(
+            metadata=GraphMetadata(name="Implicit Fan In"),
+            nodes=[
+                GraphNode(
+                    id="left",
+                    node_type=NodeType.TEXT_INPUT,
+                    label="Left",
+                    outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                    config=NodeConfig(value="hello"),
+                ),
+                GraphNode(
+                    id="right",
+                    node_type=NodeType.TEXT_INPUT,
+                    label="Right",
+                    outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                    config=NodeConfig(value="world"),
+                ),
+                GraphNode(
+                    id="target",
+                    node_type=NodeType.OUTPUT,
+                    label="Target",
+                    inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                    config=NodeConfig(output_label="Result"),
+                ),
+            ],
+            edges=[
+                GraphEdge(id="e1", source_node_id="left", source_port_id="output", target_node_id="target", target_port_id="value"),
+                GraphEdge(id="e2", source_node_id="right", source_port_id="output", target_node_id="target", target_port_id="value"),
+            ],
+        )
+
+
+def test_graph_validation_allows_fan_out_from_split():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+
+    graph = Graph(
+        metadata=GraphMetadata(name="Explicit Split"),
+        nodes=[
+            GraphNode(
+                id="source",
+                node_type=NodeType.TEXT_INPUT,
+                label="Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="one\ntwo"),
+            ),
+            GraphNode(
+                id="split",
+                node_type=NodeType.SPLIT,
+                label="Split",
+                inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                outputs=[Port(id="items", name="Items", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True, required=False)],
+                config=NodeConfig(separator="\n"),
+            ),
+            GraphNode(
+                id="left",
+                node_type=NodeType.OUTPUT,
+                label="Left",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                config=NodeConfig(output_label="Left"),
+            ),
+            GraphNode(
+                id="right",
+                node_type=NodeType.OUTPUT,
+                label="Right",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                config=NodeConfig(output_label="Right"),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="source", source_port_id="output", target_node_id="split", target_port_id="input"),
+            GraphEdge(id="e2", source_node_id="split", source_port_id="items", target_node_id="left", target_port_id="value"),
+            GraphEdge(id="e3", source_node_id="split", source_port_id="items", target_node_id="right", target_port_id="value"),
+        ],
+    )
+
+    assert graph.edges[-1].id == "e3"
+
+
+def test_graph_validation_allows_fan_in_into_merge():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+
+    graph = Graph(
+        metadata=GraphMetadata(name="Explicit Merge"),
+        nodes=[
+            GraphNode(
+                id="left",
+                node_type=NodeType.TEXT_INPUT,
+                label="Left",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="hello"),
+            ),
+            GraphNode(
+                id="right",
+                node_type=NodeType.TEXT_INPUT,
+                label="Right",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="world"),
+            ),
+            GraphNode(
+                id="merge",
+                node_type=NodeType.MERGE,
+                label="Merge",
+                inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(separator=" "),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="left", source_port_id="output", target_node_id="merge", target_port_id="inputs"),
+            GraphEdge(id="e2", source_node_id="right", source_port_id="output", target_node_id="merge", target_port_id="inputs"),
+        ],
+    )
+
+    assert graph.nodes[-1].node_type == NodeType.MERGE
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +525,12 @@ async def test_optional_multi_port_survives_one_failed_sibling(monkeypatch):
         metadata=GraphMetadata(name="Optional Multi Port Test"),
         nodes=[
             GraphNode(
-                id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                id="input_count", node_type=NodeType.TEXT_INPUT, label="Input Count",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="bla bla text"),
+            ),
+            GraphNode(
+                id="input_ai", node_type=NodeType.TEXT_INPUT, label="Input AI",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="bla bla text"),
             ),
@@ -345,16 +546,23 @@ async def test_optional_multi_port_survives_one_failed_sibling(monkeypatch):
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
             ),
             GraphNode(
+                id="merge", node_type=NodeType.MERGE, label="Merge",
+                inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(separator=" "),
+            ),
+            GraphNode(
                 id="text_output", node_type=NodeType.TEXT_OUTPUT, label="Text Output",
-                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=False, required=False)],
                 config=NodeConfig(output_label="Result"),
             ),
         ],
         edges=[
-            GraphEdge(id="e1", source_node_id="input", source_port_id="output", target_node_id="count", target_port_id="text"),
-            GraphEdge(id="e2", source_node_id="input", source_port_id="output", target_node_id="ai", target_port_id="prompt"),
-            GraphEdge(id="e3", source_node_id="count", source_port_id="output", target_node_id="text_output", target_port_id="value"),
-            GraphEdge(id="e4", source_node_id="ai", source_port_id="output", target_node_id="text_output", target_port_id="value"),
+            GraphEdge(id="e1", source_node_id="input_count", source_port_id="output", target_node_id="count", target_port_id="text"),
+            GraphEdge(id="e2", source_node_id="input_ai", source_port_id="output", target_node_id="ai", target_port_id="prompt"),
+            GraphEdge(id="e3", source_node_id="count", source_port_id="output", target_node_id="merge", target_port_id="inputs"),
+            GraphEdge(id="e4", source_node_id="ai", source_port_id="output", target_node_id="merge", target_port_id="inputs"),
+            GraphEdge(id="e5", source_node_id="merge", source_port_id="output", target_node_id="text_output", target_port_id="value"),
         ],
     )
 
@@ -641,6 +849,36 @@ async def test_output_node_directory_write_uses_per_port_format(tmp_path):
     assert Path(text_path).stem.startswith("note")
     assert json.loads(Path(json_path).read_text(encoding="utf-8")) == [1, 2, 3]
     assert Path(text_path).read_text(encoding="utf-8") == "plain"
+
+
+@pytest.mark.asyncio
+async def test_single_json_edge_does_not_double_decode_array_strings():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    graph = Graph(
+        metadata=GraphMetadata(name="JSON array passthrough"),
+        nodes=[
+            GraphNode(id="src", node_type=NodeType.TEXT_INPUT, label="Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
+                               multi=False, required=False, format="json")],
+                config=NodeConfig(value='["plain text", "42"]')),
+            GraphNode(id="out", node_type=NodeType.OUTPUT, label="Out",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY,
+                              multi=True, required=False, format="json")],
+                config=NodeConfig(output_label="Result")),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="src", source_port_id="output", target_node_id="out", target_port_id="value"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+
+    assert result.status == "success"
+    assert result.final_outputs["Result"]["value"] == ["plain text", "42"]
 
 
 # ---------------------------------------------------------------------------

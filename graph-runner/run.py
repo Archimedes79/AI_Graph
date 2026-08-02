@@ -76,7 +76,17 @@ async def run(graph_path: str, extra_inputs: dict) -> None:
             prompt_label = f"{verb} {req.kind} for '{req.label}'"
         default = req.current_value
         suffix = f" [{default}]" if default else ""
-        answer = input(f"{prompt_label}{suffix}: ").strip()
+        try:
+            answer = input(f"{prompt_label}{suffix}: ").strip()
+        except EOFError:
+            if default:
+                answer = default
+            else:
+                print(
+                    f"Error: Missing runtime value for {req.kind} node '{req.label}' and no interactive stdin is available.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
         resolved[req.node_id] = answer or default
     apply_runtime_values(graph, resolved)
 

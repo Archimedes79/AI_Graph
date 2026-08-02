@@ -8,9 +8,10 @@ interface ToolbarProps {
   onNewGraph: () => void;
   onSave: () => void;
   onLoad: () => void;
+  onInjectJson: () => void;
 }
 
-export default function Toolbar({ onNewGraph, onSave, onLoad }: ToolbarProps) {
+export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const isExecuting = useGraphStore((s) => s.isExecuting);
@@ -147,6 +148,13 @@ export default function Toolbar({ onNewGraph, onSave, onLoad }: ToolbarProps) {
           style={{ background: '#2d3148', color: '#e2e8f0' }}
         >
           Load
+        </button>
+        <button
+          onClick={onInjectJson}
+          className="px-3 py-1.5 text-xs rounded-lg"
+          style={{ background: '#2d3148', color: '#e2e8f0' }}
+        >
+          Paste JSON
         </button>
         <button
           onClick={onSave}

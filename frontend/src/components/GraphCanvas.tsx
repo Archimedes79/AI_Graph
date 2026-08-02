@@ -28,6 +28,21 @@ const edgeOptions = {
   style: { stroke: '#6366f1', strokeWidth: 2 },
 };
 
+function getConnectionRejectionReason(
+  params: Connection,
+  rfNodes: ReturnType<typeof useGraphStore.getState>['rfNodes'],
+  rfEdges: ReturnType<typeof useGraphStore.getState>['rfEdges']
+) {
+  if (!params.source || !params.target) return null;
+
+  const sourceNode = rfNodes.find((node) => node.id === params.source);
+  const targetNode = rfNodes.find((node) => node.id === params.target);
+
+  if (!sourceNode || !targetNode) return null;
+
+  return null;
+}
+
 export default function GraphCanvas() {
   const rfNodes = useGraphStore((s) => s.rfNodes);
   const rfEdges = useGraphStore((s) => s.rfEdges);
@@ -41,6 +56,12 @@ export default function GraphCanvas() {
 
   const onConnect = useCallback(
     (params: Connection) => {
+      const rejectionReason = getConnectionRejectionReason(params, rfNodes, rfEdges);
+      if (rejectionReason) {
+        window.alert(rejectionReason);
+        return;
+      }
+
       const edge: Edge = {
         ...params,
         id: `edge-${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}`,
@@ -49,7 +70,7 @@ export default function GraphCanvas() {
       } as Edge;
       setRFEdges(addEdge(edge, rfEdges));
     },
-    [rfEdges, setRFEdges]
+    [rfEdges, rfNodes, setRFEdges]
   );
 
   const onDrop = useCallback(
