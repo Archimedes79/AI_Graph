@@ -414,7 +414,7 @@ async def test_execute_code_node():
     result = await execute_graph(graph)
     assert result.status == "success"
     doubled_out = result.final_outputs.get("Doubled", {})
-    assert doubled_out.get("value") == [42]
+    assert doubled_out.get("value") == 42
 
 
 @pytest.mark.asyncio
@@ -508,6 +508,57 @@ async def test_ai_node_processes_each_batch_item(monkeypatch):
     result = await execute_graph(graph)
     assert result.status == "success"
     assert result.final_outputs["Answers"]["value"] == ["answer:first", "answer:second"]
+
+
+@pytest.mark.asyncio
+async def test_single_item_batch_keeps_scalar_unless_port_is_multi(monkeypatch):
+    """A one-item batch is not a fan-out: a non-multi output port must carry the
+    scalar, while a multi port and a genuine multi-item batch still yield lists."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    async def fake_complete(prompt, system, model, temperature, provider):
+        return f"answer:{prompt}"
+
+    monkeypatch.setattr("app.services.graph_executor.ai_service.complete", fake_complete)
+
+    def _graph(value: str, out_multi: bool) -> Graph:
+        return Graph(
+            metadata=GraphMetadata(name="Single Item Batch"),
+            nodes=[
+                GraphNode(
+                    id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                    outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
+                    config=NodeConfig(value=value),
+                ),
+                GraphNode(
+                    id="split", node_type=NodeType.SPLIT, label="Split",
+                    inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False)],
+                    outputs=[Port(id="items", name="Items", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True)],
+                    config=NodeConfig(separator="\n"),
+                ),
+                GraphNode(
+                    id="ai", node_type=NodeType.AI, label="Answer",
+                    inputs=[Port(id="prompt", name="Prompt", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=True)],
+                    outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=out_multi)],
+                ),
+            ],
+            edges=[
+                GraphEdge(id="e1", source_node_id="input", source_port_id="output", target_node_id="split", target_port_id="input"),
+                GraphEdge(id="e2", source_node_id="split", source_port_id="items", target_node_id="ai", target_port_id="prompt"),
+            ],
+        )
+
+    async def _ai_output(value: str, out_multi: bool):
+        result = await execute_graph(_graph(value, out_multi))
+        assert result.status == "success"
+        return next(r for r in result.node_results if r.node_id == "ai").outputs["output"]
+
+    assert await _ai_output("solo", out_multi=False) == "answer:solo"
+    assert await _ai_output("solo", out_multi=True) == ["answer:solo"]
+    assert await _ai_output("one\ntwo", out_multi=False) == ["answer:one", "answer:two"]
 
 
 @pytest.mark.asyncio

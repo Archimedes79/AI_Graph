@@ -193,6 +193,33 @@ Each widget's ports are named `f"{widget.id}_in"` / `f"{widget.id}_out"`, so a w
 `id` must stay stable once assigned — that's the only thing keeping existing edges
 attached across GUI edits.
 
+### The GUI window and designer
+
+At runtime, every `gui` node opens its own floating **GUI window** showing *all* of its
+widgets together — a file picker, a text window, a plot, etc. in one interface — with
+each widget fed its live value from the run. Values chosen at runtime are written back
+into the graph, so a selected file survives the run and a save/reload.
+
+Layout is edited in the **Designer** tab of the GUI node editor: widgets are placed on a
+12-column grid via `x`/`y`/`w`/`h` on each widget. These are presentational only — they
+never affect ports, wiring, or execution — and widgets without coordinates simply stack
+in list order.
+
+### "t+1" (feedback) edges
+
+A `gui` node usually has both outputs (e.g. `file_open`) and inputs (e.g. `text_window`),
+so the natural "pick a file → process it with AI → show the answer in the text window"
+pattern wires `gui → ai → gui`. That is a DAG at *port* level but a **cycle at node
+level**, and it is rejected with `Graph contains a cycle; execution is not possible.`
+
+Mark the closing edge as a **t+1 edge** (`"deferred": true`, toggled in the connector
+editor, drawn dashed with a `t+1` label) to break it: a deferred edge carries the source's
+value from the **previous** run rather than the current one, and is excluded from cycle
+detection and topological ordering. On the first run it delivers the edge's
+`initial_value`, or nothing at all if that is unset. See
+[examples/gui_file_to_ai_to_text.json](examples/gui_file_to_ai_to_text.json) for a working
+File Open → AI → Text Window graph built this way.
+
 ### Plot window data transforms
 
 `plot_window` accepts an optional data-transform snippet (`widget.code` /

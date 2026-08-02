@@ -1,0 +1,114 @@
+{
+  "metadata": {
+    "name": "GUI: File Open -> AI -> Text Window",
+    "version": "1.0.0",
+    "description": "A single GUI node holds a File Open widget and a Text Window widget. The chosen file is summarized by the AI node, whose answer is fed back into the Text Window. Because that closing edge points back at the same GUI node it would form a cycle, so it is marked \"deferred\": true -- a t+1 feedback edge. The Text Window therefore shows the PREVIOUS round's answer (on the very first round it shows the edge's initial_value).",
+    "author": "AI-Graph",
+    "tags": ["example", "gui", "deferred", "feedback"]
+  },
+  "nodes": [
+    {
+      "id": "node-gui-1",
+      "node_type": "gui",
+      "label": "Summarizer Window",
+      "description": "Pick a file, read the summary",
+      "position": { "x": 120, "y": 160 },
+      "width": 320,
+      "height": 240,
+      "inputs": [
+        { "id": "w-answer_in", "name": "Summary", "kind": "input", "data_type": "any", "multi": false, "required": false, "description": "" }
+      ],
+      "outputs": [
+        { "id": "w-source_out", "name": "Source File", "kind": "output", "data_type": "file_path", "multi": false, "required": false, "description": "" },
+        { "id": "w-answer_out", "name": "Summary", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+      ],
+      "config": {
+        "value": null,
+        "ai_provider": "ollama",
+        "ai_model": "llama3",
+        "system_prompt": "",
+        "temperature": 0.7,
+        "language": "python",
+        "code": "",
+        "output_label": "Result",
+        "separator": "\n",
+        "gui_widgets": [
+          {
+            "id": "w-source",
+            "kind": "file_open",
+            "label": "Source File",
+            "value": null,
+            "extensions": "",
+            "size": "medium",
+            "code": "",
+            "language": "python",
+            "x": 0,
+            "y": 0,
+            "w": 12,
+            "h": 2
+          },
+          {
+            "id": "w-answer",
+            "kind": "text_window",
+            "label": "Summary",
+            "value": "",
+            "extensions": "",
+            "size": "large",
+            "code": "",
+            "language": "python",
+            "x": 0,
+            "y": 2,
+            "w": 12,
+            "h": 6
+          }
+        ],
+        "extra": {}
+      }
+    },
+    {
+      "id": "node-ai-1",
+      "node_type": "ai",
+      "label": "Summarize File",
+      "description": "Summarizes the content of the chosen file",
+      "position": { "x": 560, "y": 200 },
+      "inputs": [
+        { "id": "prompt", "name": "Prompt", "kind": "input", "data_type": "file_path", "multi": false, "required": false, "description": "" }
+      ],
+      "outputs": [
+        { "id": "output", "name": "Output", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+      ],
+      "config": {
+        "value": null,
+        "ai_provider": "ollama",
+        "ai_model": "llama3",
+        "system_prompt": "Summarize the text you are given in three sentences.",
+        "temperature": 0.7,
+        "language": "python",
+        "code": "",
+        "batch_mode": "per_item",
+        "read_file_inputs": true,
+        "output_label": "Result",
+        "separator": "\n",
+        "extra": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "source_node_id": "node-gui-1",
+      "source_port_id": "w-source_out",
+      "target_node_id": "node-ai-1",
+      "target_port_id": "prompt"
+    },
+    {
+      "id": "edge-2",
+      "source_node_id": "node-ai-1",
+      "source_port_id": "output",
+      "target_node_id": "node-gui-1",
+      "target_port_id": "w-answer_in",
+      "deferred": true,
+      "initial_value": "(no summary yet -- run the graph again to see the previous round's answer)"
+    }
+  ]
+}

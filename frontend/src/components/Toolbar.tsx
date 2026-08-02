@@ -22,6 +22,7 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
   const exportGraph = useGraphStore((s) => s.exportGraph);
   const executionResult = useGraphStore((s) => s.executionResult);
   const loadGraph = useGraphStore((s) => s.loadGraph);
+  const updateNode = useGraphStore((s) => s.updateNode);
 
   const [showDeploy, setShowDeploy] = useState(false);
   const [deployContent, setDeployContent] = useState('');
@@ -88,7 +89,11 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
     if (!pendingGraph) return;
     const graph: Graph = JSON.parse(JSON.stringify(pendingGraph));
     for (const node of graph.nodes) {
-      if (values[node.id] !== undefined) node.config.value = values[node.id];
+      let changed = false;
+      if (values[node.id] !== undefined) {
+        node.config.value = values[node.id];
+        changed = true;
+      }
 
       if (node.node_type === 'gui') {
         let widgetsChanged = false;
@@ -102,7 +107,13 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
         // Widget values don't change port shape, but re-sync for consistency
         // with how every other widget mutation is applied (see applyWidgets).
         if (widgetsChanged) Object.assign(node, syncGuiNodePorts(node));
+        changed = changed || widgetsChanged;
       }
+
+      // Persist the answers back into the graph itself, not just into the
+      // copy we're about to run -- otherwise the picked file/text is forgotten
+      // the moment the run ends and has to be retyped every time.
+      if (changed) updateNode(node.id, { config: node.config });
     }
     setPendingRequirements(null);
     setPendingGraph(null);

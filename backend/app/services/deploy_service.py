@@ -16,17 +16,24 @@ from typing import Dict, List, Tuple
 
 from app.models.graph import Graph, GraphNode, GuiWidgetKind, NodeType
 from app.services.deploy.node_compilers import compile_node
+from app.services.deploy.shared import DEFERRED_EMPTY, DEFERRED_LITERAL
 
 # ---------------------------------------------------------------------------
 # Compile-time graph analysis
 # ---------------------------------------------------------------------------
 
 def _topological_order(graph: Graph) -> List[GraphNode]:
-    """Return nodes sorted so every node appears after its upstream dependencies."""
+    """
+    Return nodes sorted so every node appears after its upstream dependencies.
+    Deferred (t+1) edges carry a previous-round value and impose no ordering,
+    so a graph that is acyclic without them can still be compiled.
+    """
     node_map = {n.id: n for n in graph.nodes}
     in_degree = {n.id: 0 for n in graph.nodes}
     successors: Dict[str, List[str]] = {n.id: [] for n in graph.nodes}
     for edge in graph.edges:
+        if edge.deferred:
+            continue
         if edge.source_node_id in node_map and edge.target_node_id in node_map:
             in_degree[edge.target_node_id] += 1
             successors[edge.source_node_id].append(edge.target_node_id)
@@ -47,11 +54,25 @@ def _topological_order(graph: Graph) -> List[GraphNode]:
 
 
 def _sources_by_target(graph: Graph) -> Dict[Tuple[str, str], List[Tuple[str, str]]]:
-    """Map (target_node_id, target_port_id) -> ordered [(source_node_id, source_port_id), ...]."""
+    """
+    Map (target_node_id, target_port_id) -> ordered [(source_node_id, source_port_id), ...].
+
+    A deferred (t+1) edge has no current-round producer -- the compiled script runs
+    exactly one round -- so it is recorded with a sentinel source node id instead:
+    its literal initial value, or a marker contributing no value at all.
+    """
     mapping: Dict[Tuple[str, str], List[Tuple[str, str]]] = {}
     for edge in graph.edges:
         key = (edge.target_node_id, edge.target_port_id)
-        mapping.setdefault(key, []).append((edge.source_node_id, edge.source_port_id))
+        if edge.deferred:
+            source = (
+                (DEFERRED_LITERAL, repr(edge.initial_value))
+                if edge.initial_value is not None
+                else (DEFERRED_EMPTY, "")
+            )
+        else:
+            source = (edge.source_node_id, edge.source_port_id)
+        mapping.setdefault(key, []).append(source)
     return mapping
 
 
@@ -220,13 +241,13 @@ console.log(JSON.stringify(run(_inputs)));
         os.unlink(tmp_path)
 
 
-async def _run_code_batch(code, language, inputs, output_port_ids=None):
+async def _run_code_batch(code, language, inputs, output_port_ids=None, multi_port_ids=()):
     items = _batch_items(inputs)
     results = []
     for item in items:
         result = await _run_code(code, language, item)
         results.append(_reconcile_outputs(output_port_ids, result))
-    return _merge_batch_results(results)
+    return _merge_batch_results(results, multi_port_ids)
 '''
 
 _AI_HELPER = '''\
@@ -286,13 +307,18 @@ async def _ai_complete(prompt, system, model, temperature, provider, timeout=120
     raise ValueError(f"Unknown AI provider: {provider}")
 
 
-async def _ai_complete_batch(inputs, system, model, temperature, provider):
+async def _ai_complete_batch(inputs, system, model, temperature, provider,
+                             output_port_ids=None, multi_port_ids=()):
     items = _batch_items(inputs)
     prompts = ["\\n\\n".join(str(value) for value in item.values() if value is not None) for item in items]
-    return await asyncio.gather(*(
+    responses = await asyncio.gather(*(
         _ai_complete(prompt, system, model, temperature, provider)
         for prompt in prompts
     ))
+    return _merge_batch_results(
+        [_reconcile_outputs(output_port_ids, {"output": response}) for response in responses],
+        multi_port_ids,
+    )
 '''
 
 _BATCH_HELPERS = '''\
@@ -305,11 +331,22 @@ def _batch_items(inputs):
     ]
 
 
-def _merge_batch_results(results):
+def _merge_batch_results(results, multi_port_ids=()):
+    """Collect one result per batch item; a single-item batch on a non-multi
+    output port keeps its scalar value instead of becoming a 1-element list."""
     merged = {}
+    single = len(results) == 1
     for result in results:
         for key, value in result.items():
-            merged.setdefault(key, []).append(value)
+            is_multi = key in multi_port_ids
+            if single and not is_multi:
+                merged[key] = value
+                continue
+            target = merged.setdefault(key, [])
+            if is_multi and isinstance(value, list):
+                target.extend(value)
+            else:
+                target.append(value)
     return merged
 
 

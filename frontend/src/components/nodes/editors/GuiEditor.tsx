@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { GraphNode } from '../../../types/graph';
 import GuiWidgetEditor from '../../GuiWidgetEditor';
+import GuiDesigner from '../../gui/GuiDesigner';
 
 interface GuiEditorProps {
   node: GraphNode;
@@ -8,19 +9,43 @@ interface GuiEditorProps {
 }
 
 export default function GuiEditor({ node, applyWidgets }: GuiEditorProps) {
+  const [mode, setMode] = useState<'widgets' | 'designer'>('widgets');
+
   return (
     <div>
-      <p className="text-xs mb-3" style={{ color: '#475569' }}>
-        Ports are generated automatically from the widgets below (see the Ports tab).
-        Adding, removing, or reordering a widget updates ports immediately.
-      </p>
+      <div className="flex items-center gap-2 mb-3">
+        {(['widgets', 'designer'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setMode(tab)}
+            className="text-xs px-3 py-1.5 rounded-lg capitalize"
+            style={{
+              background: mode === tab ? '#6366f1' : '#2d3148',
+              color: mode === tab ? 'white' : '#e2e8f0',
+            }}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
-      <GuiWidgetEditor
-        widgets={node.config.gui_widgets}
-        onChange={applyWidgets}
-        aiModel={node.config.ai_model}
-        aiProvider={node.config.ai_provider}
-      />
+      {mode === 'widgets' ? (
+        <>
+          <p className="text-xs mb-3" style={{ color: '#475569' }}>
+            Ports are generated automatically from the widgets below (see the Ports tab).
+            Adding, removing, or reordering a widget updates ports immediately.
+          </p>
+
+          <GuiWidgetEditor
+            widgets={node.config.gui_widgets}
+            onChange={applyWidgets}
+            aiModel={node.config.ai_model}
+            aiProvider={node.config.ai_provider}
+          />
+        </>
+      ) : (
+        <GuiDesigner widgets={node.config.gui_widgets} onChange={applyWidgets} />
+      )}
     </div>
   );
 }

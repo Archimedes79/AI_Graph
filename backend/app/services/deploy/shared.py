@@ -6,6 +6,13 @@ from typing import Dict, List, Tuple
 
 from app.models.graph import DataType, GraphNode
 
+# Sentinel source-node ids standing in for a deferred (t+1) edge, which has no
+# current-round producer to read from. DEFERRED_LITERAL pairs with a ready-made
+# Python expression for the edge's initial value; DEFERRED_EMPTY contributes no
+# value at all (the port stays unpopulated, exactly like an unwired port).
+DEFERRED_LITERAL = "__deferred_literal__"
+DEFERRED_EMPTY = "__deferred_empty__"
+
 
 def _collect_inputs_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tuple[str, str]]]) -> List[str]:
     """Generate the lines that build `_inputs` for *node* from upstream results."""
@@ -14,12 +21,15 @@ def _collect_inputs_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[T
         srcs = sources.get((node.id, port.id), [])
         if not srcs:
             continue
-        if len(srcs) == 1:
-            sid, sport = srcs[0]
-            lines.append(f"_inputs[{port.id!r}] = results[{sid!r}][{sport!r}]")
-        else:
-            items = ", ".join(f"results[{sid!r}][{sport!r}]" for sid, sport in srcs)
-            lines.append(f"_inputs[{port.id!r}] = [{items}]")
+        exprs = [
+            sport if sid == DEFERRED_LITERAL else f"results[{sid!r}][{sport!r}]"
+            for sid, sport in srcs
+            if sid != DEFERRED_EMPTY
+        ]
+        if len(srcs) > 1:
+            lines.append(f"_inputs[{port.id!r}] = [{', '.join(exprs)}]")
+        elif exprs:
+            lines.append(f"_inputs[{port.id!r}] = {exprs[0]}")
     return lines
 
 

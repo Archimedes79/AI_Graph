@@ -27,7 +27,12 @@ frontend/.vite/
 Thumbs.db
 
 # Editor
-.vscode/
+.vscode/*
+# ...but keep the shared workspace config (Python test discovery, run tasks)
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+!.vscode/launch.json
 .idea/
 *.swp
 *.swo

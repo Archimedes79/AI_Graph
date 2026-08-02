@@ -7,6 +7,12 @@ import { syncGuiNodePorts } from '../utils/guiWidgets';
 
 type RFNode = Node<RFNodeData>;
 
+/** Extra DSL fields ReactFlow edges carry in `edge.data`. */
+export interface RFEdgeData {
+  deferred?: boolean;
+  initial_value?: unknown;
+}
+
 export interface GraphStore {
   // ReactFlow state
   rfNodes: Node<RFNodeData>[];
@@ -35,6 +41,7 @@ export interface GraphStore {
   deleteNode: (nodeId: string) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
   setRFEdges: (edges: Edge[]) => void;
+  setEdgeFeedback: (edgeId: string, patch: RFEdgeData) => void;
   setSelectedNode: (nodeId: string | null) => void;
   setEditingNode: (nodeId: string | null) => void;
   setEditingPort: (port: { nodeId: string; portId: string } | null) => void;
@@ -102,6 +109,7 @@ function normalizeGraph(graph: Graph): Graph {
           id: edge.id || `edge-${index}-${Date.now()}`,
           source_port_id: edge.source_port_id || 'output',
           target_port_id: edge.target_port_id || 'input',
+          deferred: edge.deferred === true ? true : undefined,
         }))
     : [];
 
@@ -218,6 +226,13 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges = edges;
       }),
 
+    setEdgeFeedback: (edgeId, patch) =>
+      set((state) => {
+        const edge = state.rfEdges.find((e: Edge) => e.id === edgeId);
+        if (!edge) return;
+        edge.data = { ...(edge.data as RFEdgeData | undefined), ...patch };
+      }),
+
     setSelectedNode: (nodeId) =>
       set((state) => {
         state.selectedNodeId = nodeId;
@@ -278,6 +293,7 @@ export const useGraphStore = create<GraphStore>()(
         targetHandle: ge.target_port_id,
         type: 'smoothstep',
         animated: false,
+        data: { deferred: ge.deferred, initial_value: ge.initial_value } satisfies RFEdgeData,
         style: { stroke: '#6366f1', strokeWidth: 2 },
       }));
 
@@ -299,13 +315,18 @@ export const useGraphStore = create<GraphStore>()(
         height: rfn.height ?? rfn.data.graphNode.height,
       }));
 
-      const edges: GraphEdge[] = rfEdges.map((rfe) => ({
-        id: rfe.id,
-        source_node_id: rfe.source,
-        source_port_id: rfe.sourceHandle ?? 'output',
-        target_node_id: rfe.target,
-        target_port_id: rfe.targetHandle ?? 'input',
-      }));
+      const edges: GraphEdge[] = rfEdges.map((rfe) => {
+        const data = rfe.data as RFEdgeData | undefined;
+        return {
+          id: rfe.id,
+          source_node_id: rfe.source,
+          source_port_id: rfe.sourceHandle ?? 'output',
+          target_node_id: rfe.target,
+          target_port_id: rfe.targetHandle ?? 'input',
+          deferred: data?.deferred === true ? true : undefined,
+          initial_value: data?.initial_value,
+        };
+      });
 
       return { metadata, nodes, edges };
     },

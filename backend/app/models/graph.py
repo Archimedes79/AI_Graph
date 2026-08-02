@@ -104,6 +104,14 @@ class GuiWidget(BaseModel):
     code: str = ""
     language: Literal["python", "javascript"] = "python"
 
+    # GUI-designer layout, in grid cells (12-column grid, row height is uniform).
+    # Purely presentational: it never affects ports, execution, or wiring. None
+    # means "not placed yet" -- the designer falls back to list order.
+    x: Optional[int] = None
+    y: Optional[int] = None
+    w: int = 6
+    h: int = 4
+
 
 class NodeConfig(BaseModel):
     """Extra configuration that depends on node_type."""
@@ -224,6 +232,16 @@ class GraphEdge(BaseModel):
     source_port_id: str
     target_node_id: str
     target_port_id: str
+
+    # A "t+1" (feedback) edge: it carries the source's value from the PREVIOUS
+    # execution round, not the current one. Deferred edges are excluded from
+    # cycle detection and from topological ordering, which is what makes
+    # otherwise-cyclic graphs runnable -- e.g. a gui node whose output feeds an
+    # ai node that feeds a different widget on the same gui node. On the first
+    # round a deferred edge delivers `initial_value` (None -> no value at all,
+    # exactly like an unwired port).
+    deferred: bool = False
+    initial_value: Optional[Any] = None
 
 
 class GraphMetadata(BaseModel):

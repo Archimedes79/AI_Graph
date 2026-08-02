@@ -47,6 +47,12 @@ export interface GuiWidget {
   // Same run(inputs) -> dict contract as a CODE node; see backend GuiWidget.code docstring.
   code?: string;
   language?: 'python' | 'javascript';
+  // GUI-designer layout in grid cells (12-column grid). Presentational only:
+  // never affects ports, execution, or wiring. Undefined x/y = not placed yet.
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
 }
 
 export interface NodeConfig {
@@ -90,6 +96,12 @@ export interface GraphEdge {
   source_port_id: string;
   target_node_id: string;
   target_port_id: string;
+  // A "t+1" (feedback) edge: carries the source's value from the PREVIOUS
+  // execution round. Excluded from cycle detection and topological ordering,
+  // which is what makes otherwise-cyclic graphs runnable. On the first round it
+  // delivers `initial_value` (undefined = no value, like an unwired port).
+  deferred?: boolean;
+  initial_value?: unknown;
 }
 
 export interface GraphMetadata {

@@ -74,9 +74,9 @@ def test_compiled_runner_executes_text_to_code_to_output_workflow(tmp_path):
     script = generate_runner_script(graph)
     final_outputs = _run_compiled_script(tmp_path, script, ["hello from ai-graph!"])
 
-    # code nodes run in (default) per-item batch mode, which always wraps
-    # results in a list -- even for a single, non-list input.
-    assert final_outputs["Result"]["value"] == ["HELLO FROM AI-GRAPH!"]
+    # A single-item per-item batch on a non-multi output port yields the scalar,
+    # matching what the editor's graph_executor produces for the same graph.
+    assert final_outputs["Result"]["value"] == "HELLO FROM AI-GRAPH!"
 
 
 def test_compiled_runner_executes_gui_workflow(tmp_path):

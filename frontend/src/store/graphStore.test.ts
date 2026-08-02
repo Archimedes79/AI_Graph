@@ -135,3 +135,37 @@ describe('graphStore width/height persistence', () => {
     expect(exported.nodes[0].height).toBe(240);
   });
 });
+
+describe('graphStore deferred edge persistence', () => {
+  it('round-trips deferred/initial_value through loadGraph -> exportGraph', () => {
+    const a = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
+    const b = graphNode({
+      id: 'b',
+      node_type: 'text_output',
+      inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+    });
+    loadTestGraph([a, b], [
+      { id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'b', target_port_id: 'value', deferred: true, initial_value: 'seed' },
+      { id: 'e2', source_node_id: 'a', source_port_id: 'output', target_node_id: 'b', target_port_id: 'value' },
+    ]);
+
+    const exported = useGraphStore.getState().exportGraph();
+    expect(exported.edges[0]).toMatchObject({ id: 'e1', deferred: true, initial_value: 'seed' });
+    expect(exported.edges[1].deferred).toBeUndefined();
+  });
+
+  it('setEdgeFeedback marks an existing edge as deferred', () => {
+    const a = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
+    const b = graphNode({
+      id: 'b',
+      node_type: 'text_output',
+      inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+    });
+    loadTestGraph([a, b], [{ id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'b', target_port_id: 'value' }]);
+
+    useGraphStore.getState().setEdgeFeedback('e1', { deferred: true, initial_value: 'first' });
+
+    const exported = useGraphStore.getState().exportGraph();
+    expect(exported.edges[0]).toMatchObject({ deferred: true, initial_value: 'first' });
+  });
+});

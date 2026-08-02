@@ -42,6 +42,8 @@ logger = logging.getLogger(__name__)
 def _topological_sort(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[str]:
     """
     Return node IDs in topological execution order.
+    Deferred (t+1) edges carry a value from the previous round, so they impose no
+    ordering constraint and are ignored here.
     Raises ValueError if a cycle is detected.
     """
     node_ids = {n.id for n in nodes}
@@ -49,6 +51,8 @@ def _topological_sort(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[st
     successors: Dict[str, List[str]] = defaultdict(list)
 
     for edge in edges:
+        if edge.deferred:
+            continue
         if edge.source_node_id in node_ids and edge.target_node_id in node_ids:
             in_degree[edge.target_node_id] += 1
             successors[edge.source_node_id].append(edge.target_node_id)
@@ -74,6 +78,7 @@ def _collect_inputs(
     node_id: str,
     edges: List[GraphEdge],
     node_outputs: Dict[str, Dict[str, Any]],
+    previous_outputs: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Gather all upstream output values that are wired into *node_id*'s input ports.
@@ -83,6 +88,10 @@ def _collect_inputs(
     values aren't diluted, while a single edge whose source failed still yields
     no entry at all (as opposed to a `None` value from a source that legitimately
     succeeded with `None`).
+
+    A deferred (t+1) edge reads its source from *previous_outputs* instead of the
+    current round's *node_outputs*. With no previous value it falls back to the
+    edge's `initial_value`, and contributes nothing at all when that is None.
     """
     port_edges: Dict[str, List[GraphEdge]] = defaultdict(list)
     for edge in edges:
@@ -93,8 +102,11 @@ def _collect_inputs(
     for target_port, incoming in port_edges.items():
         values = []
         for edge in incoming:
-            source_outputs = node_outputs.get(edge.source_node_id)
+            outputs = previous_outputs if edge.deferred else node_outputs
+            source_outputs = (outputs or {}).get(edge.source_node_id)
             if source_outputs is None:
+                if edge.deferred and edge.initial_value is not None:
+                    values.append(edge.initial_value)
                 continue
             values.append(source_outputs.get(edge.source_port_id))
         if len(incoming) > 1:
@@ -339,13 +351,23 @@ def _merge_batch_outputs(
     node: GraphNode,
     outputs: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """Collect one output per batch item, flattening only multi-valued ports."""
+    """Collect one output per batch item, flattening only multi-valued ports.
+
+    A batch of exactly one item is not a fan-out, so a non-multi port keeps the
+    scalar value instead of a 1-element list (`per_item` then matches
+    `whole_list` for unbatched input).
+    """
     port_map = {port.id: port for port in node.outputs}
+    single = len(outputs) == 1
     merged: Dict[str, Any] = {}
     for output in outputs:
         for key, value in output.items():
+            is_multi = bool(port_map.get(key)) and port_map[key].multi
+            if single and not is_multi:
+                merged[key] = value
+                continue
             target = merged.setdefault(key, [])
-            if port_map.get(key) and port_map[key].multi and isinstance(value, list):
+            if is_multi and isinstance(value, list):
                 target.extend(value)
             else:
                 target.append(value)
@@ -361,11 +383,13 @@ def _blocked_required_port(
     Return the name of a required input port whose wired-in predecessors have
     ALL failed/been skipped (i.e. no successful source remains for that port),
     or None if every required port is still satisfiable. Ports that aren't
-    wired to any edge, or that are optional, are never blocking here.
+    wired to any edge, or that are optional, are never blocking here. Deferred
+    (t+1) edges are ignored: their source belongs to the previous round and
+    legitimately hasn't run yet in this one.
     """
     incoming_by_port: Dict[str, List[str]] = defaultdict(list)
     for edge in edges:
-        if edge.target_node_id == node.id:
+        if edge.target_node_id == node.id and not edge.deferred:
             incoming_by_port[edge.target_port_id].append(edge.source_node_id)
 
     for port in node.inputs:
@@ -385,11 +409,17 @@ def _blocked_required_port(
 
 
 def _topological_levels(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[List[str]]:
-    """Return deterministic execution stages; every stage waits for its predecessors."""
+    """
+    Return deterministic execution stages; every stage waits for its predecessors.
+    Deferred (t+1) edges are ignored, so a graph that is acyclic once they are
+    removed still runs (and can carry values across rounds).
+    """
     node_ids = {node.id for node in nodes}
     in_degree = {node.id: 0 for node in nodes}
     successors: Dict[str, List[str]] = defaultdict(list)
     for edge in edges:
+        if edge.deferred:
+            continue
         if edge.source_node_id in node_ids and edge.target_node_id in node_ids:
             in_degree[edge.target_node_id] += 1
             successors[edge.source_node_id].append(edge.target_node_id)
@@ -444,9 +474,15 @@ async def _execute_batch_node(node: GraphNode, inputs: Dict[str, Any]) -> Dict[s
 # Graph executor
 # ---------------------------------------------------------------------------
 
-async def execute_graph(graph: Graph) -> ExecutionResult:
+async def execute_graph(
+    graph: Graph,
+    previous_outputs: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> ExecutionResult:
     """
     Execute the full graph and return an ExecutionResult.
+
+    *previous_outputs* holds the node outputs of the preceding round and is what
+    deferred (t+1) edges read from; omit it for a first/standalone round.
     """
     start = time.monotonic()
     # GUI node ports are derived data; regenerate them from `config.gui_widgets`
@@ -482,7 +518,7 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
             inputs: Dict[str, Any] = {}
             node_start = time.monotonic()
             try:
-                inputs = _collect_inputs(node_id, graph.edges, node_outputs)
+                inputs = _collect_inputs(node_id, graph.edges, node_outputs, previous_outputs)
                 effective_formats = _effective_input_formats(node, graph.edges, node_map)
                 inputs = _resolve_file_inputs(node, inputs, effective_formats)
                 source_formats = _collect_input_source_formats(node_id, graph.edges, node_map)

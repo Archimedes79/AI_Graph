@@ -7,6 +7,7 @@ import GraphCanvas from './components/GraphCanvas';
 import NodeEditor from './components/NodeEditor';
 import ConnectorEditor from './components/ConnectorEditor';
 import ResultsPanel from './components/ResultsPanel';
+import GuiWindowLayer from './components/gui/GuiWindowLayer';
 
 import { useGraphStore } from './store/graphStore';
 import type { NodeType, Graph } from './types/graph';
@@ -141,6 +142,8 @@ export default function App() {
           <GraphCanvas />
           <ResultsPanel />
         </div>
+
+        <GuiWindowLayer />
 
         {editingNodeId && (
           <NodeEditor
