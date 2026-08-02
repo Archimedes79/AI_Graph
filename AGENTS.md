@@ -170,3 +170,10 @@ one test file per node type/compiler/executor. Splitting tests that finely fragm
 suite without making it more effective. See `backend/tests/test_graph.py`,
 `test_gui_node.py`, `test_directory_to_code_forwarding.py`, and
 `test_deploy_runner_execution.py` for the existing pattern before adding a new test file.
+
+Adding a new `NodeType`/`GuiWidgetKind` or changing an existing element's behavior?
+Extend the **consolidated element-contract tests** instead of writing a new per-element
+test file: `backend/tests/test_element_contract.py` walks every registered element and
+asserts add/remove, execute, compile, save/load round-trip, AI wiring (where applicable),
+and execute-vs-compile consistency; `frontend/src/elements/elementContract.test.ts` walks
+the same registries for `create`/`ports`/`ConfigEditor`/`RuntimeWidget` sanity.
