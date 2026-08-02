@@ -14,8 +14,8 @@ from __future__ import annotations
 import textwrap
 from typing import Dict, List, Tuple
 
+from app.elements.registry import NODE_ELEMENTS
 from app.models.graph import Graph, GraphNode, GuiWidgetKind, NodeType
-from app.services.deploy.node_compilers import compile_node
 from app.services.deploy.shared import DEFERRED_EMPTY, DEFERRED_LITERAL
 
 # ---------------------------------------------------------------------------
@@ -432,7 +432,11 @@ def generate_runner_script(graph: Graph) -> str:
     body_lines: List[str] = []
     for node in order:
         body_lines.append("try:")
-        for line in compile_node(node, sources, node_map):
+        element = NODE_ELEMENTS.get(node.node_type)
+        if element is None:
+            raise ValueError(f"Unknown node type: {node.node_type}")
+        compiled_lines = [f"# Node: {node.label} ({node.node_type.value})", *element.compile(node, sources, node_map)]
+        for line in compiled_lines:
             body_lines.append("    " + line)
         body_lines.append("except Exception as _exc:")
         body_lines.append(f"    print(f\"\\u274c Error executing '{node.label}': {{_exc}}\", file=sys.stderr)")

@@ -7,45 +7,99 @@ kind of change, so it doesn't need to read the whole codebase.
 ## Golden rule
 
 If your task is scoped to **one node type** or **one GUI widget kind**, you almost
-certainly only need to touch **one file per table row below** (plus, if behavior
-changes, a matching workflow-level test). Do not open or edit files belonging to other
-node types/widget kinds — that's how a big refactor stays safe for a cheap model to work
-on in small pieces.
+certainly only need to touch **one class in one file per table row below** (plus, if
+behavior changes, a matching workflow-level test). Do not open or edit files belonging
+to other node types/widget kinds — that's how a big refactor stays safe for a cheap
+model to work on in small pieces.
+
+## Object-oriented element contract
+
+Every `NodeType` and `GuiWidgetKind` is one **element**: a class owning ALL of its
+behavior (live execution, deploy-bundle codegen, and for widgets its ports) in one file,
+rather than the same behavior scattered across separate executor/compiler files. Base
+classes live in `backend/app/elements/base.py`:
+
+- `NodeElement` — one per `NodeType`. Implements `async execute(node, inputs,
+  effective_formats=None) -> dict` (live execution) and `compile(node, sources,
+  node_map) -> list[str]` (deploy codegen). Stateless singleton; all node-specific data
+  comes from the `GraphNode` argument, never `self`.
+- `GuiWidgetElement` — one per `GuiWidgetKind`, the `gui` node's sub-elements. Implements
+  `ports(widget) -> (inputs, outputs)`, `execute(widget, inputs) -> Any`, and
+  `compile(node, widget) -> list[str]`.
+
+The `gui` node's own `NodeElement` (`elements/gui/element.py`, `GuiElement`) is a
+**Composite**: it owns no widget behavior itself, it only looks up each of its
+`config.gui_widgets` in `elements.registry.GUI_WIDGET_ELEMENTS` and dispatches to that
+widget's `execute`/`compile`, merging their results. This is the "gui master element"
+that contains one-or-more sub-elements and synchronizes them — the object hierarchy
+where the lowest level (a widget) again supports the same execute/compile contract as a
+top-level graph element.
+
+On the frontend, `frontend/src/elements/types.ts` defines the equivalent (React has no
+useful class story here, so these are plain objects, not classes):
+
+- `NodeElementDefinition` — `ConfigEditor` (the node's config-panel component, "draw +
+  interact + save/load") and `create(id) -> GraphNode` (the node's starting state when
+  dragged onto the canvas — "interact with the user" at creation time).
+- `GuiWidgetElementDefinition` — `ports(widget)`, `ConfigEditor`, and `RuntimeWidget`
+  (what actually draws in the floating `GuiWindow` and lets the user interact with it).
+
+**What an element needs to know about its neighbors, and no more:** a `NodeElement`
+never inspects other nodes, edges, or topology — `graph_executor.py` /
+`deploy_service.py` resolve all of that first and hand the element only its own
+already-resolved `inputs` dict (plus `sources`/`node_map` at compile time purely to
+generate correct variable references). A `GuiWidgetElement` never knows it lives inside
+a `gui` node beyond the `{widget.id}_in` / `{widget.id}_out` port naming convention. This
+is intentional: it's what lets a cheap agent implement one element correctly by reading
+only that one file plus its reference sibling, never the engine.
+
+**Scope boundary (deliberate, not an oversight):** `NodeConfig` / `GuiWidget` stay one
+shared, flat Pydantic/TS schema across all node types and widget kinds (see "Shared
+contracts" below) rather than a per-type schema class — splitting that is a much larger,
+DSL-breaking change and is out of scope for the element refactor.
 
 ## Adding/changing a node type's behavior
 
-| Node type | Deploy-bundle codegen (self-contained script) | Live execution (editor/API/CLI) | Frontend config panel |
-|---|---|---|---|
-| `text_input` | `backend/app/services/deploy/node_compilers/text_input.py` | `backend/app/services/executors/text_input.py` | `frontend/src/components/nodes/editors/InputEditor.tsx` |
-| `file_input` | `.../node_compilers/file_input.py` | `.../executors/file_input.py` | `InputEditor.tsx` (shared) |
-| `directory_input` | `.../node_compilers/directory_input.py` | `.../executors/directory_input.py` | `InputEditor.tsx` (shared) |
-| `ai` | `.../node_compilers/ai.py` | `.../executors/ai.py` | `frontend/src/components/nodes/editors/AIEditor.tsx` |
-| `code` | `.../node_compilers/code.py` | `.../executors/code.py` | `frontend/src/components/nodes/editors/CodeEditor.tsx` |
-| `output` | `.../node_compilers/output.py` | `.../executors/output.py` | `frontend/src/components/nodes/editors/OutputEditor.tsx` |
-| `text_output` | `.../node_compilers/text_output.py` | `.../executors/text_output.py` | `frontend/src/components/nodes/editors/TextOutputEditor.tsx` |
-| `merge` / `split` | `.../node_compilers/merge.py` / `split.py` | `.../executors/merge.py` / `split.py` | `frontend/src/components/nodes/editors/MergeSplitEditor.tsx` |
-| `gui` | `.../node_compilers/gui.py` (dispatches per widget, see below) | `.../executors/gui.py` (dispatches per widget, see below) | `frontend/src/components/nodes/editors/GuiEditor.tsx` (wraps `GuiWidgetEditor.tsx`) |
+| Node type | Backend element (execute + compile) | Frontend element (config panel + defaults) |
+|---|---|---|
+| `text_input` | `backend/app/elements/text_input/element.py` | `frontend/src/elements/text_input/element.ts` (`InputEditor.tsx`, shared) |
+| `file_input` | `.../elements/file_input/element.py` | `.../elements/file_input/element.ts` (`InputEditor.tsx`, shared) |
+| `directory_input` | `.../elements/directory_input/element.py` | `.../elements/directory_input/element.ts` (`InputEditor.tsx`, shared) |
+| `ai` | `.../elements/ai/element.py` | `.../elements/ai/element.ts` (`AIEditor.tsx`) |
+| `code` | `.../elements/code/element.py` **(reference)** | `.../elements/code/element.ts` **(reference)** (`CodeEditor.tsx`) |
+| `output` | `.../elements/output/element.py` | `.../elements/output/element.ts` (`OutputEditor.tsx`) |
+| `text_output` | `.../elements/text_output/element.py` | `.../elements/text_output/element.ts` (`TextOutputEditor.tsx`) |
+| `merge` / `split` | `.../elements/merge/element.py` / `.../elements/split/element.py` | `.../elements/merge/element.ts` / `split/element.ts` (`MergeSplitEditor.tsx`, shared) |
+| `gui` | `.../elements/gui/element.py` **(Composite, see above)** | `.../elements/gui/element.ts` (`GuiEditor.tsx` wraps `GuiWidgetEditor.tsx`) |
 
-Registries — only touch these if you're **adding a brand-new node type**, not changing
-an existing one: `deploy/node_compilers/__init__.py` (`NODE_COMPILERS`),
-`executors/__init__.py` (`NODE_EXECUTORS`).
+Use `elements/code/element.py` and `elements/code/element.ts` as the exact pattern to
+copy for any other node type — same class shape, same method names, same import style.
+
+Registry — only touch this if you're **adding a brand-new node type**, not changing an
+existing one: `backend/app/elements/registry.py` (`NODE_ELEMENTS`). On the frontend
+there is no single dispatch registry yet; `NodeEditor.tsx` and `Sidebar.tsx` still
+switch on `node_type` directly (see "Cross-cutting services").
 
 ## Adding/changing a GUI widget kind
 
-| Widget kind | Deploy-bundle codegen | Live execution | Frontend config panel | Frontend runtime widget |
-|---|---|---|---|---|
-| `file_open` | `backend/app/services/deploy/gui_widget_compilers/file_open.py` | `backend/app/services/gui_widgets/file_open.py` | `frontend/src/components/widgets/editors/FileOpenEditor.tsx` | `frontend/src/components/gui/widgets/FileOpenWidget.tsx` |
-| `directory_open` | `.../gui_widget_compilers/directory_open.py` | `.../gui_widgets/directory_open.py` | `frontend/src/components/widgets/editors/DirectoryOpenEditor.tsx` | `.../gui/widgets/DirectoryOpenWidget.tsx` |
-| `text_window` | `.../gui_widget_compilers/text_window.py` | `.../gui_widgets/text_window.py` | `frontend/src/components/widgets/editors/TextChatEditor.tsx` (shared with `chat_window`) | `.../gui/widgets/TextWindowWidget.tsx` |
-| `chat_window` | `.../gui_widget_compilers/chat_window.py` | `.../gui_widgets/chat_window.py` | `TextChatEditor.tsx` (shared with `text_window`) | `.../gui/widgets/ChatWindowWidget.tsx` |
-| `plot_window` | `.../gui_widget_compilers/plot_window.py` | inline in `executors/gui.py` (display-only, no output port) | `frontend/src/components/widgets/editors/PlotWindowEditor.tsx` | `.../gui/widgets/PlotWindowWidget.tsx` (wraps `PlotWidget.tsx`) |
+| Widget kind | Backend element (ports + execute + compile) | Frontend element (ports + config panel + runtime widget) |
+|---|---|---|
+| `file_open` | `backend/app/elements/gui/widgets/file_open/element.py` **(reference)** | `frontend/src/elements/gui/widgets/file_open/element.ts` **(reference)** |
+| `directory_open` | `.../gui/widgets/directory_open/element.py` | `.../elements/gui/widgets/directory_open/element.ts` |
+| `text_window` | `.../gui/widgets/text_window/element.py` | `.../elements/gui/widgets/text_window/element.ts` (`TextChatEditor.tsx`, shared with `chat_window`) |
+| `chat_window` | `.../gui/widgets/chat_window/element.py` | `.../elements/gui/widgets/chat_window/element.ts` (`TextChatEditor.tsx`, shared with `text_window`) |
+| `plot_window` | `.../gui/widgets/plot_window/element.py` (display-only, no output port) | `.../elements/gui/widgets/plot_window/element.ts` |
 
-Registries: `deploy/gui_widget_compilers/__init__.py` (`GUI_WIDGET_COMPILERS`),
-`gui_widgets/__init__.py` (`GUI_WIDGET_EXECUTORS`), and
-`frontend/src/components/gui/widgets/index.ts` (runtime kind -> component).
+Use `elements/gui/widgets/file_open/element.py` and
+`elements/gui/widgets/file_open/element.ts` as the exact pattern to copy for any other
+widget kind.
 
-A widget kind therefore has **five** files, one per column above — adding a kind means
-adding five small files plus three registry lines, and touching nothing else.
+Registries: `backend/app/elements/registry.py` (`GUI_WIDGET_ELEMENTS`), and
+`frontend/src/components/gui/widgets/index.ts` (runtime kind -> component; still
+separate from the `elements/` tree pending a full frontend registry pass).
+
+A widget kind therefore has **two** files (one per language), one class each, plus one
+registry line per language — adding a kind means adding those and touching nothing else.
 
 ## GUI runtime window & designer (not per-widget-kind)
 
@@ -63,8 +117,8 @@ gui` graph run at all. Logic lives in exactly three backend places — `graph_ex
 (`_topological_sort`, `_topological_levels`, `_collect_inputs`, `_blocked_required_port`),
 `deploy_service.py` (`_topological_order`, `_sources_by_target`) and `deploy/shared.py`
 (`_collect_inputs_lines`) — and in `ConnectorEditor.tsx` / `GraphCanvas.tsx` on the
-frontend. It is never per-node-type: no file under `executors/` or `node_compilers/`
-should know about it.
+frontend. It is never per-node-type: no `elements/<type>/element.py` should know about
+it.
 
 ## Shared contracts — coordinate before editing
 
@@ -75,18 +129,21 @@ agent, not as part of a single-node-type task:
 - `backend/app/models/graph.py` — `NodeType`, `GuiWidgetKind`, `GraphNode`/`GuiWidget`/`Port`/`GraphEdge` Pydantic models, `sync_gui_node_ports`.
 - `frontend/src/types/graph.ts` — the mirrored TypeScript types.
 
-Batching is also shared: `_merge_batch_outputs` in `graph_executor.py` and the
-`_merge_batch_results` helper string in `deploy_service.py` must stay behaviorally
-identical, or a graph produces different values in the editor than in its deployed
-bundle.
+Batching is also shared, and lives in `backend/app/services/batching.py`
+(`reconcile_outputs`, `batch_inputs`, `merge_batch_outputs`) so both `graph_executor.py`
+and any element's `execute`/`compile` can import it without a circular-import trick.
+That module's behavior and the `_merge_batch_results` helper string embedded in
+`deploy_service.py` must stay behaviorally identical, or a graph produces different
+values in the editor than in its deployed bundle.
 
 ## Cross-cutting services (not per-node-type — read these when a task spans node types)
 
-- `backend/app/services/graph_executor.py` — topological execution, batching, input/format resolution; delegates per-node work to `executors/`.
-- `backend/app/services/deploy_service.py` — script/bundle assembly (imports, requirements detection); delegates per-node codegen to `deploy/node_compilers/`.
+- `backend/app/services/graph_executor.py` — topological execution, batching, input/format resolution; delegates per-node work to `elements.registry.NODE_ELEMENTS[node.node_type].execute(...)`.
+- `backend/app/services/deploy_service.py` — script/bundle assembly (imports, requirements detection); delegates per-node codegen to `elements.registry.NODE_ELEMENTS[node.node_type].compile(...)`.
+- `backend/app/services/batching.py` — the shared batch-merge/reconcile helpers described above.
 - `backend/app/services/ai_service.py`, `code_executor.py`, `file_service.py` — provider-agnostic AI calls, sandboxed code execution, file I/O helpers shared across node types.
-- `frontend/src/components/NodeEditor.tsx` — modal shell (tabs/save-cancel/AI-generate handlers), dispatches to the per-node-type editors above.
-- `frontend/src/components/GuiWidgetEditor.tsx` — widget list/add/remove/reorder, dispatches to the per-kind editors above.
+- `frontend/src/components/NodeEditor.tsx` — modal shell (tabs/save-cancel/AI-generate handlers), dispatches to the per-node-type `ConfigEditor`s above.
+- `frontend/src/components/GuiWidgetEditor.tsx` — widget list/add/remove/reorder, dispatches to the per-kind `ConfigEditor`s above.
 - `frontend/src/store/graphStore.ts` — Zustand graph state (nodes/edges, load/save, port sync).
 
 ## Tests

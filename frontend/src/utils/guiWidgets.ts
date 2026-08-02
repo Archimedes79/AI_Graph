@@ -1,48 +1,11 @@
 // Pure helpers for GUI-node widget <-> port sync. Mirrors
 // backend/app/models/graph.py: gui_widget_ports / sync_gui_node_ports 1:1.
 import type { GraphNode, GuiWidget, GuiWidgetKind, Port } from '../types/graph';
+import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
 
 /** Return the (inputs, outputs) a single GUI widget contributes to its node. */
 export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Port[] } {
-  const inId = `${widget.id}_in`;
-  const outId = `${widget.id}_out`;
-  const label = widget.label || widget.id;
-
-  switch (widget.kind) {
-    case 'file_open':
-      return {
-        inputs: [],
-        outputs: [{ id: outId, name: label, kind: 'output', data_type: 'file_path', multi: false, required: false, description: '' }],
-      };
-
-    case 'directory_open':
-      return {
-        inputs: [],
-        outputs: [{ id: outId, name: label, kind: 'output', data_type: 'file_path', multi: true, required: false, description: '' }],
-      };
-
-    case 'text_window':
-      return {
-        inputs: [{ id: inId, name: label, kind: 'input', data_type: 'any', multi: false, required: false, description: '' }],
-        outputs: [{ id: outId, name: label, kind: 'output', data_type: 'text', multi: false, required: false, description: '' }],
-      };
-
-    case 'chat_window':
-      return {
-        inputs: [{ id: inId, name: label, kind: 'input', data_type: 'text', multi: true, required: false, description: '' }],
-        outputs: [{ id: outId, name: label, kind: 'output', data_type: 'text', multi: false, required: false, description: '' }],
-      };
-
-    case 'plot_window':
-      // Display-only, like text_output: accepts data to plot, no downstream port.
-      return {
-        inputs: [{ id: inId, name: label, kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-        outputs: [],
-      };
-
-    default:
-      throw new Error(`Unknown GUI widget kind: ${widget.kind}`);
-  }
+  return GUI_WIDGET_ELEMENTS[widget.kind].ports(widget);
 }
 
 /**

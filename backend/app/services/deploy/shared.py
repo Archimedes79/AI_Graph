@@ -14,7 +14,7 @@ DEFERRED_LITERAL = "__deferred_literal__"
 DEFERRED_EMPTY = "__deferred_empty__"
 
 
-def _collect_inputs_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tuple[str, str]]]) -> List[str]:
+def collect_inputs_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tuple[str, str]]]) -> List[str]:
     """Generate the lines that build `_inputs` for *node* from upstream results."""
     lines = ["_inputs = {}"]
     for port in node.inputs:
@@ -56,7 +56,7 @@ def _effective_format(
     return ""
 
 
-def _resolve_file_inputs_lines(
+def resolve_file_inputs_lines(
     node: GraphNode,
     sources: Dict[Tuple[str, str], List[Tuple[str, str]]],
     node_map: Dict[str, GraphNode],

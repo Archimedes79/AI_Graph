@@ -179,33 +179,20 @@ class GraphNode(BaseModel):
 
 
 def gui_widget_ports(widget: GuiWidget) -> tuple[List[Port], List[Port]]:
-    """Return the (inputs, outputs) a single GUI widget contributes to its node."""
-    in_id, out_id = f"{widget.id}_in", f"{widget.id}_out"
-    label = widget.label or widget.id
+    """
+    Return the (inputs, outputs) a single GUI widget contributes to its node.
+    Delegates to that widget kind's `GuiWidgetElement.ports()` (see
+    `app.elements.base` / AGENTS.md) so the widget's own class is the single
+    source of truth for its ports -- this module only orchestrates the
+    resulting DSL. Local import: `app.elements.registry` imports this module,
+    so importing it at module level here would be circular.
+    """
+    from app.elements.registry import GUI_WIDGET_ELEMENTS
 
-    if widget.kind == GuiWidgetKind.FILE_OPEN:
-        return [], [Port(id=out_id, name=label, kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=False, required=False)]
-
-    if widget.kind == GuiWidgetKind.DIRECTORY_OPEN:
-        return [], [Port(id=out_id, name=label, kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True, required=False)]
-
-    if widget.kind == GuiWidgetKind.TEXT_WINDOW:
-        return (
-            [Port(id=in_id, name=label, kind=PortKind.INPUT, data_type=DataType.ANY, multi=False, required=False)],
-            [Port(id=out_id, name=label, kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
-        )
-
-    if widget.kind == GuiWidgetKind.CHAT_WINDOW:
-        return (
-            [Port(id=in_id, name=label, kind=PortKind.INPUT, data_type=DataType.TEXT, multi=True, required=False)],
-            [Port(id=out_id, name=label, kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
-        )
-
-    if widget.kind == GuiWidgetKind.PLOT_WINDOW:
-        # Display-only, like text_output: accepts data to plot, no downstream port.
-        return [Port(id=in_id, name=label, kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)], []
-
-    raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
+    element = GUI_WIDGET_ELEMENTS.get(widget.kind)
+    if element is None:
+        raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
+    return element.ports(widget)
 
 
 def sync_gui_node_ports(node: GraphNode) -> None:
