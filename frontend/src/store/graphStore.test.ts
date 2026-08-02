@@ -22,7 +22,6 @@ function blankConfig() {
     code_prompt: '',
     output_format: 'text' as const,
     output_format_prompt: '',
-    output_transform_code: '',
     output_label: 'Result',
     write_mode: 'none' as const,
     batch_mode: 'per_item' as const,

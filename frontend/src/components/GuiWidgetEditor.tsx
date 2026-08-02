@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import type { AIProvider, GuiWidget, GuiWidgetKind } from '../types/graph';
 import { createGuiWidget, CREATABLE_GUI_WIDGET_KINDS, GUI_WIDGET_KIND_LABELS, sizeToGrid } from '../utils/guiWidgets';
 import { generateCode } from '../utils/api';
-import InputPickerEditor from './widgets/editors/InputPickerEditor';
-import TextIoEditor from './widgets/editors/TextIoEditor';
-import PlotWindowEditor from './widgets/editors/PlotWindowEditor';
+import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
 
 interface GuiWidgetEditorProps {
   widgets: GuiWidget[];
@@ -192,25 +190,20 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
               </div>
             </div>
 
-            {(widget.kind === 'file_open' || widget.kind === 'directory_open' || widget.kind === 'input_picker') && (
-              <InputPickerEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
-            )}
-
-            {(widget.kind === 'text_window' || widget.kind === 'chat_window' || widget.kind === 'text_io') && (
-              <TextIoEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
-            )}
-
-            {widget.kind === 'plot_window' && (
-              <PlotWindowEditor
-                widget={widget}
-                onUpdate={(patch) => updateWidget(index, patch)}
-                expanded={!!expandedTransform[widget.id]}
-                onToggleExpand={() => toggleTransform(widget.id)}
-                generating={generatingId === widget.id}
-                error={transformErrors[widget.id]}
-                onGenerate={() => handleGenerateTransform(widget)}
-              />
-            )}
+            {(() => {
+              const ConfigEditor = GUI_WIDGET_ELEMENTS[widget.kind].ConfigEditor;
+              return (
+                <ConfigEditor
+                  widget={widget}
+                  onUpdate={(patch: Partial<GuiWidget>) => updateWidget(index, patch)}
+                  expanded={!!expandedTransform[widget.id]}
+                  onToggleExpand={() => toggleTransform(widget.id)}
+                  generating={generatingId === widget.id}
+                  error={transformErrors[widget.id]}
+                  onGenerate={() => handleGenerateTransform(widget)}
+                />
+              );
+            })()}
           </div>
         ))}
       </div>

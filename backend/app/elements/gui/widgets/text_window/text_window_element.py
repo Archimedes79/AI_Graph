@@ -1,1 +1,0 @@
-"""Deprecated: superseded by app.elements.gui.widgets.text_io.text_io_element.TextIOElement. Dead code kept only because file-deletion tooling was unavailable when this was written — safe to delete this file and its containing folder."""

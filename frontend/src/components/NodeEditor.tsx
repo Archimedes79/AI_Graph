@@ -4,18 +4,20 @@ import { useGraphStore } from '../store/graphStore';
 import { generateCode, generatePrompt } from '../utils/api';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { inputPortsForMode } from '../elements/input/inputElement';
-import InputEditor from './nodes/editors/InputEditor';
-import AIEditor from './nodes/editors/AIEditor';
-import CodeEditor from './nodes/editors/CodeEditor';
-import OutputEditor from './nodes/editors/OutputEditor';
-import TextOutputEditor from './nodes/editors/TextOutputEditor';
-import MergeSplitEditor from './nodes/editors/MergeSplitEditor';
-import GuiEditor from './nodes/editors/GuiEditor';
+import { NODE_ELEMENTS } from '../elements/registry';
 import OutputFormatEditor from './nodes/editors/OutputFormatEditor';
 
 interface NodeEditorProps {
   nodeId: string;
   onClose: () => void;
+}
+
+function outputFormatContext(config: GraphNode['config']): string {
+  if (!config.output_format || config.output_format === 'text') return '';
+  const customDescription = config.output_format === 'custom' && config.output_format_prompt
+    ? ` (${config.output_format_prompt})`
+    : '';
+  return `The function must return output in ${config.output_format} format${customDescription}.`;
 }
 
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
@@ -60,13 +62,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       const batchContext = node.config.batch_mode === 'whole_list'
         ? 'Batch mode is `whole_list`: multi input ports arrive in `inputs` as full lists. The generated function must handle or reduce those lists and must not reject an input merely because it is not a string.'
         : 'Batch mode is `per_item`: each multi input port is expanded before `run(inputs)` is called, so one scalar item from each multi port is passed per invocation.';
-      const outputFormatContext = node.config.output_format && node.config.output_format !== 'text'
-        ? ` The function must return output in ${node.config.output_format} format${node.config.output_format === 'custom' && node.config.output_format_prompt ? ` (${node.config.output_format_prompt})` : ''}.`
-        : '';
+      const formatContext = outputFormatContext(node.config);
       const result = await generateCode({
         description: node.config.code_prompt || node.description,
         language: node.config.language,
-        context: batchContext + outputFormatContext,
+        context: formatContext ? `${batchContext} ${formatContext}` : batchContext,
         inputs: inputNames,
         outputs: outputNames,
         ai_model: node.config.ai_model,
@@ -91,6 +91,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     try {
       const result = await generatePrompt({
         description: node.description,
+        context: outputFormatContext(node.config),
         ai_model: node.config.ai_model,
         ai_provider: node.config.ai_provider,
       });
@@ -103,11 +104,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     }
   };
 
-  const nt = node.node_type;
-  const isInput = ['text_input', 'file_input', 'directory_input', 'input'].includes(nt);
-  const isAI = nt === 'ai';
-  const isCode = nt === 'code';
-  const isGui = nt === 'gui';
+  const ConfigEditor = NODE_ELEMENTS[node.node_type].ConfigEditor;
 
   const applyWidgets = (nextWidgets: GraphNode['config']['gui_widgets']) => {
     setNode((prev) => {
@@ -218,41 +215,16 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
           {activeTab === 'config' && (
             <div className="space-y-4">
-              {isInput && (
-                <InputEditor
-                  node={node}
-                  setConfig={setConfig}
-                  generating={generating}
-                  handleGenerateSelectorCode={handleGenerateSelectorCode}
-                  applyMode={applyInputMode}
-                />
-              )}
-
-              {isAI && (
-                <AIEditor
-                  node={node}
-                  setConfig={setConfig}
-                  generating={generating}
-                  handleGeneratePrompt={handleGeneratePrompt}
-                />
-              )}
-
-              {isCode && (
-                <CodeEditor
-                  node={node}
-                  setConfig={setConfig}
-                  generating={generating}
-                  handleGenerateCode={handleGenerateCode}
-                />
-              )}
-
-              {nt === 'output' && <OutputEditor node={node} setConfig={setConfig} />}
-
-              {nt === 'text_output' && <TextOutputEditor node={node} setConfig={setConfig} />}
-
-              {(nt === 'merge' || nt === 'split') && <MergeSplitEditor node={node} setConfig={setConfig} />}
-
-              {isGui && <GuiEditor node={node} applyWidgets={applyWidgets} />}
+              <ConfigEditor
+                node={node}
+                setConfig={setConfig}
+                generating={generating}
+                handleGenerateSelectorCode={handleGenerateSelectorCode}
+                applyMode={applyInputMode}
+                handleGeneratePrompt={handleGeneratePrompt}
+                handleGenerateCode={handleGenerateCode}
+                applyWidgets={applyWidgets}
+              />
 
               {genMessage && (
                 <div className="text-sm px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc' }}>

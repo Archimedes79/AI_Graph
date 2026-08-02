@@ -29,7 +29,6 @@ function blankGuiNode(): GraphNode {
       code_prompt: '',
       output_format: 'text',
       output_format_prompt: '',
-      output_transform_code: '',
       output_label: 'Result',
       write_mode: 'none',
       batch_mode: 'per_item',

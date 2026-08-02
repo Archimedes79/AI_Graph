@@ -150,10 +150,9 @@ class NodeConfig(BaseModel):
     code: str = ""                       # generated / user-written code
     code_prompt: str = ""                # stored AI prompt used to generate the code
 
-    # per-node output format declaration (used in AI generation prompts + optional transform)
+    # per-node output format declaration (used in AI generation prompts)
     output_format: str = "text"          # text | json | csv | csv_list | custom
     output_format_prompt: str = ""       # description for custom format
-    output_transform_code: str = ""      # optional post-processing code: run(outputs) -> outputs
 
     # code / ai node – batch handling
     # per_item: run() is invoked once per batch element (existing behaviour).

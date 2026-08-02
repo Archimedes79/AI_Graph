@@ -79,7 +79,6 @@ export interface NodeConfig {
   // per-node output format declaration
   output_format: 'text' | 'json' | 'csv' | 'csv_list' | 'custom';
   output_format_prompt: string;
-  output_transform_code: string;
   output_label: string;
   write_mode: 'none' | 'file' | 'directory';
   batch_mode: 'per_item' | 'whole_list';

@@ -35,21 +35,20 @@ that contains one-or-more sub-elements and synchronizes them — the object hier
 where the lowest level (a widget) again supports the same execute/compile contract as a
 top-level graph element.
 
-**Some concepts exist twice on purpose — reuse the shared helper, don't re-duplicate the
-logic.** A handful of things are exposed both as a standalone node type and as a `gui`
-widget kind (`file_input`/`file_open`, `directory_input`/`directory_open` — a file or
-directory chooser either standing alone or embedded in a GUI panel). Their elements
-independently call the same underlying operations, so the operations themselves live
-once in a shared spot and each element just calls them:
+**Some concepts have legacy names — map aliases to the canonical element, don't create
+parallel implementations.** `text_input`/`file_input`/`directory_input` all map to
+`InputElement`; `file_open`/`directory_open` map to `InputPickerElement`; and
+`text_window`/`chat_window` map to `TextIOElement`. Standalone inputs and GUI pickers
+remain separate elements because their port/runtime contracts differ, but their file
+operations live once in a shared service:
 `app.services.file_service.resolve_path`/`list_directory`/`read_text_file` (live
 execution) and the `_resolve_path`/`_list_directory`/`_read_text_file` runtime helpers
 embedded via `_FILE_HELPERS` in `deploy_service.py` (deploy codegen) are the shared,
 already-correct implementations — a new element needing "resolve this path" or "list
 this directory" should call these, not reimplement `Path(x).expanduser().resolve()`
 inline. `app.elements.base.widget_input_or_value(widget, inputs)` is the equivalent
-shared helper for a widget's "incoming wired value, falling back to its stored value"
-idiom (used by `file_open`/`directory_open`; widgets with different fallback precedence,
-e.g. `chat_window`, implement it inline instead since it's genuinely not the same rule).
+shared helper for a picker's "incoming wired value, falling back to its stored value"
+idiom; `TextIOElement` owns its distinct input/output/both precedence locally.
 
 On the frontend, `frontend/src/elements/types.ts` defines the equivalent (React has no
 useful class story here, so these are plain objects, not classes):
@@ -78,9 +77,7 @@ DSL-breaking change and is out of scope for the element refactor.
 
 | Node type | Backend element (execute + compile) | Frontend element (config panel + defaults) |
 |---|---|---|
-| `text_input` | `backend/app/elements/text_input/text_input_element.py` | `frontend/src/elements/text_input/textInputElement.ts` (`InputEditor.tsx`, shared) |
-| `file_input` | `.../elements/file_input/file_input_element.py` | `.../elements/file_input/fileInputElement.ts` (`InputEditor.tsx`, shared) |
-| `directory_input` | `.../elements/directory_input/directory_input_element.py` | `.../elements/directory_input/directoryInputElement.ts` (`InputEditor.tsx`, shared) |
+| `input` (+ legacy `text_input` / `file_input` / `directory_input`) | `backend/app/elements/input/input_element.py` | `frontend/src/elements/input/inputElement.ts` (`InputEditor.tsx`) |
 | `ai` | `.../elements/ai/ai_element.py` | `.../elements/ai/aiElement.ts` (`AIEditor.tsx`) |
 | `code` | `.../elements/code/code_element.py` **(reference)** | `.../elements/code/codeElement.ts` **(reference)** (`CodeEditor.tsx`) |
 | `output` | `.../elements/output/output_element.py` | `.../elements/output/outputElement.ts` (`OutputEditor.tsx`) |
@@ -92,30 +89,29 @@ Use `elements/code/code_element.py` and `elements/code/codeElement.ts` as the ex
 copy for any other node type — same class shape, same method names, same import style.
 
 Registry — only touch this if you're **adding a brand-new node type**, not changing an
-existing one: `backend/app/elements/registry.py` (`NODE_ELEMENTS`). On the frontend
-there is no single dispatch registry yet; `NodeEditor.tsx` and `Sidebar.tsx` still
-switch on `node_type` directly (see "Cross-cutting services").
+existing one: `backend/app/elements/registry.py` and `frontend/src/elements/registry.ts`
+(`NODE_ELEMENTS`). `NodeEditor.tsx`, `Sidebar.tsx`, and `graphStore.ts` resolve behavior
+through the frontend registry; do not add a new per-type switch to those shared shells.
 
 ## Adding/changing a GUI widget kind
 
 | Widget kind | Backend element (ports + execute + compile) | Frontend element (ports + config panel + runtime widget) |
 |---|---|---|
-| `file_open` | `backend/app/elements/gui/widgets/file_open/file_open_element.py` **(reference)** | `frontend/src/elements/gui/widgets/file_open/fileOpenElement.ts` **(reference)** |
-| `directory_open` | `.../gui/widgets/directory_open/directory_open_element.py` | `.../elements/gui/widgets/directory_open/directoryOpenElement.ts` |
-| `text_window` | `.../gui/widgets/text_window/text_window_element.py` | `.../elements/gui/widgets/text_window/textWindowElement.ts` (`TextChatEditor.tsx`, shared with `chat_window`) |
-| `chat_window` | `.../gui/widgets/chat_window/chat_window_element.py` | `.../elements/gui/widgets/chat_window/chatWindowElement.ts` (`TextChatEditor.tsx`, shared with `text_window`) |
+| `input_picker` (+ legacy `file_open` / `directory_open`) | `backend/app/elements/gui/widgets/input_picker/input_picker_element.py` **(reference)** | `frontend/src/elements/gui/widgets/input_picker/inputPickerElement.ts` **(reference)** |
+| `text_io` (+ legacy `text_window` / `chat_window`) | `.../gui/widgets/text_io/text_io_element.py` | `.../elements/gui/widgets/text_io/textIoElement.ts` |
 | `plot_window` | `.../gui/widgets/plot_window/plot_window_element.py` (display-only, no output port) | `.../elements/gui/widgets/plot_window/plotWindowElement.ts` |
 
-Use `elements/gui/widgets/file_open/file_open_element.py` and
-`elements/gui/widgets/file_open/fileOpenElement.ts` as the exact pattern to copy for any other
-widget kind.
+Use `elements/gui/widgets/input_picker/input_picker_element.py` and
+`elements/gui/widgets/input_picker/inputPickerElement.ts` as the exact pattern to copy
+for any other widget kind.
 
 Registry: `backend/app/elements/registry.py` (`GUI_WIDGET_ELEMENTS`) on the backend, and
 `frontend/src/elements/registry.ts` (`GUI_WIDGET_ELEMENTS`, whose `RuntimeWidget` field is
 what `GuiWindow.tsx` renders) on the frontend.
 
-A widget kind therefore has **two** files (one per language), one class each, plus one
-registry line per language — adding a kind means adding those and touching nothing else.
+A canonical widget kind therefore has **two** element files (one per language), plus one
+registry line per language. Its frontend definition references the local config editor
+and runtime widget; shared shells dispatch through the registry and need no kind switch.
 
 ## GUI runtime window & designer (not per-widget-kind)  
 
