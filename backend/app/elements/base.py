@@ -2,10 +2,12 @@
 Object-oriented core of the Graph DSL.
 
 Every `NodeType` and `GuiWidgetKind` is exactly one class ("element") owning ALL
-of its behavior in one file: live execution, deploy-script codegen, and (for
-widgets) which ports it contributes. See AGENTS.md's "Entity contract" section
-for the full list of what an element must implement and what it can assume
-about the surrounding engine.
+of its behavior in one file: live execution and (for widgets) which ports it
+contributes. Deploy bundles ship this exact code (see `deploy_service.py`)
+rather than a regenerated equivalent, so there is no separate codegen contract
+to implement. See AGENTS.md's "Object-oriented element contract" section for
+the full list of what an element must implement and what it can assume about
+the surrounding engine.
 """
 
 from __future__ import annotations
@@ -16,19 +18,13 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from app.models.graph import GraphNode, GuiWidget, GuiWidgetKind, NodeType, Port
 
-# Compile-time (deploy codegen) context shapes, built once per graph by
-# deploy_service.py and passed into every element's `compile`.
-Sources = Dict[Tuple[str, str], List[Tuple[str, str]]]
-NodeMap = Dict[str, GraphNode]
-
 
 @dataclass
 class DeployNeeds:
     """
-    What compile-time imports/helper blocks one node's (or widget's) `compile()`
-    output requires from the deployed runner script -- aggregated across every
-    node via `|` to decide `generate_runner_script`'s imports and embedded
-    helper blocks. All fields default to False: most elements need nothing.
+    What one node's (or widget's) behavior needs from the deployed bundle's
+    `requirements.txt` / optional runtime setup -- aggregated across every node
+    via `|`. All fields default to False: most elements need nothing extra.
     """
 
     files: bool = False          # file_service helpers (resolve_path, read/write, ...)
@@ -48,10 +44,8 @@ class DeployNeeds:
 class NodeElement(ABC):
     """
     Everything one `NodeType` needs to behave as a graph node:
-      - `execute`  -- live execution (editor "Run Graph", the HTTP API, the CLI).
-      - `compile`  -- deploy-bundle codegen (the self-contained runner script).
-    Both must produce equivalent results for equivalent inputs: that
-    equivalence is the entire point of the deploy feature.
+      - `execute` -- run this node, live in the editor/API/CLI, or in a
+        deployed bundle (which vendors and runs this exact same code).
 
     A NodeElement instance is stateless and shared (one singleton per kind,
     registered in `elements.registry.NODE_ELEMENTS`); all node-specific state
@@ -69,23 +63,19 @@ class NodeElement(ABC):
     ) -> Dict[str, Any]:
         """Run this node once for the given already-resolved/decoded inputs."""
 
-    @abstractmethod
-    def compile(self, node: GraphNode, sources: Sources, node_map: NodeMap) -> List[str]:
-        """Return the deploy-script source lines that reproduce `execute` at compile time."""
-
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
         """
         Requirement dicts (`{node_id, label, kind, direction, current_value}`,
         matching `RuntimeRequirement`'s fields) this node instance wants the user
-        prompted for before the graph runs -- web UI dialog, CLI, or the compiled
-        deploy script's stdin prompts. Default: none; most node types never
-        prompt for anything at runtime.
+        prompted for before the graph runs -- web UI dialog, CLI, or a deployed
+        bundle's stdin prompts. Default: none; most node types never prompt for
+        anything at runtime.
         """
         return []
 
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
-        """What this node instance's `compile()` output needs from the runner
-        script's imports/helper blocks. Default: nothing extra."""
+        """What this node instance needs from the deployed bundle's optional
+        runtime setup / requirements.txt. Default: nothing extra."""
         return DeployNeeds()
 
 
@@ -103,11 +93,11 @@ def widget_input_or_value(widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
 class GuiWidgetElement(ABC):
     """
     Everything one `GuiWidgetKind` needs to behave as a `gui` node's
-    sub-element -- the same three facets as NodeElement, one level down in the
+    sub-element -- the same facets as NodeElement, one level down in the
     object hierarchy. A `gui` node's own NodeElement (`elements/gui/gui_element.py`)
-    is a Composite: its `execute`/`compile` dispatch to each of its widgets'
+    is a Composite: its `execute` dispatches to each of its widgets'
     GuiWidgetElement in turn (looked up in `registry.GUI_WIDGET_ELEMENTS`) and
-    merge their results, which is what makes the gui node "an object hierarchy
+    merges their results, which is what makes the gui node "an object hierarchy
     whose lowest level again supports graph elements."
     """
 
@@ -124,10 +114,6 @@ class GuiWidgetElement(ABC):
         no output port (currently only plot_window) instead mutate `inputs` in
         place and their return value is ignored -- see `gui/element.py`.
         """
-
-    @abstractmethod
-    def compile(self, node: GraphNode, widget: GuiWidget) -> List[str]:
-        """Deploy-script lines for this one widget, mirroring `execute`."""
 
     def runtime_requirement(self, widget: GuiWidget) -> Optional[Dict[str, Any]]:
         """This widget's own requirement dict (`{label, kind}`), or None if it

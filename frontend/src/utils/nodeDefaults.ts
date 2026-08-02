@@ -15,8 +15,6 @@ export const NODE_TYPE_LABELS: Record<NodeType, string> = {
   code: 'Code Node',
   output: 'Output',
   text_output: 'Text Output',
-  merge: 'Merge',
-  split: 'Split',
   gui: 'GUI Node',
 };
 
@@ -29,8 +27,6 @@ export const NODE_TYPE_COLORS: Record<NodeType, string> = {
   code: '#1a3a2a',
   output: '#3a2000',
   text_output: '#0f3a3a',
-  merge: '#1a2a3a',
-  split: '#3a1a1a',
   gui: '#4a1d3a',
 };
 
@@ -43,8 +39,6 @@ export const NODE_TYPE_ICON: Record<NodeType, string> = {
   code: '⚙️',
   output: '📤',
   text_output: '🪟',
-  merge: '🔀',
-  split: '✂️',
   gui: '🖥️',
 };
 

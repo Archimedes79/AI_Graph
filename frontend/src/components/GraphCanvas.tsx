@@ -162,8 +162,6 @@ export default function GraphCanvas() {
               ai: '#2d1b4e',
               code: '#1a3a2a',
               output: '#3a2000',
-              merge: '#1a2a3a',
-              split: '#3a1a1a',
             };
             return colors[node.data?.graphNode?.node_type] ?? '#1a1d2e';
           }}

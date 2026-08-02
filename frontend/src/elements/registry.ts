@@ -5,9 +5,6 @@ import { inputElement } from './input/inputElement';
 import { aiElement } from './ai/aiElement';
 import { codeElement } from './code/codeElement';
 import { outputElement } from './output/outputElement';
-import { textOutputElement } from './text_output/textOutputElement';
-import { mergeElement } from './merge/mergeElement';
-import { splitElement } from './split/splitElement';
 import { guiElement } from './gui/guiElement';
 
 import { inputPickerElement } from './gui/widgets/input_picker/inputPickerElement';
@@ -23,9 +20,7 @@ export const NODE_ELEMENTS: Record<NodeType, NodeElementDefinition> = {
   ai:               aiElement,
   code:             codeElement,
   output:           outputElement,
-  text_output:      textOutputElement,
-  merge:            mergeElement,
-  split:            splitElement,
+  text_output:      outputElement,
   gui:              guiElement,
 };
 

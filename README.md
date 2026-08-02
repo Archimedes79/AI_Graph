@@ -2,8 +2,8 @@
 
 **AI-Graph** is a no-code, node-based AI workflow orchestration platform: connect nodes
 on a visual canvas to build data/AI pipelines, describe a graph as a portable JSON DSL,
-generate or edit it with AI, run it locally, or compile it into a standalone deployable
-service — without hand-writing glue code.
+generate or edit it with AI, run it locally, or deploy it as a standalone service
+— without hand-writing glue code.
 
 Nodes are connected through typed, explicit ports (data type, single-value-vs-batch,
 optional format) rather than opaque code, so what flows between them is always visible
@@ -17,8 +17,8 @@ in the graph itself, not hidden inside a block's implementation.
 - **Portable, explicit contracts** — graphs are a versioned JSON DSL with typed ports
   (`data_type`, `multi`, `format`) so a node's inputs/outputs are never ambiguous.
 - **Run anywhere the graph was built** — the same graph runs in the editor, from the
-  `graph-runner` CLI, or compiled into a single dependency-free script; behavior must
-  stay identical across all three.
+  `graph-runner` CLI, or from a deploy bundle that vendors the real engine verbatim;
+  behavior must stay identical across all three.
 - **Composable interfaces, not just pipelines** — `gui` nodes let a graph define its own
   runtime interface (file pickers, text/chat windows, plots) from small, independent
   widgets instead of a hard-coded form.
@@ -31,7 +31,10 @@ in the graph itself, not hidden inside a block's implementation.
   presets exist specifically for this: paths are auto-resolved to content before the
   node runs.
 - **Data transformation pipeline** — Text/File Input → Code node (hand-written or
-  AI-generated `run(inputs)`) → Merge/Split → Output; see `examples/text_transform.json`.
+  AI-generated `run(inputs)`) → Output; see `examples/text_transform.json`. Fan-in
+  (multiple edges into one multi input port) and fan-out (one output wired to many
+  inputs) need no dedicated node -- any join/split logic (concat/sum/count/
+  aggregate, or splitting text into a list) is just a few lines in a `code` node.
 - **Local-LLM chat or report tool** — an AI node backed by Ollama/LM Studio (no cloud
   dependency) fed by File/Directory Input, paired with a `gui` node's
   `chat_window`/`text_window` widgets for a runnable front-end with zero UI code.
@@ -39,8 +42,9 @@ in the graph itself, not hidden inside a block's implementation.
   node's output directly, with an optional AI-generated transform snippet reshaping raw
   data into plot-ready points.
 - **Deploying a graph as a standalone tool** — once a graph works in the editor,
-  **🚀 Deploy** compiles it into one self-contained script (or a Docker Compose bundle)
-  that a non-technical user or CI job can run without the AI-Graph editor at all.
+  **🚀 Deploy** packages a self-contained bundle (the real execution engine plus your
+  `graph.json`, not generated code) that a non-technical user or CI job can run without
+  the AI-Graph editor at all.
 
 For where to make a given code change (which file to touch per node type/widget kind),
 see [AGENTS.md](AGENTS.md).
@@ -55,14 +59,13 @@ see [AGENTS.md](AGENTS.md).
   - **AI Node** – send prompts to Ollama (local LLM), LM Studio, OpenAI, an OpenAI-compatible endpoint, or Anthropic
   - **Code Node** – execute generated or hand-written Python/JavaScript
   - **Output** – capture results
-  - **Merge / Split** – fan-in and fan-out multiple connections, with concat/sum/count/json_list aggregation modes on Merge
 - **Read-file inputs** – a `read_file_inputs` toggle on Code and AI nodes auto-resolves `file_path` inputs to actual content before running
 - **AI Code Generation** – describe what a node should do; the AI writes the code
 - **AI Prompt Generation** – describe the AI's role; get a system prompt generated
-- **Fan-in / Fan-out** – connect one output to many inputs, or merge many into one
+- **Fan-in / Fan-out** – connect one output to many inputs, or join many into one input port; this is pure edge/port wiring, not a dedicated node -- any actual aggregation (concat/sum/count/etc.) is written as a `code` node
 - **Graph DSL** – graphs are JSON files; readable and writable by humans and AI alike
 - **Execution Engine** – topological execution with full per-node status reporting
-- **Deployment Tooling** – export a Docker Compose stack + standalone runner script
+- **Deployment Tooling** – export a deploy bundle (vendored engine + graph.json) or a Docker Compose stack
 - **Graph Runner CLI** – execute any saved graph from the command line
 
 ---
@@ -187,7 +190,7 @@ node's inputs and outputs always reflect exactly what its widgets are capable of
 | `directory_open` | 1 output (list of file paths, filtered by `extensions`) |
 | `text_window` | 1 input + 1 output (text passthrough; incoming wins over the widget's own `value`) |
 | `chat_window` | 1 input + 1 output (text passthrough) |
-| `plot_window` | 1 input only — display-only, no downstream port, like `text_output` |
+| `plot_window` | 1 input only — display-only, no downstream port, like an `output` node with `write_mode="window"` |
 
 Each widget's ports are named `f"{widget.id}_in"` / `f"{widget.id}_out"`, so a widget's
 `id` must stay stable once assigned — that's the only thing keeping existing edges
@@ -282,7 +285,7 @@ There are two, independent kinds of "deploy" in AI-Graph:
 
 From the frontend toolbar, click **🚀 Deploy** to:
 
-- **Download Bundle** – get a zip containing `run_graph.py` (self-contained runner, no `graph.json` or AI-Graph backend needed at runtime), `requirements.txt`, `Dockerfile`, `docker-compose.yml`, and a `README.md` with run instructions
+- **Download Bundle** – get a zip containing the vendored engine (`app/elements`, `app/models`, `app/services`), your graph as `graph.json`, a `main.py` (verbatim copy of `graph-runner/run.py`), `requirements.txt`, `Dockerfile`, `docker-compose.yml`, and a `README.md` with run instructions — no `AI-Graph` backend needed at runtime
 - **View Docker Compose** – preview the generated compose file
 
 Or use the API:
@@ -309,8 +312,8 @@ pytest tests/ -v
 ```
 
 Prefer adding to or extending an existing large, workflow-level test (a full graph run
-through `execute_graph`, or a compiled deploy script actually executed) over adding a new
-test file per node type — see [AGENTS.md](AGENTS.md#tests).
+through `execute_graph`, or a real vendored deploy bundle actually executed as a
+subprocess) over adding a new test file per node type — see [AGENTS.md](AGENTS.md#tests).
 
 ---
 
@@ -324,14 +327,14 @@ AI-Graph/
 │   │   ├── main.py       # FastAPI app entry point
 │   │   ├── models/       # Graph DSL Pydantic models (NodeType/GuiWidgetKind contracts)
 │   │   ├── routers/      # API routes (graph, execute, ai, deploy, files)
-│   │   ├── elements/     # ONE class per node type / widget kind, owning execute() + compile()
+│   │   ├── elements/     # ONE class per node type / widget kind, owning execute()
 │   │   │   ├── base.py       # NodeElement / GuiWidgetElement contracts
 │   │   │   ├── registry.py   # NodeType -> element, GuiWidgetKind -> element (legacy names alias here)
 │   │   │   ├── code/code_element.py          # reference pattern for a node type
 │   │   │   └── gui/          # gui_element.py (composite) + widgets/<kind>/<kind>_element.py
 │   │   └── services/
 │   │       ├── graph_executor.py   # topology/batching/format resolution; dispatches via registry
-│   │       ├── deploy_service.py   # deploy-bundle assembly; dispatches via registry
+│   │       ├── deploy_service.py   # assembles vendored-runtime deploy bundles (not codegen)
 │   │       ├── batching.py         # shared batch reconcile/merge helpers
 │   │       ├── ai_service.py, code_executor.py, file_service.py  # cross-cutting helpers
 │   ├── tests/            # Backend tests — prefer large workflow-level tests (see AGENTS.md)

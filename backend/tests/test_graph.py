@@ -202,9 +202,18 @@ def test_graph_validation_allows_implicit_fan_in_without_merge():
 
 
 def test_graph_validation_allows_fan_out_from_split():
+    """A `code` node (the migrated equivalent of the deleted `split` node type)
+    can still fan its output out to multiple downstream nodes."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+
+    split_code = (
+        "def run(inputs):\n"
+        "    source = next(iter(inputs.values()), '')\n"
+        "    parts = str(source).split('\\n') if source else []\n"
+        "    return {'items': parts, 'count': len(parts)}\n"
+    )
 
     graph = Graph(
         metadata=GraphMetadata(name="Explicit Split"),
@@ -218,11 +227,11 @@ def test_graph_validation_allows_fan_out_from_split():
             ),
             GraphNode(
                 id="split",
-                node_type=NodeType.SPLIT,
+                node_type=NodeType.CODE,
                 label="Split",
                 inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 outputs=[Port(id="items", name="Items", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True, required=False)],
-                config=NodeConfig(separator="\n"),
+                config=NodeConfig(code=split_code, batch_mode="whole_list"),
             ),
             GraphNode(
                 id="left",
@@ -250,9 +259,22 @@ def test_graph_validation_allows_fan_out_from_split():
 
 
 def test_graph_validation_allows_fan_in_into_merge():
+    """A `code` node (the migrated equivalent of the deleted `merge` node type)
+    can still take multiple fanned-in edges on one multi input port."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+
+    concat_code = (
+        "def run(inputs):\n"
+        "    parts = []\n"
+        "    for val in inputs.values():\n"
+        "        if isinstance(val, list):\n"
+        "            parts.extend(str(v) for v in val)\n"
+        "        elif val is not None:\n"
+        "            parts.append(str(val))\n"
+        "    return {'output': ' '.join(parts)}\n"
+    )
 
     graph = Graph(
         metadata=GraphMetadata(name="Explicit Merge"),
@@ -273,11 +295,11 @@ def test_graph_validation_allows_fan_in_into_merge():
             ),
             GraphNode(
                 id="merge",
-                node_type=NodeType.MERGE,
+                node_type=NodeType.CODE,
                 label="Merge",
                 inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
-                config=NodeConfig(separator=" "),
+                config=NodeConfig(code=concat_code, batch_mode="whole_list"),
             ),
         ],
         edges=[
@@ -286,7 +308,99 @@ def test_graph_validation_allows_fan_in_into_merge():
         ],
     )
 
-    assert graph.nodes[-1].node_type == NodeType.MERGE
+    assert graph.nodes[-1].node_type == NodeType.CODE
+
+
+@pytest.mark.asyncio
+async def test_legacy_merge_split_nodes_migrate_to_equivalent_code_nodes():
+    """Loading a graph JSON containing legacy `merge`/`split` node types
+    rewrites them in place to equivalent `code` nodes (Graph._migrate_legacy_nodes
+    in models/graph.py), preserving ports so existing edges still resolve, and
+    producing identical output values to what the deleted MergeElement/
+    SplitElement used to compute for the same inputs."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, NodeType
+    from app.services.graph_executor import execute_graph
+
+    raw = {
+        "metadata": {"name": "Legacy Merge/Split"},
+        "nodes": [
+            {
+                "id": "left", "node_type": "text_input", "label": "Left",
+                "outputs": [{"id": "output", "name": "Output", "kind": "output", "data_type": "text", "required": False}],
+                "config": {"value": "2"},
+            },
+            {
+                "id": "right", "node_type": "text_input", "label": "Right",
+                "outputs": [{"id": "output", "name": "Output", "kind": "output", "data_type": "text", "required": False}],
+                "config": {"value": "3"},
+            },
+            {
+                "id": "merge_sum", "node_type": "merge", "label": "Sum",
+                "inputs": [{"id": "inputs", "name": "Inputs", "kind": "input", "data_type": "any", "multi": True, "required": False}],
+                "outputs": [{"id": "output", "name": "Output", "kind": "output", "data_type": "text", "required": False}],
+                "config": {"merge_mode": "sum", "separator": "\n"},
+            },
+            {
+                "id": "source", "node_type": "text_input", "label": "Source",
+                "outputs": [{"id": "output", "name": "Output", "kind": "output", "data_type": "text", "required": False}],
+                "config": {"value": "a,b,c"},
+            },
+            {
+                "id": "split", "node_type": "split", "label": "Split",
+                "inputs": [{"id": "input", "name": "Input", "kind": "input", "data_type": "text", "required": False}],
+                "outputs": [
+                    {"id": "items", "name": "Items", "kind": "output", "data_type": "text", "multi": True, "required": False},
+                    {"id": "count", "name": "Count", "kind": "output", "data_type": "text", "required": False},
+                ],
+                "config": {"separator": ","},
+            },
+            {
+                "id": "merge_out", "node_type": "output", "label": "MergeOut",
+                "inputs": [{"id": "value", "name": "Value", "kind": "input", "data_type": "any", "multi": True, "required": False}],
+                "config": {"output_label": "MergeResult"},
+            },
+            {
+                "id": "split_out", "node_type": "output", "label": "SplitOut",
+                "inputs": [{"id": "value", "name": "Value", "kind": "input", "data_type": "any", "multi": True, "required": False}],
+                "config": {"output_label": "SplitResult"},
+            },
+        ],
+        "edges": [
+            {"id": "e1", "source_node_id": "left", "source_port_id": "output", "target_node_id": "merge_sum", "target_port_id": "inputs"},
+            {"id": "e2", "source_node_id": "right", "source_port_id": "output", "target_node_id": "merge_sum", "target_port_id": "inputs"},
+            {"id": "e3", "source_node_id": "merge_sum", "source_port_id": "output", "target_node_id": "merge_out", "target_port_id": "value"},
+            {"id": "e4", "source_node_id": "source", "source_port_id": "output", "target_node_id": "split", "target_port_id": "input"},
+            {"id": "e5", "source_node_id": "split", "source_port_id": "items", "target_node_id": "split_out", "target_port_id": "value"},
+        ],
+    }
+
+    graph = Graph.model_validate(raw)
+
+    merge_node = next(n for n in graph.nodes if n.id == "merge_sum")
+    split_node = next(n for n in graph.nodes if n.id == "split")
+
+    # node_type rewritten; MERGE/SPLIT no longer exist as NodeType members at all.
+    assert merge_node.node_type == NodeType.CODE
+    assert split_node.node_type == NodeType.CODE
+    assert not hasattr(NodeType, "MERGE")
+    assert not hasattr(NodeType, "SPLIT")
+
+    # Ports preserved exactly -- existing edges (e1/e2/e3, e4/e5) still resolve.
+    assert [p.id for p in merge_node.inputs] == ["inputs"]
+    assert [p.id for p in merge_node.outputs] == ["output"]
+    assert [p.id for p in split_node.inputs] == ["input"]
+    assert [p.id for p in split_node.outputs] == ["items", "count"]
+
+    result = await execute_graph(graph)
+    assert result.status == "success"
+
+    # sum(["2", "3"]) == 5 -- identical to the deleted MergeElement's sum mode.
+    assert result.final_outputs["MergeResult"]["value"] == 5
+    # "a,b,c".split(",") == ["a", "b", "c"] -- identical to the deleted SplitElement.
+    assert result.final_outputs["SplitResult"]["value"] == ["a", "b", "c"]
+
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +535,7 @@ async def test_execute_code_node():
 async def test_code_node_processes_each_batch_item():
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig, _generate_split_code
     from app.services.graph_executor import execute_graph
 
     graph = Graph(
@@ -433,10 +547,10 @@ async def test_code_node_processes_each_batch_item():
                 config=NodeConfig(value="one\ntwo\nthree"),
             ),
             GraphNode(
-                id="split", node_type=NodeType.SPLIT, label="Split",
+                id="split", node_type=NodeType.CODE, label="Split",
                 inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False)],
                 outputs=[Port(id="items", name="Items", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True)],
-                config=NodeConfig(separator="\n"),
+                config=NodeConfig(code=_generate_split_code("\n"), batch_mode="whole_list"),
             ),
             GraphNode(
                 id="code", node_type=NodeType.CODE, label="Uppercase",
@@ -466,7 +580,7 @@ async def test_code_node_processes_each_batch_item():
 async def test_ai_node_processes_each_batch_item(monkeypatch):
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig, _generate_split_code
     from app.services.graph_executor import execute_graph
 
     async def fake_complete(prompt, system, model, temperature, provider):
@@ -482,10 +596,10 @@ async def test_ai_node_processes_each_batch_item(monkeypatch):
                 config=NodeConfig(value="first\nsecond"),
             ),
             GraphNode(
-                id="split", node_type=NodeType.SPLIT, label="Split",
+                id="split", node_type=NodeType.CODE, label="Split",
                 inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False)],
                 outputs=[Port(id="items", name="Items", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True)],
-                config=NodeConfig(separator="\n"),
+                config=NodeConfig(code=_generate_split_code("\n"), batch_mode="whole_list"),
             ),
             GraphNode(
                 id="ai", node_type=NodeType.AI, label="Answer",
@@ -516,7 +630,7 @@ async def test_single_item_batch_keeps_scalar_unless_port_is_multi(monkeypatch):
     scalar, while a multi port and a genuine multi-item batch still yield lists."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig, _generate_split_code
     from app.services.graph_executor import execute_graph
 
     async def fake_complete(prompt, system, model, temperature, provider):
@@ -534,10 +648,10 @@ async def test_single_item_batch_keeps_scalar_unless_port_is_multi(monkeypatch):
                     config=NodeConfig(value=value),
                 ),
                 GraphNode(
-                    id="split", node_type=NodeType.SPLIT, label="Split",
+                    id="split", node_type=NodeType.CODE, label="Split",
                     inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False)],
                     outputs=[Port(id="items", name="Items", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True)],
-                    config=NodeConfig(separator="\n"),
+                    config=NodeConfig(code=_generate_split_code("\n"), batch_mode="whole_list"),
                 ),
                 GraphNode(
                     id="ai", node_type=NodeType.AI, label="Answer",
@@ -567,7 +681,7 @@ async def test_optional_multi_port_survives_one_failed_sibling(monkeypatch):
     must not skip the downstream node; the other predecessor's value survives."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig, _generate_merge_code
     from app.services.graph_executor import execute_graph
 
     async def fake_complete(prompt, system, model, temperature, provider):
@@ -600,10 +714,10 @@ async def test_optional_multi_port_survives_one_failed_sibling(monkeypatch):
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
             ),
             GraphNode(
-                id="merge", node_type=NodeType.MERGE, label="Merge",
+                id="merge", node_type=NodeType.CODE, label="Merge",
                 inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
-                config=NodeConfig(separator=" "),
+                config=NodeConfig(code=_generate_merge_code("concat", " "), batch_mode="whole_list"),
             ),
             GraphNode(
                 id="text_output", node_type=NodeType.TEXT_OUTPUT, label="Text Output",
@@ -672,7 +786,7 @@ async def test_required_multi_port_survives_partial_failure(monkeypatch):
     satisfiable as long as at least one source succeeds."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig, _generate_merge_code
     from app.services.graph_executor import execute_graph
 
     graph = Graph(
@@ -689,10 +803,10 @@ async def test_required_multi_port_survives_partial_failure(monkeypatch):
                 config=NodeConfig(code="def run(inputs):\n    raise ValueError('boom')\n"),
             ),
             GraphNode(
-                id="downstream", node_type=NodeType.MERGE, label="Downstream",
+                id="downstream", node_type=NodeType.CODE, label="Downstream",
                 inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=True)],
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
-                config=NodeConfig(separator=" "),
+                config=NodeConfig(code=_generate_merge_code("concat", " "), batch_mode="whole_list"),
             ),
         ],
         edges=[
@@ -719,7 +833,7 @@ def test_topological_levels_form_stage_barriers():
         GraphNode(id="source", node_type=NodeType.TEXT_INPUT, label="Source"),
         GraphNode(id="left", node_type=NodeType.CODE, label="Left"),
         GraphNode(id="right", node_type=NodeType.CODE, label="Right"),
-        GraphNode(id="join", node_type=NodeType.MERGE, label="Join"),
+        GraphNode(id="join", node_type=NodeType.OUTPUT, label="Join"),
     ]
     edges = [
         GraphEdge(id="e1", source_node_id="source", source_port_id="out", target_node_id="left", target_port_id="in"),
@@ -733,10 +847,23 @@ def test_topological_levels_form_stage_barriers():
 
 @pytest.mark.asyncio
 async def test_execute_merge_node():
+    """Regression for the deleted MERGE node type's concat behavior, now a
+    plain `code` node (see models/graph.py's merge->code migration)."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
     from app.services.graph_executor import execute_graph
+
+    concat_code = (
+        "def run(inputs):\n"
+        "    parts = []\n"
+        "    for val in inputs.values():\n"
+        "        if isinstance(val, list):\n"
+        "            parts.extend(str(v) for v in val)\n"
+        "        elif val is not None:\n"
+        "            parts.append(str(val))\n"
+        "    return {'output': ' '.join(parts)}\n"
+    )
 
     graph = Graph(
         metadata=GraphMetadata(name="Merge Test"),
@@ -747,10 +874,10 @@ async def test_execute_merge_node():
             GraphNode(id="b", node_type=NodeType.TEXT_INPUT, label="B",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False, description="")],
                 config=NodeConfig(value="World")),
-            GraphNode(id="m", node_type=NodeType.MERGE, label="Merge",
+            GraphNode(id="m", node_type=NodeType.CODE, label="Merge",
                 inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False, description="")],
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False, description="")],
-                config=NodeConfig(separator=" ")),
+                config=NodeConfig(code=concat_code, batch_mode="whole_list")),
             GraphNode(id="o", node_type=NodeType.OUTPUT, label="Out",
                 inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False, description="")],
                 config=NodeConfig(output_label="Merged")),
@@ -770,15 +897,32 @@ async def test_execute_merge_node():
 
 @pytest.mark.asyncio
 async def test_merge_node_decodes_each_edge_with_its_own_format():
-    """Regression: a MERGE port fed by several edges with different declared
+    """Regression: a multi-input port fed by several edges with different declared
     formats must decode each contributing value with its OWN source edge's
     format, not one uniform port-level format (previously the first edge's
     format – found via _effective_input_format – was applied to every value,
-    which could crash on plain-text siblings or leave JSON siblings undecoded)."""
+    which could crash on plain-text siblings or leave JSON siblings undecoded).
+    Uses a `code` node running the deleted MERGE node's json_list logic, since
+    this per-edge format decoding is generic graph_executor behavior, not
+    specific to the (now-deleted) MERGE node type."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
     from app.services.graph_executor import execute_graph
+
+    json_list_code = (
+        "import json\n"
+        "\n"
+        "\n"
+        "def run(inputs):\n"
+        "    flat = []\n"
+        "    for val in inputs.values():\n"
+        "        if isinstance(val, list):\n"
+        "            flat.extend(v for v in val if v is not None)\n"
+        "        elif val is not None:\n"
+        "            flat.append(val)\n"
+        "    return {'output': json.dumps(flat)}\n"
+    )
 
     graph = Graph(
         metadata=GraphMetadata(name="Merge Mixed Format Test"),
@@ -795,12 +939,12 @@ async def test_merge_node_decodes_each_edge_with_its_own_format():
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
                                multi=False, required=False)],
                 config=NodeConfig(value="42")),
-            GraphNode(id="m", node_type=NodeType.MERGE, label="Merge",
+            GraphNode(id="m", node_type=NodeType.CODE, label="Merge",
                 inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY,
                               multi=True, required=False)],
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
                                multi=False, required=False)],
-                config=NodeConfig(merge_mode="json_list")),
+                config=NodeConfig(code=json_list_code, batch_mode="whole_list")),
         ],
         edges=[
             GraphEdge(id="e1", source_node_id="json_src", source_port_id="output", target_node_id="m", target_port_id="inputs"),
@@ -977,20 +1121,9 @@ def test_generate_docker_compose():
     assert "ollama" in compose
 
 
-def test_generate_runner_script():
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.models.graph import Graph, GraphMetadata
-    from app.services.deploy_service import generate_runner_script
-
-    graph = Graph(metadata=GraphMetadata(name="My Graph"))
-    script = generate_runner_script(graph)
-    assert "def main" in script
-    assert "execute_graph" not in script
-    assert "Graph.model_validate_json" not in script
-
-
-def test_generate_deployment_bundle_keys():
+def test_generate_deployment_bundle_layout():
+    """The bundle vendors the real engine (app/**) plus graph.json/main.py --
+    not a generated script -- and main.py is graph-runner/run.py verbatim."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app.models.graph import Graph, GraphMetadata
@@ -998,11 +1131,17 @@ def test_generate_deployment_bundle_keys():
 
     graph = Graph(metadata=GraphMetadata(name="Test Bundle"))
     bundle = generate_deployment_bundle(graph)
-    assert set(bundle.keys()) == {
-        "docker-compose.yml", "run_graph.py", "requirements.txt", "Dockerfile", "README.md",
-    }
-    assert bundle["requirements.txt"].strip() == "# No third-party dependencies required."
+
+    expected_extras = {"graph.json", "main.py", "requirements.txt", "Dockerfile", "docker-compose.yml", "README.md"}
+    assert expected_extras <= set(bundle.keys())
+    assert any(path.startswith("app/elements/") for path in bundle)
+    assert "app/models/graph.py" in bundle
+    assert "app/services/graph_executor.py" in bundle
+    assert bundle["requirements.txt"].strip() == "pydantic==2.13.4"
     assert "build: ." in bundle["docker-compose.yml"]
+
+    runner_source = (Path(__file__).parent.parent.parent / "graph-runner" / "run.py").read_text(encoding="utf-8")
+    assert bundle["main.py"] == runner_source
 
 
 def test_generate_deployment_bundle_requires_httpx_for_ai_node():
@@ -1021,19 +1160,20 @@ def test_generate_deployment_bundle_requires_httpx_for_ai_node():
         ],
     )
     bundle = generate_deployment_bundle(graph)
-    assert bundle["requirements.txt"].strip() == "httpx"
+    assert bundle["requirements.txt"].strip().splitlines() == ["pydantic==2.13.4", "httpx==0.28.1"]
 
 
-def test_generate_runner_script_compiles_gui_node(tmp_path):
-    """Regression: GUI nodes used to have no branch in deploy_service._node_lines,
-    so compiling any graph containing one raised 'Unknown node type: gui'."""
+def test_generate_deployment_bundle_vendors_gui_node_support(tmp_path):
+    """A graph containing a `gui` node must still produce a bundle whose
+    vendored app/ package can run it -- the gui widget element files must be
+    included alongside the gui node element itself."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app.models.graph import (
         Graph, GraphEdge, GraphMetadata, GraphNode, GuiWidget, GuiWidgetKind,
         NodeConfig, NodeType, Port, PortKind, DataType, sync_gui_node_ports,
     )
-    from app.services.deploy_service import generate_runner_script
+    from app.services.deploy_service import generate_deployment_bundle
 
     fixture = tmp_path / "note.txt"
     fixture.write_text("hello", encoding="utf-8")
@@ -1060,7 +1200,8 @@ def test_generate_runner_script_compiles_gui_node(tmp_path):
         ],
     )
 
-    script = generate_runner_script(graph)
-    assert "Unknown node type" not in script
-    assert "w1_out" in script
-    assert "w2_out" in script
+    bundle = generate_deployment_bundle(graph)
+    assert "app/elements/gui/gui_element.py" in bundle
+    assert "app/elements/gui/widgets/input_picker/input_picker_element.py" in bundle
+    assert "app/elements/gui/widgets/text_io/text_io_element.py" in bundle
+    assert json.loads(bundle["graph.json"])["nodes"][0]["node_type"] == "gui"

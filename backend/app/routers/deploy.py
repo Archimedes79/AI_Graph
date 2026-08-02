@@ -1,14 +1,14 @@
 """
-Deployment router – generate Docker Compose stacks and runner scripts.
+Deployment router – generate deploy bundles (vendored runtime + graph.json)
+and their accompanying Docker Compose stack.
 """
 
 from __future__ import annotations
 
 import zipfile
 import io
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import Response, PlainTextResponse
 
 from app.models.graph import Graph
@@ -21,8 +21,10 @@ router = APIRouter(prefix="/api/deploy", tags=["deploy"])
 async def create_bundle(graph: Graph):
     """
     Generate a deployment bundle (zip archive) containing:
-      - run_graph.py     – compiled, self-contained executable (no graph.json needed)
-      - docker-compose.yml
+      - app/**             – the real AI-Graph execution engine, vendored verbatim
+      - graph.json         – the graph definition
+      - main.py            – entrypoint (graph-runner/run.py, verbatim)
+      - requirements.txt / Dockerfile / docker-compose.yml / README.md
     """
     bundle = deploy_service.generate_deployment_bundle(graph)
 
@@ -46,13 +48,4 @@ async def get_docker_compose(graph: Graph):
     return PlainTextResponse(
         deploy_service.generate_docker_compose(graph),
         media_type="text/yaml",
-    )
-
-
-@router.post("/runner-script")
-async def get_runner_script(graph: Graph):
-    """Return a standalone Python runner script for the graph."""
-    return PlainTextResponse(
-        deploy_service.generate_runner_script(graph),
-        media_type="text/x-python",
     )

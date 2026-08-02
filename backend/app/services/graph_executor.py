@@ -552,13 +552,18 @@ def apply_runtime_values(graph: Graph, values: Dict[str, str]) -> None:
 
 def get_text_output_windows(graph: Graph, result: ExecutionResult) -> List[Dict[str, str]]:
     """
-    Collect the rendered content of every TEXT_OUTPUT node so it can be shown
-    to the user (web modal, or printed to the console for CLI/deployed runs).
+    Collect the rendered content of every node whose effective write_mode is
+    "window" (a `text_output` node, or an `output` node with
+    `config.write_mode == "window"` -- see `output_element.effective_write_mode`)
+    so it can be shown to the user (web modal, or printed to the console for
+    CLI/deployed runs).
     """
+    from app.elements.output.output_element import effective_write_mode
+
     results_by_id = {r.node_id: r for r in result.node_results}
     windows: List[Dict[str, str]] = []
     for node in graph.nodes:
-        if node.node_type != NodeType.TEXT_OUTPUT:
+        if node.node_type not in (NodeType.OUTPUT, NodeType.TEXT_OUTPUT) or effective_write_mode(node) != "window":
             continue
         node_result = results_by_id.get(node.id)
         if node_result is None or node_result.status != ExecutionStatus.SUCCESS:

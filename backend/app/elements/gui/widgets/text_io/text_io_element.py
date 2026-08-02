@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from app.elements.base import GuiWidgetElement
-from app.models.graph import DataType, GraphNode, GuiWidget, GuiWidgetKind, Port, PortKind
+from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
 
 
 def _effective_mode(widget: GuiWidget) -> str:
@@ -53,27 +53,3 @@ class TextIOElement(GuiWidgetElement):
                 return "\n".join(str(v) for v in incoming)
             return incoming
         return ""
-
-    def compile(self, node: GraphNode, widget: GuiWidget) -> List[str]:
-        mode = _effective_mode(widget)
-        in_id, out_id = f"{widget.id}_in", f"{widget.id}_out"
-        if mode == "input":
-            return [f"_gui_result[{out_id!r}] = {widget.value!r} or ''"]
-        if mode == "output":
-            return [
-                f"_raw = _inputs.get({in_id!r})",
-                f"_gui_result[{out_id!r}] = _raw if _raw is not None else ''",
-            ]
-        # "both": widget's own value wins; fall back to incoming (joining lists) if empty
-        return [
-            f"if {widget.value!r}:",
-            f"    _gui_result[{out_id!r}] = {widget.value!r}",
-            "else:",
-            f"    _raw = _inputs.get({in_id!r})",
-            "    if isinstance(_raw, list):",
-            f"        _gui_result[{out_id!r}] = chr(10).join(str(_x) for _x in _raw)",
-            "    elif _raw is not None:",
-            f"        _gui_result[{out_id!r}] = _raw",
-            "    else:",
-            f"        _gui_result[{out_id!r}] = ''",
-        ]

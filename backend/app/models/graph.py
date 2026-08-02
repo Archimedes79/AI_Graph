@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -26,8 +26,6 @@ class NodeType(str, Enum):
     CODE = "code"
     OUTPUT = "output"
     TEXT_OUTPUT = "text_output"
-    MERGE = "merge"
-    SPLIT = "split"
     GUI = "gui"
 
 
@@ -127,10 +125,10 @@ class NodeConfig(BaseModel):
     prompt_at_runtime: bool = False
 
     # unified input node
-    input_mode: str = "text"             # text | file | directory
+    input_mode: Literal["text", "file", "directory"] = "text"
 
     # file / directory input nodes – parsing
-    parse_format: str = "text"           # text | json | csv | csv_list | custom
+    parse_format: Literal["text", "json", "csv", "csv_list", "custom"] = "text"
     parse_code: str = ""                 # run(inputs: {content, path}) -> {content}
     example_path: str = ""               # sample file path for format detection
 
@@ -151,7 +149,7 @@ class NodeConfig(BaseModel):
     code_prompt: str = ""                # stored AI prompt used to generate the code
 
     # per-node output format declaration (used in AI generation prompts)
-    output_format: str = "text"          # text | json | csv | csv_list | custom
+    output_format: Literal["text", "json", "csv", "csv_list", "custom"] = "text"
     output_format_prompt: str = ""       # description for custom format
 
     # code / ai node – batch handling
@@ -165,15 +163,8 @@ class NodeConfig(BaseModel):
 
     # output node
     output_label: str = "Result"
-    write_mode: str = "none"             # none | file | directory – write result(s) to disk at `value`
-
-    # merge / split helpers
-    separator: str = "\n"
-    # concat: string-join all values with `separator` (existing behaviour).
-    # sum: numerically sum all flattened values.
-    # count: number of flattened scalar values received.
-    # json_list: JSON-serialized flat list of all received values.
-    merge_mode: Literal["concat", "sum", "count", "json_list"] = "concat"
+    write_mode: Literal["none", "file", "directory", "window"] = "none"  # window displays
+                                          # result(s) in a text window (former text_output node type)
 
     # gui node – ordered list of composed widgets; ports are derived from this
     gui_widgets: List[GuiWidget] = Field(default_factory=list)
@@ -229,6 +220,103 @@ def sync_gui_node_ports(node: GraphNode) -> None:
     node.outputs = outputs
 
 
+# ---------------------------------------------------------------------------
+# One-time legacy migration: `merge` / `split` node types were deleted in favor
+# of equivalent `code` nodes (see AGENTS.md). Unlike the forever-lived aliases
+# InputElement/OutputElement handle at execute() time, this migration rewrites
+# the RAW node dict once, before it is validated into a NodeType enum member --
+# "merge"/"split" never need to be valid NodeType values again afterward.
+# ---------------------------------------------------------------------------
+
+def _generate_merge_code(mode: str, separator: str) -> str:
+    """Literal `run(inputs)` source equivalent to the deleted MergeElement.execute() for *mode*."""
+    if mode == "sum":
+        return (
+            "def run(inputs):\n"
+            "    flat = []\n"
+            "    for val in inputs.values():\n"
+            "        if isinstance(val, list):\n"
+            "            flat.extend(v for v in val if v is not None)\n"
+            "        elif val is not None:\n"
+            "            flat.append(val)\n"
+            "    total = sum(float(v) for v in flat)\n"
+            "    return {'output': int(total) if total.is_integer() else total}\n"
+        )
+    if mode == "count":
+        return (
+            "def run(inputs):\n"
+            "    flat = []\n"
+            "    for val in inputs.values():\n"
+            "        if isinstance(val, list):\n"
+            "            flat.extend(v for v in val if v is not None)\n"
+            "        elif val is not None:\n"
+            "            flat.append(val)\n"
+            "    return {'output': len(flat)}\n"
+        )
+    if mode == "json_list":
+        return (
+            "import json\n"
+            "\n"
+            "\n"
+            "def run(inputs):\n"
+            "    flat = []\n"
+            "    for val in inputs.values():\n"
+            "        if isinstance(val, list):\n"
+            "            flat.extend(v for v in val if v is not None)\n"
+            "        elif val is not None:\n"
+            "            flat.append(val)\n"
+            "    return {'output': json.dumps(flat)}\n"
+        )
+    # concat -- also the fallback for an unrecognized legacy mode, matching the
+    # deleted MergeElement's own fallback-to-concat behavior.
+    return (
+        "def run(inputs):\n"
+        "    parts = []\n"
+        "    for val in inputs.values():\n"
+        "        if isinstance(val, list):\n"
+        "            parts.extend(str(v) for v in val)\n"
+        "        elif val is not None:\n"
+        "            parts.append(str(val))\n"
+        f"    return {{'output': {separator!r}.join(parts)}}\n"
+    )
+
+
+def _generate_split_code(separator: str) -> str:
+    """Literal `run(inputs)` source equivalent to the deleted SplitElement.execute()."""
+    return (
+        "def run(inputs):\n"
+        "    source = next(iter(inputs.values()), '')\n"
+        f"    parts = str(source).split({separator!r}) if source else []\n"
+        "    return {'items': parts, 'count': len(parts)}\n"
+    )
+
+
+def _migrate_legacy_merge_split_node(node: Any) -> Any:
+    """Rewrite one legacy `merge`/`split` node dict into an equivalent `code` node
+    dict. Ports (id/label/description/position/inputs/outputs) are preserved
+    exactly so existing edges keep resolving; merge_mode/separator are baked
+    into literal generated code and dropped from config."""
+    if not isinstance(node, dict):
+        return node
+    node_type = node.get("node_type")
+    if node_type not in ("merge", "split"):
+        return node
+    config = dict(node.get("config") or {})
+    separator = config.pop("separator", "\n")
+    if node_type == "merge":
+        mode = config.pop("merge_mode", "concat")
+        config["code"] = _generate_merge_code(mode, separator)
+    else:
+        config.pop("merge_mode", None)
+        config["code"] = _generate_split_code(separator)
+    config["language"] = "python"
+    config["batch_mode"] = "whole_list"
+    migrated = dict(node)
+    migrated["node_type"] = "code"
+    migrated["config"] = config
+    return migrated
+
+
 class GraphEdge(BaseModel):
     id: str
     source_node_id: str
@@ -266,6 +354,21 @@ class Graph(BaseModel):
     nodes: List[GraphNode] = Field(default_factory=list)
     edges: List[GraphEdge] = Field(default_factory=list)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_nodes(cls, data: Any) -> Any:
+        """Run _migrate_legacy_merge_split_node on every raw node dict before
+        node_type is validated against the NodeType enum -- the migration
+        insertion point for legacy `merge`/`split` graphs (see AGENTS.md)."""
+        if isinstance(data, dict):
+            nodes = data.get("nodes")
+            if isinstance(nodes, list) and any(
+                isinstance(n, dict) and n.get("node_type") in ("merge", "split") for n in nodes
+            ):
+                data = dict(data)
+                data["nodes"] = [_migrate_legacy_merge_split_node(n) for n in nodes]
+        return data
+
 
 # ---------------------------------------------------------------------------
 # Execution models
@@ -301,8 +404,8 @@ class RuntimeRequirement(BaseModel):
     """A file/directory path that must be supplied before the graph can run."""
     node_id: str
     label: str
-    kind: str       # "file" | "directory"
-    direction: str  # "input" | "output"
+    kind: Literal["text", "file", "directory"]
+    direction: Literal["input", "output"]
     current_value: str = ""
     widget_id: Optional[str] = None  # set when the requirement is a GUI node's widget
 

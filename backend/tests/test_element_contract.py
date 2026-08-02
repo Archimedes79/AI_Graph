@@ -8,11 +8,11 @@ handful of universal properties every element must satisfy -- see AGENTS.md's
 tests: when adding a new NodeType/GuiWidgetKind, extend the per-type tables
 below instead of adding a new test file.
 
-The `execute()` vs `compile()` consistency check (#6) is the one that would
-have caught this session's `text_io`/`input` bugs -- it actually runs each
-element's `compile()`-emitted lines through a small exec harness built from
-deploy_service.py's own helper snippets (not a reimplementation of them) and
-compares the result against a live `execute()` call for the same inputs.
+There is no more `compile()` to check for consistency against `execute()`:
+since deploy bundles now vendor the real `execute()` code verbatim (see
+`deploy_service.py`), the two can never diverge -- that end-to-end guarantee
+is instead exercised by `test_deploy_runner_execution.py`, which runs a real
+bundle as a subprocess and compares its output to `execute_graph()`.
 """
 
 from __future__ import annotations
@@ -20,9 +20,8 @@ from __future__ import annotations
 import base64
 import json
 import sys
-import textwrap
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import pytest
 
@@ -43,57 +42,8 @@ from app.models.graph import (  # noqa: E402
     sync_gui_node_ports,
 )
 from app.services import ai_service  # noqa: E402
-from app.services import deploy_service as ds  # noqa: E402
-from app.services.batching import batch_inputs, merge_batch_outputs  # noqa: E402
-from app.services.deploy.shared import DEFERRED_LITERAL  # noqa: E402
 
 CODE_ECHO = "def run(inputs):\n    return {'output': inputs.get('input', '')}\n"
-
-
-# ---------------------------------------------------------------------------
-# Exec harness for check #6 -- embeds deploy_service.py's own helper source
-# blocks (never a reimplementation of them) so a compiled node's lines can run
-# standalone, exactly the way generate_runner_script() would nest them.
-# ---------------------------------------------------------------------------
-
-def _harness_namespace(*, needs_files: bool = False, needs_code_runner: bool = False, needs_ai: bool = False) -> Dict[str, Any]:
-    import asyncio
-    import json
-    import os
-    import sys as _sys
-    import tempfile
-
-    ns: Dict[str, Any] = {"Path": Path, "asyncio": asyncio, "json": json, "os": os, "sys": _sys, "tempfile": tempfile}
-    if needs_files:
-        exec(ds._FILE_HELPERS, ns)
-    if needs_code_runner or needs_ai:
-        exec(ds._BATCH_HELPERS, ns)
-    if needs_code_runner:
-        exec(ds._CODE_RUNNER_HELPER, ns)
-    if needs_ai:
-        exec(ds._AI_HELPER, ns)
-    return ns
-
-
-async def _run_compiled(element, node: GraphNode, sources, node_map, *, resolved=None, **flags) -> Any:
-    """Exec *element*'s `compile()` output for *node* and return `results[node.id]`."""
-    ns = _harness_namespace(**flags)
-    ns["_resolved"] = resolved or {}
-    ns["results"] = {}
-    ns["_text_windows"] = []
-    lines = element.compile(node, sources, node_map)
-    body = textwrap.indent("\n".join(lines) or "pass", "    ")
-    exec(compile(f"async def __run():\n{body}\n", "<compiled-node>", "exec"), ns)
-    await ns["__run"]()
-    return ns["results"][node.id]
-
-
-def _literal_sources(node_id: str, inputs: Dict[str, Any]) -> Dict[Tuple[str, str], List[Tuple[str, str]]]:
-    """Fake `sources` wiring each of *inputs*'s keys to a literal value, reusing the
-    same DEFERRED_LITERAL sentinel deploy_service uses for a t+1 edge's initial
-    value -- lets compile() see the same values execute() receives without a real
-    upstream node."""
-    return {(node_id, port_id): [(DEFERRED_LITERAL, repr(value))] for port_id, value in inputs.items()}
 
 
 def _port(id_: str, kind: PortKind, data_type: DataType = DataType.ANY, multi: bool = False, required: bool = False) -> Port:
@@ -187,17 +137,6 @@ def _make_node(node_type: NodeType, tmp_path: Path) -> GraphNode:
         return GraphNode(id=nid, node_type=node_type, label="L",
                           inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
                           config=NodeConfig(output_label="Text"))
-    if node_type == NodeType.MERGE:
-        return GraphNode(id=nid, node_type=node_type, label="L",
-                          inputs=[_port("inputs", PortKind.INPUT, DataType.ANY, multi=True)],
-                          outputs=[_port("output", PortKind.OUTPUT, DataType.TEXT)],
-                          config=NodeConfig(separator="\n"))
-    if node_type == NodeType.SPLIT:
-        return GraphNode(id=nid, node_type=node_type, label="L",
-                          inputs=[_port("input", PortKind.INPUT, DataType.TEXT, required=True)],
-                          outputs=[_port("items", PortKind.OUTPUT, DataType.LIST, multi=True),
-                                   _port("count", PortKind.OUTPUT, DataType.TEXT)],
-                          config=NodeConfig(separator=","))
     if node_type == NodeType.GUI:
         node = GraphNode(id=nid, node_type=node_type, label="L", config=NodeConfig(gui_widgets=[]))
         sync_gui_node_ports(node)
@@ -205,22 +144,13 @@ def _make_node(node_type: NodeType, tmp_path: Path) -> GraphNode:
     raise AssertionError(f"no fixture for {node_type}")
 
 
-# Elements whose execute()/compile() plausibly call out to an AI model.
+# Elements whose execute() plausibly calls out to an AI model.
 AI_CAPABLE_NODE_TYPES = {NodeType.AI, NodeType.DIRECTORY_INPUT, NodeType.INPUT}
-
-# Elements covered by check #6 (execute vs compile consistency). NodeType.AI is
-# excluded: its compiled helper (`_ai_complete`) calls httpx directly with no
-# ai_service indirection to monkeypatch. NodeType.GUI is excluded: it is a pure
-# composite whose behavior is exactly its widgets' -- already exercised below.
-CODE_CONVERSION_NODE_TYPES = {
-    NodeType.TEXT_INPUT, NodeType.INPUT, NodeType.FILE_INPUT, NodeType.DIRECTORY_INPUT,
-    NodeType.MERGE, NodeType.SPLIT, NodeType.OUTPUT, NodeType.TEXT_OUTPUT, NodeType.CODE,
-}
 
 
 async def _assert_ai_call_path(node_type: NodeType, element, tmp_path: Path, monkeypatch) -> None:
     if node_type not in AI_CAPABLE_NODE_TYPES:
-        return  # merge/split/output/... never call AI -- nothing to verify.
+        return  # output/gui/... never call AI -- nothing to verify.
     calls = _install_ai_stubs(monkeypatch)
 
     if node_type == NodeType.AI:
@@ -259,43 +189,6 @@ async def _assert_ai_call_path(node_type: NodeType, element, tmp_path: Path, mon
     assert calls[0]["provider"] == AIProvider.OLLAMA
 
 
-async def _assert_code_conversion(node_type: NodeType, element, node: GraphNode) -> None:
-    if node_type not in CODE_CONVERSION_NODE_TYPES:
-        return
-
-    uses_config_value_only = node_type in (
-        NodeType.TEXT_INPUT, NodeType.INPUT, NodeType.FILE_INPUT, NodeType.DIRECTORY_INPUT,
-    )
-    if node_type == NodeType.MERGE:
-        inputs: Dict[str, Any] = {"inputs": ["a", "b"]}
-    elif node_type == NodeType.SPLIT:
-        inputs = {"input": "a,b,c"}
-    elif node_type in (NodeType.OUTPUT, NodeType.TEXT_OUTPUT):
-        inputs = {"value": ["hello", "world"]}
-    elif node_type == NodeType.CODE:
-        inputs = {"input": ["x", "y"]}
-    else:
-        inputs = {}
-
-    if node_type == NodeType.CODE and node.config.batch_mode == "per_item":
-        # graph_executor.py batches CODE/AI nodes *outside* the element (one execute()
-        # call per item); compile() bakes the equivalent batching in directly. Mirror
-        # that split here instead of calling execute() with the raw multi-port list.
-        items = batch_inputs(node, inputs)
-        exec_result = merge_batch_outputs(node, [await element.execute(node, item) for item in items])
-    else:
-        exec_result = await element.execute(node, dict(inputs))
-
-    sources = {} if uses_config_value_only else _literal_sources(node.id, inputs)
-    needs_files = node_type in (NodeType.FILE_INPUT, NodeType.DIRECTORY_INPUT) or (
-        node_type == NodeType.INPUT and node.config.input_mode in ("file", "directory")
-    )
-    compiled_result = await _run_compiled(
-        element, node, sources, {}, needs_files=needs_files, needs_code_runner=(node_type == NodeType.CODE),
-    )
-    assert compiled_result == exec_result
-
-
 @pytest.mark.parametrize("node_type, element", list(NODE_ELEMENTS.items()), ids=[t.value for t in NODE_ELEMENTS])
 async def test_node_element_contract(node_type: NodeType, element, tmp_path, monkeypatch):
     node = _make_node(node_type, tmp_path)
@@ -312,20 +205,12 @@ async def test_node_element_contract(node_type: NodeType, element, tmp_path, mon
     result = await element.execute(node, dict(inputs))
     assert isinstance(result, dict)
 
-    # 3. Code can be generated.
-    compiled = element.compile(node, {}, {})
-    assert isinstance(compiled, list)
-    assert all(isinstance(line, str) for line in compiled)
-
-    # 4. Saving and loading works.
+    # 3. Saving and loading works.
     restored = GraphNode.model_validate_json(node.model_dump_json())
     assert restored == node
 
-    # 5. AI can be called (only for AI-capable node types; no-op otherwise).
+    # 4. AI can be called (only for AI-capable node types; no-op otherwise).
     await _assert_ai_call_path(node_type, element, tmp_path, monkeypatch)
-
-    # 6. Code conversion: execute() vs compile() consistency (no-op if not covered).
-    await _assert_code_conversion(node_type, element, node)
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +277,28 @@ async def test_output_element_directory_write_honors_binary_and_csv_formats(tmp_
     assert "a" in written["table"].read_text(encoding="utf-8")
 
 
+async def test_output_element_window_mode_compiles_text_window_append():
+    """OutputElement's write_mode="window" branch (the former standalone
+    TextOutputElement, folded in as a write_mode) -- covers both an explicit
+    `output` node and the legacy `text_output` node_type alias, which forces
+    "window" regardless of its config's write_mode."""
+    node = GraphNode(
+        id="out_window", node_type=NodeType.OUTPUT, label="Out",
+        inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
+        config=NodeConfig(output_label="Shown", write_mode="window"),
+    )
+    exec_result = await NODE_ELEMENTS[NodeType.OUTPUT].execute(node, {"value": ["a", "b"]})
+    assert exec_result == {"value": ["a", "b"]}
+
+    legacy_node = GraphNode(
+        id="legacy_text_output", node_type=NodeType.TEXT_OUTPUT, label="Legacy",
+        inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
+        config=NodeConfig(output_label="Shown"),  # write_mode left at its "none" default
+    )
+    legacy_exec_result = await NODE_ELEMENTS[NodeType.TEXT_OUTPUT].execute(legacy_node, {"value": ["a", "b"]})
+    assert legacy_exec_result == exec_result
+
+
 # ---------------------------------------------------------------------------
 # GUI widget fixtures -- one minimal GuiWidget per GuiWidgetKind.
 # ---------------------------------------------------------------------------
@@ -416,38 +323,6 @@ def _gui_node_for(widget: GuiWidget, node_id: str = "gui1") -> GraphNode:
     return node
 
 
-# Widget kinds covered by check #6. plot_window is excluded: it is display-only
-# (no output port), so its compiled effect only shows up in `_inputs`, which
-# our harness (like the real script) never surfaces outside the node body --
-# there is no meaningful standalone value to diff.
-WIDGET_CODE_CONVERSION_KINDS = {GuiWidgetKind.INPUT_PICKER, GuiWidgetKind.TEXT_IO}
-
-
-async def _assert_widget_code_conversion(widget_kind: GuiWidgetKind, element, tmp_path: Path) -> None:
-    if widget_kind not in WIDGET_CODE_CONVERSION_KINDS:
-        return
-
-    if widget_kind == GuiWidgetKind.INPUT_PICKER:
-        f = tmp_path / "picked.txt"
-        f.write_text("x", encoding="utf-8")
-        widget = GuiWidget(id="w1", kind=widget_kind, mode="file", value=str(f))
-        inputs: Dict[str, Any] = {}
-        needs_files = True
-    else:  # TEXT_IO
-        widget = GuiWidget(id="w1", kind=widget_kind, mode="both", value="")
-        inputs = {"w1_in": "incoming value"}
-        needs_files = False
-
-    node = _gui_node_for(widget, node_id="gui_check6")
-    exec_result = element.execute(widget, dict(inputs))
-
-    gui_element = NODE_ELEMENTS[NodeType.GUI]
-    sources = _literal_sources(node.id, inputs)
-    compiled = await _run_compiled(gui_element, node, sources, {}, needs_files=needs_files)
-
-    assert compiled.get(f"{widget.id}_out") == exec_result
-
-
 @pytest.mark.parametrize("widget_kind, element", list(GUI_WIDGET_ELEMENTS.items()), ids=[k.value for k in GUI_WIDGET_ELEMENTS])
 async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, tmp_path):
     widget = _make_widget(widget_kind)
@@ -464,16 +339,8 @@ async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, 
     inputs = {in_id: ""} if any(p.id == in_id for p in gui_node.inputs) else {}
     element.execute(widget, inputs)  # asserting only that this doesn't raise
 
-    # 3. Code can be generated.
-    compiled = element.compile(gui_node, widget)
-    assert isinstance(compiled, list)
-    assert all(isinstance(line, str) for line in compiled)
-
-    # 4. Saving and loading works.
+    # 3. Saving and loading works.
     restored = GuiWidget.model_validate_json(widget.model_dump_json())
     assert restored == widget
 
-    # 5. AI can be called -- no GuiWidgetKind currently triggers an AI call, so nothing to verify.
-
-    # 6. Code conversion: execute() vs compile() consistency (no-op if not covered).
-    await _assert_widget_code_conversion(widget_kind, element, tmp_path)
+    # 4. AI can be called -- no GuiWidgetKind currently triggers an AI call, so nothing to verify.

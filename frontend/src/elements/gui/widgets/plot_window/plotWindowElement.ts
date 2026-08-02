@@ -4,7 +4,8 @@ import PlotWindowWidget from '../../../../components/gui/widgets/PlotWindowWidge
 
 export const plotWindowElement: GuiWidgetElementDefinition = {
   widgetKind: 'plot_window',
-  // Display-only, like text_output: accepts data to plot, no downstream port.
+  // Display-only, like an `output` node with write_mode="window": accepts data to
+  // plot, no downstream port.
   ports: (widget) => {
     const inId = `${widget.id}_in`;
     const label = widget.label || widget.id;

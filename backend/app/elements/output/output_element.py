@@ -1,16 +1,30 @@
-"""The `output` node element: passthrough plus optional file/directory write."""
+"""
+The `output` node element: passthrough plus optional file/directory write, or
+display in a text window (`write_mode == "window"`, the former standalone
+`text_output` node type -- see AGENTS.md's legacy-name conventions).
+"""
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.elements.base import DeployNeeds, NodeElement, NodeMap, Sources
+from app.elements.base import DeployNeeds, NodeElement
 from app.models.graph import GraphNode, NodeType
 from app.services import file_service
-from app.services.deploy.shared import collect_inputs_lines
+
+
+def effective_write_mode(node: GraphNode) -> str:
+    """A legacy TEXT_OUTPUT node always displays in a window, matching the
+    former TextOutputElement, regardless of its config's write_mode (which
+    only applies to the unified `output` node_type -- same convention as
+    InputElement._effective_mode for the legacy input node types)."""
+    if node.node_type == NodeType.TEXT_OUTPUT:
+        return "window"
+    return node.config.write_mode
 
 
 class OutputElement(NodeElement):
+    # Handles: NodeType.OUTPUT, NodeType.TEXT_OUTPUT
     node_type = NodeType.OUTPUT
 
     async def execute(
@@ -51,35 +65,18 @@ class OutputElement(NodeElement):
             result["written_paths"] = written
         return result
 
-    def compile(self, node: GraphNode, sources: Sources, node_map: NodeMap) -> List[str]:
-        cfg = node.config
-        lines: List[str] = []
-        lines.extend(collect_inputs_lines(node, sources))
-        lines.append(f"results[{node.id!r}] = dict(_inputs)")
-        if cfg.write_mode in ("file", "directory"):
-            lines.append(f"_out_path = _resolved.get({node.id!r}, {(cfg.value or '')!r})")
-            lines.append("if _out_path:")
-            if cfg.write_mode == "file":
-                lines.append("    _content = '\\n'.join(str(v) for v in _inputs.values() if v is not None)")
-                lines.append(f"    results[{node.id!r}]['written_path'] = write_text_file(_out_path, _content)")
-            else:
-                multi_port_ids = [p.id for p in node.inputs if p.multi]
-                lines.append(
-                    f"    results[{node.id!r}]['written_paths'] = write_output_directory("
-                    f"_out_path, _inputs, multi_ports={multi_port_ids!r})"
-                )
-        return lines
-
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
         cfg = node.config
-        if cfg.prompt_at_runtime and cfg.write_mode != "none":
+        mode = effective_write_mode(node)
+        if cfg.prompt_at_runtime and mode in ("file", "directory"):
             return [{
-                "node_id": node.id, "label": node.label, "kind": cfg.write_mode,
+                "node_id": node.id, "label": node.label, "kind": mode,
                 "direction": "output", "current_value": cfg.value or "",
             }]
         return []
 
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
-        # Matches the pre-refactor check exactly: any OUTPUT node pulls in the
-        # file helpers, regardless of its actual write_mode.
-        return DeployNeeds(files=True)
+        # Matches the pre-refactor check exactly: any file/directory-writing
+        # OUTPUT node pulls in the file helpers; "window" mode (the former
+        # TextOutputElement) needs nothing extra, same as before the merge.
+        return DeployNeeds(files=effective_write_mode(node) in ("file", "directory"))

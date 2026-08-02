@@ -61,9 +61,6 @@ export const downloadBundle = async (graph: Graph) => {
 export const getDockerCompose = (graph: Graph) =>
   api.post('/deploy/docker-compose', graph).then((r) => r.data);
 
-export const getRunnerScript = (graph: Graph) =>
-  api.post('/deploy/runner-script', graph).then((r) => r.data);
-
 // Files
 export const detectFileFormat = (path: string): Promise<{ format: string }> =>
   api.post('/files/detect-format', { path }).then((r) => r.data);

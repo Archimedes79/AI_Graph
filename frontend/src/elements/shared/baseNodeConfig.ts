@@ -29,8 +29,6 @@ export function baseNodeConfig(): NodeConfig {
     output_label: 'Result',
     write_mode: 'none',
     batch_mode: 'per_item',
-    separator: '\n',
-    merge_mode: 'concat',
     read_file_inputs: false,
     gui_widgets: [],
     extra: {},

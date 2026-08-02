@@ -5,6 +5,12 @@ AI-Graph Runner – execute a graph JSON file from the command line.
 Usage:
     python run.py graph.json [--inputs key=value ...]
     python run.py graph.json --json-inputs '{"key": "value"}'
+    python run.py                                  # defaults to ./graph.json
+
+This file is also copied verbatim into every deploy bundle as its `main.py`
+(see `backend/app/services/deploy_service.py`) -- a deployed bundle runs the
+exact same code as this CLI, just with `app/` vendored alongside it instead of
+imported from `../backend`.
 """
 
 from __future__ import annotations
@@ -16,8 +22,13 @@ import logging
 import sys
 from pathlib import Path
 
-# Allow running from the repo root
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+# Allow running from the repo root during development. This is a no-op when
+# this file is copied verbatim into a deploy bundle as main.py: there is no
+# sibling "backend" directory there, and Python already puts this script's
+# own directory (containing the bundle's vendored `app` package) on sys.path.
+_dev_backend_dir = Path(__file__).parent.parent / "backend"
+if _dev_backend_dir.is_dir():
+    sys.path.insert(0, str(_dev_backend_dir))
 
 try:
     from app.models.graph import Graph
@@ -113,7 +124,10 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("graph", help="Path to the graph JSON file")
+    parser.add_argument(
+        "graph", nargs="?", default="graph.json",
+        help="Path to the graph JSON file (default: graph.json in the current directory)",
+    )
     parser.add_argument(
         "--inputs",
         nargs="*",

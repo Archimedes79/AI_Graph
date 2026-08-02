@@ -3,6 +3,7 @@ import { useGraphStore } from '../store/graphStore';
 import { executeGraph, downloadBundle, getDockerCompose, getRuntimeRequirements, generateGraph } from '../utils/api';
 import type { Graph, RuntimeRequirement } from '../types/graph';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
+import { effectiveWriteMode } from '../elements/output/outputElement';
 import GraphWindows from './GraphWindows';
 
 interface ToolbarProps {
@@ -45,7 +46,7 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
       setExecutionResult(result);
 
       const windows = graph.nodes
-        .filter((n) => n.node_type === 'text_output')
+        .filter((n) => effectiveWriteMode(n) === 'window')
         .map((n) => {
           const nr = result.node_results.find((r) => r.node_id === n.id);
           if (!nr || nr.status !== 'success') return null;

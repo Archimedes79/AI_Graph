@@ -28,6 +28,7 @@ from app.models.graph import (  # noqa: E402
     NodeType,
     Port,
     PortKind,
+    _generate_merge_code,
 )
 from app.services.graph_executor import execute_graph  # noqa: E402
 
@@ -99,10 +100,10 @@ def _dir_to_code_graph(*, code: str, downstream_source_port: str, test_dir: str)
                 config=NodeConfig(code=code),
             ),
             GraphNode(
-                id="merge", node_type=NodeType.MERGE, label="Merge",
+                id="merge", node_type=NodeType.CODE, label="Merge",
                 inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True)],
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
-                config=NodeConfig(separator=" "),
+                config=NodeConfig(code=_generate_merge_code("concat", " "), batch_mode="whole_list"),
             ),
             GraphNode(
                 id="mergeOut", node_type=NodeType.OUTPUT, label="MergeOut",
@@ -474,10 +475,10 @@ def _dir_to_count_to_merge_graph(merge_mode: str, test_dir: str) -> Graph:
                 )),
             ),
             GraphNode(
-                id="merge", node_type=NodeType.MERGE, label="Merge",
+                id="merge", node_type=NodeType.CODE, label="Merge",
                 inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True)],
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.ANY, multi=False)],
-                config=NodeConfig(merge_mode=merge_mode),
+                config=NodeConfig(code=_generate_merge_code(merge_mode, "\n"), batch_mode="whole_list"),
             ),
             GraphNode(
                 id="out", node_type=NodeType.OUTPUT, label="Out",

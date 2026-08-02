@@ -4,18 +4,17 @@ dispatches each of its `config.gui_widgets` to that widget's own
 GuiWidgetElement (looked up in `elements.registry.GUI_WIDGET_ELEMENTS`) and
 merges their results. This is the "gui master element" that contains one or
 more sub-elements and synchronizes them: the gui node's ports are exactly the
-union of its widgets' ports (see `sync_gui_node_ports`), and its `execute`/
-`compile` are exactly the union of its widgets' `execute`/`compile`.
+union of its widgets' ports (see `sync_gui_node_ports`), and its `execute` is
+exactly the union of its widgets' `execute`.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.elements.base import GuiWidgetElement, NodeElement, NodeMap, DeployNeeds, Sources
+from app.elements.base import GuiWidgetElement, NodeElement, DeployNeeds
 from app.models.graph import GraphNode, GuiWidgetKind, NodeType, gui_widget_ports, sync_gui_node_ports
 from app.services import code_executor
-from app.services.deploy.shared import collect_inputs_lines
 
 
 def _widget_elements() -> Dict[GuiWidgetKind, GuiWidgetElement]:
@@ -57,19 +56,6 @@ class GuiElement(NodeElement):
                 raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
             result[f"{widget.id}_out"] = element.execute(widget, inputs)
         return result
-
-    def compile(self, node: GraphNode, sources: Sources, node_map: NodeMap) -> List[str]:
-        widget_elements = _widget_elements()
-        lines: List[str] = []
-        lines.extend(collect_inputs_lines(node, sources))
-        lines.append("_gui_result = {}")
-        for widget in node.config.gui_widgets:
-            element = widget_elements.get(widget.kind)
-            if element is None:
-                raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
-            lines.extend(element.compile(node, widget))
-        lines.append(f"results[{node.id!r}] = _gui_result")
-        return lines
 
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
         widget_elements = _widget_elements()

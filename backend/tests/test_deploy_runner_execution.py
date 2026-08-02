@@ -1,10 +1,13 @@
 """
-End-to-end execution tests for the deploy compiler.
+End-to-end execution tests for the deploy bundle.
 
-Unlike test_graph.py's deploy tests (which only assert on the generated
-script's *source text*), these tests actually WRITE the compiled script to
-disk and RUN it as a real python subprocess, then parse its stdout JSON and
-check the real computed values.
+Builds a REAL deploy bundle for a representative graph (writing the vendored
+`app/` package, `graph.json`, `main.py`, and `requirements.txt` to a temp
+directory) and runs `main.py` as an actual python subprocess -- exactly what a
+deployed user would do -- then compares its printed JSON result against
+`execute_graph()` run in-process for the identical graph. The bundle ships the
+real engine verbatim, so the two must always agree; there is no separate
+codegen path that could silently drift.
 """
 
 from __future__ import annotations
@@ -14,16 +17,33 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def _run_compiled_script(tmp_path: Path, script: str, stdin_answers: list[str]) -> dict:
-    """Write *script* to a temp file and run it as a real subprocess, feeding
-    *stdin_answers* (one line per runtime-requirement prompt) via stdin, then
-    return the parsed final-outputs JSON the script printed on stdout."""
-    script_path = tmp_path / "compiled_runner.py"
-    script_path.write_text(script, encoding="utf-8")
+from app.models.graph import (
+    DataType, Graph, GraphEdge, GraphMetadata, GraphNode, GuiWidget, GuiWidgetKind,
+    NodeConfig, NodeType, Port, PortKind, sync_gui_node_ports,
+)
+from app.services.deploy_service import generate_deployment_bundle
+from app.services.graph_executor import execute_graph
+
+
+def _write_bundle(root: Path, graph: Graph) -> Path:
+    """Materialize generate_deployment_bundle(graph)'s files under *root*."""
+    for rel_path, content in generate_deployment_bundle(graph).items():
+        dest = root / rel_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(content, encoding="utf-8")
+    return root
+
+
+def _run_bundle(bundle_dir: Path, stdin_answers: list[str]) -> dict:
+    """Run the bundle's main.py as a real subprocess from within *bundle_dir*
+    (exactly how a deployed user would -- no PYTHONPATH/sys.path tricks) and
+    return the parsed ExecutionResult JSON it printed on stdout."""
     stdin_text = "".join(f"{answer}\n" for answer in stdin_answers)
     result = subprocess.run(
-        [sys.executable, str(script_path)],
+        [sys.executable, "main.py"],
+        cwd=bundle_dir,
         input=stdin_text,
         capture_output=True,
         text=True,
@@ -36,20 +56,11 @@ def _run_compiled_script(tmp_path: Path, script: str, stdin_answers: list[str]) 
     return json.loads(result.stdout[json_start:])
 
 
-def test_compiled_runner_executes_text_to_code_to_output_workflow(tmp_path):
-    """text_input -> code (uppercase) -> output: run the compiled script for
-    real, feeding the text_input's runtime prompt via stdin, and check the
-    actually-computed uppercased output."""
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.models.graph import (
-        Graph, GraphEdge, GraphMetadata, GraphNode, NodeConfig, NodeType, Port, PortKind, DataType,
-    )
-    from app.services.deploy_service import generate_runner_script
-
+def _text_to_code_to_output_graph() -> Graph:
     text_input = GraphNode(
         id="text", node_type=NodeType.TEXT_INPUT, label="Source Text",
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
-        config=NodeConfig(value="placeholder"),
+        config=NodeConfig(value="hello from ai-graph!"),
     )
     code = GraphNode(
         id="code", node_type=NodeType.CODE, label="Uppercase",
@@ -62,7 +73,7 @@ def test_compiled_runner_executes_text_to_code_to_output_workflow(tmp_path):
         inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True)],
         config=NodeConfig(output_label="Result"),
     )
-    graph = Graph(
+    return Graph(
         metadata=GraphMetadata(name="Text-to-Code-to-Output Workflow"),
         nodes=[text_input, code, output],
         edges=[
@@ -71,33 +82,31 @@ def test_compiled_runner_executes_text_to_code_to_output_workflow(tmp_path):
         ],
     )
 
-    script = generate_runner_script(graph)
-    final_outputs = _run_compiled_script(tmp_path, script, ["hello from ai-graph!"])
 
-    # A single-item per-item batch on a non-multi output port yields the scalar,
-    # matching what the editor's graph_executor produces for the same graph.
-    assert final_outputs["Result"]["value"] == "HELLO FROM AI-GRAPH!"
+async def test_deploy_bundle_matches_live_execution_for_text_to_code_workflow(tmp_path):
+    """text_input -> code (uppercase) -> output: the bundled main.py, run for
+    real, must produce the same final_outputs as an in-process execute_graph()
+    call for the identical graph."""
+    graph = _text_to_code_to_output_graph()
+
+    live_result = await execute_graph(graph)
+
+    bundle_dir = _write_bundle(tmp_path / "bundle", graph)
+    # text_input always prompts at runtime; an empty answer falls back to its
+    # preset config.value, matching what execute_graph() used directly above.
+    bundled_output = _run_bundle(bundle_dir, [""])
+
+    assert bundled_output["status"] == "success"
+    assert live_result.status.value == "success"
+    assert bundled_output["final_outputs"] == live_result.final_outputs
+    assert bundled_output["final_outputs"]["Result"]["value"] == "HELLO FROM AI-GRAPH!"
 
 
-def test_compiled_runner_executes_gui_workflow(tmp_path):
-    """gui (file_open + text_window widgets) -> code (reads the file's real
-    content) -> merge -> output: run the compiled script for real and check
-    that both the file's actual content and the text_window's text reach the
-    final output."""
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.models.graph import (
-        Graph, GraphEdge, GraphMetadata, GraphNode, GuiWidget, GuiWidgetKind,
-        NodeConfig, NodeType, Port, PortKind, DataType, sync_gui_node_ports,
-    )
-    from app.services.deploy_service import generate_runner_script
-
-    fixture = tmp_path / "note.txt"
-    fixture.write_text("fixture-file-content-42", encoding="utf-8")
-
+def _gui_workflow_graph(fixture_path: Path) -> Graph:
     gui = GraphNode(
         id="gui", node_type=NodeType.GUI, label="GUI",
         config=NodeConfig(gui_widgets=[
-            GuiWidget(id="w1", kind=GuiWidgetKind.FILE_OPEN, label="File", value=str(fixture)),
+            GuiWidget(id="w1", kind=GuiWidgetKind.FILE_OPEN, label="File", value=str(fixture_path)),
             GuiWidget(id="w2", kind=GuiWidgetKind.TEXT_WINDOW, label="Text", value="text-window-value-99"),
         ]),
     )
@@ -110,10 +119,14 @@ def test_compiled_runner_executes_gui_workflow(tmp_path):
         config=NodeConfig(code="def run(inputs):\n    return {'output': inputs['path']}\n", read_file_inputs=True),
     )
     merge = GraphNode(
-        id="merge", node_type=NodeType.MERGE, label="Merge",
+        id="merge", node_type=NodeType.CODE, label="Merge",
         inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
-        config=NodeConfig(separator="\n"),
+        config=NodeConfig(
+            code="def run(inputs):\n"
+                 "    return {'output': '\\n'.join(str(v) for v in inputs.get('inputs', []) if v is not None)}\n",
+            batch_mode="whole_list",
+        ),
     )
     output = GraphNode(
         id="out", node_type=NodeType.OUTPUT, label="Out",
@@ -121,7 +134,7 @@ def test_compiled_runner_executes_gui_workflow(tmp_path):
         config=NodeConfig(output_label="Result"),
     )
 
-    graph = Graph(
+    return Graph(
         metadata=GraphMetadata(name="GUI Workflow"),
         nodes=[gui, reader, merge, output],
         edges=[
@@ -132,9 +145,45 @@ def test_compiled_runner_executes_gui_workflow(tmp_path):
         ],
     )
 
-    script = generate_runner_script(graph)
-    final_outputs = _run_compiled_script(tmp_path, script, [])
 
-    merged = final_outputs["Result"]["value"]
+async def test_deploy_bundle_matches_live_execution_for_gui_workflow(tmp_path):
+    """gui (file_open + text_window widgets) -> code (reads the file's real
+    content) -> code (merge) -> output: the bundled main.py, run for real,
+    must read the actual file content and match execute_graph()'s output for
+    the identical graph -- both widgets have preset values, so main.py never
+    needs to prompt."""
+    fixture = tmp_path / "note.txt"
+    fixture.write_text("fixture-file-content-42", encoding="utf-8")
+    graph = _gui_workflow_graph(fixture)
+
+    live_result = await execute_graph(graph)
+
+    bundle_dir = _write_bundle(tmp_path / "bundle", graph)
+    bundled_output = _run_bundle(bundle_dir, [])
+
+    assert bundled_output["final_outputs"] == live_result.final_outputs
+    merged = bundled_output["final_outputs"]["Result"]["value"]
     assert "fixture-file-content-42" in merged
     assert "text-window-value-99" in merged
+
+
+def test_deploy_bundle_layout(tmp_path):
+    """The bundle's file layout matches AGENTS.md's documented structure --
+    a vendored app/ package alongside graph.json/main.py/requirements.txt,
+    not a monolithic generated script."""
+    graph = _text_to_code_to_output_graph()
+    bundle = generate_deployment_bundle(graph)
+
+    assert "graph.json" in bundle
+    assert "main.py" in bundle
+    assert "requirements.txt" in bundle
+    assert "app/elements/base.py" in bundle
+    assert "app/elements/registry.py" in bundle
+    assert "app/elements/code/code_element.py" in bundle
+    assert "app/models/graph.py" in bundle
+    assert "app/services/graph_executor.py" in bundle
+    # Server-only modules must never be vendored into the bundle.
+    assert "app/services/deploy_service.py" not in bundle
+    assert not any(path.startswith("app/routers/") for path in bundle)
+    assert json.loads(bundle["graph.json"])["metadata"]["name"] == graph.metadata.name
+

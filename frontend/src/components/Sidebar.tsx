@@ -9,11 +9,11 @@ const CATEGORIES: { label: string; types: NodeType[] }[] = [
   },
   {
     label: 'Processing',
-    types: ['ai', 'code', 'merge', 'split'],
+    types: ['ai', 'code'],
   },
   {
     label: 'Output',
-    types: ['output', 'text_output'],
+    types: ['output'],
   },
   {
     label: 'Interactive',

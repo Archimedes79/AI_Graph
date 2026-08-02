@@ -21,8 +21,6 @@ export default {
           ai: '#2d1b4e',
           code: '#1a3a2a',
           output: '#3a2000',
-          merge: '#1a2a3a',
-          split: '#3a1a1a',
         },
       },
     },

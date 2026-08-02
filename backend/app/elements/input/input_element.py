@@ -91,44 +91,6 @@ class InputElement(NodeElement):
                 content = _parse_content(content, cfg.parse_format)
         return {"content": content, "path": str(path)}
 
-    def compile(self, node: GraphNode, sources, node_map) -> List[str]:
-        cfg = node.config
-        mode = _effective_mode(node)
-
-        if mode == "text":
-            return [
-                f"results[{node.id!r}] = {{'output': _resolved.get({node.id!r}, {(cfg.value or '')!r})}}"
-            ]
-
-        if mode == "directory":
-            recursive = cfg.extra.get("recursive", False)
-            extensions = file_service.parse_extensions_filter(cfg.extra.get("extensions", ""))
-            return [
-                f"_path = resolve_path(_resolved.get({node.id!r}, {(cfg.value or '')!r}))",
-                f"_files = list_directory(_path, recursive={recursive!r}, extensions={extensions!r})",
-                f"results[{node.id!r}] = {{'files': _files, 'count': len(_files)}}",
-            ]
-
-        lines: List[str] = [
-            f"_path = resolve_path(_resolved.get({node.id!r}, {(cfg.value or '')!r}))",
-            "_content = read_text_file(_path)",
-        ]
-        fmt = cfg.parse_format or "text"
-        if fmt == "json":
-            lines.append("import json as _json; _content = _json.loads(_content)")
-        elif fmt == "csv":
-            lines.append(
-                "import csv as _csv, io as _io;"
-                " _content = list(_csv.DictReader(_io.StringIO(_content)))"
-            )
-        elif fmt == "csv_list":
-            lines.append(
-                "import csv as _csv, io as _io;"
-                " _content = list(_csv.reader(_io.StringIO(_content)))"
-            )
-        lines.append(f"results[{node.id!r}] = {{'content': _content, 'path': str(_path)}}")
-        return lines
-
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
         kind = _RUNTIME_PROMPT_KINDS.get(node.node_type)
         if kind is None:
