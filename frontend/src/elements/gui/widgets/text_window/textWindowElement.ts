@@ -1,18 +1,1 @@
-import type { GuiWidgetElementDefinition } from '../../../types';
-import TextChatEditor from '../../../../components/widgets/editors/TextChatEditor';
-import TextWindowWidget from '../../../../components/gui/widgets/TextWindowWidget';
-
-export const textWindowElement: GuiWidgetElementDefinition = {
-  widgetKind: 'text_window',
-  ports: (widget) => {
-    const inId = `${widget.id}_in`;
-    const outId = `${widget.id}_out`;
-    const label = widget.label || widget.id;
-    return {
-      inputs: [{ id: inId, name: label, kind: 'input', data_type: 'any', multi: false, required: false, description: '' }],
-      outputs: [{ id: outId, name: label, kind: 'output', data_type: 'text', multi: false, required: false, description: '' }],
-    };
-  },
-  ConfigEditor: TextChatEditor,
-  RuntimeWidget: TextWindowWidget,
-};
+// Deprecated: superseded by frontend/src/elements/gui/widgets/text_io/textIoElement.ts. Dead code kept only because file-deletion tooling was unavailable — safe to delete this file.

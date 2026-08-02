@@ -21,6 +21,7 @@ class NodeType(str, Enum):
     TEXT_INPUT = "text_input"
     FILE_INPUT = "file_input"
     DIRECTORY_INPUT = "directory_input"
+    INPUT = "input"  # unified: text | file | directory
     AI = "ai"
     CODE = "code"
     OUTPUT = "output"
@@ -74,10 +75,12 @@ class NodePosition(BaseModel):
 
 
 class GuiWidgetKind(str, Enum):
-    FILE_OPEN = "file_open"
-    DIRECTORY_OPEN = "directory_open"
-    TEXT_WINDOW = "text_window"
-    CHAT_WINDOW = "chat_window"
+    FILE_OPEN = "file_open"           # legacy → input_picker
+    DIRECTORY_OPEN = "directory_open" # legacy → input_picker
+    INPUT_PICKER = "input_picker"     # unified: file | directory
+    TEXT_WINDOW = "text_window"       # legacy → text_io
+    CHAT_WINDOW = "chat_window"       # legacy → text_io
+    TEXT_IO = "text_io"               # unified: input | output | both
     PLOT_WINDOW = "plot_window"
 
 
@@ -92,7 +95,8 @@ class GuiWidget(BaseModel):
     kind: GuiWidgetKind
     label: str = ""
     value: Optional[str] = None      # literal/default text, or a chosen file/directory path
-    extensions: str = ""             # directory_open extension filter, e.g. ".md, .txt"
+    extensions: str = ""             # directory_open / input_picker extension filter, e.g. ".md, .txt"
+    mode: str = ""                   # input_picker: "file" | "directory"
     size: Literal["small", "medium", "large"] = "medium"
 
     # Optional data-transform snippet for display-only widgets (currently plot_window).
@@ -122,6 +126,14 @@ class NodeConfig(BaseModel):
     # always prompt via a dialog before execution.
     prompt_at_runtime: bool = False
 
+    # unified input node
+    input_mode: str = "text"             # text | file | directory
+
+    # file / directory input nodes – parsing
+    parse_format: str = "text"           # text | json | csv | csv_list | custom
+    parse_code: str = ""                 # run(inputs: {content, path}) -> {content}
+    example_path: str = ""               # sample file path for format detection
+
     # directory_input – file selection
     select_all_files: bool = True
     selector_prompt: str = ""
@@ -136,6 +148,12 @@ class NodeConfig(BaseModel):
     # code node
     language: str = "python"             # python | javascript
     code: str = ""                       # generated / user-written code
+    code_prompt: str = ""                # stored AI prompt used to generate the code
+
+    # per-node output format declaration (used in AI generation prompts + optional transform)
+    output_format: str = "text"          # text | json | csv | csv_list | custom
+    output_format_prompt: str = ""       # description for custom format
+    output_transform_code: str = ""      # optional post-processing code: run(outputs) -> outputs
 
     # code / ai node – batch handling
     # per_item: run() is invoked once per batch element (existing behaviour).

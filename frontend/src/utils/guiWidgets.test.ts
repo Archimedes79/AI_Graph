@@ -13,6 +13,10 @@ function blankGuiNode(): GraphNode {
     outputs: [],
     config: {
       prompt_at_runtime: false,
+      input_mode: 'text',
+      parse_format: 'text',
+      parse_code: '',
+      example_path: '',
       select_all_files: true,
       selector_prompt: '',
       selector_code: '',
@@ -22,6 +26,10 @@ function blankGuiNode(): GraphNode {
       temperature: 0.7,
       language: 'python',
       code: '',
+      code_prompt: '',
+      output_format: 'text',
+      output_format_prompt: '',
+      output_transform_code: '',
       output_label: 'Result',
       write_mode: 'none',
       batch_mode: 'per_item',
@@ -76,7 +84,7 @@ describe('syncGuiNodePorts', () => {
     expect(textOut).toMatchObject({ data_type: 'text', multi: false });
 
     const chatIn = node.inputs.find((p) => p.id === `${chatWindow.id}_in`)!;
-    expect(chatIn).toMatchObject({ data_type: 'text', multi: true });
+    expect(chatIn).toMatchObject({ data_type: 'any', multi: false });
     const chatOut = node.outputs.find((p) => p.id === `${chatWindow.id}_out`)!;
     expect(chatOut).toMatchObject({ data_type: 'text', multi: false });
 

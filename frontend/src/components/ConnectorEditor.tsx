@@ -22,7 +22,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
   );
   const [format, setFormat] = useState(port?.format ?? '');
   const [debugDirectory, setDebugDirectory] = useState(port?.debug_directory ?? '');
-  const [samplePath, setSamplePath] = useState(graphNode?.config.value ?? '');
+  const [samplePath, setSamplePath] = useState((graphNode?.config.example_path || graphNode?.config.value) ?? '');
   const [deferred, setDeferred] = useState(false);
   const [initialValue, setInitialValue] = useState('');
   const [detecting, setDetecting] = useState(false);
@@ -95,7 +95,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
             <p className="text-xs mt-1" style={{ color: '#475569' }}>Use a MIME type or format name. JSON and CSV are parsed at block inputs and serialized at debug outputs.</p>
             {port.data_type === 'file_path' && (
               <div className="mt-2">
-                {graphNode.node_type === 'directory_input' && (
+                {(graphNode.node_type === 'directory_input' || graphNode.node_type === 'input') && (
                   <input
                     className="w-full rounded-lg px-3 py-2 text-sm font-mono mb-2"
                     style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
@@ -105,7 +105,11 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
                   />
                 )}
                 <button
-                  onClick={() => detectFormat(graphNode.node_type === 'directory_input' ? samplePath : graphNode.config.value ?? '')}
+                  onClick={() => detectFormat(
+                    (graphNode.node_type === 'directory_input' || graphNode.node_type === 'input')
+                      ? samplePath
+                      : (graphNode.config.example_path || graphNode.config.value) ?? ''
+                  )}
                   disabled={detecting}
                   className="px-3 py-1.5 text-xs rounded-lg font-semibold"
                   style={{ background: '#2d3148', color: '#e2e8f0', opacity: detecting ? 0.6 : 1 }}

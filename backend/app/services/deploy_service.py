@@ -97,9 +97,10 @@ def _requirements_literal(graph: Graph) -> List[dict]:
             for widget in cfg.gui_widgets:
                 if widget.value:
                     continue
-                if widget.kind == GuiWidgetKind.FILE_OPEN:
+                # Determine if this widget is a file/directory picker
+                if widget.kind in (GuiWidgetKind.FILE_OPEN, GuiWidgetKind.INPUT_PICKER) and widget.mode != "directory":
                     widget_kind = "file"
-                elif widget.kind == GuiWidgetKind.DIRECTORY_OPEN:
+                elif widget.kind == GuiWidgetKind.DIRECTORY_OPEN or (widget.kind == GuiWidgetKind.INPUT_PICKER and widget.mode == "directory"):
                     widget_kind = "directory"
                 else:
                     continue
@@ -392,7 +393,7 @@ def generate_runner_script(graph: Graph) -> str:
     needs_files = bool(node_types & {NodeType.FILE_INPUT, NodeType.DIRECTORY_INPUT, NodeType.OUTPUT})
     needs_files = needs_files or any(
         n.node_type == NodeType.GUI
-        and any(w.kind in (GuiWidgetKind.FILE_OPEN, GuiWidgetKind.DIRECTORY_OPEN) for w in n.config.gui_widgets)
+        and any(w.kind in (GuiWidgetKind.FILE_OPEN, GuiWidgetKind.DIRECTORY_OPEN, GuiWidgetKind.INPUT_PICKER) for w in n.config.gui_widgets)
         for n in graph.nodes
     )
     needs_code_runner = bool(node_types & {NodeType.CODE}) or any(

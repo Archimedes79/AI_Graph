@@ -129,7 +129,8 @@ async def test_text_window_widget_passthrough():
 
 
 @pytest.mark.asyncio
-async def test_text_window_widget_prefers_wired_input_over_default():
+async def test_text_window_widget_prefers_widget_value_over_wired_input():
+    """With the unified text_io element, mode='both': widget.value wins when non-empty."""
     upstream = GraphNode(
         id="src", node_type=NodeType.TEXT_INPUT, label="Src",
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
@@ -146,7 +147,8 @@ async def test_text_window_widget_prefers_wired_input_over_default():
     result = await execute_graph(graph)
     assert result.status == "success"
     gui_result = next(r for r in result.node_results if r.node_id == "gui")
-    assert gui_result.outputs["w1_out"] == "wired value"
+    # widget.value is non-empty → wins over wired input
+    assert gui_result.outputs["w1_out"] == "default text"
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ export type NodeType =
   | 'text_input'
   | 'file_input'
   | 'directory_input'
+  | 'input'           // unified: text | file | directory
   | 'ai'
   | 'code'
   | 'output'
@@ -34,7 +35,7 @@ export interface NodePosition {
   y: number;
 }
 
-export type GuiWidgetKind = 'file_open' | 'directory_open' | 'text_window' | 'chat_window' | 'plot_window';
+export type GuiWidgetKind = 'file_open' | 'directory_open' | 'input_picker' | 'text_window' | 'chat_window' | 'text_io' | 'plot_window';
 
 export interface GuiWidget {
   id: string;
@@ -42,6 +43,7 @@ export interface GuiWidget {
   label: string;
   value?: string;
   extensions: string;
+  mode?: string;  // input_picker: 'file' | 'directory'
   size: 'small' | 'medium' | 'large';
   // Optional data-transform snippet for display-only widgets (currently plot_window).
   // Same run(inputs) -> dict contract as a CODE node; see backend GuiWidget.code docstring.
@@ -58,6 +60,12 @@ export interface GuiWidget {
 export interface NodeConfig {
   value?: string;
   prompt_at_runtime: boolean;
+  // unified input node
+  input_mode: 'text' | 'file' | 'directory';
+  parse_format: 'text' | 'json' | 'csv' | 'csv_list' | 'custom';
+  parse_code: string;
+  example_path: string;
+  // directory_input file selection
   select_all_files: boolean;
   selector_prompt: string;
   selector_code: string;
@@ -67,6 +75,11 @@ export interface NodeConfig {
   temperature: number;
   language: string;
   code: string;
+  code_prompt: string;  // stored AI prompt for code generation
+  // per-node output format declaration
+  output_format: 'text' | 'json' | 'csv' | 'csv_list' | 'custom';
+  output_format_prompt: string;
+  output_transform_code: string;
   output_label: string;
   write_mode: 'none' | 'file' | 'directory';
   batch_mode: 'per_item' | 'whole_list';

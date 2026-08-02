@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { GraphNode } from '../../../types/graph';
 
 interface CodeEditorProps {
@@ -9,13 +9,31 @@ interface CodeEditorProps {
 }
 
 export default function CodeEditor({ node, setConfig, generating, handleGenerateCode }: CodeEditorProps) {
+  const [activeTab, setActiveTab] = useState<'prompt' | 'code'>('code');
+
   return (
     <>
-      <div className="flex items-center justify-between mb-1">
+      {/* Tab switcher: Prompt / Code */}
+      <div className="flex gap-1 mb-3 rounded-lg p-1" style={{ background: '#0f1117' }}>
+        {(['prompt', 'code'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className="flex-1 py-1.5 text-xs rounded font-medium capitalize transition-colors"
+            style={{
+              background: activeTab === tab ? '#6366f1' : 'transparent',
+              color: activeTab === tab ? '#fff' : '#94a3b8',
+            }}
+          >
+            {tab === 'prompt' ? '✨ Prompt' : '⚙️ Code'}
+          </button>
+        ))}
+      </div>
+
+      {/* AI model + provider + generate button — shared header */}
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
-            Language
-          </label>
+          <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>Language</label>
           <select
             className="rounded px-2 py-1 text-sm"
             style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
@@ -56,41 +74,63 @@ export default function CodeEditor({ node, setConfig, generating, handleGenerate
           </button>
         </div>
       </div>
-      <textarea
-        className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 200 }}
-        value={node.config.code}
-        onChange={(e) => setConfig('code', e.target.value)}
-        placeholder={`def run(inputs):\n    return {"output": inputs.get("input", "")}`}
-        spellCheck={false}
-      />
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-          Batch mode
-        </label>
-        <select
-          className="w-full rounded-lg px-3 py-2 text-sm"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-          value={node.config.batch_mode}
-          onChange={(e) => setConfig('batch_mode', e.target.value)}
-        >
-          <option value="per_item">Per item (default)</option>
-          <option value="whole_list">Whole list at once (for totals/summaries)</option>
-        </select>
-      </div>
-      <div>
-        <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
-          <input
-            type="checkbox"
-            checked={!!node.config.read_file_inputs}
-            onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
+
+      {activeTab === 'prompt' && (
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+            Generation prompt — describe what the code should do
+          </label>
+          <textarea
+            className="w-full rounded-lg px-3 py-2 text-sm resize-none"
+            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 200 }}
+            value={node.config.code_prompt}
+            onChange={(e) => setConfig('code_prompt', e.target.value)}
+            placeholder="e.g. Parse the CSV content, group rows by the 'category' column, and return a dict of {category: [rows]}"
           />
-          Read file contents from paths
-        </label>
-        <p className="text-xs mt-1" style={{ color: '#475569' }}>
-          When enabled, any input port with data type 'File path' is automatically read from disk (text or base64) before this node runs.
-        </p>
-      </div>
+          <p className="text-xs mt-1" style={{ color: '#475569' }}>
+            Write a detailed prompt here, then click ✨ Generate. The prompt is stored with the graph.
+          </p>
+        </div>
+      )}
+
+      {activeTab === 'code' && (
+        <>
+          <textarea
+            className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
+            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 200 }}
+            value={node.config.code}
+            onChange={(e) => setConfig('code', e.target.value)}
+            placeholder={`def run(inputs):\n    return {"output": inputs.get("input", "")}`}
+            spellCheck={false}
+          />
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>Batch mode</label>
+            <select
+              className="w-full rounded-lg px-3 py-2 text-sm"
+              style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+              value={node.config.batch_mode}
+              onChange={(e) => setConfig('batch_mode', e.target.value)}
+            >
+              <option value="per_item">Per item (default)</option>
+              <option value="whole_list">Whole list at once (for totals/summaries)</option>
+            </select>
+          </div>
+          <div>
+            <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
+              <input
+                type="checkbox"
+                checked={!!node.config.read_file_inputs}
+                onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
+              />
+              Read file contents from paths
+            </label>
+            <p className="text-xs mt-1" style={{ color: '#475569' }}>
+              When enabled, any input port with data type 'File path' is automatically read from disk (text or base64) before this node runs.
+            </p>
+          </div>
+        </>
+      )}
     </>
   );
 }
+

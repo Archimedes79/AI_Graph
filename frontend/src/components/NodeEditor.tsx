@@ -3,6 +3,7 @@ import type { GraphNode } from '../types/graph';
 import { useGraphStore } from '../store/graphStore';
 import { generateCode, generatePrompt } from '../utils/api';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
+import { inputPortsForMode } from '../elements/input/inputElement';
 import InputEditor from './nodes/editors/InputEditor';
 import AIEditor from './nodes/editors/AIEditor';
 import CodeEditor from './nodes/editors/CodeEditor';
@@ -10,6 +11,7 @@ import OutputEditor from './nodes/editors/OutputEditor';
 import TextOutputEditor from './nodes/editors/TextOutputEditor';
 import MergeSplitEditor from './nodes/editors/MergeSplitEditor';
 import GuiEditor from './nodes/editors/GuiEditor';
+import OutputFormatEditor from './nodes/editors/OutputFormatEditor';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -23,7 +25,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const [node, setNode] = useState<GraphNode | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genMessage, setGenMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<'config' | 'ports' | 'preview'>('config');
+  const [activeTab, setActiveTab] = useState<'config' | 'output' | 'ports' | 'preview'>('config');
 
   useEffect(() => {
     if (rfNode) {
@@ -45,8 +47,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   };
 
   const handleGenerateCode = async () => {
-    if (!node.description) {
-      setGenMessage('Please add a description first.');
+    const prompt = node.config.code_prompt || node.description;
+    if (!prompt) {
+      setGenMessage('Please add a description or prompt first.');
       return;
     }
     setGenerating(true);
@@ -57,10 +60,13 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       const batchContext = node.config.batch_mode === 'whole_list'
         ? 'Batch mode is `whole_list`: multi input ports arrive in `inputs` as full lists. The generated function must handle or reduce those lists and must not reject an input merely because it is not a string.'
         : 'Batch mode is `per_item`: each multi input port is expanded before `run(inputs)` is called, so one scalar item from each multi port is passed per invocation.';
+      const outputFormatContext = node.config.output_format && node.config.output_format !== 'text'
+        ? ` The function must return output in ${node.config.output_format} format${node.config.output_format === 'custom' && node.config.output_format_prompt ? ` (${node.config.output_format_prompt})` : ''}.`
+        : '';
       const result = await generateCode({
-        description: node.description,
+        description: node.config.code_prompt || node.description,
         language: node.config.language,
-        context: batchContext,
+        context: batchContext + outputFormatContext,
         inputs: inputNames,
         outputs: outputNames,
         ai_model: node.config.ai_model,
@@ -98,19 +104,28 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   };
 
   const nt = node.node_type;
-  const isInput = ['text_input', 'file_input', 'directory_input'].includes(nt);
+  const isInput = ['text_input', 'file_input', 'directory_input', 'input'].includes(nt);
   const isAI = nt === 'ai';
   const isCode = nt === 'code';
   const isGui = nt === 'gui';
 
-  // Widgets drive `inputs`/`outputs` directly, so every add/remove/reorder
-  // re-syncs ports immediately in local state (so the Ports/Preview tabs stay
-  // correct) -- but, like every other field, is only committed to the store
-  // by `save()`, so Cancel discards it.
   const applyWidgets = (nextWidgets: GraphNode['config']['gui_widgets']) => {
     setNode((prev) => {
       if (!prev) return prev;
       return syncGuiNodePorts({ ...prev, config: { ...prev.config, gui_widgets: nextWidgets } });
+    });
+  };
+
+  const applyInputMode = (mode: 'text' | 'file' | 'directory') => {
+    setNode((prev) => {
+      if (!prev) return prev;
+      const ports = inputPortsForMode(mode);
+      return {
+        ...prev,
+        inputs: ports.inputs,
+        outputs: ports.outputs,
+        config: { ...prev.config, input_mode: mode },
+      };
     });
   };
 
@@ -169,7 +184,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
         {/* Tabs */}
         <div className="flex border-b" style={{ borderColor: '#2d3148' }}>
-          {(['config', 'ports', 'preview'] as const).map((tab) => (
+          {(['config', 'output', 'ports', 'preview'] as const).map((tab) => (
             <button
               key={tab}
               className="px-5 py-3 text-sm capitalize transition-colors"
@@ -209,6 +224,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                   setConfig={setConfig}
                   generating={generating}
                   handleGenerateSelectorCode={handleGenerateSelectorCode}
+                  applyMode={applyInputMode}
                 />
               )}
 
@@ -244,6 +260,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 </div>
               )}
             </div>
+          )}
+
+          {activeTab === 'output' && (
+            <OutputFormatEditor node={node} setConfig={setConfig} />
           )}
 
           {activeTab === 'ports' && (

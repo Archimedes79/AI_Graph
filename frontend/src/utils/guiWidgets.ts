@@ -29,28 +29,43 @@ export function syncGuiNodePorts(node: GraphNode): GraphNode {
   return { ...node, inputs, outputs };
 }
 
+/** Map a named size to its default grid dimensions. */
+export function sizeToGrid(size: 'small' | 'medium' | 'large'): { w: number; h: number } {
+  if (size === 'small')  return { w: 3, h: 2 };
+  if (size === 'large')  return { w: 12, h: 6 };
+  return { w: 6, h: 4 }; // medium
+}
+
 let widgetCounter = 1;
 export function newGuiWidgetId(): string {
   return `widget-${widgetCounter++}-${Date.now()}`;
 }
 
 export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
+  const size = 'medium';
   return {
     id: newGuiWidgetId(),
     kind,
     label,
     value: '',
     extensions: '',
-    size: 'medium',
+    mode: kind === 'input_picker' ? 'file' : kind === 'text_io' ? 'both' : '',
+    size,
+    ...sizeToGrid(size),
     code: '',
     language: 'python',
   };
 }
 
 export const GUI_WIDGET_KIND_LABELS: Record<GuiWidgetKind, string> = {
-  file_open: 'File Open',
-  directory_open: 'Directory Open',
-  text_window: 'Text Window',
-  chat_window: 'Chat Window',
+  file_open: 'File Open (legacy)',
+  directory_open: 'Directory Open (legacy)',
+  input_picker: 'Input Picker (file or directory)',
+  text_window: 'Text Window (legacy)',
+  chat_window: 'Chat Window (legacy)',
+  text_io: 'Text I/O (input / output / both)',
   plot_window: 'Plot Window',
 };
+
+/** Kinds offered when creating a brand-new widget -- legacy kinds are load-only. */
+export const CREATABLE_GUI_WIDGET_KINDS: GuiWidgetKind[] = ['input_picker', 'text_io', 'plot_window'];

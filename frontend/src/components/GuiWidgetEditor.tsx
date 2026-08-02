@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import type { AIProvider, GuiWidget, GuiWidgetKind } from '../types/graph';
-import { createGuiWidget, GUI_WIDGET_KIND_LABELS } from '../utils/guiWidgets';
+import { createGuiWidget, CREATABLE_GUI_WIDGET_KINDS, GUI_WIDGET_KIND_LABELS, sizeToGrid } from '../utils/guiWidgets';
 import { generateCode } from '../utils/api';
-import FileOpenEditor from './widgets/editors/FileOpenEditor';
-import DirectoryOpenEditor from './widgets/editors/DirectoryOpenEditor';
-import TextChatEditor from './widgets/editors/TextChatEditor';
+import InputPickerEditor from './widgets/editors/InputPickerEditor';
+import TextIoEditor from './widgets/editors/TextIoEditor';
 import PlotWindowEditor from './widgets/editors/PlotWindowEditor';
 
 interface GuiWidgetEditorProps {
@@ -15,7 +14,7 @@ interface GuiWidgetEditorProps {
 }
 
 export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider }: GuiWidgetEditorProps) {
-  const [newWidgetKind, setNewWidgetKind] = useState<GuiWidgetKind>('text_window');
+  const [newWidgetKind, setNewWidgetKind] = useState<GuiWidgetKind>('text_io');
   const [newWidgetLabel, setNewWidgetLabel] = useState('');
   const [expandedTransform, setExpandedTransform] = useState<Record<string, boolean>>({});
   const [generatingId, setGeneratingId] = useState<string | null>(null);
@@ -91,7 +90,7 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
             value={newWidgetKind}
             onChange={(e) => setNewWidgetKind(e.target.value as GuiWidgetKind)}
           >
-            {(Object.keys(GUI_WIDGET_KIND_LABELS) as GuiWidgetKind[]).map((k) => (
+            {CREATABLE_GUI_WIDGET_KINDS.map((k) => (
               <option key={k} value={k}>{GUI_WIDGET_KIND_LABELS[k]}</option>
             ))}
           </select>
@@ -181,7 +180,10 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
                   className="w-full rounded-lg px-2 py-1.5 text-sm"
                   style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
                   value={widget.size}
-                  onChange={(e) => updateWidget(index, { size: e.target.value as typeof widget.size })}
+                  onChange={(e) => {
+                    const s = e.target.value as typeof widget.size;
+                    updateWidget(index, { size: s, ...sizeToGrid(s) });
+                  }}
                 >
                   <option value="small">Small</option>
                   <option value="medium">Medium</option>
@@ -190,16 +192,12 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
               </div>
             </div>
 
-            {widget.kind === 'file_open' && (
-              <FileOpenEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
+            {(widget.kind === 'file_open' || widget.kind === 'directory_open' || widget.kind === 'input_picker') && (
+              <InputPickerEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
             )}
 
-            {widget.kind === 'directory_open' && (
-              <DirectoryOpenEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
-            )}
-
-            {(widget.kind === 'text_window' || widget.kind === 'chat_window') && (
-              <TextChatEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
+            {(widget.kind === 'text_window' || widget.kind === 'chat_window' || widget.kind === 'text_io') && (
+              <TextIoEditor widget={widget} onUpdate={(patch) => updateWidget(index, patch)} />
             )}
 
             {widget.kind === 'plot_window' && (

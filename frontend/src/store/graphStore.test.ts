@@ -6,6 +6,10 @@ import { createGuiWidget, guiWidgetPorts } from '../utils/guiWidgets';
 function blankConfig() {
   return {
     prompt_at_runtime: false,
+    input_mode: 'text' as const,
+    parse_format: 'text' as const,
+    parse_code: '',
+    example_path: '',
     select_all_files: true,
     selector_prompt: '',
     selector_code: '',
@@ -15,6 +19,10 @@ function blankConfig() {
     temperature: 0.7,
     language: 'python',
     code: '',
+    code_prompt: '',
+    output_format: 'text' as const,
+    output_format_prompt: '',
+    output_transform_code: '',
     output_label: 'Result',
     write_mode: 'none' as const,
     batch_mode: 'per_item' as const,

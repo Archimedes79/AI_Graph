@@ -118,7 +118,7 @@ async def _lmstudio_complete(
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-    payload = {"model": model, "messages": messages, "temperature": temperature}
+    payload = {"model": model, "messages": messages, "temperature": temperature, "stream": False}
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             f"{LMSTUDIO_BASE_URL}/chat/completions",
