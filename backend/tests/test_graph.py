@@ -311,6 +311,142 @@ async def test_ai_node_processes_each_batch_item(monkeypatch):
     assert result.final_outputs["Answers"]["value"] == ["answer:first", "answer:second"]
 
 
+@pytest.mark.asyncio
+async def test_optional_multi_port_survives_one_failed_sibling(monkeypatch):
+    """A failed predecessor feeding one contribution of an optional multi-port
+    must not skip the downstream node; the other predecessor's value survives."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    async def fake_complete(prompt, system, model, temperature, provider):
+        raise ConnectionError("Ollama not running")
+
+    monkeypatch.setattr("app.services.graph_executor.ai_service.complete", fake_complete)
+
+    graph = Graph(
+        metadata=GraphMetadata(name="Optional Multi Port Test"),
+        nodes=[
+            GraphNode(
+                id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="bla bla text"),
+            ),
+            GraphNode(
+                id="count", node_type=NodeType.CODE, label="Count",
+                inputs=[Port(id="text", name="Text", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(code="def run(inputs):\n    return {'output': str(inputs['text'].count('bla'))}\n"),
+            ),
+            GraphNode(
+                id="ai", node_type=NodeType.AI, label="AI Count",
+                inputs=[Port(id="prompt", name="Prompt", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+            ),
+            GraphNode(
+                id="text_output", node_type=NodeType.TEXT_OUTPUT, label="Text Output",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)],
+                config=NodeConfig(output_label="Result"),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="input", source_port_id="output", target_node_id="count", target_port_id="text"),
+            GraphEdge(id="e2", source_node_id="input", source_port_id="output", target_node_id="ai", target_port_id="prompt"),
+            GraphEdge(id="e3", source_node_id="count", source_port_id="output", target_node_id="text_output", target_port_id="value"),
+            GraphEdge(id="e4", source_node_id="ai", source_port_id="output", target_node_id="text_output", target_port_id="value"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    results_by_id = {r.node_id: r for r in result.node_results}
+
+    assert results_by_id["ai"].status == "error"
+    assert results_by_id["count"].status == "success"
+    assert results_by_id["text_output"].status == "success"
+    assert "2" in results_by_id["text_output"].outputs["value"]
+
+
+@pytest.mark.asyncio
+async def test_required_single_port_still_skips_on_failed_predecessor(monkeypatch):
+    """Regression: a single REQUIRED port fed by one failing predecessor must
+    still cause the downstream node to be SKIPPED."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    graph = Graph(
+        metadata=GraphMetadata(name="Required Single Port Test"),
+        nodes=[
+            GraphNode(
+                id="failing", node_type=NodeType.CODE, label="Failing",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(code="def run(inputs):\n    raise ValueError('boom')\n"),
+            ),
+            GraphNode(
+                id="downstream", node_type=NodeType.CODE, label="Downstream",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False, required=True)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(code="def run(inputs):\n    return {'output': inputs['value']}\n"),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="failing", source_port_id="output", target_node_id="downstream", target_port_id="value"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    results_by_id = {r.node_id: r for r in result.node_results}
+
+    assert results_by_id["failing"].status == "error"
+    assert results_by_id["downstream"].status == "skipped"
+    assert "Value" in results_by_id["downstream"].error
+
+
+@pytest.mark.asyncio
+async def test_required_multi_port_survives_partial_failure(monkeypatch):
+    """A REQUIRED multi-port with two sources, one failing, is still
+    satisfiable as long as at least one source succeeds."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    graph = Graph(
+        metadata=GraphMetadata(name="Required Multi Port Test"),
+        nodes=[
+            GraphNode(
+                id="ok", node_type=NodeType.TEXT_INPUT, label="OK",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="good"),
+            ),
+            GraphNode(
+                id="failing", node_type=NodeType.CODE, label="Failing",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(code="def run(inputs):\n    raise ValueError('boom')\n"),
+            ),
+            GraphNode(
+                id="downstream", node_type=NodeType.MERGE, label="Downstream",
+                inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=True)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(separator=" "),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="ok", source_port_id="output", target_node_id="downstream", target_port_id="inputs"),
+            GraphEdge(id="e2", source_node_id="failing", source_port_id="output", target_node_id="downstream", target_port_id="inputs"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    results_by_id = {r.node_id: r for r in result.node_results}
+
+    assert results_by_id["failing"].status == "error"
+    assert results_by_id["downstream"].status == "success"
+    assert "good" in results_by_id["downstream"].outputs["output"]
+
+
 def test_topological_levels_form_stage_barriers():
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))

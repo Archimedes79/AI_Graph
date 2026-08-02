@@ -291,6 +291,38 @@ def _merge_batch_outputs(
     return merged
 
 
+def _blocked_required_port(
+    node: GraphNode,
+    edges: List[GraphEdge],
+    result_by_id: Dict[str, "NodeResult"],
+) -> Optional[str]:
+    """
+    Return the name of a required input port whose wired-in predecessors have
+    ALL failed/been skipped (i.e. no successful source remains for that port),
+    or None if every required port is still satisfiable. Ports that aren't
+    wired to any edge, or that are optional, are never blocking here.
+    """
+    incoming_by_port: Dict[str, List[str]] = defaultdict(list)
+    for edge in edges:
+        if edge.target_node_id == node.id:
+            incoming_by_port[edge.target_port_id].append(edge.source_node_id)
+
+    for port in node.inputs:
+        if not port.required:
+            continue
+        sources = incoming_by_port.get(port.id)
+        if not sources:
+            continue
+        if not any(
+            result_by_id.get(
+                source_id, NodeResult(node_id=source_id, status=ExecutionStatus.PENDING)
+            ).status == ExecutionStatus.SUCCESS
+            for source_id in sources
+        ):
+            return port.name
+    return None
+
+
 def _topological_levels(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[List[str]]:
     """Return deterministic execution stages; every stage waits for its predecessors."""
     node_ids = {node.id for node in nodes}
@@ -470,15 +502,13 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
     for level in levels:
         async def run_node(node_id: str) -> NodeResult:
             node = node_map[node_id]
-            predecessors = {
-                edge.source_node_id
-                for edge in graph.edges
-                if edge.target_node_id == node_id
-            }
-            if any(result_by_id.get(source_id, NodeResult(
-                node_id=source_id, status=ExecutionStatus.PENDING
-            )).status != ExecutionStatus.SUCCESS for source_id in predecessors):
-                return NodeResult(node_id=node_id, status=ExecutionStatus.SKIPPED, error="Upstream node failed")
+            blocked_port = _blocked_required_port(node, graph.edges, result_by_id)
+            if blocked_port is not None:
+                return NodeResult(
+                    node_id=node_id,
+                    status=ExecutionStatus.SKIPPED,
+                    error=f"Required input '{blocked_port}' has no available value: upstream node(s) failed",
+                )
 
             inputs = _collect_inputs(node_id, graph.edges, node_outputs)
             effective_formats = _effective_input_formats(node, graph.edges, node_map)
