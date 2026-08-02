@@ -103,6 +103,10 @@ const GraphNodeComponent = memo(({ id, data }: NodeProps<RFNodeData>) => {
                 flexShrink: 0,
               }}
               title={port.description || port.name}
+              onClick={(event) => {
+                event.stopPropagation();
+                data.onPortEdit(id, port.id);
+              }}
             />
             <span className="text-xs" style={{ color: '#94a3b8' }}>
               {port.name}
@@ -165,6 +169,10 @@ const GraphNodeComponent = memo(({ id, data }: NodeProps<RFNodeData>) => {
                 flexShrink: 0,
               }}
               title={port.description || port.name}
+              onClick={(event) => {
+                event.stopPropagation();
+                data.onPortEdit(id, port.id);
+              }}
             />
           </div>
         ))}

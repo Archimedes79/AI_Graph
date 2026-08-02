@@ -4,6 +4,7 @@ const defaultConfig = (): NodeConfig => ({
   value: '',
   prompt_at_runtime: false,
   select_all_files: true,
+  selector_prompt: '',
   selector_code: 'def run(inputs):\n    # inputs["files"] is the full list of file paths in the directory\n    return {"files": inputs.get("files", [])}\n',
   ai_provider: 'ollama',
   ai_model: 'llama3',
@@ -13,7 +14,10 @@ const defaultConfig = (): NodeConfig => ({
   code: '',
   output_label: 'Result',
   write_mode: 'none',
+  batch_mode: 'per_item',
   separator: '\n',
+  merge_mode: 'concat',
+  read_file_inputs: false,
   extra: {},
 });
 
@@ -40,10 +44,10 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
         label: 'File Input',
         description: 'Read a text file',
         position: { x: 0, y: 0 },
-        inputs: [{ id: 'path', name: 'Path', kind: 'input', data_type: 'text', multi: false, required: false, description: 'File path (overrides config)' }],
+        inputs: [{ id: 'path', name: 'Path', kind: 'input', data_type: 'file_path', multi: false, required: false, description: 'Rooted file path (overrides config)' }],
         outputs: [
           { id: 'content', name: 'Content', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
-          { id: 'path', name: 'Path', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
+          { id: 'path', name: 'Path', kind: 'output', data_type: 'file_path', multi: false, required: false, description: 'Always includes the root' },
         ],
         config: cfg,
       };
@@ -57,7 +61,7 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
         position: { x: 0, y: 0 },
         inputs: [{ id: 'path', name: 'Path', kind: 'input', data_type: 'text', multi: false, required: false, description: '' }],
         outputs: [
-          { id: 'files', name: 'Files', kind: 'output', data_type: 'list', multi: true, required: false, description: 'List of file paths' },
+          { id: 'files', name: 'Files', kind: 'output', data_type: 'file_path', multi: true, required: false, description: 'Rooted file paths' },
           { id: 'count', name: 'Count', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
         ],
         config: cfg,
@@ -71,10 +75,10 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
         description: 'Send a prompt to an AI model',
         position: { x: 0, y: 0 },
         inputs: [
-          { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'text', multi: false, required: true, description: '' },
+          { id: 'prompt', name: 'Prompt batch', kind: 'input', data_type: 'text', multi: true, required: true, description: 'One prompt per batch item' },
           { id: 'context', name: 'Context', kind: 'input', data_type: 'any', multi: true, required: false, description: 'Additional context' },
         ],
-        outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }],
+        outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'text', multi: true, required: false, description: 'One response per prompt item' }],
         config: { ...cfg, system_prompt: 'You are a helpful assistant.' },
       };
 
@@ -86,7 +90,7 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
         description: 'Execute custom code',
         position: { x: 0, y: 0 },
         inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-        outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }],
+        outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: 'One result per input item' }],
         config: { ...cfg, code: 'def run(inputs):\n    return {"output": inputs.get("input", "")}\n' },
       };
 
@@ -190,3 +194,49 @@ export const NODE_TYPE_ICON: Record<NodeType, string> = {
   merge: '🔀',
   split: '✂️',
 };
+
+export interface NodePreset {
+  id: string;
+  nodeType: NodeType;
+  label: string;
+  icon: string;
+  description: string;
+  build: (id: string) => GraphNode;
+}
+
+export const NODE_PRESETS: NodePreset[] = [
+  {
+    id: 'code_read_file',
+    nodeType: 'code',
+    label: 'Read File (Code)',
+    icon: '📖',
+    description: 'Reads each file path into its content (text or base64)',
+    build: (id) => ({
+      id,
+      node_type: 'code',
+      label: 'Read File (Code)',
+      description: "Reads each file's content from its path; edit the code to post-process it.",
+      position: { x: 0, y: 0 },
+      inputs: [{ id: 'paths', name: 'File paths', kind: 'input', data_type: 'file_path', multi: true, required: true, description: 'Rooted file paths to read' }],
+      outputs: [{ id: 'content', name: 'Content', kind: 'output', data_type: 'text', multi: true, required: false, description: 'One text (or base64) value per file' }],
+      config: { ...defaultConfig(), read_file_inputs: true, code: 'def run(inputs):\n    return {"content": inputs.get("paths", "")}\n' },
+    }),
+  },
+  {
+    id: 'ai_read_file',
+    nodeType: 'ai',
+    label: 'Read File (AI)',
+    icon: '📚',
+    description: "Sends each file's content to the AI model",
+    build: (id) => ({
+      id,
+      node_type: 'ai',
+      label: 'Read File (AI)',
+      description: "Receives each file's content (not just its path) and sends it to the AI model per the description below.",
+      position: { x: 0, y: 0 },
+      inputs: [{ id: 'paths', name: 'File paths', kind: 'input', data_type: 'file_path', multi: true, required: true, description: 'Rooted file paths to read' }],
+      outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'text', multi: true, required: false, description: 'One response per file' }],
+      config: { ...defaultConfig(), read_file_inputs: true, system_prompt: 'You receive the full content of one file at a time. Respond according to the node description.' },
+    }),
+  },
+];

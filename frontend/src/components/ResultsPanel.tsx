@@ -114,13 +114,27 @@ export default function ResultsPanel() {
                 {nr.error}
               </div>
             )}
+            {Object.keys(nr.inputs ?? {}).length > 0 && (
+              <div className="px-3 py-2" style={{ borderTop: '1px solid #2d3148' }}>
+                <div className="text-xs font-medium mb-1" style={{ color: '#64748b' }}>Inputs</div>
+                <pre
+                  className="text-xs overflow-auto"
+                  style={{ color: '#94a3b8', maxHeight: 100 }}
+                >
+                  {JSON.stringify(nr.inputs, null, 2)}
+                </pre>
+              </div>
+            )}
             {nr.status === 'success' && Object.keys(nr.outputs).length > 0 && (
-              <pre
-                className="text-xs px-3 py-2 overflow-auto"
-                style={{ color: '#94a3b8', maxHeight: 100 }}
-              >
-                {JSON.stringify(nr.outputs, null, 2)}
-              </pre>
+              <div className="px-3 py-2" style={{ borderTop: '1px solid #2d3148' }}>
+                <div className="text-xs font-medium mb-1" style={{ color: '#64748b' }}>Outputs</div>
+                <pre
+                  className="text-xs overflow-auto"
+                  style={{ color: '#94a3b8', maxHeight: 100 }}
+                >
+                  {JSON.stringify(nr.outputs, null, 2)}
+                </pre>
+              </div>
             )}
           </div>
         ))}

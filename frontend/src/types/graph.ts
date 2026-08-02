@@ -12,8 +12,8 @@ export type NodeType =
   | 'split';
 
 export type PortKind = 'input' | 'output';
-export type DataType = 'text' | 'file' | 'image' | 'list' | 'any';
-export type AIProvider = 'ollama' | 'openai' | 'anthropic' | 'lmstudio';
+export type DataType = 'text' | 'file_path' | 'binary' | 'json' | 'list' | 'any';
+export type AIProvider = 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio';
 export type ExecutionStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped';
 
 export interface Port {
@@ -24,6 +24,8 @@ export interface Port {
   multi: boolean;
   required: boolean;
   description: string;
+  format?: string;
+  debug_directory?: string;
 }
 
 export interface NodePosition {
@@ -35,6 +37,7 @@ export interface NodeConfig {
   value?: string;
   prompt_at_runtime: boolean;
   select_all_files: boolean;
+  selector_prompt: string;
   selector_code: string;
   ai_provider: AIProvider;
   ai_model: string;
@@ -44,7 +47,10 @@ export interface NodeConfig {
   code: string;
   output_label: string;
   write_mode: 'none' | 'file' | 'directory';
+  batch_mode: 'per_item' | 'whole_list';
   separator: string;
+  merge_mode: 'concat' | 'sum' | 'count' | 'json_list';
+  read_file_inputs: boolean;
   extra: Record<string, unknown>;
 }
 
@@ -94,6 +100,7 @@ export interface RuntimeRequirement {
 export interface NodeResult {
   node_id: string;
   status: ExecutionStatus;
+  inputs: Record<string, unknown>;
   outputs: Record<string, unknown>;
   error?: string;
   duration_ms?: number;
@@ -113,6 +120,7 @@ export interface RFNodeData {
   graphNode: GraphNode;
   onEdit: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
+  onPortEdit: (nodeId: string, portId: string) => void;
   executionStatus?: ExecutionStatus;
   executionOutput?: Record<string, unknown>;
 }

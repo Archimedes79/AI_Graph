@@ -55,3 +55,7 @@ export const getDockerCompose = (graph: Graph) =>
 
 export const getRunnerScript = (graph: Graph) =>
   api.post('/deploy/runner-script', graph).then((r) => r.data);
+
+// Files
+export const detectFileFormat = (path: string): Promise<{ format: string }> =>
+  api.post('/files/detect-format', { path }).then((r) => r.data);

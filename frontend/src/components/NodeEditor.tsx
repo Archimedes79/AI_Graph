@@ -46,9 +46,13 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     try {
       const inputNames = node.inputs.map((p) => p.id);
       const outputNames = node.outputs.map((p) => p.id);
+      const batchContext = node.config.batch_mode === 'whole_list'
+        ? 'Batch mode is `whole_list`: multi input ports arrive in `inputs` as full lists. The generated function must handle or reduce those lists and must not reject an input merely because it is not a string.'
+        : 'Batch mode is `per_item`: each multi input port is expanded before `run(inputs)` is called, so one scalar item from each multi port is passed per invocation.';
       const result = await generateCode({
         description: node.description,
         language: node.config.language,
+        context: batchContext,
         inputs: inputNames,
         outputs: outputNames,
         ai_model: node.config.ai_model,
@@ -99,9 +103,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     setGenMessage('Generating file selector…');
     try {
       const result = await generateCode({
-        description: node.description,
+        description: node.config.selector_prompt || node.description,
         language: 'python',
-        context: '`inputs["files"]` is the full list of file paths found in the directory.',
+        context: '`inputs["files"]` is the full list of rooted file paths found in the directory. Return only the selected paths as {"files": [...]}.',
         inputs: ['files'],
         outputs: ['files'],
         ai_model: node.config.ai_model,
@@ -212,6 +216,16 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
                   {nt === 'directory_input' && (
                     <div className="mt-4 pt-4" style={{ borderTop: '1px solid #2d3148' }}>
+                      <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                        AI file-selection prompt
+                      </label>
+                      <textarea
+                        className="w-full rounded-lg px-3 py-2 text-sm resize-none"
+                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 80 }}
+                        value={node.config.selector_prompt}
+                        onChange={(e) => setConfig('selector_prompt', e.target.value)}
+                        placeholder="Select Markdown files that contain API documentation"
+                      />
                       <label className="flex items-center gap-2 text-sm mb-2" style={{ color: '#94a3b8' }}>
                         <input
                           type="checkbox"
@@ -266,6 +280,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                         <option value="ollama">Ollama (local)</option>
                         <option value="lmstudio">LM Studio (local)</option>
                         <option value="openai">OpenAI</option>
+                        <option value="openai_compatible">OpenAI-compatible endpoint</option>
                         <option value="anthropic">Anthropic</option>
                       </select>
                     </div>
@@ -316,6 +331,33 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                       className="w-full"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                      Batch mode
+                    </label>
+                    <select
+                      className="w-full rounded-lg px-3 py-2 text-sm"
+                      style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                      value={node.config.batch_mode}
+                      onChange={(e) => setConfig('batch_mode', e.target.value)}
+                    >
+                      <option value="per_item">Per item (default)</option>
+                      <option value="whole_list">Whole list at once (for totals/summaries)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!node.config.read_file_inputs}
+                        onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
+                      />
+                      Read file contents from paths
+                    </label>
+                    <p className="text-xs mt-1" style={{ color: '#475569' }}>
+                      When enabled, any input port with data type 'File path' is automatically read from disk (text or base64) before this node runs.
+                    </p>
+                  </div>
                 </>
               )}
 
@@ -347,6 +389,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                         <option value="ollama">Ollama</option>
                         <option value="lmstudio">LM Studio</option>
                         <option value="openai">OpenAI</option>
+                        <option value="openai_compatible">OpenAI-compatible endpoint</option>
                         <option value="anthropic">Anthropic</option>
                       </select>
                       <input
@@ -374,6 +417,33 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                     placeholder={`def run(inputs):\n    return {"output": inputs.get("input", "")}`}
                     spellCheck={false}
                   />
+                  <div>
+                    <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                      Batch mode
+                    </label>
+                    <select
+                      className="w-full rounded-lg px-3 py-2 text-sm"
+                      style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                      value={node.config.batch_mode}
+                      onChange={(e) => setConfig('batch_mode', e.target.value)}
+                    >
+                      <option value="per_item">Per item (default)</option>
+                      <option value="whole_list">Whole list at once (for totals/summaries)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!node.config.read_file_inputs}
+                        onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
+                      />
+                      Read file contents from paths
+                    </label>
+                    <p className="text-xs mt-1" style={{ color: '#475569' }}>
+                      When enabled, any input port with data type 'File path' is automatically read from disk (text or base64) before this node runs.
+                    </p>
+                  </div>
                 </>
               )}
 
@@ -455,16 +525,44 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
               {/* Merge/Split */}
               {(nt === 'merge' || nt === 'split') && (
                 <div>
+                  {nt === 'merge' && (
+                    <div className="mb-3">
+                      <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                        Merge mode
+                      </label>
+                      <select
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                        value={node.config.merge_mode}
+                        onChange={(e) => setConfig('merge_mode', e.target.value)}
+                      >
+                        <option value="concat">Concatenate text (default)</option>
+                        <option value="sum">Sum numbers</option>
+                        <option value="count">Count values</option>
+                        <option value="json_list">JSON list</option>
+                      </select>
+                    </div>
+                  )}
                   <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
                     Separator
                   </label>
                   <input
                     className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                    style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                    style={
+                      nt === 'merge' && node.config.merge_mode !== 'concat'
+                        ? { background: '#0f1117', color: '#475569', border: '1px solid #2d3148', opacity: 0.5 }
+                        : { background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }
+                    }
                     value={node.config.separator}
                     onChange={(e) => setConfig('separator', e.target.value)}
                     placeholder="\n"
+                    disabled={nt === 'merge' && node.config.merge_mode !== 'concat'}
                   />
+                  {nt === 'merge' && node.config.merge_mode !== 'concat' && (
+                    <p className="text-xs mt-1" style={{ color: '#475569' }}>
+                      Separator is unused in this merge mode.
+                    </p>
+                  )}
                 </div>
               )}
 

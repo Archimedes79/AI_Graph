@@ -1,6 +1,6 @@
 import React from 'react';
 import type { NodeType } from '../types/graph';
-import { NODE_TYPE_ICON, NODE_TYPE_LABELS } from '../utils/nodeDefaults';
+import { NODE_TYPE_ICON, NODE_TYPE_LABELS, NODE_PRESETS, type NodePreset } from '../utils/nodeDefaults';
 
 const CATEGORIES: { label: string; types: NodeType[] }[] = [
   {
@@ -19,9 +19,10 @@ const CATEGORIES: { label: string; types: NodeType[] }[] = [
 
 interface SidebarProps {
   onAddNode: (nodeType: NodeType) => void;
+  onAddPreset: (preset: NodePreset) => void;
 }
 
-export default function Sidebar({ onAddNode }: SidebarProps) {
+export default function Sidebar({ onAddNode, onAddPreset }: SidebarProps) {
   return (
     <aside
       className="flex flex-col h-full overflow-y-auto"
@@ -64,6 +65,29 @@ export default function Sidebar({ onAddNode }: SidebarProps) {
           ))}
         </div>
       ))}
+
+      <div className="py-3">
+        <h3 className="px-4 text-xs font-medium uppercase tracking-wider mb-2" style={{ color: '#475569' }}>
+          File Parsing
+        </h3>
+        {NODE_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-white/5"
+            style={{ color: '#e2e8f0' }}
+            onClick={() => onAddPreset(preset)}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('application/nodePreset', preset.id);
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            title={preset.description}
+          >
+            <span className="text-base">{preset.icon}</span>
+            <span>{preset.label}</span>
+          </button>
+        ))}
+      </div>
 
       <div className="mt-auto px-4 py-4 border-t" style={{ borderColor: '#2d3148' }}>
         <p className="text-xs" style={{ color: '#475569' }}>

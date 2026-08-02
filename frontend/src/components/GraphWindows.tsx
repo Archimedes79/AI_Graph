@@ -34,7 +34,8 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
 
   if (!requirements && outputWindows.length === 0) return null;
 
-  const canSubmit = !!requirements && requirements.every((r) => (values[r.node_id] ?? '').trim().length > 0);
+// Only input-direction requirements are mandatory; output paths are optional.
+    const canSubmit = !!requirements && requirements.filter((r) => r.direction === 'input').every((r) => (values[r.node_id] ?? '').trim().length > 0);
 
   return (
     <>
@@ -64,6 +65,9 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
                     {req.kind === 'text'
                       ? `Text for "${req.label}"`
                       : `${req.direction === 'input' ? 'Read' : 'Write'} ${req.kind} for "${req.label}"`}
+                    {req.direction === 'output' && (
+                      <span className="ml-1 text-xs" style={{ color: '#475569' }}>(optional)</span>
+                    )}
                   </label>
                   <input
                     className={`w-full rounded-lg px-3 py-2 text-sm ${req.kind === 'text' ? '' : 'font-mono'}`}

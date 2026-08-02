@@ -8,7 +8,7 @@ connected by Edges.  Each Node declares typed Ports (inputs / outputs).
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -36,8 +36,9 @@ class PortKind(str, Enum):
 
 class DataType(str, Enum):
     TEXT = "text"
-    FILE = "file"
-    IMAGE = "image"
+    FILE_PATH = "file_path"
+    BINARY = "binary"
+    JSON = "json"
     LIST = "list"
     ANY = "any"
 
@@ -45,6 +46,7 @@ class DataType(str, Enum):
 class AIProvider(str, Enum):
     OLLAMA = "ollama"
     OPENAI = "openai"
+    OPENAI_COMPATIBLE = "openai_compatible"
     ANTHROPIC = "anthropic"
     LMSTUDIO = "lmstudio"
 
@@ -58,9 +60,11 @@ class Port(BaseModel):
     name: str
     kind: PortKind
     data_type: DataType = DataType.ANY
-    multi: bool = False          # True → accepts / produces multiple values
+    multi: bool = False          # True -> accepts / produces an unbounded batch
     required: bool = True
     description: str = ""
+    format: Optional[str] = None  # e.g. application/json, text/csv, image/png
+    debug_directory: Optional[str] = None
 
 
 class NodePosition(BaseModel):
@@ -80,6 +84,7 @@ class NodeConfig(BaseModel):
 
     # directory_input – file selection
     select_all_files: bool = True
+    selector_prompt: str = ""
     selector_code: str = ""              # run(inputs: {files}) -> {files}
 
     # ai node
@@ -92,12 +97,26 @@ class NodeConfig(BaseModel):
     language: str = "python"             # python | javascript
     code: str = ""                       # generated / user-written code
 
+    # code / ai node – batch handling
+    # per_item: run() is invoked once per batch element (existing behaviour).
+    # whole_list: run() is invoked once with the full, unexpanded multi-port list(s),
+    # enabling "reduce" style aggregation (e.g. summing counts across all items).
+    batch_mode: Literal["per_item", "whole_list"] = "per_item"
+
+    # code / ai node – auto-read file content for file_path-typed inputs
+    read_file_inputs: bool = False
+
     # output node
     output_label: str = "Result"
     write_mode: str = "none"             # none | file | directory – write result(s) to disk at `value`
 
     # merge / split helpers
     separator: str = "\n"
+    # concat: string-join all values with `separator` (existing behaviour).
+    # sum: numerically sum all flattened values.
+    # count: number of flattened scalar values received.
+    # json_list: JSON-serialized flat list of all received values.
+    merge_mode: Literal["concat", "sum", "count", "json_list"] = "concat"
 
     extra: Dict[str, Any] = Field(default_factory=dict)
 
@@ -156,6 +175,7 @@ class ExecutionStatus(str, Enum):
 class NodeResult(BaseModel):
     node_id: str
     status: ExecutionStatus
+    inputs: Dict[str, Any] = Field(default_factory=dict)
     outputs: Dict[str, Any] = Field(default_factory=dict)
     error: Optional[str] = None
     duration_ms: Optional[float] = None

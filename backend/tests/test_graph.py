@@ -64,6 +64,32 @@ def test_example_graphs_valid():
         assert graph.metadata.name
 
 
+def test_connector_formats_decode_json_and_csv():
+    from app.services.graph_executor import _decode_value
+
+    assert _decode_value('{"name": "Ada"}', "application/json") == {"name": "Ada"}
+    assert _decode_value("name\nAda\n", "text/csv") == [{"name": "Ada"}]
+    assert _decode_value(["1", "2"], "text/plain") == ["1", "2"]
+
+
+def test_connector_debug_snapshot_uses_declared_format(tmp_path):
+    from app.models.graph import Port, PortKind, DataType
+    from app.services.graph_executor import _debug_connector_value
+
+    port = Port(
+        id="payload",
+        name="Payload",
+        kind=PortKind.OUTPUT,
+        data_type=DataType.JSON,
+        format="application/json",
+        debug_directory=str(tmp_path),
+    )
+    _debug_connector_value("node", port, {"ok": True}, "out", 0)
+
+    snapshot = tmp_path / "node_payload_out_0.json"
+    assert json.loads(snapshot.read_text()) == {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Topological sort tests
 # ---------------------------------------------------------------------------
@@ -189,7 +215,122 @@ async def test_execute_code_node():
     result = await execute_graph(graph)
     assert result.status == "success"
     doubled_out = result.final_outputs.get("Doubled", {})
-    assert doubled_out.get("value") == 42
+    assert doubled_out.get("value") == [42]
+
+
+@pytest.mark.asyncio
+async def test_code_node_processes_each_batch_item():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    graph = Graph(
+        metadata=GraphMetadata(name="Batch Code Test"),
+        nodes=[
+            GraphNode(
+                id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(value="one\ntwo\nthree"),
+            ),
+            GraphNode(
+                id="split", node_type=NodeType.SPLIT, label="Split",
+                inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False)],
+                outputs=[Port(id="items", name="Items", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True)],
+                config=NodeConfig(separator="\n"),
+            ),
+            GraphNode(
+                id="code", node_type=NodeType.CODE, label="Uppercase",
+                inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=True)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True)],
+                config=NodeConfig(code="def run(inputs):\n    return {'output': inputs['input'].upper()}\n"),
+            ),
+            GraphNode(
+                id="output", node_type=NodeType.OUTPUT, label="Output",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=True)],
+                config=NodeConfig(output_label="Batch"),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="input", source_port_id="output", target_node_id="split", target_port_id="input"),
+            GraphEdge(id="e2", source_node_id="split", source_port_id="items", target_node_id="code", target_port_id="input"),
+            GraphEdge(id="e3", source_node_id="code", source_port_id="output", target_node_id="output", target_port_id="value"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    assert result.status == "success"
+    assert result.final_outputs["Batch"]["value"] == ["ONE", "TWO", "THREE"]
+
+
+@pytest.mark.asyncio
+async def test_ai_node_processes_each_batch_item(monkeypatch):
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    async def fake_complete(prompt, system, model, temperature, provider):
+        return f"answer:{prompt}"
+
+    monkeypatch.setattr("app.services.graph_executor.ai_service.complete", fake_complete)
+    graph = Graph(
+        metadata=GraphMetadata(name="Batch AI Test"),
+        nodes=[
+            GraphNode(
+                id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
+                config=NodeConfig(value="first\nsecond"),
+            ),
+            GraphNode(
+                id="split", node_type=NodeType.SPLIT, label="Split",
+                inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=False)],
+                outputs=[Port(id="items", name="Items", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True)],
+                config=NodeConfig(separator="\n"),
+            ),
+            GraphNode(
+                id="ai", node_type=NodeType.AI, label="Answer",
+                inputs=[Port(id="prompt", name="Prompt", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=True)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True)],
+            ),
+            GraphNode(
+                id="output", node_type=NodeType.OUTPUT, label="Output",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.TEXT, multi=True)],
+                config=NodeConfig(output_label="Answers"),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="input", source_port_id="output", target_node_id="split", target_port_id="input"),
+            GraphEdge(id="e2", source_node_id="split", source_port_id="items", target_node_id="ai", target_port_id="prompt"),
+            GraphEdge(id="e3", source_node_id="ai", source_port_id="output", target_node_id="output", target_port_id="value"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    assert result.status == "success"
+    assert result.final_outputs["Answers"]["value"] == ["answer:first", "answer:second"]
+
+
+def test_topological_levels_form_stage_barriers():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import GraphNode, GraphEdge, NodeType
+    from app.services.graph_executor import _topological_levels
+
+    nodes = [
+        GraphNode(id="source", node_type=NodeType.TEXT_INPUT, label="Source"),
+        GraphNode(id="left", node_type=NodeType.CODE, label="Left"),
+        GraphNode(id="right", node_type=NodeType.CODE, label="Right"),
+        GraphNode(id="join", node_type=NodeType.MERGE, label="Join"),
+    ]
+    edges = [
+        GraphEdge(id="e1", source_node_id="source", source_port_id="out", target_node_id="left", target_port_id="in"),
+        GraphEdge(id="e2", source_node_id="source", source_port_id="out", target_node_id="right", target_port_id="in"),
+        GraphEdge(id="e3", source_node_id="left", source_port_id="out", target_node_id="join", target_port_id="in"),
+        GraphEdge(id="e4", source_node_id="right", source_port_id="out", target_node_id="join", target_port_id="in"),
+    ]
+
+    assert _topological_levels(nodes, edges) == [["source"], ["left", "right"], ["join"]]
 
 
 @pytest.mark.asyncio

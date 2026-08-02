@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType } from '../types/graph';
-import { nodeTypeDefaults } from '../utils/nodeDefaults';
+import { nodeTypeDefaults, type NodePreset } from '../utils/nodeDefaults';
 
 type RFNode = Node<RFNodeData>;
 
@@ -24,16 +24,19 @@ export interface GraphStore {
   // UI state
   selectedNodeId: string | null;
   editingNodeId: string | null;
+  editingPort: { nodeId: string; portId: string } | null;
 
   // Actions
   setMetadata: (meta: Partial<GraphMetadata>) => void;
   addNode: (nodeType: NodeType, position: { x: number; y: number }) => void;
+  addPresetNode: (preset: NodePreset, position: { x: number; y: number }) => void;
   updateNode: (nodeId: string, updates: Partial<GraphNode>) => void;
   deleteNode: (nodeId: string) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
   setRFEdges: (edges: Edge[]) => void;
   setSelectedNode: (nodeId: string | null) => void;
   setEditingNode: (nodeId: string | null) => void;
+  setEditingPort: (port: { nodeId: string; portId: string } | null) => void;
   setExecutionResult: (result: ExecutionResult | null) => void;
   setIsExecuting: (v: boolean) => void;
   setTextOutputWindows: (windows: { nodeId: string; label: string; content: string }[]) => void;
@@ -65,6 +68,7 @@ export const useGraphStore = create<GraphStore>()(
     textOutputWindows: [],
     selectedNodeId: null,
     editingNodeId: null,
+    editingPort: null,
 
     setMetadata: (meta) =>
       set((state) => {
@@ -82,6 +86,26 @@ export const useGraphStore = create<GraphStore>()(
           graphNode: defaults,
           onEdit: (nid) => get().setEditingNode(nid),
           onDelete: (nid) => get().deleteNode(nid),
+          onPortEdit: (nid, pid) => get().setEditingPort({ nodeId: nid, portId: pid }),
+        },
+      };
+      set((state) => {
+        state.rfNodes.push(rfNode as any);
+      });
+    },
+
+    addPresetNode: (preset, position) => {
+      const id = newId(preset.nodeType);
+      const graphNode = preset.build(id);
+      const rfNode: Node<RFNodeData> = {
+        id,
+        type: 'graphNode',
+        position,
+        data: {
+          graphNode,
+          onEdit: (nid) => get().setEditingNode(nid),
+          onDelete: (nid) => get().deleteNode(nid),
+          onPortEdit: (nid, pid) => get().setEditingPort({ nodeId: nid, portId: pid }),
         },
       };
       set((state) => {
@@ -128,6 +152,11 @@ export const useGraphStore = create<GraphStore>()(
         state.editingNodeId = nodeId;
       }),
 
+    setEditingPort: (port) =>
+      set((state) => {
+        state.editingPort = port;
+      }),
+
     setExecutionResult: (result) =>
       set((state) => {
         state.executionResult = result;
@@ -152,6 +181,7 @@ export const useGraphStore = create<GraphStore>()(
       const callbacks = {
         onEdit: (nid: string) => get().setEditingNode(nid),
         onDelete: (nid: string) => get().deleteNode(nid),
+        onPortEdit: (nid: string, pid: string) => get().setEditingPort({ nodeId: nid, portId: pid }),
       };
 
       const rfNodes: Node<RFNodeData>[] = graph.nodes.map((gn) => ({

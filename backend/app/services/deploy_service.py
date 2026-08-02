@@ -14,7 +14,7 @@ from __future__ import annotations
 import textwrap
 from typing import Dict, List, Tuple
 
-from app.models.graph import Graph, GraphNode, NodeType
+from app.models.graph import DataType, Graph, GraphNode, NodeType
 
 # ---------------------------------------------------------------------------
 # Compile-time graph analysis
@@ -70,6 +70,44 @@ def _collect_inputs_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[T
     return lines
 
 
+def _effective_format(
+    node: GraphNode,
+    port_id: str,
+    sources: Dict[Tuple[str, str], List[Tuple[str, str]]],
+    node_map: Dict[str, GraphNode],
+) -> str:
+    """
+    Own format on the port wins; otherwise fall back to the format declared on the
+    upstream source port(s) wired into it, mirroring graph_executor._effective_input_format.
+    """
+    port = next((p for p in node.inputs if p.id == port_id), None)
+    if port is not None and port.format:
+        return port.format
+    for source_node_id, source_port_id in sources.get((node.id, port_id), []):
+        source_node = node_map.get(source_node_id)
+        if source_node is None:
+            continue
+        source_port = next((p for p in source_node.outputs if p.id == source_port_id), None)
+        if source_port is not None and source_port.format:
+            return source_port.format
+    return ""
+
+
+def _resolve_file_inputs_lines(
+    node: GraphNode,
+    sources: Dict[Tuple[str, str], List[Tuple[str, str]]],
+    node_map: Dict[str, GraphNode],
+) -> List[str]:
+    """Lines that swap file_path input values for their content when `read_file_inputs` is set."""
+    if not node.config.read_file_inputs:
+        return []
+    file_ports = {
+        port.id: _effective_format(node, port.id, sources, node_map)
+        for port in node.inputs if port.data_type == DataType.FILE_PATH
+    }
+    return [f"_inputs = _resolve_file_inputs(_inputs, {file_ports!r})"]
+
+
 def _flatten_values_lines(inputs_var: str, out_var: str) -> List[str]:
     """Lines that flatten a dict-of-values (lists expand, scalars stringify) into a list of strings."""
     return [
@@ -82,7 +120,23 @@ def _flatten_values_lines(inputs_var: str, out_var: str) -> List[str]:
     ]
 
 
-def _node_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tuple[str, str]]]) -> List[str]:
+def _flatten_merge_values_lines(inputs_var: str, out_var: str) -> List[str]:
+    """Lines that flatten a dict-of-values (lists expand, None dropped) for sum/count/json_list merge modes."""
+    return [
+        f"{out_var} = []",
+        f"for _v in {inputs_var}.values():",
+        "    if isinstance(_v, list):",
+        f"        {out_var}.extend(_x for _x in _v if _x is not None)",
+        "    elif _v is not None:",
+        f"        {out_var}.append(_v)",
+    ]
+
+
+def _node_lines(
+    node: GraphNode,
+    sources: Dict[Tuple[str, str], List[Tuple[str, str]]],
+    node_map: Dict[str, GraphNode],
+) -> List[str]:
     """Generate the executable lines for a single node. Assumes `results` and `_resolved` exist."""
     cfg = node.config
     nt = node.node_type
@@ -92,12 +146,12 @@ def _node_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tuple[str, 
         lines.append(f"results[{node.id!r}] = {{'output': _resolved.get({node.id!r}, {(cfg.value or '')!r})}}")
 
     elif nt == NodeType.FILE_INPUT:
-        lines.append(f"_path = _resolved.get({node.id!r}, {(cfg.value or '')!r})")
+        lines.append(f"_path = str(Path(_resolved.get({node.id!r}, {(cfg.value or '')!r})).expanduser().resolve())")
         lines.append(f"results[{node.id!r}] = {{'content': _read_text_file(_path), 'path': _path}}")
 
     elif nt == NodeType.DIRECTORY_INPUT:
         recursive = bool(cfg.extra.get("recursive", False))
-        lines.append(f"_path = _resolved.get({node.id!r}, {(cfg.value or '')!r})")
+        lines.append(f"_path = str(Path(_resolved.get({node.id!r}, {(cfg.value or '')!r})).expanduser().resolve())")
         lines.append(f"_files = _list_directory(_path, recursive={recursive!r})")
         if not cfg.select_all_files and cfg.selector_code.strip():
             lines.append(
@@ -108,17 +162,35 @@ def _node_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tuple[str, 
 
     elif nt == NodeType.AI:
         lines.extend(_collect_inputs_lines(node, sources))
-        lines.append("_prompt = '\\n\\n'.join(str(v) for v in _inputs.values() if v is not None)")
-        lines.append(
-            "_output = await _ai_complete(_prompt, "
-            f"system={cfg.system_prompt!r}, model={cfg.ai_model!r}, "
-            f"temperature={cfg.temperature!r}, provider={cfg.ai_provider.value!r})"
-        )
-        lines.append(f"results[{node.id!r}] = {{'output': _output}}")
+        lines.extend(_resolve_file_inputs_lines(node, sources, node_map))
+        output_port_ids = [p.id for p in node.outputs]
+        if cfg.batch_mode == "whole_list":
+            lines.append(r'_prompt = "\n\n".join(str(_v) for _v in _inputs.values() if _v is not None)')
+            lines.append(
+                "_output = await _ai_complete(_prompt, "
+                f"system={cfg.system_prompt!r}, model={cfg.ai_model!r}, "
+                f"temperature={cfg.temperature!r}, provider={cfg.ai_provider.value!r})"
+            )
+        else:
+            lines.append(
+                "_output = await _ai_complete_batch(_inputs, "
+                f"system={cfg.system_prompt!r}, model={cfg.ai_model!r}, "
+                f"temperature={cfg.temperature!r}, provider={cfg.ai_provider.value!r})"
+            )
+        lines.append(f"results[{node.id!r}] = _reconcile_outputs({output_port_ids!r}, {{'output': _output}})")
 
     elif nt == NodeType.CODE:
         lines.extend(_collect_inputs_lines(node, sources))
-        lines.append(f"results[{node.id!r}] = await _run_code({cfg.code!r}, {(cfg.language or 'python')!r}, _inputs)")
+        lines.extend(_resolve_file_inputs_lines(node, sources, node_map))
+        output_port_ids = [p.id for p in node.outputs]
+        if cfg.batch_mode == "whole_list":
+            lines.append(f"_raw = await _run_code({cfg.code!r}, {(cfg.language or 'python')!r}, _inputs)")
+            lines.append(f"results[{node.id!r}] = _reconcile_outputs({output_port_ids!r}, _raw)")
+        else:
+            lines.append(
+                f"results[{node.id!r}] = await _run_code_batch({cfg.code!r}, {(cfg.language or 'python')!r}, "
+                f"_inputs, {output_port_ids!r})"
+            )
 
     elif nt == NodeType.OUTPUT:
         lines.extend(_collect_inputs_lines(node, sources))
@@ -141,8 +213,21 @@ def _node_lines(node: GraphNode, sources: Dict[Tuple[str, str], List[Tuple[str, 
 
     elif nt == NodeType.MERGE:
         lines.extend(_collect_inputs_lines(node, sources))
-        lines.extend(_flatten_values_lines("_inputs", "_parts"))
-        lines.append(f"results[{node.id!r}] = {{'output': {cfg.separator!r}.join(_parts)}}")
+        mode = cfg.merge_mode
+        if mode == "sum":
+            lines.extend(_flatten_merge_values_lines("_inputs", "_flat"))
+            lines.append("_total = sum(float(_x) for _x in _flat)")
+            lines.append("_total = int(_total) if _total.is_integer() else _total")
+            lines.append(f"results[{node.id!r}] = {{'output': _total}}")
+        elif mode == "count":
+            lines.extend(_flatten_merge_values_lines("_inputs", "_flat"))
+            lines.append(f"results[{node.id!r}] = {{'output': len(_flat)}}")
+        elif mode == "json_list":
+            lines.extend(_flatten_merge_values_lines("_inputs", "_flat"))
+            lines.append(f"results[{node.id!r}] = {{'output': json.dumps(_flat)}}")
+        else:
+            lines.extend(_flatten_values_lines("_inputs", "_parts"))
+            lines.append(f"results[{node.id!r}] = {{'output': {cfg.separator!r}.join(_parts)}}")
 
     elif nt == NodeType.SPLIT:
         lines.extend(_collect_inputs_lines(node, sources))
@@ -189,7 +274,7 @@ def _read_text_file(path):
 
 
 def _list_directory(path, recursive=False):
-    root = Path(path)
+    root = Path(path).expanduser().resolve()
     if not root.exists():
         raise FileNotFoundError(f"Directory not found: {path}")
     if recursive:
@@ -220,6 +305,36 @@ def _write_output_directory(dir_path, values):
             written.append(str(out_path))
             index += 1
     return written
+'''
+
+_READ_FILE_INPUTS_HELPER = '''\
+def _read_binary_file_base64(path):
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    return base64.b64encode(p.read_bytes()).decode("ascii")
+
+
+def _read_one_file(path, fmt):
+    normalized = (fmt or "").lower()
+    if normalized.startswith("image/") or normalized in ("binary", "application/octet-stream"):
+        return _read_binary_file_base64(path)
+    return _read_text_file(path)
+
+
+def _resolve_file_inputs(inputs, file_ports):
+    resolved = {}
+    for key, value in inputs.items():
+        fmt = file_ports.get(key) if key in file_ports else None
+        if key not in file_ports:
+            resolved[key] = value
+        elif isinstance(value, list):
+            resolved[key] = [_read_one_file(item, fmt) if item is not None else None for item in value]
+        elif value is None:
+            resolved[key] = None
+        else:
+            resolved[key] = _read_one_file(value, fmt)
+    return resolved
 '''
 
 _CODE_RUNNER_HELPER = '''\
@@ -272,6 +387,15 @@ console.log(JSON.stringify(run(_inputs)));
         return json.loads(raw) if raw else {}
     finally:
         os.unlink(tmp_path)
+
+
+async def _run_code_batch(code, language, inputs, output_port_ids=None):
+    items = _batch_items(inputs)
+    results = []
+    for item in items:
+        result = await _run_code(code, language, item)
+        results.append(_reconcile_outputs(output_port_ids, result))
+    return _merge_batch_results(results)
 '''
 
 _AI_HELPER = '''\
@@ -329,6 +453,52 @@ async def _ai_complete(prompt, system, model, temperature, provider, timeout=120
             return r.json()["choices"][0]["message"]["content"]
 
     raise ValueError(f"Unknown AI provider: {provider}")
+
+
+async def _ai_complete_batch(inputs, system, model, temperature, provider):
+    items = _batch_items(inputs)
+    prompts = ["\\n\\n".join(str(value) for value in item.values() if value is not None) for item in items]
+    return await asyncio.gather(*(
+        _ai_complete(prompt, system, model, temperature, provider)
+        for prompt in prompts
+    ))
+'''
+
+_BATCH_HELPERS = '''\
+def _batch_items(inputs):
+    size = max((len(value) for value in inputs.values() if isinstance(value, list)), default=1)
+    return [
+        {key: value[index] if isinstance(value, list) and index < len(value) else value
+         for key, value in inputs.items()}
+        for index in range(size)
+    ]
+
+
+def _merge_batch_results(results):
+    merged = {}
+    for result in results:
+        for key, value in result.items():
+            merged.setdefault(key, []).append(value)
+    return merged
+
+
+def _reconcile_outputs(output_port_ids, result):
+    """Wrap a raw code/AI result under the sole declared output port id when its
+    keys match none of the declared ports; warn (without crashing) if there are
+    several declared ports and none of the keys match."""
+    if not result or not isinstance(result, dict) or not output_port_ids:
+        return result
+    port_ids = set(output_port_ids)
+    if port_ids & result.keys():
+        return result
+    if len(output_port_ids) == 1:
+        return {output_port_ids[0]: result}
+    print(
+        f"\\u26a0\\ufe0f  Output keys {list(result.keys())} match none of the declared "
+        f"output ports {output_port_ids}; values may be dropped downstream.",
+        file=sys.stderr,
+    )
+    return result
 '''
 
 
@@ -344,6 +514,7 @@ def generate_runner_script(graph: Graph) -> str:
     """
     order = _topological_order(graph)
     sources = _sources_by_target(graph)
+    node_map = {n.id: n for n in graph.nodes}
     node_types = {n.node_type for n in graph.nodes}
 
     needs_files = bool(node_types & {NodeType.FILE_INPUT, NodeType.DIRECTORY_INPUT, NodeType.OUTPUT})
@@ -352,6 +523,10 @@ def generate_runner_script(graph: Graph) -> str:
         for n in graph.nodes
     )
     needs_ai = NodeType.AI in node_types
+    needs_read_file_inputs = any(
+        n.config.read_file_inputs for n in graph.nodes if n.node_type in (NodeType.AI, NodeType.CODE)
+    )
+    needs_files = needs_files or needs_read_file_inputs
 
     imports = ["import asyncio", "import json", "import sys"]
     if needs_files:
@@ -360,10 +535,16 @@ def generate_runner_script(graph: Graph) -> str:
         imports += ["import os", "import tempfile"]
     elif needs_ai:
         imports.append("import os")
+    if needs_read_file_inputs:
+        imports.append("import base64")
 
     helper_blocks: List[str] = []
     if needs_files:
         helper_blocks.append(_FILE_HELPERS)
+    if needs_read_file_inputs:
+        helper_blocks.append(_READ_FILE_INPUTS_HELPER)
+    if needs_code_runner or needs_ai:
+        helper_blocks.append(_BATCH_HELPERS)
     if needs_code_runner:
         helper_blocks.append(_CODE_RUNNER_HELPER)
     if needs_ai:
@@ -374,7 +555,7 @@ def generate_runner_script(graph: Graph) -> str:
     body_lines: List[str] = []
     for node in order:
         body_lines.append("try:")
-        for line in _node_lines(node, sources):
+        for line in _node_lines(node, sources, node_map):
             body_lines.append("    " + line)
         body_lines.append("except Exception as _exc:")
         body_lines.append(f"    print(f\"\\u274c Error executing '{node.label}': {{_exc}}\", file=sys.stderr)")

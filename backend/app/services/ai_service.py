@@ -20,6 +20,8 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
+OPENAI_COMPATIBLE_BASE_URL = os.getenv("OPENAI_COMPATIBLE_BASE_URL", "")
+OPENAI_COMPATIBLE_API_KEY = os.getenv("OPENAI_COMPATIBLE_API_KEY", "")
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +129,34 @@ async def _lmstudio_complete(
         return data["choices"][0]["message"]["content"]
 
 
+async def _openai_compatible_complete(
+    prompt: str,
+    system: str,
+    model: str,
+    temperature: float,
+    timeout: float = 120.0,
+) -> str:
+    if not OPENAI_COMPATIBLE_BASE_URL:
+        raise ValueError("OPENAI_COMPATIBLE_BASE_URL environment variable not set")
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+    payload = {"model": model, "messages": messages, "temperature": temperature}
+    headers = {}
+    if OPENAI_COMPATIBLE_API_KEY:
+        headers["Authorization"] = f"Bearer {OPENAI_COMPATIBLE_API_KEY}"
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(
+            f"{OPENAI_COMPATIBLE_BASE_URL.rstrip('/')}/chat/completions",
+            json=payload,
+            headers=headers,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+
+
 # ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
@@ -144,6 +174,8 @@ async def complete(
         return await _ollama_complete(prompt, system, model, temperature)
     if provider == AIProvider.OPENAI:
         return await _openai_complete(prompt, system, model, temperature)
+    if provider == AIProvider.OPENAI_COMPATIBLE:
+        return await _openai_compatible_complete(prompt, system, model, temperature)
     if provider == AIProvider.ANTHROPIC:
         return await _anthropic_complete(prompt, system, model, temperature)
     if provider == AIProvider.LMSTUDIO:
@@ -170,7 +202,9 @@ async def generate_code(
         "You are an expert software engineer. "
         "When asked to generate code, output ONLY valid code inside a markdown "
         "code block, followed by a brief explanation outside the block. "
-        "Do not add extra prose before the code block."
+        "Do not add extra prose before the code block. "
+        "The returned dict's keys must exactly match the requested output names - "
+        "downstream nodes look up values by these exact keys."
     )
     prompt_parts = [
         f"Write a {language} function that does the following:",
@@ -182,6 +216,11 @@ async def generate_code(
         prompt_parts.append(f"\nInputs: {', '.join(inputs)}")
     if outputs:
         prompt_parts.append(f"\nOutputs: {', '.join(outputs)}")
+        prompt_parts.append(
+            f"\nYour function must return a dict whose keys are exactly: {outputs!r}. "
+            "Use these exact strings as the dict keys - do not rename, abbreviate, "
+            "reorder, or invent additional keys, and include every one of them."
+        )
     prompt_parts.append(
         "\nThe function must be named `run` and accept a dict named `inputs` "
         "and return a dict named `outputs`. "

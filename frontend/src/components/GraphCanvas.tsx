@@ -18,6 +18,7 @@ import 'reactflow/dist/style.css';
 import { useGraphStore } from '../store/graphStore';
 import GraphNodeComponent from './nodes/GraphNodeComponent';
 import type { NodeType } from '../types/graph';
+import { NODE_PRESETS } from '../utils/nodeDefaults';
 
 const nodeTypes = { graphNode: GraphNodeComponent };
 
@@ -33,6 +34,7 @@ export default function GraphCanvas() {
   const setRFNodes = useGraphStore((s) => s.setRFNodes);
   const setRFEdges = useGraphStore((s) => s.setRFEdges);
   const addNode = useGraphStore((s) => s.addNode);
+  const addPresetNode = useGraphStore((s) => s.addPresetNode);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
@@ -53,17 +55,27 @@ export default function GraphCanvas() {
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault();
+      if (!reactFlowWrapper.current || !rfInstance) return;
+
+      const presetId = event.dataTransfer.getData('application/nodePreset');
       const nodeType = event.dataTransfer.getData('application/nodeType') as NodeType;
-      if (!nodeType || !reactFlowWrapper.current || !rfInstance) return;
+      if (!presetId && !nodeType) return;
 
       const bounds = reactFlowWrapper.current.getBoundingClientRect();
       const position = rfInstance.project({
         x: event.clientX - bounds.left,
         y: event.clientY - bounds.top,
       });
+
+      if (presetId) {
+        const preset = NODE_PRESETS.find((p) => p.id === presetId);
+        if (preset) addPresetNode(preset, position);
+        return;
+      }
+
       addNode(nodeType, position);
     },
-    [rfInstance, addNode]
+    [rfInstance, addNode, addPresetNode]
   );
 
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {

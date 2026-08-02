@@ -8,9 +8,13 @@ passing output values along the edges to downstream node inputs.
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
+import json
 import logging
 import time
 from collections import defaultdict, deque
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.models.graph import (
@@ -90,6 +94,233 @@ def _collect_inputs(
     return collected
 
 
+def _decode_value(value: Any, format_name: Optional[str]) -> Any:
+    """Decode structured connector payloads before a block receives them."""
+    if isinstance(value, list):
+        return [_decode_value(item, format_name) for item in value]
+    if not isinstance(value, str) or not format_name:
+        return value
+    normalized = format_name.lower()
+    if normalized in ("json", "application/json"):
+        return json.loads(value)
+    if normalized in ("csv", "text/csv"):
+        return list(csv.DictReader(io.StringIO(value)))
+    return value
+
+
+def _serialize_debug_value(value: Any, format_name: Optional[str]) -> tuple[str, str]:
+    """Serialize a connector snapshot using its declared format."""
+    normalized = (format_name or "text").lower()
+    if normalized in ("json", "application/json"):
+        return ".json", json.dumps(value, indent=2, ensure_ascii=False, default=str)
+    if normalized in ("csv", "text/csv") and isinstance(value, list) and value and isinstance(value[0], dict):
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=list(value[0]))
+        writer.writeheader()
+        writer.writerows(value)
+        return ".csv", output.getvalue()
+    return ".txt", str(value)
+
+
+def _debug_connector_value(node_id: str, port: Any, value: Any, direction: str, index: int) -> None:
+    """Write an optional connector snapshot for runtime inspection."""
+    if not port.debug_directory:
+        return
+    suffix, content = _serialize_debug_value(value, port.format)
+    directory = Path(port.debug_directory).expanduser().resolve()
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{node_id}_{port.id}_{direction}_{index}{suffix}").write_text(content, encoding="utf-8")
+
+
+def _read_one(path: str, fmt: Optional[str]) -> str:
+    """Resolve a single file path to its content, honoring the declared format."""
+    normalized = (fmt or "").lower()
+    if normalized.startswith("image/") or normalized in ("binary", "application/octet-stream"):
+        return file_service.read_binary_file_base64(path)
+    return file_service.read_text_file(path)
+
+
+def _effective_input_format(
+    node: GraphNode,
+    port_id: str,
+    edges: List[GraphEdge],
+    node_map: Dict[str, GraphNode],
+) -> Optional[str]:
+    """
+    Determine the format that applies to one of *node*'s input ports: an explicit
+    format on the port itself wins, otherwise fall back to the format declared on
+    the upstream source port(s) wired into it via *edges*.
+    """
+    port = next((p for p in node.inputs if p.id == port_id), None)
+    if port is not None and port.format:
+        return port.format
+    for edge in edges:
+        if edge.target_node_id != node.id or edge.target_port_id != port_id:
+            continue
+        source_node = node_map.get(edge.source_node_id)
+        if source_node is None:
+            continue
+        source_port = next((p for p in source_node.outputs if p.id == edge.source_port_id), None)
+        if source_port is not None and source_port.format:
+            return source_port.format
+    return None
+
+
+def _effective_input_formats(
+    node: GraphNode,
+    edges: List[GraphEdge],
+    node_map: Dict[str, GraphNode],
+) -> Dict[str, Optional[str]]:
+    """Compute the effective (own-or-inherited) format for every input port of *node*."""
+    return {port.id: _effective_input_format(node, port.id, edges, node_map) for port in node.inputs}
+
+
+def _resolve_file_inputs(
+    node: GraphNode,
+    inputs: Dict[str, Any],
+    effective_formats: Dict[str, Optional[str]],
+) -> Dict[str, Any]:
+    """For code/ai nodes opting in via `read_file_inputs`, replace file_path values with their content."""
+    if node.config.read_file_inputs is not True or node.node_type not in (NodeType.CODE, NodeType.AI):
+        return inputs
+
+    ports = {port.id: port for port in node.inputs}
+    resolved: Dict[str, Any] = {}
+    for key, value in inputs.items():
+        port = ports.get(key)
+        if port is None or port.data_type != DataType.FILE_PATH:
+            resolved[key] = value
+            continue
+        fmt = effective_formats.get(key)
+        if isinstance(value, list):
+            resolved[key] = [_read_one(item, fmt) if item is not None else None for item in value]
+        elif value is None:
+            resolved[key] = None
+        else:
+            resolved[key] = _read_one(value, fmt)
+    return resolved
+
+
+def _decode_node_inputs(
+    node: GraphNode,
+    inputs: Dict[str, Any],
+    effective_formats: Dict[str, Optional[str]],
+) -> Dict[str, Any]:
+    return {key: _decode_value(value, effective_formats.get(key)) for key, value in inputs.items()}
+
+
+def _decode_node_outputs(node: GraphNode, outputs: Dict[str, Any]) -> Dict[str, Any]:
+    ports = {port.id: port for port in node.outputs}
+    return {key: _decode_value(value, ports.get(key).format if ports.get(key) else None) for key, value in outputs.items()}
+
+
+def _snapshot_inputs(node: GraphNode, inputs: Dict[str, Any]) -> None:
+    for port in node.inputs:
+        value = inputs.get(port.id)
+        values = value if isinstance(value, list) and port.multi else [value]
+        for index, item in enumerate(values):
+            _debug_connector_value(node.id, port, item, "in", index)
+
+
+def _snapshot_outputs(node: GraphNode, outputs: Dict[str, Any]) -> None:
+    for port in node.outputs:
+        value = outputs.get(port.id)
+        values = value if isinstance(value, list) and port.multi else [value]
+        for index, item in enumerate(values):
+            _debug_connector_value(node.id, port, item, "out", index)
+
+
+def _batch_inputs(node: GraphNode, inputs: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Expand multi ports into indexed items while broadcasting scalar context."""
+    multi_ports = {port.id for port in node.inputs if port.multi}
+    batch_size = max(
+        (len(value) for key, value in inputs.items()
+         if key in multi_ports and isinstance(value, list)),
+        default=1,
+    )
+    items: List[Dict[str, Any]] = []
+    for index in range(batch_size):
+        item: Dict[str, Any] = {}
+        for key, value in inputs.items():
+            if key in multi_ports and isinstance(value, list):
+                item[key] = value[index] if index < len(value) else None
+            else:
+                item[key] = value
+        items.append(item)
+    return items
+
+
+def _reconcile_outputs(node: GraphNode, result: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ensure a raw dict returned by user code / AI lines up with the node's declared
+    output Port ids. If none of the keys match a declared port:
+      - exactly one output port -> wrap the whole result under that port id.
+      - multiple output ports -> log a warning (data may be dropped downstream)
+        and return the raw dict unchanged, to avoid crashing existing graphs.
+    """
+    ports = node.outputs
+    if not result or not isinstance(result, dict) or not ports:
+        return result
+    port_ids = {port.id for port in ports}
+    if port_ids & result.keys():
+        return result
+    if len(ports) == 1:
+        return {ports[0].id: result}
+    logger.warning(
+        "Node %s (%s) returned keys %s matching none of its declared output ports %s; "
+        "values may be dropped downstream.",
+        node.id, node.node_type, list(result.keys()), sorted(port_ids),
+    )
+    return result
+
+
+def _merge_batch_outputs(
+    node: GraphNode,
+    outputs: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Collect one output per batch item, flattening only multi-valued ports."""
+    port_map = {port.id: port for port in node.outputs}
+    merged: Dict[str, Any] = {}
+    for output in outputs:
+        for key, value in output.items():
+            target = merged.setdefault(key, [])
+            if port_map.get(key) and port_map[key].multi and isinstance(value, list):
+                target.extend(value)
+            else:
+                target.append(value)
+    return merged
+
+
+def _topological_levels(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[List[str]]:
+    """Return deterministic execution stages; every stage waits for its predecessors."""
+    node_ids = {node.id for node in nodes}
+    in_degree = {node.id: 0 for node in nodes}
+    successors: Dict[str, List[str]] = defaultdict(list)
+    for edge in edges:
+        if edge.source_node_id in node_ids and edge.target_node_id in node_ids:
+            in_degree[edge.target_node_id] += 1
+            successors[edge.source_node_id].append(edge.target_node_id)
+
+    current = [node.id for node in nodes if in_degree[node.id] == 0]
+    levels: List[List[str]] = []
+    visited = 0
+    while current:
+        level = list(current)
+        levels.append(level)
+        visited += len(level)
+        next_level: List[str] = []
+        for node_id in level:
+            for successor in successors[node_id]:
+                in_degree[successor] -= 1
+                if in_degree[successor] == 0:
+                    next_level.append(successor)
+        current = [node.id for node in nodes if node.id in next_level]
+
+    if visited != len(node_ids):
+        raise ValueError("Graph contains a cycle; execution is not possible.")
+    return levels
+
+
 # ---------------------------------------------------------------------------
 # Individual node executors
 # ---------------------------------------------------------------------------
@@ -106,17 +337,28 @@ async def _execute_node(
         return {"output": cfg.value or inputs.get("value", "")}
 
     if nt == NodeType.FILE_INPUT:
-        path = cfg.value or inputs.get("path", "")
+        path = str(Path(cfg.value or inputs.get("path", "")).expanduser().resolve())
         content = file_service.read_text_file(path)
         return {"content": content, "path": path}
 
     if nt == NodeType.DIRECTORY_INPUT:
-        path = cfg.value or inputs.get("path", "")
+        path = str(Path(cfg.value or inputs.get("path", "")).expanduser().resolve())
         recursive = cfg.extra.get("recursive", False)
         files = file_service.list_directory(path, recursive=recursive)
-        if not cfg.select_all_files and cfg.selector_code.strip():
+        selector_code = cfg.selector_code.strip()
+        if not cfg.select_all_files and not selector_code and cfg.selector_prompt.strip():
+            selector_code, _ = await ai_service.generate_code(
+                description=cfg.selector_prompt,
+                language=cfg.language or "python",
+                context='inputs["files"] contains rooted file paths. Return {"files": [...]} with selected paths.',
+                inputs=["files"],
+                outputs=["files"],
+                model=cfg.ai_model,
+                provider=cfg.ai_provider,
+            )
+        if not cfg.select_all_files and selector_code:
             selected = await code_executor.execute_code(
-                cfg.selector_code, cfg.language or "python", {"files": files}
+                selector_code, cfg.language or "python", {"files": files}
             )
             files = selected.get("files", files)
         return {"files": files, "count": len(files)}
@@ -134,11 +376,11 @@ async def _execute_node(
             temperature=cfg.temperature,
             provider=cfg.ai_provider,
         )
-        return {"output": response}
+        return _reconcile_outputs(node, {"output": response})
 
     if nt == NodeType.CODE:
         result = await code_executor.execute_code(cfg.code, cfg.language, inputs)
-        return result
+        return _reconcile_outputs(node, result)
 
     if nt == NodeType.OUTPUT:
         result = dict(inputs)
@@ -156,14 +398,35 @@ async def _execute_node(
         return dict(inputs)
 
     if nt == NodeType.MERGE:
-        sep = cfg.separator
-        parts = []
+        mode = cfg.merge_mode
+        if mode == "concat":
+            sep = cfg.separator
+            parts = []
+            for val in inputs.values():
+                if isinstance(val, list):
+                    parts.extend(str(v) for v in val)
+                elif val is not None:
+                    parts.append(str(val))
+            return {"output": sep.join(parts)}
+
+        flat: List[Any] = []
         for val in inputs.values():
             if isinstance(val, list):
-                parts.extend(str(v) for v in val)
+                flat.extend(v for v in val if v is not None)
             elif val is not None:
-                parts.append(str(val))
-        return {"output": sep.join(parts)}
+                flat.append(val)
+
+        if mode == "sum":
+            total = sum(float(v) for v in flat)
+            return {"output": int(total) if total.is_integer() else total}
+        if mode == "count":
+            return {"output": len(flat)}
+        if mode == "json_list":
+            return {"output": json.dumps(flat)}
+
+        logger.warning("Unknown merge_mode %r on node %s; falling back to concat", mode, node.id)
+        sep = cfg.separator
+        return {"output": sep.join(str(v) for v in flat)}
 
     if nt == NodeType.SPLIT:
         sep = cfg.separator
@@ -172,6 +435,12 @@ async def _execute_node(
         return {"items": parts, "count": len(parts)}
 
     raise ValueError(f"Unknown node type: {nt}")
+
+
+async def _execute_batch_node(node: GraphNode, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    """Run AI/code once per batch item and collect their outputs as lists."""
+    results = [await _execute_node(node, item) for item in _batch_inputs(node, inputs)]
+    return _merge_batch_outputs(node, results)
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +455,7 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
     node_map = {n.id: n for n in graph.nodes}
 
     try:
-        order = _topological_sort(graph.nodes, graph.edges)
+        levels = _topological_levels(graph.nodes, graph.edges)
     except ValueError as exc:
         return ExecutionResult(
             status=ExecutionStatus.ERROR,
@@ -197,32 +466,60 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
     node_outputs: Dict[str, Dict[str, Any]] = {}
     node_results: List[NodeResult] = []
 
-    for node_id in order:
-        node = node_map[node_id]
-        inputs = _collect_inputs(node_id, graph.edges, node_outputs)
-        node_start = time.monotonic()
-        try:
-            outputs = await _execute_node(node, inputs)
-            node_outputs[node_id] = outputs
-            node_results.append(
-                NodeResult(
+    result_by_id: Dict[str, NodeResult] = {}
+    for level in levels:
+        async def run_node(node_id: str) -> NodeResult:
+            node = node_map[node_id]
+            predecessors = {
+                edge.source_node_id
+                for edge in graph.edges
+                if edge.target_node_id == node_id
+            }
+            if any(result_by_id.get(source_id, NodeResult(
+                node_id=source_id, status=ExecutionStatus.PENDING
+            )).status != ExecutionStatus.SUCCESS for source_id in predecessors):
+                return NodeResult(node_id=node_id, status=ExecutionStatus.SKIPPED, error="Upstream node failed")
+
+            inputs = _collect_inputs(node_id, graph.edges, node_outputs)
+            effective_formats = _effective_input_formats(node, graph.edges, node_map)
+            inputs = _resolve_file_inputs(node, inputs, effective_formats)
+            inputs = _decode_node_inputs(node, inputs, effective_formats)
+            _snapshot_inputs(node, inputs)
+            node_start = time.monotonic()
+            try:
+                if node.node_type in (NodeType.AI, NodeType.CODE):
+                    outputs = (
+                        await _execute_node(node, inputs)
+                        if node.config.batch_mode == "whole_list"
+                        else await _execute_batch_node(node, inputs)
+                    )
+                else:
+                    outputs = await _execute_node(node, inputs)
+                outputs = _decode_node_outputs(node, outputs)
+                _snapshot_outputs(node, outputs)
+                return NodeResult(
                     node_id=node_id,
                     status=ExecutionStatus.SUCCESS,
+                    inputs=inputs,
                     outputs=outputs,
                     duration_ms=(time.monotonic() - node_start) * 1000,
                 )
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Error executing node %s", node_id)
-            node_results.append(
-                NodeResult(
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Error executing node %s", node_id)
+                return NodeResult(
                     node_id=node_id,
                     status=ExecutionStatus.ERROR,
+                    inputs=inputs,
                     error=str(exc),
                     duration_ms=(time.monotonic() - node_start) * 1000,
                 )
-            )
-            # Continue to remaining nodes so the caller sees full status
+
+        level_results = await asyncio.gather(*(run_node(node_id) for node_id in level))
+        for result in level_results:
+            result_by_id[result.node_id] = result
+            if result.status == ExecutionStatus.SUCCESS:
+                node_outputs[result.node_id] = result.outputs
+            node_results.append(result)
 
     # Collect outputs of OUTPUT nodes as the final result
     final_outputs: Dict[str, Any] = {}
@@ -230,7 +527,7 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
         if node.node_type in (NodeType.OUTPUT, NodeType.TEXT_OUTPUT) and node.id in node_outputs:
             final_outputs[node.config.output_label or node.id] = node_outputs[node.id]
 
-    has_error = any(r.status == ExecutionStatus.ERROR for r in node_results)
+    has_error = any(r.status != ExecutionStatus.SUCCESS for r in node_results)
     return ExecutionResult(
         status=ExecutionStatus.ERROR if has_error else ExecutionStatus.SUCCESS,
         node_results=node_results,
