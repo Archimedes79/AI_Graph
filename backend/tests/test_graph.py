@@ -506,6 +506,143 @@ async def test_execute_merge_node():
     assert "World" in merged
 
 
+@pytest.mark.asyncio
+async def test_merge_node_decodes_each_edge_with_its_own_format():
+    """Regression: a MERGE port fed by several edges with different declared
+    formats must decode each contributing value with its OWN source edge's
+    format, not one uniform port-level format (previously the first edge's
+    format – found via _effective_input_format – was applied to every value,
+    which could crash on plain-text siblings or leave JSON siblings undecoded)."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    graph = Graph(
+        metadata=GraphMetadata(name="Merge Mixed Format Test"),
+        nodes=[
+            GraphNode(id="json_src", node_type=NodeType.TEXT_INPUT, label="JSON Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
+                               multi=False, required=False, format="json")],
+                config=NodeConfig(value='{"n": 3}')),
+            GraphNode(id="text_src", node_type=NodeType.TEXT_INPUT, label="Text Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
+                               multi=False, required=False)],
+                config=NodeConfig(value="hello")),
+            GraphNode(id="num_src", node_type=NodeType.TEXT_INPUT, label="Num Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
+                               multi=False, required=False)],
+                config=NodeConfig(value="42")),
+            GraphNode(id="m", node_type=NodeType.MERGE, label="Merge",
+                inputs=[Port(id="inputs", name="Inputs", kind=PortKind.INPUT, data_type=DataType.ANY,
+                              multi=True, required=False)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
+                               multi=False, required=False)],
+                config=NodeConfig(merge_mode="json_list")),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="json_src", source_port_id="output", target_node_id="m", target_port_id="inputs"),
+            GraphEdge(id="e2", source_node_id="text_src", source_port_id="output", target_node_id="m", target_port_id="inputs"),
+            GraphEdge(id="e3", source_node_id="num_src", source_port_id="output", target_node_id="m", target_port_id="inputs"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    results_by_id = {r.node_id: r for r in result.node_results}
+
+    assert result.status == "success"
+    assert results_by_id["m"].status == "success"
+
+    merged_inputs = results_by_id["m"].inputs["inputs"]
+    assert merged_inputs[0] == {"n": 3}  # JSON-decoded using its own edge's format
+    assert merged_inputs[1] == "hello"   # left as plain text, not JSON-parsed
+    assert merged_inputs[2] == "42"      # left as plain text, not JSON-parsed
+
+    output = json.loads(results_by_id["m"].outputs["output"])
+    assert output == [{"n": 3}, "hello", "42"]
+
+
+@pytest.mark.asyncio
+async def test_output_node_writes_json_file(tmp_path):
+    """Output node's file write mode honors the value port's effective format."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    out_path = tmp_path / "result"
+    graph = Graph(
+        metadata=GraphMetadata(name="Output JSON Test"),
+        nodes=[
+            GraphNode(id="src", node_type=NodeType.TEXT_INPUT, label="Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
+                               multi=False, required=False, format="json")],
+                config=NodeConfig(value='{"a": 1, "b": [2, 3]}')),
+            GraphNode(id="o", node_type=NodeType.OUTPUT, label="Out",
+                inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY,
+                              multi=True, required=False)],
+                config=NodeConfig(output_label="Result", write_mode="file", value=str(out_path))),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="src", source_port_id="output", target_node_id="o", target_port_id="value"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    results_by_id = {r.node_id: r for r in result.node_results}
+    assert result.status == "success"
+
+    written_path = Path(results_by_id["o"].outputs["written_path"])
+    assert written_path.suffix == ".json"
+    assert json.loads(written_path.read_text(encoding="utf-8")) == {"a": 1, "b": [2, 3]}
+
+
+@pytest.mark.asyncio
+async def test_output_node_directory_write_uses_per_port_format(tmp_path):
+    """Output node's directory write mode picks each port's own effective
+    format for its file's serialization/extension."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    graph = Graph(
+        metadata=GraphMetadata(name="Output Directory Test"),
+        nodes=[
+            GraphNode(id="json_src", node_type=NodeType.TEXT_INPUT, label="JSON Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
+                               multi=False, required=False, format="json")],
+                config=NodeConfig(value="[1, 2, 3]")),
+            GraphNode(id="text_src", node_type=NodeType.TEXT_INPUT, label="Text Source",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
+                               multi=False, required=False)],
+                config=NodeConfig(value="plain")),
+            GraphNode(id="o", node_type=NodeType.OUTPUT, label="Out",
+                inputs=[
+                    Port(id="data", name="Data", kind=PortKind.INPUT, data_type=DataType.ANY, multi=False, required=False),
+                    Port(id="note", name="Note", kind=PortKind.INPUT, data_type=DataType.ANY, multi=False, required=False),
+                ],
+                config=NodeConfig(output_label="Result", write_mode="directory", value=str(tmp_path / "out"))),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="json_src", source_port_id="output", target_node_id="o", target_port_id="data"),
+            GraphEdge(id="e2", source_node_id="text_src", source_port_id="output", target_node_id="o", target_port_id="note"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    results_by_id = {r.node_id: r for r in result.node_results}
+    assert result.status == "success"
+
+    written_paths = results_by_id["o"].outputs["written_paths"]
+    json_path = next(p for p in written_paths if Path(p).suffix == ".json")
+    text_path = next(p for p in written_paths if Path(p).suffix == ".txt")
+    assert Path(json_path).stem.startswith("data")
+    assert Path(text_path).stem.startswith("note")
+    assert json.loads(Path(json_path).read_text(encoding="utf-8")) == [1, 2, 3]
+    assert Path(text_path).read_text(encoding="utf-8") == "plain"
+
+
 # ---------------------------------------------------------------------------
 # Code executor unit tests
 # ---------------------------------------------------------------------------

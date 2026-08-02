@@ -94,6 +94,31 @@ def _collect_inputs(
     return collected
 
 
+def _collect_input_source_formats(
+    node_id: str,
+    edges: List[GraphEdge],
+    node_map: Dict[str, GraphNode],
+) -> Dict[str, List[Optional[str]]]:
+    """
+    Mirror _collect_inputs' per-port accumulation order, but record each
+    contributing edge's source-port format instead of its value. Lets a
+    multi-input port fed by several edges decode each value with its own
+    upstream format instead of one uniform port-level format.
+    """
+    formats: Dict[str, List[Optional[str]]] = defaultdict(list)
+    for edge in edges:
+        if edge.target_node_id != node_id:
+            continue
+        source_node = node_map.get(edge.source_node_id)
+        source_port = (
+            next((p for p in source_node.outputs if p.id == edge.source_port_id), None)
+            if source_node is not None
+            else None
+        )
+        formats[edge.target_port_id].append(source_port.format if source_port else None)
+    return dict(formats)
+
+
 def _decode_value(value: Any, format_name: Optional[str]) -> Any:
     """Decode structured connector payloads before a block receives them."""
     if isinstance(value, list):
@@ -110,16 +135,7 @@ def _decode_value(value: Any, format_name: Optional[str]) -> Any:
 
 def _serialize_debug_value(value: Any, format_name: Optional[str]) -> tuple[str, str]:
     """Serialize a connector snapshot using its declared format."""
-    normalized = (format_name or "text").lower()
-    if normalized in ("json", "application/json"):
-        return ".json", json.dumps(value, indent=2, ensure_ascii=False, default=str)
-    if normalized in ("csv", "text/csv") and isinstance(value, list) and value and isinstance(value[0], dict):
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=list(value[0]))
-        writer.writeheader()
-        writer.writerows(value)
-        return ".csv", output.getvalue()
-    return ".txt", str(value)
+    return file_service.serialize_text_value(value, format_name)
 
 
 def _debug_connector_value(node_id: str, port: Any, value: Any, direction: str, index: int) -> None:
@@ -205,8 +221,31 @@ def _decode_node_inputs(
     node: GraphNode,
     inputs: Dict[str, Any],
     effective_formats: Dict[str, Optional[str]],
+    source_formats: Optional[Dict[str, List[Optional[str]]]] = None,
 ) -> Dict[str, Any]:
-    return {key: _decode_value(value, effective_formats.get(key)) for key, value in inputs.items()}
+    """
+    Decode each input port's value using its effective format. When a port has
+    no explicit format of its own and is fed by multiple edges (source_formats
+    has >1 entry for it), decode each element of the accumulated list with its
+    own contributing edge's format rather than one uniform port-level format.
+    """
+    ports = {port.id: port for port in node.inputs}
+    decoded: Dict[str, Any] = {}
+    for key, value in inputs.items():
+        port = ports.get(key)
+        per_edge_formats = source_formats.get(key) if source_formats else None
+        if (
+            port is not None
+            and not port.format
+            and per_edge_formats is not None
+            and len(per_edge_formats) > 1
+            and isinstance(value, list)
+            and len(per_edge_formats) == len(value)
+        ):
+            decoded[key] = [_decode_value(item, fmt) for item, fmt in zip(value, per_edge_formats)]
+        else:
+            decoded[key] = _decode_value(value, effective_formats.get(key))
+    return decoded
 
 
 def _decode_node_outputs(node: GraphNode, outputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -360,6 +399,7 @@ def _topological_levels(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[
 async def _execute_node(
     node: GraphNode,
     inputs: Dict[str, Any],
+    effective_formats: Optional[Dict[str, Optional[str]]] = None,
 ) -> Dict[str, Any]:
     """Execute a single node and return its output dict."""
     cfg = node.config
@@ -376,7 +416,8 @@ async def _execute_node(
     if nt == NodeType.DIRECTORY_INPUT:
         path = str(Path(cfg.value or inputs.get("path", "")).expanduser().resolve())
         recursive = cfg.extra.get("recursive", False)
-        files = file_service.list_directory(path, recursive=recursive)
+        extensions = file_service.parse_extensions_filter(cfg.extra.get("extensions", ""))
+        files = file_service.list_directory(path, recursive=recursive, extensions=extensions)
         selector_code = cfg.selector_code.strip()
         if not cfg.select_all_files and not selector_code and cfg.selector_prompt.strip():
             selector_code, _ = await ai_service.generate_code(
@@ -416,12 +457,33 @@ async def _execute_node(
 
     if nt == NodeType.OUTPUT:
         result = dict(inputs)
+        fmt_map = effective_formats or {}
+        non_null_items = [(k, v) for k, v in inputs.items() if v is not None]
+
         if cfg.write_mode == "file" and cfg.value:
-            content = "\n".join(str(v) for v in inputs.values() if v is not None)
-            written = file_service.write_text_file(cfg.value, content)
+            if len(non_null_items) == 1:
+                key, value = non_null_items[0]
+                fmt = fmt_map.get(key)
+                if fmt and fmt.lower() != "text":
+                    written = file_service.write_formatted_file(cfg.value, value, fmt)
+                else:
+                    written = file_service.write_text_file(cfg.value, str(value))
+            else:
+                # Multiple ports/values: join as text unless they all share one
+                # explicit non-text format, in which case write them as a JSON array.
+                shared_formats = {(fmt_map.get(k) or "text").lower() for k, _ in non_null_items}
+                if non_null_items and len(shared_formats) == 1 and next(iter(shared_formats)) != "text":
+                    fmt = fmt_map.get(non_null_items[0][0])
+                    written = file_service.write_formatted_file(
+                        cfg.value, [v for _, v in non_null_items], fmt
+                    )
+                else:
+                    content = "\n".join(str(v) for v in inputs.values() if v is not None)
+                    written = file_service.write_text_file(cfg.value, content)
             result["written_path"] = written
         elif cfg.write_mode == "directory" and cfg.value:
-            written = file_service.write_output_directory(cfg.value, inputs)
+            multi_ports = {port.id for port in node.inputs if port.multi}
+            written = file_service.write_output_directory(cfg.value, inputs, fmt_map, multi_ports)
             result["written_paths"] = written
         return result
 
@@ -513,7 +575,8 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
             inputs = _collect_inputs(node_id, graph.edges, node_outputs)
             effective_formats = _effective_input_formats(node, graph.edges, node_map)
             inputs = _resolve_file_inputs(node, inputs, effective_formats)
-            inputs = _decode_node_inputs(node, inputs, effective_formats)
+            source_formats = _collect_input_source_formats(node_id, graph.edges, node_map)
+            inputs = _decode_node_inputs(node, inputs, effective_formats, source_formats)
             _snapshot_inputs(node, inputs)
             node_start = time.monotonic()
             try:
@@ -524,7 +587,7 @@ async def execute_graph(graph: Graph) -> ExecutionResult:
                         else await _execute_batch_node(node, inputs)
                     )
                 else:
-                    outputs = await _execute_node(node, inputs)
+                    outputs = await _execute_node(node, inputs, effective_formats)
                 outputs = _decode_node_outputs(node, outputs)
                 _snapshot_outputs(node, outputs)
                 return NodeResult(

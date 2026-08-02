@@ -12,7 +12,7 @@ AI-Graph bietet eine grafische Oberfläche, in der Datenverarbeitungen als Graph
 
 - **Text Input** – Textwert als feste Eingabe oder zur Laufzeit abgefragt
 - **File Input** – eine einzelne Datei lesen und Inhalt sowie Pfad ausgeben
-- **Directory Input** – durchsucht ein Verzeichnis und gibt ausschließlich eine Liste gerooteter Dateipfade aus (`files`, Batch). Es liest keine Inhalte. Welche Dateien weitergereicht werden, kann per AI-Prompt (`selector_prompt`) auf editierbaren, prüfbaren Auswahlcode (`selector_code`) abgebildet werden, z. B. „nur `.md`-Dateien“.
+- **Directory Input** – durchsucht ein Verzeichnis und gibt ausschließlich eine Liste gerooteter Dateipfade aus (`files`, Batch). Es liest keine Inhalte. Ein einfacher Dateityp-Filter (`extensions`, z. B. `.md, .txt`) grenzt die Liste vorab ein; welche der verbleibenden Dateien weitergereicht werden, kann zusätzlich per AI-Prompt (`selector_prompt`) auf editierbaren, prüfbaren Auswahlcode (`selector_code`) abgebildet werden.
 - **AI** – Prompts mit Ollama, LM Studio, einem OpenAI-kompatiblen Endpunkt, OpenAI oder Anthropic verarbeiten
 - **Code** – Eingänge mit Python oder JavaScript auf Ausgänge abbilden; AI kann den Code aus einer Beschreibung erzeugen
 - **Read File (Code) / Read File (AI)** – Presets für die normalen Code-/AI-Blöcke: Eingang `paths` ist als `file_path`-Batch deklariert, `read_file_inputs` ist aktiviert. Dadurch werden Pfade vor der Ausführung automatisch zu Dateiinhalt aufgelöst (Text, oder Base64 bei binärem Format) – der Code-Block muss also keinen eigenen Dateizugriff programmieren, der AI-Block erhält echten Inhalt statt eines Pfad-Strings.
@@ -92,6 +92,17 @@ npm install
 npm run dev
 # opens at http://localhost:3000
 ```
+
+### Option 3 – `start.py` launcher
+
+A single Python script that starts both servers for you, no Docker or VS Code required:
+
+```bash
+python start.py               # dev mode: uvicorn --reload + vite dev server
+python start.py --mode prod   # prod mode: one process serving API + built UI on :8000
+```
+
+`--mode prod` expects a built frontend (`cd frontend && npm run build` first); it then runs a single `uvicorn` process that serves both the API and the built UI from `frontend/dist`, making it the simplest way to deploy the editor itself to another server.
 
 ---
 

@@ -15,6 +15,7 @@ import textwrap
 from typing import Dict, List, Tuple
 
 from app.models.graph import DataType, Graph, GraphNode, NodeType
+from app.services import file_service
 
 # ---------------------------------------------------------------------------
 # Compile-time graph analysis
@@ -151,8 +152,9 @@ def _node_lines(
 
     elif nt == NodeType.DIRECTORY_INPUT:
         recursive = bool(cfg.extra.get("recursive", False))
+        extensions = file_service.parse_extensions_filter(cfg.extra.get("extensions", ""))
         lines.append(f"_path = str(Path(_resolved.get({node.id!r}, {(cfg.value or '')!r})).expanduser().resolve())")
-        lines.append(f"_files = _list_directory(_path, recursive={recursive!r})")
+        lines.append(f"_files = _list_directory(_path, recursive={recursive!r}, extensions={extensions!r})")
         if not cfg.select_all_files and cfg.selector_code.strip():
             lines.append(
                 f"_files = (await _run_code({cfg.selector_code!r}, {(cfg.language or 'python')!r}, "
@@ -273,13 +275,16 @@ def _read_text_file(path):
     return p.read_text(encoding="utf-8", errors="replace")
 
 
-def _list_directory(path, recursive=False):
+def _list_directory(path, recursive=False, extensions=None):
     root = Path(path).expanduser().resolve()
     if not root.exists():
         raise FileNotFoundError(f"Directory not found: {path}")
-    if recursive:
-        return [str(p) for p in root.rglob("*") if p.is_file()]
-    return [str(p) for p in root.iterdir() if p.is_file()]
+    candidates = root.rglob("*") if recursive else root.iterdir()
+    files = [p for p in candidates if p.is_file()]
+    if extensions:
+        allowed = {e if e.startswith('.') else f'.{e}' for e in extensions}
+        files = [p for p in files if p.suffix.lower() in allowed]
+    return [str(p) for p in files]
 
 
 def _write_text_file(path, content):

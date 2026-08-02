@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.routers import ai, deploy, execute, files, graph
 
@@ -59,3 +61,12 @@ async def root():
         "docs": "/docs",
         "redoc": "/redoc",
     }
+
+
+# Optional single-process production mode: if a built frontend exists at
+# frontend/dist (repo_root/frontend/dist), serve it on the same port as the
+# API. Registered last so it never shadows the /api/* routers above. No-op
+# (dev mode unaffected) when the directory doesn't exist, e.g. local dev.
+_frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")

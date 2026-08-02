@@ -215,6 +215,23 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                   )}
 
                   {nt === 'directory_input' && (
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                        File types (comma-separated, e.g. .md, .txt)
+                      </label>
+                      <input
+                        className="w-full rounded-lg px-3 py-2 text-sm font-mono"
+                        style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                        value={(node.config.extra?.extensions as string) ?? ''}
+                        onChange={(e) =>
+                          setConfig('extra', { ...node.config.extra, extensions: e.target.value })
+                        }
+                        placeholder="Leave empty for all file types"
+                      />
+                    </div>
+                  )}
+
+                  {nt === 'directory_input' && (
                     <div className="mt-4 pt-4" style={{ borderTop: '1px solid #2d3148' }}>
                       <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
                         AI file-selection prompt
