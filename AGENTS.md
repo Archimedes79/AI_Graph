@@ -170,15 +170,40 @@ and runtime widget; shared shells dispatch through the registry and need no kind
 - `frontend/src/components/gui/layout.ts` — pure grid-resolution helper (fallback to list order); unit-tested in `layout.test.ts`.
 - `frontend/src/components/gui/widgetProps.ts` — the shared `{ widget, value, onChange }` contract every runtime widget implements.
 
-## "t+1" (deferred) edges
-`GraphEdge.deferred` marks a feedback edge carrying the **previous** round's value. It is
-excluded from cycle detection and topological ordering, which is what lets a `gui -> ai ->
-gui` graph run at all. Logic lives in exactly one backend place — `graph_executor.py`
-(`_topological_sort`, `_topological_levels`, `_collect_inputs`, `_blocked_required_port`)
-— and in `ConnectorEditor.tsx` / `GraphCanvas.tsx` on the frontend. A deploy bundle
-vendors `graph_executor.py` verbatim, so this logic never needs a second implementation
-for deploy. It is never per-node-type: no `elements/<type>/<type>_element.py` should know
-about it.
+## Memory-feedback edges (gui/widget nodes)
+A `gui`/`widget` node is a **memory element**: its output reflects its own persisted
+`GuiWidget.value` rather than being freshly recomputed from inputs each round. This is
+what lets a `gui -> ai -> gui` graph run at all despite being a cycle at node level — an
+edge feeding one of a memory node's input ports is automatically excluded from cycle
+detection and topological ordering, exactly when needed to break a cycle, with no manual
+edge marking required (no `deferred`/`initial_value` fields exist on `GraphEdge` — they
+were removed because the old design required threading a `previous_outputs` parameter
+across separate `execute_graph()` calls that no real caller, `routers/execute.py` or
+`graph-runner/run.py`, ever actually did — the feature only worked in tests that
+manually simulated a second round).
+
+Logic lives in exactly one backend place — `graph_executor.py`:
+`_is_memory_node`, `_memory_feedback_edge_ids` (Kahn's algorithm, marking one
+memory-targeting edge as feedback at a time until the graph is acyclic; used by
+`_topological_sort`/`_topological_levels`/`_collect_inputs`/`_blocked_required_port`),
+and `_settle_memory_feedback` — a same-round pass that runs after all topological
+levels finish executing, writing each feedback edge's fresh source value directly into
+the target widget's persisted `value` (read by the *next* round's output) and into that
+round's own `NodeResult.inputs` (so the frontend, which already prioritizes
+`nodeResult.inputs[widget_id + "_in"]` for display in `GuiWindow.tsx`, shows the fresh
+value immediately, same round). A deploy bundle vendors `graph_executor.py` verbatim, so
+this logic never needs a second implementation for deploy. It is never per-node-type: no
+`elements/<type>/<type>_element.py` should know about it.
+
+`frontend/src/store/graphStore.ts` mirrors the same cycle-detection algorithm
+(`memoryFeedbackEdgeIds`) purely to know, after receiving an `ExecutionResult`, which
+edges' delivered values to persist into the target widget's own `config.gui_widgets[...].value`
+client-side — this is what makes the loop actually progress across separate "Run" clicks
+in the editor, since each API call is otherwise stateless.
+
+A more general **memory element** — one that can read and write data within the *same*
+cycle, like a register update, rather than relying on the gui/widget-only automatic
+exclusion above — is a planned future addition, not yet implemented.
 
 ## One-time legacy migrations
 

@@ -1,5 +1,5 @@
 ---
-description: "Use when implementing or modifying backend (FastAPI), graph-runner (Python execution engine), node types, or Graph DSL feature code in the AI-Graph project — including the functional/logic half of the frontend (element behavior, store logic, API client) whenever a change must stay in sync across the frontend/backend boundary."
+description: "Implements/modifies AI-Graph backend (FastAPI), graph-runner, node types, and Graph DSL feature code — plus the frontend's functional/logic half (element behavior, store logic, API client) whenever a change must stay in sync across the frontend/backend boundary."
 name: "Programmer"
 tools: [read, edit, search, execute, agent]
 agents: [Cheap-Coder]

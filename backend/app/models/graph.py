@@ -186,10 +186,10 @@ class NodeConfig(BaseModel):
 
     # gui node – ordered list of composed widgets; ports are derived from this
     gui_widgets: List[GuiWidget] = Field(default_factory=list)
-    # gui node – background raster the designer/runtime window lay widgets out
-    # on, mirroring each widget's own foreground `size` (small/medium/large).
+    # gui node – background column raster the designer/runtime window lay
+    # widgets out on horizontally (row height is a fixed constant, see
+    # frontend/src/components/gui/layout.ts).
     gui_grid_columns: int = 12
-    gui_grid_row_height: int = 56
 
     extra: Dict[str, Any] = Field(default_factory=dict)
 
@@ -419,15 +419,12 @@ class GraphEdge(BaseModel):
     target_node_id: str
     target_port_id: str
 
-    # A "t+1" (feedback) edge: it carries the source's value from the PREVIOUS
-    # execution round, not the current one. Deferred edges are excluded from
-    # cycle detection and from topological ordering, which is what makes
-    # otherwise-cyclic graphs runnable -- e.g. a gui node whose output feeds an
-    # ai node that feeds a different widget on the same gui node. On the first
-    # round a deferred edge delivers `initial_value` (None -> no value at all,
-    # exactly like an unwired port).
-    deferred: bool = False
-    initial_value: Optional[Any] = None
+    # Edges into a gui/widget node's input are never a node-level ordering
+    # constraint: that node is a "memory" element, so an edge closing a cycle
+    # back onto one (e.g. gui -> ai -> the same gui) is auto-excluded from
+    # cycle detection and settled into the target widget's own persisted
+    # `value` once the rest of the round has executed, instead of blocking on
+    # it. See graph_executor.py's "memory feedback" section and AGENTS.md.
 
 
 class GraphMetadata(BaseModel):

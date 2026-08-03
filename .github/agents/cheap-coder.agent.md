@@ -1,5 +1,5 @@
 ---
-description: "Use for small, well-isolated implementation tasks scoped to one or two named files (e.g. one node-type editor component, one node compiler module, one widget-kind module) in the AI-Graph project. NOT for cross-file design work, new architecture, or anything requiring judgment calls beyond the given spec."
+description: "Small, isolated implementation tasks scoped to one or two named AI-Graph files (e.g. one node-type editor component, one node compiler module, one widget-kind module). NOT for cross-file design work, new architecture, or judgment calls beyond the given spec."
 name: "Cheap-Coder"
 tools: [read, edit, search]
 model: ["Grok Code Fast 1 (copilot)", "GPT-5 mini (copilot)", "GPT-4o mini (copilot)"]

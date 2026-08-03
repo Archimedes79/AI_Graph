@@ -7,8 +7,7 @@ interface GuiDesignerProps {
   widgets: GuiWidget[];
   onChange: (widgets: GuiWidget[]) => void;
   columns?: number;
-  rowHeight?: number;
-  onGridChange?: (patch: { columns?: number; rowHeight?: number }) => void;
+  onGridChange?: (patch: { columns?: number }) => void;
 }
 
 const CELL_WIDTH = 46;
@@ -25,7 +24,7 @@ interface DragState {
  * Grid designer for a gui node's widgets: drag to move, drag the corner to
  * resize, or type exact cells. Writes only the presentational `x/y/w/h` fields.
  */
-export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLUMNS, rowHeight = GUI_GRID_ROW_HEIGHT, onGridChange }: GuiDesignerProps) {
+export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLUMNS, onGridChange }: GuiDesignerProps) {
   const drag = useRef<DragState | null>(null);
   const widgetsRef = useRef(widgets);
   widgetsRef.current = widgets;
@@ -46,7 +45,7 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
       const state = drag.current;
       if (!state) return;
       const dx = Math.round((e.clientX - state.startClientX) / CELL_WIDTH);
-      const dy = Math.round((e.clientY - state.startClientY) / rowHeight);
+      const dy = Math.round((e.clientY - state.startClientY) / GUI_GRID_ROW_HEIGHT);
 
       if (state.mode === 'move') {
         const w = state.origin.w;
@@ -74,7 +73,7 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [patchWidget, columns, rowHeight]);
+  }, [patchWidget, columns]);
 
   const startDrag = (e: React.MouseEvent, widgetId: string, mode: DragState['mode']) => {
     const placement = placementById.get(widgetId);
@@ -132,18 +131,6 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
               onChange={(e) => onGridChange({ columns: Math.max(1, Math.min(48, Number(e.target.value) || columns)) })}
             />
           </label>
-          <label className="flex items-center gap-1 text-xs" style={{ color: '#94a3b8' }}>
-            Background row height (px)
-            <input
-              type="number"
-              min={16}
-              max={200}
-              className="w-16 rounded px-1 py-0.5 text-xs"
-              style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-              value={rowHeight}
-              onChange={(e) => onGridChange({ rowHeight: Math.max(16, Math.min(200, Number(e.target.value) || rowHeight)) })}
-            />
-          </label>
         </div>
       )}
 
@@ -153,11 +140,11 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
           background: '#0f1117',
           border: '1px solid #2d3148',
           width: columns * CELL_WIDTH,
-          height: rows * rowHeight,
+          height: rows * GUI_GRID_ROW_HEIGHT,
           maxWidth: '100%',
           backgroundImage:
             'linear-gradient(to right, #1c2036 1px, transparent 1px), linear-gradient(to bottom, #1c2036 1px, transparent 1px)',
-          backgroundSize: `${CELL_WIDTH}px ${rowHeight}px`,
+          backgroundSize: `${CELL_WIDTH}px ${GUI_GRID_ROW_HEIGHT}px`,
         }}
       >
         {placements.map(({ widget, x, y, w, h }) => (
@@ -166,9 +153,9 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
             className="absolute rounded-lg px-2 py-1 overflow-hidden cursor-move select-none"
             style={{
               left: x * CELL_WIDTH + 2,
-              top: y * rowHeight + 2,
+              top: y * GUI_GRID_ROW_HEIGHT + 2,
               width: w * CELL_WIDTH - 4,
-              height: h * rowHeight - 4,
+              height: h * GUI_GRID_ROW_HEIGHT - 4,
               background: '#2d1b4e',
               border: '1px solid #6366f1',
             }}

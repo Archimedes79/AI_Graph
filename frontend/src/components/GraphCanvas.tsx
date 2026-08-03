@@ -16,27 +16,11 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 
 import { useGraphStore } from '../store/graphStore';
-import type { RFEdgeData } from '../store/graphStore';
 import GraphNodeComponent from './nodes/GraphNodeComponent';
 import type { NodeType } from '../types/graph';
 import { ALL_NODE_PRESETS } from '../utils/nodeDefaults';
 
 const nodeTypes = { graphNode: GraphNodeComponent };
-
-/** Deferred (t+1) edges are drawn dashed and labelled so a feedback loop is readable at a glance. */
-function styleEdge(edge: Edge): Edge {
-  if (!(edge.data as RFEdgeData | undefined)?.deferred) return edge;
-  return {
-    ...edge,
-    animated: true,
-    style: { ...edge.style, stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 4' },
-    label: 't+1',
-    labelStyle: { fill: '#fdba74', fontSize: 10, fontWeight: 600 },
-    labelBgStyle: { fill: '#0f1117' },
-    labelBgPadding: [4, 2] as [number, number],
-    labelBgBorderRadius: 4,
-  };
-}
 
 const edgeOptions = {
   type: 'smoothstep',
@@ -120,13 +104,11 @@ export default function GraphCanvas() {
     event.dataTransfer.dropEffect = 'copy';
   }, []);
 
-  const styledEdges = React.useMemo(() => rfEdges.map(styleEdge), [rfEdges]);
-
   return (
     <div ref={reactFlowWrapper} className="flex-1 h-full">
       <ReactFlow
         nodes={rfNodes}
-        edges={styledEdges}
+        edges={rfEdges}
         onNodesChange={(changes: NodeChange[]) => {
           setRFNodes(applyNodeChanges(changes, rfNodes) as typeof rfNodes);
         }}

@@ -1,5 +1,5 @@
 ---
-description: "Use for small, well-isolated bug fixes or test fixes scoped to one or two named files in the AI-Graph project, when a failing test/error is already reproduced and the fix is expected to be mechanical. NOT for root-causing unclear failures across multiple files or architecture-level bugs."
+description: "Small, isolated bug/test fixes scoped to one or two named AI-Graph files, when the failing test/error is already reproduced and the fix is mechanical. NOT for root-causing unclear failures across multiple files or architecture-level bugs."
 name: "Cheap-Debugger"
 tools: [read, edit, search, execute, testFailure]
 model: ["Grok Code Fast 1 (copilot)", "GPT-5 mini (copilot)", "GPT-4o mini (copilot)"]

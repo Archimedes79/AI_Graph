@@ -7,12 +7,6 @@ import { syncGuiNodePorts } from '../utils/guiWidgets';
 
 type RFNode = Node<RFNodeData>;
 
-/** Extra DSL fields ReactFlow edges carry in `edge.data`. */
-export interface RFEdgeData {
-  deferred?: boolean;
-  initial_value?: unknown;
-}
-
 export interface GraphStore {
   // ReactFlow state
   rfNodes: Node<RFNodeData>[];
@@ -41,7 +35,6 @@ export interface GraphStore {
   deleteNode: (nodeId: string) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
   setRFEdges: (edges: Edge[]) => void;
-  setEdgeFeedback: (edgeId: string, patch: RFEdgeData) => void;
   setSelectedNode: (nodeId: string | null) => void;
   setEditingNode: (nodeId: string | null) => void;
   setEditingPort: (port: { nodeId: string; portId: string } | null) => void;
@@ -113,6 +106,59 @@ function migrateLegacyNode(rawNode: Partial<GraphNode>): Partial<GraphNode> {
   return node;
 }
 
+// A gui/widget node is a "memory" element: its output reflects its own
+// persisted widget value rather than being freshly recomputed from inputs
+// each round. An edge feeding one of its input ports is therefore excluded
+// from cycle detection exactly when needed to break a cycle -- mirrors
+// backend/app/services/graph_executor.py's `_memory_feedback_edge_ids`
+// (Kahn's algorithm, marking one memory-targeting edge as feedback at a time
+// until the graph is acyclic) so the frontend can tell, after a run, which
+// edges' delivered values should be persisted into the target widget's own
+// `value` for the *next* run (see `setExecutionResult` below).
+function isMemoryNode(nodeType: string): boolean {
+  return nodeType === 'gui' || nodeType === 'widget';
+}
+
+function memoryFeedbackEdgeIds(nodes: GraphNode[], edges: GraphEdge[]): Set<string> {
+  const nodeTypeById = new Map(nodes.map((n) => [n.id, n.node_type as string]));
+  const nodeIds = new Set(nodeTypeById.keys());
+  let feedbackIds = new Set<string>();
+
+  while (true) {
+    const active = edges.filter(
+      (e) => !feedbackIds.has(e.id) && nodeIds.has(e.source_node_id) && nodeIds.has(e.target_node_id)
+    );
+    const inDegree = new Map<string, number>();
+    nodeIds.forEach((id) => inDegree.set(id, 0));
+    const successors = new Map<string, GraphEdge[]>();
+    for (const e of active) {
+      inDegree.set(e.target_node_id, (inDegree.get(e.target_node_id) ?? 0) + 1);
+      if (!successors.has(e.source_node_id)) successors.set(e.source_node_id, []);
+      successors.get(e.source_node_id)!.push(e);
+    }
+
+    const queue: string[] = [...nodeIds].filter((id) => inDegree.get(id) === 0);
+    const visited = new Set(queue);
+    while (queue.length) {
+      const id = queue.shift()!;
+      for (const e of successors.get(id) ?? []) {
+        inDegree.set(e.target_node_id, (inDegree.get(e.target_node_id) ?? 0) - 1);
+        if (inDegree.get(e.target_node_id) === 0 && !visited.has(e.target_node_id)) {
+          visited.add(e.target_node_id);
+          queue.push(e.target_node_id);
+        }
+      }
+    }
+
+    if (visited.size === nodeIds.size) return feedbackIds;
+    const candidate = active.find(
+      (e) => !visited.has(e.target_node_id) && isMemoryNode(nodeTypeById.get(e.target_node_id) ?? '')
+    );
+    if (!candidate) return feedbackIds;
+    feedbackIds = new Set([...feedbackIds, candidate.id]);
+  }
+}
+
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
   rawNode = migrateLegacyNode(rawNode);
   const nodeType = rawNode.node_type ?? 'input';
@@ -157,7 +203,6 @@ function normalizeGraph(graph: Graph): Graph {
           id: edge.id || `edge-${index}-${Date.now()}`,
           source_port_id: edge.source_port_id || 'output',
           target_port_id: edge.target_port_id || 'input',
-          deferred: edge.deferred === true ? true : undefined,
         }))
     : [];
 
@@ -274,13 +319,6 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges = edges;
       }),
 
-    setEdgeFeedback: (edgeId, patch) =>
-      set((state) => {
-        const edge = state.rfEdges.find((e: Edge) => e.id === edgeId);
-        if (!edge) return;
-        edge.data = { ...(edge.data as RFEdgeData | undefined), ...patch };
-      }),
-
     setSelectedNode: (nodeId) =>
       set((state) => {
         state.selectedNodeId = nodeId;
@@ -299,6 +337,46 @@ export const useGraphStore = create<GraphStore>()(
     setExecutionResult: (result) =>
       set((state) => {
         state.executionResult = result;
+        if (!result) return;
+
+        // Same-round "memory settle": a gui/widget node's own output reflects
+        // its persisted widget value, so a cycle-closing edge into one only
+        // becomes visible on the NEXT run unless we persist the fresh value
+        // here now -- mirrors the backend's own in-memory
+        // `_settle_memory_feedback`, which mutates its (request-scoped) Graph
+        // copy the same way; the frontend must repeat it against its own
+        // long-lived graph state so the loop actually progresses across
+        // separate Run clicks.
+        const nodes = state.rfNodes.map((n: RFNode) => n.data.graphNode as GraphNode);
+        const edges: GraphEdge[] = state.rfEdges.map((e: Edge) => ({
+          id: e.id,
+          source_node_id: e.source,
+          source_port_id: e.sourceHandle ?? 'output',
+          target_node_id: e.target,
+          target_port_id: e.targetHandle ?? 'input',
+        }));
+        const feedbackIds = memoryFeedbackEdgeIds(nodes, edges);
+        if (feedbackIds.size === 0) return;
+
+        const resultByNodeId = new Map(result.node_results.map((r) => [r.node_id, r]));
+        for (const edge of edges) {
+          if (!feedbackIds.has(edge.id)) continue;
+          const sourceResult = resultByNodeId.get(edge.source_node_id);
+          if (!sourceResult || sourceResult.status !== 'success') continue;
+          const value = sourceResult.outputs?.[edge.source_port_id];
+          if (value === undefined) continue;
+
+          const targetIdx = state.rfNodes.findIndex((n: RFNode) => n.id === edge.target_node_id);
+          if (targetIdx === -1) continue;
+          const targetNode = state.rfNodes[targetIdx].data.graphNode as GraphNode;
+          const widgetId = edge.target_port_id.endsWith('_in')
+            ? edge.target_port_id.slice(0, -'_in'.length)
+            : edge.target_port_id;
+          const widgets = targetNode.config.gui_widgets;
+          const widget = Array.isArray(widgets) ? widgets.find((w) => w.id === widgetId) : undefined;
+          if (!widget) continue;
+          widget.value = typeof value === 'string' || value === null ? value : String(value);
+        }
       }),
 
     setIsExecuting: (v) =>
@@ -341,7 +419,6 @@ export const useGraphStore = create<GraphStore>()(
         targetHandle: ge.target_port_id,
         type: 'smoothstep',
         animated: false,
-        data: { deferred: ge.deferred, initial_value: ge.initial_value } satisfies RFEdgeData,
         style: { stroke: '#6366f1', strokeWidth: 2 },
       }));
 
@@ -363,18 +440,13 @@ export const useGraphStore = create<GraphStore>()(
         height: rfn.height ?? rfn.data.graphNode.height,
       }));
 
-      const edges: GraphEdge[] = rfEdges.map((rfe) => {
-        const data = rfe.data as RFEdgeData | undefined;
-        return {
-          id: rfe.id,
-          source_node_id: rfe.source,
-          source_port_id: rfe.sourceHandle ?? 'output',
-          target_node_id: rfe.target,
-          target_port_id: rfe.targetHandle ?? 'input',
-          deferred: data?.deferred === true ? true : undefined,
-          initial_value: data?.initial_value,
-        };
-      });
+      const edges: GraphEdge[] = rfEdges.map((rfe) => ({
+        id: rfe.id,
+        source_node_id: rfe.source,
+        source_port_id: rfe.sourceHandle ?? 'output',
+        target_node_id: rfe.target,
+        target_port_id: rfe.targetHandle ?? 'input',
+      }));
 
       return { metadata, nodes, edges };
     },

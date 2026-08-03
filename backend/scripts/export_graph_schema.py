@@ -60,13 +60,12 @@ _MODELS = [
 ]
 
 # Fields whose default value is genuinely treated as "optional, fill in a
-# fallback at read time" by the frontend (`widget.w ?? span.w`, `edge.deferred
-# || undefined`, ...), rather than "always present, safe to read directly" --
-# these must stay OPTIONAL in the generated TS even though every other
-# defaulted field below gets tightened to required (see `_tighten_required`).
+# fallback at read time" by the frontend (`widget.w ?? span.w`, ...), rather
+# than "always present, safe to read directly" -- these must stay OPTIONAL in
+# the generated TS even though every other defaulted field below gets
+# tightened to required (see `_tighten_required`).
 _LEAVE_OPTIONAL_FIELDS: dict[str, set[str]] = {
     "GuiWidget": {"value", "mode", "code", "language", "x", "y", "w", "h"},
-    "GraphEdge": {"deferred", "initial_value"},
 }
 
 

@@ -1,5 +1,5 @@
 ---
-description: "Use for the AI-Graph React/ReactFlow frontend's LOOK AND FEEL only: visual styling, layout, spacing, animations, ReactFlow canvas rendering/UX polish, and visually validating changes. NOT for functional/logic changes — those belong to Programmer."
+description: "AI-Graph React/ReactFlow frontend LOOK AND FEEL only: visual styling, layout, spacing, animations, ReactFlow rendering/UX polish, visual validation. NOT functional/logic changes — those belong to Programmer."
 name: "UI-Specialist"
 tools: [read, edit, search, execute, open_browser_page, screenshot_page, click_element, agent]
 agents: [Cheap-Coder]

@@ -52,9 +52,7 @@ export interface Graph {
  * via the `definition` "GraphEdge".
  */
 export interface GraphEdge {
-  deferred?: boolean;
   id: string;
-  initial_value?: unknown;
   source_node_id: string;
   source_port_id: string;
   target_node_id: string;
@@ -108,7 +106,6 @@ export interface NodeConfig {
   gen_ai_model: string;
   gen_ai_provider: 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
   gui_grid_columns: number;
-  gui_grid_row_height: number;
   gui_widgets: GuiWidget[];
   input_mode: 'text' | 'file' | 'directory';
   language: string;

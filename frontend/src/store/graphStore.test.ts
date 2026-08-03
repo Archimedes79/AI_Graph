@@ -31,7 +31,6 @@ function blankConfig() {
     read_file_inputs: false,
     gui_widgets: [],
     gui_grid_columns: 12,
-    gui_grid_row_height: 56,
     extra: {},
   };
 }
@@ -146,36 +145,68 @@ describe('graphStore width/height persistence', () => {
   });
 });
 
-describe('graphStore deferred edge persistence', () => {
-  it('round-trips deferred/initial_value through loadGraph -> exportGraph', () => {
-    const a = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
-    const b = graphNode({
-      id: 'b',
-      node_type: 'output',
-      inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+describe('graphStore memory-feedback settle', () => {
+  it('persists a cycle-closing edge\'s fresh value into the target widget for the next run', () => {
+    const widget = createGuiWidget('text_io', 'Answer');
+    const gui = graphNode({
+      id: 'gui1',
+      node_type: 'gui',
+      config: { ...blankConfig(), gui_widgets: [widget] },
+      ...guiWidgetPorts(widget),
     });
-    loadTestGraph([a, b], [
-      { id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'b', target_port_id: 'value', deferred: true, initial_value: 'seed' },
-      { id: 'e2', source_node_id: 'a', source_port_id: 'output', target_node_id: 'b', target_port_id: 'value' },
+    const code = graphNode({
+      id: 'code1',
+      node_type: 'code',
+      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }],
+    });
+
+    loadTestGraph([gui, code], [
+      { id: 'e1', source_node_id: 'gui1', source_port_id: `${widget.id}_out`, target_node_id: 'code1', target_port_id: 'value' },
+      { id: 'e2', source_node_id: 'code1', source_port_id: 'output', target_node_id: 'gui1', target_port_id: `${widget.id}_in` },
     ]);
 
-    const exported = useGraphStore.getState().exportGraph();
-    expect(exported.edges[0]).toMatchObject({ id: 'e1', deferred: true, initial_value: 'seed' });
-    expect(exported.edges[1].deferred).toBeUndefined();
+    useGraphStore.getState().setExecutionResult({
+      status: 'success',
+      node_results: [
+        { node_id: 'gui1', status: 'success', inputs: {}, outputs: {} },
+        { node_id: 'code1', status: 'success', inputs: {}, outputs: { output: 'fresh answer' } },
+      ],
+    } as any);
+
+    const loadedGui = useGraphStore.getState().rfNodes.find((n) => n.id === 'gui1')!.data.graphNode;
+    const loadedWidget = loadedGui.config.gui_widgets.find((w) => w.id === widget.id)!;
+    expect(loadedWidget.value).toBe('fresh answer');
   });
 
-  it('setEdgeFeedback marks an existing edge as deferred', () => {
-    const a = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
-    const b = graphNode({
-      id: 'b',
-      node_type: 'output',
-      inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+  it('does not persist a plain (non-cycle-closing) edge into the target widget', () => {
+    const widget = createGuiWidget('text_io', 'Display');
+    const gui = graphNode({
+      id: 'gui1',
+      node_type: 'gui',
+      config: { ...blankConfig(), gui_widgets: [widget] },
+      ...guiWidgetPorts(widget),
     });
-    loadTestGraph([a, b], [{ id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'b', target_port_id: 'value' }]);
+    const code = graphNode({
+      id: 'code1',
+      node_type: 'code',
+      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }],
+    });
 
-    useGraphStore.getState().setEdgeFeedback('e1', { deferred: true, initial_value: 'first' });
+    loadTestGraph([code, gui], [
+      { id: 'e1', source_node_id: 'code1', source_port_id: 'output', target_node_id: 'gui1', target_port_id: `${widget.id}_in` },
+    ]);
 
-    const exported = useGraphStore.getState().exportGraph();
-    expect(exported.edges[0]).toMatchObject({ deferred: true, initial_value: 'first' });
+    useGraphStore.getState().setExecutionResult({
+      status: 'success',
+      node_results: [
+        { node_id: 'code1', status: 'success', inputs: {}, outputs: { output: 'hello' } },
+        { node_id: 'gui1', status: 'success', inputs: { [`${widget.id}_in`]: 'hello' }, outputs: {} },
+      ],
+    } as any);
+
+    const loadedGui = useGraphStore.getState().rfNodes.find((n) => n.id === 'gui1')!.data.graphNode;
+    const loadedWidget = loadedGui.config.gui_widgets.find((w) => w.id === widget.id)!;
+    expect(loadedWidget.value).toBe('');
   });
 });
+

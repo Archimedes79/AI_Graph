@@ -295,7 +295,21 @@ async def test_plot_window_widget_broken_code_marks_node_error():
 # -- see graph_executor._effective_deferred_edge_ids.
 # ---------------------------------------------------------------------------
 
-def _gui_ai_gui_graph(fixture_path: Path, *, deferred: bool) -> Graph:
+# ---------------------------------------------------------------------------
+# gui -> ai -> gui feedback loop (memory-node auto-excluded edges, settled
+# into the target widget's persisted value at the end of the round)
+#
+# The user-built graph: one GUI node holding a file_open widget and a text_window
+# widget, with the AI node in between. At node level that is a cycle
+# (gui -> ai -> gui); a gui/widget node is a "memory" element (its output
+# reflects its own persisted widget value, not this round's fresh input), so
+# the closing edge is automatically excluded from cycle detection without the
+# user marking anything -- see graph_executor._memory_feedback_edge_ids -- and
+# its value is written into the target widget's `value` once the round
+# finishes, ready for the *next* round's output (graph_executor._settle_memory_feedback).
+# ---------------------------------------------------------------------------
+
+def _gui_ai_gui_graph(fixture_path: Path) -> Graph:
     gui = _gui_node("gui", [
         GuiWidget(id="w_file", kind=GuiWidgetKind.INPUT_PICKER, mode="file", label="Source File", value=str(fixture_path)),
         GuiWidget(id="w_text", kind=GuiWidgetKind.TEXT_IO, label="Answer"),
@@ -313,16 +327,15 @@ def _gui_ai_gui_graph(fixture_path: Path, *, deferred: bool) -> Graph:
             GraphEdge(id="e1", source_node_id="gui", source_port_id="w_file_out",
                       target_node_id="ai", target_port_id="prompt"),
             GraphEdge(id="e2", source_node_id="ai", source_port_id="output",
-                      target_node_id="gui", target_port_id="w_text_in",
-                      deferred=deferred),
+                      target_node_id="gui", target_port_id="w_text_in"),
         ],
     )
 
 
 @pytest.mark.asyncio
-async def test_gui_to_ai_to_gui_without_explicit_deferred_edge_still_runs(tmp_path, monkeypatch):
-    """A cycle closed by an edge into a gui/widget node is auto-deferred even
-    without the user marking it -- the memory-node rule, not a regression."""
+async def test_gui_to_ai_to_gui_cycle_runs_without_marking_any_edge(tmp_path, monkeypatch):
+    """A cycle closed by an edge into a gui/widget node is auto-excluded from
+    cycle detection -- the memory-node rule, no manual edge marking needed."""
     fixture = tmp_path / "source.md"
     fixture.write_text("the quick brown fox\n", encoding="utf-8")
 
@@ -331,19 +344,25 @@ async def test_gui_to_ai_to_gui_without_explicit_deferred_edge_still_runs(tmp_pa
 
     monkeypatch.setattr("app.services.graph_executor.ai_service.complete", fake_complete)
 
-    result = await execute_graph(_gui_ai_gui_graph(fixture, deferred=False))
+    result = await execute_graph(_gui_ai_gui_graph(fixture))
 
     assert result.status == ExecutionStatus.SUCCESS
     results_by_id = {r.node_id: r for r in result.node_results}
     assert results_by_id["gui"].status == ExecutionStatus.SUCCESS
-    # No previous round, so the auto-deferred edge delivers nothing this round.
-    assert "w_text_in" not in results_by_id["gui"].inputs
+    # The gui node ran before the ai node this round, using its own (empty)
+    # persisted value -- but the settle step still surfaces the ai node's
+    # fresh answer in the SAME round's result for immediate display...
+    assert results_by_id["gui"].inputs["w_text_in"] == "summary:the quick brown fox"
+    # ...while this round's own output (computed before the settle) is
+    # unaffected -- exactly a synchronous register: read-old, write-new.
+    assert results_by_id["gui"].outputs["w_text_out"] == ""
 
 
 @pytest.mark.asyncio
 async def test_non_cyclic_edge_into_gui_node_still_delivers_same_round():
-    """A plain code -> gui display wire (no loop back) is NOT auto-deferred --
-    the memory-node rule only kicks in for edges actually needed to break a cycle."""
+    """A plain code -> gui display wire (no loop back) is NOT excluded from
+    ordering -- the memory-node rule only kicks in for edges actually needed
+    to break a cycle."""
     code = GraphNode(
         id="code", node_type=NodeType.CODE, label="Compute",
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
@@ -361,77 +380,36 @@ async def test_non_cyclic_edge_into_gui_node_still_delivers_same_round():
     result = await execute_graph(graph)
     assert result.status == ExecutionStatus.SUCCESS
     results_by_id = {r.node_id: r for r in result.node_results}
-    # Delivered in the SAME round -- not held back like a real (cycle-closing) t+1 edge.
+    # Delivered in the SAME round -- not held back like a real cycle-closing edge.
     assert results_by_id["gui"].inputs["w_text_in"] == "hello"
     assert results_by_id["gui"].outputs["w_text_out"] == "hello"
 
 
-
 @pytest.mark.asyncio
-async def test_gui_file_open_to_ai_to_gui_text_window_runs_with_deferred_edge(tmp_path, monkeypatch):
-    """The closing edge marked deferred makes the loop runnable and carries the
-    AI answer into the text_window on the NEXT round, not the current one."""
+async def test_gui_feedback_value_persists_into_widget_for_next_round(tmp_path, monkeypatch):
+    """After a round settles a memory-feedback edge, the target widget's own
+    `value` carries the answer into the *next* execute_graph call -- no
+    previous-round bookkeeping needed from the caller."""
     fixture = tmp_path / "source.md"
     fixture.write_text("the quick brown fox\n", encoding="utf-8")
 
-    recorded_prompts: list[str] = []
-
     async def fake_complete(prompt, system, model, temperature, provider):
-        recorded_prompts.append(prompt)
         return f"summary:{prompt.strip()}"
 
     monkeypatch.setattr("app.services.graph_executor.ai_service.complete", fake_complete)
 
-    graph = _gui_ai_gui_graph(fixture, deferred=True)
+    graph = _gui_ai_gui_graph(fixture)
 
-    # --- round 1: no previous outputs, so the text_window gets nothing at all ---
     first = await execute_graph(graph)
     assert first.status == ExecutionStatus.SUCCESS
+    text_widget = next(w for w in graph.nodes[0].config.gui_widgets if w.id == "w_text")
+    assert text_widget.value == "summary:the quick brown fox"
 
-    first_results = {r.node_id: r for r in first.node_results}
-    assert first_results["gui"].status == ExecutionStatus.SUCCESS
-    assert first_results["ai"].status == ExecutionStatus.SUCCESS
-
-    # The file_open widget emitted the resolved path...
-    assert first_results["gui"].outputs["w_file_out"] == str(fixture.resolve())
-    # ...and the AI node received the file's *content* (read_file_inputs).
-    assert recorded_prompts == ["the quick brown fox\n"]
-    assert first_results["ai"].outputs["output"] == "summary:the quick brown fox"
-
-    # Deferred edge with no previous round and no initial_value -> no value at all.
-    assert "w_text_in" not in first_results["gui"].inputs
-    assert first_results["gui"].outputs["w_text_out"] == ""
-
-    # --- round 2: feed round 1's outputs back in; now the t+1 edge delivers ---
-    previous_outputs = {
-        r.node_id: r.outputs for r in first.node_results
-        if r.status == ExecutionStatus.SUCCESS
-    }
-    second = await execute_graph(graph, previous_outputs=previous_outputs)
+    # Re-running the SAME graph object now has the settled value available as
+    # this round's own (stale-by-one-round) output -- the gui node reads its
+    # own persisted value at the start of the round, before ai runs again.
+    second = await execute_graph(graph)
     assert second.status == ExecutionStatus.SUCCESS
+    second_by_id = {r.node_id: r for r in second.node_results}
+    assert second_by_id["gui"].outputs["w_text_out"] == "summary:the quick brown fox"
 
-    second_results = {r.node_id: r for r in second.node_results}
-    assert second_results["gui"].inputs["w_text_in"] == "summary:the quick brown fox"
-    assert second_results["gui"].outputs["w_text_out"] == "summary:the quick brown fox"
-
-
-@pytest.mark.asyncio
-async def test_deferred_edge_uses_initial_value_on_first_round(tmp_path, monkeypatch):
-    """With an initial_value set, round 1 seeds the text_window instead of leaving it empty."""
-    fixture = tmp_path / "source.md"
-    fixture.write_text("hello\n", encoding="utf-8")
-
-    async def fake_complete(prompt, system, model, temperature, provider):
-        return "answer"
-
-    monkeypatch.setattr("app.services.graph_executor.ai_service.complete", fake_complete)
-
-    graph = _gui_ai_gui_graph(fixture, deferred=True)
-    next(e for e in graph.edges if e.id == "e2").initial_value = "waiting..."
-
-    result = await execute_graph(graph)
-    assert result.status == ExecutionStatus.SUCCESS
-
-    gui_result = next(r for r in result.node_results if r.node_id == "gui")
-    assert gui_result.inputs["w_text_in"] == "waiting..."
-    assert gui_result.outputs["w_text_out"] == "waiting..."

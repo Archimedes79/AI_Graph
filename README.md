@@ -207,20 +207,26 @@ Layout is edited in the **Designer** tab of the GUI node editor: widgets are pla
 never affect ports, wiring, or execution — and widgets without coordinates simply stack
 in list order.
 
-### "t+1" (feedback) edges
+### Memory-feedback edges (gui/widget nodes)
 
 A `gui` node usually has both outputs (e.g. `input_picker`) and inputs (e.g. `text_io`),
 so the natural "pick a file → process it with AI → show the answer in the text window"
 pattern wires `gui → ai → gui`. That is a DAG at *port* level but a **cycle at node
-level**, and it is rejected with `Graph contains a cycle; execution is not possible.`
+level**.
 
-Mark the closing edge as a **t+1 edge** (`"deferred": true`, toggled in the connector
-editor, drawn dashed with a `t+1` label) to break it: a deferred edge carries the source's
-value from the **previous** run rather than the current one, and is excluded from cycle
-detection and topological ordering. On the first run it delivers the edge's
-`initial_value`, or nothing at all if that is unset. See
+A `gui`/`widget` node is a **memory element**: its output reflects its own persisted
+widget value rather than being freshly recomputed from inputs each round, so an edge
+closing a cycle by feeding one of its input ports is automatically excluded from cycle
+detection and topological ordering — no manual "deferred" marking needed. Once every
+node in that round finishes executing, the fresh value is written into the target
+widget's own stored value (visible immediately, same round, in the run results) so the
+*next* run's output reflects it too. See
 [examples/gui_file_to_ai_to_text.json](examples/gui_file_to_ai_to_text.json) for a working
 File Open → AI → Text Window graph built this way.
+
+A dedicated, more general **memory element** — one that can read and write data within
+the *same* cycle rather than relying on this automatic gui/widget-only exclusion — is a
+planned future addition, not yet implemented.
 
 ### Plot window data transforms
 

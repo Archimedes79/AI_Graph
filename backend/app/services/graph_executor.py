@@ -42,34 +42,38 @@ logger = logging.getLogger(__name__)
 
 def _is_memory_node(node_type: NodeType) -> bool:
     """
-    Node types whose output already reflects previously-persisted state (a
-    gui/widget node's own widget `value`) rather than being freshly computed
-    from this round's input. An edge feeding one of these can always be
-    treated as an implicit t+1 (deferred) edge -- without the user marking it
-    -- exactly when doing so is what's needed to break a cycle (e.g.
-    gui -> ai -> gui). An edge into a memory node that ISN'T part of any cycle
-    is left alone and still delivers same-round, e.g. a plain ai -> gui
-    display wire. See AGENTS.md's "t+1 edges" section.
+    Node types whose output already reflects their own persisted state (a
+    gui/widget node's widget `value`) rather than being freshly computed from
+    this round's input. An edge feeding one of these can always be excluded
+    from cycle detection/ordering -- exactly when doing so is what's needed to
+    break a cycle (e.g. gui -> ai -> gui) -- because the target doesn't need
+    this round's value to run: it already has its own. Once the rest of the
+    round has executed, `_settle_memory_feedback` writes the freshly computed
+    value into that widget's `value` so it's what the *next* round's output
+    reflects. An edge into a memory node that ISN'T part of any cycle is left
+    alone and still delivers same-round, e.g. a plain ai -> gui display wire.
+    (A future general-purpose "memory" node type, not just gui/widget, could
+    extend this same rule -- see AGENTS.md's "Memory feedback edges" section.)
     """
     return node_type in (NodeType.GUI, NodeType.WIDGET)
 
 
-def _effective_deferred_edge_ids(nodes: List[GraphNode], edges: List[GraphEdge]) -> set:
+def _memory_feedback_edge_ids(nodes: List[GraphNode], edges: List[GraphEdge]) -> set:
     """
-    Return the ids of every edge that should be excluded from topological
-    ordering: edges explicitly marked `deferred=True`, plus the minimal set of
-    memory-node-targeting edges (see `_is_memory_node`) needed to make the
-    graph acyclic. A graph with a real (non-memory) cycle still ends up with
-    unresolved nodes -- the caller's own Kahn's-algorithm pass raises for that.
+    Return the ids of the minimal set of memory-node-targeting edges (see
+    `_is_memory_node`) that must be excluded from topological ordering to make
+    the graph acyclic. A graph with a real (non-memory) cycle still ends up
+    with unresolved nodes -- the caller's own Kahn's-algorithm pass raises for
+    that.
     """
     node_map = {n.id: n for n in nodes}
     node_ids = set(node_map)
-    deferred_ids = {e.id for e in edges if e.deferred}
+    feedback_ids: set = set()
 
     while True:
         active = [
             e for e in edges
-            if e.id not in deferred_ids and e.source_node_id in node_ids and e.target_node_id in node_ids
+            if e.id not in feedback_ids and e.source_node_id in node_ids and e.target_node_id in node_ids
         ]
         in_degree = {nid: 0 for nid in node_ids}
         successors: Dict[str, List[GraphEdge]] = defaultdict(list)
@@ -88,7 +92,7 @@ def _effective_deferred_edge_ids(nodes: List[GraphNode], edges: List[GraphEdge])
                     queue.append(e.target_node_id)
 
         if len(visited) == len(node_ids):
-            return deferred_ids
+            return feedback_ids
 
         candidate = next(
             (
@@ -98,25 +102,24 @@ def _effective_deferred_edge_ids(nodes: List[GraphNode], edges: List[GraphEdge])
             None,
         )
         if candidate is None:
-            return deferred_ids  # unresolved (real) cycle; caller's own pass will raise
-        deferred_ids = deferred_ids | {candidate.id}
+            return feedback_ids  # unresolved (real) cycle; caller's own pass will raise
+        feedback_ids = feedback_ids | {candidate.id}
 
 
 def _topological_sort(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[str]:
     """
     Return node IDs in topological execution order.
-    Deferred (t+1) edges -- explicit or implicit via `_effective_deferred_edge_ids`
-    -- carry a value from the previous round, so they impose no ordering
+    Memory-feedback edges (see `_memory_feedback_edge_ids`) impose no ordering
     constraint and are ignored here.
     Raises ValueError if a cycle is detected.
     """
-    deferred_ids = _effective_deferred_edge_ids(nodes, edges)
+    feedback_ids = _memory_feedback_edge_ids(nodes, edges)
     node_ids = {n.id for n in nodes}
     in_degree: Dict[str, int] = {nid: 0 for nid in node_ids}
     successors: Dict[str, List[str]] = defaultdict(list)
 
     for edge in edges:
-        if edge.id in deferred_ids:
+        if edge.id in feedback_ids:
             continue
         if edge.source_node_id in node_ids and edge.target_node_id in node_ids:
             in_degree[edge.target_node_id] += 1
@@ -143,8 +146,7 @@ def _collect_inputs(
     node_id: str,
     edges: List[GraphEdge],
     node_outputs: Dict[str, Dict[str, Any]],
-    previous_outputs: Optional[Dict[str, Dict[str, Any]]] = None,
-    deferred_ids: Optional[set] = None,
+    feedback_ids: Optional[set] = None,
 ) -> Dict[str, Any]:
     """
     Gather all upstream output values that are wired into *node_id*'s input ports.
@@ -155,28 +157,24 @@ def _collect_inputs(
     no entry at all (as opposed to a `None` value from a source that legitimately
     succeeded with `None`).
 
-    A deferred (t+1) edge -- explicit (`edge.deferred`) or implicit (its id is in
-    *deferred_ids*, see `_effective_deferred_edge_ids`) -- reads its source from
-    *previous_outputs* instead of the current round's *node_outputs*. With no
-    previous value it falls back to the edge's `initial_value`, and contributes
-    nothing at all when that is None.
+    A memory-feedback edge (its id is in *feedback_ids*, see
+    `_memory_feedback_edge_ids`) contributes nothing here: its source hasn't
+    run yet this round (that's what makes the graph acyclic), and its target
+    already has its own persisted `value` to fall back on. `_settle_memory_feedback`
+    fills it in for the *next* round once the source has actually run.
     """
-    deferred_ids = deferred_ids or set()
+    feedback_ids = feedback_ids or set()
     port_edges: Dict[str, List[GraphEdge]] = defaultdict(list)
     for edge in edges:
-        if edge.target_node_id == node_id:
+        if edge.target_node_id == node_id and edge.id not in feedback_ids:
             port_edges[edge.target_port_id].append(edge)
 
     collected: Dict[str, Any] = {}
     for target_port, incoming in port_edges.items():
         values = []
         for edge in incoming:
-            is_deferred = edge.deferred or edge.id in deferred_ids
-            outputs = previous_outputs if is_deferred else node_outputs
-            source_outputs = (outputs or {}).get(edge.source_node_id)
+            source_outputs = node_outputs.get(edge.source_node_id)
             if source_outputs is None:
-                if is_deferred and edge.initial_value is not None:
-                    values.append(edge.initial_value)
                 continue
             values.append(source_outputs.get(edge.source_port_id))
         if len(incoming) > 1:
@@ -379,25 +377,60 @@ def _snapshot_outputs(node: GraphNode, outputs: Dict[str, Any]) -> None:
             _debug_connector_value(node.id, port, item, "out", index)
 
 
+def _settle_memory_feedback(
+    node_map: Dict[str, GraphNode],
+    edges: List[GraphEdge],
+    feedback_ids: set,
+    node_outputs: Dict[str, Dict[str, Any]],
+    result_by_id: Dict[str, "NodeResult"],
+) -> None:
+    """
+    Once every node in the round has run, write each memory-feedback edge's
+    freshly computed source value into its target widget's persisted `value`
+    -- what the *next* round's output reflects -- and into that widget's own
+    NodeResult.inputs for this round, so the UI shows it immediately instead
+    of waiting for another run. A source that didn't succeed this round
+    contributes nothing (the widget keeps whatever value it already had).
+    """
+    for edge in edges:
+        if edge.id not in feedback_ids:
+            continue
+        source_outputs = node_outputs.get(edge.source_node_id)
+        if source_outputs is None or edge.source_port_id not in source_outputs:
+            continue
+        value = source_outputs[edge.source_port_id]
+        target_node = node_map.get(edge.target_node_id)
+        if target_node is None:
+            continue
+        widget_id = edge.target_port_id[:-3] if edge.target_port_id.endswith("_in") else edge.target_port_id
+        widget = next((w for w in target_node.config.gui_widgets if w.id == widget_id), None)
+        if widget is None:
+            continue
+        widget.value = value
+        target_result = result_by_id.get(edge.target_node_id)
+        if target_result is not None:
+            target_result.inputs[edge.target_port_id] = value
+
+
 def _blocked_required_port(
     node: GraphNode,
     edges: List[GraphEdge],
     result_by_id: Dict[str, "NodeResult"],
-    deferred_ids: Optional[set] = None,
+    feedback_ids: Optional[set] = None,
 ) -> Optional[str]:
     """
     Return the name of a required input port whose wired-in predecessors have
     ALL failed/been skipped (i.e. no successful source remains for that port),
     or None if every required port is still satisfiable. Ports that aren't
-    wired to any edge, or that are optional, are never blocking here. Deferred
-    (t+1) edges -- explicit or implicit, see `_effective_deferred_edge_ids` --
-    are ignored: their source belongs to the previous round and legitimately
-    hasn't run yet in this one.
+    wired to any edge, or that are optional, are never blocking here.
+    Memory-feedback edges (see `_memory_feedback_edge_ids`) are ignored: their
+    source hasn't run yet this round and the target already has its own
+    persisted value to fall back on.
     """
-    deferred_ids = deferred_ids or set()
+    feedback_ids = feedback_ids or set()
     incoming_by_port: Dict[str, List[str]] = defaultdict(list)
     for edge in edges:
-        if edge.target_node_id == node.id and not edge.deferred and edge.id not in deferred_ids:
+        if edge.target_node_id == node.id and edge.id not in feedback_ids:
             incoming_by_port[edge.target_port_id].append(edge.source_node_id)
 
     for port in node.inputs:
@@ -419,16 +452,15 @@ def _blocked_required_port(
 def _topological_levels(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[List[str]]:
     """
     Return deterministic execution stages; every stage waits for its predecessors.
-    Deferred (t+1) edges -- explicit or implicit, see `_effective_deferred_edge_ids`
-    -- are ignored, so a graph that is acyclic once they are removed still runs
-    (and can carry values across rounds).
+    Memory-feedback edges (see `_memory_feedback_edge_ids`) are ignored, so a
+    graph that is acyclic once they are removed still runs.
     """
-    deferred_ids = _effective_deferred_edge_ids(nodes, edges)
+    feedback_ids = _memory_feedback_edge_ids(nodes, edges)
     node_ids = {node.id for node in nodes}
     in_degree = {node.id: 0 for node in nodes}
     successors: Dict[str, List[str]] = defaultdict(list)
     for edge in edges:
-        if edge.id in deferred_ids:
+        if edge.id in feedback_ids:
             continue
         if edge.source_node_id in node_ids and edge.target_node_id in node_ids:
             in_degree[edge.target_node_id] += 1
@@ -482,13 +514,9 @@ async def _execute_batch_node(node: GraphNode, inputs: Dict[str, Any]) -> Dict[s
 
 async def execute_graph(
     graph: Graph,
-    previous_outputs: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> ExecutionResult:
     """
     Execute the full graph and return an ExecutionResult.
-
-    *previous_outputs* holds the node outputs of the preceding round and is what
-    deferred (t+1) edges read from; omit it for a first/standalone round.
     """
     start = time.monotonic()
     # GUI node ports are derived data; regenerate them from `config.gui_widgets`
@@ -505,7 +533,7 @@ async def execute_graph(
             error=str(exc),
             duration_ms=(time.monotonic() - start) * 1000,
         )
-    deferred_ids = _effective_deferred_edge_ids(graph.nodes, graph.edges)
+    feedback_ids = _memory_feedback_edge_ids(graph.nodes, graph.edges)
 
     node_outputs: Dict[str, Dict[str, Any]] = {}
     node_results: List[NodeResult] = []
@@ -514,7 +542,7 @@ async def execute_graph(
     for level in levels:
         async def run_node(node_id: str) -> NodeResult:
             node = node_map[node_id]
-            blocked_port = _blocked_required_port(node, graph.edges, result_by_id, deferred_ids)
+            blocked_port = _blocked_required_port(node, graph.edges, result_by_id, feedback_ids)
             if blocked_port is not None:
                 return NodeResult(
                     node_id=node_id,
@@ -525,7 +553,7 @@ async def execute_graph(
             inputs: Dict[str, Any] = {}
             node_start = time.monotonic()
             try:
-                inputs = _collect_inputs(node_id, graph.edges, node_outputs, previous_outputs, deferred_ids)
+                inputs = _collect_inputs(node_id, graph.edges, node_outputs, feedback_ids)
                 effective_formats = _effective_input_formats(node, graph.edges, node_map)
                 inputs = _resolve_file_inputs(node, inputs, effective_formats)
                 source_formats = _collect_input_source_formats(node_id, graph.edges, node_map)
@@ -564,6 +592,8 @@ async def execute_graph(
             if result.status == ExecutionStatus.SUCCESS:
                 node_outputs[result.node_id] = result.outputs
             node_results.append(result)
+
+    _settle_memory_feedback(node_map, graph.edges, feedback_ids, node_outputs, result_by_id)
 
     # Collect outputs of OUTPUT nodes as the final result
     final_outputs: Dict[str, Any] = {}

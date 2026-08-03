@@ -2,8 +2,9 @@
 // Presentational only: never touches ports, wiring, or execution.
 import type { GuiWidget } from '../../types/graph';
 
-// Fallback background raster for graphs saved before gui_grid_columns/
-// gui_grid_row_height existed on NodeConfig (see baseNodeConfig.ts).
+// Fallback background column count for graphs saved before gui_grid_columns
+// existed on NodeConfig (see baseNodeConfig.ts). Row height is fixed and not
+// user-configurable -- only the column count varies per node.
 export const GUI_GRID_COLUMNS = 12;
 export const GUI_GRID_ROW_HEIGHT = 56;
 

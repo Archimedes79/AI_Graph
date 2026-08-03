@@ -1,5 +1,5 @@
 ---
-description: "Use when debugging failures, writing or running tests (pytest, vitest/jest), investigating stack traces, or validating fixes for the AI-Graph backend, graph-runner, or frontend."
+description: "Debugs failures, writes/runs tests (pytest, vitest/jest), investigates stack traces, and validates fixes for the AI-Graph backend, graph-runner, or frontend."
 name: "Debugger-Tester"
 tools: [read, edit, search, execute, testFailure, agent]
 agents: [Cheap-Debugger]

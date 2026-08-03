@@ -49,10 +49,8 @@ export default function GuiEditor({ node, setConfig, applyWidgets }: GuiEditorPr
           widgets={node.config.gui_widgets}
           onChange={applyWidgets}
           columns={node.config.gui_grid_columns}
-          rowHeight={node.config.gui_grid_row_height}
           onGridChange={(patch) => {
             if (patch.columns !== undefined) setConfig('gui_grid_columns', patch.columns);
-            if (patch.rowHeight !== undefined) setConfig('gui_grid_row_height', patch.rowHeight);
           }}
         />
       )}

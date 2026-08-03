@@ -2,9 +2,9 @@
   "metadata": {
     "name": "GUI: File Open -> AI -> Text Window",
     "version": "1.0.0",
-    "description": "A single GUI node holds a File Open widget and a Text Window widget. The chosen file is summarized by the AI node, whose answer is fed back into the Text Window. Because that closing edge points back at the same GUI node it would form a cycle, so it is marked \"deferred\": true -- a t+1 feedback edge. The Text Window therefore shows the PREVIOUS round's answer (on the very first round it shows the edge's initial_value).",
+    "description": "A single GUI node holds a File Open widget and a Text Window widget. The chosen file is summarized by the AI node, whose answer is fed back into the Text Window. Because that closing edge points back at the same GUI node it would form a cycle, so it is automatically excluded from cycle detection (a gui/widget node is a 'memory' element) and its value is written into the Text Window's own stored value once the round finishes -- so it shows the fresh answer immediately, and the NEXT run's output reflects it too.",
     "author": "AI-Graph",
-    "tags": ["example", "gui", "deferred", "feedback"]
+    "tags": ["example", "gui", "memory-feedback"]
   },
   "nodes": [
     {
@@ -108,9 +108,7 @@
       "source_node_id": "node-ai-1",
       "source_port_id": "output",
       "target_node_id": "node-gui-1",
-      "target_port_id": "w-answer_in",
-      "deferred": true,
-      "initial_value": "(no summary yet -- run the graph again to see the previous round's answer)"
+      "target_port_id": "w-answer_in"
     }
   ]
 }

@@ -90,7 +90,6 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
 
   const placements = resolveWidgetLayout(node.config.gui_widgets, node.config.gui_grid_columns ?? GUI_GRID_COLUMNS);
   const rows = layoutRowCount(placements);
-  const rowHeight = node.config.gui_grid_row_height ?? GUI_GRID_ROW_HEIGHT;
 
   return (
     <div
@@ -129,7 +128,7 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
             className="grid gap-3"
             style={{
               gridTemplateColumns: `repeat(${node.config.gui_grid_columns ?? GUI_GRID_COLUMNS}, 1fr)`,
-              gridTemplateRows: `repeat(${rows}, minmax(${rowHeight}px, auto))`,
+              gridTemplateRows: `repeat(${rows}, minmax(${GUI_GRID_ROW_HEIGHT}px, auto))`,
             }}
           >
             {placements.map(({ widget, x, y, w, h }) => {

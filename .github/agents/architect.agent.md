@@ -1,5 +1,5 @@
 ---
-description: "Use when overseeing the AI-Graph project: architecture decisions, task breakdown, cross-cutting design consistency, delegating work to specialist agents, or checking overall project health across frontend/backend/graph-runner."
+description: "Oversees the AI-Graph project: architecture decisions, task breakdown, cross-cutting design consistency, delegating to specialist agents, and project health across frontend/backend/graph-runner."
 name: "Architect"
 tools: [read, search, edit, agent, todo]
 agents: [Programmer, Debugger-Tester, UI-Specialist, Cheap-Coder, Cheap-Debugger]
