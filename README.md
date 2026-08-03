@@ -128,6 +128,10 @@ python start.py --mode package --output my.zip    # custom output path
 
 The zip contains `backend/app`, `backend/requirements.txt`, the built `frontend/dist`, `start.py` and `README.md`. On the target machine: unzip, `pip install -r backend/requirements.txt` (ideally in a venv), then `python start.py --mode prod`.
 
+### Option 4 – VS Code one-click launch
+
+Open the repo in VS Code and use the **Run and Debug** view: pick "Start AI-Graph (backend + frontend)" and press the green ▷ button (or `F5`). It just runs `start.py` in dev mode for you — no arguments, no terminal typing. See `.vscode/launch.json`. The equivalent `Start AI-Graph` build task (`Ctrl+Shift+B`) in `.vscode/tasks.json` starts the same two dev servers directly, without going through `start.py`.
+
 ---
 
 ## 📖 Graph DSL
