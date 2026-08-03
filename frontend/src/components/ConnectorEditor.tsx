@@ -95,7 +95,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
             <p className="text-xs mt-1" style={{ color: '#475569' }}>Use a MIME type or format name. JSON and CSV are parsed at block inputs and serialized at debug outputs.</p>
             {port.data_type === 'file_path' && (
               <div className="mt-2">
-                {(graphNode.node_type === 'directory_input' || graphNode.node_type === 'input') && (
+                {graphNode.node_type === 'input' && (
                   <input
                     className="w-full rounded-lg px-3 py-2 text-sm font-mono mb-2"
                     style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
@@ -106,7 +106,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
                 )}
                 <button
                   onClick={() => detectFormat(
-                    (graphNode.node_type === 'directory_input' || graphNode.node_type === 'input')
+                    graphNode.node_type === 'input'
                       ? samplePath
                       : graphNode.config.value ?? ''
                   )}

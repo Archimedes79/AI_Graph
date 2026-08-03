@@ -25,7 +25,7 @@ def test_graph_dsl_round_trip():
         nodes=[
             GraphNode(
                 id="n1",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Input",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False, description="")],
                 config=NodeConfig(value="hello"),
@@ -100,7 +100,7 @@ def test_graph_validation_allows_one_to_one_wiring():
         nodes=[
             GraphNode(
                 id="source",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="hello"),
@@ -132,7 +132,7 @@ def test_graph_validation_allows_implicit_fan_out_without_split():
         nodes=[
             GraphNode(
                 id="source",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="hello"),
@@ -172,14 +172,14 @@ def test_graph_validation_allows_implicit_fan_in_without_merge():
         nodes=[
             GraphNode(
                 id="left",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Left",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="hello"),
             ),
             GraphNode(
                 id="right",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Right",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="world"),
@@ -220,7 +220,7 @@ def test_graph_validation_allows_fan_out_from_split():
         nodes=[
             GraphNode(
                 id="source",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="one\ntwo"),
@@ -281,14 +281,14 @@ def test_graph_validation_allows_fan_in_into_merge():
         nodes=[
             GraphNode(
                 id="left",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Left",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="hello"),
             ),
             GraphNode(
                 id="right",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Right",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="world"),
@@ -402,6 +402,75 @@ async def test_legacy_merge_split_nodes_migrate_to_equivalent_code_nodes():
     assert result.final_outputs["SplitResult"]["value"] == ["a", "b", "c"]
 
 
+async def test_legacy_alias_node_types_and_widget_kinds_migrate():
+    """Loading a graph JSON containing the retired alias names (text_input/
+    file_input/directory_input/text_output node types; file_open/directory_open/
+    text_window/chat_window widget kinds) rewrites them to their unified
+    elements (Graph._migrate_legacy_nodes), preserving ids/ports so edges keep
+    resolving, and preserving behavior (input mode, always-prompt, window
+    display, picker mode)."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GuiWidgetKind, NodeType
+    from app.services.graph_executor import execute_graph, get_runtime_requirements
+
+    raw = {
+        "metadata": {"name": "Legacy Aliases"},
+        "nodes": [
+            {
+                "id": "src", "node_type": "text_input", "label": "Src",
+                "outputs": [{"id": "output", "name": "Output", "kind": "output", "data_type": "text", "required": False}],
+                "config": {"value": "hello"},
+            },
+            {
+                "id": "shown", "node_type": "text_output", "label": "Shown",
+                "inputs": [{"id": "value", "name": "Value", "kind": "input", "data_type": "any", "multi": True, "required": False}],
+                "config": {"output_label": "Window"},
+            },
+            {
+                "id": "gui", "node_type": "gui", "label": "GUI",
+                "config": {"gui_widgets": [
+                    {"id": "w_file", "kind": "file_open", "label": "F"},
+                    {"id": "w_dir", "kind": "directory_open", "label": "D"},
+                    {"id": "w_text", "kind": "text_window", "label": "T", "value": "typed"},
+                ]},
+            },
+        ],
+        "edges": [
+            {"id": "e1", "source_node_id": "src", "source_port_id": "output", "target_node_id": "shown", "target_port_id": "value"},
+        ],
+    }
+
+    graph = Graph.model_validate(raw)
+    nodes = {n.id: n for n in graph.nodes}
+
+    # Node types rewritten to their unified elements, behavior preserved in config.
+    assert nodes["src"].node_type == NodeType.INPUT
+    assert nodes["src"].config.input_mode == "text"
+    assert nodes["src"].config.prompt_at_runtime is True  # legacy inputs always prompted
+    assert nodes["shown"].node_type == NodeType.OUTPUT
+    assert nodes["shown"].config.write_mode == "window"
+    for name in ("TEXT_INPUT", "FILE_INPUT", "DIRECTORY_INPUT", "TEXT_OUTPUT"):
+        assert not hasattr(NodeType, name)
+
+    # Widget kinds rewritten, ids untouched, picker/text modes preserved.
+    widgets = {w.id: w for w in nodes["gui"].config.gui_widgets}
+    assert widgets["w_file"].kind == GuiWidgetKind.INPUT_PICKER and widgets["w_file"].mode == "file"
+    assert widgets["w_dir"].kind == GuiWidgetKind.INPUT_PICKER and widgets["w_dir"].mode == "directory"
+    assert widgets["w_text"].kind == GuiWidgetKind.TEXT_IO and widgets["w_text"].mode == "both"
+    for name in ("FILE_OPEN", "DIRECTORY_OPEN", "TEXT_WINDOW", "CHAT_WINDOW"):
+        assert not hasattr(GuiWidgetKind, name)
+
+    # The migrated graph still runs, edges resolving against the untouched ids.
+    result = await execute_graph(graph)
+    assert result.status == "success"
+    assert result.final_outputs["Window"]["value"] == "hello"
+
+    # And the always-prompt contract survives as a runtime requirement.
+    reqs = get_runtime_requirements(graph)
+    assert any(r.node_id == "src" and r.kind == "text" for r in reqs)
+
+
 
 # ---------------------------------------------------------------------------
 # Topological sort tests
@@ -414,7 +483,7 @@ def test_topological_sort_linear():
     from app.services.graph_executor import _topological_sort
 
     nodes = [
-        GraphNode(id="a", node_type=NodeType.TEXT_INPUT, label="A"),
+        GraphNode(id="a", node_type=NodeType.INPUT, label="A"),
         GraphNode(id="b", node_type=NodeType.CODE, label="B"),
         GraphNode(id="c", node_type=NodeType.OUTPUT, label="C"),
     ]
@@ -460,7 +529,7 @@ async def test_execute_text_input_to_output():
         nodes=[
             GraphNode(
                 id="n1",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Input",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False, description="")],
                 config=NodeConfig(value="test-value"),
@@ -498,7 +567,7 @@ async def test_execute_code_node():
         nodes=[
             GraphNode(
                 id="n1",
-                node_type=NodeType.TEXT_INPUT,
+                node_type=NodeType.INPUT,
                 label="Num",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False, description="")],
                 config=NodeConfig(value="21"),
@@ -542,7 +611,7 @@ async def test_code_node_processes_each_batch_item():
         metadata=GraphMetadata(name="Batch Code Test"),
         nodes=[
             GraphNode(
-                id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                id="input", node_type=NodeType.INPUT, label="Input",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="one\ntwo\nthree"),
             ),
@@ -591,7 +660,7 @@ async def test_ai_node_processes_each_batch_item(monkeypatch):
         metadata=GraphMetadata(name="Batch AI Test"),
         nodes=[
             GraphNode(
-                id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                id="input", node_type=NodeType.INPUT, label="Input",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
                 config=NodeConfig(value="first\nsecond"),
             ),
@@ -643,7 +712,7 @@ async def test_single_item_batch_keeps_scalar_unless_port_is_multi(monkeypatch):
             metadata=GraphMetadata(name="Single Item Batch"),
             nodes=[
                 GraphNode(
-                    id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                    id="input", node_type=NodeType.INPUT, label="Input",
                     outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
                     config=NodeConfig(value=value),
                 ),
@@ -693,12 +762,12 @@ async def test_optional_multi_port_survives_one_failed_sibling(monkeypatch):
         metadata=GraphMetadata(name="Optional Multi Port Test"),
         nodes=[
             GraphNode(
-                id="input_count", node_type=NodeType.TEXT_INPUT, label="Input Count",
+                id="input_count", node_type=NodeType.INPUT, label="Input Count",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="bla bla text"),
             ),
             GraphNode(
-                id="input_ai", node_type=NodeType.TEXT_INPUT, label="Input AI",
+                id="input_ai", node_type=NodeType.INPUT, label="Input AI",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="bla bla text"),
             ),
@@ -720,9 +789,9 @@ async def test_optional_multi_port_survives_one_failed_sibling(monkeypatch):
                 config=NodeConfig(code=_generate_merge_code("concat", " "), batch_mode="whole_list"),
             ),
             GraphNode(
-                id="text_output", node_type=NodeType.TEXT_OUTPUT, label="Text Output",
+                id="text_output", node_type=NodeType.OUTPUT, label="Text Output",
                 inputs=[Port(id="value", name="Value", kind=PortKind.INPUT, data_type=DataType.ANY, multi=False, required=False)],
-                config=NodeConfig(output_label="Result"),
+                config=NodeConfig(output_label="Result", write_mode="window"),
             ),
         ],
         edges=[
@@ -793,7 +862,7 @@ async def test_required_multi_port_survives_partial_failure(monkeypatch):
         metadata=GraphMetadata(name="Required Multi Port Test"),
         nodes=[
             GraphNode(
-                id="ok", node_type=NodeType.TEXT_INPUT, label="OK",
+                id="ok", node_type=NodeType.INPUT, label="OK",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
                 config=NodeConfig(value="good"),
             ),
@@ -830,7 +899,7 @@ def test_topological_levels_form_stage_barriers():
     from app.services.graph_executor import _topological_levels
 
     nodes = [
-        GraphNode(id="source", node_type=NodeType.TEXT_INPUT, label="Source"),
+        GraphNode(id="source", node_type=NodeType.INPUT, label="Source"),
         GraphNode(id="left", node_type=NodeType.CODE, label="Left"),
         GraphNode(id="right", node_type=NodeType.CODE, label="Right"),
         GraphNode(id="join", node_type=NodeType.OUTPUT, label="Join"),
@@ -868,10 +937,10 @@ async def test_execute_merge_node():
     graph = Graph(
         metadata=GraphMetadata(name="Merge Test"),
         nodes=[
-            GraphNode(id="a", node_type=NodeType.TEXT_INPUT, label="A",
+            GraphNode(id="a", node_type=NodeType.INPUT, label="A",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False, description="")],
                 config=NodeConfig(value="Hello")),
-            GraphNode(id="b", node_type=NodeType.TEXT_INPUT, label="B",
+            GraphNode(id="b", node_type=NodeType.INPUT, label="B",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False, description="")],
                 config=NodeConfig(value="World")),
             GraphNode(id="m", node_type=NodeType.CODE, label="Merge",
@@ -927,15 +996,15 @@ async def test_merge_node_decodes_each_edge_with_its_own_format():
     graph = Graph(
         metadata=GraphMetadata(name="Merge Mixed Format Test"),
         nodes=[
-            GraphNode(id="json_src", node_type=NodeType.TEXT_INPUT, label="JSON Source",
+            GraphNode(id="json_src", node_type=NodeType.INPUT, label="JSON Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
                                multi=False, required=False, format="json")],
                 config=NodeConfig(value='{"n": 3}')),
-            GraphNode(id="text_src", node_type=NodeType.TEXT_INPUT, label="Text Source",
+            GraphNode(id="text_src", node_type=NodeType.INPUT, label="Text Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
                                multi=False, required=False)],
                 config=NodeConfig(value="hello")),
-            GraphNode(id="num_src", node_type=NodeType.TEXT_INPUT, label="Num Source",
+            GraphNode(id="num_src", node_type=NodeType.INPUT, label="Num Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
                                multi=False, required=False)],
                 config=NodeConfig(value="42")),
@@ -980,7 +1049,7 @@ async def test_output_node_writes_json_file(tmp_path):
     graph = Graph(
         metadata=GraphMetadata(name="Output JSON Test"),
         nodes=[
-            GraphNode(id="src", node_type=NodeType.TEXT_INPUT, label="Source",
+            GraphNode(id="src", node_type=NodeType.INPUT, label="Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
                                multi=False, required=False, format="json")],
                 config=NodeConfig(value='{"a": 1, "b": [2, 3]}')),
@@ -1015,11 +1084,11 @@ async def test_output_node_directory_write_uses_per_port_format(tmp_path):
     graph = Graph(
         metadata=GraphMetadata(name="Output Directory Test"),
         nodes=[
-            GraphNode(id="json_src", node_type=NodeType.TEXT_INPUT, label="JSON Source",
+            GraphNode(id="json_src", node_type=NodeType.INPUT, label="JSON Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
                                multi=False, required=False, format="json")],
                 config=NodeConfig(value="[1, 2, 3]")),
-            GraphNode(id="text_src", node_type=NodeType.TEXT_INPUT, label="Text Source",
+            GraphNode(id="text_src", node_type=NodeType.INPUT, label="Text Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
                                multi=False, required=False)],
                 config=NodeConfig(value="plain")),
@@ -1059,7 +1128,7 @@ async def test_single_json_edge_does_not_double_decode_array_strings():
     graph = Graph(
         metadata=GraphMetadata(name="JSON array passthrough"),
         nodes=[
-            GraphNode(id="src", node_type=NodeType.TEXT_INPUT, label="Source",
+            GraphNode(id="src", node_type=NodeType.INPUT, label="Source",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,
                                multi=False, required=False, format="json")],
                 config=NodeConfig(value='["plain text", "42"]')),
@@ -1181,8 +1250,8 @@ def test_generate_deployment_bundle_vendors_gui_node_support(tmp_path):
     gui = GraphNode(
         id="gui", node_type=NodeType.GUI, label="GUI",
         config=NodeConfig(gui_widgets=[
-            GuiWidget(id="w1", kind=GuiWidgetKind.FILE_OPEN, label="File", value=str(fixture)),
-            GuiWidget(id="w2", kind=GuiWidgetKind.TEXT_WINDOW, label="Text", value="hello text"),
+            GuiWidget(id="w1", kind=GuiWidgetKind.INPUT_PICKER, mode="file", label="File", value=str(fixture)),
+            GuiWidget(id="w2", kind=GuiWidgetKind.TEXT_IO, label="Text", value="hello text"),
         ]),
     )
     sync_gui_node_ports(gui)

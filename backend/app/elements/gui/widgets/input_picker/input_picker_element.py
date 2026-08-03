@@ -1,4 +1,4 @@
-"""The unified input picker element handling file_open, directory_open, and input_picker widget kinds."""
+"""The unified input picker widget element: file | directory, via widget.mode."""
 
 from __future__ import annotations
 
@@ -10,14 +10,10 @@ from app.services import code_executor, file_service
 
 
 def _is_directory(widget: GuiWidget) -> bool:
-    """Derive mode from widget.mode, falling back to legacy widget.kind."""
-    if widget.mode:
-        return widget.mode == "directory"
-    return widget.kind == GuiWidgetKind.DIRECTORY_OPEN
+    return widget.mode == "directory"
 
 
 class InputPickerElement(GuiWidgetElement):
-    # Handles: GuiWidgetKind.INPUT_PICKER, FILE_OPEN, DIRECTORY_OPEN
     widget_kind = GuiWidgetKind.INPUT_PICKER
 
     def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:

@@ -11,8 +11,7 @@
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "GuiWidgetKind".
  */
-export type GuiWidgetKind =
-  'file_open' | 'directory_open' | 'input_picker' | 'text_window' | 'chat_window' | 'text_io' | 'plot_window';
+export type GuiWidgetKind = 'input_picker' | 'text_io' | 'plot_window';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "PortKind".
@@ -22,17 +21,7 @@ export type PortKind = 'input' | 'output';
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "NodeType".
  */
-export type NodeType =
-  | 'text_input'
-  | 'file_input'
-  | 'directory_input'
-  | 'input'
-  | 'ai'
-  | 'code'
-  | 'output'
-  | 'text_output'
-  | 'gui'
-  | 'widget';
+export type NodeType = 'input' | 'ai' | 'code' | 'output' | 'gui' | 'widget';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "AIProvider".

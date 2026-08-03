@@ -8,40 +8,28 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
 }
 
 export const NODE_TYPE_LABELS: Record<NodeType, string> = {
-  text_input: 'Text Input',
-  file_input: 'File Input',
-  directory_input: 'Directory',
   input: 'Input',
   ai: 'AI Node',
   code: 'Code Node',
   output: 'Output',
-  text_output: 'Text Output',
   gui: 'GUI Node',
   widget: 'Widget',
 };
 
 export const NODE_TYPE_COLORS: Record<NodeType, string> = {
-  text_input: '#1e3a5f',
-  file_input: '#1e3a5f',
-  directory_input: '#1e3a5f',
   input: '#1e3a5f',
   ai: '#2d1b4e',
   code: '#1a3a2a',
   output: '#3a2000',
-  text_output: '#0f3a3a',
   gui: '#4a1d3a',
   widget: '#3a1d4a',
 };
 
 export const NODE_TYPE_ICON: Record<NodeType, string> = {
-  text_input: '📝',
-  file_input: '📄',
-  directory_input: '📁',
   input: '📥',
   ai: '🤖',
   code: '⚙️',
   output: '📤',
-  text_output: '🪟',
   gui: '🖥️',
   widget: '🧩',
 };

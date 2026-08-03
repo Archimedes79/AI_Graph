@@ -20,14 +20,10 @@ _output = OutputElement()
 _gui = GuiElement()
 
 NODE_ELEMENTS: Dict[NodeType, NodeElement] = {
-    NodeType.TEXT_INPUT:       _input,
-    NodeType.FILE_INPUT:       _input,
-    NodeType.DIRECTORY_INPUT:  _input,
     NodeType.INPUT:            _input,
     NodeType.AI:               AIElement(),
     NodeType.CODE:             CodeElement(),
     NodeType.OUTPUT:           _output,
-    NodeType.TEXT_OUTPUT:      _output,
     NodeType.GUI:              _gui,
     # A WIDGET node is a GUI node whose `gui_widgets` holds exactly one widget --
     # same element, same execute()/ports() derivation, see gui_element.py.
@@ -35,11 +31,7 @@ NODE_ELEMENTS: Dict[NodeType, NodeElement] = {
 }
 
 GUI_WIDGET_ELEMENTS: Dict[GuiWidgetKind, GuiWidgetElement] = {
-    GuiWidgetKind.FILE_OPEN:        _input_picker,
-    GuiWidgetKind.DIRECTORY_OPEN:   _input_picker,
     GuiWidgetKind.INPUT_PICKER:     _input_picker,
-    GuiWidgetKind.TEXT_WINDOW:      _text_io,
-    GuiWidgetKind.CHAT_WINDOW:      _text_io,
     GuiWidgetKind.TEXT_IO:          _text_io,
     GuiWidgetKind.PLOT_WINDOW:      PlotWindowElement(),
 }

@@ -72,20 +72,20 @@ def _dir_to_code_graph(*, code: str, downstream_source_port: str, test_dir: str)
         metadata=GraphMetadata(name="Dir->Code->Merge/Output"),
         nodes=[
             GraphNode(
-                id="dir", node_type=NodeType.DIRECTORY_INPUT, label="Dir",
+                id="dir", node_type=NodeType.INPUT, label="Dir",
                 outputs=[
                     Port(id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True),
                     Port(id="count", name="Count", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False),
                 ],
-                config=NodeConfig(value=test_dir, select_all_files=True),
+                config=NodeConfig(input_mode="directory", value=test_dir, select_all_files=True),
             ),
             GraphNode(
-                id="dirDirect", node_type=NodeType.DIRECTORY_INPUT, label="DirDirect",
+                id="dirDirect", node_type=NodeType.INPUT, label="DirDirect",
                 outputs=[
                     Port(id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True),
                     Port(id="count", name="Count", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False),
                 ],
-                config=NodeConfig(value=test_dir, select_all_files=True),
+                config=NodeConfig(input_mode="directory", value=test_dir, select_all_files=True),
             ),
             GraphNode(
                 id="code", node_type=NodeType.CODE, label="CountBla",
@@ -210,7 +210,7 @@ async def test_text_input_to_code_to_output_regression():
         metadata=GraphMetadata(name="Text->Code->Output"),
         nodes=[
             GraphNode(
-                id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                id="input", node_type=NodeType.INPUT, label="Input",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
                 config=NodeConfig(value="hello world"),
             ),
@@ -250,12 +250,12 @@ async def test_directory_to_code_to_second_code_reduce_is_batched_not_reduced(tm
         metadata=GraphMetadata(name="Dir->Code->Code(sum)"),
         nodes=[
             GraphNode(
-                id="dir", node_type=NodeType.DIRECTORY_INPUT, label="Dir",
+                id="dir", node_type=NodeType.INPUT, label="Dir",
                 outputs=[
                     Port(id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True),
                     Port(id="count", name="Count", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False),
                 ],
-                config=NodeConfig(value=test_dir, select_all_files=True),
+                config=NodeConfig(input_mode="directory", value=test_dir, select_all_files=True),
             ),
             GraphNode(
                 id="code1", node_type=NodeType.CODE, label="CountBla",
@@ -312,7 +312,7 @@ async def test_single_output_port_code_node_wraps_mismatched_keys():
         metadata=GraphMetadata(name="SingleOutputMismatch"),
         nodes=[
             GraphNode(
-                id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                id="input", node_type=NodeType.INPUT, label="Input",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
                 config=NodeConfig(value="hello"),
             ),
@@ -353,7 +353,7 @@ async def test_multi_output_port_node_with_matching_keys_is_unaffected():
         metadata=GraphMetadata(name="MultiOutputMatching"),
         nodes=[
             GraphNode(
-                id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+                id="input", node_type=NodeType.INPUT, label="Input",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
                 config=NodeConfig(value="hello"),
             ),
@@ -395,9 +395,9 @@ async def test_whole_list_batch_mode_reduces_counts_to_total_of_five(tmp_path):
         metadata=GraphMetadata(name="Dir->Code(count)->Code(whole_list sum)"),
         nodes=[
             GraphNode(
-                id="dir", node_type=NodeType.DIRECTORY_INPUT, label="Dir",
+                id="dir", node_type=NodeType.INPUT, label="Dir",
                 outputs=[Port(id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True)],
-                config=NodeConfig(value=test_dir, select_all_files=True),
+                config=NodeConfig(input_mode="directory", value=test_dir, select_all_files=True),
             ),
             GraphNode(
                 id="code1", node_type=NodeType.CODE, label="CountBla",
@@ -458,9 +458,9 @@ def _dir_to_count_to_merge_graph(merge_mode: str, test_dir: str) -> Graph:
         metadata=GraphMetadata(name=f"Dir->Code(count)->Merge({merge_mode})"),
         nodes=[
             GraphNode(
-                id="dir", node_type=NodeType.DIRECTORY_INPUT, label="Dir",
+                id="dir", node_type=NodeType.INPUT, label="Dir",
                 outputs=[Port(id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True)],
-                config=NodeConfig(value=test_dir, select_all_files=True),
+                config=NodeConfig(input_mode="directory", value=test_dir, select_all_files=True),
             ),
             GraphNode(
                 id="code", node_type=NodeType.CODE, label="CountBla",
@@ -558,7 +558,7 @@ async def test_missing_file_input_yields_error_node_result_without_crashing():
         metadata=GraphMetadata(name="MissingFileInput"),
         nodes=[
             GraphNode(
-                id="src", node_type=NodeType.TEXT_INPUT, label="Src",
+                id="src", node_type=NodeType.INPUT, label="Src",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=False)],
                 config=NodeConfig(value="Z:/definitely/missing.txt"),
             ),
@@ -606,14 +606,14 @@ async def test_failed_fan_in_source_does_not_inject_none(tmp_path):
         metadata=GraphMetadata(name="FailedFanInSource"),
         nodes=[
             GraphNode(
-                id="good_src", node_type=NodeType.TEXT_INPUT, label="GoodSrc",
+                id="good_src", node_type=NodeType.INPUT, label="GoodSrc",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
                 config=NodeConfig(value="good"),
             ),
             GraphNode(
-                id="bad_src", node_type=NodeType.FILE_INPUT, label="BadSrc",
+                id="bad_src", node_type=NodeType.INPUT, label="BadSrc",
                 outputs=[Port(id="content", name="Content", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
-                config=NodeConfig(value=str(tmp_path / "does_not_exist.txt")),
+                config=NodeConfig(input_mode="file", value=str(tmp_path / "does_not_exist.txt")),
             ),
             GraphNode(
                 id="code", node_type=NodeType.CODE, label="Echo",

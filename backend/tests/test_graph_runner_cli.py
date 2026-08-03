@@ -56,8 +56,8 @@ async def test_runner_resolves_widget_scoped_gui_requirements_independently(tmp_
     gui = GraphNode(
         id="gui", node_type=NodeType.GUI, label="GUI",
         config=NodeConfig(gui_widgets=[
-            GuiWidget(id="w1", kind=GuiWidgetKind.FILE_OPEN, label="File"),
-            GuiWidget(id="w2", kind=GuiWidgetKind.DIRECTORY_OPEN, label="Dir"),
+            GuiWidget(id="w1", kind=GuiWidgetKind.INPUT_PICKER, mode="file", label="File"),
+            GuiWidget(id="w2", kind=GuiWidgetKind.INPUT_PICKER, mode="directory", label="Dir"),
         ]),
     )
     sync_gui_node_ports(gui)

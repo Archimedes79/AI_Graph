@@ -133,7 +133,7 @@ def main() -> None:
         nargs="*",
         metavar="key=value",
         default=[],
-        help="Override any node's value by node ID (text_input, file/directory paths, output paths)",
+        help="Override any node's value by node ID (input text, file/directory paths, output paths)",
     )
     parser.add_argument(
         "--json-inputs",

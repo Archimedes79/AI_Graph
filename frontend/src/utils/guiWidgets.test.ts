@@ -44,48 +44,48 @@ function blankGuiNode(): GraphNode {
 
 describe('syncGuiNodePorts', () => {
   it('is a no-op for non-gui nodes', () => {
-    const node = { ...blankGuiNode(), node_type: 'text_input' as const };
+    const node = { ...blankGuiNode(), node_type: 'input' as const };
     const result = syncGuiNodePorts(node);
     expect(result).toBe(node);
   });
 
   it('generates the exact port shape for each widget kind', () => {
     let node = blankGuiNode();
-    const fileOpen = createGuiWidget('file_open', 'Pick file');
-    const dirOpen = createGuiWidget('directory_open', 'Pick dir');
-    const textWindow = createGuiWidget('text_window', 'Text');
-    const chatWindow = createGuiWidget('chat_window', 'Chat');
+    const filePicker = createGuiWidget('input_picker', 'Pick file');
+    const dirPicker = { ...createGuiWidget('input_picker', 'Pick dir'), mode: 'directory' };
+    const textIo = createGuiWidget('text_io', 'Text');
+    const chatIo = createGuiWidget('text_io', 'Chat');
     const plotWindow = createGuiWidget('plot_window', 'Plot');
-    node.config.gui_widgets = [fileOpen, dirOpen, textWindow, chatWindow, plotWindow];
+    node.config.gui_widgets = [filePicker, dirPicker, textIo, chatIo, plotWindow];
 
     node = syncGuiNodePorts(node);
 
     expect(node.outputs.map((p) => p.id)).toEqual([
-      `${fileOpen.id}_out`,
-      `${dirOpen.id}_out`,
-      `${textWindow.id}_out`,
-      `${chatWindow.id}_out`,
+      `${filePicker.id}_out`,
+      `${dirPicker.id}_out`,
+      `${textIo.id}_out`,
+      `${chatIo.id}_out`,
     ]);
     expect(node.inputs.map((p) => p.id)).toEqual([
-      `${textWindow.id}_in`,
-      `${chatWindow.id}_in`,
+      `${textIo.id}_in`,
+      `${chatIo.id}_in`,
       `${plotWindow.id}_in`,
     ]);
 
-    const fileOut = node.outputs.find((p) => p.id === `${fileOpen.id}_out`)!;
+    const fileOut = node.outputs.find((p) => p.id === `${filePicker.id}_out`)!;
     expect(fileOut).toMatchObject({ data_type: 'file_path', multi: false });
 
-    const dirOut = node.outputs.find((p) => p.id === `${dirOpen.id}_out`)!;
+    const dirOut = node.outputs.find((p) => p.id === `${dirPicker.id}_out`)!;
     expect(dirOut).toMatchObject({ data_type: 'file_path', multi: true });
 
-    const textIn = node.inputs.find((p) => p.id === `${textWindow.id}_in`)!;
+    const textIn = node.inputs.find((p) => p.id === `${textIo.id}_in`)!;
     expect(textIn).toMatchObject({ data_type: 'any', multi: false });
-    const textOut = node.outputs.find((p) => p.id === `${textWindow.id}_out`)!;
+    const textOut = node.outputs.find((p) => p.id === `${textIo.id}_out`)!;
     expect(textOut).toMatchObject({ data_type: 'text', multi: false });
 
-    const chatIn = node.inputs.find((p) => p.id === `${chatWindow.id}_in`)!;
+    const chatIn = node.inputs.find((p) => p.id === `${chatIo.id}_in`)!;
     expect(chatIn).toMatchObject({ data_type: 'any', multi: false });
-    const chatOut = node.outputs.find((p) => p.id === `${chatWindow.id}_out`)!;
+    const chatOut = node.outputs.find((p) => p.id === `${chatIo.id}_out`)!;
     expect(chatOut).toMatchObject({ data_type: 'text', multi: false });
 
     const plotIn = node.inputs.find((p) => p.id === `${plotWindow.id}_in`)!;
@@ -106,7 +106,7 @@ describe('syncGuiNodePorts', () => {
 
   it('keeps port ids stable across re-syncs (edge-preserving)', () => {
     let node = blankGuiNode();
-    const widget = createGuiWidget('text_window', 'Text');
+    const widget = createGuiWidget('text_io', 'Text');
     node.config.gui_widgets = [widget];
 
     const first = syncGuiNodePorts(node);
@@ -118,9 +118,9 @@ describe('syncGuiNodePorts', () => {
 
   it('removing a widget removes only that widget\'s ports, leaving others identical', () => {
     let node = blankGuiNode();
-    const a = createGuiWidget('text_window', 'A');
-    const b = createGuiWidget('chat_window', 'B');
-    const c = createGuiWidget('file_open', 'C');
+    const a = createGuiWidget('text_io', 'A');
+    const b = createGuiWidget('text_io', 'B');
+    const c = createGuiWidget('input_picker', 'C');
     node.config.gui_widgets = [a, b, c];
     node = syncGuiNodePorts(node);
 

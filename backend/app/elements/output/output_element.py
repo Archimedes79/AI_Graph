@@ -1,7 +1,6 @@
 """
 The `output` node element: passthrough plus optional file/directory write, or
-display in a text window (`write_mode == "window"`, the former standalone
-`text_output` node type -- see AGENTS.md's legacy-name conventions).
+display in a text window (`write_mode == "window"`).
 """
 
 from __future__ import annotations
@@ -13,18 +12,7 @@ from app.models.graph import GraphNode, NodeType
 from app.services import file_service
 
 
-def effective_write_mode(node: GraphNode) -> str:
-    """A legacy TEXT_OUTPUT node always displays in a window, matching the
-    former TextOutputElement, regardless of its config's write_mode (which
-    only applies to the unified `output` node_type -- same convention as
-    InputElement._effective_mode for the legacy input node types)."""
-    if node.node_type == NodeType.TEXT_OUTPUT:
-        return "window"
-    return node.config.write_mode
-
-
 class OutputElement(NodeElement):
-    # Handles: NodeType.OUTPUT, NodeType.TEXT_OUTPUT
     node_type = NodeType.OUTPUT
 
     async def execute(
@@ -72,16 +60,12 @@ class OutputElement(NodeElement):
 
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
         cfg = node.config
-        mode = effective_write_mode(node)
-        if cfg.prompt_at_runtime and mode in ("file", "directory"):
+        if cfg.prompt_at_runtime and cfg.write_mode in ("file", "directory"):
             return [{
-                "node_id": node.id, "label": node.label, "kind": mode,
+                "node_id": node.id, "label": node.label, "kind": cfg.write_mode,
                 "direction": "output", "current_value": cfg.value or "",
             }]
         return []
 
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
-        # Matches the pre-refactor check exactly: any file/directory-writing
-        # OUTPUT node pulls in the file helpers; "window" mode (the former
-        # TextOutputElement) needs nothing extra, same as before the merge.
-        return DeployNeeds(files=effective_write_mode(node) in ("file", "directory"))
+        return DeployNeeds(files=node.config.write_mode in ("file", "directory"))

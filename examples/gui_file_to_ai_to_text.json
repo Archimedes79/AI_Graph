@@ -35,7 +35,8 @@
         "gui_widgets": [
           {
             "id": "w-source",
-            "kind": "file_open",
+            "kind": "input_picker",
+            "mode": "file",
             "label": "Source File",
             "value": null,
             "extensions": "",
@@ -49,7 +50,8 @@
           },
           {
             "id": "w-answer",
-            "kind": "text_window",
+            "kind": "text_io",
+            "mode": "both",
             "label": "Summary",
             "value": "",
             "extensions": "",

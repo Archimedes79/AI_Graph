@@ -39,7 +39,7 @@ function blankConfig() {
 function graphNode(overrides: Partial<GraphNode>): GraphNode {
   return {
     id: 'n',
-    node_type: 'text_input',
+    node_type: 'input',
     label: 'Node',
     description: '',
     position: { x: 0, y: 0 },
@@ -60,8 +60,8 @@ function loadTestGraph(nodes: GraphNode[], edges: Graph['edges'] = []) {
 
 describe('graphStore.updateNode edge pruning', () => {
   it('removes edges attached to ports no longer present after an update', () => {
-    const w1 = createGuiWidget('file_open', 'A');
-    const w2 = createGuiWidget('file_open', 'B');
+    const w1 = createGuiWidget('input_picker', 'A');
+    const w2 = createGuiWidget('input_picker', 'B');
     const guiNode = graphNode({
       id: 'gui1',
       node_type: 'gui',
@@ -72,7 +72,7 @@ describe('graphStore.updateNode edge pruning', () => {
 
     const sink = graphNode({
       id: 'sink',
-      node_type: 'text_output',
+      node_type: 'output',
       inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
     });
 
@@ -102,7 +102,7 @@ describe('graphStore.updateNode edge pruning', () => {
     const a = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
     const b = graphNode({
       id: 'b',
-      node_type: 'text_output',
+      node_type: 'output',
       inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
     });
     loadTestGraph([a, b], [{ id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'b', target_port_id: 'value' }]);
@@ -115,7 +115,7 @@ describe('graphStore.updateNode edge pruning', () => {
 
 describe('graphStore.loadGraph gui port sync', () => {
   it('regenerates a gui node\'s ports from its widget list even if stale ports were provided', () => {
-    const widget = createGuiWidget('text_window', 'Text');
+    const widget = createGuiWidget('text_io', 'Text');
     const staleGui = graphNode({
       id: 'gui1',
       node_type: 'gui',
@@ -151,7 +151,7 @@ describe('graphStore deferred edge persistence', () => {
     const a = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
     const b = graphNode({
       id: 'b',
-      node_type: 'text_output',
+      node_type: 'output',
       inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
     });
     loadTestGraph([a, b], [
@@ -168,7 +168,7 @@ describe('graphStore deferred edge persistence', () => {
     const a = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
     const b = graphNode({
       id: 'b',
-      node_type: 'text_output',
+      node_type: 'output',
       inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
     });
     loadTestGraph([a, b], [{ id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'b', target_port_id: 'value' }]);

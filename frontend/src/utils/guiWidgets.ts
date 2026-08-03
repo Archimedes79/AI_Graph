@@ -66,14 +66,10 @@ export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
 }
 
 export const GUI_WIDGET_KIND_LABELS: Record<GuiWidgetKind, string> = {
-  file_open: 'File Open (legacy)',
-  directory_open: 'Directory Open (legacy)',
   input_picker: 'Input Picker (file or directory)',
-  text_window: 'Text Window (legacy)',
-  chat_window: 'Chat Window (legacy)',
   text_io: 'Text I/O (input / output / both)',
   plot_window: 'Plot Window',
 };
 
-/** Kinds offered when creating a brand-new widget -- legacy kinds are load-only. */
+/** Kinds offered when creating a brand-new widget. */
 export const CREATABLE_GUI_WIDGET_KINDS: GuiWidgetKind[] = ['input_picker', 'text_io', 'plot_window'];

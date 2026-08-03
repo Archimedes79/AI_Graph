@@ -156,9 +156,7 @@ export default function GraphCanvas() {
           style={{ background: '#1a1d2e', border: '1px solid #2d3148' }}
           nodeColor={(node) => {
             const colors: Record<string, string> = {
-              text_input: '#1e3a5f',
-              file_input: '#1e3a5f',
-              directory_input: '#1e3a5f',
+              input: '#1e3a5f',
               ai: '#2d1b4e',
               code: '#1a3a2a',
               output: '#3a2000',

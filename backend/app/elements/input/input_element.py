@@ -1,4 +1,4 @@
-"""The unified input element handling text_input, file_input, directory_input, and input node types."""
+"""The unified input element: text | file | directory, via config.input_mode."""
 
 from __future__ import annotations
 
@@ -8,24 +8,12 @@ from app.elements.base import NodeElement, DeployNeeds
 from app.models.graph import GraphNode, NodeType
 from app.services import code_executor, file_service
 
-_RUNTIME_PROMPT_KINDS = {NodeType.TEXT_INPUT: "text", NodeType.FILE_INPUT: "file", NodeType.DIRECTORY_INPUT: "directory"}
-
 
 def _effective_mode(node: GraphNode) -> str:
-    """Derive mode from the legacy node_type first (it's unambiguous); only the
-    unified `input` node_type consults config.input_mode, since that field
-    defaults to "text" and would otherwise shadow legacy file/directory nodes."""
-    if node.node_type == NodeType.FILE_INPUT:
-        return "file"
-    if node.node_type == NodeType.DIRECTORY_INPUT:
-        return "directory"
-    if node.node_type == NodeType.TEXT_INPUT:
-        return "text"
     return node.config.input_mode or "text"
 
 
 class InputElement(NodeElement):
-    # Handles: NodeType.INPUT, NodeType.TEXT_INPUT, NodeType.FILE_INPUT, NodeType.DIRECTORY_INPUT
     node_type = NodeType.INPUT
 
     async def execute(
@@ -69,11 +57,10 @@ class InputElement(NodeElement):
         return {"content": content, "path": str(path)}
 
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
-        kind = _RUNTIME_PROMPT_KINDS.get(node.node_type)
-        if kind is None:
+        if not node.config.prompt_at_runtime:
             return []
         return [{
-            "node_id": node.id, "label": node.label, "kind": kind,
+            "node_id": node.id, "label": node.label, "kind": _effective_mode(node),
             "direction": "input", "current_value": node.config.value or "",
         }]
 

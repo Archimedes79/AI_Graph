@@ -96,29 +96,10 @@ def _install_ai_stubs(monkeypatch) -> List[dict]:
 
 def _make_node(node_type: NodeType, tmp_path: Path) -> GraphNode:
     nid = f"n_{node_type.value}"
-    if node_type == NodeType.TEXT_INPUT:
-        return GraphNode(id=nid, node_type=node_type, label="L",
-                          outputs=[_port("output", PortKind.OUTPUT, DataType.TEXT)],
-                          config=NodeConfig(value="hello"))
     if node_type == NodeType.INPUT:
         return GraphNode(id=nid, node_type=node_type, label="L",
                           outputs=[_port("output", PortKind.OUTPUT, DataType.TEXT)],
                           config=NodeConfig(value="hello", input_mode="text"))
-    if node_type == NodeType.FILE_INPUT:
-        f = tmp_path / "sample.txt"
-        f.write_text("sample content", encoding="utf-8")
-        return GraphNode(id=nid, node_type=node_type, label="L",
-                          inputs=[_port("path", PortKind.INPUT, DataType.FILE_PATH)],
-                          outputs=[_port("content", PortKind.OUTPUT, DataType.TEXT),
-                                   _port("path", PortKind.OUTPUT, DataType.FILE_PATH)],
-                          config=NodeConfig(value=str(f)))
-    if node_type == NodeType.DIRECTORY_INPUT:
-        (tmp_path / "a.txt").write_text("a", encoding="utf-8")
-        return GraphNode(id=nid, node_type=node_type, label="L",
-                          inputs=[_port("path", PortKind.INPUT, DataType.FILE_PATH)],
-                          outputs=[_port("files", PortKind.OUTPUT, DataType.FILE_PATH, multi=True),
-                                   _port("count", PortKind.OUTPUT, DataType.TEXT)],
-                          config=NodeConfig(value=str(tmp_path), select_all_files=True))
     if node_type == NodeType.AI:
         return GraphNode(id=nid, node_type=node_type, label="L",
                           inputs=[_port("prompt", PortKind.INPUT, DataType.TEXT, multi=True)],
@@ -133,10 +114,6 @@ def _make_node(node_type: NodeType, tmp_path: Path) -> GraphNode:
         return GraphNode(id=nid, node_type=node_type, label="L",
                           inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
                           config=NodeConfig(output_label="Result"))
-    if node_type == NodeType.TEXT_OUTPUT:
-        return GraphNode(id=nid, node_type=node_type, label="L",
-                          inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
-                          config=NodeConfig(output_label="Text"))
     if node_type == NodeType.GUI:
         node = GraphNode(id=nid, node_type=node_type, label="L", config=NodeConfig(gui_widgets=[]))
         sync_gui_node_ports(node)
@@ -150,7 +127,7 @@ def _make_node(node_type: NodeType, tmp_path: Path) -> GraphNode:
 
 
 # Elements whose execute() plausibly calls out to an AI model.
-AI_CAPABLE_NODE_TYPES = {NodeType.AI, NodeType.DIRECTORY_INPUT, NodeType.INPUT}
+AI_CAPABLE_NODE_TYPES = {NodeType.AI, NodeType.INPUT}
 
 
 async def _assert_ai_call_path(node_type: NodeType, element, tmp_path: Path, monkeypatch) -> None:
@@ -172,7 +149,7 @@ async def _assert_ai_call_path(node_type: NodeType, element, tmp_path: Path, mon
         assert calls[0]["system"] == "sys"
         return
 
-    # NodeType.DIRECTORY_INPUT / NodeType.INPUT in directory mode with a selector_prompt.
+    # NodeType.INPUT in directory mode with a selector_prompt.
     (tmp_path / "keep.txt").write_text("x", encoding="utf-8")
     node = GraphNode(
         id="dir_ai_check", node_type=node_type, label="Dir",
@@ -225,19 +202,20 @@ async def test_node_element_contract(node_type: NodeType, element, tmp_path, mon
 # ---------------------------------------------------------------------------
 
 async def test_directory_input_applies_extension_filter(tmp_path):
-    """DirectoryInput's config.extra["extensions"] filter (was its own test file)."""
+    """Input (directory mode) config.extra["extensions"] filter (was its own test file)."""
     (tmp_path / "a.md").write_text("md a", encoding="utf-8")
     (tmp_path / "b.md").write_text("md b", encoding="utf-8")
     (tmp_path / "c.txt").write_text("txt c", encoding="utf-8")
 
     node = GraphNode(
-        id="dir_filter", node_type=NodeType.DIRECTORY_INPUT, label="Dir",
+        id="dir_filter", node_type=NodeType.INPUT, label="Dir",
         inputs=[_port("path", PortKind.INPUT, DataType.FILE_PATH)],
         outputs=[_port("files", PortKind.OUTPUT, DataType.FILE_PATH, multi=True),
                  _port("count", PortKind.OUTPUT, DataType.TEXT)],
-        config=NodeConfig(value=str(tmp_path), select_all_files=True, extra={"extensions": ".md"}),
+        config=NodeConfig(value=str(tmp_path), input_mode="directory",
+                          select_all_files=True, extra={"extensions": ".md"}),
     )
-    result = await NODE_ELEMENTS[NodeType.DIRECTORY_INPUT].execute(node, {})
+    result = await NODE_ELEMENTS[NodeType.INPUT].execute(node, {})
     assert sorted(Path(p).name for p in result["files"]) == ["a.md", "b.md"]
     assert result["count"] == 2
 
@@ -284,9 +262,7 @@ async def test_output_element_directory_write_honors_binary_and_csv_formats(tmp_
 
 async def test_output_element_window_mode_compiles_text_window_append():
     """OutputElement's write_mode="window" branch (the former standalone
-    TextOutputElement, folded in as a write_mode) -- covers both an explicit
-    `output` node and the legacy `text_output` node_type alias, which forces
-    "window" regardless of its config's write_mode."""
+    TextOutputElement, folded in as a write_mode)."""
     node = GraphNode(
         id="out_window", node_type=NodeType.OUTPUT, label="Out",
         inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
@@ -294,14 +270,6 @@ async def test_output_element_window_mode_compiles_text_window_append():
     )
     exec_result = await NODE_ELEMENTS[NodeType.OUTPUT].execute(node, {"value": ["a", "b"]})
     assert exec_result == {"value": ["a", "b"]}
-
-    legacy_node = GraphNode(
-        id="legacy_text_output", node_type=NodeType.TEXT_OUTPUT, label="Legacy",
-        inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
-        config=NodeConfig(output_label="Shown"),  # write_mode left at its "none" default
-    )
-    legacy_exec_result = await NODE_ELEMENTS[NodeType.TEXT_OUTPUT].execute(legacy_node, {"value": ["a", "b"]})
-    assert legacy_exec_result == exec_result
 
 
 # ---------------------------------------------------------------------------
@@ -311,12 +279,8 @@ async def test_output_element_window_mode_compiles_text_window_append():
 def _make_widget(kind: GuiWidgetKind) -> GuiWidget:
     if kind == GuiWidgetKind.INPUT_PICKER:
         return GuiWidget(id="w1", kind=kind, mode="file")
-    if kind in (GuiWidgetKind.FILE_OPEN, GuiWidgetKind.DIRECTORY_OPEN):
-        return GuiWidget(id="w1", kind=kind)  # legacy: mode derived from kind
     if kind == GuiWidgetKind.TEXT_IO:
         return GuiWidget(id="w1", kind=kind, mode="both")
-    if kind in (GuiWidgetKind.TEXT_WINDOW, GuiWidgetKind.CHAT_WINDOW):
-        return GuiWidget(id="w1", kind=kind)  # legacy: mode defaults to "both"
     if kind == GuiWidgetKind.PLOT_WINDOW:
         return GuiWidget(id="w1", kind=kind)
     raise AssertionError(f"no fixture for {kind}")

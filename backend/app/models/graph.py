@@ -18,14 +18,10 @@ from pydantic import BaseModel, Field, model_validator
 # ---------------------------------------------------------------------------
 
 class NodeType(str, Enum):
-    TEXT_INPUT = "text_input"
-    FILE_INPUT = "file_input"
-    DIRECTORY_INPUT = "directory_input"
     INPUT = "input"  # unified: text | file | directory
     AI = "ai"
     CODE = "code"
     OUTPUT = "output"
-    TEXT_OUTPUT = "text_output"
     GUI = "gui"
     WIDGET = "widget"  # a single GuiWidget standalone on the canvas -- see gui_element.py
 
@@ -75,11 +71,7 @@ class NodePosition(BaseModel):
 
 
 class GuiWidgetKind(str, Enum):
-    FILE_OPEN = "file_open"           # legacy → input_picker
-    DIRECTORY_OPEN = "directory_open" # legacy → input_picker
     INPUT_PICKER = "input_picker"     # unified: file | directory
-    TEXT_WINDOW = "text_window"       # legacy → text_io
-    CHAT_WINDOW = "chat_window"       # legacy → text_io
     TEXT_IO = "text_io"               # unified: input | output | both
     PLOT_WINDOW = "plot_window"
 
@@ -95,13 +87,13 @@ class GuiWidget(BaseModel):
     kind: GuiWidgetKind
     label: str = ""
     value: Optional[str] = None      # literal/default text, or a chosen file/directory path
-    extensions: str = ""             # directory_open / input_picker extension filter, e.g. ".md, .txt"
-    mode: str = ""                   # input_picker: "file" | "directory"
+    extensions: str = ""             # input_picker (directory mode) extension filter, e.g. ".md, .txt"
+    mode: str = ""                   # input_picker: "file" | "directory"; text_io: "input" | "output" | "both"
     size: Literal["small", "medium", "large"] = "medium"
 
-    # input_picker (directory mode) – same file-selection contract as the legacy
-    # directory_input node's NodeConfig fields, kept per-widget so a standalone
-    # widget node has no different functionality from a directory_input node.
+    # input_picker (directory mode) – same file-selection contract as the input
+    # node's NodeConfig fields, kept per-widget so a standalone widget node has
+    # no different functionality from an input node in directory mode.
     recursive: bool = False
     select_all_files: bool = True
     selector_prompt: str = ""
@@ -128,18 +120,18 @@ class GuiWidget(BaseModel):
 
 class NodeConfig(BaseModel):
     """Extra configuration that depends on node_type."""
-    # text_input / file_input / directory_input
+    # input node
     value: Optional[str] = None           # literal value or path, also used as the
                                            # dialog's pre-filled default
 
-    # output (file|directory write) only – text_input/file_input/directory_input
-    # always prompt via a dialog before execution.
+    # input node: prompt via a dialog before execution (pre-filled with `value`).
+    # output node (file|directory write): prompt for the write target.
     prompt_at_runtime: bool = False
 
     # unified input node
     input_mode: Literal["text", "file", "directory"] = "text"
 
-    # directory_input – file selection
+    # input node (directory mode) – file selection
     select_all_files: bool = True
     selector_prompt: str = ""
     selector_code: str = ""              # run(inputs: {files}) -> {files}
@@ -190,7 +182,7 @@ class NodeConfig(BaseModel):
     # output node
     output_label: str = "Result"
     write_mode: Literal["none", "file", "directory", "window"] = "none"  # window displays
-                                          # result(s) in a text window (former text_output node type)
+                                          # result(s) in a text window
 
     # gui node – ordered list of composed widgets; ports are derived from this
     gui_widgets: List[GuiWidget] = Field(default_factory=list)
@@ -253,12 +245,83 @@ def sync_gui_node_ports(node: GraphNode) -> None:
 
 
 # ---------------------------------------------------------------------------
-# One-time legacy migration: `merge` / `split` node types were deleted in favor
-# of equivalent `code` nodes (see AGENTS.md). Unlike the forever-lived aliases
-# InputElement/OutputElement handle at execute() time, this migration rewrites
-# the RAW node dict once, before it is validated into a NodeType enum member --
-# "merge"/"split" never need to be valid NodeType values again afterward.
+# One-time legacy migrations. Two flavors, both rewriting the RAW node dict
+# before it is validated into a NodeType/GuiWidgetKind enum member:
+#   * `merge` / `split` node types were deleted in favor of equivalent `code`
+#     nodes (literal generated code below).
+#   * The legacy alias node types (`text_input`/`file_input`/`directory_input`
+#     -> `input`, `text_output` -> `output`) and widget kinds (`file_open`/
+#     `directory_open` -> `input_picker`, `text_window`/`chat_window` ->
+#     `text_io`) were retired in favor of their unified elements; the alias
+#     names are no longer valid enum values (see AGENTS.md).
 # ---------------------------------------------------------------------------
+
+_LEGACY_NODE_TYPES = {"merge", "split", "text_input", "file_input", "directory_input", "text_output"}
+
+# legacy widget kind -> (canonical kind, mode)
+_LEGACY_WIDGET_KINDS = {
+    "file_open": ("input_picker", "file"),
+    "directory_open": ("input_picker", "directory"),
+    "text_window": ("text_io", "both"),
+    "chat_window": ("text_io", "both"),
+}
+
+# legacy input node type -> input_mode; these nodes always prompted at runtime.
+_LEGACY_INPUT_MODES = {"text_input": "text", "file_input": "file", "directory_input": "directory"}
+
+
+def _migrate_legacy_alias_node(node: dict) -> dict:
+    """Rewrite one legacy alias node dict (input/output family) in place-copy
+    style: ports/edges keep resolving because ids are untouched."""
+    node_type = node.get("node_type")
+    config = dict(node.get("config") or {})
+    migrated = dict(node)
+    if node_type in _LEGACY_INPUT_MODES:
+        config["input_mode"] = _LEGACY_INPUT_MODES[node_type]
+        config["prompt_at_runtime"] = True  # legacy input nodes always prompted
+        migrated["node_type"] = "input"
+    elif node_type == "text_output":
+        config["write_mode"] = "window"
+        migrated["node_type"] = "output"
+    migrated["config"] = config
+    return migrated
+
+
+def _migrate_legacy_widgets(node: dict) -> dict:
+    """Rewrite legacy widget kinds inside a node's config.gui_widgets. Widget
+    ids are untouched, so the derived `{id}_in`/`{id}_out` ports keep edges
+    attached."""
+    config = node.get("config")
+    if not isinstance(config, dict):
+        return node
+    widgets = config.get("gui_widgets")
+    if not isinstance(widgets, list):
+        return node
+    new_widgets = []
+    changed = False
+    for widget in widgets:
+        if isinstance(widget, dict) and widget.get("kind") in _LEGACY_WIDGET_KINDS:
+            kind, mode = _LEGACY_WIDGET_KINDS[widget["kind"]]
+            widget = {**widget, "kind": kind, "mode": widget.get("mode") or mode}
+            changed = True
+        new_widgets.append(widget)
+    if not changed:
+        return node
+    migrated = dict(node)
+    migrated["config"] = {**config, "gui_widgets": new_widgets}
+    return migrated
+
+
+def _migrate_legacy_node(node: Any) -> Any:
+    if not isinstance(node, dict):
+        return node
+    node_type = node.get("node_type")
+    if node_type in ("merge", "split"):
+        return _migrate_legacy_merge_split_node(node)
+    if node_type in _LEGACY_NODE_TYPES:
+        node = _migrate_legacy_alias_node(node)
+    return _migrate_legacy_widgets(node)
+
 
 def _generate_merge_code(mode: str, separator: str) -> str:
     """Literal `run(inputs)` source equivalent to the deleted MergeElement.execute() for *mode*."""
@@ -389,16 +452,16 @@ class Graph(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _migrate_legacy_nodes(cls, data: Any) -> Any:
-        """Run _migrate_legacy_merge_split_node on every raw node dict before
-        node_type is validated against the NodeType enum -- the migration
-        insertion point for legacy `merge`/`split` graphs (see AGENTS.md)."""
+        """Run _migrate_legacy_node on every raw node dict before node_type /
+        widget kind is validated against its enum -- the migration insertion
+        point for legacy graphs (see AGENTS.md)."""
         if isinstance(data, dict):
             nodes = data.get("nodes")
-            if isinstance(nodes, list) and any(
-                isinstance(n, dict) and n.get("node_type") in ("merge", "split") for n in nodes
-            ):
-                data = dict(data)
-                data["nodes"] = [_migrate_legacy_merge_split_node(n) for n in nodes]
+            if isinstance(nodes, list):
+                migrated = [_migrate_legacy_node(n) for n in nodes]
+                if any(m is not n for m, n in zip(migrated, nodes)):
+                    data = dict(data)
+                    data["nodes"] = migrated
         return data
 
 

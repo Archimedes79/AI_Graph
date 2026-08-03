@@ -93,7 +93,7 @@ async def test_gui_node_with_plot_window_executes_without_crashing():
         config=NodeConfig(gui_widgets=[GuiWidget(id="w1", kind=GuiWidgetKind.PLOT_WINDOW)]),
     )
     text_in = GraphNode(
-        id="in", node_type=NodeType.TEXT_INPUT, label="Input",
+        id="in", node_type=NodeType.INPUT, label="Input",
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
         config=NodeConfig(value="42"),
     )

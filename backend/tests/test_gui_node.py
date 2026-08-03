@@ -61,7 +61,7 @@ async def test_file_open_widget_feeds_downstream_code_node_content(tmp_path):
     fixture = tmp_path / "note.md"
     fixture.write_text("hello from gui\n", encoding="utf-8")
 
-    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.FILE_OPEN, value=str(fixture))])
+    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.INPUT_PICKER, mode="file", value=str(fixture))])
     code = GraphNode(
         id="code", node_type=NodeType.CODE, label="EchoContent",
         inputs=[Port(id="path", name="Path", kind=PortKind.INPUT, data_type=DataType.FILE_PATH)],
@@ -92,7 +92,7 @@ async def test_directory_open_widget_lists_files_with_extension_filter(tmp_path)
 
     gui = _gui_node(
         "gui",
-        [GuiWidget(id="w1", kind=GuiWidgetKind.DIRECTORY_OPEN, value=str(tmp_path), extensions=".md")],
+        [GuiWidget(id="w1", kind=GuiWidgetKind.INPUT_PICKER, mode="directory", value=str(tmp_path), extensions=".md")],
     )
     code = GraphNode(
         id="code", node_type=NodeType.CODE, label="CountFiles",
@@ -119,7 +119,7 @@ async def test_directory_open_widget_lists_files_with_extension_filter(tmp_path)
 
 @pytest.mark.asyncio
 async def test_text_window_widget_passthrough():
-    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.TEXT_WINDOW, value="default text")])
+    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.TEXT_IO, value="default text")])
     graph = Graph(metadata=GraphMetadata(name="TextWindow"), nodes=[gui], edges=[])
 
     result = await execute_graph(graph)
@@ -132,11 +132,11 @@ async def test_text_window_widget_passthrough():
 async def test_text_window_widget_prefers_widget_value_over_wired_input():
     """With the unified text_io element, mode='both': widget.value wins when non-empty."""
     upstream = GraphNode(
-        id="src", node_type=NodeType.TEXT_INPUT, label="Src",
+        id="src", node_type=NodeType.INPUT, label="Src",
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
         config=NodeConfig(value="wired value"),
     )
-    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.TEXT_WINDOW, value="default text")])
+    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.TEXT_IO, value="default text")])
     graph = Graph(
         metadata=GraphMetadata(name="TextWindow wired"),
         nodes=[upstream, gui],
@@ -153,7 +153,7 @@ async def test_text_window_widget_prefers_widget_value_over_wired_input():
 
 @pytest.mark.asyncio
 async def test_chat_window_widget_passthrough_prefers_own_value():
-    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.CHAT_WINDOW, value="typed message")])
+    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.TEXT_IO, value="typed message")])
     graph = Graph(metadata=GraphMetadata(name="ChatWindow"), nodes=[gui], edges=[])
 
     result = await execute_graph(graph)
@@ -169,7 +169,7 @@ async def test_chat_window_widget_falls_back_to_joined_wired_input():
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=True)],
         config=NodeConfig(code="def run(inputs):\n    return {'output': ['hi', 'there']}\n"),
     )
-    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.CHAT_WINDOW)])
+    gui = _gui_node("gui", [GuiWidget(id="w1", kind=GuiWidgetKind.TEXT_IO)])
     graph = Graph(
         metadata=GraphMetadata(name="ChatWindow fallback"),
         nodes=[upstream, gui],
@@ -185,8 +185,8 @@ async def test_chat_window_widget_falls_back_to_joined_wired_input():
 
 def test_runtime_requirements_and_apply_round_trip_for_empty_file_open_widget(tmp_path):
     gui = _gui_node("gui", [
-        GuiWidget(id="w1", kind=GuiWidgetKind.FILE_OPEN),
-        GuiWidget(id="w2", kind=GuiWidgetKind.DIRECTORY_OPEN, value=str(tmp_path)),
+        GuiWidget(id="w1", kind=GuiWidgetKind.INPUT_PICKER, mode="file"),
+        GuiWidget(id="w2", kind=GuiWidgetKind.INPUT_PICKER, mode="directory", value=str(tmp_path)),
     ])
     graph = Graph(metadata=GraphMetadata(name="Requirements"), nodes=[gui], edges=[])
 
@@ -211,7 +211,7 @@ def test_runtime_requirements_and_apply_round_trip_for_empty_file_open_widget(tm
 
 def test_apply_runtime_values_keeps_plain_node_id_behavior_unchanged():
     node = GraphNode(
-        id="input", node_type=NodeType.TEXT_INPUT, label="Input",
+        id="input", node_type=NodeType.INPUT, label="Input",
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
         config=NodeConfig(),
     )
@@ -238,7 +238,7 @@ PLOT_TRANSFORM_BROKEN = (
 
 def _plot_graph(widget: GuiWidget) -> Graph:
     upstream = GraphNode(
-        id="src", node_type=NodeType.TEXT_INPUT, label="Src",
+        id="src", node_type=NodeType.INPUT, label="Src",
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
         config=NodeConfig(value="[1, 2, 3]"),
     )
@@ -297,8 +297,8 @@ async def test_plot_window_widget_broken_code_marks_node_error():
 
 def _gui_ai_gui_graph(fixture_path: Path, *, deferred: bool) -> Graph:
     gui = _gui_node("gui", [
-        GuiWidget(id="w_file", kind=GuiWidgetKind.FILE_OPEN, label="Source File", value=str(fixture_path)),
-        GuiWidget(id="w_text", kind=GuiWidgetKind.TEXT_WINDOW, label="Answer"),
+        GuiWidget(id="w_file", kind=GuiWidgetKind.INPUT_PICKER, mode="file", label="Source File", value=str(fixture_path)),
+        GuiWidget(id="w_text", kind=GuiWidgetKind.TEXT_IO, label="Answer"),
     ])
     ai = GraphNode(
         id="ai", node_type=NodeType.AI, label="Summarize",
@@ -349,7 +349,7 @@ async def test_non_cyclic_edge_into_gui_node_still_delivers_same_round():
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
         config=NodeConfig(code="def run(inputs):\n    return {'output': 'hello'}\n"),
     )
-    gui = _gui_node("gui", [GuiWidget(id="w_text", kind=GuiWidgetKind.TEXT_WINDOW, label="Answer")])
+    gui = _gui_node("gui", [GuiWidget(id="w_text", kind=GuiWidgetKind.TEXT_IO, label="Answer")])
     graph = Graph(
         metadata=GraphMetadata(name="Code -> GUI display"),
         nodes=[code, gui],

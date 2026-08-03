@@ -69,14 +69,15 @@ contains one-or-more sub-elements and synchronizes them — the object hierarchy
 lowest level (a widget) again supports the same execute contract as a top-level graph
 element.
 
-**Some concepts have legacy names — map aliases to the canonical element, don't create
-parallel implementations.** `text_input`/`file_input`/`directory_input` all map to
-`InputElement`; `file_open`/`directory_open` map to `InputPickerElement`;
-`text_window`/`chat_window` map to `TextIOElement`; and `text_output` maps to
-`OutputElement` (`write_mode="window"`, forced regardless of the node's stored
-config — see `output_element.effective_write_mode` / frontend
-`outputElement.effectiveWriteMode`). Standalone inputs and GUI pickers
-remain separate elements because their port/runtime contracts differ, but their file
+**Legacy names no longer exist as enum members — they are migrated away at load
+time.** `text_input`/`file_input`/`directory_input` become `input` (with the matching
+`config.input_mode` and `prompt_at_runtime=True`, since legacy inputs always prompted);
+`text_output` becomes `output` with `write_mode="window"`; widget kinds
+`file_open`/`directory_open` become `input_picker` (mode `file`/`directory`) and
+`text_window`/`chat_window` become `text_io` (mode `both`). This happens once in
+`Graph._migrate_legacy_nodes` (see "One-time legacy migrations" below) and is mirrored
+client-side in `graphStore.ts` (`migrateLegacyNode`) for raw JSON imports that bypass
+the backend. No element branches on an alias anymore. File
 operations live once in `app.services.file_service`
 (`resolve_path`/`list_directory`/`read_text_file`/`write_formatted_file` etc. — call
 these, don't reimplement `Path(x).expanduser().resolve()` inline). The deployed bundle
@@ -127,10 +128,10 @@ DSL-breaking change and is out of scope for the element refactor.
 
 | Node type | Backend element (execute) | Frontend element (config panel + defaults) |
 |---|---|---|
-| `input` (+ legacy `text_input` / `file_input` / `directory_input`) | `backend/app/elements/input/input_element.py` | `frontend/src/elements/input/inputElement.ts` + `InputEditor.tsx` (same folder) |
+| `input` | `backend/app/elements/input/input_element.py` | `frontend/src/elements/input/inputElement.ts` + `InputEditor.tsx` (same folder) |
 | `ai` | `.../elements/ai/ai_element.py` | `.../elements/ai/aiElement.ts` + `AIEditor.tsx` |
 | `code` | `.../elements/code/code_element.py` **(reference)** | `.../elements/code/codeElement.ts` + `CodeEditor.tsx` **(reference)** |
-| `output` (+ legacy `text_output`, forced to `write_mode="window"`) | `.../elements/output/output_element.py` | `.../elements/output/outputElement.ts` + `OutputEditor.tsx` |
+| `output` | `.../elements/output/output_element.py` | `.../elements/output/outputElement.ts` + `OutputEditor.tsx` |
 | `gui` | `.../elements/gui/gui_element.py` **(Composite, see above)** | `.../elements/gui/guiElement.ts` + `GuiEditor.tsx` (wraps `components/GuiWidgetEditor.tsx`) |
 
 Use `elements/code/code_element.py` and `elements/code/codeElement.ts` as the exact pattern to
@@ -145,8 +146,8 @@ through the frontend registry; do not add a new per-type switch to those shared 
 
 | Widget kind | Backend element (ports + execute) | Frontend element (ports + config panel + runtime widget) |
 |---|---|---|
-| `input_picker` (+ legacy `file_open` / `directory_open`) | `backend/app/elements/gui/widgets/input_picker/input_picker_element.py` **(reference)** | `frontend/src/elements/gui/widgets/input_picker/inputPickerElement.ts` + `InputPickerEditor.tsx` **(reference)** |
-| `text_io` (+ legacy `text_window` / `chat_window`) | `.../gui/widgets/text_io/text_io_element.py` | `.../elements/gui/widgets/text_io/textIoElement.ts` + `TextIoEditor.tsx` |
+| `input_picker` | `backend/app/elements/gui/widgets/input_picker/input_picker_element.py` **(reference)** | `frontend/src/elements/gui/widgets/input_picker/inputPickerElement.ts` + `InputPickerEditor.tsx` **(reference)** |
+| `text_io` | `.../gui/widgets/text_io/text_io_element.py` | `.../elements/gui/widgets/text_io/textIoElement.ts` + `TextIoEditor.tsx` |
 | `plot_window` | `.../gui/widgets/plot_window/plot_window_element.py` (display-only, no output port) | `.../elements/gui/widgets/plot_window/plotWindowElement.ts` + `PlotWindowEditor.tsx` |
 
 Use `elements/gui/widgets/input_picker/input_picker_element.py` and
@@ -179,26 +180,26 @@ vendors `graph_executor.py` verbatim, so this logic never needs a second impleme
 for deploy. It is never per-node-type: no `elements/<type>/<type>_element.py` should know
 about it.
 
-## One-time legacy migrations vs forever-lived legacy aliases
+## One-time legacy migrations
 
-`text_input`/`file_input`/`directory_input`, `text_output`, and the various GUI widget
-aliases (`file_open`, `text_window`, ...) are **forever-lived**: their `NodeType`/
-`GuiWidgetKind` enum members stay valid indefinitely, and each element's own code
-branches on `node.node_type`/`widget.kind` at execute() time to interpret
-them (see `InputElement._effective_mode`, `OutputElement.effective_write_mode`).
+No legacy alias survives as an enum member. `Graph._migrate_legacy_nodes` (a
+`model_validator(mode="before")` on `Graph` in `backend/app/models/graph.py`) rewrites
+every raw node dict before enum validation:
 
-`merge`/`split` were deleted instead, because they were 100% code-equivalent to a
-few lines in a `code` node -- there was no reason to keep the old element alive.
-`Graph._migrate_legacy_nodes` (a `model_validator(mode="before")` on `Graph` in
-`backend/app/models/graph.py`) rewrites any raw node dict with
-`node_type in ("merge", "split")` into an equivalent `code` node dict -- generating
-literal Python from the old `merge_mode`/`separator` config via
-`_generate_merge_code`/`_generate_split_code` -- before that dict is validated into a
-`NodeType` enum member. This runs once, at load time, for every `Graph.model_validate`/
-`model_validate_json` call (including FastAPI request bodies); afterward the node is
-an ordinary `code` node and `"merge"`/`"split"` are never valid `NodeType` values again.
-When deleting a node type/widget kind entirely (not aliasing it), prefer this
-one-time-rewrite pattern over adding a permanent branch to a surviving element.
+- `merge`/`split` → an equivalent `code` node (literal Python generated from the old
+  `merge_mode`/`separator` config via `_generate_merge_code`/`_generate_split_code`).
+- `text_input`/`file_input`/`directory_input` → `input` with `config.input_mode` set to
+  `text`/`file`/`directory` and `prompt_at_runtime=True` (legacy inputs always prompted).
+- `text_output` → `output` with `write_mode="window"`.
+- widget kinds `file_open`/`directory_open` → `input_picker` (mode `file`/`directory`);
+  `text_window`/`chat_window` → `text_io` (mode `both`).
+
+This runs once, at load time, for every `Graph.model_validate`/`model_validate_json`
+call (including FastAPI request bodies); afterward the node/widget is ordinary and the
+legacy strings are never valid enum values again. `graphStore.ts`'s
+`migrateLegacyNode` mirrors the alias rules client-side for raw JSON imports that never
+touch the backend. When deleting a node type/widget kind, extend this one-time-rewrite
+pattern — do not add a permanent branch to a surviving element.
 
 ## Shared contracts — coordinate before editing
 

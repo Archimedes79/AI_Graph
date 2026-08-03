@@ -4,8 +4,8 @@ import { createGuiWidget } from '../../utils/guiWidgets';
 
 describe('resolveWidgetLayout', () => {
   it('stacks unplaced widgets in list order', () => {
-    const a = createGuiWidget('file_open', 'A');
-    const b = createGuiWidget('text_window', 'B');
+    const a = createGuiWidget('input_picker', 'A');
+    const b = createGuiWidget('text_io', 'B');
 
     const placements = resolveWidgetLayout([a, b]);
 
@@ -16,8 +16,8 @@ describe('resolveWidgetLayout', () => {
   });
 
   it('honors designer coordinates and orders by row then column', () => {
-    const a = { ...createGuiWidget('file_open', 'A'), x: 6, y: 2, w: 6, h: 2 };
-    const b = { ...createGuiWidget('text_window', 'B'), x: 0, y: 2, w: 6, h: 2 };
+    const a = { ...createGuiWidget('input_picker', 'A'), x: 6, y: 2, w: 6, h: 2 };
+    const b = { ...createGuiWidget('text_io', 'B'), x: 0, y: 2, w: 6, h: 2 };
 
     const placements = resolveWidgetLayout([a, b]);
 
@@ -27,7 +27,7 @@ describe('resolveWidgetLayout', () => {
 
   it('flows unplaced widgets below placed ones and clamps to the grid', () => {
     const placed = { ...createGuiWidget('plot_window', 'P'), x: 20, y: 0, w: 20, h: 3 };
-    const unplaced = createGuiWidget('text_window', 'U');
+    const unplaced = createGuiWidget('text_io', 'U');
 
     const placements = resolveWidgetLayout([placed, unplaced]);
 

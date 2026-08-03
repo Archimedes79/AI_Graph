@@ -14,25 +14,17 @@ import { plotWindowElement } from './gui/widgets/plot_window/plotWindowElement';
 
 /** Dispatch table every NodeType resolves through -- see AGENTS.md's element contract. */
 export const NODE_ELEMENTS: Record<NodeType, NodeElementDefinition> = {
-  text_input:       inputElement,
-  file_input:       inputElement,
-  directory_input:  inputElement,
   input:            inputElement,
   ai:               aiElement,
   code:             codeElement,
   output:           outputElement,
-  text_output:      outputElement,
   gui:              guiElement,
   widget:           widgetElement,
 };
 
 /** Dispatch table every GuiWidgetKind resolves through -- see AGENTS.md's element contract. */
 export const GUI_WIDGET_ELEMENTS: Record<GuiWidgetKind, GuiWidgetElementDefinition> = {
-  file_open:       inputPickerElement,
-  directory_open:  inputPickerElement,
   input_picker:    inputPickerElement,
-  text_window:     textIoElement,
-  chat_window:     textIoElement,
   text_io:         textIoElement,
   plot_window:     plotWindowElement,
 };

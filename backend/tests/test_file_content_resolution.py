@@ -56,11 +56,11 @@ def _dir_to_code_graph(test_dir: str) -> Graph:
         metadata=GraphMetadata(name="Dir->Code(read_file_inputs)"),
         nodes=[
             GraphNode(
-                id="dir", node_type=NodeType.DIRECTORY_INPUT, label="Dir",
+                id="dir", node_type=NodeType.INPUT, label="Dir",
                 outputs=[
                     Port(id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True),
                 ],
-                config=NodeConfig(value=test_dir, select_all_files=True),
+                config=NodeConfig(input_mode="directory", value=test_dir, select_all_files=True),
             ),
             GraphNode(
                 id="code", node_type=NodeType.CODE, label="EchoContent",
@@ -96,11 +96,11 @@ async def test_node_results_expose_resolved_inputs_and_whole_list_receives_list(
         metadata=GraphMetadata(name="Dir->Read File->Count whole list"),
         nodes=[
             GraphNode(
-                id="dir", node_type=NodeType.DIRECTORY_INPUT, label="Directory",
+                id="dir", node_type=NodeType.INPUT, label="Directory",
                 outputs=[
                     Port(id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True),
                 ],
-                config=NodeConfig(value=test_dir, select_all_files=True),
+                config=NodeConfig(input_mode="directory", value=test_dir, select_all_files=True),
             ),
             GraphNode(
                 id="read", node_type=NodeType.CODE, label="Read File",
@@ -160,11 +160,11 @@ async def test_ai_node_receives_file_content_not_paths(tmp_path, monkeypatch):
         metadata=GraphMetadata(name="Dir->AI(read_file_inputs)"),
         nodes=[
             GraphNode(
-                id="dir", node_type=NodeType.DIRECTORY_INPUT, label="Dir",
+                id="dir", node_type=NodeType.INPUT, label="Dir",
                 outputs=[
                     Port(id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH, multi=True),
                 ],
-                config=NodeConfig(value=test_dir, select_all_files=True),
+                config=NodeConfig(input_mode="directory", value=test_dir, select_all_files=True),
             ),
             GraphNode(
                 id="ai", node_type=NodeType.AI, label="Summarize",
@@ -199,7 +199,7 @@ async def test_binary_file_round_trip_via_base64(tmp_path):
         metadata=GraphMetadata(name="Binary round-trip"),
         nodes=[
             GraphNode(
-                id="input", node_type=NodeType.TEXT_INPUT, label="PathInput",
+                id="input", node_type=NodeType.INPUT, label="PathInput",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
                 config=NodeConfig(value=str(binary_path)),
             ),
@@ -242,7 +242,7 @@ async def test_read_file_inputs_off_by_default_keeps_raw_path(tmp_path):
         metadata=GraphMetadata(name="read_file_inputs off (regression)"),
         nodes=[
             GraphNode(
-                id="input", node_type=NodeType.TEXT_INPUT, label="PathInput",
+                id="input", node_type=NodeType.INPUT, label="PathInput",
                 outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False)],
                 config=NodeConfig(value=str(file_path)),
             ),
@@ -287,14 +287,14 @@ def _dir_to_code_graph_with_formats(test_dir: str, source_format: str, target_fo
         metadata=GraphMetadata(name="Dir->Code(format inheritance)"),
         nodes=[
             GraphNode(
-                id="dir", node_type=NodeType.DIRECTORY_INPUT, label="Dir",
+                id="dir", node_type=NodeType.INPUT, label="Dir",
                 outputs=[
                     Port(
                         id="files", name="Files", kind=PortKind.OUTPUT, data_type=DataType.FILE_PATH,
                         multi=True, format=source_format,
                     ),
                 ],
-                config=NodeConfig(value=test_dir, select_all_files=True),
+                config=NodeConfig(input_mode="directory", value=test_dir, select_all_files=True),
             ),
             GraphNode(
                 id="code", node_type=NodeType.CODE, label="EchoContent",
@@ -353,7 +353,7 @@ async def test_downstream_inherits_upstream_json_format_when_unset():
         metadata=GraphMetadata(name="Text->Code(json format inheritance)"),
         nodes=[
             GraphNode(
-                id="input", node_type=NodeType.TEXT_INPUT, label="JsonInput",
+                id="input", node_type=NodeType.INPUT, label="JsonInput",
                 outputs=[
                     Port(
                         id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT,

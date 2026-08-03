@@ -24,14 +24,8 @@ export default function InputEditor({
   handleGenerateSelectorCode,
   applyMode,
 }: InputEditorProps) {
-  const nt = node.node_type;
-  const isUnified = nt === 'input';
-
-  const mode: 'text' | 'file' | 'directory' = isUnified
-    ? ((node.config.input_mode || 'text') as 'text' | 'file' | 'directory')
-    : nt === 'directory_input' ? 'directory'
-    : nt === 'file_input'      ? 'file'
-    : 'text';
+  const mode: 'text' | 'file' | 'directory' =
+    (node.config.input_mode || 'text') as 'text' | 'file' | 'directory';
 
   const isText = mode === 'text';
   const isFile = mode === 'file';
@@ -39,9 +33,8 @@ export default function InputEditor({
 
   return (
     <div>
-      {/* Mode selector — only for unified `input` node */}
-      {isUnified && (
-        <div className="mb-4">
+      {/* Mode selector */}
+      <div className="mb-4">
           <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>Mode</label>
           <select
             className="w-full rounded-lg px-3 py-2 text-sm"
@@ -58,7 +51,6 @@ export default function InputEditor({
             <option value="directory">Directory (list of files)</option>
           </select>
         </div>
-      )}
 
       {/* Default value / path */}
       <div className="mb-4">
@@ -78,7 +70,7 @@ export default function InputEditor({
       </div>
 
       {/* Directory-specific options */}
-      {(isDirectory || nt === 'directory_input') && (
+      {isDirectory && (
         <>
           <label className="flex items-center gap-2 mb-2 text-sm" style={{ color: '#94a3b8' }}>
             <input
@@ -103,8 +95,8 @@ export default function InputEditor({
         </>
       )}
 
-      {/* AI file selector — directory modes */}
-      {(isDirectory || nt === 'directory_input') && (
+      {/* AI file selector — directory mode */}
+      {isDirectory && (
         <div className="mt-4 pt-4" style={{ borderTop: '1px solid #2d3148' }}>
           <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
             AI file-selection prompt

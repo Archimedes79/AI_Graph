@@ -1,10 +1,10 @@
-"""Unified text I/O widget handling text_window, chat_window, and text_io widget kinds.
+"""Unified text I/O widget.
 
 widget.mode controls ports and behaviour:
   "input"  - output port only; user types text that drives the graph
   "output" - input port only; displays incoming value (read-only)
   "both"   - both ports; user's typed text goes out, incoming value is displayed
-Legacy text_window / chat_window are treated as mode "both".
+An unset mode defaults to "both".
 """
 
 from __future__ import annotations
@@ -18,11 +18,10 @@ from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
 def _effective_mode(widget: GuiWidget) -> str:
     if widget.mode in ("input", "output", "both"):
         return widget.mode
-    return "both"  # legacy text_window / chat_window default
+    return "both"
 
 
 class TextIOElement(GuiWidgetElement):
-    # Handles: GuiWidgetKind.TEXT_IO, TEXT_WINDOW, CHAT_WINDOW
     widget_kind = GuiWidgetKind.TEXT_IO
 
     def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:

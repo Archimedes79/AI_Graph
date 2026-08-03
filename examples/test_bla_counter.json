@@ -2,9 +2,9 @@
   "metadata": {
     "name": "Directory Bla Counter",
     "version": "1.0.0",
-    "description": "Reads every .md file in a directory, counts occurrences of the word 'bla' across all of them, and produces a short summary. Demonstrates input(directory) -> code(whole_list, read_file_inputs) -> text_output.",
+    "description": "Reads every .md file in a directory, counts occurrences of the word 'bla' across all of them, and produces a short summary. Demonstrates input(directory) -> code(whole_list, read_file_inputs) -> output(window).",
     "author": "AI-Graph",
-    "tags": ["example", "input", "code", "text_output", "directory"]
+    "tags": ["example", "input", "code", "output", "directory"]
   },
   "nodes": [
     {
@@ -49,7 +49,7 @@
     },
     {
       "id": "node-textoutput-1",
-      "node_type": "text_output",
+      "node_type": "output",
       "label": "Result",
       "description": "Displays the summary and bla count",
       "position": { "x": 840, "y": 160 },
@@ -60,6 +60,7 @@
       "outputs": [],
       "config": {
         "output_label": "Bla Counter Result",
+        "write_mode": "window",
         "extra": {}
       }
     }

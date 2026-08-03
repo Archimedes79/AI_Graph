@@ -568,7 +568,7 @@ async def execute_graph(
     # Collect outputs of OUTPUT nodes as the final result
     final_outputs: Dict[str, Any] = {}
     for node in graph.nodes:
-        if node.node_type in (NodeType.OUTPUT, NodeType.TEXT_OUTPUT) and node.id in node_outputs:
+        if node.node_type == NodeType.OUTPUT and node.id in node_outputs:
             final_outputs[node.config.output_label or node.id] = node_outputs[node.id]
 
     has_error = any(r.status != ExecutionStatus.SUCCESS for r in node_results)
@@ -587,10 +587,10 @@ async def execute_graph(
 
 def get_runtime_requirements(graph: Graph) -> List[RuntimeRequirement]:
     """
-    Inspect the graph for input nodes (text/file/directory) which always prompt
-    the user via a dialog before execution, output nodes flagged with
-    `prompt_at_runtime`, and GUI-node picker widgets that have no preset
-    `value`. Returns the list of values that must be supplied.
+    Inspect the graph for input nodes flagged with `prompt_at_runtime` (which
+    prompt the user via a dialog before execution), output nodes flagged the
+    same way, and GUI-node picker widgets that have no preset `value`. Returns
+    the list of values that must be supplied.
 
     Delegates per-node-type/per-widget-kind logic to each element's
     `runtime_requirements`, the same method `deploy_service._requirements_literal`
@@ -612,7 +612,7 @@ def apply_runtime_values(graph: Graph, values: Dict[str, str]) -> None:
     Apply resolved runtime values onto the graph in place.
 
     Widget-targeting convention: a key of `"{node_id}::{widget_id}"` sets the
-    matching GUI node's widget `value` (used for the file_open/directory_open
+    matching GUI node's widget `value` (used for the input_picker
     requirements returned by `get_runtime_requirements`). A plain `node_id` key
     keeps the existing behaviour of writing `node.config.value` unchanged for
     every other node type.
@@ -633,18 +633,14 @@ def apply_runtime_values(graph: Graph, values: Dict[str, str]) -> None:
 
 def get_text_output_windows(graph: Graph, result: ExecutionResult) -> List[Dict[str, str]]:
     """
-    Collect the rendered content of every node whose effective write_mode is
-    "window" (a `text_output` node, or an `output` node with
-    `config.write_mode == "window"` -- see `output_element.effective_write_mode`)
-    so it can be shown to the user (web modal, or printed to the console for
-    CLI/deployed runs).
+    Collect the rendered content of every `output` node with
+    `config.write_mode == "window"` so it can be shown to the user (web modal,
+    or printed to the console for CLI/deployed runs).
     """
-    from app.elements.output.output_element import effective_write_mode
-
     results_by_id = {r.node_id: r for r in result.node_results}
     windows: List[Dict[str, str]] = []
     for node in graph.nodes:
-        if node.node_type not in (NodeType.OUTPUT, NodeType.TEXT_OUTPUT) or effective_write_mode(node) != "window":
+        if node.node_type != NodeType.OUTPUT or node.config.write_mode != "window":
             continue
         node_result = results_by_id.get(node.id)
         if node_result is None or node_result.status != ExecutionStatus.SUCCESS:

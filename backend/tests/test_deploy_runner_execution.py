@@ -58,9 +58,9 @@ def _run_bundle(bundle_dir: Path, stdin_answers: list[str]) -> dict:
 
 def _text_to_code_to_output_graph() -> Graph:
     text_input = GraphNode(
-        id="text", node_type=NodeType.TEXT_INPUT, label="Source Text",
+        id="text", node_type=NodeType.INPUT, label="Source Text",
         outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
-        config=NodeConfig(value="hello from ai-graph!"),
+        config=NodeConfig(value="hello from ai-graph!", prompt_at_runtime=True),
     )
     code = GraphNode(
         id="code", node_type=NodeType.CODE, label="Uppercase",
@@ -106,8 +106,8 @@ def _gui_workflow_graph(fixture_path: Path) -> Graph:
     gui = GraphNode(
         id="gui", node_type=NodeType.GUI, label="GUI",
         config=NodeConfig(gui_widgets=[
-            GuiWidget(id="w1", kind=GuiWidgetKind.FILE_OPEN, label="File", value=str(fixture_path)),
-            GuiWidget(id="w2", kind=GuiWidgetKind.TEXT_WINDOW, label="Text", value="text-window-value-99"),
+            GuiWidget(id="w1", kind=GuiWidgetKind.INPUT_PICKER, mode="file", label="File", value=str(fixture_path)),
+            GuiWidget(id="w2", kind=GuiWidgetKind.TEXT_IO, label="Text", value="text-window-value-99"),
         ]),
     )
     sync_gui_node_ports(gui)

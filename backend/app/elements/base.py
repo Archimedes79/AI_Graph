@@ -82,9 +82,9 @@ class NodeElement(ABC):
 def widget_input_or_value(widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
     """A widget's incoming wired value, falling back to its own stored value.
 
-    Shared by widget kinds that are simple overridable pickers (file_open,
-    directory_open) -- kinds with different precedence (e.g. chat_window,
-    where the widget's own value wins first) implement it inline instead.
+    Shared by widget kinds that are simple overridable pickers (input_picker)
+    -- kinds with different precedence (e.g. text_io in "both" mode, where the
+    widget's own value wins first) implement it inline instead.
     """
     raw = inputs.get(f"{widget.id}_in")
     return raw if raw is not None else widget.value

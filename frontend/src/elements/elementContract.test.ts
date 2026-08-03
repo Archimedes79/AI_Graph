@@ -26,10 +26,10 @@ function makeWidget(kind: GuiWidget['kind']): GuiWidget {
 describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, element) => {
   it('create() produces a valid GraphNode shape', () => {
     const node = element.create(`${nodeType}-1`);
-    // Some NodeType keys are legacy aliases sharing one element (e.g. text_input/
-    // file_input/directory_input all resolve to inputElement) -- create() always
-    // stamps its own canonical node_type, so assert it round-trips through the
-    // registry to this same element rather than requiring an exact string match.
+    // A few NodeType keys share one element (widget resolves to the gui-style
+    // element) -- create() always stamps its own canonical node_type, so assert
+    // it round-trips through the registry to this same element rather than
+    // requiring an exact string match.
     expect(NODE_ELEMENTS[node.node_type]).toBe(element);
     expect(node.id).toBe(`${nodeType}-1`);
     expect(node.config).toBeTruthy();

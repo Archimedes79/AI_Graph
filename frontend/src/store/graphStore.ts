@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
-import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType } from '../types/graph';
+import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType, GuiWidgetKind } from '../types/graph';
 import { nodeTypeDefaults, type NodePreset } from '../utils/nodeDefaults';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 
@@ -66,8 +66,56 @@ function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphM
   };
 }
 
+// One-time client-side migration of retired legacy alias names, mirroring
+// backend/app/models/graph.py's _migrate_legacy_node (the backend handles
+// API loads; this covers raw JSON file/paste imports).
+const LEGACY_INPUT_MODES: Record<string, 'text' | 'file' | 'directory'> = {
+  text_input: 'text',
+  file_input: 'file',
+  directory_input: 'directory',
+};
+const LEGACY_WIDGET_KINDS: Record<string, { kind: GuiWidgetKind; mode: string }> = {
+  file_open: { kind: 'input_picker', mode: 'file' },
+  directory_open: { kind: 'input_picker', mode: 'directory' },
+  text_window: { kind: 'text_io', mode: 'both' },
+  chat_window: { kind: 'text_io', mode: 'both' },
+};
+
+function migrateLegacyNode(rawNode: Partial<GraphNode>): Partial<GraphNode> {
+  const nodeType = rawNode.node_type as string | undefined;
+  let node = rawNode;
+  if (nodeType && nodeType in LEGACY_INPUT_MODES) {
+    node = {
+      ...node,
+      node_type: 'input',
+      config: { ...(node.config as GraphNode['config']), input_mode: LEGACY_INPUT_MODES[nodeType], prompt_at_runtime: true },
+    };
+  } else if (nodeType === 'text_output') {
+    node = {
+      ...node,
+      node_type: 'output',
+      config: { ...(node.config as GraphNode['config']), write_mode: 'window' },
+    };
+  }
+  const widgets = node.config?.gui_widgets;
+  if (Array.isArray(widgets) && widgets.some((w) => (w.kind as string) in LEGACY_WIDGET_KINDS)) {
+    node = {
+      ...node,
+      config: {
+        ...(node.config as GraphNode['config']),
+        gui_widgets: widgets.map((w) => {
+          const legacy = LEGACY_WIDGET_KINDS[w.kind as string];
+          return legacy ? { ...w, kind: legacy.kind, mode: w.mode || legacy.mode } : w;
+        }),
+      },
+    };
+  }
+  return node;
+}
+
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
-  const nodeType = rawNode.node_type ?? 'text_input';
+  rawNode = migrateLegacyNode(rawNode);
+  const nodeType = rawNode.node_type ?? 'input';
   const nodeId = rawNode.id ?? newId(nodeType);
   const defaults = nodeTypeDefaults(nodeType, nodeId);
 
