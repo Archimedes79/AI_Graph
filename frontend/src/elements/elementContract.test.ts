@@ -16,7 +16,11 @@ import { NODE_ELEMENTS, GUI_WIDGET_ELEMENTS } from './registry';
 import type { GraphNode, GuiWidget } from '../types/graph';
 
 function makeWidget(kind: GuiWidget['kind']): GuiWidget {
-  return { id: 'w1', kind, label: '', extensions: '', size: 'medium' };
+  return {
+    id: 'w1', kind, label: '', extensions: '', size: 'medium',
+    recursive: false, select_all_files: true, selector_prompt: '', selector_code: '',
+    ai_model: 'llama3', ai_provider: 'ollama',
+  };
 }
 
 describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, element) => {

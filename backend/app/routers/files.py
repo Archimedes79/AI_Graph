@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from app.services import file_service
 
@@ -25,3 +25,22 @@ async def detect_format(payload: dict):
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"format": fmt}
+
+
+@router.post("/attachments")
+async def upload_attachment(file: UploadFile = File(...)):
+    """Save an uploaded context-file attachment inside the project, returning its path."""
+    content = await file.read()
+    path = file_service.save_attachment(file.filename or "attachment", content)
+    return {"path": path, "name": file.filename}
+
+
+@router.delete("/attachments")
+async def remove_attachment(path: str):
+    """Delete a previously uploaded attachment."""
+    try:
+        file_service.delete_attachment(path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True}
+

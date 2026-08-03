@@ -22,4 +22,8 @@ export const textIoElement: GuiWidgetElementDefinition = {
 
   ConfigEditor: TextIoEditor,
   RuntimeWidget: TextIoWidget,
+  // "input"/"both": the widget's value is the user's typed message, sent once
+  // the graph runs -- clear it afterward so the next run doesn't resend the
+  // same message, and the box is ready for the next chat turn.
+  clearValueAfterRun: (widget) => effectiveMode(widget) !== 'output',
 };

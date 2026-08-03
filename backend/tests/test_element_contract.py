@@ -141,6 +141,11 @@ def _make_node(node_type: NodeType, tmp_path: Path) -> GraphNode:
         node = GraphNode(id=nid, node_type=node_type, label="L", config=NodeConfig(gui_widgets=[]))
         sync_gui_node_ports(node)
         return node
+    if node_type == NodeType.WIDGET:
+        widget = GuiWidget(id="w1", kind=GuiWidgetKind.TEXT_IO, label="W", value="hello", mode="input")
+        node = GraphNode(id=nid, node_type=node_type, label="L", config=NodeConfig(gui_widgets=[widget]))
+        sync_gui_node_ports(node)
+        return node
     raise AssertionError(f"no fixture for {node_type}")
 
 
@@ -324,7 +329,7 @@ def _gui_node_for(widget: GuiWidget, node_id: str = "gui1") -> GraphNode:
 
 
 @pytest.mark.parametrize("widget_kind, element", list(GUI_WIDGET_ELEMENTS.items()), ids=[k.value for k in GUI_WIDGET_ELEMENTS])
-async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, tmp_path):
+async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, tmp_path, monkeypatch):
     widget = _make_widget(widget_kind)
     gui_node = _gui_node_for(widget)
 
@@ -334,13 +339,29 @@ async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, 
     sync_gui_node_ports(empty_node)
     assert empty_node.config.gui_widgets == [] and empty_node.inputs == [] and empty_node.outputs == []
 
-    # 2. Executed (widget execute() is sync, unlike NodeElement.execute()).
+    # 2. Executed.
     in_id = f"{widget.id}_in"
     inputs = {in_id: ""} if any(p.id == in_id for p in gui_node.inputs) else {}
-    element.execute(widget, inputs)  # asserting only that this doesn't raise
+    await element.execute(widget, inputs)  # asserting only that this doesn't raise
 
     # 3. Saving and loading works.
     restored = GuiWidget.model_validate_json(widget.model_dump_json())
     assert restored == widget
 
-    # 4. AI can be called -- no GuiWidgetKind currently triggers an AI call, so nothing to verify.
+    # 4. AI can be called -- only input_picker's directory-mode file selector does.
+    if widget_kind != GuiWidgetKind.INPUT_PICKER:
+        return
+    calls = _install_ai_stubs(monkeypatch)
+    (tmp_path / "keep.txt").write_text("x", encoding="utf-8")
+    ai_widget = GuiWidget(
+        id="w_ai", kind=GuiWidgetKind.INPUT_PICKER, mode="directory", value=str(tmp_path),
+        select_all_files=False, selector_code="", selector_prompt="pick files",
+        ai_model="m2", ai_provider=AIProvider.OLLAMA,
+    )
+    await element.execute(ai_widget, {})
+    assert len(calls) == 1 and calls[0]["kind"] == "generate_code"
+    assert calls[0]["description"] == "pick files"
+    assert calls[0]["inputs"] == ["files"]
+    assert calls[0]["outputs"] == ["files"]
+    assert calls[0]["model"] == "m2"
+    assert calls[0]["provider"] == AIProvider.OLLAMA

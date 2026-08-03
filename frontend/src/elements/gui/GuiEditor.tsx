@@ -5,10 +5,11 @@ import GuiDesigner from '../../components/gui/GuiDesigner';
 
 interface GuiEditorProps {
   node: GraphNode;
+  setConfig: (key: string, value: unknown) => void;
   applyWidgets: (widgets: GraphNode['config']['gui_widgets']) => void;
 }
 
-export default function GuiEditor({ node, applyWidgets }: GuiEditorProps) {
+export default function GuiEditor({ node, setConfig, applyWidgets }: GuiEditorProps) {
   const [mode, setMode] = useState<'widgets' | 'designer'>('widgets');
 
   return (
@@ -32,19 +33,28 @@ export default function GuiEditor({ node, applyWidgets }: GuiEditorProps) {
       {mode === 'widgets' ? (
         <>
           <p className="text-xs mb-3" style={{ color: '#475569' }}>
-            Ports are generated automatically from the widgets below (see the Ports tab).
+            Ports are generated automatically from the widgets below.
             Adding, removing, or reordering a widget updates ports immediately.
           </p>
 
           <GuiWidgetEditor
             widgets={node.config.gui_widgets}
             onChange={applyWidgets}
-            aiModel={node.config.ai_model}
-            aiProvider={node.config.ai_provider}
+            aiModel={node.config.gen_ai_model}
+            aiProvider={node.config.gen_ai_provider}
           />
         </>
       ) : (
-        <GuiDesigner widgets={node.config.gui_widgets} onChange={applyWidgets} />
+        <GuiDesigner
+          widgets={node.config.gui_widgets}
+          onChange={applyWidgets}
+          columns={node.config.gui_grid_columns}
+          rowHeight={node.config.gui_grid_row_height}
+          onGridChange={(patch) => {
+            if (patch.columns !== undefined) setConfig('gui_grid_columns', patch.columns);
+            if (patch.rowHeight !== undefined) setConfig('gui_grid_row_height', patch.rowHeight);
+          }}
+        />
       )}
     </div>
   );

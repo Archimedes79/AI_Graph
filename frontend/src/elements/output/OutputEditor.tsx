@@ -51,7 +51,7 @@ export default function OutputEditor({ node, setConfig }: OutputEditorProps) {
           {(mode === 'file' || mode === 'directory') && (
             <>
               <label className="block text-xs font-medium mb-1 mt-3" style={{ color: '#94a3b8' }}>
-                {mode === 'file' ? 'Output file path' : 'Output directory path'}
+                {mode === 'file' ? 'Default output file path' : 'Default output directory path'}
               </label>
               <input
                 className="w-full rounded-lg px-3 py-2 text-sm"
@@ -61,6 +61,10 @@ export default function OutputEditor({ node, setConfig }: OutputEditorProps) {
                 placeholder={mode === 'file' ? '/path/to/output.txt' : '/path/to/output-dir'}
                 disabled={node.config.prompt_at_runtime}
               />
+              <p className="text-xs mt-1" style={{ color: '#475569' }}>
+                Wire a value into this node's "Path" input port to set the {mode === 'file' ? 'file' : 'directory'} path
+                from elsewhere in the graph instead — it overrides the default above whenever connected.
+              </p>
               <label className="flex items-center gap-2 mt-2 text-sm" style={{ color: '#94a3b8' }}>
                 <input
                   type="checkbox"

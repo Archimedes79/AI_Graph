@@ -6,6 +6,8 @@ import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { inputPortsForMode } from '../elements/input/inputElement';
 import { NODE_ELEMENTS } from '../elements/registry';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
+import ProviderModelSelect from '../elements/shared/ProviderModelSelect';
+import ContextFileAttachment from '../elements/shared/ContextFileAttachment';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -27,7 +29,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const [node, setNode] = useState<GraphNode | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genMessage, setGenMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<'config' | 'output' | 'ports' | 'preview'>('config');
+  const [activeTab, setActiveTab] = useState<'config' | 'output' | 'preview'>('config');
 
   useEffect(() => {
     if (rfNode) {
@@ -67,10 +69,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
         description: node.config.code_prompt || node.description,
         language: node.config.language,
         context: formatContext ? `${batchContext} ${formatContext}` : batchContext,
+        context_file: node.config.config_context_file,
         inputs: inputNames,
         outputs: outputNames,
-        ai_model: node.config.ai_model,
-        ai_provider: node.config.ai_provider,
+        ai_model: node.config.gen_ai_model,
+        ai_provider: node.config.gen_ai_provider,
       });
       setConfig('code', result.code);
       setGenMessage('✅ Code generated!');
@@ -92,8 +95,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       const result = await generatePrompt({
         description: node.description,
         context: outputFormatContext(node.config),
-        ai_model: node.config.ai_model,
-        ai_provider: node.config.ai_provider,
+        context_file: node.config.config_context_file,
+        ai_model: node.config.gen_ai_model,
+        ai_provider: node.config.gen_ai_provider,
       });
       setConfig('system_prompt', result.system_prompt);
       setGenMessage('✅ Prompt generated!');
@@ -138,10 +142,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
         description: node.config.selector_prompt || node.description,
         language: 'python',
         context: '`inputs["files"]` is the full list of rooted file paths found in the directory. Return only the selected paths as {"files": [...]}.',
+        context_file: node.config.config_context_file,
         inputs: ['files'],
         outputs: ['files'],
-        ai_model: node.config.ai_model,
-        ai_provider: node.config.ai_provider,
+        ai_model: node.config.gen_ai_model,
+        ai_provider: node.config.gen_ai_provider,
       });
       setConfig('selector_code', result.code);
       setGenMessage('✅ Selector generated!');
@@ -181,7 +186,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
         {/* Tabs */}
         <div className="flex border-b" style={{ borderColor: '#2d3148' }}>
-          {(['config', 'output', 'ports', 'preview'] as const).map((tab) => (
+          {(['config', 'output', 'preview'] as const).map((tab) => (
             <button
               key={tab}
               className="px-5 py-3 text-sm capitalize transition-colors"
@@ -215,6 +220,24 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
           {activeTab === 'config' && (
             <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                  Generation model (used by every ✨ Generate button below and in the Output tab)
+                </label>
+                <ProviderModelSelect
+                  provider={node.config.gen_ai_provider}
+                  model={node.config.gen_ai_model}
+                  onProviderChange={(p) => setConfig('gen_ai_provider', p)}
+                  onModelChange={(m) => setConfig('gen_ai_model', m)}
+                />
+              </div>
+
+              <ContextFileAttachment
+                label="Context file (optional, used as extra context by ✨ Generate above)"
+                path={node.config.config_context_file ?? ''}
+                onChange={(path) => setConfig('config_context_file', path)}
+              />
+
               <ConfigEditor
                 node={node}
                 setConfig={setConfig}
@@ -236,43 +259,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
           {activeTab === 'output' && (
             <OutputFormatEditor node={node} setConfig={setConfig} />
-          )}
-
-          {activeTab === 'ports' && (
-            <div className="space-y-4">
-              <p className="text-xs" style={{ color: '#94a3b8' }}>
-                Port definitions are set automatically based on node type. You can review them here.
-              </p>
-              <div>
-                <h3 className="text-sm font-semibold mb-2" style={{ color: '#e2e8f0' }}>
-                  Inputs
-                </h3>
-                {node.inputs.length === 0 && <p className="text-xs" style={{ color: '#475569' }}>No input ports</p>}
-                {node.inputs.map((port) => (
-                  <div key={port.id} className="mb-2 px-3 py-2 rounded-lg flex items-center gap-3" style={{ background: '#0f1117', border: '1px solid #2d3148' }}>
-                    <span className="text-xs font-mono" style={{ color: '#6366f1' }}>{port.id}</span>
-                    <span className="text-xs" style={{ color: '#e2e8f0' }}>{port.name}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#1e3a5f', color: '#93c5fd' }}>{port.data_type}</span>
-                    {port.multi && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#2d1b4e', color: '#c4b5fd' }}>multi</span>}
-                    {port.required && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#3a2000', color: '#fdba74' }}>required</span>}
-                  </div>
-                ))}
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold mb-2" style={{ color: '#e2e8f0' }}>
-                  Outputs
-                </h3>
-                {node.outputs.length === 0 && <p className="text-xs" style={{ color: '#475569' }}>No output ports</p>}
-                {node.outputs.map((port) => (
-                  <div key={port.id} className="mb-2 px-3 py-2 rounded-lg flex items-center gap-3" style={{ background: '#0f1117', border: '1px solid #2d3148' }}>
-                    <span className="text-xs font-mono" style={{ color: '#22c55e' }}>{port.id}</span>
-                    <span className="text-xs" style={{ color: '#e2e8f0' }}>{port.name}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#1a3a2a', color: '#86efac' }}>{port.data_type}</span>
-                    {port.multi && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#2d1b4e', color: '#c4b5fd' }}>multi</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
           )}
 
           {activeTab === 'preview' && (

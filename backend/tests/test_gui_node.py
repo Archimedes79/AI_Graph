@@ -285,11 +285,14 @@ async def test_plot_window_widget_broken_code_marks_node_error():
 
 
 # ---------------------------------------------------------------------------
-# gui -> ai -> gui feedback loop (deferred "t+1" edges)
+# gui -> ai -> gui feedback loop (memory-node auto-deferred "t+1" edges)
 #
 # The user-built graph: one GUI node holding a file_open widget and a text_window
 # widget, with the AI node in between. At node level that is a cycle
-# (gui -> ai -> gui), so it is only runnable when the closing edge is deferred.
+# (gui -> ai -> gui); a gui/widget node is a "memory" element (its output
+# reflects its own persisted widget value, not this round's fresh input), so
+# the closing edge is automatically treated as t+1 without the user marking it
+# -- see graph_executor._effective_deferred_edge_ids.
 # ---------------------------------------------------------------------------
 
 def _gui_ai_gui_graph(fixture_path: Path, *, deferred: bool) -> Graph:
@@ -317,8 +320,9 @@ def _gui_ai_gui_graph(fixture_path: Path, *, deferred: bool) -> Graph:
 
 
 @pytest.mark.asyncio
-async def test_gui_to_ai_to_gui_without_deferred_edge_is_still_a_cycle(tmp_path, monkeypatch):
-    """Regression guard: deferred-edge support must not make real cycles runnable."""
+async def test_gui_to_ai_to_gui_without_explicit_deferred_edge_still_runs(tmp_path, monkeypatch):
+    """A cycle closed by an edge into a gui/widget node is auto-deferred even
+    without the user marking it -- the memory-node rule, not a regression."""
     fixture = tmp_path / "source.md"
     fixture.write_text("the quick brown fox\n", encoding="utf-8")
 
@@ -329,9 +333,38 @@ async def test_gui_to_ai_to_gui_without_deferred_edge_is_still_a_cycle(tmp_path,
 
     result = await execute_graph(_gui_ai_gui_graph(fixture, deferred=False))
 
-    assert result.status == ExecutionStatus.ERROR
-    assert "cycle" in (result.error or "").lower()
-    assert result.node_results == []
+    assert result.status == ExecutionStatus.SUCCESS
+    results_by_id = {r.node_id: r for r in result.node_results}
+    assert results_by_id["gui"].status == ExecutionStatus.SUCCESS
+    # No previous round, so the auto-deferred edge delivers nothing this round.
+    assert "w_text_in" not in results_by_id["gui"].inputs
+
+
+@pytest.mark.asyncio
+async def test_non_cyclic_edge_into_gui_node_still_delivers_same_round():
+    """A plain code -> gui display wire (no loop back) is NOT auto-deferred --
+    the memory-node rule only kicks in for edges actually needed to break a cycle."""
+    code = GraphNode(
+        id="code", node_type=NodeType.CODE, label="Compute",
+        outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
+        config=NodeConfig(code="def run(inputs):\n    return {'output': 'hello'}\n"),
+    )
+    gui = _gui_node("gui", [GuiWidget(id="w_text", kind=GuiWidgetKind.TEXT_WINDOW, label="Answer")])
+    graph = Graph(
+        metadata=GraphMetadata(name="Code -> GUI display"),
+        nodes=[code, gui],
+        edges=[
+            GraphEdge(id="e1", source_node_id="code", source_port_id="output",
+                      target_node_id="gui", target_port_id="w_text_in"),
+        ],
+    )
+    result = await execute_graph(graph)
+    assert result.status == ExecutionStatus.SUCCESS
+    results_by_id = {r.node_id: r for r in result.node_results}
+    # Delivered in the SAME round -- not held back like a real (cycle-closing) t+1 edge.
+    assert results_by_id["gui"].inputs["w_text_in"] == "hello"
+    assert results_by_id["gui"].outputs["w_text_out"] == "hello"
+
 
 
 @pytest.mark.asyncio

@@ -27,6 +27,7 @@ class NodeType(str, Enum):
     OUTPUT = "output"
     TEXT_OUTPUT = "text_output"
     GUI = "gui"
+    WIDGET = "widget"  # a single GuiWidget standalone on the canvas -- see gui_element.py
 
 
 class PortKind(str, Enum):
@@ -49,6 +50,7 @@ class AIProvider(str, Enum):
     OPENAI_COMPATIBLE = "openai_compatible"
     ANTHROPIC = "anthropic"
     LMSTUDIO = "lmstudio"
+    GITHUB_COPILOT = "github_copilot"  # GitHub Models API, OpenAI-compatible; needs GITHUB_TOKEN
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +99,16 @@ class GuiWidget(BaseModel):
     mode: str = ""                   # input_picker: "file" | "directory"
     size: Literal["small", "medium", "large"] = "medium"
 
+    # input_picker (directory mode) – same file-selection contract as the legacy
+    # directory_input node's NodeConfig fields, kept per-widget so a standalone
+    # widget node has no different functionality from a directory_input node.
+    recursive: bool = False
+    select_all_files: bool = True
+    selector_prompt: str = ""
+    selector_code: str = ""          # run(inputs: {files}) -> {files}
+    ai_provider: AIProvider = AIProvider.OLLAMA
+    ai_model: str = "llama3"
+
     # Optional data-transform snippet for display-only widgets (currently plot_window).
     # Same contract as a CODE node: exposes run(inputs: dict) -> dict, executed via the
     # sandboxed code_executor. Receives {"value": <raw incoming data>} and should return
@@ -127,30 +139,44 @@ class NodeConfig(BaseModel):
     # unified input node
     input_mode: Literal["text", "file", "directory"] = "text"
 
-    # file / directory input nodes – parsing
-    parse_format: Literal["text", "json", "csv", "csv_list", "custom"] = "text"
-    parse_code: str = ""                 # run(inputs: {content, path}) -> {content}
-    example_path: str = ""               # sample file path for format detection
-
     # directory_input – file selection
     select_all_files: bool = True
     selector_prompt: str = ""
     selector_code: str = ""              # run(inputs: {files}) -> {files}
 
-    # ai node
+    # ai node -- runtime inference call only (the node's own execute())
     ai_provider: AIProvider = AIProvider.OLLAMA
     ai_model: str = "llama3"
     system_prompt: str = ""
     temperature: float = 0.7
+
+    # Every design-time ✨ Generate call (code, system prompt, selector code,
+    # output format) shares this one provider/model pair -- deliberately not
+    # split per-purpose, and deliberately separate from ai_provider/ai_model
+    # above so inference can stay on a cheap/local model while generation
+    # uses a stronger one.
+    gen_ai_provider: AIProvider = AIProvider.OLLAMA
+    gen_ai_model: str = "llama3"
 
     # code node
     language: str = "python"             # python | javascript
     code: str = ""                       # generated / user-written code
     code_prompt: str = ""                # stored AI prompt used to generate the code
 
+    # Config tab -- optional context file (path) whose content is appended as
+    # extra context to every ✨ Generate call in the Config tab (code, system
+    # prompt, selector code). Read server-side via file_service, same as any
+    # other path field; see routers/ai.py.
+    config_context_file: str = ""
+
     # per-node output format declaration (used in AI generation prompts)
     output_format: Literal["text", "json", "csv", "csv_list", "custom"] = "text"
     output_format_prompt: str = ""       # description for custom format
+
+    # Output tab -- optional context file (path) whose content is appended as
+    # extra context when generating output_format_prompt via AI ("Generate
+    # Output Format from prompt"). Independent of config_context_file above.
+    output_context_file: str = ""
 
     # code / ai node – batch handling
     # per_item: run() is invoked once per batch element (existing behaviour).
@@ -168,6 +194,10 @@ class NodeConfig(BaseModel):
 
     # gui node – ordered list of composed widgets; ports are derived from this
     gui_widgets: List[GuiWidget] = Field(default_factory=list)
+    # gui node – background raster the designer/runtime window lay widgets out
+    # on, mirroring each widget's own foreground `size` (small/medium/large).
+    gui_grid_columns: int = 12
+    gui_grid_row_height: int = 56
 
     extra: Dict[str, Any] = Field(default_factory=dict)
 
@@ -204,11 +234,13 @@ def gui_widget_ports(widget: GuiWidget) -> tuple[List[Port], List[Port]]:
 
 def sync_gui_node_ports(node: GraphNode) -> None:
     """
-    Regenerate a GUI node's inputs/outputs strictly from `config.gui_widgets`,
-    in order. No-op for non-GUI nodes. Call this after any widget-list edit
-    instead of hand-editing `inputs`/`outputs` directly.
+    Regenerate a GUI/WIDGET node's inputs/outputs strictly from
+    `config.gui_widgets`, in order. No-op for any other node type. Call this
+    after any widget-list edit instead of hand-editing `inputs`/`outputs`
+    directly. A WIDGET node is just a GUI node whose `gui_widgets` happens to
+    hold exactly one widget -- same derivation, same element (see gui_element.py).
     """
-    if node.node_type != NodeType.GUI:
+    if node.node_type not in (NodeType.GUI, NodeType.WIDGET):
         return
     inputs: List[Port] = []
     outputs: List[Port] = []
@@ -418,6 +450,7 @@ class GenerateCodeRequest(BaseModel):
     description: str
     language: str = "python"
     context: str = ""
+    context_file: str = ""            # optional path; content is appended to context server-side
     inputs: List[str] = Field(default_factory=list)
     outputs: List[str] = Field(default_factory=list)
     ai_provider: AIProvider = AIProvider.OLLAMA
@@ -433,12 +466,27 @@ class GenerateCodeResponse(BaseModel):
 class GeneratePromptRequest(BaseModel):
     description: str
     context: str = ""
+    context_file: str = ""            # optional path; content is appended to context server-side
     ai_provider: AIProvider = AIProvider.OLLAMA
     ai_model: str = "llama3"
 
 
 class GeneratePromptResponse(BaseModel):
     system_prompt: str
+    explanation: str = ""
+
+
+class GenerateOutputFormatRequest(BaseModel):
+    """Ask the AI to describe the expected \"custom\" output format/shape for a node."""
+    description: str
+    context: str = ""
+    context_file: str = ""            # optional path; content is appended to context server-side
+    ai_provider: AIProvider = AIProvider.OLLAMA
+    ai_model: str = "llama3"
+
+
+class GenerateOutputFormatResponse(BaseModel):
+    output_format_prompt: str
     explanation: str = ""
 
 

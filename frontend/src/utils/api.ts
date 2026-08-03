@@ -26,6 +26,7 @@ export const generateCode = (body: {
   description: string;
   language?: string;
   context?: string;
+  context_file?: string;
   inputs?: string[];
   outputs?: string[];
   ai_model?: string;
@@ -35,9 +36,19 @@ export const generateCode = (body: {
 export const generatePrompt = (body: {
   description: string;
   context?: string;
+  context_file?: string;
   ai_model?: string;
   ai_provider?: string;
 }) => api.post('/ai/generate-prompt', body).then((r) => r.data);
+
+export const generateOutputFormat = (body: {
+  description: string;
+  context?: string;
+  context_file?: string;
+  ai_model?: string;
+  ai_provider?: string;
+}): Promise<{ output_format_prompt: string; explanation?: string }> =>
+  api.post('/ai/generate-output-format', body).then((r) => r.data);
 
 export const generateGraph = (body: {
   description: string;
@@ -46,6 +57,18 @@ export const generateGraph = (body: {
   ai_provider?: string;
 }): Promise<{ graph: Graph; explanation?: string }> =>
   api.post('/ai/generate-graph', body).then((r) => r.data);
+
+// Context-file attachments (stored project-side, referenced by config_context_file /
+// output_context_file). Keeps the config a plain server path, same as any other file field.
+export const uploadAttachment = (file: File): Promise<{ path: string; name: string }> => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.post('/files/attachments', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+    .then((r) => r.data);
+};
+
+export const deleteAttachment = (path: string): Promise<void> =>
+  api.delete('/files/attachments', { params: { path } }).then(() => undefined);
 
 // Deployment
 export const downloadBundle = async (graph: Graph) => {

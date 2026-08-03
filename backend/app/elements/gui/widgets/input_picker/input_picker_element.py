@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.elements.base import DeployNeeds, GuiWidgetElement, widget_input_or_value
 from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
-from app.services import file_service
+from app.services import code_executor, file_service
 
 
 def _is_directory(widget: GuiWidget) -> bool:
@@ -38,16 +38,32 @@ class InputPickerElement(GuiWidgetElement):
             ],
         )
 
-    def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
         raw = widget_input_or_value(widget, inputs)
         is_dir = _is_directory(widget)
         if not raw:
             return [] if is_dir else None
         path = file_service.resolve_path(raw)
-        if is_dir:
-            extensions = file_service.parse_extensions_filter(widget.extensions)
-            return file_service.list_directory(path, recursive=False, extensions=extensions)
-        return str(path)
+        if not is_dir:
+            return str(path)
+
+        extensions = file_service.parse_extensions_filter(widget.extensions)
+        files = file_service.list_directory(path, recursive=widget.recursive, extensions=extensions)
+
+        selector_code = widget.selector_code.strip()
+        if not widget.select_all_files and not selector_code and widget.selector_prompt.strip():
+            from app.services import ai_service
+            selector_code, _ = await ai_service.generate_code(
+                description=widget.selector_prompt,
+                language="python",
+                context='inputs["files"] contains rooted file paths. Return {"files": [...]} with selected paths.',
+                inputs=["files"], outputs=["files"],
+                model=widget.ai_model, provider=widget.ai_provider,
+            )
+        if not widget.select_all_files and selector_code:
+            selected = await code_executor.execute_code(selector_code, "python", {"files": files})
+            files = selected.get("files", files)
+        return files
 
     def runtime_requirement(self, widget: GuiWidget) -> Optional[Dict[str, Any]]:
         if widget.value:
@@ -56,4 +72,8 @@ class InputPickerElement(GuiWidgetElement):
         return {"label": label, "kind": "directory" if _is_directory(widget) else "file"}
 
     def deploy_needs(self, widget: GuiWidget) -> DeployNeeds:
-        return DeployNeeds(files=True, code_runner=bool(widget.code and widget.code.strip()))
+        is_dir = _is_directory(widget)
+        code_runner = is_dir and not widget.select_all_files and bool(
+            widget.selector_code.strip() or widget.selector_prompt.strip()
+        )
+        return DeployNeeds(files=True, code_runner=code_runner)

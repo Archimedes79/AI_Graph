@@ -10,14 +10,42 @@ import io
 import json
 import logging
 import mimetypes
+import os
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Project-local storage for uploaded "context file" attachments (see routers/files.py).
+ATTACHMENTS_DIR = Path(os.getenv(
+    "ATTACHMENTS_DIR", str(Path(__file__).resolve().parents[2] / "data" / "attachments"),
+))
 
-def resolve_path(raw: str) -> str:
-    """Expand '~' and resolve a config/widget/input-supplied path string to an absolute one."""
+
+def save_attachment(filename: str, content: bytes) -> str:
+    """Persist an uploaded attachment under ATTACHMENTS_DIR and return its path."""
+    ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = f"{uuid.uuid4().hex}_{Path(filename).name}"
+    dest = ATTACHMENTS_DIR / safe_name
+    dest.write_bytes(content)
+    return str(dest)
+
+
+def delete_attachment(path: str) -> None:
+    """Remove a previously saved attachment; refuses to touch anything outside ATTACHMENTS_DIR."""
+    target = Path(path).expanduser().resolve()
+    if ATTACHMENTS_DIR.resolve() not in target.parents:
+        raise ValueError("Refusing to delete a path outside the attachments directory")
+    target.unlink(missing_ok=True)
+
+
+def resolve_path(raw: "str | List[str]") -> str:
+    """Expand '~' and resolve a config/widget/input-supplied path string to an
+    absolute one. If *raw* is a list (e.g. a multi-file port wired into a
+    single-path consumer), only the first entry is used."""
+    if isinstance(raw, list):
+        raw = raw[0] if raw else ""
     return str(Path(raw).expanduser().resolve())
 
 
@@ -59,28 +87,41 @@ def parse_extensions_filter(raw: str) -> Optional[List[str]]:
     return [p for p in parts if p] or None
 
 
-def read_text_file(path: str) -> str:
-    """Read and return the contents of a text file."""
+def read_file(path: "str | List[str]", mode: str = "text") -> str:
+    """Read a single file, either as UTF-8 text (`mode="text"`) or as
+    base64-encoded bytes (`mode="binary"`). If *path* is a list (a multi-file
+    port wired into a single-file read), only the first entry is read --
+    use `read_batch` to read every item instead."""
+    if isinstance(path, list):
+        path = path[0] if path else ""
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"File not found: {path}")
+    if mode == "binary":
+        return base64.b64encode(p.read_bytes()).decode("ascii")
     return p.read_text(encoding="utf-8", errors="replace")
 
 
-def read_binary_file_base64(path: str) -> str:
-    """Read a file's bytes and return them base64-encoded."""
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"File not found: {path}")
-    return base64.b64encode(p.read_bytes()).decode("ascii")
+def read_batch(paths: List[Optional[str]], mode: str = "text") -> List[Optional[str]]:
+    """Read every path in *paths* (text or binary, per `read_file`), preserving
+    `None` entries positionally so results still line up with their inputs."""
+    return [read_file(path, mode) if path is not None else None for path in paths]
 
 
-def write_text_file(path: str, content: str) -> str:
-    """Write *content* to *path*, creating parent directories as needed."""
+def write_file(path: str, content: Any, mode: str = "text") -> str:
+    """Write a single file, creating parent directories as needed. `mode="text"`
+    writes *content* as UTF-8 (coercing non-str values via `str()`); `mode="binary"`
+    writes *content* as raw bytes, base64-decoding it first if it's given as a str."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(content, encoding="utf-8")
-    logger.info("Wrote %d bytes to %s", len(content), path)
+    if mode == "binary":
+        data = content if isinstance(content, (bytes, bytearray)) else base64.b64decode(str(content))
+        p.write_bytes(bytes(data))
+        logger.info("Wrote %d bytes to %s", len(data), path)
+    else:
+        text = content if isinstance(content, str) else str(content)
+        p.write_text(text, encoding="utf-8")
+        logger.info("Wrote %d bytes to %s", len(text), path)
     return str(p)
 
 
@@ -116,26 +157,22 @@ def _binary_extension(format_name: Optional[str]) -> str:
 
 def write_formatted_file(path: str, value: Any, format_name: Optional[str]) -> str:
     """
-    Write *value* to *path* using the extension/serialization implied by a
-    non-text *format_name* (json/csv/binary/image); the resulting file's
-    suffix is derived from the format, replacing whatever suffix *path* has.
-    Callers should use write_text_file directly for the plain-text/unset case.
+    Write *value* to *path* using the extension/serialization implied by
+    *format_name* (json/csv/binary/image, or plain text if unset); the
+    resulting file's suffix is derived from the format, replacing whatever
+    suffix *path* has. Delegates the actual disk write to `write_file`.
     """
     if _is_binary_format(format_name):
         ext = _binary_extension(format_name)
-        data = value if isinstance(value, (bytes, bytearray)) else base64.b64decode(str(value))
-        out_path = Path(path).with_suffix(ext)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(bytes(data))
-        logger.info("Wrote %d bytes to %s", len(data), out_path)
-        return str(out_path)
+        out_path = str(Path(path).with_suffix(ext))
+        return write_file(out_path, value, mode="binary")
 
     ext, content = serialize_text_value(value, format_name)
-    out_path = Path(path).with_suffix(ext)
-    return write_text_file(str(out_path), content)
+    out_path = str(Path(path).with_suffix(ext))
+    return write_file(out_path, content, mode="text")
 
 
-def write_output_directory(
+def write_batch(
     dir_path: str,
     values: Dict[str, Any],
     formats: Optional[Dict[str, Optional[str]]] = None,
@@ -169,12 +206,13 @@ def write_output_directory(
             if fmt and fmt.lower() != "text":
                 out_path = write_formatted_file(str(root / stem), item, fmt)
             else:
-                out_path = write_text_file(str(root / f"{stem}.txt"), str(item))
+                out_path = write_file(str(root / f"{stem}.txt"), str(item), mode="text")
             written.append(out_path)
             index += 1
 
     logger.info("Wrote %d file(s) to %s", len(written), dir_path)
     return written
+
 
 
 def detect_format(path: str) -> str:

@@ -22,6 +22,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
 OPENAI_COMPATIBLE_BASE_URL = os.getenv("OPENAI_COMPATIBLE_BASE_URL", "")
 OPENAI_COMPATIBLE_API_KEY = os.getenv("OPENAI_COMPATIBLE_API_KEY", "")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+GITHUB_MODELS_BASE_URL = os.getenv("GITHUB_MODELS_BASE_URL", "https://models.github.ai/inference")
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +159,32 @@ async def _openai_compatible_complete(
         return data["choices"][0]["message"]["content"]
 
 
+async def _github_copilot_complete(
+    prompt: str,
+    system: str,
+    model: str,
+    temperature: float,
+    timeout: float = 120.0,
+) -> str:
+    if not GITHUB_TOKEN:
+        raise ValueError("GITHUB_TOKEN environment variable not set")
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+    payload = {"model": model, "messages": messages, "temperature": temperature}
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(
+            f"{GITHUB_MODELS_BASE_URL.rstrip('/')}/chat/completions",
+            json=payload,
+            headers=headers,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+
+
 # ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
@@ -188,6 +216,8 @@ async def complete(
         return await _anthropic_complete(prompt, system, model, temperature)
     if provider == "lmstudio":
         return await _lmstudio_complete(prompt, system, model, temperature)
+    if provider == "github_copilot":
+        return await _github_copilot_complete(prompt, system, model, temperature)
     raise ValueError(f"Unknown AI provider: {provider}")
 
 
@@ -276,6 +306,45 @@ async def generate_prompt(
         sp = raw.strip()
         explanation = ""
     return sp, explanation
+
+
+async def generate_output_format(
+    description: str,
+    context: str = "",
+    model: str = "llama3",
+    provider: AIProvider = AIProvider.OLLAMA,
+) -> tuple[str, str]:
+    """
+    Ask the LLM to describe the expected "custom" output format/shape for a
+    node from a natural-language description (e.g. field names, types,
+    nesting). This text is later injected verbatim into other nodes' AI code/
+    prompt generation as context -- see NodeConfig.output_format_prompt and
+    NodeEditor.tsx's outputFormatContext(). Returns (format_description, explanation).
+    """
+    system = (
+        "You are an expert at specifying data output formats/shapes for software "
+        "functions. Given a natural language description of a task, produce a "
+        "concise, unambiguous description of the exact output format/shape the "
+        "function should return (field names, types, nesting). This text is "
+        "injected into other AI generation prompts verbatim -- it is descriptive, "
+        "not executable code. "
+        "Output the format description as plain text inside <output_format> tags, "
+        "then a brief explanation."
+    )
+    prompt = f"Task description: {description}"
+    if context:
+        prompt += f"\n\nAdditional context: {context}"
+    raw = await complete(prompt, system, model, 0.3, provider)
+
+    import re
+    match = re.search(r"<output_format>(.*?)</output_format>", raw, re.DOTALL)
+    if match:
+        fmt = match.group(1).strip()
+        explanation = raw[match.end() :].strip()
+    else:
+        fmt = raw.strip()
+        explanation = ""
+    return fmt, explanation
 
 
 async def generate_graph(

@@ -30,7 +30,8 @@ export default function CodeEditor({ node, setConfig, generating, handleGenerate
         ))}
       </div>
 
-      {/* AI model + provider + generate button — shared header */}
+      {/* Language + generate button — shared header. Provider/model for code
+          generation live once in NodeEditor.tsx's Config tab (gen_ai_provider/model). */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>Language</label>
@@ -44,35 +45,14 @@ export default function CodeEditor({ node, setConfig, generating, handleGenerate
             <option value="javascript">JavaScript</option>
           </select>
         </div>
-        <div className="flex items-center gap-2">
-          <select
-            className="rounded px-2 py-1 text-xs"
-            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-            value={node.config.ai_provider}
-            onChange={(e) => setConfig('ai_provider', e.target.value)}
-          >
-            <option value="ollama">Ollama</option>
-            <option value="lmstudio">LM Studio</option>
-            <option value="openai">OpenAI</option>
-            <option value="openai_compatible">OpenAI-compatible endpoint</option>
-            <option value="anthropic">Anthropic</option>
-          </select>
-          <input
-            className="rounded px-2 py-1 text-xs w-24"
-            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-            value={node.config.ai_model}
-            onChange={(e) => setConfig('ai_model', e.target.value)}
-            placeholder="llama3"
-          />
-          <button
-            onClick={handleGenerateCode}
-            disabled={generating}
-            className="text-xs px-2 py-1 rounded"
-            style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
-          >
-            {generating ? '…' : '✨ Generate'}
-          </button>
-        </div>
+        <button
+          onClick={handleGenerateCode}
+          disabled={generating}
+          className="text-xs px-2 py-1 rounded"
+          style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
+        >
+          {generating ? '…' : '✨ Generate'}
+        </button>
       </div>
 
       {activeTab === 'prompt' && (

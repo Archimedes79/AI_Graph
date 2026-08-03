@@ -1,6 +1,7 @@
 import type { GraphNode, NodeType } from '../types/graph';
 import { baseNodeConfig } from '../elements/shared/baseNodeConfig';
 import { NODE_ELEMENTS } from '../elements/registry';
+import { createGuiWidget, guiWidgetPorts } from './guiWidgets';
 
 export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
   return NODE_ELEMENTS[nodeType].create(id);
@@ -16,6 +17,7 @@ export const NODE_TYPE_LABELS: Record<NodeType, string> = {
   output: 'Output',
   text_output: 'Text Output',
   gui: 'GUI Node',
+  widget: 'Widget',
 };
 
 export const NODE_TYPE_COLORS: Record<NodeType, string> = {
@@ -28,6 +30,7 @@ export const NODE_TYPE_COLORS: Record<NodeType, string> = {
   output: '#3a2000',
   text_output: '#0f3a3a',
   gui: '#4a1d3a',
+  widget: '#3a1d4a',
 };
 
 export const NODE_TYPE_ICON: Record<NodeType, string> = {
@@ -40,6 +43,7 @@ export const NODE_TYPE_ICON: Record<NodeType, string> = {
   output: '📤',
   text_output: '🪟',
   gui: '🖥️',
+  widget: '🧩',
 };
 
 export interface NodePreset {
@@ -51,39 +55,82 @@ export interface NodePreset {
   build: (id: string) => GraphNode;
 }
 
-export const NODE_PRESETS: NodePreset[] = [
+// File-reading presets were removed: Input's "file" mode (and input_picker's
+// file mode + a downstream node's `read_file_inputs`) already reads a file's
+// content directly with no AI/code involved -- see AGENTS.md's element table.
+export const NODE_PRESETS: NodePreset[] = [];
+
+/**
+ * One-click standalone `widget` node per creatable GuiWidgetKind -- the same
+ * widget kinds offered inside a `gui` node's widget list (see
+ * `CREATABLE_GUI_WIDGET_KINDS`), each pre-populated so it's immediately
+ * connectable without opening the config editor first.
+ */
+export const WIDGET_PRESETS: NodePreset[] = [
   {
-    id: 'code_read_file',
-    nodeType: 'code',
-    label: 'Read File (Code)',
-    icon: '📖',
-    description: 'Reads each file path into its content (text or base64)',
-    build: (id) => ({
-      id,
-      node_type: 'code',
-      label: 'Read File (Code)',
-      description: "Reads each file's content from its path; edit the code to post-process it.",
-      position: { x: 0, y: 0 },
-      inputs: [{ id: 'paths', name: 'File paths', kind: 'input', data_type: 'file_path', multi: true, required: true, description: 'Rooted file paths to read' }],
-      outputs: [{ id: 'content', name: 'Content', kind: 'output', data_type: 'text', multi: true, required: false, description: 'One text (or base64) value per file' }],
-      config: { ...baseNodeConfig(), read_file_inputs: true, code: 'def run(inputs):\n    return {"content": inputs.get("paths", "")}\n' },
-    }),
+    id: 'widget_input_picker',
+    nodeType: 'widget',
+    label: 'File/Directory Picker',
+    icon: '📂',
+    description: 'A standalone file or directory picker widget',
+    build: (id) => {
+      const widget = createGuiWidget('input_picker', 'Picker');
+      const { inputs, outputs } = guiWidgetPorts(widget);
+      return {
+        id,
+        node_type: 'widget',
+        label: 'File/Directory Picker',
+        description: 'A standalone file or directory picker widget',
+        position: { x: 0, y: 0 },
+        inputs,
+        outputs,
+        config: { ...baseNodeConfig(), gui_widgets: [widget] },
+      };
+    },
   },
   {
-    id: 'ai_read_file',
-    nodeType: 'ai',
-    label: 'Read File (AI)',
-    icon: '📚',
-    description: "Sends each file's content to the AI model",
-    build: (id) => ({
-      id,
-      node_type: 'ai',
-      label: 'Read File (AI)',
-      description: "Receives each file's content (not just its path) and sends it to the AI model per the description below.",
-      position: { x: 0, y: 0 },
-      inputs: [{ id: 'paths', name: 'File paths', kind: 'input', data_type: 'file_path', multi: true, required: true, description: 'Rooted file paths to read' }],
-      outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'text', multi: true, required: false, description: 'One response per file' }],
-      config: { ...baseNodeConfig(), read_file_inputs: true, system_prompt: 'You receive the full content of one file at a time. Respond according to the node description.' },
-    }),
+    id: 'widget_text_io',
+    nodeType: 'widget',
+    label: 'Text I/O',
+    icon: '💬',
+    description: 'A standalone text input / output / chat widget',
+    build: (id) => {
+      const widget = createGuiWidget('text_io', 'Text');
+      const { inputs, outputs } = guiWidgetPorts(widget);
+      return {
+        id,
+        node_type: 'widget',
+        label: 'Text I/O',
+        description: 'A standalone text input / output / chat widget',
+        position: { x: 0, y: 0 },
+        inputs,
+        outputs,
+        config: { ...baseNodeConfig(), gui_widgets: [widget] },
+      };
+    },
+  },
+  {
+    id: 'widget_plot_window',
+    nodeType: 'widget',
+    label: 'Plot',
+    icon: '📊',
+    description: 'A standalone plot display widget',
+    build: (id) => {
+      const widget = createGuiWidget('plot_window', 'Plot');
+      const { inputs, outputs } = guiWidgetPorts(widget);
+      return {
+        id,
+        node_type: 'widget',
+        label: 'Plot',
+        description: 'A standalone plot display widget',
+        position: { x: 0, y: 0 },
+        inputs,
+        outputs,
+        config: { ...baseNodeConfig(), gui_widgets: [widget] },
+      };
+    },
   },
 ];
+
+/** Every preset across both sections of the Sidebar palette -- used to resolve a drag/drop by preset id. */
+export const ALL_NODE_PRESETS: NodePreset[] = [...NODE_PRESETS, ...WIDGET_PRESETS];

@@ -36,7 +36,7 @@ class TextIOElement(GuiWidgetElement):
             return [in_port], []
         return [in_port], [out_port]  # "both"
 
-    def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
         mode = _effective_mode(widget)
         in_id = f"{widget.id}_in"
         if mode == "input":

@@ -24,7 +24,7 @@ cd backend; .venv\Scripts\python.exe -m pytest tests/test_element_contract.py -k
 
 # frontend, scoped to one node type or widget kind
 cd frontend; npm run test -- -t "node element: <node_type>"
-cd frontend; npm run test -- -t "widget: <widget_kind>"
+cd frontend; npm run test -- -t "gui widget element: <widget_kind>"
 
 # only before rollout/commit: full suite once
 cd backend; .venv\Scripts\python.exe -m pytest tests -q

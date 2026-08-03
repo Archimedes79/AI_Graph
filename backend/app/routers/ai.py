@@ -13,13 +13,27 @@ from app.models.graph import (
     GenerateCodeResponse,
     GenerateGraphRequest,
     GenerateGraphResponse,
+    GenerateOutputFormatRequest,
+    GenerateOutputFormatResponse,
     GeneratePromptRequest,
     GeneratePromptResponse,
 )
-from app.services import ai_service
+from app.services import ai_service, file_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+
+
+def _with_context_file(context: str, context_file: str) -> str:
+    """Append a context file's content (read server-side) to *context*, if given."""
+    if not context_file:
+        return context
+    try:
+        content = file_service.read_file(context_file, mode="text")
+    except (FileNotFoundError, OSError) as exc:
+        raise HTTPException(400, f"Could not read context file: {exc}") from exc
+    file_context = f"Context file ({context_file}):\n{content}"
+    return f"{context}\n\n{file_context}" if context else file_context
 
 
 @router.post("/generate-code", response_model=GenerateCodeResponse)
@@ -29,13 +43,15 @@ async def generate_code(req: GenerateCodeRequest):
         code, explanation = await ai_service.generate_code(
             description=req.description,
             language=req.language,
-            context=req.context,
+            context=_with_context_file(req.context, req.context_file),
             inputs=req.inputs,
             outputs=req.outputs,
             model=req.ai_model,
             provider=req.ai_provider,
         )
         return GenerateCodeResponse(code=code, language=req.language, explanation=explanation)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("generate_code failed")
         raise HTTPException(500, str(exc)) from exc
@@ -47,13 +63,33 @@ async def generate_prompt(req: GeneratePromptRequest):
     try:
         sp, explanation = await ai_service.generate_prompt(
             description=req.description,
-            context=req.context,
+            context=_with_context_file(req.context, req.context_file),
             model=req.ai_model,
             provider=req.ai_provider,
         )
         return GeneratePromptResponse(system_prompt=sp, explanation=explanation)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("generate_prompt failed")
+        raise HTTPException(500, str(exc)) from exc
+
+
+@router.post("/generate-output-format", response_model=GenerateOutputFormatResponse)
+async def generate_output_format(req: GenerateOutputFormatRequest):
+    """Ask the AI to describe the expected output format/shape from a description."""
+    try:
+        fmt, explanation = await ai_service.generate_output_format(
+            description=req.description,
+            context=_with_context_file(req.context, req.context_file),
+            model=req.ai_model,
+            provider=req.ai_provider,
+        )
+        return GenerateOutputFormatResponse(output_format_prompt=fmt, explanation=explanation)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("generate_output_format failed")
         raise HTTPException(500, str(exc)) from exc
 
 

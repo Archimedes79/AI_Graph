@@ -108,11 +108,13 @@ class GuiWidgetElement(ABC):
         """The (inputs, outputs) this widget contributes to its owning gui node."""
 
     @abstractmethod
-    def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
         """
         Compute this widget's `{id}_out` port value. Display-only widgets with
         no output port (currently only plot_window) instead mutate `inputs` in
-        place and their return value is ignored -- see `gui/element.py`.
+        place and their return value is ignored -- see `gui/element.py`. Async
+        so a widget can await a sandboxed code run / AI call (e.g. input_picker's
+        directory-mode file selector) exactly like a NodeElement can.
         """
 
     def runtime_requirement(self, widget: GuiWidget) -> Optional[Dict[str, Any]]:

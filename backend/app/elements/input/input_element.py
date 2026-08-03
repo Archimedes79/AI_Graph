@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import csv
-import io
-import json
 from typing import Any, Dict, List
 
 from app.elements.base import NodeElement, DeployNeeds
@@ -25,17 +22,6 @@ def _effective_mode(node: GraphNode) -> str:
     if node.node_type == NodeType.TEXT_INPUT:
         return "text"
     return node.config.input_mode or "text"
-
-
-def _parse_content(content: str, parse_format: str) -> Any:
-    """Apply a named parse_format to raw file text."""
-    if parse_format == "json":
-        return json.loads(content)
-    if parse_format == "csv":
-        return list(csv.DictReader(io.StringIO(content)))
-    if parse_format == "csv_list":
-        return list(csv.reader(io.StringIO(content)))
-    return content
 
 
 class InputElement(NodeElement):
@@ -79,16 +65,7 @@ class InputElement(NodeElement):
             return {"files": files, "count": len(files)}
 
         # mode == "file"
-        content: Any = file_service.read_text_file(path)
-        if cfg.parse_format and cfg.parse_format != "text":
-            if cfg.parse_format == "custom" and cfg.parse_code.strip():
-                result = await code_executor.execute_code(
-                    cfg.parse_code, cfg.language or "python",
-                    {"content": content, "path": str(path)},
-                )
-                content = result.get("content", content)
-            else:
-                content = _parse_content(content, cfg.parse_format)
+        content: Any = file_service.read_file(path, mode="text")
         return {"content": content, "path": str(path)}
 
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:

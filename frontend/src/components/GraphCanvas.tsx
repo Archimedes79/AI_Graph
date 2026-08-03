@@ -19,7 +19,7 @@ import { useGraphStore } from '../store/graphStore';
 import type { RFEdgeData } from '../store/graphStore';
 import GraphNodeComponent from './nodes/GraphNodeComponent';
 import type { NodeType } from '../types/graph';
-import { NODE_PRESETS } from '../utils/nodeDefaults';
+import { ALL_NODE_PRESETS } from '../utils/nodeDefaults';
 
 const nodeTypes = { graphNode: GraphNodeComponent };
 
@@ -105,7 +105,7 @@ export default function GraphCanvas() {
       });
 
       if (presetId) {
-        const preset = NODE_PRESETS.find((p) => p.id === presetId);
+        const preset = ALL_NODE_PRESETS.find((p) => p.id === presetId);
         if (preset) addPresetNode(preset, position);
         return;
       }

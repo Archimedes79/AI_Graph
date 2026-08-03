@@ -40,19 +40,83 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _is_memory_node(node_type: NodeType) -> bool:
+    """
+    Node types whose output already reflects previously-persisted state (a
+    gui/widget node's own widget `value`) rather than being freshly computed
+    from this round's input. An edge feeding one of these can always be
+    treated as an implicit t+1 (deferred) edge -- without the user marking it
+    -- exactly when doing so is what's needed to break a cycle (e.g.
+    gui -> ai -> gui). An edge into a memory node that ISN'T part of any cycle
+    is left alone and still delivers same-round, e.g. a plain ai -> gui
+    display wire. See AGENTS.md's "t+1 edges" section.
+    """
+    return node_type in (NodeType.GUI, NodeType.WIDGET)
+
+
+def _effective_deferred_edge_ids(nodes: List[GraphNode], edges: List[GraphEdge]) -> set:
+    """
+    Return the ids of every edge that should be excluded from topological
+    ordering: edges explicitly marked `deferred=True`, plus the minimal set of
+    memory-node-targeting edges (see `_is_memory_node`) needed to make the
+    graph acyclic. A graph with a real (non-memory) cycle still ends up with
+    unresolved nodes -- the caller's own Kahn's-algorithm pass raises for that.
+    """
+    node_map = {n.id: n for n in nodes}
+    node_ids = set(node_map)
+    deferred_ids = {e.id for e in edges if e.deferred}
+
+    while True:
+        active = [
+            e for e in edges
+            if e.id not in deferred_ids and e.source_node_id in node_ids and e.target_node_id in node_ids
+        ]
+        in_degree = {nid: 0 for nid in node_ids}
+        successors: Dict[str, List[GraphEdge]] = defaultdict(list)
+        for e in active:
+            in_degree[e.target_node_id] += 1
+            successors[e.source_node_id].append(e)
+
+        queue: deque[str] = deque(nid for nid, deg in in_degree.items() if deg == 0)
+        visited = set(queue)
+        while queue:
+            nid = queue.popleft()
+            for e in successors[nid]:
+                in_degree[e.target_node_id] -= 1
+                if in_degree[e.target_node_id] == 0 and e.target_node_id not in visited:
+                    visited.add(e.target_node_id)
+                    queue.append(e.target_node_id)
+
+        if len(visited) == len(node_ids):
+            return deferred_ids
+
+        candidate = next(
+            (
+                e for e in active
+                if e.target_node_id not in visited and _is_memory_node(node_map[e.target_node_id].node_type)
+            ),
+            None,
+        )
+        if candidate is None:
+            return deferred_ids  # unresolved (real) cycle; caller's own pass will raise
+        deferred_ids = deferred_ids | {candidate.id}
+
+
 def _topological_sort(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[str]:
     """
     Return node IDs in topological execution order.
-    Deferred (t+1) edges carry a value from the previous round, so they impose no
-    ordering constraint and are ignored here.
+    Deferred (t+1) edges -- explicit or implicit via `_effective_deferred_edge_ids`
+    -- carry a value from the previous round, so they impose no ordering
+    constraint and are ignored here.
     Raises ValueError if a cycle is detected.
     """
+    deferred_ids = _effective_deferred_edge_ids(nodes, edges)
     node_ids = {n.id for n in nodes}
     in_degree: Dict[str, int] = {nid: 0 for nid in node_ids}
     successors: Dict[str, List[str]] = defaultdict(list)
 
     for edge in edges:
-        if edge.deferred:
+        if edge.id in deferred_ids:
             continue
         if edge.source_node_id in node_ids and edge.target_node_id in node_ids:
             in_degree[edge.target_node_id] += 1
@@ -80,6 +144,7 @@ def _collect_inputs(
     edges: List[GraphEdge],
     node_outputs: Dict[str, Dict[str, Any]],
     previous_outputs: Optional[Dict[str, Dict[str, Any]]] = None,
+    deferred_ids: Optional[set] = None,
 ) -> Dict[str, Any]:
     """
     Gather all upstream output values that are wired into *node_id*'s input ports.
@@ -90,10 +155,13 @@ def _collect_inputs(
     no entry at all (as opposed to a `None` value from a source that legitimately
     succeeded with `None`).
 
-    A deferred (t+1) edge reads its source from *previous_outputs* instead of the
-    current round's *node_outputs*. With no previous value it falls back to the
-    edge's `initial_value`, and contributes nothing at all when that is None.
+    A deferred (t+1) edge -- explicit (`edge.deferred`) or implicit (its id is in
+    *deferred_ids*, see `_effective_deferred_edge_ids`) -- reads its source from
+    *previous_outputs* instead of the current round's *node_outputs*. With no
+    previous value it falls back to the edge's `initial_value`, and contributes
+    nothing at all when that is None.
     """
+    deferred_ids = deferred_ids or set()
     port_edges: Dict[str, List[GraphEdge]] = defaultdict(list)
     for edge in edges:
         if edge.target_node_id == node_id:
@@ -103,10 +171,11 @@ def _collect_inputs(
     for target_port, incoming in port_edges.items():
         values = []
         for edge in incoming:
-            outputs = previous_outputs if edge.deferred else node_outputs
+            is_deferred = edge.deferred or edge.id in deferred_ids
+            outputs = previous_outputs if is_deferred else node_outputs
             source_outputs = (outputs or {}).get(edge.source_node_id)
             if source_outputs is None:
-                if edge.deferred and edge.initial_value is not None:
+                if is_deferred and edge.initial_value is not None:
                     values.append(edge.initial_value)
                 continue
             values.append(source_outputs.get(edge.source_port_id))
@@ -171,12 +240,17 @@ def _debug_connector_value(node_id: str, port: Any, value: Any, direction: str, 
     (directory / f"{node_id}_{port.id}_{direction}_{index}{suffix}").write_text(content, encoding="utf-8")
 
 
-def _read_one(path: str, fmt: Optional[str]) -> str:
-    """Resolve a single file path to its content, honoring the declared format."""
+def _format_to_read_mode(fmt: Optional[str]) -> str:
+    """Map a declared Port.format to file_service's read `mode` ("text"/"binary")."""
     normalized = (fmt or "").lower()
     if normalized.startswith("image/") or normalized in ("binary", "application/octet-stream"):
-        return file_service.read_binary_file_base64(path)
-    return file_service.read_text_file(path)
+        return "binary"
+    return "text"
+
+
+def _read_one(path: str, fmt: Optional[str]) -> str:
+    """Resolve a single file path to its content, honoring the declared format."""
+    return file_service.read_file(path, mode=_format_to_read_mode(fmt))
 
 
 def _effective_input_format(
@@ -232,7 +306,8 @@ def _resolve_file_inputs(
             continue
         fmt = effective_formats.get(key)
         if isinstance(value, list):
-            resolved[key] = [_read_one(item, fmt) if item is not None else None for item in value]
+            mode = _format_to_read_mode(fmt)
+            resolved[key] = file_service.read_batch(value, mode=mode)
         elif value is None:
             resolved[key] = None
         else:
@@ -308,18 +383,21 @@ def _blocked_required_port(
     node: GraphNode,
     edges: List[GraphEdge],
     result_by_id: Dict[str, "NodeResult"],
+    deferred_ids: Optional[set] = None,
 ) -> Optional[str]:
     """
     Return the name of a required input port whose wired-in predecessors have
     ALL failed/been skipped (i.e. no successful source remains for that port),
     or None if every required port is still satisfiable. Ports that aren't
     wired to any edge, or that are optional, are never blocking here. Deferred
-    (t+1) edges are ignored: their source belongs to the previous round and
-    legitimately hasn't run yet in this one.
+    (t+1) edges -- explicit or implicit, see `_effective_deferred_edge_ids` --
+    are ignored: their source belongs to the previous round and legitimately
+    hasn't run yet in this one.
     """
+    deferred_ids = deferred_ids or set()
     incoming_by_port: Dict[str, List[str]] = defaultdict(list)
     for edge in edges:
-        if edge.target_node_id == node.id and not edge.deferred:
+        if edge.target_node_id == node.id and not edge.deferred and edge.id not in deferred_ids:
             incoming_by_port[edge.target_port_id].append(edge.source_node_id)
 
     for port in node.inputs:
@@ -341,14 +419,16 @@ def _blocked_required_port(
 def _topological_levels(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[List[str]]:
     """
     Return deterministic execution stages; every stage waits for its predecessors.
-    Deferred (t+1) edges are ignored, so a graph that is acyclic once they are
-    removed still runs (and can carry values across rounds).
+    Deferred (t+1) edges -- explicit or implicit, see `_effective_deferred_edge_ids`
+    -- are ignored, so a graph that is acyclic once they are removed still runs
+    (and can carry values across rounds).
     """
+    deferred_ids = _effective_deferred_edge_ids(nodes, edges)
     node_ids = {node.id for node in nodes}
     in_degree = {node.id: 0 for node in nodes}
     successors: Dict[str, List[str]] = defaultdict(list)
     for edge in edges:
-        if edge.deferred:
+        if edge.id in deferred_ids:
             continue
         if edge.source_node_id in node_ids and edge.target_node_id in node_ids:
             in_degree[edge.target_node_id] += 1
@@ -425,6 +505,7 @@ async def execute_graph(
             error=str(exc),
             duration_ms=(time.monotonic() - start) * 1000,
         )
+    deferred_ids = _effective_deferred_edge_ids(graph.nodes, graph.edges)
 
     node_outputs: Dict[str, Dict[str, Any]] = {}
     node_results: List[NodeResult] = []
@@ -433,7 +514,7 @@ async def execute_graph(
     for level in levels:
         async def run_node(node_id: str) -> NodeResult:
             node = node_map[node_id]
-            blocked_port = _blocked_required_port(node, graph.edges, result_by_id)
+            blocked_port = _blocked_required_port(node, graph.edges, result_by_id, deferred_ids)
             if blocked_port is not None:
                 return NodeResult(
                     node_id=node_id,
@@ -444,7 +525,7 @@ async def execute_graph(
             inputs: Dict[str, Any] = {}
             node_start = time.monotonic()
             try:
-                inputs = _collect_inputs(node_id, graph.edges, node_outputs, previous_outputs)
+                inputs = _collect_inputs(node_id, graph.edges, node_outputs, previous_outputs, deferred_ids)
                 effective_formats = _effective_input_formats(node, graph.edges, node_map)
                 inputs = _resolve_file_inputs(node, inputs, effective_formats)
                 source_formats = _collect_input_source_formats(node_id, graph.edges, node_map)

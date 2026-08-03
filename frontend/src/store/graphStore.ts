@@ -92,10 +92,10 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
     },
   };
 
-  // gui node ports are always derived from their widget list -- never trust
-  // hand-edited/imported/AI-generated `inputs`/`outputs`, mirroring the
+  // gui/widget node ports are always derived from their widget list -- never
+  // trust hand-edited/imported/AI-generated `inputs`/`outputs`, mirroring the
   // backend's defensive sync_gui_node_ports call in execute_graph.
-  return nodeType === 'gui' ? syncGuiNodePorts(node) : node;
+  return nodeType === 'gui' || nodeType === 'widget' ? syncGuiNodePorts(node) : node;
 }
 
 function normalizeGraph(graph: Graph): Graph {

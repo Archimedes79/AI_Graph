@@ -96,7 +96,7 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
         changed = true;
       }
 
-      if (node.node_type === 'gui') {
+      if (node.node_type === 'gui' || node.node_type === 'widget') {
         let widgetsChanged = false;
         for (const widget of node.config.gui_widgets) {
           const key = `${node.id}::${widget.id}`;

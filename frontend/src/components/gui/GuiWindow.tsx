@@ -28,8 +28,26 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
 
   // Local edits win over the last run's inputs until the next run replaces them.
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const prevResultRef = useRef(nodeResult);
   useEffect(() => {
     setOverrides({});
+    // A new run completed while this window was open (not just the initial
+    // mount) -- clear any one-shot widget values (e.g. a sent chat message)
+    // so they aren't resent on the next run. See `clearValueAfterRun`.
+    if (prevResultRef.current !== undefined && prevResultRef.current !== nodeResult) {
+      const toClear = node.config.gui_widgets.filter(
+        (w) => GUI_WIDGET_ELEMENTS[w.kind].clearValueAfterRun?.(w) && w.value
+      );
+      if (toClear.length > 0) {
+        updateNode(node.id, {
+          config: {
+            ...node.config,
+            gui_widgets: node.config.gui_widgets.map((w) => (toClear.includes(w) ? { ...w, value: '' } : w)),
+          },
+        });
+      }
+    }
+    prevResultRef.current = nodeResult;
   }, [nodeResult]);
 
   const onHeaderMouseDown = useCallback(
@@ -70,8 +88,9 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
     });
   };
 
-  const placements = resolveWidgetLayout(node.config.gui_widgets);
+  const placements = resolveWidgetLayout(node.config.gui_widgets, node.config.gui_grid_columns ?? GUI_GRID_COLUMNS);
   const rows = layoutRowCount(placements);
+  const rowHeight = node.config.gui_grid_row_height ?? GUI_GRID_ROW_HEIGHT;
 
   return (
     <div
@@ -109,8 +128,8 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
           <div
             className="grid gap-3"
             style={{
-              gridTemplateColumns: `repeat(${GUI_GRID_COLUMNS}, 1fr)`,
-              gridTemplateRows: `repeat(${rows}, minmax(${GUI_GRID_ROW_HEIGHT}px, auto))`,
+              gridTemplateColumns: `repeat(${node.config.gui_grid_columns ?? GUI_GRID_COLUMNS}, 1fr)`,
+              gridTemplateRows: `repeat(${rows}, minmax(${rowHeight}px, auto))`,
             }}
           >
             {placements.map(({ widget, x, y, w, h }) => {

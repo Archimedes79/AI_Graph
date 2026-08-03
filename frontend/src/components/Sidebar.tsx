@@ -1,12 +1,8 @@
 import React from 'react';
 import type { NodeType } from '../types/graph';
-import { NODE_TYPE_ICON, NODE_TYPE_LABELS, NODE_PRESETS, type NodePreset } from '../utils/nodeDefaults';
+import { NODE_TYPE_ICON, NODE_TYPE_LABELS, WIDGET_PRESETS, type NodePreset } from '../utils/nodeDefaults';
 
 const CATEGORIES: { label: string; types: NodeType[] }[] = [
-  {
-    label: 'Inputs',
-    types: ['input'],
-  },
   {
     label: 'Processing',
     types: ['ai', 'code'],
@@ -72,9 +68,9 @@ export default function Sidebar({ onAddNode, onAddPreset }: SidebarProps) {
 
       <div className="py-3">
         <h3 className="px-4 text-xs font-medium uppercase tracking-wider mb-2" style={{ color: '#475569' }}>
-          File Parsing
+          Widgets
         </h3>
-        {NODE_PRESETS.map((preset) => (
+        {WIDGET_PRESETS.map((preset) => (
           <button
             key={preset.id}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-white/5"

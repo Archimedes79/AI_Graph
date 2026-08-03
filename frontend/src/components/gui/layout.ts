@@ -2,6 +2,8 @@
 // Presentational only: never touches ports, wiring, or execution.
 import type { GuiWidget } from '../../types/graph';
 
+// Fallback background raster for graphs saved before gui_grid_columns/
+// gui_grid_row_height existed on NodeConfig (see baseNodeConfig.ts).
 export const GUI_GRID_COLUMNS = 12;
 export const GUI_GRID_ROW_HEIGHT = 56;
 
@@ -34,18 +36,18 @@ function clamp(value: number, min: number, max: number): number {
  * below in list order, so a graph built before the designer existed still
  * renders top-to-bottom exactly as its widget list reads.
  */
-export function resolveWidgetLayout(widgets: GuiWidget[]): WidgetPlacement[] {
+export function resolveWidgetLayout(widgets: GuiWidget[], columns: number = GUI_GRID_COLUMNS): WidgetPlacement[] {
   const placements: WidgetPlacement[] = [];
   let flowY = 0;
 
   for (const widget of widgets) {
     const span = defaultSpan(widget);
-    const w = clamp(Math.round(widget.w ?? span.w), 1, GUI_GRID_COLUMNS);
+    const w = clamp(Math.round(widget.w ?? span.w), 1, columns);
     const h = Math.max(1, Math.round(widget.h ?? span.h));
     const isPlaced = widget.x !== undefined && widget.y !== undefined;
 
     if (isPlaced) {
-      const x = clamp(Math.round(widget.x as number), 0, GUI_GRID_COLUMNS - w);
+      const x = clamp(Math.round(widget.x as number), 0, columns - w);
       const y = Math.max(0, Math.round(widget.y as number));
       placements.push({ widget, x, y, w, h });
       flowY = Math.max(flowY, y + h);

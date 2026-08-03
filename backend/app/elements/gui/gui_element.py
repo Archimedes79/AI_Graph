@@ -6,6 +6,11 @@ merges their results. This is the "gui master element" that contains one or
 more sub-elements and synchronizes them: the gui node's ports are exactly the
 union of its widgets' ports (see `sync_gui_node_ports`), and its `execute` is
 exactly the union of its widgets' `execute`.
+
+This same class is also registered for `NodeType.WIDGET` (see registry.py): a
+standalone "widget" node is simply a `gui` node whose `gui_widgets` holds
+exactly one entry -- no separate element, no duplicated logic, just a
+single-widget instance of the exact composite below.
 """
 
 from __future__ import annotations
@@ -54,7 +59,7 @@ class GuiElement(NodeElement):
             element = widget_elements.get(widget.kind)
             if element is None:
                 raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
-            result[f"{widget.id}_out"] = element.execute(widget, inputs)
+            result[f"{widget.id}_out"] = await element.execute(widget, inputs)
         return result
 
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:

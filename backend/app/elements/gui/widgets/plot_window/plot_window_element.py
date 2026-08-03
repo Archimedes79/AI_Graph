@@ -16,7 +16,7 @@ class PlotWindowElement(GuiWidgetElement):
         label = widget.label or widget.id
         return [Port(id=in_id, name=label, kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)], []
 
-    def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
         # Display-only: this is never called (see gui/element.py) since a widget
         # with no output port has its in-place transform handled by the caller.
         return None

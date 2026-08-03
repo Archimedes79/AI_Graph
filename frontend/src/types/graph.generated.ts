@@ -23,12 +23,21 @@ export type PortKind = 'input' | 'output';
  * via the `definition` "NodeType".
  */
 export type NodeType =
-  'text_input' | 'file_input' | 'directory_input' | 'input' | 'ai' | 'code' | 'output' | 'text_output' | 'gui';
+  | 'text_input'
+  | 'file_input'
+  | 'directory_input'
+  | 'input'
+  | 'ai'
+  | 'code'
+  | 'output'
+  | 'text_output'
+  | 'gui'
+  | 'widget';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "AIProvider".
  */
-export type AIProvider = 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio';
+export type AIProvider = 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "DataType".
@@ -99,22 +108,25 @@ export interface GraphNode {
  */
 export interface NodeConfig {
   ai_model: string;
-  ai_provider: 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio';
+  ai_provider: 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
   batch_mode: 'per_item' | 'whole_list';
   code: string;
   code_prompt: string;
-  example_path: string;
+  config_context_file: string;
   extra: {
     [k: string]: unknown;
   };
+  gen_ai_model: string;
+  gen_ai_provider: 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
+  gui_grid_columns: number;
+  gui_grid_row_height: number;
   gui_widgets: GuiWidget[];
   input_mode: 'text' | 'file' | 'directory';
   language: string;
+  output_context_file: string;
   output_format: 'text' | 'json' | 'csv' | 'csv_list' | 'custom';
   output_format_prompt: string;
   output_label: string;
-  parse_code: string;
-  parse_format: 'text' | 'json' | 'csv' | 'csv_list' | 'custom';
   prompt_at_runtime: boolean;
   read_file_inputs: boolean;
   select_all_files: boolean;
@@ -135,6 +147,8 @@ export interface NodeConfig {
  * via the `definition` "GuiWidget".
  */
 export interface GuiWidget {
+  ai_model: string;
+  ai_provider: 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
   code?: string;
   extensions: string;
   h?: number;
@@ -143,6 +157,10 @@ export interface GuiWidget {
   label: string;
   language?: 'python' | 'javascript';
   mode?: string;
+  recursive: boolean;
+  select_all_files: boolean;
+  selector_code: string;
+  selector_prompt: string;
   size: 'small' | 'medium' | 'large';
   value?: string | null;
   w?: number;

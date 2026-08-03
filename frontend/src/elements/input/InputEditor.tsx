@@ -36,7 +36,6 @@ export default function InputEditor({
   const isText = mode === 'text';
   const isFile = mode === 'file';
   const isDirectory = mode === 'directory';
-  const parseFormat = node.config.parse_format || 'text';
 
   return (
     <div>
@@ -78,38 +77,6 @@ export default function InputEditor({
         </p>
       </div>
 
-      {/* Parse format — file mode */}
-      {(isFile || nt === 'file_input') && (
-        <div className="mb-4">
-          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>Parse format</label>
-          <select
-            className="w-full rounded-lg px-3 py-2 text-sm"
-            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-            value={parseFormat}
-            onChange={(e) => setConfig('parse_format', e.target.value)}
-          >
-            {PARSE_FORMATS.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
-          {parseFormat === 'custom' && (
-            <div className="mt-2">
-              <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                Parser code — run(inputs) receives {'{'}"content", "path"{'}'} and must return {'{'}"content"{'}'}
-              </label>
-              <textarea
-                className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-                style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 120 }}
-                value={node.config.parse_code}
-                onChange={(e) => setConfig('parse_code', e.target.value)}
-                spellCheck={false}
-                placeholder={'def run(inputs):\n    content = inputs["content"]\n    return {"content": content}'}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Directory-specific options */}
       {(isDirectory || nt === 'directory_input') && (
         <>
@@ -134,27 +101,6 @@ export default function InputEditor({
             />
           </div>
         </>
-      )}
-
-      {/* Example path — file or directory modes (for format detection) */}
-      {!isText && nt !== 'text_input' && (
-        <div className="mb-4">
-          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-            Example path (for format detection)
-          </label>
-          <input
-            className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-            value={node.config.example_path}
-            onChange={(e) => setConfig('example_path', e.target.value)}
-            placeholder={isDirectory || nt === 'directory_input'
-              ? 'Sample file path within the directory'
-              : 'Same as default path, or override for detection'}
-          />
-          <p className="text-xs mt-1" style={{ color: '#475569' }}>
-            Used with "Detect format" in the Connector Editor to propose the right parse format.
-          </p>
-        </div>
       )}
 
       {/* AI file selector — directory modes */}

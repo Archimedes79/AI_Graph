@@ -29,4 +29,9 @@ export interface GuiWidgetElementDefinition {
   ports: (widget: GuiWidget) => { inputs: Port[]; outputs: Port[] };
   ConfigEditor: React.ComponentType<any>;
   RuntimeWidget: React.ComponentType<GuiWidgetRuntimeProps>;
+  // Optional: widget's stored value is a one-shot "message" that should be
+  // cleared once a run has consumed it (e.g. a chat-style text_io widget),
+  // rather than being resent on every subsequent round. Omitted/false for
+  // widgets whose value is a persistent setting (e.g. input_picker's path).
+  clearValueAfterRun?: (widget: GuiWidget) => boolean;
 }

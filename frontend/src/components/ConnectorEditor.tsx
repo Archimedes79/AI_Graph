@@ -22,7 +22,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
   );
   const [format, setFormat] = useState(port?.format ?? '');
   const [debugDirectory, setDebugDirectory] = useState(port?.debug_directory ?? '');
-  const [samplePath, setSamplePath] = useState((graphNode?.config.example_path || graphNode?.config.value) ?? '');
+  const [samplePath, setSamplePath] = useState(graphNode?.config.value ?? '');
   const [deferred, setDeferred] = useState(false);
   const [initialValue, setInitialValue] = useState('');
   const [detecting, setDetecting] = useState(false);
@@ -108,7 +108,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
                   onClick={() => detectFormat(
                     (graphNode.node_type === 'directory_input' || graphNode.node_type === 'input')
                       ? samplePath
-                      : (graphNode.config.example_path || graphNode.config.value) ?? ''
+                      : graphNode.config.value ?? ''
                   )}
                   disabled={detecting}
                   className="px-3 py-1.5 text-xs rounded-lg font-semibold"

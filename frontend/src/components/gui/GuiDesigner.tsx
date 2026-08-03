@@ -1,15 +1,17 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import type { GuiWidget } from '../../types/graph';
 import { GUI_WIDGET_KIND_LABELS } from '../../utils/guiWidgets';
-import { GUI_GRID_COLUMNS, resolveWidgetLayout, layoutRowCount } from './layout';
+import { GUI_GRID_COLUMNS, GUI_GRID_ROW_HEIGHT, resolveWidgetLayout, layoutRowCount } from './layout';
 
 interface GuiDesignerProps {
   widgets: GuiWidget[];
   onChange: (widgets: GuiWidget[]) => void;
+  columns?: number;
+  rowHeight?: number;
+  onGridChange?: (patch: { columns?: number; rowHeight?: number }) => void;
 }
 
 const CELL_WIDTH = 46;
-const ROW_HEIGHT = 40;
 
 interface DragState {
   widgetId: string;
@@ -23,12 +25,12 @@ interface DragState {
  * Grid designer for a gui node's widgets: drag to move, drag the corner to
  * resize, or type exact cells. Writes only the presentational `x/y/w/h` fields.
  */
-export default function GuiDesigner({ widgets, onChange }: GuiDesignerProps) {
+export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLUMNS, rowHeight = GUI_GRID_ROW_HEIGHT, onGridChange }: GuiDesignerProps) {
   const drag = useRef<DragState | null>(null);
   const widgetsRef = useRef(widgets);
   widgetsRef.current = widgets;
 
-  const placements = resolveWidgetLayout(widgets);
+  const placements = resolveWidgetLayout(widgets, columns);
   const placementById = new Map(placements.map((p) => [p.widget.id, p]));
   const rows = Math.max(layoutRowCount(placements) + 1, 6);
 
@@ -44,12 +46,12 @@ export default function GuiDesigner({ widgets, onChange }: GuiDesignerProps) {
       const state = drag.current;
       if (!state) return;
       const dx = Math.round((e.clientX - state.startClientX) / CELL_WIDTH);
-      const dy = Math.round((e.clientY - state.startClientY) / ROW_HEIGHT);
+      const dy = Math.round((e.clientY - state.startClientY) / rowHeight);
 
       if (state.mode === 'move') {
         const w = state.origin.w;
         patchWidget(state.widgetId, {
-          x: Math.min(GUI_GRID_COLUMNS - w, Math.max(0, state.origin.x + dx)),
+          x: Math.min(columns - w, Math.max(0, state.origin.x + dx)),
           y: Math.max(0, state.origin.y + dy),
           w,
           h: state.origin.h,
@@ -58,7 +60,7 @@ export default function GuiDesigner({ widgets, onChange }: GuiDesignerProps) {
         patchWidget(state.widgetId, {
           x: state.origin.x,
           y: state.origin.y,
-          w: Math.min(GUI_GRID_COLUMNS - state.origin.x, Math.max(1, state.origin.w + dx)),
+          w: Math.min(columns - state.origin.x, Math.max(1, state.origin.w + dx)),
           h: Math.max(1, state.origin.h + dy),
         });
       }
@@ -72,7 +74,7 @@ export default function GuiDesigner({ widgets, onChange }: GuiDesignerProps) {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [patchWidget]);
+  }, [patchWidget, columns, rowHeight]);
 
   const startDrag = (e: React.MouseEvent, widgetId: string, mode: DragState['mode']) => {
     const placement = placementById.get(widgetId);
@@ -116,17 +118,46 @@ export default function GuiDesigner({ widgets, onChange }: GuiDesignerProps) {
         </button>
       </div>
 
+      {onGridChange && (
+        <div className="flex items-center gap-4 mb-2">
+          <label className="flex items-center gap-1 text-xs" style={{ color: '#94a3b8' }}>
+            Background columns
+            <input
+              type="number"
+              min={1}
+              max={48}
+              className="w-14 rounded px-1 py-0.5 text-xs"
+              style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+              value={columns}
+              onChange={(e) => onGridChange({ columns: Math.max(1, Math.min(48, Number(e.target.value) || columns)) })}
+            />
+          </label>
+          <label className="flex items-center gap-1 text-xs" style={{ color: '#94a3b8' }}>
+            Background row height (px)
+            <input
+              type="number"
+              min={16}
+              max={200}
+              className="w-16 rounded px-1 py-0.5 text-xs"
+              style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+              value={rowHeight}
+              onChange={(e) => onGridChange({ rowHeight: Math.max(16, Math.min(200, Number(e.target.value) || rowHeight)) })}
+            />
+          </label>
+        </div>
+      )}
+
       <div
         className="relative rounded-lg overflow-auto"
         style={{
           background: '#0f1117',
           border: '1px solid #2d3148',
-          width: GUI_GRID_COLUMNS * CELL_WIDTH,
-          height: rows * ROW_HEIGHT,
+          width: columns * CELL_WIDTH,
+          height: rows * rowHeight,
           maxWidth: '100%',
           backgroundImage:
             'linear-gradient(to right, #1c2036 1px, transparent 1px), linear-gradient(to bottom, #1c2036 1px, transparent 1px)',
-          backgroundSize: `${CELL_WIDTH}px ${ROW_HEIGHT}px`,
+          backgroundSize: `${CELL_WIDTH}px ${rowHeight}px`,
         }}
       >
         {placements.map(({ widget, x, y, w, h }) => (
@@ -135,9 +166,9 @@ export default function GuiDesigner({ widgets, onChange }: GuiDesignerProps) {
             className="absolute rounded-lg px-2 py-1 overflow-hidden cursor-move select-none"
             style={{
               left: x * CELL_WIDTH + 2,
-              top: y * ROW_HEIGHT + 2,
+              top: y * rowHeight + 2,
               width: w * CELL_WIDTH - 4,
-              height: h * ROW_HEIGHT - 4,
+              height: h * rowHeight - 4,
               background: '#2d1b4e',
               border: '1px solid #6366f1',
             }}
@@ -166,9 +197,9 @@ export default function GuiDesigner({ widgets, onChange }: GuiDesignerProps) {
               {widget.label || widget.id}
             </span>
             {([
-              ['x', x, 0, GUI_GRID_COLUMNS - 1],
+              ['x', x, 0, columns - 1],
               ['y', y, 0, 999],
-              ['w', w, 1, GUI_GRID_COLUMNS],
+              ['w', w, 1, columns],
               ['h', h, 1, 999],
             ] as const).map(([field, value, min, max]) => (
               <label key={field} className="flex items-center gap-1 text-xs" style={{ color: '#475569' }}>

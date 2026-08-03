@@ -17,6 +17,7 @@ _input = InputElement()
 _input_picker = InputPickerElement()
 _text_io = TextIOElement()
 _output = OutputElement()
+_gui = GuiElement()
 
 NODE_ELEMENTS: Dict[NodeType, NodeElement] = {
     NodeType.TEXT_INPUT:       _input,
@@ -27,7 +28,10 @@ NODE_ELEMENTS: Dict[NodeType, NodeElement] = {
     NodeType.CODE:             CodeElement(),
     NodeType.OUTPUT:           _output,
     NodeType.TEXT_OUTPUT:      _output,
-    NodeType.GUI:              GuiElement(),
+    NodeType.GUI:              _gui,
+    # A WIDGET node is a GUI node whose `gui_widgets` holds exactly one widget --
+    # same element, same execute()/ports() derivation, see gui_element.py.
+    NodeType.WIDGET:           _gui,
 }
 
 GUI_WIDGET_ELEMENTS: Dict[GuiWidgetKind, GuiWidgetElement] = {

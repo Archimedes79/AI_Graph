@@ -9,14 +9,16 @@ export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Po
 }
 
 /**
- * Regenerate a GUI node's inputs/outputs strictly from `config.gui_widgets`, in
- * order. No-op (returns the node unchanged) for non-GUI nodes. Call this after
- * any widget-list edit instead of hand-editing `inputs`/`outputs` directly --
- * widget ids never change, so port ids (`${id}_in` / `${id}_out`) stay stable
- * across re-syncs and existing edges remain attached.
+ * Regenerate a GUI/WIDGET node's inputs/outputs strictly from
+ * `config.gui_widgets`, in order. No-op (returns the node unchanged) for any
+ * other node type. Call this after any widget-list edit instead of
+ * hand-editing `inputs`/`outputs` directly -- widget ids never change, so
+ * port ids (`${id}_in` / `${id}_out`) stay stable across re-syncs and
+ * existing edges remain attached. A WIDGET node is just a GUI node whose
+ * `gui_widgets` holds exactly one widget -- same derivation.
  */
 export function syncGuiNodePorts(node: GraphNode): GraphNode {
-  if (node.node_type !== 'gui') return node;
+  if (node.node_type !== 'gui' && node.node_type !== 'widget') return node;
 
   const inputs: Port[] = [];
   const outputs: Port[] = [];
@@ -54,6 +56,12 @@ export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
     ...sizeToGrid(size),
     code: '',
     language: 'python',
+    recursive: false,
+    select_all_files: true,
+    selector_prompt: '',
+    selector_code: '',
+    ai_model: 'llama3',
+    ai_provider: 'ollama',
   };
 }
 

@@ -21,7 +21,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
   const bgColor = NODE_TYPE_COLORS[graphNode.node_type] ?? '#1a1d2e';
   const icon = NODE_TYPE_ICON[graphNode.node_type] ?? '⬜';
   const statusColor = executionResult ? statusColors[executionResult.status] : undefined;
-  const isGui = graphNode.node_type === 'gui';
+  const isGuiLike = graphNode.node_type === 'gui' || graphNode.node_type === 'widget';
 
   const handleEdit = useCallback(() => onEdit(id), [id, onEdit]);
   const handleDelete = useCallback(
@@ -36,12 +36,12 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
     <div
       className="rounded-lg overflow-hidden shadow-lg select-none"
       style={
-        isGui
+        isGuiLike
           ? { background: bgColor, border: `2px solid ${statusColor ?? '#2d3148'}`, width: '100%', height: '100%' }
           : { background: bgColor, border: `2px solid ${statusColor ?? '#2d3148'}`, minWidth: 180, maxWidth: 240 }
       }
     >
-      {isGui && (
+      {isGuiLike && (
         <NodeResizer
           isVisible={selected}
           minWidth={220}
@@ -92,8 +92,8 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
         </div>
       </div>
 
-      {/* Ports — GUI nodes get a special two-column layout: outputs left, inputs right */}
-      {isGui ? (
+      {/* Ports — GUI/widget nodes get a special two-column layout: outputs left, inputs right */}
+      {isGuiLike ? (
         <div className="px-3 py-2">
           <div className="grid grid-cols-2 gap-x-2">
             {/* Left column: source (output) ports — handles on the left edge */}
@@ -181,7 +181,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
       <div className="px-3 py-2 flex flex-col gap-1">
         {/* Inputs */}
         {graphNode.inputs.map((port) => {
-          const plotWidget = isGui
+          const plotWidget = isGuiLike
             ? graphNode.config.gui_widgets.find((w) => w.kind === 'plot_window' && `${w.id}_in` === port.id)
             : undefined;
           return (

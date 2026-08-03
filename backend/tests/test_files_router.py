@@ -38,3 +38,37 @@ def test_detect_format_endpoint_missing_path_field_returns_400():
     response = client.post("/api/files/detect-format", json={})
 
     assert response.status_code == 400
+
+
+def test_upload_and_delete_attachment_roundtrip(monkeypatch, tmp_path):
+    from app.services import file_service
+
+    monkeypatch.setattr(file_service, "ATTACHMENTS_DIR", tmp_path)
+
+    response = client.post(
+        "/api/files/attachments",
+        files={"file": ("notes.txt", b"hello world", "text/plain")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "notes.txt"
+    saved_path = Path(body["path"])
+    assert saved_path.exists()
+    assert saved_path.read_bytes() == b"hello world"
+
+    delete_response = client.request("DELETE", "/api/files/attachments", params={"path": body["path"]})
+    assert delete_response.status_code == 200
+    assert not saved_path.exists()
+
+
+def test_delete_attachment_outside_directory_rejected(monkeypatch, tmp_path):
+    from app.services import file_service
+
+    monkeypatch.setattr(file_service, "ATTACHMENTS_DIR", tmp_path / "attachments")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("keep me", encoding="utf-8")
+
+    response = client.request("DELETE", "/api/files/attachments", params={"path": str(outside)})
+
+    assert response.status_code == 400
+    assert outside.exists()
