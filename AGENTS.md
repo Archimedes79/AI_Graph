@@ -12,6 +12,30 @@ behavior changes, a matching workflow-level test). Do not open or edit files bel
 to other node types/widget kinds — that's how a big refactor stays safe for a cheap
 model to work on in small pieces.
 
+## Cost-bounded single-element workflow
+
+To keep an edit round cheap: name the exact file(s) from the tables below, make the
+change, run ONLY that element's slice of the consolidated contract test (never the
+full suite) while iterating, and run the full suite exactly once before rollout.
+
+```powershell
+# backend, scoped to one node type or widget kind (id = the enum's .value)
+cd backend; .venv\Scripts\python.exe -m pytest tests/test_element_contract.py -k <node_type_or_widget_kind> -q -x
+
+# frontend, scoped to one node type or widget kind
+cd frontend; npm run test -- -t "node element: <node_type>"
+cd frontend; npm run test -- -t "widget: <widget_kind>"
+
+# only before rollout/commit: full suite once
+cd backend; .venv\Scripts\python.exe -m pytest tests -q
+cd frontend; npm run test
+```
+
+Do not run the full suite (or ask an agent to) on every edit round — the consolidated
+tests in `test_element_contract.py` / `elementContract.test.ts` are parametrized per
+node type/widget kind precisely so a single-element change can be verified without
+touching or re-running assertions for unrelated elements.
+
 ## Object-oriented element contract
 
 Every `NodeType` and `GuiWidgetKind` is one **element**: a class owning ALL of its
