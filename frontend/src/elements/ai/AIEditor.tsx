@@ -111,18 +111,17 @@ export default function AIEditor({
         />
       </div>
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-          Batch mode
+        <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
+          <input
+            type="checkbox"
+            checked={node.config.batch_mode === 'whole_list'}
+            onChange={(e) => setConfig('batch_mode', e.target.checked ? 'whole_list' : 'per_item')}
+          />
+          Run once on the whole input array
         </label>
-        <select
-          className="w-full rounded-lg px-3 py-2 text-sm"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-          value={node.config.batch_mode}
-          onChange={(e) => setConfig('batch_mode', e.target.value)}
-        >
-          <option value="per_item">Per item (default)</option>
-          <option value="whole_list">Whole list at once (for totals/summaries)</option>
-        </select>
+        <p className="text-xs mt-1" style={{ color: '#475569' }}>
+          Leave unchecked to run this prompt separately for each item in a list input (default). Check this to receive the entire array at once — useful for totals, summaries, or merges.
+        </p>
       </div>
       <div>
         <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
