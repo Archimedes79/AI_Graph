@@ -1,6 +1,7 @@
 import React from 'react';
 import type { GuiWidget } from '../../../../types/graph';
 import ProviderModelSelect from '../../../shared/ProviderModelSelect';
+import ContextFileAttachment from '../../../shared/ContextFileAttachment';
 
 interface PlotWindowEditorProps {
   widget: GuiWidget;
@@ -52,16 +53,13 @@ export default function PlotWindowEditor({
             onProviderChange={(provider) => onUpdate({ ai_provider: provider })}
             onModelChange={(model) => onUpdate({ ai_model: model })}
           />
-          <label className="block text-xs font-medium mt-2 mb-1" style={{ color: '#94a3b8' }}>
-            Data addition (example input file, optional)
-          </label>
-          <input
-            className="w-full rounded-lg px-2 py-1.5 text-sm font-mono"
-            style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
-            value={widget.example_input_path ?? ''}
-            onChange={(e) => onUpdate({ example_input_path: e.target.value })}
-            placeholder="e:\\test\\data.csv"
-          />
+          <div className="mt-2">
+            <ContextFileAttachment
+              label="Additional data (optional context file)"
+              path={widget.example_input_path ?? ''}
+              onChange={(path) => onUpdate({ example_input_path: path })}
+            />
+          </div>
           <p className="text-xs mb-2" style={{ color: '#475569' }}>
             Keep code empty to pass through raw incoming data unchanged.
           </p>

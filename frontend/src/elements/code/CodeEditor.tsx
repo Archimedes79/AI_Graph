@@ -67,7 +67,7 @@ export default function CodeEditor({
       </div>
 
       <ContextFileAttachment
-        label="Data addition (optional context file)"
+        label="Additional data (optional context file)"
         path={contextFile}
         onChange={onContextFileChange}
       />
