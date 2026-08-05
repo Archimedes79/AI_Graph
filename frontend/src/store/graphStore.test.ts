@@ -208,5 +208,38 @@ describe('graphStore memory-feedback settle', () => {
     const loadedWidget = loadedGui.config.gui_widgets.find((w) => w.id === widget.id)!;
     expect(loadedWidget.value).toBe('');
   });
+
+  it('preserves structured feedback values for the next run', () => {
+    const widget = createGuiWidget('text_io', 'Structured');
+    const gui = graphNode({
+      id: 'gui1',
+      node_type: 'gui',
+      config: { ...blankConfig(), gui_widgets: [widget] },
+      ...guiWidgetPorts(widget),
+    });
+    const code = graphNode({
+      id: 'code1',
+      node_type: 'code',
+      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'json', multi: false, required: false, description: '' }],
+    });
+
+    loadTestGraph([gui, code], [
+      { id: 'e1', source_node_id: 'gui1', source_port_id: `${widget.id}_out`, target_node_id: 'code1', target_port_id: 'value' },
+      { id: 'e2', source_node_id: 'code1', source_port_id: 'output', target_node_id: 'gui1', target_port_id: `${widget.id}_in` },
+    ]);
+
+    const payload = [{ x: 1, y: 2 }];
+    useGraphStore.getState().setExecutionResult({
+      status: 'success',
+      node_results: [
+        { node_id: 'gui1', status: 'success', inputs: {}, outputs: {} },
+        { node_id: 'code1', status: 'success', inputs: {}, outputs: { output: payload } },
+      ],
+    } as any);
+
+    const loadedGui = useGraphStore.getState().rfNodes.find((n) => n.id === 'gui1')!.data.graphNode;
+    const loadedWidget = loadedGui.config.gui_widgets.find((w) => w.id === widget.id)!;
+    expect(loadedWidget.value).toEqual(payload);
+  });
 });
 

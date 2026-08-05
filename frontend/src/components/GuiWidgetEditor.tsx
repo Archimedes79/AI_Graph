@@ -46,18 +46,28 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
   };
 
   const handleGenerateTransform = async (widget: GuiWidget) => {
+    const prompt = (widget.plot_prompt ?? '').trim();
+    if (!prompt) {
+      setTransformErrors((prev) => ({
+        ...prev,
+        [widget.id]: 'Plot prompt is required before generating transform code.',
+      }));
+      return;
+    }
     setGeneratingId(widget.id);
     setTransformErrors((prev) => ({ ...prev, [widget.id]: '' }));
     try {
       const language = widget.language ?? 'python';
       const result = await generateCode({
-        description:
-          'Transform the incoming data into a plottable array: either a list of numbers, or a list of {x, y} objects, or a list of {label, value} objects, suitable for a simple chart',
+        description: prompt,
         language,
         context:
           'Must expose run(inputs: dict) -> dict, receiving {"value": <raw incoming data>} and returning {"value": <plot-ready data>}.',
-        ai_model: aiModel,
-        ai_provider: aiProvider,
+        context_file: (widget.example_input_path ?? '').trim() || undefined,
+        inputs: ['value'],
+        outputs: ['value'],
+        ai_model: widget.ai_model || aiModel,
+        ai_provider: widget.ai_provider || aiProvider,
       });
       // Look up the widget's current position by stable id, not the index
       // captured at click time -- the list may have been reordered/edited

@@ -62,6 +62,28 @@ def test_generate_prompt_merges_context_file_content(tmp_path, monkeypatch):
     assert "be concise" in captured["context"]
 
 
+def test_generate_code_context_file_includes_parsed_csv_preview(tmp_path, monkeypatch):
+    context_file = tmp_path / "sample.csv"
+    context_file.write_text("x,y\n1,2\n3,4\n", encoding="utf-8")
+    captured = {}
+
+    async def fake_generate_code(**kwargs):
+        captured.update(kwargs)
+        return "def run(inputs):\n    return {}\n", "ok"
+
+    monkeypatch.setattr(ai_service, "generate_code", fake_generate_code)
+
+    response = client.post("/api/ai/generate-code", json={
+        "description": "plot x vs y",
+        "context_file": str(context_file),
+    })
+
+    assert response.status_code == 200
+    assert "format=csv" in captured["context"]
+    assert "Parsed preview" in captured["context"]
+    assert '"x": "1"' in captured["context"]
+
+
 def test_generate_code_missing_context_file_returns_400(tmp_path):
     missing = tmp_path / "does_not_exist.txt"
 

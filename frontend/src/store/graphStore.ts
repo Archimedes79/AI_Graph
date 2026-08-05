@@ -375,7 +375,7 @@ export const useGraphStore = create<GraphStore>()(
           const widgets = targetNode.config.gui_widgets;
           const widget = Array.isArray(widgets) ? widgets.find((w) => w.id === widgetId) : undefined;
           if (!widget) continue;
-          widget.value = typeof value === 'string' || value === null ? value : String(value);
+          widget.value = value as any;
         }
       }),
 

@@ -35,7 +35,7 @@ export default function TextIoEditor({ widget, onUpdate }: Props) {
           <textarea
             className="w-full rounded-lg px-2 py-1.5 text-sm font-mono"
             style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 60 }}
-            value={widget.value ?? ''}
+            value={typeof widget.value === 'string' ? widget.value : ''}
             onChange={(e) => onUpdate({ value: e.target.value })}
             placeholder="Leave blank for no default…"
           />

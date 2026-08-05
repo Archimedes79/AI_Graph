@@ -136,6 +136,7 @@ export interface GuiWidget {
   ai_model: string;
   ai_provider: 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
   code?: string;
+  example_input_path: string;
   extensions: string;
   h?: number;
   id: string;
@@ -143,12 +144,13 @@ export interface GuiWidget {
   label: string;
   language?: 'python' | 'javascript';
   mode?: string;
+  plot_prompt: string;
   recursive: boolean;
   select_all_files: boolean;
   selector_code: string;
   selector_prompt: string;
   size: 'small' | 'medium' | 'large';
-  value?: string | null;
+  value?: unknown;
   w?: number;
   x?: number | null;
   y?: number | null;

@@ -222,6 +222,15 @@ def test_apply_runtime_values_keeps_plain_node_id_behavior_unchanged():
     assert graph.nodes[0].config.value == "plain value"
 
 
+def test_plot_window_widget_does_not_create_runtime_prompt_requirement():
+    gui = _gui_node("gui", [GuiWidget(id="plot1", kind=GuiWidgetKind.PLOT_WINDOW, label="Plot")])
+    graph = Graph(metadata=GraphMetadata(name="Plot reqs"), nodes=[gui], edges=[])
+
+    requirements = get_runtime_requirements(graph)
+
+    assert requirements == []
+
+
 PLOT_TRANSFORM_JSON = (
     "def run(inputs):\n"
     "    import json\n"

@@ -4,6 +4,9 @@ AI-generation router – code and prompt generation endpoints.
 
 from __future__ import annotations
 
+import csv
+import io
+import json
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -24,15 +27,46 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
+def _parsed_preview(content: str, format_name: str) -> str:
+    """Best-effort structured preview so generation can reason about sample data shape."""
+    normalized = (format_name or "").lower()
+    try:
+        if normalized in ("csv", "text/csv"):
+            rows = list(csv.DictReader(io.StringIO(content)))
+            return json.dumps(rows[:8], indent=2, ensure_ascii=False)
+        if normalized in ("json", "application/json"):
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                parsed = parsed[:8]
+            return json.dumps(parsed, indent=2, ensure_ascii=False)
+        if normalized == "jsonl":
+            records = []
+            for line in content.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                records.append(json.loads(line))
+                if len(records) >= 8:
+                    break
+            return json.dumps(records, indent=2, ensure_ascii=False)
+    except Exception:
+        return ""
+    return ""
+
+
 def _with_context_file(context: str, context_file: str) -> str:
     """Append a context file's content (read server-side) to *context*, if given."""
     if not context_file:
         return context
     try:
         content = file_service.read_file(context_file, mode="text")
+        detected = file_service.detect_format(context_file)
     except (FileNotFoundError, OSError) as exc:
         raise HTTPException(400, f"Could not read context file: {exc}") from exc
-    file_context = f"Context file ({context_file}):\n{content}"
+    preview = _parsed_preview(content, detected)
+    file_context = f"Context file ({context_file}, format={detected}):\n{content}"
+    if preview:
+        file_context = f"{file_context}\n\nParsed preview (up to 8 records/items):\n{preview}"
     return f"{context}\n\n{file_context}" if context else file_context
 
 

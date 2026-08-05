@@ -16,6 +16,8 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
     e.target.value = '';
   };
 
+  const hasValue = Array.isArray(value) ? value.length > 0 : !!value;
+
   return (
     <div className="flex flex-col gap-2 h-full">
       <div className="flex items-center gap-2">
@@ -34,6 +36,16 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
         >
           Browse…
         </button>
+        {hasValue && (
+          <button
+            onClick={() => onChange('')}
+            className="text-xs px-2 py-1.5 rounded-lg flex-shrink-0"
+            style={{ background: '#2d3148', color: '#f87171' }}
+            title="Clear selection"
+          >
+            ✕
+          </button>
+        )}
       </div>
       {Array.isArray(value) && (
         <span className="text-xs" style={{ color: '#94a3b8' }}>{displayVal}</span>

@@ -31,7 +31,11 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
 
   const placements = resolveWidgetLayout(widgets, columns);
   const placementById = new Map(placements.map((p) => [p.widget.id, p]));
-  const rows = Math.max(layoutRowCount(placements) + 1, 6);
+  // Tight fit, matching the runtime GuiWindow exactly -- no padding row or
+  // artificial floor, so the editor never shows background beyond what the
+  // placed widgets actually occupy.
+  const rows = layoutRowCount(placements);
+  const contentColumns = Math.max(1, ...placements.map((p) => p.x + p.w));
 
   const patchWidget = useCallback(
     (widgetId: string, patch: Partial<GuiWidget>) => {
@@ -131,6 +135,15 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
               onChange={(e) => onGridChange({ columns: Math.max(1, Math.min(48, Number(e.target.value) || columns)) })}
             />
           </label>
+          <button
+            onClick={() => onGridChange({ columns: contentColumns })}
+            disabled={contentColumns === columns}
+            className="text-xs px-2 py-1 rounded"
+            style={{ background: '#2d3148', color: '#e2e8f0', opacity: contentColumns === columns ? 0.4 : 1 }}
+            title="Shrink background columns to exactly wrap the placed widgets"
+          >
+            Fit width to content
+          </button>
         </div>
       )}
 

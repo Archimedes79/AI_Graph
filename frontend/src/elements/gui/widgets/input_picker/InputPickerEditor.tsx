@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { GuiWidget } from '../../../../types/graph';
 import { generateCode } from '../../../../utils/api';
+import ProviderModelSelect from '../../../shared/ProviderModelSelect';
 
 interface InputPickerEditorProps {
   widget: GuiWidget;
@@ -22,8 +23,9 @@ export default function InputPickerEditor({ widget, onUpdate }: InputPickerEdito
     try {
       const result = await generateCode({
         description: widget.selector_prompt,
-        language: 'python',
+        language: widget.language || 'python',
         context: '`inputs["files"]` is the full list of rooted file paths found in the directory. Return only the selected paths as {"files": [...]}.',
+        context_file: (widget.example_input_path ?? '').trim() || undefined,
         inputs: ['files'],
         outputs: ['files'],
         ai_model: widget.ai_model,
@@ -59,7 +61,7 @@ export default function InputPickerEditor({ widget, onUpdate }: InputPickerEdito
         <input
           className="w-full rounded-lg px-2 py-1.5 text-sm"
           style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
-          value={widget.value ?? ''}
+          value={typeof widget.value === 'string' ? widget.value : ''}
           onChange={(e) => onUpdate({ value: e.target.value })}
           placeholder={mode === 'directory' ? '/path/to/directory' : '/path/to/file'}
         />
@@ -89,7 +91,7 @@ export default function InputPickerEditor({ widget, onUpdate }: InputPickerEdito
 
           <div className="pt-2" style={{ borderTop: '1px solid #2d3148' }}>
             <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-              AI file-selection prompt
+              Prompt text
             </label>
             <textarea
               className="w-full rounded-lg px-2 py-1.5 text-sm resize-none"
@@ -98,6 +100,43 @@ export default function InputPickerEditor({ widget, onUpdate }: InputPickerEdito
               onChange={(e) => onUpdate({ selector_prompt: e.target.value })}
               placeholder="Select Markdown files that contain API documentation"
             />
+            <div className="mt-2 mb-2">
+              <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                Provider selection
+              </label>
+              <ProviderModelSelect
+                provider={widget.ai_provider ?? 'ollama'}
+                model={widget.ai_model ?? 'llama3'}
+                onProviderChange={(provider) => onUpdate({ ai_provider: provider })}
+                onModelChange={(model) => onUpdate({ ai_model: model })}
+              />
+            </div>
+            <div className="mb-2">
+              <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                Additional data (example input file, optional)
+              </label>
+              <input
+                className="w-full rounded-lg px-2 py-1.5 text-sm font-mono"
+                style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                value={widget.example_input_path ?? ''}
+                onChange={(e) => onUpdate({ example_input_path: e.target.value })}
+                placeholder="e:\\test\\data.csv"
+              />
+            </div>
+            <div className="mb-2">
+              <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                Language selection
+              </label>
+              <select
+                className="w-full rounded-lg px-2 py-1.5 text-sm"
+                style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                value={widget.language ?? 'python'}
+                onChange={(e) => onUpdate({ language: e.target.value as 'python' | 'javascript' })}
+              >
+                <option value="python">Python</option>
+                <option value="javascript">JavaScript</option>
+              </select>
+            </div>
             <label className="flex items-center gap-2 text-sm my-1" style={{ color: '#94a3b8' }}>
               <input
                 type="checkbox"
@@ -110,7 +149,7 @@ export default function InputPickerEditor({ widget, onUpdate }: InputPickerEdito
               <>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
-                    File Selector Code — run(inputs) receives {'{'}"files"{'}'} and must return {'{'}"files"{'}'}
+                    Code window (editable) — run(inputs) receives {'{'}"files"{'}'} and must return {'{'}"files"{'}'}
                   </label>
                   <button
                     onClick={handleGenerateSelectorCode}

@@ -1,9 +1,11 @@
 import axios from 'axios';
 import type { Graph, ExecutionResult, RuntimeRequirement } from '../types/graph';
 
+// Must stay above backend AI_COMPLETE_TIMEOUT (ai_service.py) so the client
+// never times out before a slow local model (up to ~10 min) responds.
 const api = axios.create({
   baseURL: '/api',
-  timeout: 120_000,
+  timeout: 660_000,
 });
 
 // Graph CRUD

@@ -62,6 +62,8 @@ export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
     selector_code: '',
     ai_model: 'llama3',
     ai_provider: 'ollama',
+    plot_prompt: '',
+    example_input_path: '',
   };
 }
 

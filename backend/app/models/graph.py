@@ -86,7 +86,7 @@ class GuiWidget(BaseModel):
     id: str
     kind: GuiWidgetKind
     label: str = ""
-    value: Optional[str] = None      # literal/default text, or a chosen file/directory path
+    value: Optional[Any] = None      # literal/default value or a chosen file/directory path
     extensions: str = ""             # input_picker (directory mode) extension filter, e.g. ".md, .txt"
     mode: str = ""                   # input_picker: "file" | "directory"; text_io: "input" | "output" | "both"
     size: Literal["small", "medium", "large"] = "medium"
@@ -108,6 +108,8 @@ class GuiWidget(BaseModel):
     # objects. Empty string means the raw incoming value passes through unchanged.
     code: str = ""
     language: Literal["python", "javascript"] = "python"
+    plot_prompt: str = ""            # design-time prompt used to generate plot transform code
+    example_input_path: str = ""     # optional sample file used as generation context
 
     # GUI-designer layout, in grid cells (12-column grid, row height is uniform).
     # Purely presentational: it never affects ports, execution, or wiring. None

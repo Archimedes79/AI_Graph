@@ -25,6 +25,11 @@ OPENAI_COMPATIBLE_API_KEY = os.getenv("OPENAI_COMPATIBLE_API_KEY", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_MODELS_BASE_URL = os.getenv("GITHUB_MODELS_BASE_URL", "https://models.github.ai/inference")
 
+# Local models (ollama/lmstudio) on modest hardware routinely take several
+# minutes -- up to ~10 minutes -- for a large generation prompt with
+# context-file content; keep an env override but default well above that.
+AI_COMPLETE_TIMEOUT = float(os.getenv("AI_COMPLETE_TIMEOUT", "660"))
+
 
 # ---------------------------------------------------------------------------
 # Provider helpers
@@ -35,7 +40,7 @@ async def _ollama_complete(
     system: str,
     model: str,
     temperature: float,
-    timeout: float = 120.0,
+    timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
     payload = {
         "model": model,
@@ -56,7 +61,7 @@ async def _openai_complete(
     system: str,
     model: str,
     temperature: float,
-    timeout: float = 120.0,
+    timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
     if not OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY environment variable not set")
@@ -82,7 +87,7 @@ async def _anthropic_complete(
     system: str,
     model: str,
     temperature: float,
-    timeout: float = 120.0,
+    timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
     if not ANTHROPIC_API_KEY:
         raise ValueError("ANTHROPIC_API_KEY environment variable not set")
@@ -114,7 +119,7 @@ async def _lmstudio_complete(
     system: str,
     model: str,
     temperature: float,
-    timeout: float = 120.0,
+    timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
     messages = []
     if system:
@@ -136,7 +141,7 @@ async def _openai_compatible_complete(
     system: str,
     model: str,
     temperature: float,
-    timeout: float = 120.0,
+    timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
     if not OPENAI_COMPATIBLE_BASE_URL:
         raise ValueError("OPENAI_COMPATIBLE_BASE_URL environment variable not set")
@@ -164,7 +169,7 @@ async def _github_copilot_complete(
     system: str,
     model: str,
     temperature: float,
-    timeout: float = 120.0,
+    timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
     if not GITHUB_TOKEN:
         raise ValueError("GITHUB_TOKEN environment variable not set")

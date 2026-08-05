@@ -6,8 +6,6 @@ import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { inputPortsForMode } from '../elements/input/inputElement';
 import { NODE_ELEMENTS } from '../elements/registry';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
-import ProviderModelSelect from '../elements/shared/ProviderModelSelect';
-import ContextFileAttachment from '../elements/shared/ContextFileAttachment';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -51,9 +49,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   };
 
   const handleGenerateCode = async () => {
-    const prompt = node.config.code_prompt || node.description;
+    const prompt = (node.config.code_prompt ?? '').trim();
     if (!prompt) {
-      setGenMessage('Please add a description or prompt first.');
+      setGenMessage('Please add a code generation prompt first.');
       return;
     }
     setGenerating(true);
@@ -66,7 +64,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
         : 'Batch mode is `per_item`: each multi input port is expanded before `run(inputs)` is called, so one scalar item from each multi port is passed per invocation.';
       const formatContext = outputFormatContext(node.config);
       const result = await generateCode({
-        description: node.config.code_prompt || node.description,
+        description: prompt,
         language: node.config.language,
         context: formatContext ? `${batchContext} ${formatContext}` : batchContext,
         context_file: node.config.config_context_file,
@@ -131,7 +129,8 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   };
 
   const handleGenerateSelectorCode = async () => {
-    if (!node.description) {
+    const selectorPrompt = (node.config.selector_prompt ?? '').trim();
+    if (!selectorPrompt) {
       setGenMessage('Please describe which files to select first.');
       return;
     }
@@ -139,8 +138,8 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     setGenMessage('Generating file selector…');
     try {
       const result = await generateCode({
-        description: node.config.selector_prompt || node.description,
-        language: 'python',
+        description: selectorPrompt,
+        language: node.config.language || 'python',
         context: '`inputs["files"]` is the full list of rooted file paths found in the directory. Return only the selected paths as {"files": [...]}.',
         context_file: node.config.config_context_file,
         inputs: ['files'],
@@ -204,49 +203,39 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          {/* Description – always visible */}
-          <div className="mb-4">
-            <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-              Description (used for AI code/prompt generation)
-            </label>
-            <textarea
-              className="w-full rounded-lg px-3 py-2 text-sm resize-none"
-              style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 64 }}
-              value={node.description}
-              onChange={(e) => setNode((prev) => prev ? { ...prev, description: e.target.value } : prev)}
-              placeholder="Describe what this node does…"
-            />
-          </div>
+          {node.node_type !== 'code' && node.node_type !== 'ai' && (
+            <div className="mb-4">
+              <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                Description (optional)
+              </label>
+              <textarea
+                className="w-full rounded-lg px-3 py-2 text-sm resize-none"
+                style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 64 }}
+                value={node.description}
+                onChange={(e) => setNode((prev) => prev ? { ...prev, description: e.target.value } : prev)}
+                placeholder="Document what this node does…"
+              />
+            </div>
+          )}
 
           {activeTab === 'config' && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                  Generation model (used by every ✨ Generate button below and in the Output tab)
-                </label>
-                <ProviderModelSelect
-                  provider={node.config.gen_ai_provider}
-                  model={node.config.gen_ai_model}
-                  onProviderChange={(p) => setConfig('gen_ai_provider', p)}
-                  onModelChange={(m) => setConfig('gen_ai_model', m)}
-                />
-              </div>
-
-              <ContextFileAttachment
-                label="Context file (optional, used as extra context by ✨ Generate above)"
-                path={node.config.config_context_file ?? ''}
-                onChange={(path) => setConfig('config_context_file', path)}
-              />
-
               <ConfigEditor
                 node={node}
                 setConfig={setConfig}
+                setDescription={(value: string) => setNode((prev) => (prev ? { ...prev, description: value } : prev))}
                 generating={generating}
                 handleGenerateSelectorCode={handleGenerateSelectorCode}
                 applyMode={applyInputMode}
                 handleGeneratePrompt={handleGeneratePrompt}
                 handleGenerateCode={handleGenerateCode}
                 applyWidgets={applyWidgets}
+                genProvider={node.config.gen_ai_provider}
+                genModel={node.config.gen_ai_model}
+                onGenProviderChange={(p: GraphNode['config']['gen_ai_provider']) => setConfig('gen_ai_provider', p)}
+                onGenModelChange={(m: string) => setConfig('gen_ai_model', m)}
+                contextFile={node.config.config_context_file ?? ''}
+                onContextFileChange={(path: string) => setConfig('config_context_file', path)}
               />
 
               {genMessage && (

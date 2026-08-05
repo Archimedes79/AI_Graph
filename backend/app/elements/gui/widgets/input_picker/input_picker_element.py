@@ -47,17 +47,18 @@ class InputPickerElement(GuiWidgetElement):
         files = file_service.list_directory(path, recursive=widget.recursive, extensions=extensions)
 
         selector_code = widget.selector_code.strip()
+        language = widget.language or "python"
         if not widget.select_all_files and not selector_code and widget.selector_prompt.strip():
             from app.services import ai_service
             selector_code, _ = await ai_service.generate_code(
                 description=widget.selector_prompt,
-                language="python",
+                language=language,
                 context='inputs["files"] contains rooted file paths. Return {"files": [...]} with selected paths.',
                 inputs=["files"], outputs=["files"],
                 model=widget.ai_model, provider=widget.ai_provider,
             )
         if not widget.select_all_files and selector_code:
-            selected = await code_executor.execute_code(selector_code, "python", {"files": files})
+            selected = await code_executor.execute_code(selector_code, language, {"files": files})
             files = selected.get("files", files)
         return files
 

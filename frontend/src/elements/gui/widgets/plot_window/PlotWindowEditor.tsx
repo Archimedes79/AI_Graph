@@ -1,5 +1,6 @@
 import React from 'react';
 import type { GuiWidget } from '../../../../types/graph';
+import ProviderModelSelect from '../../../shared/ProviderModelSelect';
 
 interface PlotWindowEditorProps {
   widget: GuiWidget;
@@ -31,8 +32,38 @@ export default function PlotWindowEditor({
       </button>
       {expanded && (
         <div className="mt-2">
+          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+            Prompt
+          </label>
+          <textarea
+            className="w-full rounded-lg px-2 py-1.5 text-sm resize-none"
+            style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 72 }}
+            value={widget.plot_prompt ?? ''}
+            onChange={(e) => onUpdate({ plot_prompt: e.target.value })}
+            placeholder="Describe the chart transform you need (axes, grouping, aggregation, filters, etc.)"
+            spellCheck={false}
+          />
+          <label className="block text-xs font-medium mt-2 mb-1" style={{ color: '#94a3b8' }}>
+            Provider selection
+          </label>
+          <ProviderModelSelect
+            provider={widget.ai_provider ?? 'ollama'}
+            model={widget.ai_model ?? 'llama3'}
+            onProviderChange={(provider) => onUpdate({ ai_provider: provider })}
+            onModelChange={(model) => onUpdate({ ai_model: model })}
+          />
+          <label className="block text-xs font-medium mt-2 mb-1" style={{ color: '#94a3b8' }}>
+            Data addition (example input file, optional)
+          </label>
+          <input
+            className="w-full rounded-lg px-2 py-1.5 text-sm font-mono"
+            style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
+            value={widget.example_input_path ?? ''}
+            onChange={(e) => onUpdate({ example_input_path: e.target.value })}
+            placeholder="e:\\test\\data.csv"
+          />
           <p className="text-xs mb-2" style={{ color: '#475569' }}>
-            Leave empty to display raw incoming data.
+            Keep code empty to pass through raw incoming data unchanged.
           </p>
           <div className="flex items-center justify-between mb-1">
             <select
@@ -53,6 +84,9 @@ export default function PlotWindowEditor({
               {generating ? '…' : '✨ Generate'}
             </button>
           </div>
+          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+            Code window (editable)
+          </label>
           <textarea
             className="w-full rounded-lg px-2 py-1.5 text-sm resize-none font-mono"
             style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 100 }}

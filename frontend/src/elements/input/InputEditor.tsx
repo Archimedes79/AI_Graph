@@ -1,5 +1,8 @@
 import React from 'react';
 import type { GraphNode } from '../../types/graph';
+import type { AIProvider } from '../../types/graph';
+import ProviderModelSelect from '../shared/ProviderModelSelect';
+import ContextFileAttachment from '../shared/ContextFileAttachment';
 
 interface InputEditorProps {
   node: GraphNode;
@@ -7,6 +10,12 @@ interface InputEditorProps {
   generating: boolean;
   handleGenerateSelectorCode: () => void;
   applyMode?: (mode: 'text' | 'file' | 'directory') => void;
+  genProvider: AIProvider;
+  genModel: string;
+  onGenProviderChange: (provider: AIProvider) => void;
+  onGenModelChange: (model: string) => void;
+  contextFile: string;
+  onContextFileChange: (path: string) => void;
 }
 
 const PARSE_FORMATS = [
@@ -23,6 +32,12 @@ export default function InputEditor({
   generating,
   handleGenerateSelectorCode,
   applyMode,
+  genProvider,
+  genModel,
+  onGenProviderChange,
+  onGenModelChange,
+  contextFile,
+  onContextFileChange,
 }: InputEditorProps) {
   const mode: 'text' | 'file' | 'directory' =
     (node.config.input_mode || 'text') as 'text' | 'file' | 'directory';
@@ -99,7 +114,7 @@ export default function InputEditor({
       {isDirectory && (
         <div className="mt-4 pt-4" style={{ borderTop: '1px solid #2d3148' }}>
           <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-            AI file-selection prompt
+            Prompt text
           </label>
           <textarea
             className="w-full rounded-lg px-3 py-2 text-sm resize-none"
@@ -108,6 +123,38 @@ export default function InputEditor({
             onChange={(e) => setConfig('selector_prompt', e.target.value)}
             placeholder="Select Markdown files that contain API documentation"
           />
+          <div className="mt-3">
+            <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+              Provider selection
+            </label>
+            <ProviderModelSelect
+              provider={genProvider}
+              model={genModel}
+              onProviderChange={onGenProviderChange}
+              onModelChange={onGenModelChange}
+            />
+          </div>
+          <div className="mt-3">
+            <ContextFileAttachment
+              label="Additional data (optional context file)"
+              path={contextFile}
+              onChange={onContextFileChange}
+            />
+          </div>
+          <div className="mt-3 mb-2">
+            <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+              Language selection
+            </label>
+            <select
+              className="w-full rounded-lg px-3 py-2 text-sm"
+              style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+              value={node.config.language || 'python'}
+              onChange={(e) => setConfig('language', e.target.value)}
+            >
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+            </select>
+          </div>
           <label className="flex items-center gap-2 text-sm mb-2" style={{ color: '#94a3b8' }}>
             <input
               type="checkbox"
@@ -120,7 +167,7 @@ export default function InputEditor({
             <>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
-                  File Selector Code — run(inputs) receives {'{'}"files"{'}'} and must return {'{'}"files"{'}'}
+                  Code window (editable) — run(inputs) receives {'{'}"files"{'}'} and must return {'{'}"files"{'}'}
                 </label>
                 <button
                   onClick={handleGenerateSelectorCode}

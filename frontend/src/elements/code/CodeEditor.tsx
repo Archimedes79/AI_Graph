@@ -1,40 +1,82 @@
 import React, { useState } from 'react';
 import type { GraphNode } from '../../types/graph';
+import type { AIProvider } from '../../types/graph';
+import ProviderModelSelect from '../shared/ProviderModelSelect';
+import ContextFileAttachment from '../shared/ContextFileAttachment';
 
 interface CodeEditorProps {
   node: GraphNode;
   setConfig: (key: string, value: unknown) => void;
   generating: boolean;
   handleGenerateCode: () => void;
+  genProvider: AIProvider;
+  genModel: string;
+  onGenProviderChange: (provider: AIProvider) => void;
+  onGenModelChange: (model: string) => void;
+  contextFile: string;
+  onContextFileChange: (path: string) => void;
 }
 
-export default function CodeEditor({ node, setConfig, generating, handleGenerateCode }: CodeEditorProps) {
-  const [activeTab, setActiveTab] = useState<'prompt' | 'code'>('code');
+export default function CodeEditor({
+  node,
+  setConfig,
+  generating,
+  handleGenerateCode,
+  genProvider,
+  genModel,
+  onGenProviderChange,
+  onGenModelChange,
+  contextFile,
+  onContextFileChange,
+}: CodeEditorProps) {
+  const [activeTab, setActiveTab] = useState<'code' | 'advanced'>('code');
 
   return (
     <>
-      {/* Tab switcher: Prompt / Code */}
-      <div className="flex gap-1 mb-3 rounded-lg p-1" style={{ background: '#0f1117' }}>
-        {(['prompt', 'code'] as const).map((tab) => (
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
+            Prompt text
+          </label>
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className="flex-1 py-1.5 text-xs rounded font-medium capitalize transition-colors"
-            style={{
-              background: activeTab === tab ? '#6366f1' : 'transparent',
-              color: activeTab === tab ? '#fff' : '#94a3b8',
-            }}
+            onClick={handleGenerateCode}
+            disabled={generating}
+            className="text-xs px-2 py-1 rounded"
+            style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
           >
-            {tab === 'prompt' ? '✨ Prompt' : '⚙️ Code'}
+            {generating ? '…' : '✨ Generate'}
           </button>
-        ))}
+        </div>
+        <textarea
+          className="w-full rounded-lg px-3 py-2 text-sm resize-none"
+          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 120 }}
+          value={node.config.code_prompt}
+          onChange={(e) => setConfig('code_prompt', e.target.value)}
+          placeholder="Describe what the generated code should do."
+        />
       </div>
 
-      {/* Language + generate button — shared header. Provider/model for code
-          generation live once in NodeEditor.tsx's Config tab (gen_ai_provider/model). */}
-      <div className="flex items-center justify-between mb-3">
+      <div>
+        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+          Provider selection
+        </label>
+        <ProviderModelSelect
+          provider={genProvider}
+          model={genModel}
+          onProviderChange={onGenProviderChange}
+          onModelChange={onGenModelChange}
+        />
+      </div>
+
+      <ContextFileAttachment
+        label="Data addition (optional context file)"
+        path={contextFile}
+        onChange={onContextFileChange}
+      />
+
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>Language</label>
+          <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>Language selection</label>
           <select
             className="rounded px-2 py-1 text-sm"
             style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
@@ -45,44 +87,42 @@ export default function CodeEditor({ node, setConfig, generating, handleGenerate
             <option value="javascript">JavaScript</option>
           </select>
         </div>
-        <button
-          onClick={handleGenerateCode}
-          disabled={generating}
-          className="text-xs px-2 py-1 rounded"
-          style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
-        >
-          {generating ? '…' : '✨ Generate'}
-        </button>
+
+        <div className="flex gap-1 rounded-lg p-1" style={{ background: '#0f1117' }}>
+          {(['code', 'advanced'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="py-1.5 px-2 text-xs rounded font-medium capitalize transition-colors"
+              style={{
+                background: activeTab === tab ? '#6366f1' : 'transparent',
+                color: activeTab === tab ? '#fff' : '#94a3b8',
+              }}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {activeTab === 'prompt' && (
+      {activeTab === 'code' && (
         <div>
           <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-            Generation prompt — describe what the code should do
+            Code window (editable)
           </label>
           <textarea
-            className="w-full rounded-lg px-3 py-2 text-sm resize-none"
-            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 200 }}
-            value={node.config.code_prompt}
-            onChange={(e) => setConfig('code_prompt', e.target.value)}
-            placeholder="e.g. Parse the CSV content, group rows by the 'category' column, and return a dict of {category: [rows]}"
-          />
-          <p className="text-xs mt-1" style={{ color: '#475569' }}>
-            Write a detailed prompt here, then click ✨ Generate. The prompt is stored with the graph.
-          </p>
-        </div>
-      )}
-
-      {activeTab === 'code' && (
-        <>
-          <textarea
             className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 200 }}
+            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 220 }}
             value={node.config.code}
             onChange={(e) => setConfig('code', e.target.value)}
             placeholder={`def run(inputs):\n    return {"output": inputs.get("input", "")}`}
             spellCheck={false}
           />
+        </div>
+      )}
+
+      {activeTab === 'advanced' && (
+        <>
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>Batch mode</label>
             <select
