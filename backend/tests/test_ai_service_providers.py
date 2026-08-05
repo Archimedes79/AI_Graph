@@ -44,12 +44,20 @@ async def test_github_copilot_complete_calls_expected_endpoint(monkeypatch):
 
     captured = {}
 
-    class FakeResponse:
+    class FakeStreamResponse:
         def raise_for_status(self):
             pass
 
-        def json(self):
-            return {"choices": [{"message": {"content": "42"}}]}
+        async def aiter_lines(self):
+            yield 'data: {"choices":[{"delta":{"content":"42"}}]}'
+            yield "data: [DONE]"
+
+    class FakeStreamCtx:
+        async def __aenter__(self):
+            return FakeStreamResponse()
+
+        async def __aexit__(self, *exc):
+            return False
 
     class FakeAsyncClient:
         def __init__(self, timeout=120.0):
@@ -61,11 +69,11 @@ async def test_github_copilot_complete_calls_expected_endpoint(monkeypatch):
         async def __aexit__(self, *exc):
             return False
 
-        async def post(self, url, json=None, headers=None):
+        def stream(self, method, url, json=None, headers=None):
             captured["url"] = url
             captured["json"] = json
             captured["headers"] = headers
-            return FakeResponse()
+            return FakeStreamCtx()
 
     monkeypatch.setattr(ai_service.httpx, "AsyncClient", FakeAsyncClient)
 

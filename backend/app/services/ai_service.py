@@ -29,6 +29,8 @@ GITHUB_MODELS_BASE_URL = os.getenv("GITHUB_MODELS_BASE_URL", "https://models.git
 # Local models (ollama/lmstudio) on modest hardware routinely take several
 # minutes -- up to ~10 minutes -- for a large generation prompt with
 # context-file content; keep an env override but default well above that.
+# Since every provider call now streams (see below), this mainly bounds the
+# connect/write/pool phases -- the per-chunk read budget is AI_STREAM_IDLE_TIMEOUT.
 AI_COMPLETE_TIMEOUT = float(os.getenv("AI_COMPLETE_TIMEOUT", "660"))
 
 # Bounds worst-case latency for "reasoning"/"thinking" local models, which can
@@ -37,6 +39,64 @@ AI_COMPLETE_TIMEOUT = float(os.getenv("AI_COMPLETE_TIMEOUT", "660"))
 # model can burn the entire AI_COMPLETE_TIMEOUT and get killed by our client
 # mid-thought, never returning any content at all.
 AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "4096"))
+
+# Streaming turns the timeout into a per-chunk *idle* timeout: it resets on
+# every token received, so a model that is slow but still actively producing
+# tokens is never mistaken for a hung one -- only a connection that goes
+# completely silent for this long is treated as failed.
+AI_STREAM_IDLE_TIMEOUT = float(os.getenv("AI_STREAM_IDLE_TIMEOUT", "120"))
+
+# How often (seconds) to log accumulated progress while a stream is in
+# flight, so a slow local model's output can be watched growing in the
+# console instead of just waiting for the final result.
+_STREAM_PROGRESS_LOG_INTERVAL = 5.0
+
+
+def _stream_timeout(connect_write_pool_budget: float) -> httpx.Timeout:
+    return httpx.Timeout(connect_write_pool_budget, read=AI_STREAM_IDLE_TIMEOUT)
+
+
+async def _stream_chat_completion(
+    client: httpx.AsyncClient,
+    url: str,
+    payload: dict,
+    headers: dict,
+    provider: str,
+    model: str,
+) -> str:
+    """
+    POST an OpenAI-style `stream: true` chat-completions request and
+    accumulate the streamed `delta.content` chunks into the full text.
+    Shared by every provider using this SSE schema (openai, openai_compatible,
+    lmstudio, github_copilot).
+    """
+    chunks: list[str] = []
+    start = time.monotonic()
+    last_logged = start
+    async with client.stream("POST", url, json={**payload, "stream": True}, headers=headers) as response:
+        response.raise_for_status()
+        async for line in response.aiter_lines():
+            if not line.startswith("data:"):
+                continue
+            data = line[len("data:"):].strip()
+            if data == "[DONE]":
+                break
+            try:
+                event = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            piece = event.get("choices", [{}])[0].get("delta", {}).get("content") or ""
+            if not piece:
+                continue
+            chunks.append(piece)
+            now = time.monotonic()
+            if now - last_logged >= _STREAM_PROGRESS_LOG_INTERVAL:
+                logger.info(
+                    "AI stream progress <- provider=%s model=%s after %.1fs (%d chars so far)",
+                    provider, model, now - start, sum(len(c) for c in chunks),
+                )
+                last_logged = now
+    return "".join(chunks)
 
 
 # ---------------------------------------------------------------------------
@@ -54,14 +114,35 @@ async def _ollama_complete(
         "model": model,
         "prompt": prompt,
         "system": system,
-        "stream": False,
+        "stream": True,
         "options": {"temperature": temperature, "num_predict": AI_MAX_TOKENS},
     }
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("response", "")
+    chunks: list[str] = []
+    start = time.monotonic()
+    last_logged = start
+    async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
+        async with client.stream("POST", f"{OLLAMA_BASE_URL}/api/generate", json=payload) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                piece = event.get("response") or ""
+                if piece:
+                    chunks.append(piece)
+                    now = time.monotonic()
+                    if now - last_logged >= _STREAM_PROGRESS_LOG_INTERVAL:
+                        logger.info(
+                            "AI stream progress <- provider=ollama model=%s after %.1fs (%d chars so far)",
+                            model, now - start, sum(len(c) for c in chunks),
+                        )
+                        last_logged = now
+                if event.get("done"):
+                    break
+    return "".join(chunks)
 
 
 async def _openai_complete(
@@ -79,15 +160,10 @@ async def _openai_complete(
     messages.append({"role": "user", "content": prompt})
     payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            json=payload,
-            headers=headers,
+    async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
+        return await _stream_chat_completion(
+            client, "https://api.openai.com/v1/chat/completions", payload, headers, "openai", model,
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
 
 
 async def _anthropic_complete(
@@ -111,15 +187,38 @@ async def _anthropic_complete(
         "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
     }
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            json=payload,
-            headers=headers,
-        )
-        response.raise_for_status()
-        data = response.json()
-        return data["content"][0]["text"]
+    chunks: list[str] = []
+    start = time.monotonic()
+    last_logged = start
+    async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
+        async with client.stream(
+            "POST", "https://api.anthropic.com/v1/messages", json={**payload, "stream": True}, headers=headers,
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[len("data:"):].strip()
+                if not data:
+                    continue
+                try:
+                    event = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("type") == "content_block_delta":
+                    piece = event.get("delta", {}).get("text") or ""
+                    if piece:
+                        chunks.append(piece)
+                        now = time.monotonic()
+                        if now - last_logged >= _STREAM_PROGRESS_LOG_INTERVAL:
+                            logger.info(
+                                "AI stream progress <- provider=anthropic model=%s after %.1fs (%d chars so far)",
+                                model, now - start, sum(len(c) for c in chunks),
+                            )
+                            last_logged = now
+                elif event.get("type") == "message_stop":
+                    break
+    return "".join(chunks)
 
 
 async def _lmstudio_complete(
@@ -137,17 +236,12 @@ async def _lmstudio_complete(
         "model": model,
         "messages": messages,
         "temperature": temperature,
-        "stream": False,
         "max_tokens": AI_MAX_TOKENS,
     }
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            f"{LMSTUDIO_BASE_URL}/chat/completions",
-            json=payload,
+    async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
+        return await _stream_chat_completion(
+            client, f"{LMSTUDIO_BASE_URL}/chat/completions", payload, {}, "lmstudio", model,
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
 
 
 async def _openai_compatible_complete(
@@ -167,15 +261,11 @@ async def _openai_compatible_complete(
     headers = {}
     if OPENAI_COMPATIBLE_API_KEY:
         headers["Authorization"] = f"Bearer {OPENAI_COMPATIBLE_API_KEY}"
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            f"{OPENAI_COMPATIBLE_BASE_URL.rstrip('/')}/chat/completions",
-            json=payload,
-            headers=headers,
+    async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
+        return await _stream_chat_completion(
+            client, f"{OPENAI_COMPATIBLE_BASE_URL.rstrip('/')}/chat/completions", payload, headers,
+            "openai_compatible", model,
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
 
 
 async def _github_copilot_complete(
@@ -193,15 +283,11 @@ async def _github_copilot_complete(
     messages.append({"role": "user", "content": prompt})
     payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
     headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            f"{GITHUB_MODELS_BASE_URL.rstrip('/')}/chat/completions",
-            json=payload,
-            headers=headers,
+    async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
+        return await _stream_chat_completion(
+            client, f"{GITHUB_MODELS_BASE_URL.rstrip('/')}/chat/completions", payload, headers,
+            "github_copilot", model,
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
 
 
 # ---------------------------------------------------------------------------
