@@ -16,7 +16,10 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
   const [newWidgetLabel, setNewWidgetLabel] = useState('');
   const [expandedTransform, setExpandedTransform] = useState<Record<string, boolean>>({});
   const [generatingId, setGeneratingId] = useState<string | null>(null);
-  const [transformErrors, setTransformErrors] = useState<Record<string, string>>({});
+  // Shared success/error feedback for any widget's "✨ Generate" action, keyed
+  // by widget id -- mirrors NodeEditor.tsx's single genMessage banner so code
+  // generation gives the same feedback everywhere it's used.
+  const [genMessages, setGenMessages] = useState<Record<string, string>>({});
 
   const addWidget = () => {
     const widget = createGuiWidget(newWidgetKind, newWidgetLabel.trim());
@@ -48,14 +51,14 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
   const handleGenerateTransform = async (widget: GuiWidget) => {
     const prompt = (widget.plot_prompt ?? '').trim();
     if (!prompt) {
-      setTransformErrors((prev) => ({
+      setGenMessages((prev) => ({
         ...prev,
-        [widget.id]: 'Plot prompt is required before generating transform code.',
+        [widget.id]: '❌ Plot prompt is required before generating transform code.',
       }));
       return;
     }
     setGeneratingId(widget.id);
-    setTransformErrors((prev) => ({ ...prev, [widget.id]: '' }));
+    setGenMessages((prev) => ({ ...prev, [widget.id]: '' }));
     try {
       const language = widget.language ?? 'python';
       const result = await generateCode({
@@ -75,15 +78,57 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
       const currentIndex = widgets.findIndex((w) => w.id === widget.id);
       if (currentIndex === -1) return;
       updateWidget(currentIndex, { code: result.code });
+      setGenMessages((prev) => ({ ...prev, [widget.id]: '✅ Transform generated!' }));
     } catch (e: any) {
-      setTransformErrors((prev) => ({
+      setGenMessages((prev) => ({
         ...prev,
-        [widget.id]: e?.response?.data?.detail ?? e?.message ?? 'Error generating code',
+        [widget.id]: `❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error generating code'}`,
       }));
     } finally {
       setGeneratingId(null);
     }
   };
+
+  const handleGenerateSelector = async (widget: GuiWidget) => {
+    const prompt = (widget.selector_prompt ?? '').trim();
+    if (!prompt) {
+      setGenMessages((prev) => ({
+        ...prev,
+        [widget.id]: '❌ Please describe which files to select first.',
+      }));
+      return;
+    }
+    setGeneratingId(widget.id);
+    setGenMessages((prev) => ({ ...prev, [widget.id]: '' }));
+    try {
+      const language = widget.language || 'python';
+      const result = await generateCode({
+        description: prompt,
+        language,
+        context:
+          '`inputs["files"]` is the full list of rooted file paths found in the directory. Return only the selected paths as {"files": [...]}.',
+        context_file: (widget.example_input_path ?? '').trim() || undefined,
+        inputs: ['files'],
+        outputs: ['files'],
+        ai_model: widget.ai_model || aiModel,
+        ai_provider: widget.ai_provider || aiProvider,
+      });
+      const currentIndex = widgets.findIndex((w) => w.id === widget.id);
+      if (currentIndex === -1) return;
+      updateWidget(currentIndex, { selector_code: result.code });
+      setGenMessages((prev) => ({ ...prev, [widget.id]: '✅ Selector generated!' }));
+    } catch (e: any) {
+      setGenMessages((prev) => ({
+        ...prev,
+        [widget.id]: `❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error generating code'}`,
+      }));
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  const handleGenerate = (widget: GuiWidget) =>
+    widget.kind === 'plot_window' ? handleGenerateTransform(widget) : handleGenerateSelector(widget);
 
   return (
     <div>
@@ -209,8 +254,8 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
                   expanded={!!expandedTransform[widget.id]}
                   onToggleExpand={() => toggleTransform(widget.id)}
                   generating={generatingId === widget.id}
-                  error={transformErrors[widget.id]}
-                  onGenerate={() => handleGenerateTransform(widget)}
+                  message={genMessages[widget.id]}
+                  onGenerate={() => handleGenerate(widget)}
                 />
               );
             })()}

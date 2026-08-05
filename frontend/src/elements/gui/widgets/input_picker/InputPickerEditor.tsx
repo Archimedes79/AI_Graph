@@ -1,45 +1,18 @@
-import React, { useState } from 'react';
+import React from 'react';
 import type { GuiWidget } from '../../../../types/graph';
-import { generateCode } from '../../../../utils/api';
 import ProviderModelSelect from '../../../shared/ProviderModelSelect';
 import ContextFileAttachment from '../../../shared/ContextFileAttachment';
 
 interface InputPickerEditorProps {
   widget: GuiWidget;
   onUpdate: (patch: Partial<GuiWidget>) => void;
+  generating: boolean;
+  message?: string;
+  onGenerate: () => void;
 }
 
-export default function InputPickerEditor({ widget, onUpdate }: InputPickerEditorProps) {
+export default function InputPickerEditor({ widget, onUpdate, generating, message, onGenerate }: InputPickerEditorProps) {
   const mode = widget.mode || 'file';
-  const [generating, setGenerating] = useState(false);
-  const [genMessage, setGenMessage] = useState('');
-
-  const handleGenerateSelectorCode = async () => {
-    if (!widget.selector_prompt.trim()) {
-      setGenMessage('Please describe which files to select first.');
-      return;
-    }
-    setGenerating(true);
-    setGenMessage('Generating file selector…');
-    try {
-      const result = await generateCode({
-        description: widget.selector_prompt,
-        language: widget.language || 'python',
-        context: '`inputs["files"]` is the full list of rooted file paths found in the directory. Return only the selected paths as {"files": [...]}.',
-        context_file: (widget.example_input_path ?? '').trim() || undefined,
-        inputs: ['files'],
-        outputs: ['files'],
-        ai_model: widget.ai_model,
-        ai_provider: widget.ai_provider,
-      });
-      onUpdate({ selector_code: result.code });
-      setGenMessage('✅ Selector generated!');
-    } catch (e: any) {
-      setGenMessage(`❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error'}`);
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   return (
     <div className="space-y-2">
@@ -148,7 +121,7 @@ export default function InputPickerEditor({ widget, onUpdate }: InputPickerEdito
                     Code window (editable) — run(inputs) receives {'{'}"files"{'}'} and must return {'{'}"files"{'}'}
                   </label>
                   <button
-                    onClick={handleGenerateSelectorCode}
+                    onClick={onGenerate}
                     disabled={generating}
                     className="text-xs px-2 py-1 rounded"
                     style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
@@ -163,7 +136,11 @@ export default function InputPickerEditor({ widget, onUpdate }: InputPickerEdito
                   onChange={(e) => onUpdate({ selector_code: e.target.value })}
                   spellCheck={false}
                 />
-                {genMessage && <p className="text-xs mt-1" style={{ color: '#94a3b8' }}>{genMessage}</p>}
+                {message && (
+                  <div className="text-xs mt-2 px-2 py-1.5 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc' }}>
+                    {message}
+                  </div>
+                )}
               </>
             )}
           </div>

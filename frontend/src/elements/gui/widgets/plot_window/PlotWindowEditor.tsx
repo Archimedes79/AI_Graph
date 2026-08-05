@@ -9,7 +9,7 @@ interface PlotWindowEditorProps {
   expanded: boolean;
   onToggleExpand: () => void;
   generating: boolean;
-  error?: string;
+  message?: string;
   onGenerate: () => void;
 }
 
@@ -19,7 +19,7 @@ export default function PlotWindowEditor({
   expanded,
   onToggleExpand,
   generating,
-  error,
+  message,
   onGenerate,
 }: PlotWindowEditorProps) {
   return (
@@ -92,9 +92,9 @@ export default function PlotWindowEditor({
             onChange={(e) => onUpdate({ code: e.target.value })}
             spellCheck={false}
           />
-          {error && (
-            <div className="text-xs mt-1" style={{ color: '#f87171' }}>
-              ❌ {error}
+          {message && (
+            <div className="text-xs mt-2 px-2 py-1.5 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc' }}>
+              {message}
             </div>
           )}
         </div>

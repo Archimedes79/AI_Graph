@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from typing import Optional
 
 import httpx
@@ -30,6 +31,13 @@ GITHUB_MODELS_BASE_URL = os.getenv("GITHUB_MODELS_BASE_URL", "https://models.git
 # context-file content; keep an env override but default well above that.
 AI_COMPLETE_TIMEOUT = float(os.getenv("AI_COMPLETE_TIMEOUT", "660"))
 
+# Bounds worst-case latency for "reasoning"/"thinking" local models, which can
+# spend thousands of tokens of internal chain-of-thought (billed as normal
+# output tokens) before ever emitting a real answer -- without this cap such a
+# model can burn the entire AI_COMPLETE_TIMEOUT and get killed by our client
+# mid-thought, never returning any content at all.
+AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "4096"))
+
 
 # ---------------------------------------------------------------------------
 # Provider helpers
@@ -47,7 +55,7 @@ async def _ollama_complete(
         "prompt": prompt,
         "system": system,
         "stream": False,
-        "options": {"temperature": temperature},
+        "options": {"temperature": temperature, "num_predict": AI_MAX_TOKENS},
     }
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
@@ -69,7 +77,7 @@ async def _openai_complete(
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-    payload = {"model": model, "messages": messages, "temperature": temperature}
+    payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
@@ -93,7 +101,7 @@ async def _anthropic_complete(
         raise ValueError("ANTHROPIC_API_KEY environment variable not set")
     payload = {
         "model": model,
-        "max_tokens": 4096,
+        "max_tokens": AI_MAX_TOKENS,
         "temperature": temperature,
         "messages": [{"role": "user", "content": prompt}],
     }
@@ -125,7 +133,13 @@ async def _lmstudio_complete(
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-    payload = {"model": model, "messages": messages, "temperature": temperature, "stream": False}
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": False,
+        "max_tokens": AI_MAX_TOKENS,
+    }
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             f"{LMSTUDIO_BASE_URL}/chat/completions",
@@ -149,7 +163,7 @@ async def _openai_compatible_complete(
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-    payload = {"model": model, "messages": messages, "temperature": temperature}
+    payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
     headers = {}
     if OPENAI_COMPATIBLE_API_KEY:
         headers["Authorization"] = f"Bearer {OPENAI_COMPATIBLE_API_KEY}"
@@ -177,7 +191,7 @@ async def _github_copilot_complete(
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-    payload = {"model": model, "messages": messages, "temperature": temperature}
+    payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
     headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
@@ -210,20 +224,40 @@ async def complete(
     deploy_service.py's `extract_source`); `AIProvider` is a `str` subclass, so
     passing an enum member here still compares equal.
     """
-    logger.info("AI complete: provider=%s model=%s", provider, model)
-    if provider == "ollama":
-        return await _ollama_complete(prompt, system, model, temperature)
-    if provider == "openai":
-        return await _openai_complete(prompt, system, model, temperature)
-    if provider == "openai_compatible":
-        return await _openai_compatible_complete(prompt, system, model, temperature)
-    if provider == "anthropic":
-        return await _anthropic_complete(prompt, system, model, temperature)
-    if provider == "lmstudio":
-        return await _lmstudio_complete(prompt, system, model, temperature)
-    if provider == "github_copilot":
-        return await _github_copilot_complete(prompt, system, model, temperature)
-    raise ValueError(f"Unknown AI provider: {provider}")
+    start = time.monotonic()
+    # Logged at INFO so a hanging/slow local model (lmstudio/ollama) can be
+    # diagnosed from the backend console: exactly what was sent, and how long
+    # the provider actually took (or whether/when it ever came back).
+    logger.info(
+        "AI request -> provider=%s model=%s temperature=%s\n--- system ---\n%s\n--- prompt ---\n%s",
+        provider, model, temperature, system, prompt,
+    )
+    try:
+        if provider == "ollama":
+            result = await _ollama_complete(prompt, system, model, temperature)
+        elif provider == "openai":
+            result = await _openai_complete(prompt, system, model, temperature)
+        elif provider == "openai_compatible":
+            result = await _openai_compatible_complete(prompt, system, model, temperature)
+        elif provider == "anthropic":
+            result = await _anthropic_complete(prompt, system, model, temperature)
+        elif provider == "lmstudio":
+            result = await _lmstudio_complete(prompt, system, model, temperature)
+        elif provider == "github_copilot":
+            result = await _github_copilot_complete(prompt, system, model, temperature)
+        else:
+            raise ValueError(f"Unknown AI provider: {provider}")
+    except Exception:
+        logger.exception(
+            "AI request FAILED <- provider=%s model=%s after %.1fs",
+            provider, model, time.monotonic() - start,
+        )
+        raise
+    logger.info(
+        "AI response <- provider=%s model=%s after %.1fs (%d chars)\n--- response ---\n%s",
+        provider, model, time.monotonic() - start, len(result), result,
+    )
+    return result
 
 
 async def generate_code(
