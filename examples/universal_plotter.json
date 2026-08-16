@@ -1,0 +1,194 @@
+{
+  "metadata": {
+    "name": "Untitled Graph",
+    "version": "1.0.0",
+    "description": "",
+    "author": "",
+    "tags": []
+  },
+  "nodes": [
+    {
+      "id": "gui-1-1785960470955",
+      "node_type": "gui",
+      "label": "GUI Node",
+      "description": "A composed panel of interactive widgets (file/directory pickers, text/chat windows)",
+      "position": {
+        "x": 131.31140120187513,
+        "y": 55.00138899973797
+      },
+      "inputs": [
+        {
+          "id": "widget-2-1785960520949_in",
+          "name": "Plot Window",
+          "kind": "input",
+          "data_type": "any",
+          "multi": true,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "outputs": [
+        {
+          "id": "widget-1-1785960517449_out",
+          "name": "FileInput",
+          "kind": "output",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "config": {
+        "value": "",
+        "prompt_at_runtime": false,
+        "input_mode": "text",
+        "select_all_files": true,
+        "selector_prompt": "",
+        "selector_code": "def run(inputs):\n    # inputs[\"files\"] is the full list of file paths in the directory\n    return {\"files\": inputs.get(\"files\", [])}\n",
+        "ai_provider": "ollama",
+        "ai_model": "llama3",
+        "gen_ai_provider": "lmstudio",
+        "gen_ai_model": "",
+        "system_prompt": "",
+        "temperature": 0.7,
+        "language": "python",
+        "code": "",
+        "code_prompt": "",
+        "config_context_file": "",
+        "output_format": "text",
+        "output_format_prompt": "",
+        "output_context_file": "",
+        "output_label": "Result",
+        "write_mode": "none",
+        "batch_mode": "per_item",
+        "read_file_inputs": false,
+        "gui_widgets": [
+          {
+            "id": "widget-1-1785960517449",
+            "kind": "input_picker",
+            "label": "FileInput",
+            "value": "e:\\test\\data.csv",
+            "extensions": "",
+            "mode": "file",
+            "size": "medium",
+            "w": 8,
+            "h": 1,
+            "code": "",
+            "language": "python",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
+            "ai_model": "llama3",
+            "ai_provider": "ollama",
+            "x": 0,
+            "y": 5
+          },
+          {
+            "id": "widget-2-1785960520949",
+            "kind": "plot_window",
+            "label": "Plot Window",
+            "value": "",
+            "extensions": "",
+            "mode": "",
+            "size": "medium",
+            "w": 8,
+            "h": 5,
+            "code": "Plot a histogram of input data",
+            "language": "python",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
+            "ai_model": "llama3",
+            "ai_provider": "ollama",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "gui_grid_columns": 8,
+        "extra": {}
+      },
+      "width": 448,
+      "height": 238
+    },
+    {
+      "id": "code-2-1785960688947",
+      "node_type": "code",
+      "label": "Code Node",
+      "description": "read the file from the path from the input. Read just one file, fix the format of the path.",
+      "position": {
+        "x": 222.31460198155565,
+        "y": 326.946443173221
+      },
+      "inputs": [
+        {
+          "id": "input",
+          "name": "Input",
+          "kind": "input",
+          "data_type": "any",
+          "multi": true,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Output batch",
+          "kind": "output",
+          "data_type": "any",
+          "multi": true,
+          "required": false,
+          "description": "One result per input item"
+        }
+      ],
+      "config": {
+        "value": "",
+        "prompt_at_runtime": false,
+        "input_mode": "text",
+        "select_all_files": true,
+        "selector_prompt": "",
+        "selector_code": "def run(inputs):\n    # inputs[\"files\"] is the full list of file paths in the directory\n    return {\"files\": inputs.get(\"files\", [])}\n",
+        "ai_provider": "ollama",
+        "ai_model": "llama3",
+        "gen_ai_provider": "lmstudio",
+        "gen_ai_model": "",
+        "system_prompt": "",
+        "temperature": 0.7,
+        "language": "python",
+        "code": "def run(inputs):\n    return {\"output\": inputs.get(\"input\", \"\")}\n",
+        "code_prompt": "",
+        "config_context_file": "D:\\Daten\\Dropbox\\Dokumente\\AI_Graph\\backend\\data\\attachments\\597ac82482d84fd7beb5839705194f6c_data.csv",
+        "output_format": "csv_list",
+        "output_format_prompt": "",
+        "output_context_file": "",
+        "output_label": "Result",
+        "write_mode": "none",
+        "batch_mode": "per_item",
+        "read_file_inputs": false,
+        "gui_widgets": [],
+        "gui_grid_columns": 12,
+        "extra": {}
+      },
+      "width": 184,
+      "height": 116
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-gui-1-1785960470955-widget-1-1785960517449_out-code-2-1785960688947-input",
+      "source_node_id": "gui-1-1785960470955",
+      "source_port_id": "widget-1-1785960517449_out",
+      "target_node_id": "code-2-1785960688947",
+      "target_port_id": "input"
+    },
+    {
+      "id": "edge-code-2-1785960688947-output-gui-1-1785960470955-widget-2-1785960520949_in",
+      "source_node_id": "code-2-1785960688947",
+      "source_port_id": "output",
+      "target_node_id": "gui-1-1785960470955",
+      "target_port_id": "widget-2-1785960520949_in"
+    }
+  ]
+}

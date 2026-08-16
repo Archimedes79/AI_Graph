@@ -17,7 +17,7 @@ async def test_directory_bla_counter_workflow_executes_end_to_end(tmp_path: Path
     (tmp_path / "text1.md").write_text("bla bla", encoding="utf-8")
     (tmp_path / "text2.md").write_text("bla bla bla", encoding="utf-8")
 
-    example_path = Path(__file__).parents[2] / "examples" / "test_bla_counter.json"
+    example_path = Path(__file__).parent.parent.parent / "examples" / "bla_counter.json"
     graph = Graph.model_validate_json(example_path.read_text(encoding="utf-8"))
     input_node = next(node for node in graph.nodes if node.node_type == NodeType.INPUT)
     input_node.config.value = str(tmp_path)
