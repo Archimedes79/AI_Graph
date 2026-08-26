@@ -21,10 +21,22 @@ from app.models.graph import (
     GeneratePromptRequest,
     GeneratePromptResponse,
 )
-from app.services import ai_service, file_service
+from app.services import ai_service, ai_settings, file_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+
+
+def _gen_target(req) -> tuple[str, str]:
+    """
+    Which AI writes this code/prompt. The editor sends its one configured
+    code-generation AI with every request; when it sends nothing (a fresh
+    browser, a script calling the API directly), the server's own default
+    fills in -- see ai_settings.resolve_gen_target. Nodes no longer carry a
+    generation provider of their own.
+    """
+    provider = str(getattr(req.ai_provider, "value", req.ai_provider) or "")
+    return ai_settings.resolve_gen_target(provider, req.ai_model or "")
 
 
 def _parsed_preview(content: str, format_name: str) -> str:
@@ -73,6 +85,7 @@ def _with_context_file(context: str, context_file: str) -> str:
 @router.post("/generate-code", response_model=GenerateCodeResponse)
 async def generate_code(req: GenerateCodeRequest):
     """Ask the AI to generate code for a node's description."""
+    gen_provider, gen_model = _gen_target(req)
     try:
         code, explanation = await ai_service.generate_code(
             description=req.description,
@@ -80,8 +93,8 @@ async def generate_code(req: GenerateCodeRequest):
             context=_with_context_file(req.context, req.context_file),
             inputs=req.inputs,
             outputs=req.outputs,
-            model=req.ai_model,
-            provider=req.ai_provider,
+            model=gen_model,
+            provider=gen_provider,
         )
         return GenerateCodeResponse(code=code, language=req.language, explanation=explanation)
     except HTTPException:
@@ -94,12 +107,13 @@ async def generate_code(req: GenerateCodeRequest):
 @router.post("/generate-prompt", response_model=GeneratePromptResponse)
 async def generate_prompt(req: GeneratePromptRequest):
     """Ask the AI to generate a system prompt from a natural-language description."""
+    gen_provider, gen_model = _gen_target(req)
     try:
         sp, explanation = await ai_service.generate_prompt(
             description=req.description,
             context=_with_context_file(req.context, req.context_file),
-            model=req.ai_model,
-            provider=req.ai_provider,
+            model=gen_model,
+            provider=gen_provider,
         )
         return GeneratePromptResponse(system_prompt=sp, explanation=explanation)
     except HTTPException:
@@ -112,12 +126,13 @@ async def generate_prompt(req: GeneratePromptRequest):
 @router.post("/generate-output-format", response_model=GenerateOutputFormatResponse)
 async def generate_output_format(req: GenerateOutputFormatRequest):
     """Ask the AI to describe the expected output format/shape from a description."""
+    gen_provider, gen_model = _gen_target(req)
     try:
         fmt, explanation = await ai_service.generate_output_format(
             description=req.description,
             context=_with_context_file(req.context, req.context_file),
-            model=req.ai_model,
-            provider=req.ai_provider,
+            model=gen_model,
+            provider=gen_provider,
         )
         return GenerateOutputFormatResponse(output_format_prompt=fmt, explanation=explanation)
     except HTTPException:
@@ -127,15 +142,35 @@ async def generate_output_format(req: GenerateOutputFormatRequest):
         raise HTTPException(500, str(exc)) from exc
 
 
+@router.post("/generate-data-format", response_model=GenerateOutputFormatResponse)
+async def generate_data_format(req: GenerateOutputFormatRequest):
+    """Ask the AI to design a data node's format contract, proposing then picking one option."""
+    gen_provider, gen_model = _gen_target(req)
+    try:
+        fmt, explanation = await ai_service.generate_data_format(
+            description=req.description,
+            context=_with_context_file(req.context, req.context_file),
+            model=gen_model,
+            provider=gen_provider,
+        )
+        return GenerateOutputFormatResponse(output_format_prompt=fmt, explanation=explanation)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("generate_data_format failed")
+        raise HTTPException(500, str(exc)) from exc
+
+
 @router.post("/generate-graph", response_model=GenerateGraphResponse)
 async def generate_graph(req: GenerateGraphRequest):
     """Ask the AI to author a full Graph DSL document from a natural-language description."""
+    gen_provider, gen_model = _gen_target(req)
     try:
         graph_dict, explanation = await ai_service.generate_graph(
             description=req.description,
             context=req.context,
-            model=req.ai_model,
-            provider=req.ai_provider,
+            model=gen_model,
+            provider=gen_provider,
         )
         # Constructing with graph=graph_dict validates it against the full Graph schema.
         return GenerateGraphResponse(graph=graph_dict, explanation=explanation)

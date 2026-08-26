@@ -4,6 +4,7 @@ import type { GuiWidgetElementDefinition, NodeElementDefinition } from './types'
 import { inputElement } from './input/inputElement';
 import { aiElement } from './ai/aiElement';
 import { codeElement } from './code/codeElement';
+import { dataElement } from './data/dataElement';
 import { outputElement } from './output/outputElement';
 import { guiElement } from './gui/guiElement';
 import { widgetElement } from './widget/widgetElement';
@@ -17,6 +18,7 @@ export const NODE_ELEMENTS: Record<NodeType, NodeElementDefinition> = {
   input:            inputElement,
   ai:               aiElement,
   code:             codeElement,
+  data:             dataElement,
   output:           outputElement,
   gui:              guiElement,
   widget:           widgetElement,

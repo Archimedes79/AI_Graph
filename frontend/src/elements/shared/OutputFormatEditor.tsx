@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { GraphNode } from '../../types/graph';
 import { generateOutputFormat } from '../../utils/api';
-import ProviderModelSelect from './ProviderModelSelect';
+import { genAI } from '../../store/settingsStore';
 import ContextFileAttachment from './ContextFileAttachment';
 
 interface Props {
@@ -34,8 +34,7 @@ export default function OutputFormatEditor({ node, setConfig }: Props) {
       const result = await generateOutputFormat({
         description,
         context_file: node.config.output_context_file,
-        ai_model: node.config.gen_ai_model,
-        ai_provider: node.config.gen_ai_provider,
+        ...genAI(),
       });
       setConfig('output_format_prompt', result.output_format_prompt);
       setGenMessage('✅ Format generated!');
@@ -70,13 +69,7 @@ export default function OutputFormatEditor({ node, setConfig }: Props) {
 
       {format === 'custom' && (
         <div>
-          <ProviderModelSelect
-            provider={node.config.gen_ai_provider}
-            model={node.config.gen_ai_model}
-            onProviderChange={(p) => setConfig('gen_ai_provider', p)}
-            onModelChange={(m) => setConfig('gen_ai_model', m)}
-          />
-          <div className="mt-3">
+          <div>
             <ContextFileAttachment
               label="Context file (optional, e.g. a sample output file)"
               path={node.config.output_context_file ?? ''}

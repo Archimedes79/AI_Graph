@@ -55,7 +55,11 @@ class InputPickerElement(GuiWidgetElement):
                 language=language,
                 context='inputs["files"] contains rooted file paths. Return {"files": [...]} with selected paths.',
                 inputs=["files"], outputs=["files"],
-                model=widget.ai_model, provider=widget.ai_provider,
+                # No provider argument: a widget carries none any more, so this
+                # last-resort generation follows whatever AI the run is
+                # configured with (app.services.ai_settings) -- the same one the
+                # graph's AI nodes use. In the editor the selector code is
+                # normally generated ahead of time via the ✨ button instead.
             )
         if not widget.select_all_files and selector_code:
             selected = await code_executor.execute_code(selector_code, language, {"files": files})

@@ -15,6 +15,10 @@ export interface GraphStore {
   // Graph metadata
   metadata: GraphMetadata;
 
+  // Absolute server-side path this graph was last loaded from/saved to, or
+  // null for an untitled graph -- lets "Save" write back to it directly.
+  currentFilePath: string | null;
+
   // Execution state
   executionResult: ExecutionResult | null;
   isExecuting: boolean;
@@ -29,6 +33,7 @@ export interface GraphStore {
 
   // Actions
   setMetadata: (meta: Partial<GraphMetadata>) => void;
+  setCurrentFilePath: (path: string | null) => void;
   addNode: (nodeType: NodeType, position: { x: number; y: number }) => void;
   addPresetNode: (preset: NodePreset, position: { x: number; y: number }) => void;
   updateNode: (nodeId: string, updates: Partial<GraphNode>) => void;
@@ -116,7 +121,7 @@ function migrateLegacyNode(rawNode: Partial<GraphNode>): Partial<GraphNode> {
 // edges' delivered values should be persisted into the target widget's own
 // `value` for the *next* run (see `setExecutionResult` below).
 function isMemoryNode(nodeType: string): boolean {
-  return nodeType === 'gui' || nodeType === 'widget';
+  return nodeType === 'data' || nodeType === 'gui' || nodeType === 'widget';
 }
 
 function memoryFeedbackEdgeIds(nodes: GraphNode[], edges: GraphEdge[]): Set<string> {
@@ -219,6 +224,11 @@ const defaultMetadata = (): GraphMetadata => ({
   description: '',
   author: '',
   tags: [],
+  // Which AI this graph's AI nodes call when they run, set once for the whole
+  // graph (⚙ Settings) instead of once per node. 'default' means unset, which
+  // the backend resolves to its own fallback; whoever runs a deployed copy can
+  // override it without editing the graph -- see backend/app/services/ai_settings.py.
+  ai_defaults: { provider: 'default', model: '' },
 });
 
 export const useGraphStore = create<GraphStore>()(
@@ -226,6 +236,7 @@ export const useGraphStore = create<GraphStore>()(
     rfNodes: [],
     rfEdges: [],
     metadata: defaultMetadata(),
+    currentFilePath: null,
     executionResult: null,
     isExecuting: false,
     textOutputWindows: [],
@@ -236,6 +247,11 @@ export const useGraphStore = create<GraphStore>()(
     setMetadata: (meta) =>
       set((state) => {
         Object.assign(state.metadata, meta);
+      }),
+
+    setCurrentFilePath: (path) =>
+      set((state) => {
+        state.currentFilePath = path;
       }),
 
     addNode: (nodeType, position) => {
@@ -355,10 +371,18 @@ export const useGraphStore = create<GraphStore>()(
           target_node_id: e.target,
           target_port_id: e.targetHandle ?? 'input',
         }));
+        const resultByNodeId = new Map(result.node_results.map((r) => [r.node_id, r]));
+        for (const rfNode of state.rfNodes) {
+          const graphNode = rfNode.data.graphNode as GraphNode;
+          if (graphNode.node_type !== 'data') continue;
+          const nodeResult = resultByNodeId.get(graphNode.id);
+          if (nodeResult?.status === 'success' && nodeResult.outputs && 'output' in nodeResult.outputs) {
+            graphNode.config.data_value = nodeResult.outputs.output as any;
+          }
+        }
         const feedbackIds = memoryFeedbackEdgeIds(nodes, edges);
         if (feedbackIds.size === 0) return;
 
-        const resultByNodeId = new Map(result.node_results.map((r) => [r.node_id, r]));
         for (const edge of edges) {
           if (!feedbackIds.has(edge.id)) continue;
           const sourceResult = resultByNodeId.get(edge.source_node_id);
@@ -369,6 +393,10 @@ export const useGraphStore = create<GraphStore>()(
           const targetIdx = state.rfNodes.findIndex((n: RFNode) => n.id === edge.target_node_id);
           if (targetIdx === -1) continue;
           const targetNode = state.rfNodes[targetIdx].data.graphNode as GraphNode;
+          if (targetNode.node_type === 'data') {
+            targetNode.config.data_value = value as any;
+            continue;
+          }
           const widgetId = edge.target_port_id.endsWith('_in')
             ? edge.target_port_id.slice(0, -'_in'.length)
             : edge.target_port_id;
@@ -427,6 +455,10 @@ export const useGraphStore = create<GraphStore>()(
         state.rfNodes = rfNodes as any;
         state.rfEdges = rfEdges;
         state.executionResult = null;
+        // Whoever loaded a graph without going through the file-path flow
+        // (Paste JSON, AI Graph, etc.) doesn't know its file path; the caller
+        // sets `currentFilePath` explicitly right after loadGraph when it does.
+        state.currentFilePath = null;
       });
     },
 

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import type { GraphNode } from '../types/graph';
 import { useGraphStore } from '../store/graphStore';
-import { generateCode, generatePrompt } from '../utils/api';
+import { generateCode, generateDataFormat, generatePrompt } from '../utils/api';
+import { genAI } from '../store/settingsStore';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { inputPortsForMode } from '../elements/input/inputElement';
 import { NODE_ELEMENTS } from '../elements/registry';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
+import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
+import { connectedDataFormatContext } from '../elements/data/dataElement';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -23,6 +26,8 @@ function outputFormatContext(config: GraphNode['config']): string {
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const rfNode = useGraphStore((s) => s.rfNodes.find((n) => n.id === nodeId));
   const updateNode = useGraphStore((s) => s.updateNode);
+  const graphNodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
+  const graphEdges = useGraphStore((s) => s.rfEdges);
 
   const [node, setNode] = useState<GraphNode | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -37,6 +42,17 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
   if (!node) return null;
 
+  // ai/code are the only node types that actually consume `output_format` at
+  // runtime/codegen time; gui/widget nodes' output is fully determined by
+  // each widget's kind (see WidgetOutputSummary) -- everything else has no
+  // output-format concept, so they get no Output tab at all.
+  const showManualOutputTab = node.node_type === 'ai' || node.node_type === 'code';
+  const showWidgetOutputTab = node.node_type === 'gui' || node.node_type === 'widget';
+  const tabs = showManualOutputTab || showWidgetOutputTab
+    ? (['config', 'output', 'preview'] as const)
+    : (['config', 'preview'] as const);
+  const effectiveTab = (tabs as readonly string[]).includes(activeTab) ? activeTab : 'config';
+
   const save = () => {
     updateNode(nodeId, node);
     onClose();
@@ -46,6 +62,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     setNode((prev) =>
       prev ? { ...prev, config: { ...prev.config, [key]: value } } : prev
     );
+  };
+
+  const connectedDataContext = () => {
+    return connectedDataFormatContext(node.id, graphNodes, graphEdges);
   };
 
   const handleGenerateCode = async () => {
@@ -63,15 +83,16 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
         ? 'Batch mode is `whole_list`: multi input ports arrive in `inputs` as full lists. The generated function must handle or reduce those lists and must not reject an input merely because it is not a string.'
         : 'Batch mode is `per_item`: each multi input port is expanded before `run(inputs)` is called, so one scalar item from each multi port is passed per invocation.';
       const formatContext = outputFormatContext(node.config);
+      const dataContext = connectedDataContext();
+      const generationContext = [batchContext, formatContext, dataContext].filter(Boolean).join('\n');
       const result = await generateCode({
         description: prompt,
         language: node.config.language,
-        context: formatContext ? `${batchContext} ${formatContext}` : batchContext,
+        context: generationContext,
         context_file: node.config.config_context_file,
         inputs: inputNames,
         outputs: outputNames,
-        ai_model: node.config.gen_ai_model,
-        ai_provider: node.config.gen_ai_provider,
+        ...genAI(),
       });
       setConfig('code', result.code);
       setGenMessage('✅ Code generated!');
@@ -92,10 +113,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     try {
       const result = await generatePrompt({
         description: node.description,
-        context: outputFormatContext(node.config),
+        context: [outputFormatContext(node.config), connectedDataContext()].filter(Boolean).join('\n'),
         context_file: node.config.config_context_file,
-        ai_model: node.config.gen_ai_model,
-        ai_provider: node.config.gen_ai_provider,
+        ...genAI(),
       });
       setConfig('system_prompt', result.system_prompt);
       setGenMessage('✅ Prompt generated!');
@@ -104,6 +124,49 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleGenerateDataFormat = async () => {
+    const prompt = node.config.data_prompt?.trim();
+    if (!prompt) {
+      setGenMessage('Please describe the data format first.');
+      return;
+    }
+    setGenerating(true);
+    setGenMessage('Generating data format…');
+    try {
+      const result = await generateDataFormat({
+        description: prompt,
+        context: `Standard format family: ${node.config.data_format}.\n${connectedDataContext()}`,
+        context_file: node.config.config_context_file,
+        ...genAI(),
+      });
+      setConfig('data_format_prompt', result.output_format_prompt);
+      setGenMessage('✅ Data format generated!');
+    } catch (e: any) {
+      setGenMessage(`❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error'}`);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const applyDataFormat = (format: GraphNode['config']['data_format']) => {
+    const structured = format === 'structure';
+    const dataType = structured ? 'json' : 'text';
+    const portFormat = structured ? 'application/json' : 'text/plain';
+    setNode((previous) => previous ? {
+      ...previous,
+      inputs: previous.inputs.map((port) => ({ ...port, data_type: dataType, format: portFormat })),
+      outputs: previous.outputs.map((port) => ({ ...port, data_type: dataType, format: portFormat })),
+      config: { ...previous.config, data_format: format },
+    } : previous);
+  };
+
+  const setDataDebugDirectory = (path: string) => {
+    setNode((previous) => previous ? {
+      ...previous,
+      outputs: previous.outputs.map((port) => port.id === 'output' ? { ...port, debug_directory: path || undefined } : port),
+    } : previous);
   };
 
   const ConfigEditor = NODE_ELEMENTS[node.node_type].ConfigEditor;
@@ -144,8 +207,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
         context_file: node.config.config_context_file,
         inputs: ['files'],
         outputs: ['files'],
-        ai_model: node.config.gen_ai_model,
-        ai_provider: node.config.gen_ai_provider,
+        ...genAI(),
       });
       setConfig('selector_code', result.code);
       setGenMessage('✅ Selector generated!');
@@ -185,13 +247,13 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
         {/* Tabs */}
         <div className="flex border-b" style={{ borderColor: '#2d3148' }}>
-          {(['config', 'output', 'preview'] as const).map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab}
               className="px-5 py-3 text-sm capitalize transition-colors"
               style={{
-                color: activeTab === tab ? '#6366f1' : '#94a3b8',
-                borderBottom: activeTab === tab ? '2px solid #6366f1' : '2px solid transparent',
+                color: effectiveTab === tab ? '#6366f1' : '#94a3b8',
+                borderBottom: effectiveTab === tab ? '2px solid #6366f1' : '2px solid transparent',
                 background: 'transparent',
               }}
               onClick={() => setActiveTab(tab)}
@@ -203,7 +265,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          {node.node_type !== 'code' && node.node_type !== 'ai' && (
+          {node.node_type !== 'code' && node.node_type !== 'ai' && node.node_type !== 'data' && (
             <div className="mb-4">
               <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
                 Description (optional)
@@ -218,7 +280,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
             </div>
           )}
 
-          {activeTab === 'config' && (
+          {effectiveTab === 'config' && (
             <div className="space-y-4">
               <ConfigEditor
                 node={node}
@@ -229,11 +291,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 applyMode={applyInputMode}
                 handleGeneratePrompt={handleGeneratePrompt}
                 handleGenerateCode={handleGenerateCode}
+                handleGenerateDataFormat={handleGenerateDataFormat}
+                applyDataFormat={applyDataFormat}
+                setDataDebugDirectory={setDataDebugDirectory}
                 applyWidgets={applyWidgets}
-                genProvider={node.config.gen_ai_provider}
-                genModel={node.config.gen_ai_model}
-                onGenProviderChange={(p: GraphNode['config']['gen_ai_provider']) => setConfig('gen_ai_provider', p)}
-                onGenModelChange={(m: string) => setConfig('gen_ai_model', m)}
                 contextFile={node.config.config_context_file ?? ''}
                 onContextFileChange={(path: string) => setConfig('config_context_file', path)}
               />
@@ -246,11 +307,13 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
             </div>
           )}
 
-          {activeTab === 'output' && (
-            <OutputFormatEditor node={node} setConfig={setConfig} />
+          {effectiveTab === 'output' && (
+            showWidgetOutputTab
+              ? <WidgetOutputSummary node={node} />
+              : <OutputFormatEditor node={node} setConfig={setConfig} />
           )}
 
-          {activeTab === 'preview' && (
+          {effectiveTab === 'preview' && (
             <div>
               <pre
                 className="text-xs rounded-lg p-4 overflow-auto"

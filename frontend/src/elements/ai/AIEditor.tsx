@@ -10,10 +10,6 @@ interface AIEditorProps {
   setDescription: (value: string) => void;
   generating: boolean;
   handleGeneratePrompt: () => void;
-  genProvider: AIProvider;
-  genModel: string;
-  onGenProviderChange: (provider: AIProvider) => void;
-  onGenModelChange: (model: string) => void;
   contextFile: string;
   onContextFileChange: (path: string) => void;
 }
@@ -24,10 +20,6 @@ export default function AIEditor({
   setDescription,
   generating,
   handleGeneratePrompt,
-  genProvider,
-  genModel,
-  onGenProviderChange,
-  onGenModelChange,
   contextFile,
   onContextFileChange,
 }: AIEditorProps) {
@@ -43,18 +35,6 @@ export default function AIEditor({
           value={node.description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Describe the assistant behavior you want in the runtime prompt."
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-          Provider selection
-        </label>
-        <ProviderModelSelect
-          provider={genProvider}
-          model={genModel}
-          onProviderChange={onGenProviderChange}
-          onModelChange={onGenModelChange}
         />
       </div>
 
@@ -96,7 +76,14 @@ export default function AIEditor({
           model={node.config.ai_model}
           onProviderChange={(p) => setConfig('ai_provider', p)}
           onModelChange={(m) => setConfig('ai_model', m)}
+          allowDefault
+          defaultLabel="Use the graph's default (⚙ Settings)"
         />
+        <p className="text-xs mt-1" style={{ color: '#475569' }}>
+          Leave this on the graph's default unless this one node must always use a specific
+          provider — then a deployed copy of the graph can be pointed at a different AI
+          without editing every node.
+        </p>
       </div>
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>

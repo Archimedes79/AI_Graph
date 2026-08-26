@@ -5,7 +5,6 @@ Graph execution router.
 from __future__ import annotations
 
 import logging
-from typing import Dict
 
 from fastapi import APIRouter, HTTPException
 

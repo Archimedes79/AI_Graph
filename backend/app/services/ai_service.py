@@ -14,6 +14,7 @@ from typing import Optional
 import httpx
 
 from app.models.graph import AIProvider
+from app.services import ai_settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,49 @@ OPENAI_COMPATIBLE_BASE_URL = os.getenv("OPENAI_COMPATIBLE_BASE_URL", "")
 OPENAI_COMPATIBLE_API_KEY = os.getenv("OPENAI_COMPATIBLE_API_KEY", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_MODELS_BASE_URL = os.getenv("GITHUB_MODELS_BASE_URL", "https://models.github.ai/inference")
+
+
+# Endpoints and credentials are resolved per call rather than read from the
+# constants above directly: an explicitly-set environment variable still wins,
+# but otherwise `ai-settings.json` supplies them (see ai_settings.py). That is
+# what lets a deployed, double-clicked executable be pointed at a local LM
+# Studio or a hosted endpoint without setting environment variables at all --
+# the constants stay as the env-derived defaults these fall back to.
+
+def _ollama_base_url() -> str:
+    return ai_settings.endpoint("OLLAMA_BASE_URL", OLLAMA_BASE_URL, "ollama_base_url")
+
+
+def _lmstudio_base_url() -> str:
+    return ai_settings.endpoint("LMSTUDIO_BASE_URL", LMSTUDIO_BASE_URL, "lmstudio_base_url")
+
+
+def _openai_compatible_base_url() -> str:
+    return ai_settings.endpoint(
+        "OPENAI_COMPATIBLE_BASE_URL", OPENAI_COMPATIBLE_BASE_URL, "openai_compatible_base_url"
+    )
+
+
+def _github_models_base_url() -> str:
+    return ai_settings.endpoint("GITHUB_MODELS_BASE_URL", GITHUB_MODELS_BASE_URL, "github_models_base_url")
+
+
+def _openai_api_key() -> str:
+    return ai_settings.credential("OPENAI_API_KEY", OPENAI_API_KEY, "openai")
+
+
+def _anthropic_api_key() -> str:
+    return ai_settings.credential("ANTHROPIC_API_KEY", ANTHROPIC_API_KEY, "anthropic")
+
+
+def _openai_compatible_api_key() -> str:
+    return ai_settings.credential(
+        "OPENAI_COMPATIBLE_API_KEY", OPENAI_COMPATIBLE_API_KEY, "openai_compatible"
+    )
+
+
+def _github_token() -> str:
+    return ai_settings.credential("GITHUB_TOKEN", GITHUB_TOKEN, "github")
 
 # Local models (ollama/lmstudio) on modest hardware routinely take several
 # minutes -- up to ~10 minutes -- for a large generation prompt with
@@ -121,7 +165,7 @@ async def _ollama_complete(
     start = time.monotonic()
     last_logged = start
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
-        async with client.stream("POST", f"{OLLAMA_BASE_URL}/api/generate", json=payload) as response:
+        async with client.stream("POST", f"{_ollama_base_url()}/api/generate", json=payload) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
                 if not line:
@@ -152,14 +196,15 @@ async def _openai_complete(
     temperature: float,
     timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
-    if not OPENAI_API_KEY:
-        raise ValueError("OPENAI_API_KEY environment variable not set")
+    api_key = _openai_api_key()
+    if not api_key:
+        raise ValueError("No OpenAI API key configured (OPENAI_API_KEY, or api_keys.openai in ai-settings.json)")
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
     payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+    headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
         return await _stream_chat_completion(
             client, "https://api.openai.com/v1/chat/completions", payload, headers, "openai", model,
@@ -173,8 +218,11 @@ async def _anthropic_complete(
     temperature: float,
     timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
-    if not ANTHROPIC_API_KEY:
-        raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+    api_key = _anthropic_api_key()
+    if not api_key:
+        raise ValueError(
+            "No Anthropic API key configured (ANTHROPIC_API_KEY, or api_keys.anthropic in ai-settings.json)"
+        )
     payload = {
         "model": model,
         "max_tokens": AI_MAX_TOKENS,
@@ -184,7 +232,7 @@ async def _anthropic_complete(
     if system:
         payload["system"] = system
     headers = {
-        "x-api-key": ANTHROPIC_API_KEY,
+        "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
     }
     chunks: list[str] = []
@@ -240,7 +288,7 @@ async def _lmstudio_complete(
     }
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
         return await _stream_chat_completion(
-            client, f"{LMSTUDIO_BASE_URL}/chat/completions", payload, {}, "lmstudio", model,
+            client, f"{_lmstudio_base_url()}/chat/completions", payload, {}, "lmstudio", model,
         )
 
 
@@ -251,19 +299,24 @@ async def _openai_compatible_complete(
     temperature: float,
     timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
-    if not OPENAI_COMPATIBLE_BASE_URL:
-        raise ValueError("OPENAI_COMPATIBLE_BASE_URL environment variable not set")
+    base_url = _openai_compatible_base_url()
+    if not base_url:
+        raise ValueError(
+            "No OpenAI-compatible endpoint configured (OPENAI_COMPATIBLE_BASE_URL, "
+            "or endpoints.openai_compatible_base_url in ai-settings.json)"
+        )
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
     payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
     headers = {}
-    if OPENAI_COMPATIBLE_API_KEY:
-        headers["Authorization"] = f"Bearer {OPENAI_COMPATIBLE_API_KEY}"
+    compatible_key = _openai_compatible_api_key()
+    if compatible_key:
+        headers["Authorization"] = f"Bearer {compatible_key}"
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
         return await _stream_chat_completion(
-            client, f"{OPENAI_COMPATIBLE_BASE_URL.rstrip('/')}/chat/completions", payload, headers,
+            client, f"{base_url.rstrip('/')}/chat/completions", payload, headers,
             "openai_compatible", model,
         )
 
@@ -275,17 +328,18 @@ async def _github_copilot_complete(
     temperature: float,
     timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
-    if not GITHUB_TOKEN:
-        raise ValueError("GITHUB_TOKEN environment variable not set")
+    token = _github_token()
+    if not token:
+        raise ValueError("No GITHUB_TOKEN configured (env var, or api_keys.github in ai-settings.json)")
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
     payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
-    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+    headers = {"Authorization": f"Bearer {token}"}
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
         return await _stream_chat_completion(
-            client, f"{GITHUB_MODELS_BASE_URL.rstrip('/')}/chat/completions", payload, headers,
+            client, f"{_github_models_base_url().rstrip('/')}/chat/completions", payload, headers,
             "github_copilot", model,
         )
 
@@ -297,19 +351,36 @@ async def _github_copilot_complete(
 async def complete(
     prompt: str,
     system: str = "",
-    model: str = "llama3",
+    model: str = "",
     temperature: float = 0.7,
-    provider: str = "ollama",
+    provider: str = ai_settings.DEFAULT_SENTINEL,
 ) -> str:
     """
     Call the requested AI provider and return the text completion.
 
-    *provider* is compared against plain provider-name strings (not the
-    `AIProvider` enum) so this function's body has no app-internal-model
-    dependency and can be embedded verbatim in the deploy bundle (see
-    deploy_service.py's `extract_source`); `AIProvider` is a `str` subclass, so
-    passing an enum member here still compares equal.
+    *provider* may be the `default` sentinel (the default for new AI nodes),
+    meaning "whatever this run is configured to use" -- it is resolved here,
+    once, through `ai_settings.resolve_target`, so no caller and no element has
+    to know where the runtime AI configuration comes from. A node that names a
+    real provider keeps it unless the run forces one.
+
+    After resolution, *provider* is compared against plain provider-name
+    strings (not the `AIProvider` enum) so this function's body has no
+    app-internal-model dependency and can be embedded verbatim in the deploy
+    bundle; `AIProvider` is a `str` subclass, so passing an enum member here
+    still compares equal.
     """
+    # `AIProvider` is a str-Enum, whose str() is "AIProvider.OLLAMA" rather
+    # than "ollama" on Python < 3.11 -- take .value when there is one.
+    requested_provider = str(getattr(provider, "value", provider) or "")
+    requested_model = str(getattr(model, "value", model) or "")
+    provider, model = ai_settings.resolve_target(requested_provider, requested_model)
+    if (provider, model) != (requested_provider, requested_model):
+        logger.info(
+            "AI target resolved: %s/%s -> %s/%s",
+            requested_provider or "(default)", requested_model or "(default)", provider, model,
+        )
+
     start = time.monotonic()
     # Logged at INFO so a hanging/slow local model (lmstudio/ollama) can be
     # diagnosed from the backend console: exactly what was sent, and how long
@@ -352,8 +423,8 @@ async def generate_code(
     context: str = "",
     inputs: list[str] | None = None,
     outputs: list[str] | None = None,
-    model: str = "llama3",
-    provider: AIProvider = AIProvider.OLLAMA,
+    model: str = "",
+    provider: AIProvider = AIProvider.DEFAULT,
 ) -> tuple[str, str]:
     """
     Ask the LLM to generate code that maps *inputs* to *outputs*.
@@ -402,8 +473,8 @@ async def generate_code(
 async def generate_prompt(
     description: str,
     context: str = "",
-    model: str = "llama3",
-    provider: AIProvider = AIProvider.OLLAMA,
+    model: str = "",
+    provider: AIProvider = AIProvider.DEFAULT,
 ) -> tuple[str, str]:
     """
     Ask the LLM to generate a system prompt from a natural-language description.
@@ -436,8 +507,8 @@ async def generate_prompt(
 async def generate_output_format(
     description: str,
     context: str = "",
-    model: str = "llama3",
-    provider: AIProvider = AIProvider.OLLAMA,
+    model: str = "",
+    provider: AIProvider = AIProvider.DEFAULT,
 ) -> tuple[str, str]:
     """
     Ask the LLM to describe the expected "custom" output format/shape for a
@@ -472,11 +543,65 @@ async def generate_output_format(
     return fmt, explanation
 
 
+async def generate_data_format(
+    description: str,
+    context: str = "",
+    model: str = "",
+    provider: AIProvider = AIProvider.DEFAULT,
+) -> tuple[str, str]:
+    """
+    Ask the LLM to design a `data` node's format contract (config.data_format_prompt).
+    A `data` node only distinguishes "text" vs. "structure" (config.data_format) --
+    all the actual shape detail (field names, types, nesting, dimensions) lives in
+    this free-text prompt, so the system prompt below asks the model to propose a
+    few candidate structures, weigh them against any example input given as
+    *context*, then commit to one. Returns (format_description, explanation).
+    """
+    system = (
+        "You are an expert at designing the data format/schema a graph \"data\" "
+        "node should persist. Given a task description and, if provided, example "
+        "input data, propose two or three plausible candidate formats (field "
+        "names, types, nesting, or structure), briefly weigh their tradeoffs "
+        "against the given examples, then commit to the single best one.\n\n"
+        "Example:\n"
+        "Task description: Store the extracted invoice line items.\n"
+        "Example data: \"3x Widget @ 9.99, 1x Gadget @ 19.99\"\n"
+        "Candidate formats:\n"
+        "1. A flat list of strings, one per line item.\n"
+        "2. A JSON array of {name, quantity, unit_price} objects.\n"
+        "3. A single JSON object keyed by item name mapping to quantity.\n"
+        "Chosen format: option 2, because line items need distinct quantity and "
+        "price fields for later calculations, and a list naturally accommodates "
+        "any number of items.\n"
+        "<data_format>A JSON array of objects, each with \"name\" (string), "
+        "\"quantity\" (integer), and \"unit_price\" (number), e.g. "
+        "[{\"name\": \"Widget\", \"quantity\": 3, \"unit_price\": 9.99}].</data_format>\n\n"
+        "Now do the same for the given task: think through candidate proposals and "
+        "your reasoning as plain text, then put only the final chosen format "
+        "description (field names, types, nesting, and a representative example "
+        "value) inside <data_format> tags, followed by a brief explanation."
+    )
+    prompt = f"Task description: {description}"
+    if context:
+        prompt += f"\n\nAdditional context: {context}"
+    raw = await complete(prompt, system, model, 0.3, provider)
+
+    import re
+    match = re.search(r"<data_format>(.*?)</data_format>", raw, re.DOTALL)
+    if match:
+        fmt = match.group(1).strip()
+        explanation = raw[match.end() :].strip()
+    else:
+        fmt = raw.strip()
+        explanation = ""
+    return fmt, explanation
+
+
 async def generate_graph(
     description: str,
     context: str = "",
-    model: str = "llama3",
-    provider: AIProvider = AIProvider.OLLAMA,
+    model: str = "",
+    provider: AIProvider = AIProvider.DEFAULT,
 ) -> tuple[dict, str]:
     """
     Ask the LLM to author a full Graph DSL document from a natural-language
@@ -502,8 +627,15 @@ async def generate_graph(
         "  ],\n"
         '  "edges": [{"id": str, "source_node_id": str, "source_port_id": str, "target_node_id": str, "target_port_id": str}, ...]\n'
         "}\n\n"
-        "Valid node_type values: input, ai, code, output, gui. An \"input\" node's "
-        "config.input_mode selects text, file, or directory input. There is no dedicated "
+        "Valid node_type values: input, data, ai, code, output, gui. An \"input\" node's "
+        "config.input_mode selects text, file, or directory input. "
+        "A \"data\" node is persisted graph memory with one optional input port named "
+        "\"input\" and one output port named \"output\". Define data nodes before code or "
+        "ai nodes when a workflow has known intermediate contracts. Set config.data_format "
+        "to text or structure; put the precise schema, field names, types, nesting, and "
+        "constraints in config.data_format_prompt; and initialize config.data_value when "
+        "useful. Connected code and ai nodes must honor those source and target contracts. "
+        "There is no dedicated "
         "merge/split node type: fan-in (multiple edges into one "
         "multi input port) and fan-out (one output wired to many inputs) are pure edge "
         "wiring, and any merge/split-style aggregation (concat/sum/count/json_list a set of "

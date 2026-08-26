@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import type { AIProvider, GuiWidget, GuiWidgetKind } from '../types/graph';
+import type { GuiWidget, GuiWidgetKind } from '../types/graph';
 import { createGuiWidget, CREATABLE_GUI_WIDGET_KINDS, GUI_WIDGET_KIND_LABELS, sizeToGrid } from '../utils/guiWidgets';
 import { generateCode } from '../utils/api';
+import { genAI } from '../store/settingsStore';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
 
 interface GuiWidgetEditorProps {
   widgets: GuiWidget[];
   onChange: (widgets: GuiWidget[]) => void;
-  aiModel: string;
-  aiProvider: AIProvider;
 }
 
-export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider }: GuiWidgetEditorProps) {
+// Widgets no longer carry a generation provider/model of their own, and this
+// component no longer takes one from its node: every ✨ Generate action in the
+// editor uses the single code-generation AI from the settings store.
+export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorProps) {
   const [newWidgetKind, setNewWidgetKind] = useState<GuiWidgetKind>('text_io');
   const [newWidgetLabel, setNewWidgetLabel] = useState('');
   const [expandedTransform, setExpandedTransform] = useState<Record<string, boolean>>({});
@@ -69,8 +71,7 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
         context_file: (widget.example_input_path ?? '').trim() || undefined,
         inputs: ['value'],
         outputs: ['value'],
-        ai_model: widget.ai_model || aiModel,
-        ai_provider: widget.ai_provider || aiProvider,
+        ...genAI(),
       });
       // Look up the widget's current position by stable id, not the index
       // captured at click time -- the list may have been reordered/edited
@@ -110,8 +111,7 @@ export default function GuiWidgetEditor({ widgets, onChange, aiModel, aiProvider
         context_file: (widget.example_input_path ?? '').trim() || undefined,
         inputs: ['files'],
         outputs: ['files'],
-        ai_model: widget.ai_model || aiModel,
-        ai_provider: widget.ai_provider || aiProvider,
+        ...genAI(),
       });
       const currentIndex = widgets.findIndex((w) => w.id === widget.id);
       if (currentIndex === -1) return;

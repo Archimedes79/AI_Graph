@@ -1,6 +1,5 @@
 import React from 'react';
 import type { GuiWidget } from '../../../../types/graph';
-import ProviderModelSelect from '../../../shared/ProviderModelSelect';
 import ContextFileAttachment from '../../../shared/ContextFileAttachment';
 
 interface PlotWindowEditorProps {
@@ -29,7 +28,7 @@ export default function PlotWindowEditor({
         className="text-xs font-medium mb-1"
         style={{ color: '#94a3b8', background: 'transparent' }}
       >
-        {expanded ? '▾' : '▸'} Data transform (optional)
+        {expanded ? '▾' : '▸'} Plotting code (required)
       </button>
       {expanded && (
         <div className="mt-2">
@@ -44,15 +43,6 @@ export default function PlotWindowEditor({
             placeholder="Describe the chart transform you need (axes, grouping, aggregation, filters, etc.)"
             spellCheck={false}
           />
-          <label className="block text-xs font-medium mt-2 mb-1" style={{ color: '#94a3b8' }}>
-            Provider selection
-          </label>
-          <ProviderModelSelect
-            provider={widget.ai_provider ?? 'ollama'}
-            model={widget.ai_model ?? 'llama3'}
-            onProviderChange={(provider) => onUpdate({ ai_provider: provider })}
-            onModelChange={(model) => onUpdate({ ai_model: model })}
-          />
           <div className="mt-2">
             <ContextFileAttachment
               label="Additional data (optional context file)"
@@ -61,7 +51,7 @@ export default function PlotWindowEditor({
             />
           </div>
           <p className="text-xs mb-2" style={{ color: '#475569' }}>
-            Keep code empty to pass through raw incoming data unchanged.
+            The code must return {`{"value": <plot-ready data>}`}. Runs without code are rejected.
           </p>
           <div className="flex items-center justify-between mb-1">
             <select
@@ -83,7 +73,7 @@ export default function PlotWindowEditor({
             </button>
           </div>
           <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-            Code window (editable)
+            Plotting code (required)
           </label>
           <textarea
             className="w-full rounded-lg px-2 py-1.5 text-sm resize-none font-mono"

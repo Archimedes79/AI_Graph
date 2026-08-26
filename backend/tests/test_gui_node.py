@@ -261,14 +261,14 @@ def _plot_graph(widget: GuiWidget) -> Graph:
 
 
 @pytest.mark.asyncio
-async def test_plot_window_widget_empty_code_passes_through_raw_value():
+async def test_plot_window_widget_empty_code_marks_node_error():
     graph = _plot_graph(GuiWidget(id="w1", kind=GuiWidgetKind.PLOT_WINDOW))
 
     result = await execute_graph(graph)
-    assert result.status == "success"
+    assert result.status == "error"
     gui_result = next(r for r in result.node_results if r.node_id == "gui")
-    assert gui_result.inputs["w1_in"] == "[1, 2, 3]"
-    assert gui_result.outputs == {}
+    assert gui_result.status == "error"
+    assert "requires plotting code" in gui_result.error
 
 
 @pytest.mark.asyncio

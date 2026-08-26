@@ -14,12 +14,12 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_ELEMENTS, GUI_WIDGET_ELEMENTS } from './registry';
 import type { GraphNode, GuiWidget } from '../types/graph';
+import { connectedDataFormatContext } from './data/dataElement';
 
 function makeWidget(kind: GuiWidget['kind']): GuiWidget {
   return {
     id: 'w1', kind, label: '', extensions: '', size: 'medium',
     recursive: false, select_all_files: true, selector_prompt: '', selector_code: '',
-    ai_model: 'llama3', ai_provider: 'ollama',
     plot_prompt: '',
     example_input_path: '',
   };
@@ -57,6 +57,25 @@ describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, elem
   it('has a defined ConfigEditor component', () => {
     expect(element.ConfigEditor).toBeDefined();
   });
+});
+
+it('describes connected data nodes as source and target generation formats', () => {
+  const source = NODE_ELEMENTS.data.create('source');
+  source.label = 'Input records';
+  source.config.data_format = 'structure';
+  source.config.data_format_prompt = 'columns: id integer, name text';
+  const processor = NODE_ELEMENTS.code.create('processor');
+  const target = NODE_ELEMENTS.data.create('target');
+  target.label = 'Result map';
+  target.config.data_format = 'structure';
+
+  const context = connectedDataFormatContext('processor', [source, processor, target], [
+    { source: 'source', target: 'processor' },
+    { source: 'processor', target: 'target' },
+  ]);
+
+  expect(context).toContain('Source data format from "Input records": structure: columns: id integer, name text');
+  expect(context).toContain('Target data format required by "Result map": structure');
 });
 
 describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (widgetKind, element) => {

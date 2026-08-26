@@ -5,7 +5,7 @@ import { NODE_TYPE_ICON, NODE_TYPE_LABELS, WIDGET_PRESETS, type NodePreset } fro
 const CATEGORIES: { label: string; types: NodeType[] }[] = [
   {
     label: 'Processing',
-    types: ['ai', 'code'],
+    types: ['data', 'ai', 'code'],
   },
   {
     label: 'Output',

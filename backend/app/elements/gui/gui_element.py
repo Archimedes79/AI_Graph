@@ -50,11 +50,12 @@ class GuiElement(NodeElement):
             # port to carry the result through.
             _, widget_outputs = gui_widget_ports(widget)
             if not widget_outputs:
-                if widget.code:
-                    in_id = f"{widget.id}_in"
-                    raw_value = inputs.get(in_id)
-                    transformed = await code_executor.execute_code(widget.code, widget.language, {"value": raw_value})
-                    inputs[in_id] = transformed.get("value", raw_value)
+                if widget.kind == GuiWidgetKind.PLOT_WINDOW and not widget.code.strip():
+                    raise ValueError(f"Plot window '{widget.label or widget.id}' requires plotting code")
+                in_id = f"{widget.id}_in"
+                raw_value = inputs.get(in_id)
+                transformed = await code_executor.execute_code(widget.code, widget.language, {"value": raw_value})
+                inputs[in_id] = transformed.get("value", raw_value)
                 continue
             element = widget_elements.get(widget.kind)
             if element is None:
@@ -78,7 +79,11 @@ class GuiElement(NodeElement):
 
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
         widget_elements = _widget_elements()
-        needs = DeployNeeds()
+        # A gui/widget node IS the graph's interface, so a bundle containing one
+        # has to ship the web runtime -- reducing a file picker or a plot to a
+        # console prompt would silently deploy something other than what was
+        # designed. See deploy_service's "GUI runtime" section.
+        needs = DeployNeeds(interactive_ui=True)
         for widget in node.config.gui_widgets:
             element = widget_elements.get(widget.kind)
             if element is not None:

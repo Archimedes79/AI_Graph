@@ -31,6 +31,11 @@ class DeployNeeds:
     code_runner: bool = False    # sandboxed Python/JS execute_code helper
     ai: bool = False             # ai_service completion helper
     read_file_inputs: bool = False  # implies `files` too; see generate_runner_script
+    # This node has an interface a user operates while the graph runs, so the
+    # bundle must ship the web runtime (serve.py + the built page) rather than
+    # falling back to console prompts. Set by the gui element; deploy_service
+    # asks for it here instead of inspecting node_type itself.
+    interactive_ui: bool = False
 
     def __or__(self, other: "DeployNeeds") -> "DeployNeeds":
         return DeployNeeds(
@@ -38,6 +43,7 @@ class DeployNeeds:
             code_runner=self.code_runner or other.code_runner,
             ai=self.ai or other.ai,
             read_file_inputs=self.read_file_inputs or other.read_file_inputs,
+            interactive_ui=self.interactive_ui or other.interactive_ui,
         )
 
 

@@ -32,6 +32,7 @@ from app.models.graph import (  # noqa: E402
     AIProvider,
     DataType,
     Graph,
+    GraphEdge,
     GraphNode,
     GuiWidget,
     GuiWidgetKind,
@@ -42,6 +43,7 @@ from app.models.graph import (  # noqa: E402
     sync_gui_node_ports,
 )
 from app.services import ai_service  # noqa: E402
+from app.services.graph_executor import ExecutionStatus, execute_graph  # noqa: E402
 
 CODE_ECHO = "def run(inputs):\n    return {'output': inputs.get('input', '')}\n"
 
@@ -73,13 +75,13 @@ def _install_ai_stubs(monkeypatch) -> List[dict]:
     """Monkeypatch ai_service so no element under test ever makes a real network call."""
     calls: List[dict] = []
 
-    async def stub_complete(prompt, system="", model="llama3", temperature=0.7, provider=AIProvider.OLLAMA):
+    async def stub_complete(prompt, system="", model="", temperature=0.7, provider=AIProvider.DEFAULT):
         calls.append({"kind": "complete", "prompt": prompt, "system": system, "model": model,
                       "temperature": temperature, "provider": provider})
         return "STUB_COMPLETION"
 
     async def stub_generate_code(description, language="python", context="", inputs=None, outputs=None,
-                                  model="llama3", provider=AIProvider.OLLAMA):
+                                  model="", provider=AIProvider.DEFAULT):
         calls.append({"kind": "generate_code", "description": description, "language": language,
                       "context": context, "inputs": inputs or [], "outputs": outputs or [],
                       "model": model, "provider": provider})
@@ -110,6 +112,11 @@ def _make_node(node_type: NodeType, tmp_path: Path) -> GraphNode:
                           inputs=[_port("input", PortKind.INPUT, DataType.ANY, multi=True)],
                           outputs=[_port("output", PortKind.OUTPUT, DataType.ANY, multi=True)],
                           config=NodeConfig(code=CODE_ECHO))
+    if node_type == NodeType.DATA:
+        return GraphNode(id=nid, node_type=node_type, label="L",
+                          inputs=[_port("input", PortKind.INPUT, DataType.ANY)],
+                          outputs=[_port("output", PortKind.OUTPUT, DataType.ANY)],
+                          config=NodeConfig(data_value={"answer": 42}, data_format="structure"))
     if node_type == NodeType.OUTPUT:
         return GraphNode(id=nid, node_type=node_type, label="L",
                           inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
@@ -193,6 +200,40 @@ async def test_node_element_contract(node_type: NodeType, element, tmp_path, mon
 
     # 4. AI can be called (only for AI-capable node types; no-op otherwise).
     await _assert_ai_call_path(node_type, element, tmp_path, monkeypatch)
+
+
+async def test_data_element_persists_cycle_feedback_for_next_run():
+    data_node = GraphNode(
+        id="memory", node_type=NodeType.DATA, label="Memory",
+        inputs=[_port("input", PortKind.INPUT)],
+        outputs=[_port("output", PortKind.OUTPUT)],
+        config=NodeConfig(data_value=1, data_format="structure"),
+    )
+    code_node = GraphNode(
+        id="increment", node_type=NodeType.CODE, label="Increment",
+        inputs=[_port("input", PortKind.INPUT)],
+        outputs=[_port("output", PortKind.OUTPUT)],
+        config=NodeConfig(code="def run(inputs):\n    return {'output': inputs['input'] + 1}\n"),
+    )
+    graph = Graph(
+        nodes=[data_node, code_node],
+        edges=[
+            GraphEdge(id="read", source_node_id="memory", source_port_id="output",
+                      target_node_id="increment", target_port_id="input"),
+            GraphEdge(id="write", source_node_id="increment", source_port_id="output",
+                      target_node_id="memory", target_port_id="input"),
+        ],
+    )
+
+    first = await execute_graph(graph)
+    assert first.status == ExecutionStatus.SUCCESS
+    assert next(r for r in first.node_results if r.node_id == "memory").outputs == {"output": 1}
+    assert data_node.config.data_value == 2
+
+    second = await execute_graph(graph)
+    assert second.status == ExecutionStatus.SUCCESS
+    assert next(r for r in second.node_results if r.node_id == "memory").outputs == {"output": 2}
+    assert data_node.config.data_value == 3
 
 
 # ---------------------------------------------------------------------------
@@ -320,12 +361,14 @@ async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, 
     ai_widget = GuiWidget(
         id="w_ai", kind=GuiWidgetKind.INPUT_PICKER, mode="directory", value=str(tmp_path),
         select_all_files=False, selector_code="", selector_prompt="pick files",
-        ai_model="m2", ai_provider=AIProvider.OLLAMA,
     )
     await element.execute(ai_widget, {})
     assert len(calls) == 1 and calls[0]["kind"] == "generate_code"
     assert calls[0]["description"] == "pick files"
     assert calls[0]["inputs"] == ["files"]
     assert calls[0]["outputs"] == ["files"]
-    assert calls[0]["model"] == "m2"
-    assert calls[0]["provider"] == AIProvider.OLLAMA
+    # A widget carries no provider of its own any more: it asks for nothing and
+    # lets ai_settings resolve whatever this run is configured with, so a
+    # deployed graph's AI choice reaches widget-level generation too.
+    assert calls[0]["model"] == ""
+    assert calls[0]["provider"] == AIProvider.DEFAULT

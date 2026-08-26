@@ -16,6 +16,14 @@ export const updateGraph = (id: string, graph: Graph) => api.put(`/graphs/${id}`
 export const deleteGraph = (id: string) => api.delete(`/graphs/${id}`).then((r) => r.data);
 export const exportGraph = (id: string) => api.get(`/graphs/${id}/export`).then((r) => r.data);
 
+// File-based Load/Save (New/Load/Save/Save As), reading and writing an absolute
+// server-side path so repeated saves round-trip to the same file it was loaded from.
+export const loadGraphFile = (path: string): Promise<{ path: string; graph: Graph }> =>
+  api.post('/graphs/file/load', { path }).then((r) => r.data);
+
+export const saveGraphFile = (path: string, graph: Graph): Promise<{ path: string }> =>
+  api.post('/graphs/file/save', { path, graph }).then((r) => r.data);
+
 // Execution
 export const executeGraph = (graph: Graph): Promise<ExecutionResult> =>
   api.post('/execute/', graph).then((r) => r.data);
@@ -52,6 +60,15 @@ export const generateOutputFormat = (body: {
 }): Promise<{ output_format_prompt: string; explanation?: string }> =>
   api.post('/ai/generate-output-format', body).then((r) => r.data);
 
+export const generateDataFormat = (body: {
+  description: string;
+  context?: string;
+  context_file?: string;
+  ai_model?: string;
+  ai_provider?: string;
+}): Promise<{ output_format_prompt: string; explanation?: string }> =>
+  api.post('/ai/generate-data-format', body).then((r) => r.data);
+
 export const generateGraph = (body: {
   description: string;
   context?: string;
@@ -59,6 +76,27 @@ export const generateGraph = (body: {
   ai_provider?: string;
 }): Promise<{ graph: Graph; explanation?: string }> =>
   api.post('/ai/generate-graph', body).then((r) => r.data);
+
+// Deployed-runtime endpoints (served by a deploy bundle's serve.py, not by the
+// editor backend): the one graph the bundle ships, and the AI configuration
+// whoever runs it can change without touching the graph.
+export const getRuntimeGraph = (): Promise<Graph> =>
+  api.get('/runtime/graph').then((r) => r.data);
+
+export interface RuntimeAISettingsPayload {
+  settings: { ai?: { provider?: string; model?: string } };
+  effective: { provider: string; model: string; settings_file: string };
+  base_url: string;
+  api_key: string;
+}
+
+export const getAISettings = (): Promise<RuntimeAISettingsPayload> =>
+  api.get('/runtime/ai-settings').then((r) => r.data);
+
+export const saveAISettings = (
+  body: { provider: string; model: string; base_url: string; api_key: string },
+): Promise<{ path: string; effective: RuntimeAISettingsPayload['effective'] }> =>
+  api.post('/runtime/ai-settings', body).then((r) => r.data);
 
 // Context-file attachments (stored project-side, referenced by config_context_file /
 // output_context_file). Keeps the config a plain server path, same as any other file field.

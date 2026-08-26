@@ -3,16 +3,23 @@ import { useGraphStore } from '../store/graphStore';
 import { executeGraph, downloadBundle, getDockerCompose, getRuntimeRequirements, generateGraph } from '../utils/api';
 import type { Graph, RuntimeRequirement } from '../types/graph';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
+import { genAI } from '../store/settingsStore';
 import GraphWindows from './GraphWindows';
 
 interface ToolbarProps {
   onNewGraph: () => void;
   onSave: () => void;
+  onSaveAs: () => void;
   onLoad: () => void;
   onInjectJson: () => void;
+  onOpenSettings: () => void;
+  currentFilePath: string | null;
+  saveStatus: string;
 }
 
-export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: ToolbarProps) {
+export default function Toolbar({
+  onNewGraph, onSave, onSaveAs, onLoad, onInjectJson, onOpenSettings, currentFilePath, saveStatus,
+}: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const isExecuting = useGraphStore((s) => s.isExecuting);
@@ -160,7 +167,7 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
     setAiError('');
     setAiResult(null);
     try {
-      const result = await generateGraph({ description: aiDescription });
+      const result = await generateGraph({ description: aiDescription, ...genAI() });
       setAiResult(result);
     } catch (e: any) {
       setAiError(e?.response?.data?.detail ?? e?.message ?? 'Failed to generate graph.');
@@ -203,6 +210,9 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
           value={metadata.name}
           onChange={(e) => setMetadata({ name: e.target.value })}
         />
+        <span className="text-xs truncate max-w-xs" style={{ color: '#475569' }} title={currentFilePath ?? 'Not saved to a file yet'}>
+          {currentFilePath ?? 'Untitled — not saved'}
+        </span>
 
         <div className="flex-1" />
 
@@ -226,7 +236,7 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
           className="px-3 py-1.5 text-xs rounded-lg"
           style={{ background: '#2d3148', color: '#e2e8f0' }}
         >
-          Paste JSON
+          📋 Copy
         </button>
         <button
           onClick={handleOpenAiGraph}
@@ -240,7 +250,38 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
           className="px-3 py-1.5 text-xs rounded-lg"
           style={{ background: '#2d3148', color: '#e2e8f0' }}
         >
-          Save JSON
+          Save
+        </button>
+        <button
+          onClick={onSaveAs}
+          className="px-3 py-1.5 text-xs rounded-lg"
+          style={{ background: '#2d3148', color: '#e2e8f0' }}
+        >
+          Save As…
+        </button>
+        {saveStatus && (
+          <span className="text-xs" style={{ color: '#94a3b8' }}>
+            {saveStatus}
+          </span>
+        )}
+
+        {/* Run */}
+        <button
+          onClick={handleRun}
+          disabled={isExecuting}
+          className="px-4 py-1.5 text-xs rounded-lg font-semibold flex items-center gap-2"
+          style={{ background: isExecuting ? '#374151' : '#6366f1', color: 'white', opacity: isExecuting ? 0.7 : 1 }}
+        >
+          {isExecuting ? '⏳ Running…' : '▶ Run Graph'}
+        </button>
+
+        <button
+          onClick={onOpenSettings}
+          className="px-3 py-1.5 text-xs rounded-lg"
+          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          title="Code generation AI and this graph's runtime AI default"
+        >
+          ⚙ Settings
         </button>
 
         {/* Deploy dropdown */}
@@ -253,16 +294,6 @@ export default function Toolbar({ onNewGraph, onSave, onLoad, onInjectJson }: To
             🚀 Deploy ▾
           </button>
         </div>
-
-        {/* Run */}
-        <button
-          onClick={handleRun}
-          disabled={isExecuting}
-          className="px-4 py-1.5 text-xs rounded-lg font-semibold flex items-center gap-2"
-          style={{ background: isExecuting ? '#374151' : '#6366f1', color: 'white', opacity: isExecuting ? 0.7 : 1 }}
-        >
-          {isExecuting ? '⏳ Running…' : '▶ Run Graph'}
-        </button>
 
         {/* Status */}
         {statusLabel && (

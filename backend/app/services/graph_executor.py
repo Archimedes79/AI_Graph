@@ -31,6 +31,7 @@ from app.models.graph import (
 )
 from app.elements.registry import NODE_ELEMENTS
 from app.services import ai_service, file_service  # ai_service: tests monkeypatch this module attribute
+from app.services import ai_settings
 from app.services.batching import batch_inputs, merge_batch_outputs
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ def _is_memory_node(node_type: NodeType) -> bool:
     (A future general-purpose "memory" node type, not just gui/widget, could
     extend this same rule -- see AGENTS.md's "Memory feedback edges" section.)
     """
-    return node_type in (NodeType.GUI, NodeType.WIDGET)
+    return node_type in (NodeType.DATA, NodeType.GUI, NodeType.WIDGET)
 
 
 def _memory_feedback_edge_ids(nodes: List[GraphNode], edges: List[GraphEdge]) -> set:
@@ -402,6 +403,12 @@ def _settle_memory_feedback(
         target_node = node_map.get(edge.target_node_id)
         if target_node is None:
             continue
+        if target_node.node_type == NodeType.DATA:
+            target_node.config.data_value = value
+            target_result = result_by_id.get(edge.target_node_id)
+            if target_result is not None:
+                target_result.inputs[edge.target_port_id] = value
+            continue
         widget_id = edge.target_port_id[:-3] if edge.target_port_id.endswith("_in") else edge.target_port_id
         widget = next((w for w in target_node.config.gui_widgets if w.id == widget_id), None)
         if widget is None:
@@ -519,6 +526,15 @@ async def execute_graph(
     Execute the full graph and return an ExecutionResult.
     """
     start = time.monotonic()
+    # Publish the graph's own AI default (metadata.ai_defaults) for this run, so
+    # an `ai` node configured as AIProvider.DEFAULT resolves to it -- unless the
+    # environment, an ai-settings.json, or a CLI/UI override takes precedence
+    # (see app.services.ai_settings). It lives here rather than in the AI
+    # element because an element never sees the graph it belongs to.
+    ai_settings.set_graph_defaults(
+        str(getattr(graph.metadata.ai_defaults.provider, "value", graph.metadata.ai_defaults.provider) or ""),
+        graph.metadata.ai_defaults.model,
+    )
     # GUI node ports are derived data; regenerate them from `config.gui_widgets`
     # before wiring/topology are inspected, so edges always see trustworthy ports.
     for node in graph.nodes:

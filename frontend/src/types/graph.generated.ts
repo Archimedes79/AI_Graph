@@ -21,12 +21,13 @@ export type PortKind = 'input' | 'output';
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "NodeType".
  */
-export type NodeType = 'input' | 'ai' | 'code' | 'output' | 'gui' | 'widget';
+export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui' | 'widget';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "AIProvider".
  */
-export type AIProvider = 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
+export type AIProvider =
+  'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "DataType".
@@ -63,6 +64,7 @@ export interface GraphEdge {
  * via the `definition` "GraphMetadata".
  */
 export interface GraphMetadata {
+  ai_defaults: AIDefaults;
   author: string;
   created_at?: string | null;
   description: string;
@@ -70,6 +72,21 @@ export interface GraphMetadata {
   tags: string[];
   updated_at?: string | null;
   version: string;
+}
+/**
+ * The graph's own answer to "which AI should my `default` AI nodes use?",
+ * set once in the editor instead of once per node. It is the lowest-priority
+ * source: an AI_GRAPH_AI_PROVIDER environment variable, an ai-settings.json
+ * beside the deployed tool, or a CLI flag all override it at run time, which
+ * is how the same shipped graph runs against a local model on one machine
+ * and a hosted endpoint on another. See app.services.ai_settings.
+ *
+ * This interface was referenced by `Graph`'s JSON-Schema
+ * via the `definition` "AIDefaults".
+ */
+export interface AIDefaults {
+  model: string;
+  provider: 'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
 }
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
@@ -95,16 +112,18 @@ export interface GraphNode {
  */
 export interface NodeConfig {
   ai_model: string;
-  ai_provider: 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
+  ai_provider: 'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
   batch_mode: 'per_item' | 'whole_list';
   code: string;
   code_prompt: string;
   config_context_file: string;
+  data_format: 'text' | 'structure';
+  data_format_prompt: string;
+  data_prompt: string;
+  data_value?: unknown;
   extra: {
     [k: string]: unknown;
   };
-  gen_ai_model: string;
-  gen_ai_provider: 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
   gui_grid_columns: number;
   gui_widgets: GuiWidget[];
   input_mode: 'text' | 'file' | 'directory';
@@ -133,8 +152,6 @@ export interface NodeConfig {
  * via the `definition` "GuiWidget".
  */
 export interface GuiWidget {
-  ai_model: string;
-  ai_provider: 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
   code?: string;
   example_input_path: string;
   extensions: string;

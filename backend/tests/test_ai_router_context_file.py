@@ -121,3 +121,37 @@ async def test_ai_service_generate_output_format_extracts_tagged_content(monkeyp
 
     assert fmt == "A list of ints"
     assert "Explanation" in explanation
+
+
+def test_generate_data_format_endpoint(monkeypatch):
+    async def fake_generate_data_format(description, context, model, provider):
+        assert "extra note" in context
+        return "A JSON array of {name, quantity}", "ok"
+
+    monkeypatch.setattr(ai_service, "generate_data_format", fake_generate_data_format)
+
+    response = client.post("/api/ai/generate-data-format", json={
+        "description": "store line items",
+        "context": "extra note",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["output_format_prompt"] == "A JSON array of {name, quantity}"
+
+
+@pytest.mark.asyncio
+async def test_ai_service_generate_data_format_proposes_then_extracts_chosen_format(monkeypatch):
+    async def fake_complete(prompt, system, model, temperature, provider):
+        assert "propose two or three plausible candidate formats" in system
+        return (
+            "Candidate formats:\n1. flat list\n2. JSON array of objects\n"
+            "Chosen: option 2.\n"
+            "<data_format>A JSON array of {name, quantity}</data_format>\nExplanation here."
+        )
+
+    monkeypatch.setattr(ai_service, "complete", fake_complete)
+
+    fmt, explanation = await ai_service.generate_data_format("store line items")
+
+    assert fmt == "A JSON array of {name, quantity}"
+    assert "Explanation" in explanation

@@ -12,6 +12,10 @@ const statusColors: Record<string, string> = {
   pending: '#6b7280',
 };
 
+function dataValuePreview(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
 const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const { graphNode, onEdit, onDelete } = data;
   const executionResult = useGraphStore((s) =>
@@ -159,10 +163,10 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
               })}
             </div>
           </div>
-          {/* t+1 hint */}
+          {/* Memory-feedback hint -- this node's own persisted value breaks any cycle automatically, no manual edge marking needed */}
           {(graphNode.inputs.length > 0 && graphNode.outputs.length > 0) && (
             <p className="text-xs mt-2 px-1" style={{ color: '#475569' }}>
-              Tip: to feed results back in (e.g. AI → text window), mark that edge as <strong style={{ color: '#f59e0b' }}>t+1</strong> in the Connector Editor to break the cycle.
+              Tip: this node remembers its own value, so a feedback edge into it (e.g. AI → text window) breaks the cycle automatically.
             </p>
           )}
           {executionResult?.status === 'success' && (
@@ -232,6 +236,17 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
             {graphNode.config.value.length > 30
               ? graphNode.config.value.slice(0, 30) + '…'
               : graphNode.config.value}
+          </div>
+        )}
+
+        {/* Persisted data-node content preview */}
+        {graphNode.node_type === 'data' && graphNode.config.data_value != null && (
+          <div
+            className="text-xs truncate mt-1 px-1 py-0.5 rounded font-mono"
+            style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}
+            title={dataValuePreview(graphNode.config.data_value)}
+          >
+            {dataValuePreview(graphNode.config.data_value).slice(0, 30)}
           </div>
         )}
 

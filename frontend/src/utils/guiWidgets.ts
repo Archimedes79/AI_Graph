@@ -60,8 +60,6 @@ export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
     select_all_files: true,
     selector_prompt: '',
     selector_code: '',
-    ai_model: 'llama3',
-    ai_provider: 'ollama',
     plot_prompt: '',
     example_input_path: '',
   };

@@ -37,12 +37,7 @@ export default function GuiEditor({ node, setConfig, applyWidgets }: GuiEditorPr
             Adding, removing, or reordering a widget updates ports immediately.
           </p>
 
-          <GuiWidgetEditor
-            widgets={node.config.gui_widgets}
-            onChange={applyWidgets}
-            aiModel={node.config.gen_ai_model}
-            aiProvider={node.config.gen_ai_provider}
-          />
+          <GuiWidgetEditor widgets={node.config.gui_widgets} onChange={applyWidgets} />
         </>
       ) : (
         <GuiDesigner

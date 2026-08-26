@@ -30,8 +30,29 @@ _dev_backend_dir = Path(__file__).parent.parent / "backend"
 if _dev_backend_dir.is_dir():
     sys.path.insert(0, str(_dev_backend_dir))
 
+
+def _default_graph_path() -> Path:
+    """
+    Where to look for the graph when no path was given on the command line.
+
+    Normally just `graph.json` in the current working directory. In a
+    PyInstaller one-file build (see the bundle's `build_exe.py`) the graph is
+    embedded as a data file and unpacked to `sys._MEIPASS` at startup, so that
+    copy is used instead -- but a `graph.json` placed next to the executable
+    still wins, so a shipped tool can be re-pointed at a different graph
+    without rebuilding it.
+    """
+    bundled = getattr(sys, "_MEIPASS", None)
+    if bundled:
+        beside_exe = Path(sys.executable).parent / "graph.json"
+        if beside_exe.is_file():
+            return beside_exe
+        return Path(bundled) / "graph.json"
+    return Path("graph.json")
+
 try:
     from app.models.graph import Graph
+    from app.services import ai_settings
     from app.services.graph_executor import (
         apply_runtime_values,
         execute_graph,
@@ -69,6 +90,16 @@ async def run(graph_path: str, extra_inputs: dict) -> None:
 
     graph = Graph.model_validate_json(path.read_text(encoding="utf-8"))
 
+    # execute_graph() publishes this itself, but do it here too so the banner
+    # below reports the AI this run will actually use rather than the bare
+    # fallback -- the graph's own default is the last thing still missing at
+    # this point (CLI flags and env vars were already in place).
+    ai_defaults = graph.metadata.ai_defaults
+    ai_settings.set_graph_defaults(
+        str(getattr(ai_defaults.provider, "value", ai_defaults.provider) or ""),
+        ai_defaults.model,
+    )
+
     # Inject explicit CLI overrides into any node's config.value (by node ID)
     if extra_inputs:
         for node in graph.nodes:
@@ -102,7 +133,15 @@ async def run(graph_path: str, extra_inputs: dict) -> None:
         resolved[key] = answer or default
     apply_runtime_values(graph, resolved)
 
-    print(f"Executing graph: {graph.metadata.name!r}", file=sys.stderr)
+    ai = ai_settings.describe()
+    forced = " [forced for every node]" if ai["force"] else ""
+    where = ai["settings_file"] if ai["settings_file_exists"] else f"{ai['settings_file']} (not present)"
+    print(
+        f"Executing graph: {graph.metadata.name!r}\n"
+        f"  AI default: {ai['provider']} / {ai['model']}{forced}\n"
+        f"  AI settings file: {where}",
+        file=sys.stderr,
+    )
     result = await execute_graph(graph)
 
     output = result.model_dump()
@@ -125,8 +164,8 @@ def main() -> None:
         epilog=__doc__,
     )
     parser.add_argument(
-        "graph", nargs="?", default="graph.json",
-        help="Path to the graph JSON file (default: graph.json in the current directory)",
+        "graph", nargs="?", default=None,
+        help="Path to the graph JSON file (default: graph.json next to this script/executable)",
     )
     parser.add_argument(
         "--inputs",
@@ -141,7 +180,28 @@ def main() -> None:
         default=None,
         help="Override inputs as a JSON object",
     )
+    # Configure the AI once, for this run, instead of per node. Nodes left at
+    # the `default` provider follow this; --ai-force also overrides nodes that
+    # pin a provider of their own. Without these flags the same setting can
+    # come from AI_GRAPH_AI_PROVIDER/AI_GRAPH_AI_MODEL, from an
+    # ai-settings.json next to this script/executable, or from the graph's own
+    # metadata.ai_defaults -- see app/services/ai_settings.py.
+    parser.add_argument(
+        "--ai-provider", default="", metavar="NAME",
+        help="AI provider for this run: ollama | lmstudio | openai | anthropic | "
+             "openai_compatible | github_copilot",
+    )
+    parser.add_argument(
+        "--ai-model", default="", metavar="MODEL",
+        help="Model name for this run (e.g. llama3, qwen2.5-coder-7b, gpt-4o)",
+    )
+    parser.add_argument(
+        "--ai-force", action="store_true",
+        help="Also override AI nodes that pin their own provider",
+    )
     args = parser.parse_args()
+
+    ai_settings.set_override(args.ai_provider, args.ai_model, args.ai_force)
 
     extra: dict = {}
     if args.json_inputs:
@@ -149,7 +209,7 @@ def main() -> None:
     if args.inputs:
         extra.update(parse_kv(args.inputs))
 
-    asyncio.run(run(args.graph, extra))
+    asyncio.run(run(args.graph or str(_default_graph_path()), extra))
 
 
 if __name__ == "__main__":

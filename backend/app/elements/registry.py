@@ -5,6 +5,7 @@ from typing import Dict
 from app.elements.ai.ai_element import AIElement
 from app.elements.base import GuiWidgetElement, NodeElement
 from app.elements.code.code_element import CodeElement
+from app.elements.data.data_element import DataElement
 from app.elements.gui.gui_element import GuiElement
 from app.elements.gui.widgets.input_picker.input_picker_element import InputPickerElement
 from app.elements.gui.widgets.plot_window.plot_window_element import PlotWindowElement
@@ -23,6 +24,7 @@ NODE_ELEMENTS: Dict[NodeType, NodeElement] = {
     NodeType.INPUT:            _input,
     NodeType.AI:               AIElement(),
     NodeType.CODE:             CodeElement(),
+    NodeType.DATA:             DataElement(),
     NodeType.OUTPUT:           _output,
     NodeType.GUI:              _gui,
     # A WIDGET node is a GUI node whose `gui_widgets` holds exactly one widget --

@@ -10,15 +10,17 @@ function blankConfig() {
     select_all_files: true,
     selector_prompt: '',
     selector_code: '',
-    ai_provider: 'ollama' as const,
-    ai_model: 'llama3',
-    gen_ai_provider: 'ollama' as const,
-    gen_ai_model: 'llama3',
+    ai_provider: 'default' as const,
+    ai_model: '',
     system_prompt: '',
     temperature: 0.7,
     language: 'python',
     code: '',
     code_prompt: '',
+    data_value: null,
+    data_format: 'text' as const,
+    data_prompt: '',
+    data_format_prompt: '',
     config_context_file: '',
     output_format: 'text' as const,
     output_format_prompt: '',
@@ -26,8 +28,6 @@ function blankConfig() {
     output_label: 'Result',
     write_mode: 'none' as const,
     batch_mode: 'per_item' as const,
-    separator: '\n',
-    merge_mode: 'concat' as const,
     read_file_inputs: false,
     gui_widgets: [],
     gui_grid_columns: 12,
@@ -51,11 +51,27 @@ function graphNode(overrides: Partial<GraphNode>): GraphNode {
 
 function loadTestGraph(nodes: GraphNode[], edges: Graph['edges'] = []) {
   useGraphStore.getState().loadGraph({
-    metadata: { name: 'Test', version: '1.0.0', description: '', author: '', tags: [] },
+    metadata: {
+      name: 'Test', version: '1.0.0', description: '', author: '', tags: [],
+      ai_defaults: { provider: 'default', model: '' },
+    },
     nodes,
     edges,
   });
 }
+
+describe('graphStore.currentFilePath', () => {
+  it('resets to null on loadGraph, and can be set explicitly by the caller afterward', () => {
+    useGraphStore.getState().setCurrentFilePath('/tmp/example.json');
+    expect(useGraphStore.getState().currentFilePath).toBe('/tmp/example.json');
+
+    loadTestGraph([]);
+    expect(useGraphStore.getState().currentFilePath).toBeNull();
+
+    useGraphStore.getState().setCurrentFilePath('/tmp/loaded.json');
+    expect(useGraphStore.getState().currentFilePath).toBe('/tmp/loaded.json');
+  });
+});
 
 describe('graphStore.updateNode edge pruning', () => {
   it('removes edges attached to ports no longer present after an update', () => {
@@ -146,6 +162,50 @@ describe('graphStore width/height persistence', () => {
 });
 
 describe('graphStore memory-feedback settle', () => {
+  it('persists an acyclic data-node update for the next run', () => {
+    const data = graphNode({ id: 'data1', node_type: 'data', config: { ...blankConfig(), data_value: 'old value' } });
+    loadTestGraph([data]);
+
+    useGraphStore.getState().setExecutionResult({
+      status: 'success',
+      node_results: [{ node_id: 'data1', status: 'success', inputs: { input: 'new value' }, outputs: { output: 'new value' } }],
+    } as any);
+
+    const loadedData = useGraphStore.getState().rfNodes[0].data.graphNode;
+    expect(loadedData.config.data_value).toBe('new value');
+  });
+
+  it('persists a cycle-closing edge into a data node for the next run', () => {
+    const data = graphNode({
+      id: 'data1',
+      node_type: 'data',
+      inputs: [{ id: 'input', name: 'Update', kind: 'input', data_type: 'any', multi: false, required: false, description: '' }],
+      outputs: [{ id: 'output', name: 'Value', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }],
+      config: { ...blankConfig(), data_value: 'old value' },
+    });
+    const code = graphNode({
+      id: 'code1',
+      node_type: 'code',
+      inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: false, required: false, description: '' }],
+      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }],
+    });
+    loadTestGraph([data, code], [
+      { id: 'read', source_node_id: 'data1', source_port_id: 'output', target_node_id: 'code1', target_port_id: 'input' },
+      { id: 'write', source_node_id: 'code1', source_port_id: 'output', target_node_id: 'data1', target_port_id: 'input' },
+    ]);
+
+    useGraphStore.getState().setExecutionResult({
+      status: 'success',
+      node_results: [
+        { node_id: 'data1', status: 'success', inputs: {}, outputs: { output: 'old value' } },
+        { node_id: 'code1', status: 'success', inputs: {}, outputs: { output: 'new value' } },
+      ],
+    } as any);
+
+    const loadedData = useGraphStore.getState().rfNodes.find((node) => node.id === 'data1')!.data.graphNode;
+    expect(loadedData.config.data_value).toBe('new value');
+  });
+
   it('persists a cycle-closing edge\'s fresh value into the target widget for the next run', () => {
     const widget = createGuiWidget('text_io', 'Answer');
     const gui = graphNode({

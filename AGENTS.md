@@ -131,6 +131,7 @@ DSL-breaking change and is out of scope for the element refactor.
 | `input` | `backend/app/elements/input/input_element.py` | `frontend/src/elements/input/inputElement.ts` + `InputEditor.tsx` (same folder) |
 | `ai` | `.../elements/ai/ai_element.py` | `.../elements/ai/aiElement.ts` + `AIEditor.tsx` |
 | `code` | `.../elements/code/code_element.py` **(reference)** | `.../elements/code/codeElement.ts` + `CodeEditor.tsx` **(reference)** |
+| `data` | `.../elements/data/data_element.py` | `.../elements/data/dataElement.ts` + `DataEditor.tsx` |
 | `output` | `.../elements/output/output_element.py` | `.../elements/output/outputElement.ts` + `OutputEditor.tsx` |
 | `gui` | `.../elements/gui/gui_element.py` **(Composite, see above)** | `.../elements/gui/guiElement.ts` + `GuiEditor.tsx` (wraps `components/GuiWidgetEditor.tsx`) |
 
@@ -170,9 +171,9 @@ and runtime widget; shared shells dispatch through the registry and need no kind
 - `frontend/src/components/gui/layout.ts` — pure grid-resolution helper (fallback to list order); unit-tested in `layout.test.ts`.
 - `frontend/src/components/gui/widgetProps.ts` — the shared `{ widget, value, onChange }` contract every runtime widget implements.
 
-## Memory-feedback edges (gui/widget nodes)
-A `gui`/`widget` node is a **memory element**: its output reflects its own persisted
-`GuiWidget.value` rather than being freshly recomputed from inputs each round. This is
+## Memory-feedback edges (data/gui/widget nodes)
+A `data`, `gui`, or `widget` node is a **memory element**: its output can reflect its own
+persisted state rather than being freshly recomputed from inputs each round. This is
 what lets a `gui -> ai -> gui` graph run at all despite being a cycle at node level — an
 edge feeding one of a memory node's input ports is automatically excluded from cycle
 detection and topological ordering, exactly when needed to break a cycle, with no manual
@@ -188,8 +189,8 @@ memory-targeting edge as feedback at a time until the graph is acyclic; used by
 `_topological_sort`/`_topological_levels`/`_collect_inputs`/`_blocked_required_port`),
 and `_settle_memory_feedback` — a same-round pass that runs after all topological
 levels finish executing, writing each feedback edge's fresh source value directly into
-the target widget's persisted `value` (read by the *next* round's output) and into that
-round's own `NodeResult.inputs` (so the frontend, which already prioritizes
+the target data node's `config.data_value` or widget's persisted `value` (read by the
+*next* round's output) and into that round's own `NodeResult.inputs` (so the frontend, which already prioritizes
 `nodeResult.inputs[widget_id + "_in"]` for display in `GuiWindow.tsx`, shows the fresh
 value immediately, same round). A deploy bundle vendors `graph_executor.py` verbatim, so
 this logic never needs a second implementation for deploy. It is never per-node-type: no
@@ -197,13 +198,10 @@ this logic never needs a second implementation for deploy. It is never per-node-
 
 `frontend/src/store/graphStore.ts` mirrors the same cycle-detection algorithm
 (`memoryFeedbackEdgeIds`) purely to know, after receiving an `ExecutionResult`, which
-edges' delivered values to persist into the target widget's own `config.gui_widgets[...].value`
-client-side — this is what makes the loop actually progress across separate "Run" clicks
-in the editor, since each API call is otherwise stateless.
-
-A more general **memory element** — one that can read and write data within the *same*
-cycle, like a register update, rather than relying on the gui/widget-only automatic
-exclusion above — is a planned future addition, not yet implemented.
+edges' delivered values to persist into the target data node's `config.data_value` or
+widget's own `config.gui_widgets[...].value` client-side. Successful acyclic data-node
+outputs are persisted too. This is what makes memory progress across separate "Run"
+clicks in the editor, since each API call is otherwise stateless.
 
 ## One-time legacy migrations
 
@@ -240,6 +238,80 @@ Batching is also shared, and lives in `backend/app/services/batching.py`
 and any element's `execute` can import it without a circular-import trick. Since a
 deploy bundle vendors `batching.py` verbatim (see below), there is no second copy of
 this behavior that could drift from the editor's.
+
+## Where the AI configuration lives (two different questions)
+
+There are two AI choices in this system and they deliberately live in different
+places. Do not merge them, and do not add a third copy of either:
+
+| Question | Lives in | Set once in |
+|---|---|---|
+| Which AI **writes** my code/prompts? | `frontend/src/store/settingsStore.ts` (localStorage), server fallback `AI_GRAPH_GEN_PROVIDER`/`AI_GRAPH_GEN_MODEL` | ⚙ Settings in the editor toolbar |
+| Which AI does the graph **call when it runs**? | `metadata.ai_defaults` in the graph DSL | ⚙ Settings, and overridable at run time |
+
+The generation AI is a property of the workstation, not of the graph: it never
+affects execution, it is the same for every node, and a graph shared with a
+colleague should not carry someone's model choice. It used to be
+`NodeConfig.gen_ai_provider`/`gen_ai_model` plus a per-widget copy on
+`GuiWidget`; those fields are gone (old graphs load fine -- pydantic's default
+`extra="ignore"` drops them). Every ✨ Generate call spreads `genAI()` from the
+settings store into its request body, so there is exactly one place in the
+frontend that decides which AI generates, and `routers/ai.py`'s `_gen_target`
+is the one place on the backend that fills in a missing choice.
+
+The runtime AI is resolved in exactly one place too:
+`app/services/ai_settings.py`, called from `ai_service.complete()`. An `ai`
+node's `ai_provider` defaults to `AIProvider.DEFAULT` ("follow the run"); a node
+that names a real provider keeps it. Precedence, highest first:
+
+1. a run-level override -- `--ai-provider`/`--ai-model` (CLI, `serve.py`), or
+   the deployed GUI's settings panel
+2. `AI_GRAPH_AI_PROVIDER` / `AI_GRAPH_AI_MODEL`
+3. `ai-settings.json` (cwd, next to the executable, `$AI_GRAPH_SETTINGS`, or
+   `~/.ai-graph/settings.json`) -- which also carries endpoints and API keys, so
+   a double-clicked executable is configurable with no environment variables
+4. the graph's own `metadata.ai_defaults`, published by `execute_graph()`
+5. `ollama` / `llama3`
+
+`--ai-force` (or `AI_GRAPH_AI_FORCE=1`, or `"force": true` in the settings file)
+also overrides nodes that pin their own provider.
+
+`ai_settings.py` is vendored into every bundle, so editor, CLI and deployed tool
+resolve the AI identically. An element never participates in this: `AIElement`
+passes its node's configured pair to `complete()` and knows nothing else, and
+`graph_executor` publishes the graph default because an element never sees the
+graph it lives in.
+
+## The deploy bundle's three entry points
+
+Every script a bundle ships is a repo file copied verbatim -- the same rule that
+keeps the engine from drifting, applied to the runner:
+
+| Bundle file | Repo file | When it ships |
+|---|---|---|
+| `main.py` | `graph-runner/run.py` | always -- the CLI |
+| `serve.py` | `graph-runner/serve.py` | when the graph has an interactive node **and** `frontend/dist/runtime.html` exists |
+| `build_exe.py` | `graph-runner/build_exe.py` | always -- PyInstaller one-file build |
+
+`build_exe.py` turns a bundle into a single executable that needs no Python on
+the target machine; `main.py`'s `_default_graph_path()` is what makes the
+embedded `graph.json` findable there (and lets one dropped beside the executable
+win, so a shipped tool can be re-pointed at an edited graph without a rebuild).
+
+**GUI runtime.** A `gui`/`widget` node's `deploy_needs` sets
+`interactive_ui=True`; `deploy_service._serves_gui` combines that with the
+presence of a built frontend. When both hold, the bundle also gets `static/`
+(the built `frontend/dist`, as bytes -- the bundle dict is
+`Dict[str, str | bytes]`) and `fastapi`/`uvicorn` in `requirements.txt`.
+`serve.py` serves `runtime.html`, which mounts
+`frontend/src/runtime/RuntimeApp.tsx`: the editor's own graph store and
+`GuiWindowLayer`, with the canvas removed. **There is no second widget
+implementation** -- a deployed tool renders through the exact components the
+designer previewed, which is the whole reason this is a web runtime and not a
+native one. `serve.py` defines its handful of endpoints inline rather than
+vendoring `app/routers/*`: a deployed tool must not offer code generation or
+file browsing. Without a built frontend the graph still deploys, headless, and
+the generated README says why.
 
 ## Deploying a graph — vendored-runtime bundles, not codegen
 

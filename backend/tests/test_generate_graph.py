@@ -59,7 +59,10 @@ This graph feeds a literal greeting into an output node.
 
 @pytest.mark.asyncio
 async def test_generate_graph_parses_valid_fenced_json(monkeypatch):
+    captured = {}
+
     async def fake_complete(prompt, system, model, temperature, provider):
+        captured["system"] = system
         return VALID_GRAPH_JSON
 
     monkeypatch.setattr(ai_service, "complete", fake_complete)
@@ -73,6 +76,8 @@ async def test_generate_graph_parses_valid_fenced_json(monkeypatch):
     graph = Graph.model_validate(graph_dict)
     assert len(graph.nodes) == 2
     assert len(graph.edges) == 1
+    assert "input, data, ai, code, output, gui" in captured["system"]
+    assert "Define data nodes before code or ai nodes" in captured["system"]
 
 
 @pytest.mark.asyncio
@@ -90,7 +95,10 @@ async def test_generate_graph_raises_on_malformed_json(monkeypatch):
 async def test_gui_node_with_plot_window_executes_without_crashing():
     gui = GraphNode(
         id="gui", node_type=NodeType.GUI, label="Plot",
-        config=NodeConfig(gui_widgets=[GuiWidget(id="w1", kind=GuiWidgetKind.PLOT_WINDOW)]),
+    config=NodeConfig(gui_widgets=[GuiWidget(
+      id="w1", kind=GuiWidgetKind.PLOT_WINDOW,
+      code="def run(inputs):\n    return {'value': inputs.get('value')}\n",
+    )]),
     )
     text_in = GraphNode(
         id="in", node_type=NodeType.INPUT, label="Input",

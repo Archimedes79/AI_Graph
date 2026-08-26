@@ -42,6 +42,11 @@ Thumbs.db
 
 # Data
 data/
+!backend/app/elements/data/
+!backend/app/elements/data/**
+backend/app/elements/data/__pycache__/
+!frontend/src/elements/data/
+!frontend/src/elements/data/**
 *.log
 
 # Packaged editor deploy artifact (built by start.py --mode package)

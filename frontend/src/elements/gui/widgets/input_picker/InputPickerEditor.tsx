@@ -1,6 +1,5 @@
 import React from 'react';
 import type { GuiWidget } from '../../../../types/graph';
-import ProviderModelSelect from '../../../shared/ProviderModelSelect';
 import ContextFileAttachment from '../../../shared/ContextFileAttachment';
 
 interface InputPickerEditorProps {
@@ -74,17 +73,6 @@ export default function InputPickerEditor({ widget, onUpdate, generating, messag
               onChange={(e) => onUpdate({ selector_prompt: e.target.value })}
               placeholder="Select Markdown files that contain API documentation"
             />
-            <div className="mt-2 mb-2">
-              <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                Provider selection
-              </label>
-              <ProviderModelSelect
-                provider={widget.ai_provider ?? 'ollama'}
-                model={widget.ai_model ?? 'llama3'}
-                onProviderChange={(provider) => onUpdate({ ai_provider: provider })}
-                onModelChange={(model) => onUpdate({ ai_model: model })}
-              />
-            </div>
             <div className="mb-2">
               <ContextFileAttachment
                 label="Additional data (optional context file)"

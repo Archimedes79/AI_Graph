@@ -4,16 +4,16 @@ Graph CRUD + DSL import/export router.
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List
-from pathlib import Path
+from typing import Dict, List
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 
-from app.models.graph import Graph, GraphMetadata
+from app.models.graph import Graph
+from app.services import file_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/graphs", tags=["graphs"])
@@ -96,3 +96,40 @@ async def import_graph(file: UploadFile = File(...)):
     gid = f"graph-{len(_store) + 1}"
     _store[gid] = graph
     return {"id": gid, **graph.model_dump()}
+
+
+class GraphFileLoadRequest(BaseModel):
+    path: str
+
+
+class GraphFileSaveRequest(BaseModel):
+    path: str
+    graph: Graph
+
+
+@router.post("/file/load")
+async def load_graph_file(payload: GraphFileLoadRequest):
+    """Read a graph JSON DSL from an absolute server-side path (the editor's "Load")."""
+    resolved = file_service.resolve_path(payload.path)
+    try:
+        raw = file_service.read_file(resolved, mode="text")
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    try:
+        graph = Graph.model_validate_json(raw)
+    except Exception as exc:
+        raise HTTPException(400, f"Invalid graph JSON: {exc}") from exc
+    return {"path": resolved, "graph": graph.model_dump()}
+
+
+@router.post("/file/save")
+async def save_graph_file(payload: GraphFileSaveRequest):
+    """Write the graph JSON DSL to an absolute server-side path (the editor's "Save"/"Save
+    As"), so subsequent saves round-trip to the same file a graph was loaded from."""
+    resolved = file_service.resolve_path(payload.path)
+    payload.graph.metadata.updated_at = _now()
+    try:
+        file_service.write_file(resolved, payload.graph.model_dump_json(indent=2))
+    except OSError as exc:
+        raise HTTPException(400, f"Could not write graph file: {exc}") from exc
+    return {"path": resolved}

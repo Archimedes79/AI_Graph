@@ -1,7 +1,5 @@
 import React from 'react';
 import type { GraphNode } from '../../types/graph';
-import type { AIProvider } from '../../types/graph';
-import ProviderModelSelect from '../shared/ProviderModelSelect';
 import ContextFileAttachment from '../shared/ContextFileAttachment';
 
 interface InputEditorProps {
@@ -10,10 +8,6 @@ interface InputEditorProps {
   generating: boolean;
   handleGenerateSelectorCode: () => void;
   applyMode?: (mode: 'text' | 'file' | 'directory') => void;
-  genProvider: AIProvider;
-  genModel: string;
-  onGenProviderChange: (provider: AIProvider) => void;
-  onGenModelChange: (model: string) => void;
   contextFile: string;
   onContextFileChange: (path: string) => void;
 }
@@ -32,10 +26,6 @@ export default function InputEditor({
   generating,
   handleGenerateSelectorCode,
   applyMode,
-  genProvider,
-  genModel,
-  onGenProviderChange,
-  onGenModelChange,
   contextFile,
   onContextFileChange,
 }: InputEditorProps) {
@@ -123,17 +113,6 @@ export default function InputEditor({
             onChange={(e) => setConfig('selector_prompt', e.target.value)}
             placeholder="Select Markdown files that contain API documentation"
           />
-          <div className="mt-3">
-            <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-              Provider selection
-            </label>
-            <ProviderModelSelect
-              provider={genProvider}
-              model={genModel}
-              onProviderChange={onGenProviderChange}
-              onModelChange={onGenModelChange}
-            />
-          </div>
           <div className="mt-3">
             <ContextFileAttachment
               label="Additional data (optional context file)"

@@ -21,6 +21,7 @@ class NodeType(str, Enum):
     INPUT = "input"  # unified: text | file | directory
     AI = "ai"
     CODE = "code"
+    DATA = "data"
     OUTPUT = "output"
     GUI = "gui"
     WIDGET = "widget"  # a single GuiWidget standalone on the canvas -- see gui_element.py
@@ -41,6 +42,11 @@ class DataType(str, Enum):
 
 
 class AIProvider(str, Enum):
+    # "Whatever this run is configured to use" -- the default for a new AI
+    # node, resolved once per run by app.services.ai_settings (env var, an
+    # ai-settings.json next to the deployed tool, or the graph's own
+    # metadata.ai_defaults). Naming a real provider below pins the node to it.
+    DEFAULT = "default"
     OLLAMA = "ollama"
     OPENAI = "openai"
     OPENAI_COMPATIBLE = "openai_compatible"
@@ -98,8 +104,11 @@ class GuiWidget(BaseModel):
     select_all_files: bool = True
     selector_prompt: str = ""
     selector_code: str = ""          # run(inputs: {files}) -> {files}
-    ai_provider: AIProvider = AIProvider.OLLAMA
-    ai_model: str = "llama3"
+    # No per-widget generation provider/model: every design-time "Generate"
+    # call in the editor uses the one editor-wide code-generation AI (a
+    # workstation setting, not graph data -- see frontend/src/store/
+    # settingsStore.ts). Widgets written before that carried ai_provider /
+    # ai_model here; pydantic's default extra="ignore" drops them on load.
 
     # Optional data-transform snippet for display-only widgets (currently plot_window).
     # Same contract as a CODE node: exposes run(inputs: dict) -> dict, executed via the
@@ -138,24 +147,37 @@ class NodeConfig(BaseModel):
     selector_prompt: str = ""
     selector_code: str = ""              # run(inputs: {files}) -> {files}
 
-    # ai node -- runtime inference call only (the node's own execute())
-    ai_provider: AIProvider = AIProvider.OLLAMA
-    ai_model: str = "llama3"
+    # ai node -- runtime inference call only (the node's own execute()).
+    # DEFAULT means "follow this run's AI configuration" (see AIProvider.DEFAULT
+    # and app.services.ai_settings), which is what lets one deployed graph be
+    # pointed at a local LM Studio or a hosted endpoint without editing it.
+    # Naming a provider here pins this node to it regardless.
+    ai_provider: AIProvider = AIProvider.DEFAULT
+    ai_model: str = ""                   # "" -> the run's configured model
     system_prompt: str = ""
     temperature: float = 0.7
 
-    # Every design-time ✨ Generate call (code, system prompt, selector code,
-    # output format) shares this one provider/model pair -- deliberately not
-    # split per-purpose, and deliberately separate from ai_provider/ai_model
-    # above so inference can stay on a cheap/local model while generation
-    # uses a stronger one.
-    gen_ai_provider: AIProvider = AIProvider.OLLAMA
-    gen_ai_model: str = "llama3"
+    # NOTE: there are deliberately no gen_ai_provider/gen_ai_model fields here.
+    # Which AI writes your code and prompts is a property of the workstation
+    # doing the authoring, not of the graph: it never affects execution, it is
+    # the same for every node, and a graph shared with someone else should not
+    # carry your model choice. It lives in one editor-wide setting instead
+    # (frontend/src/store/settingsStore.ts, with AI_GRAPH_GEN_PROVIDER /
+    # AI_GRAPH_GEN_MODEL as the server-side fallback). Older graphs carrying
+    # these fields load unchanged -- pydantic's default extra="ignore".
 
     # code node
     language: str = "python"             # python | javascript
     code: str = ""                       # generated / user-written code
     code_prompt: str = ""                # stored AI prompt used to generate the code
+
+    # data node -- a persisted value plus its design-time format contract.
+    # The value is updated after a cycle-closing feedback edge settles, making
+    # the node a deterministic register rather than a runtime AI call.
+    data_value: Optional[Any] = None
+    data_format: Literal["text", "structure"] = "text"
+    data_prompt: str = ""
+    data_format_prompt: str = ""
 
     # Config tab -- optional context file (path) whose content is appended as
     # extra context to every ✨ Generate call in the Config tab (code, system
@@ -429,6 +451,19 @@ class GraphEdge(BaseModel):
     # it. See graph_executor.py's "memory feedback" section and AGENTS.md.
 
 
+class AIDefaults(BaseModel):
+    """
+    The graph's own answer to "which AI should my `default` AI nodes use?",
+    set once in the editor instead of once per node. It is the lowest-priority
+    source: an AI_GRAPH_AI_PROVIDER environment variable, an ai-settings.json
+    beside the deployed tool, or a CLI flag all override it at run time, which
+    is how the same shipped graph runs against a local model on one machine
+    and a hosted endpoint on another. See app.services.ai_settings.
+    """
+    provider: AIProvider = AIProvider.DEFAULT
+    model: str = ""
+
+
 class GraphMetadata(BaseModel):
     name: str = "Untitled Graph"
     version: str = "1.0.0"
@@ -437,6 +472,7 @@ class GraphMetadata(BaseModel):
     tags: List[str] = Field(default_factory=list)
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    ai_defaults: AIDefaults = Field(default_factory=AIDefaults)
 
 
 class Graph(BaseModel):
@@ -515,8 +551,12 @@ class GenerateCodeRequest(BaseModel):
     context_file: str = ""            # optional path; content is appended to context server-side
     inputs: List[str] = Field(default_factory=list)
     outputs: List[str] = Field(default_factory=list)
-    ai_provider: AIProvider = AIProvider.OLLAMA
-    ai_model: str = "llama3"
+    # Empty/DEFAULT -> the server's own code-generation default
+    # (AI_GRAPH_GEN_PROVIDER / AI_GRAPH_GEN_MODEL, or ai-settings.json's
+    # "codegen" section). The editor normally sends its one configured
+    # generation AI explicitly; see ai_settings.resolve_gen_target.
+    ai_provider: AIProvider = AIProvider.DEFAULT
+    ai_model: str = ""
 
 
 class GenerateCodeResponse(BaseModel):
@@ -529,8 +569,12 @@ class GeneratePromptRequest(BaseModel):
     description: str
     context: str = ""
     context_file: str = ""            # optional path; content is appended to context server-side
-    ai_provider: AIProvider = AIProvider.OLLAMA
-    ai_model: str = "llama3"
+    # Empty/DEFAULT -> the server's own code-generation default
+    # (AI_GRAPH_GEN_PROVIDER / AI_GRAPH_GEN_MODEL, or ai-settings.json's
+    # "codegen" section). The editor normally sends its one configured
+    # generation AI explicitly; see ai_settings.resolve_gen_target.
+    ai_provider: AIProvider = AIProvider.DEFAULT
+    ai_model: str = ""
 
 
 class GeneratePromptResponse(BaseModel):
@@ -543,8 +587,12 @@ class GenerateOutputFormatRequest(BaseModel):
     description: str
     context: str = ""
     context_file: str = ""            # optional path; content is appended to context server-side
-    ai_provider: AIProvider = AIProvider.OLLAMA
-    ai_model: str = "llama3"
+    # Empty/DEFAULT -> the server's own code-generation default
+    # (AI_GRAPH_GEN_PROVIDER / AI_GRAPH_GEN_MODEL, or ai-settings.json's
+    # "codegen" section). The editor normally sends its one configured
+    # generation AI explicitly; see ai_settings.resolve_gen_target.
+    ai_provider: AIProvider = AIProvider.DEFAULT
+    ai_model: str = ""
 
 
 class GenerateOutputFormatResponse(BaseModel):
@@ -556,8 +604,12 @@ class GenerateGraphRequest(BaseModel):
     """Ask the AI to author a full Graph DSL document, not just one node."""
     description: str
     context: str = ""
-    ai_provider: AIProvider = AIProvider.OLLAMA
-    ai_model: str = "llama3"
+    # Empty/DEFAULT -> the server's own code-generation default
+    # (AI_GRAPH_GEN_PROVIDER / AI_GRAPH_GEN_MODEL, or ai-settings.json's
+    # "codegen" section). The editor normally sends its one configured
+    # generation AI explicitly; see ai_settings.resolve_gen_target.
+    ai_provider: AIProvider = AIProvider.DEFAULT
+    ai_model: str = ""
 
 
 class GenerateGraphResponse(BaseModel):

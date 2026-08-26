@@ -1,7 +1,5 @@
 import React from 'react';
 import type { GraphNode } from '../../types/graph';
-import type { AIProvider } from '../../types/graph';
-import ProviderModelSelect from '../shared/ProviderModelSelect';
 import ContextFileAttachment from '../shared/ContextFileAttachment';
 
 interface CodeEditorProps {
@@ -9,10 +7,6 @@ interface CodeEditorProps {
   setConfig: (key: string, value: unknown) => void;
   generating: boolean;
   handleGenerateCode: () => void;
-  genProvider: AIProvider;
-  genModel: string;
-  onGenProviderChange: (provider: AIProvider) => void;
-  onGenModelChange: (model: string) => void;
   contextFile: string;
   onContextFileChange: (path: string) => void;
 }
@@ -22,10 +16,6 @@ export default function CodeEditor({
   setConfig,
   generating,
   handleGenerateCode,
-  genProvider,
-  genModel,
-  onGenProviderChange,
-  onGenModelChange,
   contextFile,
   onContextFileChange,
 }: CodeEditorProps) {
@@ -51,18 +41,6 @@ export default function CodeEditor({
           value={node.config.code_prompt}
           onChange={(e) => setConfig('code_prompt', e.target.value)}
           placeholder="Describe what the generated code should do."
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-          Provider selection
-        </label>
-        <ProviderModelSelect
-          provider={genProvider}
-          model={genModel}
-          onProviderChange={onGenProviderChange}
-          onModelChange={onGenModelChange}
         />
       </div>
 
