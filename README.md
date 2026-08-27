@@ -308,6 +308,39 @@ Two separate settings, both behind **⚙ Settings** in the toolbar:
   `metadata.ai_defaults`; every AI node left on *"Use the graph's default"* follows
   it, so a graph with eight AI nodes is configured once.
 
+### Where the API key goes
+
+**⚙ Settings only picks a provider and model — it has no key field.** A hosted provider
+reads its credential from the environment, or from an `ai-settings.json`:
+
+```json
+{
+  "codegen":  { "provider": "anthropic", "model": "claude-sonnet-4-5" },
+  "ai":       { "provider": "lmstudio",  "model": "qwen2.5-coder-7b" },
+  "api_keys": { "anthropic": "sk-ant-…", "openai": "", "github": "", "openai_compatible": "" },
+  "endpoints": { "lmstudio_base_url": "http://localhost:1234/v1" }
+}
+```
+
+`codegen` is the AI that answers ✨ Generate, `ai` the one the graph calls when it runs —
+so you can generate with a strong hosted model and execute against a local one. The file
+is looked up in the working directory, next to the executable, at `$AI_GRAPH_SETTINGS`,
+and finally `~/.ai-graph/settings.json`. Restart the backend after editing it.
+
+Two provider names are worth spelling out:
+
+- **Anthropic** needs an API key from [console.anthropic.com](https://console.anthropic.com)
+  (`ANTHROPIC_API_KEY`, or `api_keys.anthropic`). A locally installed Claude Desktop or
+  Claude Code is *not* an endpoint this can call — those are applications, not an API
+  server on your machine, so there is nothing to point a base URL at.
+- **GitHub Copilot** in the provider list means the [GitHub Models](https://models.github.ai)
+  API, which is OpenAI-compatible. It authenticates with a GitHub personal access token
+  (`GITHUB_TOKEN`, or `api_keys.github`) that has the `models:read` scope — not with a
+  Copilot editor subscription, which exposes no API of its own.
+
+Anything else that speaks the OpenAI protocol — a proxy, a gateway, a self-hosted
+server — goes in as **OpenAI-compatible endpoint** with its own base URL and key.
+
 A deployed graph can be re-pointed at a different runtime AI without editing it, highest
 precedence first: `--ai-provider`/`--ai-model` (CLI or the deployed GUI's settings
 panel) → `AI_GRAPH_AI_PROVIDER`/`AI_GRAPH_AI_MODEL` → an `ai-settings.json` next to the
