@@ -56,4 +56,4 @@ class AIElement(NodeElement):
         return reconcile_outputs(node, {"output": response})
 
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
-        return DeployNeeds(ai=True, read_file_inputs=node.config.read_file_inputs)
+        return DeployNeeds(ai=True)

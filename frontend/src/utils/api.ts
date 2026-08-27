@@ -83,6 +83,15 @@ export const generateGraph = (body: {
 export const getRuntimeGraph = (): Promise<Graph> =>
   api.get('/runtime/graph').then((r) => r.data);
 
+export interface ProviderStatus {
+  local: Record<string, { reachable: boolean; models: string[] }>;
+  runtime_target: { provider: string; model: string };
+  gen_target: { provider: string; model: string };
+}
+
+export const getProviderStatus = (): Promise<ProviderStatus> =>
+  api.get('/ai/providers').then((r) => r.data);
+
 export interface RuntimeAISettingsPayload {
   settings: { ai?: { provider?: string; model?: string } };
   effective: { provider: string; model: string; settings_file: string };

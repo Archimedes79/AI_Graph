@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "name": "Hello World",
+    "version": "1.0.0",
+    "description": "The smallest possible graph: a text input wired straight to a result window.",
+    "author": "",
+    "tags": ["example"],
+    "ai_defaults": { "provider": "default", "model": "" }
+  },
+  "nodes": [
+    {
+      "id": "greeting",
+      "node_type": "input",
+      "label": "Greeting",
+      "description": "Prompts on the command line; pressing Enter keeps the default below.",
+      "position": { "x": 80, "y": 120 },
+      "inputs": [],
+      "outputs": [
+        { "id": "output", "name": "Output", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+      ],
+      "config": { "value": "Hello, World!", "input_mode": "text", "prompt_at_runtime": true }
+    },
+    {
+      "id": "result",
+      "node_type": "output",
+      "label": "Result",
+      "description": "",
+      "position": { "x": 420, "y": 120 },
+      "inputs": [
+        { "id": "value", "name": "Value", "kind": "input", "data_type": "any", "multi": true, "required": false, "description": "" }
+      ],
+      "outputs": [],
+      "config": { "output_label": "Hello Result", "write_mode": "window" }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source_node_id": "greeting", "source_port_id": "output", "target_node_id": "result", "target_port_id": "value" }
+  ]
+}

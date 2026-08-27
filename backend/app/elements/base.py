@@ -27,10 +27,14 @@ class DeployNeeds:
     via `|`. All fields default to False: most elements need nothing extra.
     """
 
-    files: bool = False          # file_service helpers (resolve_path, read/write, ...)
-    code_runner: bool = False    # sandboxed Python/JS execute_code helper
-    ai: bool = False             # ai_service completion helper
-    read_file_inputs: bool = False  # implies `files` too; see generate_runner_script
+    # Only needs that actually change the bundle belong here. `file_service`
+    # and `code_executor` are stdlib-only and vendored unconditionally, so
+    # "this node reads files" or "this node runs code" can never affect what
+    # gets shipped -- fields for those existed, were computed by six elements,
+    # and were read by nobody. Add one back the moment a need genuinely changes
+    # the bundle; that is exactly what this class is for.
+
+    ai: bool = False             # -> httpx in requirements.txt
     # This node has an interface a user operates while the graph runs, so the
     # bundle must ship the web runtime (serve.py + the built page) rather than
     # falling back to console prompts. Set by the gui element; deploy_service
@@ -39,10 +43,7 @@ class DeployNeeds:
 
     def __or__(self, other: "DeployNeeds") -> "DeployNeeds":
         return DeployNeeds(
-            files=self.files or other.files,
-            code_runner=self.code_runner or other.code_runner,
             ai=self.ai or other.ai,
-            read_file_inputs=self.read_file_inputs or other.read_file_inputs,
             interactive_ui=self.interactive_ui or other.interactive_ui,
         )
 
@@ -130,7 +131,7 @@ class GuiWidgetElement(ABC):
         return None
 
     def deploy_needs(self, widget: GuiWidget) -> DeployNeeds:
-        """Default: a widget needs the sandboxed code runner iff it carries a
-        non-empty data-transform snippet (see GuiWidget.code); most widget kinds
-        don't need to override this."""
-        return DeployNeeds(code_runner=bool(widget.code and widget.code.strip()))
+        """What this widget needs from the deployed bundle. Default: nothing
+        extra -- the sandboxed runner a data-transform snippet uses is vendored
+        unconditionally."""
+        return DeployNeeds()

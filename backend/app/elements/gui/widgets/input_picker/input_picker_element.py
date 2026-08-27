@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.elements.base import DeployNeeds, GuiWidgetElement, widget_input_or_value
+from app.elements.base import GuiWidgetElement, widget_input_or_value
 from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
 from app.services import code_executor, file_service
 
@@ -71,10 +71,3 @@ class InputPickerElement(GuiWidgetElement):
             return None
         label = widget.label or widget.id
         return {"label": label, "kind": "directory" if _is_directory(widget) else "file"}
-
-    def deploy_needs(self, widget: GuiWidget) -> DeployNeeds:
-        is_dir = _is_directory(widget)
-        code_runner = is_dir and not widget.select_all_files and bool(
-            widget.selector_code.strip() or widget.selector_prompt.strip()
-        )
-        return DeployNeeds(files=True, code_runner=code_runner)

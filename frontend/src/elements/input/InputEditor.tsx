@@ -1,6 +1,7 @@
 import React from 'react';
 import type { GraphNode } from '../../types/graph';
 import ContextFileAttachment from '../shared/ContextFileAttachment';
+import { DIMMER, FIELD, LINE, MUTED, SUCCESS } from '../../ui/theme';
 
 interface InputEditorProps {
   node: GraphNode;
@@ -40,10 +41,10 @@ export default function InputEditor({
     <div>
       {/* Mode selector */}
       <div className="mb-4">
-          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>Mode</label>
+          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Mode</label>
           <select
             className="w-full rounded-lg px-3 py-2 text-sm"
-            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+            style={FIELD}
             value={mode}
             onChange={(e) => {
               const next = e.target.value as 'text' | 'file' | 'directory';
@@ -59,17 +60,17 @@ export default function InputEditor({
 
       {/* Default value / path */}
       <div className="mb-4">
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           {isText ? 'Default Text (shown in the run dialog)' : 'Default Path (shown in the run dialog)'}
         </label>
         <input
           className="w-full rounded-lg px-3 py-2 text-sm"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+          style={FIELD}
           value={node.config.value ?? ''}
           onChange={(e) => setConfig('value', e.target.value)}
           placeholder={isText ? 'Enter default text…' : isDirectory ? '/path/to/directory' : '/path/to/file'}
         />
-        <p className="text-xs mt-1" style={{ color: '#475569' }}>
+        <p className="text-xs mt-1" style={{ color: DIMMER }}>
           Whenever the graph runs, a dialog asks the user for this value (pre-filled with the default above).
         </p>
       </div>
@@ -77,7 +78,7 @@ export default function InputEditor({
       {/* Directory-specific options */}
       {isDirectory && (
         <>
-          <label className="flex items-center gap-2 mb-2 text-sm" style={{ color: '#94a3b8' }}>
+          <label className="flex items-center gap-2 mb-2 text-sm" style={{ color: MUTED }}>
             <input
               type="checkbox"
               checked={!!node.config.extra?.recursive}
@@ -86,12 +87,12 @@ export default function InputEditor({
             Recursive
           </label>
           <div className="mb-4">
-            <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+            <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
               File types (comma-separated, e.g. .md, .txt)
             </label>
             <input
               className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-              style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+              style={FIELD}
               value={(node.config.extra?.extensions as string) ?? ''}
               onChange={(e) => setConfig('extra', { ...node.config.extra, extensions: e.target.value })}
               placeholder="Leave empty for all file types"
@@ -102,13 +103,13 @@ export default function InputEditor({
 
       {/* AI file selector — directory mode */}
       {isDirectory && (
-        <div className="mt-4 pt-4" style={{ borderTop: '1px solid #2d3148' }}>
-          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+        <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${LINE}` }}>
+          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
             Prompt text
           </label>
           <textarea
             className="w-full rounded-lg px-3 py-2 text-sm resize-none"
-            style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 80 }}
+            style={{ ...FIELD, minHeight: 80 }}
             value={node.config.selector_prompt}
             onChange={(e) => setConfig('selector_prompt', e.target.value)}
             placeholder="Select Markdown files that contain API documentation"
@@ -121,12 +122,12 @@ export default function InputEditor({
             />
           </div>
           <div className="mt-3 mb-2">
-            <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+            <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
               Language selection
             </label>
             <select
               className="w-full rounded-lg px-3 py-2 text-sm"
-              style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+              style={FIELD}
               value={node.config.language || 'python'}
               onChange={(e) => setConfig('language', e.target.value)}
             >
@@ -134,7 +135,7 @@ export default function InputEditor({
               <option value="javascript">JavaScript</option>
             </select>
           </div>
-          <label className="flex items-center gap-2 text-sm mb-2" style={{ color: '#94a3b8' }}>
+          <label className="flex items-center gap-2 text-sm mb-2" style={{ color: MUTED }}>
             <input
               type="checkbox"
               checked={node.config.select_all_files}
@@ -145,21 +146,21 @@ export default function InputEditor({
           {!node.config.select_all_files && (
             <>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
+                <label className="text-xs font-medium" style={{ color: MUTED }}>
                   Code window (editable) — run(inputs) receives {'{'}"files"{'}'} and must return {'{'}"files"{'}'}
                 </label>
                 <button
                   onClick={handleGenerateSelectorCode}
                   disabled={generating}
                   className="text-xs px-2 py-1 rounded"
-                  style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
+                  style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}
                 >
                   {generating ? '…' : '✨ Generate'}
                 </button>
               </div>
               <textarea
                 className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-                style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 140 }}
+                style={{ ...FIELD, minHeight: 140 }}
                 value={node.config.selector_code}
                 onChange={(e) => setConfig('selector_code', e.target.value)}
                 spellCheck={false}

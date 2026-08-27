@@ -6,9 +6,13 @@ import { genAI } from '../store/settingsStore';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { inputPortsForMode } from '../elements/input/inputElement';
 import { NODE_ELEMENTS } from '../elements/registry';
+import Modal from './Modal';
+import { useGenerate } from '../elements/shared/useGenerate';
+import { SELECTOR_CODE_CONTEXT } from '../elements/shared/generationContext';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
-import { connectedDataFormatContext } from '../elements/data/dataElement';
+import { connectedDataFormatContext, connectedOutputDataNodes } from '../elements/data/dataElement';
+import { ACCENT, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT } from '../ui/theme';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -30,8 +34,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const graphEdges = useGraphStore((s) => s.rfEdges);
 
   const [node, setNode] = useState<GraphNode | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [genMessage, setGenMessage] = useState('');
+  // One state machine for all four ✨ Generate buttons in this editor.
+  const generate = useGenerate();
+  const generating = generate.busy;
+  const genMessage = generate.message();
   const [activeTab, setActiveTab] = useState<'config' | 'output' | 'preview'>('config');
 
   useEffect(() => {
@@ -68,87 +74,52 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     return connectedDataFormatContext(node.id, graphNodes, graphEdges);
   };
 
-  const handleGenerateCode = async () => {
-    const prompt = (node.config.code_prompt ?? '').trim();
-    if (!prompt) {
-      setGenMessage('Please add a code generation prompt first.');
-      return;
-    }
-    setGenerating(true);
-    setGenMessage('Generating code…');
-    try {
-      const inputNames = node.inputs.map((p) => p.id);
-      const outputNames = node.outputs.map((p) => p.id);
+  const handleGenerateCode = () => generate.run({
+    guard: () => (node.config.code_prompt ?? '').trim() ? undefined : 'Please add a code generation prompt first.',
+    pending: 'Generating code…',
+    success: '✅ Code generated!',
+    run: () => {
       const batchContext = node.config.batch_mode === 'whole_list'
         ? 'Batch mode is `whole_list`: multi input ports arrive in `inputs` as full lists. The generated function must handle or reduce those lists and must not reject an input merely because it is not a string.'
         : 'Batch mode is `per_item`: each multi input port is expanded before `run(inputs)` is called, so one scalar item from each multi port is passed per invocation.';
-      const formatContext = outputFormatContext(node.config);
-      const dataContext = connectedDataContext();
-      const generationContext = [batchContext, formatContext, dataContext].filter(Boolean).join('\n');
-      const result = await generateCode({
-        description: prompt,
+      return generateCode({
+        description: (node.config.code_prompt ?? '').trim(),
         language: node.config.language,
-        context: generationContext,
+        context: [batchContext, outputFormatContext(node.config), connectedDataContext()].filter(Boolean).join('\n'),
         context_file: node.config.config_context_file,
-        inputs: inputNames,
-        outputs: outputNames,
+        inputs: node.inputs.map((p) => p.id),
+        outputs: node.outputs.map((p) => p.id),
         ...genAI(),
       });
-      setConfig('code', result.code);
-      setGenMessage('✅ Code generated!');
-    } catch (e: any) {
-      setGenMessage(`❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error'}`);
-    } finally {
-      setGenerating(false);
-    }
-  };
+    },
+    apply: (result) => setConfig('code', result.code),
+  });
 
-  const handleGeneratePrompt = async () => {
-    if (!node.description) {
-      setGenMessage('Please add a description first.');
-      return;
-    }
-    setGenerating(true);
-    setGenMessage('Generating system prompt…');
-    try {
-      const result = await generatePrompt({
-        description: node.description,
-        context: [outputFormatContext(node.config), connectedDataContext()].filter(Boolean).join('\n'),
-        context_file: node.config.config_context_file,
-        ...genAI(),
-      });
-      setConfig('system_prompt', result.system_prompt);
-      setGenMessage('✅ Prompt generated!');
-    } catch (e: any) {
-      setGenMessage(`❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error'}`);
-    } finally {
-      setGenerating(false);
-    }
-  };
+  const handleGeneratePrompt = () => generate.run({
+    guard: () => node.description ? undefined : 'Please add a description first.',
+    pending: 'Generating system prompt…',
+    success: '✅ Prompt generated!',
+    run: () => generatePrompt({
+      description: node.description,
+      context: [outputFormatContext(node.config), connectedDataContext()].filter(Boolean).join('\n'),
+      context_file: node.config.config_context_file,
+      ...genAI(),
+    }),
+    apply: (result) => setConfig('system_prompt', result.system_prompt),
+  });
 
-  const handleGenerateDataFormat = async () => {
-    const prompt = node.config.data_prompt?.trim();
-    if (!prompt) {
-      setGenMessage('Please describe the data format first.');
-      return;
-    }
-    setGenerating(true);
-    setGenMessage('Generating data format…');
-    try {
-      const result = await generateDataFormat({
-        description: prompt,
-        context: `Standard format family: ${node.config.data_format}.\n${connectedDataContext()}`,
-        context_file: node.config.config_context_file,
-        ...genAI(),
-      });
-      setConfig('data_format_prompt', result.output_format_prompt);
-      setGenMessage('✅ Data format generated!');
-    } catch (e: any) {
-      setGenMessage(`❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error'}`);
-    } finally {
-      setGenerating(false);
-    }
-  };
+  const handleGenerateDataFormat = () => generate.run({
+    guard: () => node.config.data_prompt?.trim() ? undefined : 'Please describe the data format first.',
+    pending: 'Generating data format…',
+    success: '✅ Data format generated!',
+    run: () => generateDataFormat({
+      description: (node.config.data_prompt ?? '').trim(),
+      context: `Standard format family: ${node.config.data_format}.\n${connectedDataContext()}`,
+      context_file: node.config.config_context_file,
+      ...genAI(),
+    }),
+    apply: (result) => setConfig('data_format_prompt', result.output_format_prompt),
+  });
 
   const applyDataFormat = (format: GraphNode['config']['data_format']) => {
     const structured = format === 'structure';
@@ -191,88 +162,87 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     });
   };
 
-  const handleGenerateSelectorCode = async () => {
-    const selectorPrompt = (node.config.selector_prompt ?? '').trim();
-    if (!selectorPrompt) {
-      setGenMessage('Please describe which files to select first.');
-      return;
-    }
-    setGenerating(true);
-    setGenMessage('Generating file selector…');
-    try {
-      const result = await generateCode({
-        description: selectorPrompt,
-        language: node.config.language || 'python',
-        context: '`inputs["files"]` is the full list of rooted file paths found in the directory. Return only the selected paths as {"files": [...]}.',
-        context_file: node.config.config_context_file,
-        inputs: ['files'],
-        outputs: ['files'],
-        ...genAI(),
-      });
-      setConfig('selector_code', result.code);
-      setGenMessage('✅ Selector generated!');
-    } catch (e: any) {
-      setGenMessage(`❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error'}`);
-    } finally {
-      setGenerating(false);
-    }
-  };
+  const handleGenerateSelectorCode = () => generate.run({
+    guard: () => (node.config.selector_prompt ?? '').trim() ? undefined : 'Please describe which files to select first.',
+    pending: 'Generating file selector…',
+    success: '✅ Selector generated!',
+    run: () => generateCode({
+      description: (node.config.selector_prompt ?? '').trim(),
+      language: node.config.language || 'python',
+      context: SELECTOR_CODE_CONTEXT,
+      context_file: node.config.config_context_file,
+      inputs: ['files'],
+      outputs: ['files'],
+      ...genAI(),
+    }),
+    apply: (result) => setConfig('selector_code', result.code),
+  });
+
+  const tabBar = (
+    <div className="flex border-b" style={{ borderColor: LINE }}>
+      {tabs.map((tab) => (
+        <button
+          key={tab}
+          className="px-5 py-3 text-sm capitalize transition-colors"
+          style={{
+            color: effectiveTab === tab ? ACCENT : MUTED,
+            borderBottom: effectiveTab === tab ? `2px solid ${ACCENT}` : '2px solid transparent',
+            background: 'transparent',
+          }}
+          onClick={() => setActiveTab(tab)}
+        >
+          {tab}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
-    >
-      <div
-        className="rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col"
-        style={{ background: '#1a1d2e', border: '1px solid #2d3148', maxHeight: '90vh' }}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-6 py-4"
-          style={{ background: '#0f1117', borderBottom: '1px solid #2d3148' }}
-        >
-          <div className="flex items-center gap-3">
-            <input
-              className="text-lg font-bold bg-transparent border-none outline-none"
-              style={{ color: '#e2e8f0' }}
-              value={node.label}
-              onChange={(e) => setNode((prev) => prev ? { ...prev, label: e.target.value } : prev)}
-            />
-          </div>
-          <button onClick={onClose} style={{ color: '#94a3b8' }} className="hover:text-white text-xl">
-            ✕
+    <Modal
+      title={
+        <input
+          className="text-lg font-bold bg-transparent border-none outline-none w-full"
+          style={{ color: TEXT }}
+          value={node.label}
+          aria-label="Node label"
+          onChange={(e) => setNode((prev) => prev ? { ...prev, label: e.target.value } : prev)}
+        />
+      }
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+      scrollBody
+      // The editor holds unsaved edits; a stray backdrop click must not throw
+      // them away. Escape is left working because it is what Cancel does.
+      dismissOnBackdrop={false}
+      subHeader={tabBar}
+      footer={
+        <>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-lg"
+            style={NEUTRAL_BUTTON}
+          >
+            Cancel
           </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b" style={{ borderColor: '#2d3148' }}>
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              className="px-5 py-3 text-sm capitalize transition-colors"
-              style={{
-                color: effectiveTab === tab ? '#6366f1' : '#94a3b8',
-                borderBottom: effectiveTab === tab ? '2px solid #6366f1' : '2px solid transparent',
-                background: 'transparent',
-              }}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <button
+            onClick={save}
+            className="px-4 py-2 text-sm rounded-lg font-semibold"
+            style={PRIMARY_BUTTON}
+          >
+            Save
+          </button>
+        </>
+      }
+    >
+      <div className="px-6 py-5">
           {node.node_type !== 'code' && node.node_type !== 'ai' && node.node_type !== 'data' && (
             <div className="mb-4">
-              <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+              <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
                 Description (optional)
               </label>
               <textarea
                 className="w-full rounded-lg px-3 py-2 text-sm resize-none"
-                style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 64 }}
+                style={{ ...FIELD, minHeight: 64 }}
                 value={node.description}
                 onChange={(e) => setNode((prev) => prev ? { ...prev, description: e.target.value } : prev)}
                 placeholder="Document what this node does…"
@@ -300,7 +270,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
               />
 
               {genMessage && (
-                <div className="text-sm px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc' }}>
+                <div className="text-sm px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: ACCENT_TEXT }}>
                   {genMessage}
                 </div>
               )}
@@ -310,42 +280,20 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           {effectiveTab === 'output' && (
             showWidgetOutputTab
               ? <WidgetOutputSummary node={node} />
-              : <OutputFormatEditor node={node} setConfig={setConfig} />
+              : <OutputFormatEditor node={node} setConfig={setConfig} connectedDataNodes={connectedOutputDataNodes(node.id, graphNodes, graphEdges)} />
           )}
 
           {effectiveTab === 'preview' && (
             <div>
               <pre
                 className="text-xs rounded-lg p-4 overflow-auto"
-                style={{ background: '#0f1117', color: '#94a3b8', border: '1px solid #2d3148', maxHeight: 400 }}
+                style={{ background: SUNKEN, color: MUTED, border: `1px solid ${LINE}`, maxHeight: 400 }}
               >
                 {JSON.stringify(node, null, 2)}
               </pre>
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div
-          className="flex items-center justify-end gap-3 px-6 py-4"
-          style={{ background: '#0f1117', borderTop: '1px solid #2d3148' }}
-        >
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg"
-            style={{ background: '#2d3148', color: '#e2e8f0' }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={save}
-            className="px-4 py-2 text-sm rounded-lg font-semibold"
-            style={{ background: '#6366f1', color: 'white' }}
-          >
-            Save
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

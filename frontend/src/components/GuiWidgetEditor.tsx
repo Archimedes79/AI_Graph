@@ -3,7 +3,10 @@ import type { GuiWidget, GuiWidgetKind } from '../types/graph';
 import { createGuiWidget, CREATABLE_GUI_WIDGET_KINDS, GUI_WIDGET_KIND_LABELS, sizeToGrid } from '../utils/guiWidgets';
 import { generateCode } from '../utils/api';
 import { genAI } from '../store/settingsStore';
+import { useGenerate } from '../elements/shared/useGenerate';
+import { PLOT_TRANSFORM_CONTEXT, SELECTOR_CODE_CONTEXT } from '../elements/shared/generationContext';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
+import { DANGER, DIMMER, FIELD_ON_SURFACE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, WELL } from '../ui/theme';
 
 interface GuiWidgetEditorProps {
   widgets: GuiWidget[];
@@ -17,11 +20,9 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
   const [newWidgetKind, setNewWidgetKind] = useState<GuiWidgetKind>('text_io');
   const [newWidgetLabel, setNewWidgetLabel] = useState('');
   const [expandedTransform, setExpandedTransform] = useState<Record<string, boolean>>({});
-  const [generatingId, setGeneratingId] = useState<string | null>(null);
-  // Shared success/error feedback for any widget's "✨ Generate" action, keyed
-  // by widget id -- mirrors NodeEditor.tsx's single genMessage banner so code
-  // generation gives the same feedback everywhere it's used.
-  const [genMessages, setGenMessages] = useState<Record<string, string>>({});
+  // Same generate state machine as the node editor, keyed per widget because
+  // this component hosts one ✨ button per widget rather than one per editor.
+  const generate = useGenerate();
 
   const addWidget = () => {
     const widget = createGuiWidget(newWidgetKind, newWidgetLabel.trim());
@@ -30,6 +31,12 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
   };
 
   const removeWidget = (index: number) => {
+    // Removing a widget removes its ports, and saving the node then prunes
+    // every edge that was attached to them -- elsewhere in the graph, out of
+    // sight. Say so rather than letting wires vanish silently.
+    const widget = widgets[index];
+    const name = widget.label || widget.id;
+    if (!window.confirm(`Remove "${name}"? Any connections to its ports will be dropped when you save this node.`)) return;
     onChange(widgets.filter((_, i) => i !== index));
   };
 
@@ -50,96 +57,50 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
     setExpandedTransform((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleGenerateTransform = async (widget: GuiWidget) => {
-    const prompt = (widget.plot_prompt ?? '').trim();
-    if (!prompt) {
-      setGenMessages((prev) => ({
-        ...prev,
-        [widget.id]: '❌ Plot prompt is required before generating transform code.',
-      }));
-      return;
-    }
-    setGeneratingId(widget.id);
-    setGenMessages((prev) => ({ ...prev, [widget.id]: '' }));
-    try {
-      const language = widget.language ?? 'python';
-      const result = await generateCode({
-        description: prompt,
-        language,
-        context:
-          'Must expose run(inputs: dict) -> dict, receiving {"value": <raw incoming data>} and returning {"value": <plot-ready data>}.',
-        context_file: (widget.example_input_path ?? '').trim() || undefined,
-        inputs: ['value'],
-        outputs: ['value'],
-        ...genAI(),
-      });
-      // Look up the widget's current position by stable id, not the index
-      // captured at click time -- the list may have been reordered/edited
-      // while this request was in flight.
-      const currentIndex = widgets.findIndex((w) => w.id === widget.id);
-      if (currentIndex === -1) return;
-      updateWidget(currentIndex, { code: result.code });
-      setGenMessages((prev) => ({ ...prev, [widget.id]: '✅ Transform generated!' }));
-    } catch (e: any) {
-      setGenMessages((prev) => ({
-        ...prev,
-        [widget.id]: `❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error generating code'}`,
-      }));
-    } finally {
-      setGeneratingId(null);
-    }
+  /**
+   * Apply a generated snippet to the widget, looked up by its stable id rather
+   * than the index captured at click time -- the list may have been reordered
+   * or edited while the request was in flight.
+   */
+  const applyToWidget = (widgetId: string, patch: Partial<GuiWidget>) => {
+    const currentIndex = widgets.findIndex((w) => w.id === widgetId);
+    if (currentIndex !== -1) updateWidget(currentIndex, patch);
   };
 
-  const handleGenerateSelector = async (widget: GuiWidget) => {
-    const prompt = (widget.selector_prompt ?? '').trim();
-    if (!prompt) {
-      setGenMessages((prev) => ({
-        ...prev,
-        [widget.id]: '❌ Please describe which files to select first.',
-      }));
-      return;
-    }
-    setGeneratingId(widget.id);
-    setGenMessages((prev) => ({ ...prev, [widget.id]: '' }));
-    try {
-      const language = widget.language || 'python';
-      const result = await generateCode({
+  const handleGenerate = (widget: GuiWidget) => {
+    const isPlot = widget.kind === 'plot_window';
+    const prompt = ((isPlot ? widget.plot_prompt : widget.selector_prompt) ?? '').trim();
+    return generate.run({
+      guard: () => prompt
+        ? undefined
+        : isPlot
+          ? 'Plot prompt is required before generating transform code.'
+          : 'Please describe which files to select first.',
+      success: isPlot ? '✅ Transform generated!' : '✅ Selector generated!',
+      failure: 'Error generating code',
+      run: () => generateCode({
         description: prompt,
-        language,
-        context:
-          '`inputs["files"]` is the full list of rooted file paths found in the directory. Return only the selected paths as {"files": [...]}.',
+        language: widget.language || 'python',
+        context: isPlot ? PLOT_TRANSFORM_CONTEXT : SELECTOR_CODE_CONTEXT,
         context_file: (widget.example_input_path ?? '').trim() || undefined,
-        inputs: ['files'],
-        outputs: ['files'],
+        inputs: [isPlot ? 'value' : 'files'],
+        outputs: [isPlot ? 'value' : 'files'],
         ...genAI(),
-      });
-      const currentIndex = widgets.findIndex((w) => w.id === widget.id);
-      if (currentIndex === -1) return;
-      updateWidget(currentIndex, { selector_code: result.code });
-      setGenMessages((prev) => ({ ...prev, [widget.id]: '✅ Selector generated!' }));
-    } catch (e: any) {
-      setGenMessages((prev) => ({
-        ...prev,
-        [widget.id]: `❌ ${e?.response?.data?.detail ?? e?.message ?? 'Error generating code'}`,
-      }));
-    } finally {
-      setGeneratingId(null);
-    }
+      }),
+      apply: (result) => applyToWidget(widget.id, isPlot ? { code: result.code } : { selector_code: result.code }),
+    }, widget.id);
   };
-
-  const handleGenerate = (widget: GuiWidget) =>
-    widget.kind === 'plot_window' ? handleGenerateTransform(widget) : handleGenerateSelector(widget);
 
   return (
     <div>
-      <div className="flex items-end gap-2 mb-4 px-3 py-3 rounded-lg" style={{ background: '#0f1117', border: '1px solid #2d3148' }}>
+      <div className="flex items-end gap-2 mb-4 px-3 py-3 rounded-lg" style={WELL}>
         <div className="flex-1">
-          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
             Kind
           </label>
           <select
             className="w-full rounded-lg px-2 py-1.5 text-sm"
-            style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
+            style={FIELD_ON_SURFACE}
             value={newWidgetKind}
             onChange={(e) => setNewWidgetKind(e.target.value as GuiWidgetKind)}
           >
@@ -149,12 +110,12 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
           </select>
         </div>
         <div className="flex-1">
-          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
             Label
           </label>
           <input
             className="w-full rounded-lg px-2 py-1.5 text-sm"
-            style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
+            style={FIELD_ON_SURFACE}
             value={newWidgetLabel}
             onChange={(e) => setNewWidgetLabel(e.target.value)}
             placeholder="Widget label"
@@ -163,33 +124,35 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
         <button
           onClick={addWidget}
           className="text-xs px-3 py-1.5 rounded font-semibold"
-          style={{ background: '#6366f1', color: 'white' }}
+          style={PRIMARY_BUTTON}
+          aria-label="Add widget"
         >
           + Add Widget
         </button>
       </div>
 
       {widgets.length === 0 && (
-        <p className="text-xs" style={{ color: '#475569' }}>No widgets yet — add one above.</p>
+        <p className="text-xs" style={{ color: DIMMER }}>No widgets yet — add one above.</p>
       )}
 
       <div className="space-y-3">
         {widgets.map((widget, index) => (
-          <div key={widget.id} className="px-3 py-3 rounded-lg" style={{ background: '#0f1117', border: '1px solid #2d3148' }}>
+          <div key={widget.id} className="px-3 py-3 rounded-lg" style={WELL}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#2d1b4e', color: '#c4b5fd' }}>
                   {GUI_WIDGET_KIND_LABELS[widget.kind]}
                 </span>
-                <span className="text-xs font-mono" style={{ color: '#475569' }}>{widget.id}</span>
+                <span className="text-xs font-mono" style={{ color: DIMMER }}>{widget.id}</span>
               </div>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => moveWidget(index, -1)}
                   disabled={index === 0}
                   className="text-xs px-2 py-1 rounded"
-                  style={{ background: '#2d3148', color: '#e2e8f0', opacity: index === 0 ? 0.4 : 1 }}
+                  style={{ ...NEUTRAL_BUTTON, opacity: index === 0 ? 0.4 : 1 }}
                   title="Move up"
+                  aria-label={`Move ${widget.label || widget.id} up`}
                 >
                   ↑
                 </button>
@@ -197,16 +160,18 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
                   onClick={() => moveWidget(index, 1)}
                   disabled={index === widgets.length - 1}
                   className="text-xs px-2 py-1 rounded"
-                  style={{ background: '#2d3148', color: '#e2e8f0', opacity: index === widgets.length - 1 ? 0.4 : 1 }}
+                  style={{ ...NEUTRAL_BUTTON, opacity: index === widgets.length - 1 ? 0.4 : 1 }}
                   title="Move down"
+                  aria-label={`Move ${widget.label || widget.id} down`}
                 >
                   ↓
                 </button>
                 <button
                   onClick={() => removeWidget(index)}
                   className="text-xs px-2 py-1 rounded"
-                  style={{ background: '#ef4444', color: 'white' }}
+                  style={{ background: DANGER, color: 'white' }}
                   title="Remove widget"
+                  aria-label={`Remove widget ${widget.label || widget.id}`}
                 >
                   ✕
                 </button>
@@ -215,23 +180,23 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
 
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
                   Label
                 </label>
                 <input
                   className="w-full rounded-lg px-2 py-1.5 text-sm"
-                  style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                  style={FIELD_ON_SURFACE}
                   value={widget.label}
                   onChange={(e) => updateWidget(index, { label: e.target.value })}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+                <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
                   Size
                 </label>
                 <select
                   className="w-full rounded-lg px-2 py-1.5 text-sm"
-                  style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                  style={FIELD_ON_SURFACE}
                   value={widget.size}
                   onChange={(e) => {
                     const s = e.target.value as typeof widget.size;
@@ -253,8 +218,8 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
                   onUpdate={(patch: Partial<GuiWidget>) => updateWidget(index, patch)}
                   expanded={!!expandedTransform[widget.id]}
                   onToggleExpand={() => toggleTransform(widget.id)}
-                  generating={generatingId === widget.id}
-                  message={genMessages[widget.id]}
+                  generating={generate.isGenerating(widget.id)}
+                  message={generate.message(widget.id)}
                   onGenerate={() => handleGenerate(widget)}
                 />
               );

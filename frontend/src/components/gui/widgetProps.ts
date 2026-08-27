@@ -2,13 +2,21 @@ import type { GuiWidget } from '../../types/graph';
 
 /**
  * Uniform prop shape for every runtime GUI widget in `gui/widgets/`.
- * `value` is what flowed into the widget's `{id}_in` port on the last run
- * (falling back to the widget's stored value); `onChange` writes the widget's
- * value back into the graph, which is what its `{id}_out` port emits.
+ *
+ * The two values are deliberately separate. `value` is what the widget itself
+ * holds -- the user's edit, or its stored value -- and is what its `{id}_out`
+ * port emits. `incoming` is what arrived on its `{id}_in` port in the last run.
+ *
+ * Collapsing them into one prop is what made a chat window unusable: the read
+ * pane and the write pane both showed `value`, so typing a reply overwrote the
+ * answer the user was reading, one character at a time. Widgets that only
+ * display (`plot_window`, a read-only text_io) still just take
+ * `incoming ?? value`; only the ones that do both need the distinction.
  */
 export interface GuiWidgetRuntimeProps {
   widget: GuiWidget;
   value: unknown;
+  incoming?: unknown;
   onChange: (value: string) => void;
 }
 

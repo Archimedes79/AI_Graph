@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import { valueToText } from '../widgetProps';
+import { DANGER_SOFT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '../../../ui/theme';
 
 /** Runtime input_picker widget: unified file or directory picker. */
 export default function InputPickerWidget({ widget, value, onChange }: GuiWidgetRuntimeProps) {
@@ -8,12 +9,23 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
   const isDir = widget.mode === 'directory';
   const displayVal = Array.isArray(value) ? `${value.length} file(s) selected` : valueToText(value);
 
+  const [pickWarning, setPickWarning] = React.useState('');
+
   const handlePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const fullPath = (file as File & { path?: string }).path;
-    onChange(fullPath || file.name);
     e.target.value = '';
+    if (!file) return;
+    // `File.path` is an Electron extension; a browser never exposes the real
+    // location. Writing `file.name` instead used to look like it worked and
+    // then failed server-side with a file-not-found from the working
+    // directory -- say so instead, since the engine resolves a real path.
+    const fullPath = (file as File & { path?: string }).path;
+    if (!fullPath) {
+      setPickWarning(`The browser only reveals the name "${file.name}", not its location. Type or paste the full path instead.`);
+      return;
+    }
+    setPickWarning('');
+    onChange(fullPath);
   };
 
   const hasValue = Array.isArray(value) ? value.length > 0 : !!value;
@@ -23,7 +35,7 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
       <div className="flex items-center gap-2">
         <input
           className="flex-1 min-w-0 rounded-lg px-2 py-1.5 text-sm font-mono"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+          style={FIELD}
           value={Array.isArray(value) ? '' : valueToText(value)}
           onChange={(e) => onChange(e.target.value)}
           placeholder={isDir ? '/path/to/directory' : '/path/to/file'}
@@ -32,7 +44,7 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
         <button
           onClick={() => pickerRef.current?.click()}
           className="text-xs px-3 py-1.5 rounded-lg flex-shrink-0"
-          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          style={NEUTRAL_BUTTON}
         >
           Browse…
         </button>
@@ -40,18 +52,22 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
           <button
             onClick={() => onChange('')}
             className="text-xs px-2 py-1.5 rounded-lg flex-shrink-0"
-            style={{ background: '#2d3148', color: '#f87171' }}
+            style={{ background: LINE, color: DANGER_SOFT }}
             title="Clear selection"
+            aria-label={`Clear ${widget.label || widget.id}`}
           >
             ✕
           </button>
         )}
       </div>
       {Array.isArray(value) && (
-        <span className="text-xs" style={{ color: '#94a3b8' }}>{displayVal}</span>
+        <span className="text-xs" style={{ color: MUTED }}>{displayVal}</span>
+      )}
+      {pickWarning && (
+        <span className="text-xs" style={{ color: '#fbbf24' }}>{pickWarning}</span>
       )}
       {widget.extensions && !isDir && (
-        <span className="text-xs" style={{ color: '#475569' }}>Allowed: {widget.extensions}</span>
+        <span className="text-xs" style={{ color: DIMMER }}>Allowed: {widget.extensions}</span>
       )}
       <input
         ref={pickerRef}

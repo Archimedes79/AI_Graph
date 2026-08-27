@@ -101,6 +101,9 @@ def clean_ai_settings(monkeypatch, tmp_path):
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("AI_GRAPH_SETTINGS", str(tmp_path / "ai-settings.json"))
+    # No network in tests: whatever ollama/LM Studio the developer's machine
+    # happens to run must not leak into the resolution being asserted.
+    monkeypatch.setattr(ai_settings, "probe_local_models", lambda *a, **k: None)
     ai_settings.reset_cache()
     ai_settings.set_graph_defaults()
     ai_settings.set_override()
@@ -114,6 +117,35 @@ def test_default_sentinel_falls_back_when_nothing_is_configured(clean_ai_setting
     assert ai_settings.resolve_target("default", "") == ("ollama", "llama3")
     # A graph written before the sentinel existed has an empty provider.
     assert ai_settings.resolve_target("", "") == ("ollama", "llama3")
+
+
+def test_unconfigured_machine_uses_the_local_provider_that_is_running(clean_ai_settings, monkeypatch):
+    """Nothing configured anywhere, ollama down, LM Studio serving models:
+    resolution must land on LM Studio and its first served model instead of
+    a dead ollama/llama3 endpoint."""
+    monkeypatch.setattr(
+        ai_settings, "probe_local_models",
+        lambda provider, *a, **k: ["gemma-local"] if provider == "lmstudio" else None,
+    )
+    assert ai_settings.resolve_target("default", "") == ("lmstudio", "gemma-local")
+
+
+def test_pinned_local_provider_without_model_uses_its_first_served_model(clean_ai_settings, monkeypatch):
+    monkeypatch.setattr(
+        ai_settings, "probe_local_models",
+        lambda provider, *a, **k: ["qwen-local"] if provider == "lmstudio" else None,
+    )
+    assert ai_settings.resolve_target("lmstudio", "") == ("lmstudio", "qwen-local")
+
+
+def test_explicit_configuration_beats_local_discovery(clean_ai_settings, monkeypatch):
+    monkeypatch.setattr(
+        ai_settings, "probe_local_models",
+        lambda provider, *a, **k: ["gemma-local"] if provider == "lmstudio" else None,
+    )
+    monkeypatch.setenv("AI_GRAPH_AI_PROVIDER", "anthropic")
+    monkeypatch.setenv("AI_GRAPH_AI_MODEL", "claude-x")
+    assert ai_settings.resolve_target("default", "") == ("anthropic", "claude-x")
 
 
 def test_node_that_names_a_provider_keeps_it(clean_ai_settings):

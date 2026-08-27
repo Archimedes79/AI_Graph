@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.elements.base import DeployNeeds, NodeElement
+from app.elements.base import NodeElement
 from app.models.graph import GraphNode, NodeType
 from app.services import file_service
 
@@ -66,6 +66,3 @@ class OutputElement(NodeElement):
                 "direction": "output", "current_value": cfg.value or "",
             }]
         return []
-
-    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
-        return DeployNeeds(files=node.config.write_mode in ("file", "directory"))

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useGraphStore } from '../../store/graphStore';
 import GuiWindow from './GuiWindow';
+import { FIELD_ON_SURFACE } from '../../ui/theme';
 
 /** Mounts one runtime `GuiWindow` per `gui`/`widget` node, plus pills to reopen closed ones. */
 export default function GuiWindowLayer() {
@@ -32,7 +33,7 @@ export default function GuiWindowLayer() {
               key={node.id}
               onClick={() => setClosed((prev) => prev.filter((id) => id !== node.id))}
               className="px-3 py-1.5 text-xs rounded-lg shadow-lg"
-              style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
+              style={FIELD_ON_SURFACE}
             >
               🖥️ {node.label}
             </button>

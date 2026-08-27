@@ -2,6 +2,8 @@ import React from 'react';
 import { useSettingsStore } from '../store/settingsStore';
 import { useGraphStore } from '../store/graphStore';
 import ProviderModelSelect from '../elements/shared/ProviderModelSelect';
+import Modal from './Modal';
+import { ACCENT_TEXT, DIM, PRIMARY_BUTTON, TEXT } from '../ui/theme';
 
 interface SettingsDialogProps {
   onClose: () => void;
@@ -31,30 +33,26 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
     setMetadata({ ai_defaults: { ...aiDefaults, ...patch } });
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
-      onClick={onClose}
-    >
-      <div
-        className="rounded-xl overflow-hidden shadow-2xl w-full max-w-2xl mx-4"
-        style={{ background: '#1a1d2e', border: '1px solid #2d3148' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          className="flex items-center justify-between px-5 py-3"
-          style={{ background: '#0f1117', borderBottom: '1px solid #2d3148' }}
+    <Modal
+      title="⚙ Settings"
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+      footer={
+        <button
+          onClick={onClose}
+          className="px-3 py-1.5 text-xs rounded-lg font-semibold"
+          style={PRIMARY_BUTTON}
         >
-          <span className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>⚙ Settings</span>
-          <button onClick={onClose} style={{ color: '#94a3b8' }}>✕</button>
-        </div>
-
-        <div className="p-5 space-y-6">
+          Done
+        </button>
+      }
+    >
+      <div className="p-5 space-y-6">
           <section>
-            <h3 className="text-sm font-semibold mb-1" style={{ color: '#e2e8f0' }}>
+            <h3 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>
               Code generation AI
             </h3>
-            <p className="text-xs mb-3" style={{ color: '#64748b' }}>
+            <p className="text-xs mb-3" style={{ color: DIM }}>
               Used by every ✨ Generate action in the editor — code, system prompts, selector
               code, plot transforms, output formats and whole graphs. Set once here, for this
               browser; it is never saved into a graph, so a graph you share carries no model
@@ -71,10 +69,10 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold mb-1" style={{ color: '#e2e8f0' }}>
+            <h3 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>
               Runtime AI default — for this graph
             </h3>
-            <p className="text-xs mb-3" style={{ color: '#64748b' }}>
+            <p className="text-xs mb-3" style={{ color: DIM }}>
               Which AI the graph's AI nodes call when they run. Every AI node left on
               “Use the graph's default” follows this, so a graph with eight AI nodes is
               configured once. Saved with the graph as <code>metadata.ai_defaults</code>.
@@ -89,7 +87,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
             />
             <div
               className="text-xs rounded-lg px-3 py-2 mt-3"
-              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#a5b4fc' }}
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: ACCENT_TEXT }}
             >
               When this graph is deployed, whoever runs it can point it somewhere else without
               editing it — <code>--ai-provider</code>/<code>--ai-model</code> on the command
@@ -97,18 +95,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               <code>ai-settings.json</code> next to the executable all take precedence over this.
             </div>
           </section>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-3" style={{ borderTop: '1px solid #2d3148' }}>
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-xs rounded-lg font-semibold"
-            style={{ background: '#6366f1', color: 'white' }}
-          >
-            Done
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

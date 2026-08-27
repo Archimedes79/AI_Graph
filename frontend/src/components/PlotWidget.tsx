@@ -1,4 +1,5 @@
 import React from 'react';
+import { ACCENT, DIM } from '../ui/theme';
 
 interface PlotWidgetProps {
   data: unknown;
@@ -59,12 +60,16 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
   const points = toPoints(data);
 
   if (!points) {
+    // A non-chartable string is worth showing verbatim: it's either the raw
+    // incoming text (so the user sees what shape actually arrived) or a
+    // "⚠ transform failed" message from the backend's display transform.
+    const text = typeof data === 'string' ? data.trim() : '';
     return (
       <div
-        className="text-xs px-2 py-1.5 rounded"
-        style={{ background: 'rgba(255,255,255,0.05)', color: '#64748b' }}
+        className="text-xs px-2 py-1.5 rounded whitespace-pre-wrap break-words"
+        style={{ background: 'rgba(255,255,255,0.05)', color: DIM, maxHeight: 160, overflowY: 'auto' }}
       >
-        No chartable data
+        {text || 'No chartable data'}
       </div>
     );
   }
@@ -95,12 +100,12 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
             const yValue = scaleY(p.value);
             const y = Math.min(yZero, yValue);
             const h = Math.max(1, Math.abs(yValue - yZero));
-            return <rect key={i} x={x} y={y} width={w} height={h} fill="#6366f1" />;
+            return <rect key={i} x={x} y={y} width={w} height={h} fill={ACCENT} />;
           })
         : (
           <polyline
             fill="none"
-            stroke="#6366f1"
+            stroke={ACCENT}
             strokeWidth={1.5}
             points={points
               .map((p, i) => `${padding + (i / (points.length - 1)) * plotW},${scaleY(p.value)}`)

@@ -8,12 +8,23 @@ import type { GuiWidget } from '../../types/graph';
 export const GUI_GRID_COLUMNS = 12;
 export const GUI_GRID_ROW_HEIGHT = 56;
 
-/** Cell footprint a widget gets when the designer has not sized it yet. */
-const DEFAULT_SPAN: Record<GuiWidget['size'], { w: number; h: number }> = {
-  small: { w: 4, h: 2 },
-  medium: { w: 6, h: 3 },
-  large: { w: 12, h: 5 },
+/**
+ * Cell footprint for a widget size. The single source of truth: `createGuiWidget`
+ * and the size dropdown stamp these onto new/resized widgets (via `sizeToGrid` in
+ * utils/guiWidgets.ts, which re-exports this), and `defaultSpan` below uses the
+ * same table for widgets the designer never placed. Two tables lived here before
+ * and disagreed on three of six numbers, so the same "medium" widget rendered at
+ * a different height depending on whether it had ever been sized.
+ */
+export const SIZE_SPAN: Record<GuiWidget['size'], { w: number; h: number }> = {
+  small: { w: 3, h: 2 },
+  medium: { w: 6, h: 4 },
+  large: { w: 12, h: 6 },
 };
+
+export function sizeToGrid(size: GuiWidget['size']): { w: number; h: number } {
+  return SIZE_SPAN[size] ?? SIZE_SPAN.medium;
+}
 
 export interface WidgetPlacement {
   widget: GuiWidget;
@@ -24,7 +35,7 @@ export interface WidgetPlacement {
 }
 
 export function defaultSpan(widget: GuiWidget): { w: number; h: number } {
-  return DEFAULT_SPAN[widget.size] ?? DEFAULT_SPAN.medium;
+  return sizeToGrid(widget.size);
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { GraphNode } from '../../types/graph';
 import GuiWidgetEditor from '../../components/GuiWidgetEditor';
 import GuiDesigner from '../../components/gui/GuiDesigner';
+import { ACCENT, DIMMER, LINE, TEXT } from '../../ui/theme';
 
 interface GuiEditorProps {
   node: GraphNode;
@@ -21,8 +22,8 @@ export default function GuiEditor({ node, setConfig, applyWidgets }: GuiEditorPr
             onClick={() => setMode(tab)}
             className="text-xs px-3 py-1.5 rounded-lg capitalize"
             style={{
-              background: mode === tab ? '#6366f1' : '#2d3148',
-              color: mode === tab ? 'white' : '#e2e8f0',
+              background: mode === tab ? ACCENT : LINE,
+              color: mode === tab ? 'white' : TEXT,
             }}
           >
             {tab}
@@ -32,7 +33,7 @@ export default function GuiEditor({ node, setConfig, applyWidgets }: GuiEditorPr
 
       {mode === 'widgets' ? (
         <>
-          <p className="text-xs mb-3" style={{ color: '#475569' }}>
+          <p className="text-xs mb-3" style={{ color: DIMMER }}>
             Ports are generated automatically from the widgets below.
             Adding, removing, or reordering a widget updates ports immediately.
           </p>

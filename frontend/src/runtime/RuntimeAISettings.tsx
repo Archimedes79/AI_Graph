@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import ProviderModelSelect from '../elements/shared/ProviderModelSelect';
+import Modal from '../components/Modal';
 import { getAISettings, saveAISettings } from '../utils/api';
 import type { AIProvider } from '../types/graph';
+import { errorText } from '../utils/errorText';
+import { ACCENT_TEXT, DIM, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON } from '../ui/theme';
 
 interface RuntimeAISettingsProps {
   onClose: () => void;
@@ -25,6 +28,14 @@ export default function RuntimeAISettings({ onClose }: RuntimeAISettingsProps) {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Every edit invalidates a previous "✅ Saved": leaving it up while the user
+  // switches provider or retypes a key tells them their change is stored when
+  // it is not. Each setter below clears it.
+  const edit = <T,>(set: (value: T) => void) => (value: T) => {
+    setStatus('');
+    set(value);
+  };
+
   useEffect(() => {
     getAISettings()
       .then((data) => {
@@ -34,7 +45,7 @@ export default function RuntimeAISettings({ onClose }: RuntimeAISettingsProps) {
         setApiKey(data.api_key ?? '');
         setEffective(data.effective);
       })
-      .catch((e: any) => setStatus(`❌ ${e?.response?.data?.detail ?? e?.message ?? 'Could not read settings'}`));
+      .catch((error) => setStatus(`❌ ${errorText(error, 'Could not read settings')}`));
   }, []);
 
   const handleSave = async () => {
@@ -44,8 +55,8 @@ export default function RuntimeAISettings({ onClose }: RuntimeAISettingsProps) {
       const result = await saveAISettings({ provider, model, base_url: baseUrl, api_key: apiKey });
       setEffective(result.effective);
       setStatus(`✅ Saved to ${result.path}`);
-    } catch (e: any) {
-      setStatus(`❌ ${e?.response?.data?.detail ?? e?.message ?? 'Save failed'}`);
+    } catch (error) {
+      setStatus(`❌ ${errorText(error, 'Save failed')}`);
     } finally {
       setBusy(false);
     }
@@ -55,26 +66,34 @@ export default function RuntimeAISettings({ onClose }: RuntimeAISettingsProps) {
   const needsKey = provider === 'openai' || provider === 'anthropic' || provider === 'openai_compatible';
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
-      onClick={onClose}
+    <Modal
+      title="⚙ AI Settings"
+      onClose={onClose}
+      maxWidth="max-w-xl"
+      dismissOnBackdrop={!busy}
+      dismissOnEscape={!busy}
+      footer={
+        <>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-xs rounded-lg"
+            style={NEUTRAL_BUTTON}
+          >
+            Close
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={busy}
+            className="px-3 py-1.5 text-xs rounded-lg font-semibold"
+            style={{ ...PRIMARY_BUTTON, opacity: busy ? 0.6 : 1 }}
+          >
+            Save
+          </button>
+        </>
+      }
     >
-      <div
-        className="rounded-xl overflow-hidden shadow-2xl w-full max-w-xl mx-4"
-        style={{ background: '#1a1d2e', border: '1px solid #2d3148' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          className="flex items-center justify-between px-5 py-3"
-          style={{ background: '#0f1117', borderBottom: '1px solid #2d3148' }}
-        >
-          <span className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>⚙ AI Settings</span>
-          <button onClick={onClose} style={{ color: '#94a3b8' }}>✕</button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          <p className="text-xs" style={{ color: '#64748b' }}>
+      <div className="p-5 space-y-4">
+          <p className="text-xs" style={{ color: DIM }}>
             Which AI this tool calls. Set it once here — every AI step in the graph that was
             left on its default follows it.
           </p>
@@ -82,22 +101,22 @@ export default function RuntimeAISettings({ onClose }: RuntimeAISettingsProps) {
           <ProviderModelSelect
             provider={provider}
             model={model}
-            onProviderChange={setProvider}
-            onModelChange={setModel}
+            onProviderChange={edit(setProvider)}
+            onModelChange={edit(setModel)}
             allowDefault
             defaultLabel="Whatever the graph was built with"
           />
 
           {needsEndpoint && (
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+              <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
                 Server address
               </label>
               <input
                 className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                style={FIELD}
                 value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
+                onChange={(e) => edit(setBaseUrl)(e.target.value)}
                 placeholder={provider === 'ollama' ? 'http://localhost:11434' : 'http://localhost:1234/v1'}
               />
             </div>
@@ -105,18 +124,18 @@ export default function RuntimeAISettings({ onClose }: RuntimeAISettingsProps) {
 
           {needsKey && (
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+              <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
                 API key
               </label>
               <input
                 type="password"
                 className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                style={FIELD}
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => edit(setApiKey)(e.target.value)}
                 placeholder="sk-…"
               />
-              <p className="text-xs mt-1" style={{ color: '#475569' }}>
+              <p className="text-xs mt-1" style={{ color: DIMMER }}>
                 Stored in the settings file next to this tool. An environment variable, if one
                 is set, still takes precedence over it.
               </p>
@@ -126,34 +145,15 @@ export default function RuntimeAISettings({ onClose }: RuntimeAISettingsProps) {
           {effective && (
             <div
               className="text-xs rounded-lg px-3 py-2"
-              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#a5b4fc' }}
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: ACCENT_TEXT }}
             >
               Currently calling <strong>{effective.provider}</strong> / <strong>{effective.model}</strong>
-              <div style={{ color: '#64748b' }} className="mt-1 font-mono">{effective.settings_file}</div>
+              <div style={{ color: DIM }} className="mt-1 font-mono">{effective.settings_file}</div>
             </div>
           )}
 
-          {status && <div className="text-xs" style={{ color: '#94a3b8' }}>{status}</div>}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-3" style={{ borderTop: '1px solid #2d3148' }}>
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-xs rounded-lg"
-            style={{ background: '#2d3148', color: '#e2e8f0' }}
-          >
-            Close
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={busy}
-            className="px-3 py-1.5 text-xs rounded-lg font-semibold"
-            style={{ background: '#6366f1', color: 'white', opacity: busy ? 0.6 : 1 }}
-          >
-            Save
-          </button>
-        </div>
+        {status && <div className="text-xs" style={{ color: MUTED }}>{status}</div>}
       </div>
-    </div>
+    </Modal>
   );
 }

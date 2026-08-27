@@ -4,6 +4,9 @@ import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType, GuiWidgetKind } from '../types/graph';
 import { nodeTypeDefaults, type NodePreset } from '../utils/nodeDefaults';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
+import { executeGraph } from '../utils/api';
+import { errorText } from '../utils/errorText';
+import { ACCENT } from '../ui/theme';
 
 type RFNode = Node<RFNodeData>;
 
@@ -25,6 +28,9 @@ export interface GraphStore {
 
   // Text Output node windows shown after a run
   textOutputWindows: { nodeId: string; label: string; content: string }[];
+
+  // Serialised graph as of the last load/save, for `isDirty`.
+  savedSnapshot: string | null;
 
   // UI state
   selectedNodeId: string | null;
@@ -49,6 +55,53 @@ export interface GraphStore {
   closeTextOutputWindow: (nodeId: string) => void;
   loadGraph: (graph: Graph) => void;
   exportGraph: () => Graph;
+  /**
+   * Whether the graph differs from the last loaded or saved version.
+   *
+   * Computed by comparing the exported graph against a snapshot rather than
+   * tracked with a flag on every mutation: ReactFlow reports a plain click as a
+   * node change, so a flag would mark a freshly opened graph dirty and train
+   * the user to click through the confirmations that exist to protect them.
+   * Selection is not part of the exported graph, so this cannot fire on it;
+   * moving a node, which is a real change, does.
+   */
+  isDirty: () => boolean;
+  /** Record the current graph as saved (after a successful write to disk). */
+  markSaved: () => void;
+  /**
+   * Execute *graph* and put the whole outcome into the store: the result, the
+   * text-output windows, the busy flag, and a synthesised error result if the
+   * request itself fails.
+   *
+   * Lives here rather than in a component because the store already owns every
+   * piece of state it touches, and because two front-ends need it -- the
+   * editor's toolbar and the deployed runtime page. They had a copy each, and
+   * the copies had already drifted.
+   */
+  runGraph: (graph: Graph) => Promise<void>;
+}
+
+/**
+ * The content of every `output` node set to `write_mode: "window"`, ready to
+ * show in a floating window.
+ */
+function collectTextOutputWindows(
+  graph: Graph,
+  result: ExecutionResult,
+): { nodeId: string; label: string; content: string }[] {
+  return graph.nodes
+    .filter((node) => node.node_type === 'output' && node.config.write_mode === 'window')
+    .map((node) => {
+      const nodeResult = result.node_results.find((r) => r.node_id === node.id);
+      if (!nodeResult || nodeResult.status !== 'success') return null;
+      const content = Object.values(nodeResult.outputs)
+        .flatMap((value) => (Array.isArray(value) ? value : [value]))
+        .filter((value) => value !== null && value !== undefined)
+        .map(String)
+        .join('\n');
+      return { nodeId: node.id, label: node.config.output_label || node.label, content };
+    })
+    .filter((w): w is { nodeId: string; label: string; content: string } => w !== null);
 }
 
 let nodeCounter = 1;
@@ -243,6 +296,7 @@ export const useGraphStore = create<GraphStore>()(
     selectedNodeId: null,
     editingNodeId: null,
     editingPort: null,
+    savedSnapshot: null,
 
     setMetadata: (meta) =>
       set((state) => {
@@ -387,7 +441,12 @@ export const useGraphStore = create<GraphStore>()(
           if (!feedbackIds.has(edge.id)) continue;
           const sourceResult = resultByNodeId.get(edge.source_node_id);
           if (!sourceResult || sourceResult.status !== 'success') continue;
-          const value = sourceResult.outputs?.[edge.source_port_id];
+          // Prefer the value the backend's own settle pass wrote into the
+          // target's NodeResult.inputs: for a display-only widget that is the
+          // *transformed* value (apply_display_transform), not the raw source
+          // output. Fall back to the raw output for older results.
+          const settled = resultByNodeId.get(edge.target_node_id)?.inputs?.[edge.target_port_id];
+          const value = settled !== undefined ? settled : sourceResult.outputs?.[edge.source_port_id];
           if (value === undefined) continue;
 
           const targetIdx = state.rfNodes.findIndex((n: RFNode) => n.id === edge.target_node_id);
@@ -447,7 +506,7 @@ export const useGraphStore = create<GraphStore>()(
         targetHandle: ge.target_port_id,
         type: 'smoothstep',
         animated: false,
-        style: { stroke: '#6366f1', strokeWidth: 2 },
+        style: { stroke: ACCENT, strokeWidth: 2 },
       }));
 
       set((state) => {
@@ -460,6 +519,10 @@ export const useGraphStore = create<GraphStore>()(
         // sets `currentFilePath` explicitly right after loadGraph when it does.
         state.currentFilePath = null;
       });
+      // Snapshot through exportGraph() rather than from normalizedGraph: it is
+      // the same serialisation isDirty() compares against, so a freshly loaded
+      // graph is guaranteed to read as clean.
+      get().markSaved();
     },
 
     exportGraph: () => {
@@ -481,6 +544,45 @@ export const useGraphStore = create<GraphStore>()(
       }));
 
       return { metadata, nodes, edges };
+    },
+
+    isDirty: () => {
+      const { savedSnapshot } = get();
+      const current = JSON.stringify(get().exportGraph());
+      // A never-saved graph counts as dirty only once it has something in it.
+      if (savedSnapshot === null) return get().rfNodes.length > 0;
+      return current !== savedSnapshot;
+    },
+
+    markSaved: () => {
+      const snapshot = JSON.stringify(get().exportGraph());
+      set((state) => {
+        state.savedSnapshot = snapshot;
+      });
+    },
+
+    runGraph: async (graph) => {
+      const { setIsExecuting, setExecutionResult, setTextOutputWindows } = get();
+      setIsExecuting(true);
+      setExecutionResult(null);
+      setTextOutputWindows([]);
+      try {
+        const result = await executeGraph(graph);
+        // setExecutionResult also settles memory-feedback values back into the
+        // graph, which is why the result goes through the store rather than
+        // being held in a component.
+        setExecutionResult(result);
+        setTextOutputWindows(collectTextOutputWindows(graph, result));
+      } catch (error) {
+        setExecutionResult({
+          status: 'error',
+          node_results: [],
+          final_outputs: {},
+          error: errorText(error, 'Execution failed'),
+        });
+      } finally {
+        setIsExecuting(false);
+      }
     },
   }))
 );

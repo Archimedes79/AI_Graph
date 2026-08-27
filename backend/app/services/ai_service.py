@@ -8,8 +8,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
-from typing import Optional
+from dataclasses import dataclass
+from typing import Callable, Dict, Optional
 
 import httpx
 
@@ -100,6 +102,39 @@ def _stream_timeout(connect_write_pool_budget: float) -> httpx.Timeout:
     return httpx.Timeout(connect_write_pool_budget, read=AI_STREAM_IDLE_TIMEOUT)
 
 
+class _StreamProgress:
+    """
+    Accumulates a streamed completion and logs how it is growing.
+
+    Every provider streams, but in three different wire formats (OpenAI-style
+    SSE, Ollama's newline-delimited JSON, Anthropic's own SSE events), so only
+    the buffer and the logging cadence are shared here -- each provider keeps
+    its own line parsing.
+    """
+
+    def __init__(self, provider: str, model: str) -> None:
+        self._chunks: list[str] = []
+        self._provider = provider
+        self._model = model
+        self._start = time.monotonic()
+        self._last_logged = self._start
+
+    def add(self, piece: str) -> None:
+        if not piece:
+            return
+        self._chunks.append(piece)
+        now = time.monotonic()
+        if now - self._last_logged >= _STREAM_PROGRESS_LOG_INTERVAL:
+            logger.info(
+                "AI stream progress <- provider=%s model=%s after %.1fs (%d chars so far)",
+                self._provider, self._model, now - self._start, sum(len(c) for c in self._chunks),
+            )
+            self._last_logged = now
+
+    def text(self) -> str:
+        return "".join(self._chunks)
+
+
 async def _stream_chat_completion(
     client: httpx.AsyncClient,
     url: str,
@@ -114,9 +149,7 @@ async def _stream_chat_completion(
     Shared by every provider using this SSE schema (openai, openai_compatible,
     lmstudio, github_copilot).
     """
-    chunks: list[str] = []
-    start = time.monotonic()
-    last_logged = start
+    progress = _StreamProgress(provider, model)
     async with client.stream("POST", url, json={**payload, "stream": True}, headers=headers) as response:
         response.raise_for_status()
         async for line in response.aiter_lines():
@@ -129,18 +162,8 @@ async def _stream_chat_completion(
                 event = json.loads(data)
             except json.JSONDecodeError:
                 continue
-            piece = event.get("choices", [{}])[0].get("delta", {}).get("content") or ""
-            if not piece:
-                continue
-            chunks.append(piece)
-            now = time.monotonic()
-            if now - last_logged >= _STREAM_PROGRESS_LOG_INTERVAL:
-                logger.info(
-                    "AI stream progress <- provider=%s model=%s after %.1fs (%d chars so far)",
-                    provider, model, now - start, sum(len(c) for c in chunks),
-                )
-                last_logged = now
-    return "".join(chunks)
+            progress.add(event.get("choices", [{}])[0].get("delta", {}).get("content") or "")
+    return progress.text()
 
 
 # ---------------------------------------------------------------------------
@@ -161,9 +184,7 @@ async def _ollama_complete(
         "stream": True,
         "options": {"temperature": temperature, "num_predict": AI_MAX_TOKENS},
     }
-    chunks: list[str] = []
-    start = time.monotonic()
-    last_logged = start
+    progress = _StreamProgress("ollama", model)
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
         async with client.stream("POST", f"{_ollama_base_url()}/api/generate", json=payload) as response:
             response.raise_for_status()
@@ -174,41 +195,110 @@ async def _ollama_complete(
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                piece = event.get("response") or ""
-                if piece:
-                    chunks.append(piece)
-                    now = time.monotonic()
-                    if now - last_logged >= _STREAM_PROGRESS_LOG_INTERVAL:
-                        logger.info(
-                            "AI stream progress <- provider=ollama model=%s after %.1fs (%d chars so far)",
-                            model, now - start, sum(len(c) for c in chunks),
-                        )
-                        last_logged = now
+                progress.add(event.get("response") or "")
                 if event.get("done"):
                     break
-    return "".join(chunks)
+    return progress.text()
 
 
-async def _openai_complete(
+@dataclass(frozen=True)
+class _OpenAIStyle:
+    """
+    One provider that speaks the OpenAI chat-completions API, described rather
+    than coded.
+
+    Four of our providers build the identical messages/payload and stream the
+    identical SSE schema; all that genuinely differs is where to POST, which
+    credential to send, and whether that credential is mandatory. Holding those
+    four facts as data means a fifth such provider is one table entry instead of
+    another copy of the same twenty lines -- and that a fix to the request
+    shape cannot be applied to three of them and forgotten on the fourth.
+
+    Ollama and Anthropic are deliberately NOT in here: different endpoints,
+    different payload keys, different stream framing and termination. Only
+    `_StreamProgress` is shared with them.
+    """
+
+    base_url: Callable[[], str]
+    credential: Optional[Callable[[], str]] = None
+    credential_required: bool = False
+    missing_credential_error: str = ""
+    missing_base_url_error: str = ""
+
+
+_OPENAI_STYLE: Dict[str, _OpenAIStyle] = {
+    "openai": _OpenAIStyle(
+        base_url=lambda: "https://api.openai.com/v1",
+        credential=_openai_api_key,
+        credential_required=True,
+        missing_credential_error=(
+            "No OpenAI API key configured (OPENAI_API_KEY, or api_keys.openai in ai-settings.json)"
+        ),
+    ),
+    # A local LM Studio needs no credential at all.
+    "lmstudio": _OpenAIStyle(base_url=_lmstudio_base_url),
+    "openai_compatible": _OpenAIStyle(
+        base_url=_openai_compatible_base_url,
+        credential=_openai_compatible_api_key,   # optional: many self-hosted endpoints have none
+        missing_base_url_error=(
+            "No OpenAI-compatible endpoint configured (OPENAI_COMPATIBLE_BASE_URL, "
+            "or endpoints.openai_compatible_base_url in ai-settings.json)"
+        ),
+    ),
+    "github_copilot": _OpenAIStyle(
+        base_url=_github_models_base_url,
+        credential=_github_token,
+        credential_required=True,
+        missing_credential_error=(
+            "No GITHUB_TOKEN configured (env var, or api_keys.github in ai-settings.json)"
+        ),
+    ),
+}
+
+
+async def _openai_style_complete(
+    provider: str,
     prompt: str,
     system: str,
     model: str,
     temperature: float,
     timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
-    api_key = _openai_api_key()
-    if not api_key:
-        raise ValueError("No OpenAI API key configured (OPENAI_API_KEY, or api_keys.openai in ai-settings.json)")
+    """The one request body every `_OPENAI_STYLE` provider shares."""
+    spec = _OPENAI_STYLE[provider]
+
+    base_url = spec.base_url()
+    if not base_url:
+        raise ValueError(spec.missing_base_url_error or f"No base URL configured for provider {provider!r}")
+
+    headers = {}
+    if spec.credential is not None:
+        token = spec.credential()
+        if not token and spec.credential_required:
+            raise ValueError(spec.missing_credential_error)
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
     payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
-    headers = {"Authorization": f"Bearer {api_key}"}
+
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
         return await _stream_chat_completion(
-            client, "https://api.openai.com/v1/chat/completions", payload, headers, "openai", model,
+            client, f"{base_url.rstrip('/')}/chat/completions", payload, headers, provider, model,
         )
+
+
+# The four named wrappers stay: `complete()` dispatches by function name and the
+# provider tests monkeypatch these directly, so they are part of the module's
+# surface, not incidental.
+
+async def _openai_complete(
+    prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
+) -> str:
+    return await _openai_style_complete("openai", prompt, system, model, temperature, timeout)
 
 
 async def _anthropic_complete(
@@ -235,9 +325,7 @@ async def _anthropic_complete(
         "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
     }
-    chunks: list[str] = []
-    start = time.monotonic()
-    last_logged = start
+    progress = _StreamProgress("anthropic", model)
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
         async with client.stream(
             "POST", "https://api.anthropic.com/v1/messages", json={**payload, "stream": True}, headers=headers,
@@ -254,94 +342,28 @@ async def _anthropic_complete(
                 except json.JSONDecodeError:
                     continue
                 if event.get("type") == "content_block_delta":
-                    piece = event.get("delta", {}).get("text") or ""
-                    if piece:
-                        chunks.append(piece)
-                        now = time.monotonic()
-                        if now - last_logged >= _STREAM_PROGRESS_LOG_INTERVAL:
-                            logger.info(
-                                "AI stream progress <- provider=anthropic model=%s after %.1fs (%d chars so far)",
-                                model, now - start, sum(len(c) for c in chunks),
-                            )
-                            last_logged = now
+                    progress.add(event.get("delta", {}).get("text") or "")
                 elif event.get("type") == "message_stop":
                     break
-    return "".join(chunks)
+    return progress.text()
 
 
 async def _lmstudio_complete(
-    prompt: str,
-    system: str,
-    model: str,
-    temperature: float,
-    timeout: float = AI_COMPLETE_TIMEOUT,
+    prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": AI_MAX_TOKENS,
-    }
-    async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
-        return await _stream_chat_completion(
-            client, f"{_lmstudio_base_url()}/chat/completions", payload, {}, "lmstudio", model,
-        )
+    return await _openai_style_complete("lmstudio", prompt, system, model, temperature, timeout)
 
 
 async def _openai_compatible_complete(
-    prompt: str,
-    system: str,
-    model: str,
-    temperature: float,
-    timeout: float = AI_COMPLETE_TIMEOUT,
+    prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
-    base_url = _openai_compatible_base_url()
-    if not base_url:
-        raise ValueError(
-            "No OpenAI-compatible endpoint configured (OPENAI_COMPATIBLE_BASE_URL, "
-            "or endpoints.openai_compatible_base_url in ai-settings.json)"
-        )
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
-    payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
-    headers = {}
-    compatible_key = _openai_compatible_api_key()
-    if compatible_key:
-        headers["Authorization"] = f"Bearer {compatible_key}"
-    async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
-        return await _stream_chat_completion(
-            client, f"{base_url.rstrip('/')}/chat/completions", payload, headers,
-            "openai_compatible", model,
-        )
+    return await _openai_style_complete("openai_compatible", prompt, system, model, temperature, timeout)
 
 
 async def _github_copilot_complete(
-    prompt: str,
-    system: str,
-    model: str,
-    temperature: float,
-    timeout: float = AI_COMPLETE_TIMEOUT,
+    prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
 ) -> str:
-    token = _github_token()
-    if not token:
-        raise ValueError("No GITHUB_TOKEN configured (env var, or api_keys.github in ai-settings.json)")
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
-    payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
-    headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
-        return await _stream_chat_completion(
-            client, f"{_github_models_base_url().rstrip('/')}/chat/completions", payload, headers,
-            "github_copilot", model,
-        )
+    return await _openai_style_complete("github_copilot", prompt, system, model, temperature, timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -470,6 +492,36 @@ async def generate_code(
     return code or raw, explanation
 
 
+async def _generate_tagged(
+    system: str,
+    tag: str,
+    description: str,
+    context: str,
+    model: str,
+    provider: AIProvider,
+    temperature: float = 0.3,
+) -> tuple[str, str]:
+    """
+    Ask the model for one piece of text wrapped in `<tag>...</tag>`, and split
+    the reply into (that text, the explanation that follows it).
+
+    Three generators want exactly this -- a system prompt, an output-format
+    description, a data-format contract. They differ only in their system
+    prompt (which is the actual content, and stays with each function) and in
+    the tag name. A model that ignores the tags falls back to the whole reply,
+    which is better than returning nothing.
+    """
+    prompt = f"Task description: {description}"
+    if context:
+        prompt += f"\n\nAdditional context: {context}"
+    raw = await complete(prompt, system, model, temperature, provider)
+
+    match = re.search(rf"<{tag}>(.*?)</{tag}>", raw, re.DOTALL)
+    if match:
+        return match.group(1).strip(), raw[match.end():].strip()
+    return raw.strip(), ""
+
+
 async def generate_prompt(
     description: str,
     context: str = "",
@@ -487,21 +539,7 @@ async def generate_prompt(
         "Output the system prompt as plain text inside <system_prompt> tags, "
         "then a brief explanation."
     )
-    prompt = f"Task description: {description}"
-    if context:
-        prompt += f"\n\nAdditional context: {context}"
-    raw = await complete(prompt, system, model, 0.3, provider)
-
-    # Extract <system_prompt>...</system_prompt>
-    import re
-    match = re.search(r"<system_prompt>(.*?)</system_prompt>", raw, re.DOTALL)
-    if match:
-        sp = match.group(1).strip()
-        explanation = raw[match.end() :].strip()
-    else:
-        sp = raw.strip()
-        explanation = ""
-    return sp, explanation
+    return await _generate_tagged(system, "system_prompt", description, context, model, provider)
 
 
 async def generate_output_format(
@@ -527,20 +565,7 @@ async def generate_output_format(
         "Output the format description as plain text inside <output_format> tags, "
         "then a brief explanation."
     )
-    prompt = f"Task description: {description}"
-    if context:
-        prompt += f"\n\nAdditional context: {context}"
-    raw = await complete(prompt, system, model, 0.3, provider)
-
-    import re
-    match = re.search(r"<output_format>(.*?)</output_format>", raw, re.DOTALL)
-    if match:
-        fmt = match.group(1).strip()
-        explanation = raw[match.end() :].strip()
-    else:
-        fmt = raw.strip()
-        explanation = ""
-    return fmt, explanation
+    return await _generate_tagged(system, "output_format", description, context, model, provider)
 
 
 async def generate_data_format(
@@ -581,20 +606,7 @@ async def generate_data_format(
         "description (field names, types, nesting, and a representative example "
         "value) inside <data_format> tags, followed by a brief explanation."
     )
-    prompt = f"Task description: {description}"
-    if context:
-        prompt += f"\n\nAdditional context: {context}"
-    raw = await complete(prompt, system, model, 0.3, provider)
-
-    import re
-    match = re.search(r"<data_format>(.*?)</data_format>", raw, re.DOTALL)
-    if match:
-        fmt = match.group(1).strip()
-        explanation = raw[match.end() :].strip()
-    else:
-        fmt = raw.strip()
-        explanation = ""
-    return fmt, explanation
+    return await _generate_tagged(system, "data_format", description, context, model, provider)
 
 
 async def generate_graph(
@@ -658,7 +670,6 @@ async def generate_graph(
     if graph_dict is None:
         raise ValueError("Could not parse a Graph DSL JSON document from the AI response")
 
-    import re
     match = re.search(r"```json\n(.*?)```", raw, re.DOTALL)
     explanation = raw[match.end() :].strip() if match else ""
     return graph_dict, explanation
@@ -666,7 +677,6 @@ async def generate_graph(
 
 def _extract_code_block(text: str) -> str:
     """Extract the first fenced code block from markdown text."""
-    import re
     match = re.search(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
     if match:
         return match.group(1).strip()
@@ -679,7 +689,6 @@ def _extract_json_block(text: str) -> Optional[dict]:
     parsing the whole raw response as JSON if no fenced block is found.
     Returns None if neither succeeds.
     """
-    import re
     match = re.search(r"```json\n(.*?)```", text, re.DOTALL)
     candidate = match.group(1).strip() if match else text.strip()
     try:

@@ -48,10 +48,13 @@ behavior scattered across separate executor files. Base classes live in
   element implements; there is no separate deploy-codegen method, see "Deploying a
   graph" below). Also implements `runtime_requirements(node)` (what interactive input
   the live editor/CLI must prompt for before running — defaults to a no-op on the base
-  class) and `deploy_needs(node) -> DeployNeeds` (which optional runtime dependency,
-  e.g. `httpx` for AI calls, the deployed bundle's `requirements.txt` needs — also
-  merge-able via `DeployNeeds.__or__`). Stateless singleton; all node-specific data
-  comes from the `GraphNode` argument, never `self`.
+  class) and `deploy_needs(node) -> DeployNeeds` (what this node changes about the
+  deployed bundle: `httpx` for AI calls, the web runtime for an interactive node —
+  merge-able via `DeployNeeds.__or__`). `DeployNeeds` carries **only** needs that
+  actually change the bundle; fields for "reads files" and "runs code" existed,
+  were computed by six elements, and were read by nobody, because those services
+  are stdlib-only and vendored unconditionally. Stateless singleton; all
+  node-specific data comes from the `GraphNode` argument, never `self`.
 - `GuiWidgetElement` — one per `GuiWidgetKind`, the `gui` node's sub-elements. Implements
   `ports(widget) -> (inputs, outputs)`, `execute(widget, inputs) -> Any`, and the
   widget-level equivalents `runtime_requirement(widget)` / `deploy_needs(widget)`.
@@ -223,6 +226,39 @@ legacy strings are never valid enum values again. `graphStore.ts`'s
 `migrateLegacyNode` mirrors the alias rules client-side for raw JSON imports that never
 touch the backend. When deleting a node type/widget kind, extend this one-time-rewrite
 pattern — do not add a permanent branch to a surviving element.
+
+## Shared frontend building blocks (use these, don't re-author them)
+
+Each of these replaced a pattern that had been hand-written between 7 and 33
+times, and in every case the copies had already drifted. Reach for them before
+writing a new dialog, generate button, or style object:
+
+| Need | Use | Not |
+|---|---|---|
+| A modal/overlay | `components/Modal.tsx` | a hand-rolled backdrop + panel + header |
+| A ✨ Generate button's state | `elements/shared/useGenerate.ts` | your own `generating`/`message` pair |
+| A message for a failed request | `utils/errorText.ts` | `e?.response?.data?.detail ?? …` |
+| Chrome colours and control styles | `ui/theme.ts` | a hex literal in a `style={{}}` |
+| Running a graph | `graphStore.runGraph(graph)` | your own execute/collect-windows loop |
+
+`Modal` also owns the keyboard and focus behaviour (Escape, focus trap, focus
+restore, `aria-modal`) that no dialog had before, which is the main reason not
+to hand-roll one: a new bespoke overlay silently loses all of it.
+
+`ui/theme.ts` holds only chrome that repeats. A colour used once -- a node
+type's tint, a chart accent -- stays where it is used; adding it here would
+make the file a dumping ground rather than a vocabulary.
+
+Two contracts worth knowing before touching a GUI widget:
+
+- **`GuiWidgetRuntimeProps` has both `value` and `incoming`.** `value` is what
+  the widget itself holds and what its `{id}_out` port emits; `incoming` is what
+  arrived on `{id}_in`. They were one prop, which is what made a chat window
+  overwrite the reply the user was reading as they typed. Display-only widgets
+  can still just take `incoming ?? value`.
+- **`components/gui/layout.ts` owns all grid maths**, including `sizeToGrid`
+  (re-exported from `utils/guiWidgets.ts`). There used to be a second size→cells
+  table here that disagreed with it on three of six numbers.
 
 ## Shared contracts — coordinate before editing
 

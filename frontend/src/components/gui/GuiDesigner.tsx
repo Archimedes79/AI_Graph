@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import type { GuiWidget } from '../../types/graph';
 import { GUI_WIDGET_KIND_LABELS } from '../../utils/guiWidgets';
 import { GUI_GRID_COLUMNS, GUI_GRID_ROW_HEIGHT, resolveWidgetLayout, layoutRowCount } from './layout';
+import { ACCENT, ACCENT_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '../../ui/theme';
 
 interface GuiDesignerProps {
   widgets: GuiWidget[];
@@ -99,7 +100,7 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
 
   if (widgets.length === 0) {
     return (
-      <p className="text-xs" style={{ color: '#475569' }}>
+      <p className="text-xs" style={{ color: DIMMER }}>
         No widgets yet — add some in the Config tab first.
       </p>
     );
@@ -108,13 +109,21 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs" style={{ color: '#475569' }}>
+        <p className="text-xs" style={{ color: DIMMER }}>
           Drag to move, drag the corner to resize. Layout is presentational only — ports never change.
         </p>
         <button
-          onClick={autoArrange}
+          onClick={() => {
+            const placed = widgets.filter((w) => w.x !== undefined || w.y !== undefined).length;
+            // Only ask when there is actually a layout to destroy; there is no
+            // undo, and the button sits right next to the grid it flattens.
+            if (placed > 0 && !window.confirm(
+              `Clear the positions of ${placed} placed widget${placed === 1 ? '' : 's'} and stack them in list order?`,
+            )) return;
+            autoArrange();
+          }}
           className="text-xs px-2 py-1 rounded flex-shrink-0"
-          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          style={NEUTRAL_BUTTON}
           title="Clear positions and stack widgets in list order"
         >
           Auto-arrange
@@ -123,14 +132,14 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
 
       {onGridChange && (
         <div className="flex items-center gap-4 mb-2">
-          <label className="flex items-center gap-1 text-xs" style={{ color: '#94a3b8' }}>
+          <label className="flex items-center gap-1 text-xs" style={{ color: MUTED }}>
             Background columns
             <input
               type="number"
               min={1}
               max={48}
               className="w-14 rounded px-1 py-0.5 text-xs"
-              style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+              style={FIELD}
               value={columns}
               onChange={(e) => onGridChange({ columns: Math.max(1, Math.min(48, Number(e.target.value) || columns)) })}
             />
@@ -139,7 +148,7 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
             onClick={() => onGridChange({ columns: contentColumns })}
             disabled={contentColumns === columns}
             className="text-xs px-2 py-1 rounded"
-            style={{ background: '#2d3148', color: '#e2e8f0', opacity: contentColumns === columns ? 0.4 : 1 }}
+            style={{ ...NEUTRAL_BUTTON, opacity: contentColumns === columns ? 0.4 : 1 }}
             title="Shrink background columns to exactly wrap the placed widgets"
           >
             Fit width to content
@@ -150,8 +159,8 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
       <div
         className="relative rounded-lg overflow-auto"
         style={{
-          background: '#0f1117',
-          border: '1px solid #2d3148',
+          background: SUNKEN,
+          border: `1px solid ${LINE}`,
           width: columns * CELL_WIDTH,
           height: rows * GUI_GRID_ROW_HEIGHT,
           maxWidth: '100%',
@@ -170,19 +179,19 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
               width: w * CELL_WIDTH - 4,
               height: h * GUI_GRID_ROW_HEIGHT - 4,
               background: '#2d1b4e',
-              border: '1px solid #6366f1',
+              border: `1px solid ${ACCENT}`,
             }}
             onMouseDown={(e) => startDrag(e, widget.id, 'move')}
           >
-            <div className="text-xs font-medium truncate" style={{ color: '#e2e8f0' }}>
+            <div className="text-xs font-medium truncate" style={{ color: TEXT }}>
               {widget.label || widget.id}
             </div>
-            <div className="text-xs truncate" style={{ color: '#a5b4fc' }}>
+            <div className="text-xs truncate" style={{ color: ACCENT_TEXT }}>
               {GUI_WIDGET_KIND_LABELS[widget.kind]}
             </div>
             <div
               className="absolute"
-              style={{ right: 0, bottom: 0, width: 12, height: 12, background: '#6366f1', cursor: 'nwse-resize' }}
+              style={{ right: 0, bottom: 0, width: 12, height: 12, background: ACCENT, cursor: 'nwse-resize' }}
               onMouseDown={(e) => startDrag(e, widget.id, 'resize')}
               title="Resize"
             />
@@ -193,7 +202,7 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
       <div className="mt-3 space-y-2">
         {placements.map(({ widget, x, y, w, h }) => (
           <div key={widget.id} className="flex items-center gap-2">
-            <span className="text-xs truncate flex-1 min-w-0" style={{ color: '#94a3b8' }}>
+            <span className="text-xs truncate flex-1 min-w-0" style={{ color: MUTED }}>
               {widget.label || widget.id}
             </span>
             {([
@@ -202,14 +211,14 @@ export default function GuiDesigner({ widgets, onChange, columns = GUI_GRID_COLU
               ['w', w, 1, columns],
               ['h', h, 1, 999],
             ] as const).map(([field, value, min, max]) => (
-              <label key={field} className="flex items-center gap-1 text-xs" style={{ color: '#475569' }}>
+              <label key={field} className="flex items-center gap-1 text-xs" style={{ color: DIMMER }}>
                 {field}
                 <input
                   type="number"
                   min={min}
                   max={max}
                   className="w-12 rounded px-1 py-0.5 text-xs"
-                  style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+                  style={FIELD}
                   value={value}
                   onChange={(e) => {
                     const next = Math.max(min, Math.min(max, Number(e.target.value) || 0));

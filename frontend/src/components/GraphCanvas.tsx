@@ -19,13 +19,14 @@ import { useGraphStore } from '../store/graphStore';
 import GraphNodeComponent from './nodes/GraphNodeComponent';
 import type { NodeType } from '../types/graph';
 import { ALL_NODE_PRESETS } from '../utils/nodeDefaults';
+import { ACCENT, LINE, PANEL, SUNKEN, SURFACE } from '../ui/theme';
 
 const nodeTypes = { graphNode: GraphNodeComponent };
 
 const edgeOptions = {
   type: 'smoothstep',
   animated: false,
-  style: { stroke: '#6366f1', strokeWidth: 2 },
+  style: { stroke: ACCENT, strokeWidth: 2 },
 };
 
 function getConnectionRejectionReason(
@@ -66,7 +67,7 @@ export default function GraphCanvas() {
         ...params,
         id: `edge-${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}`,
         type: 'smoothstep',
-        style: { stroke: '#6366f1', strokeWidth: 2 },
+        style: { stroke: ACCENT, strokeWidth: 2 },
       } as Edge;
       setRFEdges(addEdge(edge, rfEdges));
     },
@@ -122,20 +123,20 @@ export default function GraphCanvas() {
         onInit={setRfInstance}
         onDrop={onDrop}
         onDragOver={onDragOver}
-        deleteKeyCode="Delete"
-        style={{ background: '#0f1117' }}
+        deleteKeyCode={['Delete', 'Backspace']}
+        style={{ background: SUNKEN }}
       >
         <Background
           variant={BackgroundVariant.Dots}
           gap={24}
           size={1}
-          color="#2d3148"
+          color={LINE}
         />
         <Controls
-          style={{ background: '#1a1d2e', border: '1px solid #2d3148' }}
+          style={PANEL}
         />
         <MiniMap
-          style={{ background: '#1a1d2e', border: '1px solid #2d3148' }}
+          style={PANEL}
           nodeColor={(node) => {
             const colors: Record<string, string> = {
               input: '#1e3a5f',
@@ -143,7 +144,7 @@ export default function GraphCanvas() {
               code: '#1a3a2a',
               output: '#3a2000',
             };
-            return colors[node.data?.graphNode?.node_type] ?? '#1a1d2e';
+            return colors[node.data?.graphNode?.node_type] ?? SURFACE;
           }}
         />
       </ReactFlow>

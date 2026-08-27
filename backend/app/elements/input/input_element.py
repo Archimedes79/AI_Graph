@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from app.elements.base import NodeElement, DeployNeeds
+from app.elements.base import NodeElement
 from app.models.graph import GraphNode, NodeType
 from app.services import code_executor, file_service
 
@@ -63,11 +63,3 @@ class InputElement(NodeElement):
             "node_id": node.id, "label": node.label, "kind": _effective_mode(node),
             "direction": "input", "current_value": node.config.value or "",
         }]
-
-    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
-        mode = _effective_mode(node)
-        if mode == "text":
-            return DeployNeeds()
-        cfg = node.config
-        code_runner = mode == "directory" and not cfg.select_all_files and bool(cfg.selector_code.strip())
-        return DeployNeeds(files=True, code_runner=code_runner)

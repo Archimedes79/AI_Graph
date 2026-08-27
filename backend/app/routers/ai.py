@@ -27,6 +27,32 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
+@router.get("/providers")
+async def provider_status():
+    """
+    Which AI providers are actually usable right now: probes the local ones
+    (ollama, LM Studio) for reachability and served models -- so the editor
+    can offer a model dropdown instead of a blind free-text field -- and
+    reports what the current run/generation targets resolve to.
+    """
+    import asyncio
+
+    async def probe(provider: str):
+        return provider, await asyncio.to_thread(ai_settings.probe_local_models, provider, 1.5, True)
+
+    results = dict(await asyncio.gather(*(probe(p) for p in ai_settings.LOCAL_PROVIDERS)))
+    runtime_provider, runtime_model = ai_settings.resolve_target("default", "")
+    gen_provider, gen_model = ai_settings.resolve_gen_target("", "")
+    return {
+        "local": {
+            provider: {"reachable": models is not None, "models": models or []}
+            for provider, models in results.items()
+        },
+        "runtime_target": {"provider": runtime_provider, "model": runtime_model},
+        "gen_target": {"provider": gen_provider, "model": gen_model},
+    }
+
+
 def _gen_target(req) -> tuple[str, str]:
     """
     Which AI writes this code/prompt. The editor sends its one configured
@@ -82,101 +108,92 @@ def _with_context_file(context: str, context_file: str) -> str:
     return f"{context}\n\n{file_context}" if context else file_context
 
 
+async def _generated(name: str, coro):
+    """
+    Run one generation call and turn any failure into a 500 with the message.
+
+    All five endpoints below wanted the identical try/except/log, and a
+    generation that fails is a 500 with the provider's own message every time --
+    a local model that is not running, a missing key, an unreachable endpoint.
+    An HTTPException raised deeper (a context file that cannot be read) is
+    already the right answer and passes through untouched.
+    """
+    try:
+        return await coro
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("%s failed", name)
+        raise HTTPException(500, str(exc)) from exc
+
+
 @router.post("/generate-code", response_model=GenerateCodeResponse)
 async def generate_code(req: GenerateCodeRequest):
     """Ask the AI to generate code for a node's description."""
     gen_provider, gen_model = _gen_target(req)
-    try:
-        code, explanation = await ai_service.generate_code(
-            description=req.description,
-            language=req.language,
-            context=_with_context_file(req.context, req.context_file),
-            inputs=req.inputs,
-            outputs=req.outputs,
-            model=gen_model,
-            provider=gen_provider,
-        )
-        return GenerateCodeResponse(code=code, language=req.language, explanation=explanation)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("generate_code failed")
-        raise HTTPException(500, str(exc)) from exc
+    code, explanation = await _generated("generate_code", ai_service.generate_code(
+        description=req.description,
+        language=req.language,
+        context=_with_context_file(req.context, req.context_file),
+        inputs=req.inputs,
+        outputs=req.outputs,
+        model=gen_model,
+        provider=gen_provider,
+    ))
+    return GenerateCodeResponse(code=code, language=req.language, explanation=explanation)
 
 
 @router.post("/generate-prompt", response_model=GeneratePromptResponse)
 async def generate_prompt(req: GeneratePromptRequest):
     """Ask the AI to generate a system prompt from a natural-language description."""
     gen_provider, gen_model = _gen_target(req)
-    try:
-        sp, explanation = await ai_service.generate_prompt(
-            description=req.description,
-            context=_with_context_file(req.context, req.context_file),
-            model=gen_model,
-            provider=gen_provider,
-        )
-        return GeneratePromptResponse(system_prompt=sp, explanation=explanation)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("generate_prompt failed")
-        raise HTTPException(500, str(exc)) from exc
+    system_prompt, explanation = await _generated("generate_prompt", ai_service.generate_prompt(
+        description=req.description,
+        context=_with_context_file(req.context, req.context_file),
+        model=gen_model,
+        provider=gen_provider,
+    ))
+    return GeneratePromptResponse(system_prompt=system_prompt, explanation=explanation)
 
 
 @router.post("/generate-output-format", response_model=GenerateOutputFormatResponse)
 async def generate_output_format(req: GenerateOutputFormatRequest):
     """Ask the AI to describe the expected output format/shape from a description."""
     gen_provider, gen_model = _gen_target(req)
-    try:
-        fmt, explanation = await ai_service.generate_output_format(
-            description=req.description,
-            context=_with_context_file(req.context, req.context_file),
-            model=gen_model,
-            provider=gen_provider,
-        )
-        return GenerateOutputFormatResponse(output_format_prompt=fmt, explanation=explanation)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("generate_output_format failed")
-        raise HTTPException(500, str(exc)) from exc
+    fmt, explanation = await _generated("generate_output_format", ai_service.generate_output_format(
+        description=req.description,
+        context=_with_context_file(req.context, req.context_file),
+        model=gen_model,
+        provider=gen_provider,
+    ))
+    return GenerateOutputFormatResponse(output_format_prompt=fmt, explanation=explanation)
 
 
 @router.post("/generate-data-format", response_model=GenerateOutputFormatResponse)
 async def generate_data_format(req: GenerateOutputFormatRequest):
     """Ask the AI to design a data node's format contract, proposing then picking one option."""
     gen_provider, gen_model = _gen_target(req)
-    try:
-        fmt, explanation = await ai_service.generate_data_format(
-            description=req.description,
-            context=_with_context_file(req.context, req.context_file),
-            model=gen_model,
-            provider=gen_provider,
-        )
-        return GenerateOutputFormatResponse(output_format_prompt=fmt, explanation=explanation)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("generate_data_format failed")
-        raise HTTPException(500, str(exc)) from exc
+    fmt, explanation = await _generated("generate_data_format", ai_service.generate_data_format(
+        description=req.description,
+        context=_with_context_file(req.context, req.context_file),
+        model=gen_model,
+        provider=gen_provider,
+    ))
+    return GenerateOutputFormatResponse(output_format_prompt=fmt, explanation=explanation)
 
 
 @router.post("/generate-graph", response_model=GenerateGraphResponse)
 async def generate_graph(req: GenerateGraphRequest):
     """Ask the AI to author a full Graph DSL document from a natural-language description."""
     gen_provider, gen_model = _gen_target(req)
-    try:
-        graph_dict, explanation = await ai_service.generate_graph(
-            description=req.description,
-            context=req.context,
-            model=gen_model,
-            provider=gen_provider,
-        )
-        # Constructing with graph=graph_dict validates it against the full Graph schema.
-        return GenerateGraphResponse(graph=graph_dict, explanation=explanation)
-    except Exception as exc:
-        logger.exception("generate_graph failed")
-        raise HTTPException(500, str(exc)) from exc
+    graph_dict, explanation = await _generated("generate_graph", ai_service.generate_graph(
+        description=req.description,
+        context=req.context,
+        model=gen_model,
+        provider=gen_provider,
+    ))
+    # Constructing with graph=graph_dict validates it against the full Graph schema.
+    return GenerateGraphResponse(graph=graph_dict, explanation=explanation)
 
 
 @router.post("/complete")

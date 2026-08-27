@@ -1,5 +1,7 @@
 import React from 'react';
 import type { GuiWidget } from '../../../../types/graph';
+import { effectiveTextIoMode } from './mode';
+import { DIM, FIELD_ON_SURFACE, MUTED } from '../../../../ui/theme';
 
 interface Props {
   widget: GuiWidget;
@@ -7,17 +9,17 @@ interface Props {
 }
 
 export default function TextIoEditor({ widget, onUpdate }: Props) {
-  const mode = widget.mode && ['input', 'output', 'both'].includes(widget.mode) ? widget.mode : 'both';
+  const mode = effectiveTextIoMode(widget);
 
   return (
     <div className="space-y-2">
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           Mode
         </label>
         <select
           className="w-full rounded-lg px-2 py-1.5 text-sm"
-          style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148' }}
+          style={FIELD_ON_SURFACE}
           value={mode}
           onChange={(e) => onUpdate({ mode: e.target.value })}
         >
@@ -29,12 +31,12 @@ export default function TextIoEditor({ widget, onUpdate }: Props) {
 
       {mode !== 'output' && (
         <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
             Default / Initial value
           </label>
           <textarea
             className="w-full rounded-lg px-2 py-1.5 text-sm font-mono"
-            style={{ background: '#1a1d2e', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 60 }}
+            style={{ ...FIELD_ON_SURFACE, minHeight: 60 }}
             value={typeof widget.value === 'string' ? widget.value : ''}
             onChange={(e) => onUpdate({ value: e.target.value })}
             placeholder="Leave blank for no default…"
@@ -43,12 +45,12 @@ export default function TextIoEditor({ widget, onUpdate }: Props) {
       )}
 
       {mode === 'output' && (
-        <p className="text-xs" style={{ color: '#64748b' }}>
+        <p className="text-xs" style={{ color: DIM }}>
           Output mode: this widget has only an <strong style={{ color: '#a78bfa' }}>input port</strong> and shows whatever the connected node produces.
         </p>
       )}
       {mode === 'input' && (
-        <p className="text-xs" style={{ color: '#64748b' }}>
+        <p className="text-xs" style={{ color: DIM }}>
           Input mode: this widget has only an <strong style={{ color: '#a78bfa' }}>output port</strong> carrying the user's typed text.
         </p>
       )}

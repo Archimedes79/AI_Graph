@@ -107,42 +107,6 @@ def _memory_feedback_edge_ids(nodes: List[GraphNode], edges: List[GraphEdge]) ->
         feedback_ids = feedback_ids | {candidate.id}
 
 
-def _topological_sort(nodes: List[GraphNode], edges: List[GraphEdge]) -> List[str]:
-    """
-    Return node IDs in topological execution order.
-    Memory-feedback edges (see `_memory_feedback_edge_ids`) impose no ordering
-    constraint and are ignored here.
-    Raises ValueError if a cycle is detected.
-    """
-    feedback_ids = _memory_feedback_edge_ids(nodes, edges)
-    node_ids = {n.id for n in nodes}
-    in_degree: Dict[str, int] = {nid: 0 for nid in node_ids}
-    successors: Dict[str, List[str]] = defaultdict(list)
-
-    for edge in edges:
-        if edge.id in feedback_ids:
-            continue
-        if edge.source_node_id in node_ids and edge.target_node_id in node_ids:
-            in_degree[edge.target_node_id] += 1
-            successors[edge.source_node_id].append(edge.target_node_id)
-
-    queue: deque[str] = deque(
-        nid for nid, deg in in_degree.items() if deg == 0
-    )
-    order: List[str] = []
-    while queue:
-        nid = queue.popleft()
-        order.append(nid)
-        for succ in successors[nid]:
-            in_degree[succ] -= 1
-            if in_degree[succ] == 0:
-                queue.append(succ)
-
-    if len(order) != len(node_ids):
-        raise ValueError("Graph contains a cycle; execution is not possible.")
-    return order
-
-
 def _collect_inputs(
     node_id: str,
     edges: List[GraphEdge],
@@ -378,7 +342,7 @@ def _snapshot_outputs(node: GraphNode, outputs: Dict[str, Any]) -> None:
             _debug_connector_value(node.id, port, item, "out", index)
 
 
-def _settle_memory_feedback(
+async def _settle_memory_feedback(
     node_map: Dict[str, GraphNode],
     edges: List[GraphEdge],
     feedback_ids: set,
@@ -392,7 +356,15 @@ def _settle_memory_feedback(
     NodeResult.inputs for this round, so the UI shows it immediately instead
     of waiting for another run. A source that didn't succeed this round
     contributes nothing (the widget keeps whatever value it already had).
+
+    A display-only widget's transform code runs here too (the same
+    `apply_display_transform` the gui element uses for same-round wires):
+    when the widget ran at level 0 its feedback input hadn't arrived yet, so
+    settling the raw value would mean the transform never sees fresh data.
     """
+    from app.elements.gui.gui_element import apply_display_transform
+    from app.models.graph import gui_widget_ports
+
     for edge in edges:
         if edge.id not in feedback_ids:
             continue
@@ -413,23 +385,29 @@ def _settle_memory_feedback(
         widget = next((w for w in target_node.config.gui_widgets if w.id == widget_id), None)
         if widget is None:
             continue
+        _, widget_outputs = gui_widget_ports(widget)
+        if not widget_outputs:
+            value = await apply_display_transform(widget, value)
         widget.value = value
         target_result = result_by_id.get(edge.target_node_id)
         if target_result is not None:
             target_result.inputs[edge.target_port_id] = value
 
 
-def _blocked_required_port(
+def _blocked_port(
     node: GraphNode,
     edges: List[GraphEdge],
     result_by_id: Dict[str, "NodeResult"],
     feedback_ids: Optional[set] = None,
 ) -> Optional[str]:
     """
-    Return the name of a required input port whose wired-in predecessors have
-    ALL failed/been skipped (i.e. no successful source remains for that port),
-    or None if every required port is still satisfiable. Ports that aren't
-    wired to any edge, or that are optional, are never blocking here.
+    Return the name of a WIRED input port whose predecessors have ALL
+    failed/been skipped (i.e. no successful source remains for that port), or
+    None if every wired port is still satisfiable. Ports that aren't wired to
+    any edge are never blocking — optional means "may be unwired", but a port
+    the user *did* wire is expected to deliver: running anyway would hand the
+    element an inputs dict with the key silently missing, which surfaces as a
+    confusing KeyError inside user code instead of a clean skip.
     Memory-feedback edges (see `_memory_feedback_edge_ids`) are ignored: their
     source hasn't run yet this round and the target already has its own
     persisted value to fall back on.
@@ -441,8 +419,6 @@ def _blocked_required_port(
             incoming_by_port[edge.target_port_id].append(edge.source_node_id)
 
     for port in node.inputs:
-        if not port.required:
-            continue
         sources = incoming_by_port.get(port.id)
         if not sources:
             continue
@@ -558,12 +534,12 @@ async def execute_graph(
     for level in levels:
         async def run_node(node_id: str) -> NodeResult:
             node = node_map[node_id]
-            blocked_port = _blocked_required_port(node, graph.edges, result_by_id, feedback_ids)
+            blocked_port = _blocked_port(node, graph.edges, result_by_id, feedback_ids)
             if blocked_port is not None:
                 return NodeResult(
                     node_id=node_id,
                     status=ExecutionStatus.SKIPPED,
-                    error=f"Required input '{blocked_port}' has no available value: upstream node(s) failed",
+                    error=f"Input '{blocked_port}' has no available value: upstream node(s) failed or were skipped",
                 )
 
             inputs: Dict[str, Any] = {}
@@ -609,7 +585,7 @@ async def execute_graph(
                 node_outputs[result.node_id] = result.outputs
             node_results.append(result)
 
-    _settle_memory_feedback(node_map, graph.edges, feedback_ids, node_outputs, result_by_id)
+    await _settle_memory_feedback(node_map, graph.edges, feedback_ids, node_outputs, result_by_id)
 
     # Collect outputs of OUTPUT nodes as the final result
     final_outputs: Dict[str, Any] = {}
@@ -639,7 +615,7 @@ def get_runtime_requirements(graph: Graph) -> List[RuntimeRequirement]:
     the list of values that must be supplied.
 
     Delegates per-node-type/per-widget-kind logic to each element's
-    `runtime_requirements`, the same method `deploy_service._requirements_literal`
+    `runtime_requirements`, the same method `deploy_service._requirements_txt`
     dispatches through, so the editor and the compiled deploy bundle can never
     disagree on which nodes/widgets prompt at runtime.
     """

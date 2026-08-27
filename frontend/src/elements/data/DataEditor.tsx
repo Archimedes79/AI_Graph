@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { GraphNode } from '../../types/graph';
 import ContextFileAttachment from '../shared/ContextFileAttachment';
+import { DANGER_SOFT, FIELD, LINE, MUTED, SUCCESS, SUNKEN, TEXT } from '../../ui/theme';
 
 interface DataEditorProps {
   node: GraphNode;
@@ -55,19 +56,19 @@ export default function DataEditor({
     <>
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>Format generation prompt</label>
+          <label className="text-xs font-medium" style={{ color: MUTED }}>Format generation prompt</label>
           <button
             onClick={handleGenerateDataFormat}
             disabled={generating}
             className="text-xs px-2 py-1 rounded"
-            style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
+            style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}
           >
             {generating ? '…' : '✨ Generate'}
           </button>
         </div>
         <textarea
           className="w-full rounded-lg px-3 py-2 text-sm resize-none"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 100 }}
+          style={{ ...FIELD, minHeight: 100 }}
           value={node.config.data_prompt}
           onChange={(event) => setConfig('data_prompt', event.target.value)}
           placeholder="Describe the records, fields, types, constraints, and examples this node stores."
@@ -81,10 +82,10 @@ export default function DataEditor({
       />
 
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>Standard data format</label>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Standard data format</label>
         <select
           className="w-full rounded px-2 py-2 text-sm"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+          style={FIELD}
           value={node.config.data_format}
           onChange={(event) => applyDataFormat(event.target.value as GraphNode['config']['data_format'])}
         >
@@ -94,10 +95,10 @@ export default function DataEditor({
       </div>
 
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>Defined data format</label>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Defined data format</label>
         <textarea
           className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 140 }}
+          style={{ ...FIELD, minHeight: 140 }}
           value={node.config.data_format_prompt}
           onChange={(event) => setConfig('data_format_prompt', event.target.value)}
           placeholder="Field names, types, dimensions, constraints, and a representative example."
@@ -105,22 +106,22 @@ export default function DataEditor({
       </div>
 
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>Stored content</label>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Stored content</label>
         <textarea
           className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: `1px solid ${contentError ? '#f87171' : '#2d3148'}`, minHeight: 160 }}
+          style={{ background: SUNKEN, color: TEXT, border: `1px solid ${contentError ? DANGER_SOFT : LINE}`, minHeight: 160 }}
           value={content}
           onChange={(event) => updateContent(event.target.value)}
           spellCheck={false}
         />
-        {contentError && <p className="text-xs mt-1" style={{ color: '#f87171' }}>{contentError}</p>}
+        {contentError && <p className="text-xs mt-1" style={{ color: DANGER_SOFT }}>{contentError}</p>}
       </div>
 
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>Temporary debug directory</label>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Temporary debug directory</label>
         <input
           className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+          style={FIELD}
           value={debugDirectory}
           onChange={(event) => setDataDebugDirectory(event.target.value)}
           placeholder="Leave empty to disable runtime snapshots"

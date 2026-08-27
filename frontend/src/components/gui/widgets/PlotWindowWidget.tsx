@@ -3,7 +3,10 @@ import PlotWidget from '../../PlotWidget';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 
 /** Runtime `plot_window` widget: charts what flowed into `{id}_in`. Display-only. */
-export default function PlotWindowWidget({ value }: GuiWidgetRuntimeProps) {
+export default function PlotWindowWidget({ value, incoming }: GuiWidgetRuntimeProps) {
+  // Display-only: the port value is the whole point, the stored value is only
+  // a fallback for before the first run.
+  const data = incoming !== undefined ? incoming : value;
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 220, height: 90 });
 
@@ -22,7 +25,7 @@ export default function PlotWindowWidget({ value }: GuiWidgetRuntimeProps) {
 
   return (
     <div ref={containerRef} className="w-full h-full flex items-center justify-center" style={{ minHeight: 60 }}>
-      <PlotWidget data={value} width={size.width} height={size.height} />
+      <PlotWidget data={data} width={size.width} height={size.height} />
     </div>
   );
 }

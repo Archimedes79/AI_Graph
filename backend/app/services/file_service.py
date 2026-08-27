@@ -242,20 +242,3 @@ def detect_format(path: str) -> str:
     except UnicodeDecodeError:
         return "binary"
 
-
-def file_info(path: str) -> Dict[str, Any]:
-    """Return metadata about a file."""
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"Path not found: {path}")
-    stat = p.stat()
-    mime, _ = mimetypes.guess_type(str(p))
-    return {
-        "path": str(p),
-        "name": p.name,
-        "size_bytes": stat.st_size,
-        "is_file": p.is_file(),
-        "is_dir": p.is_dir(),
-        "mime_type": mime,
-        "extension": p.suffix,
-    }

@@ -4,6 +4,7 @@ import { useGraphStore } from '../../store/graphStore';
 import { GUI_GRID_COLUMNS, GUI_GRID_ROW_HEIGHT, layoutRowCount, resolveWidgetLayout } from './layout';
 import { GUI_WIDGET_ELEMENTS } from '../../elements/registry';
 import { valueToText } from './widgetProps';
+import { DANGER, DIMMER, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '../../ui/theme';
 
 interface GuiWindowProps {
   node: GraphNode;
@@ -11,8 +12,8 @@ interface GuiWindowProps {
   onClose: () => void;
 }
 
-const windowChrome = { background: '#1a1d2e', border: '1px solid #2d3148' } as const;
-const headerChrome = { background: '#0f1117', borderBottom: '1px solid #2d3148' } as const;
+const windowChrome = { background: SURFACE, border: `1px solid ${LINE}` } as const;
+const headerChrome = { background: SUNKEN, borderBottom: `1px solid ${LINE}` } as const;
 
 /**
  * The runtime window of a single `gui` node: every one of its widgets, laid
@@ -110,17 +111,22 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
         style={headerChrome}
         onMouseDown={onHeaderMouseDown}
       >
-        <span className="text-sm font-semibold flex items-center gap-2" style={{ color: '#e2e8f0' }}>
+        <span className="text-sm font-semibold flex items-center gap-2" style={{ color: TEXT }}>
           🖥️ {node.label}
         </span>
-        <button onClick={onClose} style={{ color: '#94a3b8' }} className="hover:text-white text-sm">
+        <button
+          onClick={onClose}
+          style={{ color: MUTED }}
+          className="hover:text-white text-sm"
+          aria-label={`Close ${node.label} window`}
+        >
           ✕
         </button>
       </div>
 
       <div className="flex-1 overflow-auto px-4 py-4">
         {node.config.gui_widgets.length === 0 ? (
-          <p className="text-xs" style={{ color: '#475569' }}>
+          <p className="text-xs" style={{ color: DIMMER }}>
             This GUI node has no widgets yet — add some in the node editor.
           </p>
         ) : (
@@ -135,7 +141,12 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
               const WidgetComponent = GUI_WIDGET_ELEMENTS[widget.kind].RuntimeWidget;
               const incoming = nodeResult?.inputs?.[`${widget.id}_in`];
               const outgoing = nodeResult?.outputs?.[`${widget.id}_out`];
-              const value = overrides[widget.id] ?? (incoming !== undefined ? incoming : widget.value ?? '');
+              // What the widget itself holds: the edit in flight, else its
+              // stored value. Kept apart from `incoming` so a widget that both
+              // shows and accepts text (a chat window) does not overwrite the
+              // reply the user is reading as they type.
+              const ownValue = overrides[widget.id] ?? widget.value ?? '';
+              const value = incoming !== undefined && overrides[widget.id] === undefined ? incoming : ownValue;
 
               return (
                 <div
@@ -143,12 +154,12 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
                   className="rounded-lg px-3 py-2 flex flex-col gap-1 min-w-0"
                   style={{
                     background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid #2d3148',
+                    border: `1px solid ${LINE}`,
                     gridColumn: `${x + 1} / span ${w}`,
                     gridRow: `${y + 1} / span ${h}`,
                   }}
                 >
-                  <span className="text-xs font-medium flex-shrink-0" style={{ color: '#94a3b8' }}>
+                  <span className="text-xs font-medium flex-shrink-0" style={{ color: MUTED }}>
                     {widget.label || widget.id}
                   </span>
                   <div className="flex-1 min-h-0">
@@ -156,16 +167,17 @@ export default function GuiWindow({ node, index, onClose }: GuiWindowProps) {
                       <WidgetComponent
                         widget={widget}
                         value={value}
+                        incoming={incoming}
                         onChange={(next) => setWidgetValue(widget, next)}
                       />
                     ) : (
-                      <span className="text-xs" style={{ color: '#ef4444' }}>
+                      <span className="text-xs" style={{ color: DANGER }}>
                         Unsupported widget kind: {widget.kind}
                       </span>
                     )}
                   </div>
                   {outgoing !== undefined && (
-                    <span className="text-xs truncate flex-shrink-0" style={{ color: '#475569' }} title={valueToText(outgoing)}>
+                    <span className="text-xs truncate flex-shrink-0" style={{ color: DIMMER }} title={valueToText(outgoing)}>
                       → {valueToText(outgoing).slice(0, 80)}
                     </span>
                   )}

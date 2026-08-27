@@ -15,11 +15,34 @@ single-widget instance of the exact composite below.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from app.elements.base import GuiWidgetElement, NodeElement, DeployNeeds
 from app.models.graph import GraphNode, GuiWidgetKind, NodeType, gui_widget_ports, sync_gui_node_ports
 from app.services import code_executor
+
+logger = logging.getLogger(__name__)
+
+
+async def apply_display_transform(widget, raw_value: Any) -> Any:
+    """
+    Run a display-only widget's optional transform code over the raw incoming
+    value. Because nothing downstream depends on the result, a failure here is
+    cosmetic: it becomes the widget's displayed value (a "⚠ … transform
+    failed" string) instead of an exception. Used by GuiElement.execute for
+    same-round wires and by graph_executor._settle_memory_feedback for
+    feedback wires, so a plot fed through a cycle is transformed identically.
+    """
+    if not widget.code.strip():
+        return raw_value  # no transform: display the incoming value as-is
+    try:
+        transformed = await code_executor.execute_code(widget.code, widget.language, {"value": raw_value})
+        return transformed.get("value", raw_value)
+    except Exception as exc:  # noqa: BLE001
+        label = widget.label or widget.id
+        logger.warning("Display transform of widget %s failed: %s", label, exc)
+        return f"⚠ {label}: transform failed:\n{exc}"
 
 
 def _widget_elements() -> Dict[GuiWidgetKind, GuiWidgetElement]:
@@ -47,15 +70,14 @@ class GuiElement(NodeElement):
             # Display-only widgets (e.g. plot_window) declare no output port and
             # therefore need no element behavior beyond an optional in-place
             # transform of the raw incoming value -- there is no downstream
-            # port to carry the result through.
+            # port to carry the result through. Because nothing downstream
+            # depends on it, a failure here is cosmetic: it becomes the widget's
+            # displayed value instead of failing the whole node (which used to
+            # take every sibling widget's output down with it).
             _, widget_outputs = gui_widget_ports(widget)
             if not widget_outputs:
-                if widget.kind == GuiWidgetKind.PLOT_WINDOW and not widget.code.strip():
-                    raise ValueError(f"Plot window '{widget.label or widget.id}' requires plotting code")
                 in_id = f"{widget.id}_in"
-                raw_value = inputs.get(in_id)
-                transformed = await code_executor.execute_code(widget.code, widget.language, {"value": raw_value})
-                inputs[in_id] = transformed.get("value", raw_value)
+                inputs[in_id] = await apply_display_transform(widget, inputs.get(in_id))
                 continue
             element = widget_elements.get(widget.kind)
             if element is None:

@@ -261,14 +261,16 @@ def _plot_graph(widget: GuiWidget) -> Graph:
 
 
 @pytest.mark.asyncio
-async def test_plot_window_widget_empty_code_marks_node_error():
+async def test_plot_window_widget_empty_code_passes_value_through():
+    """No transform code = display the incoming value unchanged (charting is
+    the frontend's job; a plot window without a transform is valid)."""
     graph = _plot_graph(GuiWidget(id="w1", kind=GuiWidgetKind.PLOT_WINDOW))
 
     result = await execute_graph(graph)
-    assert result.status == "error"
+    assert result.status == "success"
     gui_result = next(r for r in result.node_results if r.node_id == "gui")
-    assert gui_result.status == "error"
-    assert "requires plotting code" in gui_result.error
+    assert gui_result.status == "success"
+    assert gui_result.inputs["w1_in"] == "[1, 2, 3]"
 
 
 @pytest.mark.asyncio
@@ -284,13 +286,19 @@ async def test_plot_window_widget_transforms_value_into_inputs_snapshot():
 
 
 @pytest.mark.asyncio
-async def test_plot_window_widget_broken_code_marks_node_error():
+async def test_plot_window_widget_broken_code_shows_error_in_widget():
+    """A display-only transform failure is cosmetic: it must not fail the gui
+    node (that used to take every sibling widget's output down with it) —
+    the error becomes the widget's displayed value instead."""
     graph = _plot_graph(GuiWidget(id="w1", kind=GuiWidgetKind.PLOT_WINDOW, code=PLOT_TRANSFORM_BROKEN))
 
     result = await execute_graph(graph)
     results_by_id = {r.node_id: r for r in result.node_results}
-    assert results_by_id["gui"].status == "error"
-    assert "boom" in results_by_id["gui"].error
+    assert results_by_id["gui"].status == "success"
+    displayed = results_by_id["gui"].inputs["w1_in"]
+    assert isinstance(displayed, str)
+    assert "transform failed" in displayed
+    assert "boom" in displayed
 
 
 # ---------------------------------------------------------------------------

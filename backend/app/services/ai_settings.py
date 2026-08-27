@@ -123,9 +123,11 @@ def settings() -> Dict[str, Any]:
 
 
 def reset_cache() -> None:
-    """Forget the parsed settings file (after `save()`, or in tests)."""
+    """Forget the parsed settings file and any local-provider probe results
+    (after `save()`, or in tests)."""
     global _cached_settings
     _cached_settings = None
+    _probe_cache.clear()
 
 
 def save(new_settings: Dict[str, Any], path: Optional[Path] = None) -> Path:
@@ -142,6 +144,75 @@ def save(new_settings: Dict[str, Any], path: Optional[Path] = None) -> Path:
 def _section(name: str) -> Dict[str, Any]:
     value = settings().get(name)
     return value if isinstance(value, dict) else {}
+
+
+# ---------------------------------------------------------------------------
+# Local provider discovery
+# ---------------------------------------------------------------------------
+#
+# "Configure the AI once" only helps if there is something sensible when the
+# user configured *nothing*: a static ollama/llama3 fallback means a machine
+# that runs LM Studio instead (or ollama under a different model name) gets
+# connection errors out of the box. So the bottom rung of the precedence
+# ladder asks the local providers themselves: a quick HTTP probe (stdlib
+# urllib -- this module must stay dependency-free for deploy bundles), cached
+# per process. Explicit configuration at any higher rung bypasses all of this.
+
+LOCAL_PROVIDERS = ("ollama", "lmstudio")
+
+_probe_cache: Dict[str, Optional[list]] = {}
+
+
+def _local_base_url(provider: str) -> str:
+    # Defaults mirror ai_service's module-level constants; resolved through
+    # the same env-var/settings-file precedence via endpoint().
+    if provider == "ollama":
+        return endpoint("OLLAMA_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"), "ollama_base_url")
+    return endpoint("LMSTUDIO_BASE_URL", os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1"), "lmstudio_base_url")
+
+
+def probe_local_models(provider: str, timeout: float = 1.5, refresh: bool = False) -> Optional[list]:
+    """
+    The model names a local provider currently serves, or None if it isn't
+    reachable. Cached per process; pass refresh=True to re-probe (the editor's
+    provider-status endpoint does, so starting LM Studio mid-session is
+    picked up).
+    """
+    if provider not in LOCAL_PROVIDERS:
+        return None
+    if not refresh and provider in _probe_cache:
+        return _probe_cache[provider]
+
+    import urllib.request
+
+    url = _local_base_url(provider).rstrip("/") + ("/api/tags" if provider == "ollama" else "/models")
+    models: Optional[list] = None
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if provider == "ollama":
+            models = [m.get("name", "") for m in payload.get("models", []) if m.get("name")]
+        else:
+            models = [m.get("id", "") for m in payload.get("data", []) if m.get("id")]
+    except Exception as exc:  # noqa: BLE001 -- unreachable is a normal answer here
+        logger.debug("Local AI provider %s not reachable at %s: %s", provider, url, exc)
+    _probe_cache[provider] = models
+    return models
+
+
+def _first_reachable_local_provider() -> str:
+    for provider in LOCAL_PROVIDERS:
+        if probe_local_models(provider):
+            return provider
+    return ""
+
+
+def _default_model_for(provider: str) -> str:
+    """A usable model when none was configured: for a local provider, the
+    first model it actually serves (an LM Studio model id or an installed
+    ollama tag beats guessing 'llama3'); empty otherwise."""
+    models = probe_local_models(provider)
+    return models[0] if models else ""
 
 
 # ---------------------------------------------------------------------------
@@ -184,15 +255,20 @@ def _runtime_target() -> Tuple[str, str]:
         or os.getenv("AI_GRAPH_AI_PROVIDER", "")
         or str(ai_section.get("provider") or "")
         or _graph_defaults[0]
-        or FALLBACK_PROVIDER
     )
     model = (
         _override[1]
         or os.getenv("AI_GRAPH_AI_MODEL", "")
         or str(ai_section.get("model") or "")
         or _graph_defaults[1]
-        or FALLBACK_MODEL
     )
+    if not provider:
+        # Nothing configured anywhere: use whichever local provider is
+        # actually running (see "Local provider discovery" above) before
+        # falling back to the static default.
+        provider = _first_reachable_local_provider() or FALLBACK_PROVIDER
+    if not model:
+        model = _default_model_for(provider) or FALLBACK_MODEL
     return provider, model
 
 
@@ -211,7 +287,10 @@ def resolve_target(provider: str, model: str) -> Tuple[str, str]:
         return runtime_provider, runtime_model
     resolved_provider = provider if provider and provider != DEFAULT_SENTINEL else runtime_provider
     resolved_model = model or (runtime_model if resolved_provider == runtime_provider else "")
-    return resolved_provider, resolved_model or FALLBACK_MODEL
+    # A node that pins a provider but not a model gets that provider's own
+    # first served model (for a running local provider) before the static
+    # fallback -- "llama3" is meaningless to an LM Studio endpoint.
+    return resolved_provider, resolved_model or _default_model_for(resolved_provider) or FALLBACK_MODEL
 
 
 def resolve_gen_target(provider: str, model: str) -> Tuple[str, str]:

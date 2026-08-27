@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from app.elements.base import DeployNeeds, NodeElement
+from app.elements.base import NodeElement
 from app.models.graph import GraphNode, NodeType
 from app.services import code_executor
 from app.services.batching import reconcile_outputs
@@ -26,6 +26,3 @@ class CodeElement(NodeElement):
         cfg = node.config
         result = await code_executor.execute_code(cfg.code, cfg.language, inputs)
         return reconcile_outputs(node, result)
-
-    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
-        return DeployNeeds(code_runner=True, read_file_inputs=node.config.read_file_inputs)

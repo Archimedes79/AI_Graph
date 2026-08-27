@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
-import { executeGraph, downloadBundle, getDockerCompose, getRuntimeRequirements, generateGraph } from '../utils/api';
+import { downloadBundle, getDockerCompose, getRuntimeRequirements, generateGraph } from '../utils/api';
+import { errorText } from '../utils/errorText';
 import type { Graph, RuntimeRequirement } from '../types/graph';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { genAI } from '../store/settingsStore';
 import GraphWindows from './GraphWindows';
+import Modal from './Modal';
+import { ACCENT, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
 interface ToolbarProps {
   onNewGraph: () => void;
@@ -13,25 +16,33 @@ interface ToolbarProps {
   onLoad: () => void;
   onInjectJson: () => void;
   onOpenSettings: () => void;
+  /** Ask before replacing the current graph; false means the user said no. */
+  confirmDiscard: (action: string) => boolean;
   currentFilePath: string | null;
   saveStatus: string;
 }
 
 export default function Toolbar({
-  onNewGraph, onSave, onSaveAs, onLoad, onInjectJson, onOpenSettings, currentFilePath, saveStatus,
+  onNewGraph, onSave, onSaveAs, onLoad, onInjectJson, onOpenSettings, confirmDiscard,
+  currentFilePath, saveStatus,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
+  // Subscribed to so the toolbar re-renders when the graph changes and the
+  // "✅ Saved" line below can stop claiming something that is no longer true.
+  const rfNodes = useGraphStore((s) => s.rfNodes);
+  const rfEdges = useGraphStore((s) => s.rfEdges);
+  const isDirty = useGraphStore((s) => s.isDirty);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const isExecuting = useGraphStore((s) => s.isExecuting);
-  const setIsExecuting = useGraphStore((s) => s.setIsExecuting);
-  const setExecutionResult = useGraphStore((s) => s.setExecutionResult);
-  const setTextOutputWindows = useGraphStore((s) => s.setTextOutputWindows);
   const exportGraph = useGraphStore((s) => s.exportGraph);
+  const runGraph = useGraphStore((s) => s.runGraph);
   const executionResult = useGraphStore((s) => s.executionResult);
   const loadGraph = useGraphStore((s) => s.loadGraph);
   const updateNode = useGraphStore((s) => s.updateNode);
 
   const [showDeploy, setShowDeploy] = useState(false);
+  const [deployBusy, setDeployBusy] = useState('');
+  const [deployError, setDeployError] = useState('');
   const [deployContent, setDeployContent] = useState('');
   const [deployLabel, setDeployLabel] = useState('');
   const [pendingRequirements, setPendingRequirements] = useState<RuntimeRequirement[] | null>(null);
@@ -42,40 +53,6 @@ export default function Toolbar({
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiResult, setAiResult] = useState<{ graph: Graph; explanation?: string } | null>(null);
-
-  const runGraph = async (graph: Graph) => {
-    setIsExecuting(true);
-    setExecutionResult(null);
-    setTextOutputWindows([]);
-    try {
-      const result = await executeGraph(graph);
-      setExecutionResult(result);
-
-      const windows = graph.nodes
-        .filter((n) => n.node_type === 'output' && n.config.write_mode === 'window')
-        .map((n) => {
-          const nr = result.node_results.find((r) => r.node_id === n.id);
-          if (!nr || nr.status !== 'success') return null;
-          const content = Object.values(nr.outputs)
-            .flatMap((v) => (Array.isArray(v) ? v : [v]))
-            .filter((v) => v !== null && v !== undefined)
-            .map(String)
-            .join('\n');
-          return { nodeId: n.id, label: n.config.output_label || n.label, content };
-        })
-        .filter((w): w is { nodeId: string; label: string; content: string } => w !== null);
-      setTextOutputWindows(windows);
-    } catch (e: any) {
-      setExecutionResult({
-        status: 'error',
-        node_results: [],
-        final_outputs: {},
-        error: e?.response?.data?.detail ?? e?.message ?? 'Execution failed',
-      });
-    } finally {
-      setIsExecuting(false);
-    }
-  };
 
   const handleRun = async () => {
     const graph = exportGraph();
@@ -132,18 +109,35 @@ export default function Toolbar({
     setPendingGraph(null);
   };
 
-  const handleDownloadBundle = async () => {
-    const graph = exportGraph();
-    await downloadBundle(graph);
+  // Both deploy actions used to have no busy state and no error handling, so a
+  // slow or rejecting backend looked exactly like a dead button.
+  const runDeployAction = async (label: string, action: () => Promise<void>) => {
+    setShowDeploy(false);
+    setDeployBusy(label);
+    setDeployError('');
+    try {
+      await action();
+    } catch (error) {
+      setDeployError(errorText(error, `${label} failed.`));
+    } finally {
+      setDeployBusy('');
+    }
   };
 
-  const handleDockerCompose = async () => {
-    const graph = exportGraph();
-    const content = await getDockerCompose(graph);
-    setDeployLabel('docker-compose.yml');
-    setDeployContent(content);
-    setShowDeploy(true);
-  };
+  const handleDownloadBundle = () =>
+    runDeployAction('Bundle download', async () => {
+      await downloadBundle(exportGraph());
+    });
+
+  const handleDockerCompose = () =>
+    runDeployAction('Compose preview', async () => {
+      const content = await getDockerCompose(exportGraph());
+      setDeployLabel('docker-compose.yml');
+      setDeployContent(content);
+      // Deliberately no setShowDeploy(true): the preview renders off
+      // deployContent, and re-opening the dropdown here left it hanging behind
+      // the modal after the caller had just closed it.
+    });
 
   const handleOpenAiGraph = () => {
     setAiDescription('');
@@ -170,7 +164,7 @@ export default function Toolbar({
       const result = await generateGraph({ description: aiDescription, ...genAI() });
       setAiResult(result);
     } catch (e: any) {
-      setAiError(e?.response?.data?.detail ?? e?.message ?? 'Failed to generate graph.');
+      setAiError(errorText(e, 'Failed to generate graph.'));
     } finally {
       setAiGenerating(false);
     }
@@ -178,27 +172,46 @@ export default function Toolbar({
 
   const handleConfirmAiGraph = () => {
     if (!aiResult) return;
+    // The user came here to explore an idea; loading the result must not
+    // silently destroy the graph they already had open.
+    if (!confirmDiscard('Replace the current graph with the generated one?')) return;
     loadGraph(aiResult.graph);
     setShowAiGraph(false);
     setAiResult(null);
     setAiError('');
   };
 
+  // A dropdown with no dismiss handler stays open over the canvas until you
+  // find the button again.
+  useEffect(() => {
+    if (!showDeploy) return;
+    const close = () => setShowDeploy(false);
+    const onKeyDown = (event: KeyboardEvent) => event.key === 'Escape' && close();
+    // Deferred so the click that opened the menu doesn't immediately close it.
+    const timer = window.setTimeout(() => document.addEventListener('click', close), 0);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('click', close);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showDeploy]);
+
   const statusColor = executionResult
-    ? executionResult.status === 'success' ? '#22c55e' : '#ef4444'
-    : '#475569';
+    ? executionResult.status === 'success' ? SUCCESS : DANGER
+    : DIMMER;
   const statusLabel = executionResult ? `${executionResult.status} (${Math.round(executionResult.duration_ms ?? 0)}ms)` : '';
 
   return (
     <>
       <header
         className="flex items-center gap-4 px-4 h-14 flex-shrink-0"
-        style={{ background: '#0f1117', borderBottom: '1px solid #2d3148' }}
+        style={{ background: SUNKEN, borderBottom: `1px solid ${LINE}` }}
       >
         {/* Logo */}
         <div className="flex items-center gap-2 mr-2">
           <span className="text-xl">🕸️</span>
-          <span className="text-base font-bold" style={{ color: '#6366f1' }}>
+          <span className="text-base font-bold" style={{ color: ACCENT }}>
             AI-Graph
           </span>
         </div>
@@ -206,11 +219,11 @@ export default function Toolbar({
         {/* Graph name */}
         <input
           className="bg-transparent border-none outline-none text-sm font-medium max-w-xs"
-          style={{ color: '#e2e8f0', borderBottom: '1px dashed #2d3148', paddingBottom: 2 }}
+          style={{ color: TEXT, borderBottom: `1px dashed ${LINE}`, paddingBottom: 2 }}
           value={metadata.name}
           onChange={(e) => setMetadata({ name: e.target.value })}
         />
-        <span className="text-xs truncate max-w-xs" style={{ color: '#475569' }} title={currentFilePath ?? 'Not saved to a file yet'}>
+        <span className="text-xs truncate max-w-xs" style={{ color: DIMMER }} title={currentFilePath ?? 'Not saved to a file yet'}>
           {currentFilePath ?? 'Untitled — not saved'}
         </span>
 
@@ -220,48 +233,56 @@ export default function Toolbar({
         <button
           onClick={onNewGraph}
           className="px-3 py-1.5 text-xs rounded-lg"
-          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          style={NEUTRAL_BUTTON}
         >
           New
         </button>
         <button
           onClick={onLoad}
           className="px-3 py-1.5 text-xs rounded-lg"
-          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          style={NEUTRAL_BUTTON}
         >
           Load
         </button>
         <button
           onClick={onInjectJson}
           className="px-3 py-1.5 text-xs rounded-lg"
-          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          style={NEUTRAL_BUTTON}
         >
           📋 Copy
         </button>
         <button
           onClick={handleOpenAiGraph}
           className="px-3 py-1.5 text-xs rounded-lg"
-          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          style={NEUTRAL_BUTTON}
         >
           ✨ AI Graph
         </button>
         <button
           onClick={onSave}
           className="px-3 py-1.5 text-xs rounded-lg"
-          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          style={NEUTRAL_BUTTON}
         >
           Save
         </button>
         <button
           onClick={onSaveAs}
           className="px-3 py-1.5 text-xs rounded-lg"
-          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          style={NEUTRAL_BUTTON}
         >
           Save As…
         </button>
-        {saveStatus && (
-          <span className="text-xs" style={{ color: '#94a3b8' }}>
+        {/* A "✅ Saved to …" that survives the next ten edits is a lie about
+            what is on disk; it only shows while the graph is actually clean.
+            (rfNodes/rfEdges are read above purely to drive this re-render.) */}
+        {saveStatus && !isDirty() && (
+          <span className="text-xs" style={{ color: MUTED }}>
             {saveStatus}
+          </span>
+        )}
+        {isDirty() && (rfNodes.length > 0 || rfEdges.length > 0) && (
+          <span className="text-xs" style={{ color: DIM }} title="Unsaved changes">
+            ● unsaved
           </span>
         )}
 
@@ -270,7 +291,7 @@ export default function Toolbar({
           onClick={handleRun}
           disabled={isExecuting}
           className="px-4 py-1.5 text-xs rounded-lg font-semibold flex items-center gap-2"
-          style={{ background: isExecuting ? '#374151' : '#6366f1', color: 'white', opacity: isExecuting ? 0.7 : 1 }}
+          style={{ background: isExecuting ? '#374151' : ACCENT, color: 'white', opacity: isExecuting ? 0.7 : 1 }}
         >
           {isExecuting ? '⏳ Running…' : '▶ Run Graph'}
         </button>
@@ -278,7 +299,7 @@ export default function Toolbar({
         <button
           onClick={onOpenSettings}
           className="px-3 py-1.5 text-xs rounded-lg"
-          style={{ background: '#2d3148', color: '#e2e8f0' }}
+          style={NEUTRAL_BUTTON}
           title="Code generation AI and this graph's runtime AI default"
         >
           ⚙ Settings
@@ -288,12 +309,19 @@ export default function Toolbar({
         <div className="relative">
           <button
             onClick={() => setShowDeploy(!showDeploy)}
+            disabled={!!deployBusy}
+            aria-expanded={showDeploy}
+            aria-haspopup="menu"
             className="px-3 py-1.5 text-xs rounded-lg flex items-center gap-1"
-            style={{ background: '#2d3148', color: '#e2e8f0' }}
+            style={{ ...NEUTRAL_BUTTON, opacity: deployBusy ? 0.6 : 1 }}
           >
-            🚀 Deploy ▾
+            {deployBusy ? `⏳ ${deployBusy}…` : '🚀 Deploy ▾'}
           </button>
         </div>
+
+        {deployError && (
+          <span className="text-xs font-medium" style={{ color: DANGER_TEXT }}>❌ {deployError}</span>
+        )}
 
         {/* Status */}
         {statusLabel && (
@@ -307,25 +335,25 @@ export default function Toolbar({
       {showDeploy && (
         <div
           className="fixed z-50"
-          style={{ top: 56, right: 16, background: '#1a1d2e', border: '1px solid #2d3148', borderRadius: 8, minWidth: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
+          style={{ top: 56, right: 16, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 8, minWidth: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
         >
           <button
             className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
-            style={{ color: '#e2e8f0' }}
-            onClick={() => { setShowDeploy(false); handleDownloadBundle(); }}
+            style={{ color: TEXT }}
+            onClick={handleDownloadBundle}
           >
             📦 Download Bundle (zip)
           </button>
           <button
             className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
-            style={{ color: '#e2e8f0' }}
-            onClick={() => { setShowDeploy(false); handleDockerCompose(); }}
+            style={{ color: TEXT }}
+            onClick={handleDockerCompose}
           >
             🐳 View Docker Compose
           </button>
           <button
             className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors border-t"
-            style={{ color: '#94a3b8', borderColor: '#2d3148' }}
+            style={{ color: MUTED, borderColor: LINE }}
             onClick={() => setShowDeploy(false)}
           >
             Cancel
@@ -335,25 +363,11 @@ export default function Toolbar({
 
       {/* Deploy preview modal */}
       {deployContent && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          onClick={() => setDeployContent('')}
-        >
-          <div
-            className="rounded-xl overflow-hidden shadow-2xl w-full max-w-2xl mx-4"
-            style={{ background: '#1a1d2e', border: '1px solid #2d3148' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-3" style={{ background: '#0f1117', borderBottom: '1px solid #2d3148' }}>
-              <span className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>{deployLabel}</span>
-              <button onClick={() => setDeployContent('')} style={{ color: '#94a3b8' }}>✕</button>
-            </div>
-            <pre className="p-5 overflow-auto text-xs font-mono" style={{ color: '#94a3b8', maxHeight: '60vh' }}>
-              {deployContent}
-            </pre>
-          </div>
-        </div>
+        <Modal title={deployLabel} onClose={() => setDeployContent('')} maxWidth="max-w-2xl">
+          <pre className="p-5 overflow-auto text-xs font-mono" style={{ color: MUTED, maxHeight: '60vh' }}>
+            {deployContent}
+          </pre>
+        </Modal>
       )}
 
       <GraphWindows
@@ -364,82 +378,70 @@ export default function Toolbar({
 
       {/* AI Graph modal */}
       {showAiGraph && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          onClick={handleCloseAiGraph}
-        >
-          <div
-            className="rounded-xl overflow-hidden shadow-2xl w-full max-w-2xl mx-4"
-            style={{ background: '#1a1d2e', border: '1px solid #2d3148' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="flex items-center justify-between px-5 py-3"
-              style={{ background: '#0f1117', borderBottom: '1px solid #2d3148' }}
-            >
-              <span className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>
-                ✨ Generate Graph with AI
-              </span>
-              <button onClick={handleCloseAiGraph} style={{ color: '#94a3b8' }}>✕</button>
-            </div>
-
-            <div className="p-5 flex flex-col gap-3">
-              <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
-                Describe the graph you want
-              </label>
-              <textarea
-                value={aiDescription}
-                onChange={(e) => setAiDescription(e.target.value)}
-                className="w-full rounded-lg p-3 text-sm resize-y outline-none"
-                style={{ minHeight: 100, background: '#0f1117', border: '1px solid #2d3148', color: '#e2e8f0' }}
-                placeholder="e.g. Read a text file, summarize it with AI, and show the result in a text window."
-                disabled={aiGenerating}
-              />
-
-              {aiError && (
-                <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: '#fca5a5' }}>
-                  ❌ {aiError}
-                </div>
-              )}
-
-              {aiResult && (
-                <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc' }}>
-                  {aiResult.explanation || 'Graph generated.'} ({aiResult.graph.nodes.length} node{aiResult.graph.nodes.length === 1 ? '' : 's'},{' '}
-                  {aiResult.graph.edges.length} edge{aiResult.graph.edges.length === 1 ? '' : 's'})
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-1">
+        <Modal
+          title="✨ Generate Graph with AI"
+          onClose={handleCloseAiGraph}
+          maxWidth="max-w-2xl"
+          dismissOnBackdrop={!aiGenerating}
+          dismissOnEscape={!aiGenerating}
+          footer={
+            <>
+              <button
+                onClick={handleCloseAiGraph}
+                className="px-4 py-2 text-sm rounded-lg"
+                style={NEUTRAL_BUTTON}
+              >
+                Cancel
+              </button>
+              {aiResult ? (
                 <button
-                  onClick={handleCloseAiGraph}
-                  className="px-4 py-2 text-sm rounded-lg"
-                  style={{ background: '#2d3148', color: '#e2e8f0' }}
+                  onClick={handleConfirmAiGraph}
+                  className="px-4 py-2 text-sm rounded-lg font-semibold"
+                  style={{ background: SUCCESS, color: 'white' }}
                 >
-                  Cancel
+                  Load Graph
                 </button>
-                {aiResult ? (
-                  <button
-                    onClick={handleConfirmAiGraph}
-                    className="px-4 py-2 text-sm rounded-lg font-semibold"
-                    style={{ background: '#22c55e', color: 'white' }}
-                  >
-                    Load Graph
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleGenerateGraph}
-                    disabled={aiGenerating}
-                    className="px-4 py-2 text-sm rounded-lg font-semibold"
-                    style={{ background: '#6366f1', color: 'white', opacity: aiGenerating ? 0.7 : 1 }}
-                  >
-                    {aiGenerating ? '⏳ Generating…' : 'Generate'}
-                  </button>
-                )}
+              ) : (
+                <button
+                  onClick={handleGenerateGraph}
+                  disabled={aiGenerating}
+                  className="px-4 py-2 text-sm rounded-lg font-semibold"
+                  style={{ ...PRIMARY_BUTTON, opacity: aiGenerating ? 0.7 : 1 }}
+                >
+                  {aiGenerating ? '⏳ Generating…' : 'Generate'}
+                </button>
+              )}
+            </>
+          }
+        >
+          <div className="p-5 flex flex-col gap-3">
+            <label className="text-xs font-medium" style={{ color: MUTED }}>
+              Describe the graph you want
+            </label>
+            <textarea
+              autoFocus
+              value={aiDescription}
+              onChange={(e) => setAiDescription(e.target.value)}
+              className="w-full rounded-lg p-3 text-sm resize-y outline-none"
+              style={{ minHeight: 100, background: SUNKEN, border: `1px solid ${LINE}`, color: TEXT }}
+              placeholder="e.g. Read a text file, summarize it with AI, and show the result in a text window."
+              disabled={aiGenerating}
+            />
+
+            {aiError && (
+              <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: DANGER_TEXT }}>
+                ❌ {aiError}
               </div>
-            </div>
+            )}
+
+            {aiResult && (
+              <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: ACCENT_TEXT }}>
+                {aiResult.explanation || 'Graph generated.'} ({aiResult.graph.nodes.length} node{aiResult.graph.nodes.length === 1 ? '' : 's'},{' '}
+                {aiResult.graph.edges.length} edge{aiResult.graph.edges.length === 1 ? '' : 's'})
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

@@ -1,5 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { deleteAttachment, uploadAttachment } from '../../utils/api';
+import { errorText } from '../../utils/errorText';
+import { DANGER_SOFT, DIM, LINE, MUTED, SUNKEN, TEXT, WELL } from '../../ui/theme';
 
 interface ContextFileAttachmentProps {
   label: string;
@@ -27,7 +29,7 @@ export default function ContextFileAttachment({ label, path, onChange }: Context
       const result = await uploadAttachment(file);
       onChange(result.path);
     } catch (e: any) {
-      setError(e?.response?.data?.detail ?? e?.message ?? 'Upload failed');
+      setError(errorText(e, 'Upload failed'));
     } finally {
       setBusy(false);
     }
@@ -47,14 +49,14 @@ export default function ContextFileAttachment({ label, path, onChange }: Context
 
   return (
     <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>{label}</label>
+      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>{label}</label>
       {path ? (
         <div
           className="flex items-center justify-between rounded-lg px-3 py-2 text-sm"
-          style={{ background: '#0f1117', border: '1px solid #2d3148', color: '#e2e8f0' }}
+          style={{ ...WELL, color: TEXT }}
         >
           <span className="truncate">📎 {displayName(path)}</span>
-          <button onClick={handleRemove} disabled={busy} className="text-xs px-2" style={{ color: '#f87171' }}>
+          <button onClick={handleRemove} disabled={busy} className="text-xs px-2" style={{ color: DANGER_SOFT }}>
             ✕ Remove
           </button>
         </div>
@@ -64,7 +66,7 @@ export default function ContextFileAttachment({ label, path, onChange }: Context
           onDrop={(e) => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); }}
           onClick={() => inputRef.current?.click()}
           className="rounded-lg px-3 py-2 text-sm text-center cursor-pointer"
-          style={{ background: '#0f1117', border: '1px dashed #2d3148', color: '#64748b' }}
+          style={{ background: SUNKEN, border: `1px dashed ${LINE}`, color: DIM }}
         >
           {busy ? 'Uploading…' : '📎 Drop a file here, or click to attach'}
           <input
@@ -75,7 +77,7 @@ export default function ContextFileAttachment({ label, path, onChange }: Context
           />
         </div>
       )}
-      {error && <p className="text-xs mt-1" style={{ color: '#f87171' }}>{error}</p>}
+      {error && <p className="text-xs mt-1" style={{ color: DANGER_SOFT }}>{error}</p>}
     </div>
   );
 }

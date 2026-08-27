@@ -3,6 +3,8 @@ import type { GraphNode } from '../../types/graph';
 import type { AIProvider } from '../../types/graph';
 import ProviderModelSelect from '../shared/ProviderModelSelect';
 import ContextFileAttachment from '../shared/ContextFileAttachment';
+import BatchAndFileInputOptions from '../shared/BatchAndFileInputOptions';
+import { DIMMER, FIELD, MUTED, PRIMARY_BUTTON } from '../../ui/theme';
 
 interface AIEditorProps {
   node: GraphNode;
@@ -26,12 +28,12 @@ export default function AIEditor({
   return (
     <>
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           Text describing the prompt
         </label>
         <textarea
           className="w-full rounded-lg px-3 py-2 text-sm resize-none"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 96 }}
+          style={{ ...FIELD, minHeight: 96 }}
           value={node.description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Describe the assistant behavior you want in the runtime prompt."
@@ -46,21 +48,21 @@ export default function AIEditor({
 
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
+          <label className="text-xs font-medium" style={{ color: MUTED }}>
             Runtime prompt window
           </label>
           <button
             onClick={handleGeneratePrompt}
             disabled={generating}
             className="text-xs px-2 py-1 rounded"
-            style={{ background: '#6366f1', color: 'white', opacity: generating ? 0.5 : 1 }}
+            style={{ ...PRIMARY_BUTTON, opacity: generating ? 0.5 : 1 }}
           >
             {generating ? '…' : '✨ Generate'}
           </button>
         </div>
         <textarea
           className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 120 }}
+          style={{ ...FIELD, minHeight: 120 }}
           value={node.config.system_prompt}
           onChange={(e) => setConfig('system_prompt', e.target.value)}
           placeholder="You are a helpful assistant…"
@@ -68,7 +70,7 @@ export default function AIEditor({
       </div>
 
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           Runtime provider/model (used when this node runs)
         </label>
         <ProviderModelSelect
@@ -79,14 +81,14 @@ export default function AIEditor({
           allowDefault
           defaultLabel="Use the graph's default (⚙ Settings)"
         />
-        <p className="text-xs mt-1" style={{ color: '#475569' }}>
+        <p className="text-xs mt-1" style={{ color: DIMMER }}>
           Leave this on the graph's default unless this one node must always use a specific
           provider — then a deployed copy of the graph can be pointed at a different AI
           without editing every node.
         </p>
       </div>
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           Temperature ({node.config.temperature})
         </label>
         <input
@@ -97,32 +99,7 @@ export default function AIEditor({
           className="w-full"
         />
       </div>
-      <div>
-        <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
-          <input
-            type="checkbox"
-            checked={node.config.batch_mode === 'whole_list'}
-            onChange={(e) => setConfig('batch_mode', e.target.checked ? 'whole_list' : 'per_item')}
-          />
-          Run once on the whole input array
-        </label>
-        <p className="text-xs mt-1" style={{ color: '#475569' }}>
-          Leave unchecked to run this prompt separately for each item in a list input (default). Check this to receive the entire array at once — useful for totals, summaries, or merges.
-        </p>
-      </div>
-      <div>
-        <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
-          <input
-            type="checkbox"
-            checked={!!node.config.read_file_inputs}
-            onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
-          />
-          Read file contents from paths
-        </label>
-        <p className="text-xs mt-1" style={{ color: '#475569' }}>
-          When enabled, any input port with data type 'File path' is automatically read from disk (text or base64) before this node runs.
-        </p>
-      </div>
+      <BatchAndFileInputOptions node={node} setConfig={setConfig} subject="prompt" />
     </>
   );
 }

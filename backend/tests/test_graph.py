@@ -473,14 +473,19 @@ async def test_legacy_alias_node_types_and_widget_kinds_migrate():
 
 
 # ---------------------------------------------------------------------------
-# Topological sort tests
+# Topological ordering tests
 # ---------------------------------------------------------------------------
 
-def test_topological_sort_linear():
+# These test `_topological_levels`, the ordering function `execute_graph`
+# actually calls. A second, flat `_topological_sort` used to exist purely for
+# these two tests; it ran the same Kahn's-algorithm pass over the same
+# feedback-edge filter and was vendored into every deploy bundle unused.
+
+def test_topological_levels_linear():
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.models.graph import GraphNode, GraphEdge, NodeType, NodeConfig, NodePosition
-    from app.services.graph_executor import _topological_sort
+    from app.models.graph import GraphNode, GraphEdge, NodeType
+    from app.services.graph_executor import _topological_levels
 
     nodes = [
         GraphNode(id="a", node_type=NodeType.INPUT, label="A"),
@@ -491,15 +496,15 @@ def test_topological_sort_linear():
         GraphEdge(id="e1", source_node_id="a", source_port_id="out", target_node_id="b", target_port_id="in"),
         GraphEdge(id="e2", source_node_id="b", source_port_id="out", target_node_id="c", target_port_id="in"),
     ]
-    order = _topological_sort(nodes, edges)
+    order = [node_id for level in _topological_levels(nodes, edges) for node_id in level]
     assert order.index("a") < order.index("b") < order.index("c")
 
 
-def test_topological_sort_cycle():
+def test_topological_levels_cycle():
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from app.models.graph import GraphNode, GraphEdge, NodeType
-    from app.services.graph_executor import _topological_sort
+    from app.services.graph_executor import _topological_levels
 
     nodes = [
         GraphNode(id="a", node_type=NodeType.CODE, label="A"),
@@ -510,7 +515,7 @@ def test_topological_sort_cycle():
         GraphEdge(id="e2", source_node_id="b", source_port_id="out", target_node_id="a", target_port_id="in"),
     ]
     with pytest.raises(ValueError, match="cycle"):
-        _topological_sort(nodes, edges)
+        _topological_levels(nodes, edges)
 
 
 # ---------------------------------------------------------------------------
@@ -847,6 +852,45 @@ async def test_required_single_port_still_skips_on_failed_predecessor(monkeypatc
     assert results_by_id["failing"].status == "error"
     assert results_by_id["downstream"].status == "skipped"
     assert "Value" in results_by_id["downstream"].error
+
+
+@pytest.mark.asyncio
+async def test_wired_optional_port_skips_on_failed_predecessor():
+    """Regression: an OPTIONAL port that IS wired to a failing predecessor must
+    skip cleanly too — running anyway hands user code an inputs dict with the
+    key silently missing, which surfaced as `KeyError: 'input'` inside the
+    code node instead of a skip explaining that the upstream failed."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.models.graph import Graph, GraphNode, GraphEdge, GraphMetadata, NodeType, Port, PortKind, DataType, NodeConfig
+    from app.services.graph_executor import execute_graph
+
+    graph = Graph(
+        metadata=GraphMetadata(name="Wired Optional Port Test"),
+        nodes=[
+            GraphNode(
+                id="failing", node_type=NodeType.CODE, label="Failing",
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(code="def run(inputs):\n    raise ValueError('boom')\n"),
+            ),
+            GraphNode(
+                id="downstream", node_type=NodeType.CODE, label="Downstream",
+                inputs=[Port(id="input", name="Input", kind=PortKind.INPUT, data_type=DataType.ANY, multi=False, required=False)],
+                outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT, multi=False, required=False)],
+                config=NodeConfig(code="def run(inputs):\n    return {'output': inputs['input']}\n"),
+            ),
+        ],
+        edges=[
+            GraphEdge(id="e1", source_node_id="failing", source_port_id="output", target_node_id="downstream", target_port_id="input"),
+        ],
+    )
+
+    result = await execute_graph(graph)
+    results_by_id = {r.node_id: r for r in result.node_results}
+
+    assert results_by_id["failing"].status == "error"
+    assert results_by_id["downstream"].status == "skipped"
+    assert "upstream" in results_by_id["downstream"].error
 
 
 @pytest.mark.asyncio

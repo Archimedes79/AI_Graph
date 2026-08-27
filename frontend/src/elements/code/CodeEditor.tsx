@@ -1,6 +1,8 @@
 import React from 'react';
 import type { GraphNode } from '../../types/graph';
 import ContextFileAttachment from '../shared/ContextFileAttachment';
+import BatchAndFileInputOptions from '../shared/BatchAndFileInputOptions';
+import { FIELD, MUTED, SUCCESS } from '../../ui/theme';
 
 interface CodeEditorProps {
   node: GraphNode;
@@ -23,21 +25,21 @@ export default function CodeEditor({
     <>
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
+          <label className="text-xs font-medium" style={{ color: MUTED }}>
             Prompt text
           </label>
           <button
             onClick={handleGenerateCode}
             disabled={generating}
             className="text-xs px-2 py-1 rounded"
-            style={{ background: '#22c55e', color: 'white', opacity: generating ? 0.5 : 1 }}
+            style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}
           >
             {generating ? '…' : '✨ Generate'}
           </button>
         </div>
         <textarea
           className="w-full rounded-lg px-3 py-2 text-sm resize-none"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 120 }}
+          style={{ ...FIELD, minHeight: 120 }}
           value={node.config.code_prompt}
           onChange={(e) => setConfig('code_prompt', e.target.value)}
           placeholder="Describe what the generated code should do."
@@ -51,10 +53,10 @@ export default function CodeEditor({
       />
 
       <div className="flex items-center gap-3">
-        <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>Language selection</label>
+        <label className="text-xs font-medium" style={{ color: MUTED }}>Language selection</label>
         <select
           className="rounded px-2 py-1 text-sm"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
+          style={FIELD}
           value={node.config.language}
           onChange={(e) => setConfig('language', e.target.value)}
         >
@@ -64,12 +66,12 @@ export default function CodeEditor({
       </div>
 
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           Code window (editable)
         </label>
         <textarea
           className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-          style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148', minHeight: 220 }}
+          style={{ ...FIELD, minHeight: 220 }}
           value={node.config.code}
           onChange={(e) => setConfig('code', e.target.value)}
           placeholder={`def run(inputs):\n    return {"output": inputs.get("input", "")}`}
@@ -77,32 +79,7 @@ export default function CodeEditor({
         />
       </div>
 
-      <div>
-        <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
-          <input
-            type="checkbox"
-            checked={node.config.batch_mode === 'whole_list'}
-            onChange={(e) => setConfig('batch_mode', e.target.checked ? 'whole_list' : 'per_item')}
-          />
-          Run once on the whole input array
-        </label>
-        <p className="text-xs mt-1" style={{ color: '#475569' }}>
-          Leave unchecked to run this code separately for each item in a list input (default). Check this to receive the entire array at once — useful for totals, summaries, or merges.
-        </p>
-      </div>
-      <div>
-        <label className="flex items-center gap-2 text-sm" style={{ color: '#94a3b8' }}>
-          <input
-            type="checkbox"
-            checked={!!node.config.read_file_inputs}
-            onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
-          />
-          Read file contents from paths
-        </label>
-        <p className="text-xs mt-1" style={{ color: '#475569' }}>
-          When enabled, any input port with data type 'File path' is automatically read from disk (text or base64) before this node runs.
-        </p>
-      </div>
+      <BatchAndFileInputOptions node={node} setConfig={setConfig} subject="code" />
     </>
   );
 }

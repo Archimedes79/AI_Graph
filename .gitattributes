@@ -1,0 +1,7 @@
+# Normalise line endings so a Windows/Dropbox round-trip stops rewriting whole
+# files in the diff. Text files are stored with LF in the repository and checked
+# out with LF; the editors in use here all handle that fine.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
 import type { RuntimeRequirement } from '../types/graph';
+import Modal from './Modal';
+import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
 interface GraphWindowsProps {
   requirements: RuntimeRequirement[] | null;
@@ -11,10 +13,10 @@ interface GraphWindowsProps {
 const KIND_ICON: Record<string, string> = { text: '📝', file: '📄', directory: '📁' };
 
 const windowChrome = {
-  background: '#1a1d2e',
-  border: '1px solid #2d3148',
+  background: SURFACE,
+  border: `1px solid ${LINE}`,
 } as const;
-const headerChrome = { background: '#0f1117', borderBottom: '1px solid #2d3148' } as const;
+const headerChrome = { background: SUNKEN, borderBottom: `1px solid ${LINE}` } as const;
 
 /**
  * Renders the "before running" input-requirement window and the post-run
@@ -39,60 +41,34 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
 
   if (!requirements && outputWindows.length === 0) return null;
 
-// Only input-direction requirements are mandatory; output paths are optional.
-    const canSubmit = !!requirements && requirements.filter((r) => r.direction === 'input').every((r) => (values[keyFor(r)] ?? '').trim().length > 0);
+  // Only input-direction requirements are mandatory; output paths are optional.
+  const missing = (requirements ?? [])
+    .filter((r) => r.direction === 'input' && (values[keyFor(r)] ?? '').trim().length === 0)
+    .map((r) => r.label);
+  const canSubmit = !!requirements && missing.length === 0;
 
   return (
     <>
       {requirements && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.6)' }}
-        >
-          <div
-            className="rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col"
-            style={{ ...windowChrome, maxHeight: '90vh' }}
-          >
-            <div className="px-6 py-4" style={headerChrome}>
-              <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: '#e2e8f0' }}>
-                📥 Before running…
-              </h2>
-              <p className="text-xs mt-1" style={{ color: '#94a3b8' }}>
-                This graph needs a few values before it can run.
-              </p>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-              {requirements.map((req) => (
-                <div key={keyFor(req)}>
-                  <label className="block text-xs font-medium mb-1" style={{ color: '#94a3b8' }}>
-                    {KIND_ICON[req.kind] ?? '📄'}{' '}
-                    {req.kind === 'text'
-                      ? `Text for "${req.label}"`
-                      : `${req.direction === 'input' ? 'Read' : 'Write'} ${req.kind} for "${req.label}"`}
-                    {req.direction === 'output' && (
-                      <span className="ml-1 text-xs" style={{ color: '#475569' }}>(optional)</span>
-                    )}
-                  </label>
-                  <input
-                    className={`w-full rounded-lg px-3 py-2 text-sm ${req.kind === 'text' ? '' : 'font-mono'}`}
-                    style={{ background: '#0f1117', color: '#e2e8f0', border: '1px solid #2d3148' }}
-                    value={values[keyFor(req)] ?? ''}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [keyFor(req)]: e.target.value }))}
-                    placeholder={
-                      req.kind === 'text' ? 'Enter text…' : req.kind === 'directory' ? '/path/to/directory' : '/path/to/file'
-                    }
-                    autoFocus
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-end gap-3 px-6 py-4" style={headerChrome}>
+        <Modal
+          title="📥 Before running…"
+          onClose={onCancel}
+          scrollBody
+          // Typed paths; a backdrop click must not discard them. Escape is the
+          // deliberate way out and matches Cancel.
+          dismissOnBackdrop={false}
+          footer={
+            <>
+              {/* A greyed-out Run button with no explanation just looks broken. */}
+              {missing.length > 0 && (
+                <span className="text-xs mr-auto" style={{ color: MUTED }}>
+                  Still needed: {missing.join(', ')}
+                </span>
+              )}
               <button
                 onClick={onCancel}
                 className="px-4 py-2 text-sm rounded-lg"
-                style={{ background: '#2d3148', color: '#e2e8f0' }}
+                style={NEUTRAL_BUTTON}
               >
                 Cancel
               </button>
@@ -100,13 +76,51 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
                 onClick={() => onSubmit(values)}
                 disabled={!canSubmit}
                 className="px-4 py-2 text-sm rounded-lg font-semibold"
-                style={{ background: '#6366f1', color: 'white', opacity: canSubmit ? 1 : 0.5 }}
+                style={{ ...PRIMARY_BUTTON, opacity: canSubmit ? 1 : 0.5 }}
               >
                 ▶ Run Graph
               </button>
-            </div>
+            </>
+          }
+        >
+          <div className="px-6 pt-4 pb-1">
+            <p className="text-xs" style={{ color: MUTED }}>
+              This graph needs a few values before it can run.
+            </p>
           </div>
-        </div>
+
+          <div
+            className="px-6 py-5 space-y-4"
+            // Enter in any field runs, as in every other one-purpose dialog.
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canSubmit) onSubmit(values);
+            }}
+          >
+            {requirements.map((req, index) => (
+              <div key={keyFor(req)}>
+                <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
+                  {KIND_ICON[req.kind] ?? '📄'}{' '}
+                  {req.kind === 'text'
+                    ? `Text for "${req.label}"`
+                    : `${req.direction === 'input' ? 'Read' : 'Write'} ${req.kind} for "${req.label}"`}
+                  {req.direction === 'output' && (
+                    <span className="ml-1 text-xs" style={{ color: DIMMER }}>(optional)</span>
+                  )}
+                </label>
+                <input
+                  className={`w-full rounded-lg px-3 py-2 text-sm ${req.kind === 'text' ? '' : 'font-mono'}`}
+                  style={FIELD}
+                  value={values[keyFor(req)] ?? ''}
+                  onChange={(e) => setValues((prev) => ({ ...prev, [keyFor(req)]: e.target.value }))}
+                  placeholder={
+                    req.kind === 'text' ? 'Enter text…' : req.kind === 'directory' ? '/path/to/directory' : '/path/to/file'
+                  }
+                  autoFocus={index === 0}
+                />
+              </div>
+            ))}
+          </div>
+        </Modal>
       )}
 
       {outputWindows.length > 0 && (
@@ -127,18 +141,19 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
               }}
             >
               <div className="flex items-center justify-between px-4 py-2 flex-shrink-0" style={headerChrome}>
-                <span className="text-sm font-semibold flex items-center gap-2" style={{ color: '#e2e8f0' }}>
+                <span className="text-sm font-semibold flex items-center gap-2" style={{ color: TEXT }}>
                   🪟 {win.label}
                 </span>
                 <button
                   onClick={() => closeOutputWindow(win.nodeId)}
-                  style={{ color: '#94a3b8' }}
+                  style={{ color: MUTED }}
                   className="hover:text-white text-sm"
+                  aria-label={`Close output window ${win.label}`}
                 >
                   ✕
                 </button>
               </div>
-              <pre className="flex-1 overflow-auto px-4 py-3 text-sm whitespace-pre-wrap" style={{ color: '#e2e8f0' }}>
+              <pre className="flex-1 overflow-auto px-4 py-3 text-sm whitespace-pre-wrap" style={{ color: TEXT }}>
                 {win.content}
               </pre>
             </div>
