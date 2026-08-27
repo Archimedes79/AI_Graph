@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -54,19 +55,31 @@ async def health():
     return {"status": "ok", "service": "ai-graph-backend"}
 
 
-@app.get("/")
-async def root():
-    return {
-        "message": "AI-Graph API is running",
-        "docs": "/docs",
-        "redoc": "/redoc",
-    }
-
-
 # Optional single-process production mode: if a built frontend exists at
 # frontend/dist (repo_root/frontend/dist), serve it on the same port as the
 # API. Registered last so it never shadows the /api/* routers above. No-op
 # (dev mode unaffected) when the directory doesn't exist, e.g. local dev.
-_frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
-if _frontend_dist.is_dir():
+# In a PyInstaller build the repo layout is gone and everything the exe ships
+# sits under sys._MEIPASS instead (see build_editor_exe.py).
+if getattr(sys, "frozen", False):
+    _frontend_dist = Path(sys._MEIPASS) / "frontend" / "dist"
+else:
+    _frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+_serves_frontend = _frontend_dist.is_dir()
+
+# Only claim "/" when there is no UI to serve there. An explicit route always
+# wins over a mount, so registering this unconditionally would hand the editor's
+# own entry point a JSON blob instead of index.html.
+if not _serves_frontend:
+
+    @app.get("/")
+    async def root():
+        return {
+            "message": "AI-Graph API is running",
+            "docs": "/docs",
+            "redoc": "/redoc",
+        }
+
+else:
     app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")

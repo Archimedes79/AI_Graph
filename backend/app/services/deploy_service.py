@@ -18,6 +18,7 @@ are generated.
 from __future__ import annotations
 
 import json
+import sys
 import textwrap
 from pathlib import Path
 from typing import Dict, Union
@@ -31,10 +32,18 @@ from app.services import ai_settings
 
 # Root of the actual `app` package this module lives in -- what gets vendored
 # into the bundle's app/ folder verbatim (never regenerated/rewritten).
-_APP_ROOT = Path(__file__).resolve().parent.parent
 # Repo root: only consulted at *build* time to locate graph-runner/run.py to
 # embed as main.py; the emitted bundle has no dependency on this layout.
-_REPO_ROOT = _APP_ROOT.parent.parent
+# A PyInstaller build of the editor has no repo around it, so it ships these
+# same trees as data under sys._MEIPASS and vendoring reads them from there --
+# which is why build_editor_exe.py must add-data app/ and graph-runner/ as
+# source, not just as importable modules.
+if getattr(sys, "frozen", False):
+    _REPO_ROOT = Path(sys._MEIPASS)
+    _APP_ROOT = _REPO_ROOT / "app"
+else:
+    _APP_ROOT = Path(__file__).resolve().parent.parent
+    _REPO_ROOT = _APP_ROOT.parent.parent
 # The built editor frontend. Its `runtime.html` entry is the page a GUI bundle
 # serves (see graph-runner/serve.py); absent in a checkout that has never run
 # `npm run build`, in which case a GUI graph still deploys -- as a headless CLI

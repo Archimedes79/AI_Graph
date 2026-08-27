@@ -3,6 +3,7 @@
 Build a checkpoint: verify the tree, then package the editor.
 
     python checkpoint.py                 # verify everything, then package
+    python checkpoint.py --exe           # ...and build a standalone executable
     python checkpoint.py --skip-tests    # just build + package
     python checkpoint.py --verify-only   # run the checks, produce nothing
 
@@ -64,6 +65,8 @@ def main() -> int:
     parser.add_argument("--skip-tests", action="store_true", help="build and package without running the suites")
     parser.add_argument("--verify-only", action="store_true", help="run the checks but produce no package")
     parser.add_argument("--keep-going", action="store_true", help="run every step even after a failure")
+    parser.add_argument("--exe", action="store_true",
+                        help="also build a standalone executable (needs PyInstaller on this machine)")
     args = parser.parse_args()
 
     python = backend_python()
@@ -85,6 +88,11 @@ def main() -> int:
             Step("Package the editor", [python, "start.py", "--mode", "package", "--skip-build",
                                         "--output", "dist/ai-graph-editor-package.zip"], REPO_ROOT),
         ]
+        if args.exe:
+            steps.append(
+                Step("Build standalone executable", [python, "build_editor_exe.py", "--skip-build"], REPO_ROOT,
+                     "Install PyInstaller first:  pip install pyinstaller")
+            )
 
     failed = False
     for step in steps:
@@ -109,6 +117,10 @@ def main() -> int:
             print(f"\nCheckpoint ready: {package} ({package.stat().st_size / 1024:.0f} KB)")
             print("On the target machine: unzip, `pip install -r backend/requirements.txt`,")
             print("then `python start.py --mode prod` -> http://localhost:8000")
+        exe = next(iter(REPO_ROOT.glob("dist/ai-graph.exe")), None) or next(iter(REPO_ROOT.glob("dist/ai-graph")), None)
+        if args.exe and exe and exe.is_file():
+            print(f"\nStandalone executable: {exe} ({exe.stat().st_size / 1024 / 1024:.0f} MB)")
+            print("Needs no Python on the target machine; run it -> http://127.0.0.1:8000")
     else:
         print("\nCheckpoint verified.")
     return 0

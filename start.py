@@ -18,10 +18,12 @@ VS Code's .vscode/tasks.json.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 import threading
+import webbrowser
 import zipfile
 from pathlib import Path
 
@@ -91,7 +93,29 @@ def run_dev() -> int:
     return backend.returncode or frontend.returncode or 0
 
 
+def run_prod_frozen() -> int:
+    """
+    Packaged editor (see build_editor_exe.py): serve the embedded API and UI
+    from THIS process. A frozen build cannot spawn `python -m uvicorn` the way
+    the checkout does -- sys.executable is the editor itself -- so it runs the
+    ASGI app in-process, and opens a browser because the exe is double-clicked
+    at least as often as it is launched from a shell.
+    """
+    import uvicorn
+    from app.main import app
+
+    port = int(os.getenv("AI_GRAPH_PORT", "8000"))
+    url = f"http://127.0.0.1:{port}"
+    print(f"[start] AI-Graph editor -> {url}   (Ctrl+C to stop)")
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    return 0
+
+
 def run_prod() -> int:
+    if getattr(sys, "frozen", False):
+        return run_prod_frozen()
+
     dist_dir = FRONTEND_DIR / "dist"
     if not dist_dir.is_dir():
         print("[start] frontend/dist not found.")
@@ -154,7 +178,12 @@ def build_package(output: Path | None = None, skip_build: bool = False) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the AI-Graph editor (frontend + backend).")
-    parser.add_argument("--mode", choices=["dev", "prod", "package"], default="dev")
+    # A packaged build has no npm/vite to run, and serving the embedded UI is
+    # the only thing it can do -- so that is what a double-click gets.
+    parser.add_argument(
+        "--mode", choices=["dev", "prod", "package"],
+        default="prod" if getattr(sys, "frozen", False) else "dev",
+    )
     parser.add_argument("--output", type=Path, default=None, help="package mode: output zip path")
     parser.add_argument(
         "--skip-build", action="store_true",

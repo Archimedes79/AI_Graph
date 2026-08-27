@@ -7,9 +7,11 @@ The code module must expose a `run(inputs: dict) -> dict` function.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -36,6 +38,47 @@ def _sandboxed_env() -> Dict[str, str]:
     return {k: v for k, v in os.environ.items() if k.upper() in _SUBPROCESS_ENV_ALLOWLIST}
 
 
+def _is_real_python(candidate: str) -> bool:
+    """
+    Whether `candidate` actually runs Python. Windows ships a `python.exe` App
+    Execution Alias that only advertises the Microsoft Store, and `shutil.which`
+    happily returns it -- so a name on PATH is not evidence of an interpreter.
+    """
+    try:
+        probe = subprocess.run(
+            [candidate, "-c", "print(1)"],
+            capture_output=True, timeout=15, env=_sandboxed_env(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return probe.returncode == 0 and probe.stdout.decode(errors="replace").strip() == "1"
+
+
+@functools.lru_cache(maxsize=1)
+def _python_interpreter() -> str:
+    """
+    The interpreter to run a Python code node with. In a PyInstaller build
+    `sys.executable` is the packaged tool itself, so using it would relaunch the
+    tool instead of running the snippet -- a frozen build has to find a real
+    Python on PATH. Cached: this probes subprocesses, and the answer cannot
+    change while the process lives.
+    """
+    if not getattr(sys, "frozen", False):
+        return sys.executable
+
+    for name in ("python", "python3", "py"):
+        found = shutil.which(name)
+        if found and _is_real_python(found):
+            return found
+
+    raise RuntimeError(
+        "Python code nodes need a Python interpreter on PATH when running from a "
+        "packaged executable, and none was found. Install Python from python.org "
+        "(the Microsoft Store stub on PATH does not count), or use a JavaScript "
+        "code node, which needs Node.js instead."
+    )
+
+
 async def _run_in_subprocess(cmd: list[str], inputs: Dict[str, Any], label: str) -> Dict[str, Any]:
     """Run `cmd` (interpreter + script path already appended) with JSON inputs as argv, JSON output on stdout.
 
@@ -60,9 +103,12 @@ async def _run_in_subprocess(cmd: list[str], inputs: Dict[str, Any], label: str)
             raise TimeoutError(f"{label} execution timed out after {EXECUTION_TIMEOUT}s")
 
         if completed.returncode != 0:
-            raise RuntimeError(completed.stderr.decode().strip())
+            # errors="replace": a failing interpreter's message is in the OS
+            # locale's encoding, not necessarily UTF-8, and a decode error here
+            # would mask the actual reason the node failed.
+            raise RuntimeError(completed.stderr.decode(errors="replace").strip())
 
-        raw = completed.stdout.decode().strip()
+        raw = completed.stdout.decode(errors="replace").strip()
         return json.loads(raw) if raw else {}
     finally:
         os.unlink(cmd[-1])
@@ -90,7 +136,7 @@ print(json.dumps(_outputs))
         f.write(wrapper)
         tmp_path = f.name
 
-    return await _run_in_subprocess([sys.executable, tmp_path], inputs, "Code")
+    return await _run_in_subprocess([_python_interpreter(), tmp_path], inputs, "Code")
 
 
 async def execute_javascript(code: str, inputs: Dict[str, Any]) -> Dict[str, Any]:

@@ -46,8 +46,9 @@ in the graph itself, not hidden inside a block's implementation.
   `graph.json`, not generated code) that a non-technical user or CI job can run without
   the AI-Graph editor at all.
 
-For where to make a given code change (which file to touch per node type/widget kind),
-see [AGENTS.md](AGENTS.md).
+This file covers what AI-Graph is and how to run/use it. For where to make a given code
+change (which file to touch per node type/widget kind, and the design rules behind the
+codebase), see [AGENTS.md](AGENTS.md).
 
 ---
 
@@ -134,6 +135,38 @@ python start.py --mode package --output my.zip    # custom output path
 
 The zip contains `backend/app`, `backend/requirements.txt`, the built `frontend/dist`, `start.py` and `README.md`. On the target machine: unzip, `pip install -r backend/requirements.txt` (ideally in a venv), then `python start.py --mode prod`.
 
+`python checkpoint.py` runs this whole pipeline in the safe order for you before a
+release: checks generated types are current, runs both test suites, builds the
+frontend, and packages the zip above — stopping at the first failure. Use
+`--skip-tests` to just build+package, or `--verify-only` to check without packaging.
+
+### Option 4 – standalone executable
+
+The zip above still expects Python and `pip install` on the target machine. To hand
+someone a file they just run, build the editor into one executable:
+
+```bash
+pip install pyinstaller          # build machine only
+python build_editor_exe.py       # -> dist/ai-graph[.exe]
+```
+
+Run it (or double-click it) and it serves the editor on
+[http://127.0.0.1:8000](http://127.0.0.1:8000), opening a browser by itself. The
+backend, the built UI, and the sources the Deploy feature vendors are all embedded —
+no Python, Node or pip needed on the target. `--onedir` emits a folder instead of a
+single file (starts faster), `--skip-build` reuses an existing `frontend/dist`, and
+`AI_GRAPH_PORT` picks a different port. `python checkpoint.py --exe` runs the full
+verify-and-package pipeline and builds the executable at the end.
+
+Cross-compiling is not supported: build the Windows `.exe` on Windows, the Linux
+binary on Linux, the macOS binary on macOS.
+
+Two things still come from the target machine, because they are separate interpreters
+that cannot be embedded: **Python code nodes need a `python` on PATH** (a real one —
+the Microsoft Store stub is detected and rejected with a clear message) and
+**JavaScript code nodes need `node`**. Everything else — AI calls, file I/O, GUI
+widgets, deploy-bundle export — works standalone.
+
 ---
 
 ## 📖 Graph DSL
@@ -186,9 +219,8 @@ The AI can generate this function for you: just describe what the node should do
 A `gui` node is a composable interface node: it holds an ordered list of **widgets**
 (`config.gui_widgets`), and its ports are *always* derived from that list — you never
 hand-edit a GUI node's inputs/outputs. Add, remove, or reorder widgets and the node's
-ports are regenerated to match (`sync_gui_node_ports` in `app/models/graph.py`, mirrored
-in `frontend/src/utils/guiWidgets.ts`). This is the core interface contract: **a GUI
-node's inputs and outputs always reflect exactly what its widgets are capable of.**
+ports are regenerated to match. This is the core interface contract: **a GUI node's
+inputs and outputs always reflect exactly what its widgets are capable of.**
 
 | Widget kind | Ports it contributes |
 |---|---|
@@ -213,37 +245,27 @@ Layout is edited in the **Designer** tab of the GUI node editor: widgets are pla
 never affect ports, wiring, or execution — and widgets without coordinates simply stack
 in list order.
 
-### Memory-feedback edges (data/gui/widget nodes)
+### Cyclic graphs: gui → ai → gui
 
 A `gui` node usually has both outputs (e.g. `input_picker`) and inputs (e.g. `text_io`),
 so the natural "pick a file → process it with AI → show the answer in the text window"
-pattern wires `gui → ai → gui`. That is a DAG at *port* level but a **cycle at node
-level**.
-
-A `data`, `gui`, or `widget` node is a **memory element**: its output can reflect its own
-persisted value rather than being freshly recomputed from inputs each round, so an edge
-closing a cycle by feeding one of its input ports is automatically excluded from cycle
-detection and topological ordering — no manual "deferred" marking needed. Once every
-node in that round finishes executing, the fresh value is written into the target
-node's stored value (visible immediately in the run results) so the *next* run's output
-reflects it too. Acyclic updates to a data node pass through immediately and are also
-persisted. See
-[examples/gui_file_to_ai_to_text.json](examples/gui_file_to_ai_to_text.json) for a working
-File Open → AI → Text Window graph built this way.
+pattern wires `gui → ai → gui` — a cycle at node level. `data`, `gui`, and `widget`
+nodes are **memory elements**: their output can reflect its own persisted value instead
+of being freshly recomputed each round, so a cycle-closing edge into one of them is
+automatically excluded from execution ordering — no manual "deferred" marking needed —
+and settles into the node's stored value once the round finishes, ready for the *next*
+run. See [examples/gui_file_to_ai_to_text.json](examples/gui_file_to_ai_to_text.json)
+for a working File Open → AI → Text Window graph, and
+[AGENTS.md](AGENTS.md#memory-feedback-edges-dataguiwidget-nodes) for the underlying
+algorithm.
 
 ### Plot window data transforms
 
-`plot_window` requires a data-transform snippet (`widget.code` /
-`widget.language`), following the **same contract as a Code node**:
+`plot_window` needs a data-transform snippet with the **same contract as a Code node**:
 `run(inputs: dict) -> dict`, receiving `{"value": <raw incoming data>}` and returning
 `{"value": <plot-ready data>}` — a list of numbers, or a list of `{x, y}` /
-`{label, value}` objects. It runs through the same sandboxed `code_executor` as Code
-nodes (`backend/app/elements/gui/widgets/plot_window/plot_window_element.py`). An empty
-code field is rejected during execution. The transformed value is rendered by a
-dependency-free inline SVG component (`frontend/src/components/PlotWidget.tsx`). The GUI widget editor
-(`frontend/src/components/GuiWidgetEditor.tsx`) can call the AI to generate this
-transform via the same `/api/ai/generate-code` endpoint used elsewhere — no separate
-endpoint is needed.
+`{label, value}` objects. The AI can generate this transform for you, the same way it
+generates Code node bodies.
 
 ### Generating whole graphs with AI
 
@@ -272,15 +294,16 @@ Two separate settings, both behind **⚙ Settings** in the toolbar:
 
 - **Code generation AI** – used by every ✨ Generate action. It belongs to your
   browser, not to the graph, so a graph you share carries no model choice of yours.
-  Server-side fallback: `AI_GRAPH_GEN_PROVIDER` / `AI_GRAPH_GEN_MODEL`.
 - **Runtime AI default** – what the graph's AI nodes call. Saved with the graph as
   `metadata.ai_defaults`; every AI node left on *"Use the graph's default"* follows
   it, so a graph with eight AI nodes is configured once.
 
-A deployed graph can be re-pointed without editing it — `--ai-provider/--ai-model`,
-`AI_GRAPH_AI_PROVIDER`, or an `ai-settings.json` next to the executable (which also
-holds endpoints and API keys, so a double-clicked tool needs no environment
-variables at all). `--ai-force` overrides even nodes that pin their own provider.
+A deployed graph can be re-pointed at a different runtime AI without editing it, highest
+precedence first: `--ai-provider`/`--ai-model` (CLI or the deployed GUI's settings
+panel) → `AI_GRAPH_AI_PROVIDER`/`AI_GRAPH_AI_MODEL` → an `ai-settings.json` next to the
+executable (also holds endpoints/API keys, so a double-clicked tool needs no
+environment variables at all) → the graph's own `metadata.ai_defaults` → `ollama`/`llama3`.
+`--ai-force` overrides even nodes that pin their own provider.
 
 ---
 
@@ -303,13 +326,15 @@ python run.py my_graph.json --inputs my-text-node-id="Custom input text"
 
 ## 🚢 Deployment
 
-There are two, independent kinds of "deploy" in AI-Graph:
+There are two, independent kinds of "deploy" in AI-Graph.
 
 ### Deploying a graph
 
 From the frontend toolbar, click **🚀 Deploy** to:
 
-- **Download Bundle** – get a zip containing the vendored engine (`app/elements`, `app/models`, `app/services`), your graph as `graph.json`, a `main.py` (verbatim copy of `graph-runner/run.py`), `requirements.txt`, `Dockerfile`, `docker-compose.yml`, and a `README.md` with run instructions — no `AI-Graph` backend needed at runtime
+- **Download Bundle** – get a zip containing the vendored engine, your graph as
+  `graph.json`, a `main.py`, `requirements.txt`, `Dockerfile`, `docker-compose.yml`,
+  and a `README.md` with run instructions — no AI-Graph backend needed at runtime
 - **View Docker Compose** – preview the generated compose file
 
 A bundle can then be run three ways:
@@ -324,8 +349,7 @@ python build_exe.py            # -> dist/<name>, a single executable
 nodes and the editor has a built frontend (`cd frontend && npm run build`), the
 bundle also gets `serve.py` and a `static/` folder. `python serve.py` opens the
 tool's own page: the file pickers, text windows and plots the graph was designed
-with, rendered by the very same components the editor used — there is no second
-widget implementation that could drift from the designer. A gear icon in that page
+with, rendered by the very same components the editor used. A gear icon in that page
 points the tool at a different AI and remembers the choice. Without a built
 frontend the graph still deploys, just headless, and the bundle's README says so.
 
@@ -337,6 +361,9 @@ curl -X POST http://localhost:8000/api/deploy/bundle \
   -d @my_graph.json \
   --output bundle.zip
 ```
+
+See [AGENTS.md](AGENTS.md#deploying-a-graph--vendored-runtime-bundles-not-codegen) for
+exactly which files a bundle contains and why it can never drift from the editor.
 
 ### Deploying the editor itself
 
@@ -352,6 +379,12 @@ pip install -r requirements.txt pytest pytest-asyncio
 pytest tests/ -v
 ```
 
+```bash
+cd frontend
+npm install
+npm run test
+```
+
 Prefer adding to or extending an existing large, workflow-level test (a full graph run
 through `execute_graph`, or a real vendored deploy bundle actually executed as a
 subprocess) over adding a new test file per node type — see [AGENTS.md](AGENTS.md#tests).
@@ -362,52 +395,15 @@ subprocess) over adding a new test file per node type — see [AGENTS.md](AGENTS
 
 ```
 AI-Graph/
-├── AGENTS.md             # Codebase map for AI coding agents (which file to touch per node/widget kind)
-├── backend/              # FastAPI Python backend
-│   ├── app/
-│   │   ├── main.py       # FastAPI app entry point
-│   │   ├── models/       # Graph DSL Pydantic models (NodeType/GuiWidgetKind contracts)
-│   │   ├── routers/      # API routes (graph, execute, ai, deploy, files)
-│   │   ├── elements/     # ONE class per node type / widget kind, owning execute()
-│   │   │   ├── base.py       # NodeElement / GuiWidgetElement contracts
-│   │   │   ├── registry.py   # NodeType -> element, GuiWidgetKind -> element (legacy names alias here)
-│   │   │   ├── code/code_element.py          # reference pattern for a node type
-│   │   │   └── gui/          # gui_element.py (composite) + widgets/<kind>/<kind>_element.py
-│   │   └── services/
-│   │       ├── graph_executor.py   # topology/batching/format resolution; dispatches via registry
-│   │       ├── deploy_service.py   # assembles vendored-runtime deploy bundles (not codegen)
-│   │       ├── batching.py         # shared batch reconcile/merge helpers
-│   │       ├── ai_settings.py      # resolves WHICH AI a run uses (env / settings file / graph)
-│   │       ├── ai_service.py, code_executor.py, file_service.py  # cross-cutting helpers
-│   ├── scripts/
-│   │   └── export_graph_schema.py  # dumps Graph's Pydantic JSON schema for gen:types
-│   ├── tests/            # Backend tests — prefer large workflow-level tests (see AGENTS.md)
-│   └── requirements.txt
-├── frontend/             # React + TypeScript + ReactFlow frontend
-│   ├── scripts/
-│   │   ├── genTypes.mjs             # runs export_graph_schema.py, writes graph.generated.ts
-│   │   ├── checkTypesUpToDate.mjs   # `npm run gen:types:check`: fails if generated types drifted
-│   │   └── graphTypesLib.mjs        # shared JSON-schema -> TS conversion helpers
-│   └── src/
-│       ├── elements/     # ONE folder per node type / widget kind: element def + ConfigEditor colocated
-│       │   ├── registry.ts   # NODE_ELEMENTS / GUI_WIDGET_ELEMENTS (legacy names alias here)
-│       │   ├── code/codeElement.ts + CodeEditor.tsx   # reference pattern for a node type
-│       │   ├── gui/widgets/input_picker/   # reference pattern for a widget kind
-│       │   └── shared/       # editors shared by more than one element (MergeSplitEditor removed; OutputFormatEditor, etc.)
-│       ├── components/
-│       │   ├── NodeEditor.tsx        # modal shell; resolves ConfigEditor via elements/registry.ts
-│       │   └── GuiWidgetEditor.tsx   # widget list; resolves ConfigEditor via elements/registry.ts
-│       ├── runtime/      # RuntimeApp.tsx — what a deployed graph serves (runtime.html)
-│       ├── store/        # Zustand state (graphStore + the editor's settingsStore)
-│       ├── types/
-│       │   ├── graph.ts            # re-exports graph.generated.ts + frontend-only types
-│       │   └── graph.generated.ts  # AUTO-GENERATED from backend/app/models/graph.py; do not hand-edit
-│       └── utils/        # API client, node defaults
-├── graph-runner/         # Entry points, vendored verbatim into every bundle
-│   ├── run.py            # CLI (becomes a bundle's main.py)
-│   ├── serve.py          # browser runtime for GUI graphs (becomes serve.py)
-│   └── build_exe.py      # PyInstaller one-file build (becomes build_exe.py)
-├── examples/             # Example graph JSON files
-├── docker-compose.yml    # Full-stack deployment
+├── AGENTS.md          # Codebase map for AI coding agents/contributors: which file to touch per node/widget kind
+├── checkpoint.py       # Verify + package the editor in one command (see Quick Start)
+├── backend/            # FastAPI Python backend (app/models, app/routers, app/elements, app/services)
+├── frontend/            # React + TypeScript + ReactFlow frontend (src/elements, src/components, src/store)
+├── graph-runner/        # run.py (CLI) / serve.py (GUI runtime) / build_exe.py — vendored verbatim into every deploy bundle
+├── examples/            # Example graph JSON files
+├── docker-compose.yml   # Full-stack deployment
 └── README.md
 ```
+
+For the detailed per-node-type/per-widget-kind file map (which class to edit for a
+given change), see [AGENTS.md](AGENTS.md).

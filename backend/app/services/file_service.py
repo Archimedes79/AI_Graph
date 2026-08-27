@@ -11,16 +11,27 @@ import json
 import logging
 import mimetypes
 import os
+import sys
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Project-local storage for uploaded "context file" attachments (see routers/files.py).
-ATTACHMENTS_DIR = Path(os.getenv(
-    "ATTACHMENTS_DIR", str(Path(__file__).resolve().parents[2] / "data" / "attachments"),
-))
+
+def _default_attachments_dir() -> Path:
+    """
+    Project-local storage for uploaded "context file" attachments. A frozen
+    build's own directory tree is a temp dir that is deleted on exit, so a
+    packaged editor stores them next to the executable instead.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "data" / "attachments"
+    return Path(__file__).resolve().parents[2] / "data" / "attachments"
+
+
+# See routers/files.py.
+ATTACHMENTS_DIR = Path(os.getenv("ATTACHMENTS_DIR", str(_default_attachments_dir())))
 
 
 def save_attachment(filename: str, content: bytes) -> str:

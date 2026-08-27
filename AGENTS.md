@@ -2,7 +2,8 @@
 
 This file tells an AI coding agent — especially a cheap/fast model (`Cheap-Coder` /
 `Cheap-Debugger`) given a narrow, single-file task — exactly where to look for a given
-kind of change, so it doesn't need to read the whole codebase.
+kind of change, so it doesn't need to read the whole codebase. For what AI-Graph is and
+how to run/use it, see [README.md](README.md).
 
 ## Golden rule
 
@@ -34,7 +35,9 @@ cd frontend; npm run test
 Do not run the full suite (or ask an agent to) on every edit round — the consolidated
 tests in `test_element_contract.py` / `elementContract.test.ts` are parametrized per
 node type/widget kind precisely so a single-element change can be verified without
-touching or re-running assertions for unrelated elements.
+touching or re-running assertions for unrelated elements. `python checkpoint.py` runs
+both full suites plus the build/package steps in the right order before a release —
+see [README.md](README.md#-quick-start).
 
 ## Object-oriented element contract
 
@@ -73,14 +76,7 @@ lowest level (a widget) again supports the same execute contract as a top-level 
 element.
 
 **Legacy names no longer exist as enum members — they are migrated away at load
-time.** `text_input`/`file_input`/`directory_input` become `input` (with the matching
-`config.input_mode` and `prompt_at_runtime=True`, since legacy inputs always prompted);
-`text_output` becomes `output` with `write_mode="window"`; widget kinds
-`file_open`/`directory_open` become `input_picker` (mode `file`/`directory`) and
-`text_window`/`chat_window` become `text_io` (mode `both`). This happens once in
-`Graph._migrate_legacy_nodes` (see "One-time legacy migrations" below) and is mirrored
-client-side in `graphStore.ts` (`migrateLegacyNode`) for raw JSON imports that bypass
-the backend. No element branches on an alias anymore. File
+time.** See "One-time legacy migrations" below for the exact mapping. File
 operations live once in `app.services.file_service`
 (`resolve_path`/`list_directory`/`read_text_file`/`write_formatted_file` etc. — call
 these, don't reimplement `Path(x).expanduser().resolve()` inline). The deployed bundle
@@ -154,6 +150,10 @@ through the frontend registry; do not add a new per-type switch to those shared 
 | `text_io` | `.../gui/widgets/text_io/text_io_element.py` | `.../elements/gui/widgets/text_io/textIoElement.ts` + `TextIoEditor.tsx` |
 | `plot_window` | `.../gui/widgets/plot_window/plot_window_element.py` (display-only, no output port) | `.../elements/gui/widgets/plot_window/plotWindowElement.ts` + `PlotWindowEditor.tsx` |
 
+`plot_window`'s transform snippet runs through the same sandboxed `code_executor` as a
+Code node and is rendered by the dependency-free inline SVG `frontend/src/components/PlotWidget.tsx`
+(user-facing contract: see [README.md](README.md#-gui-nodes)).
+
 Use `elements/gui/widgets/input_picker/input_picker_element.py` and
 `elements/gui/widgets/input_picker/inputPickerElement.ts` as the exact pattern to copy
 for any other widget kind.
@@ -175,16 +175,11 @@ and runtime widget; shared shells dispatch through the registry and need no kind
 - `frontend/src/components/gui/widgetProps.ts` — the shared `{ widget, value, onChange }` contract every runtime widget implements.
 
 ## Memory-feedback edges (data/gui/widget nodes)
-A `data`, `gui`, or `widget` node is a **memory element**: its output can reflect its own
-persisted state rather than being freshly recomputed from inputs each round. This is
-what lets a `gui -> ai -> gui` graph run at all despite being a cycle at node level — an
-edge feeding one of a memory node's input ports is automatically excluded from cycle
-detection and topological ordering, exactly when needed to break a cycle, with no manual
-edge marking required (no `deferred`/`initial_value` fields exist on `GraphEdge` — they
-were removed because the old design required threading a `previous_outputs` parameter
-across separate `execute_graph()` calls that no real caller, `routers/execute.py` or
-`graph-runner/run.py`, ever actually did — the feature only worked in tests that
-manually simulated a second round).
+
+Why this exists and how it looks in a graph (`gui → ai → gui`): see
+[README.md](README.md#cyclic-graphs-gui--ai--gui). The rest of this section is the
+implementation, which is agent-relevant because it's never per-node-type: no
+`elements/<type>/<type>_element.py` should know about it.
 
 Logic lives in exactly one backend place — `graph_executor.py`:
 `_is_memory_node`, `_memory_feedback_edge_ids` (Kahn's algorithm, marking one
@@ -196,8 +191,13 @@ the target data node's `config.data_value` or widget's persisted `value` (read b
 *next* round's output) and into that round's own `NodeResult.inputs` (so the frontend, which already prioritizes
 `nodeResult.inputs[widget_id + "_in"]` for display in `GuiWindow.tsx`, shows the fresh
 value immediately, same round). A deploy bundle vendors `graph_executor.py` verbatim, so
-this logic never needs a second implementation for deploy. It is never per-node-type: no
-`elements/<type>/<type>_element.py` should know about it.
+this logic never needs a second implementation for deploy.
+
+No `deferred`/`initial_value` fields exist on `GraphEdge` — they were removed because
+the old design required threading a `previous_outputs` parameter across separate
+`execute_graph()` calls that no real caller (`routers/execute.py` or
+`graph-runner/run.py`) ever actually did — the feature only worked in tests that
+manually simulated a second round.
 
 `frontend/src/store/graphStore.ts` mirrors the same cycle-detection algorithm
 (`memoryFeedbackEdgeIds`) purely to know, after receiving an `ExecutionResult`, which
@@ -278,39 +278,20 @@ this behavior that could drift from the editor's.
 ## Where the AI configuration lives (two different questions)
 
 There are two AI choices in this system and they deliberately live in different
-places. Do not merge them, and do not add a third copy of either:
+places — what each one does, where to set it in the UI, and the runtime-AI override
+precedence are documented for users in
+[README.md](README.md#choosing-the-ai-once-not-per-node). This section is only the
+implementation pointers; do not merge the two choices, and do not add a third copy of
+either:
 
-| Question | Lives in | Set once in |
+| Question | Lives in | Resolved by |
 |---|---|---|
-| Which AI **writes** my code/prompts? | `frontend/src/store/settingsStore.ts` (localStorage), server fallback `AI_GRAPH_GEN_PROVIDER`/`AI_GRAPH_GEN_MODEL` | ⚙ Settings in the editor toolbar |
-| Which AI does the graph **call when it runs**? | `metadata.ai_defaults` in the graph DSL | ⚙ Settings, and overridable at run time |
+| Which AI **writes** my code/prompts? | `frontend/src/store/settingsStore.ts` (localStorage), server fallback `AI_GRAPH_GEN_PROVIDER`/`AI_GRAPH_GEN_MODEL` | Every ✨ Generate call spreads `genAI()` from the settings store into its request body; `routers/ai.py`'s `_gen_target` fills in a missing choice server-side. |
+| Which AI does the graph **call when it runs**? | `metadata.ai_defaults` in the graph DSL | `app/services/ai_settings.py`, called from `ai_service.complete()`, applying the precedence order documented in the README. |
 
-The generation AI is a property of the workstation, not of the graph: it never
-affects execution, it is the same for every node, and a graph shared with a
-colleague should not carry someone's model choice. It used to be
-`NodeConfig.gen_ai_provider`/`gen_ai_model` plus a per-widget copy on
-`GuiWidget`; those fields are gone (old graphs load fine -- pydantic's default
-`extra="ignore"` drops them). Every ✨ Generate call spreads `genAI()` from the
-settings store into its request body, so there is exactly one place in the
-frontend that decides which AI generates, and `routers/ai.py`'s `_gen_target`
-is the one place on the backend that fills in a missing choice.
-
-The runtime AI is resolved in exactly one place too:
-`app/services/ai_settings.py`, called from `ai_service.complete()`. An `ai`
-node's `ai_provider` defaults to `AIProvider.DEFAULT` ("follow the run"); a node
-that names a real provider keeps it. Precedence, highest first:
-
-1. a run-level override -- `--ai-provider`/`--ai-model` (CLI, `serve.py`), or
-   the deployed GUI's settings panel
-2. `AI_GRAPH_AI_PROVIDER` / `AI_GRAPH_AI_MODEL`
-3. `ai-settings.json` (cwd, next to the executable, `$AI_GRAPH_SETTINGS`, or
-   `~/.ai-graph/settings.json`) -- which also carries endpoints and API keys, so
-   a double-clicked executable is configurable with no environment variables
-4. the graph's own `metadata.ai_defaults`, published by `execute_graph()`
-5. `ollama` / `llama3`
-
-`--ai-force` (or `AI_GRAPH_AI_FORCE=1`, or `"force": true` in the settings file)
-also overrides nodes that pin their own provider.
+It used to be `NodeConfig.gen_ai_provider`/`gen_ai_model` plus a per-widget copy on
+`GuiWidget`; those fields are gone (old graphs load fine — pydantic's default
+`extra="ignore"` drops them).
 
 `ai_settings.py` is vendored into every bundle, so editor, CLI and deployed tool
 resolve the AI identically. An element never participates in this: `AIElement`
@@ -318,54 +299,76 @@ passes its node's configured pair to `complete()` and knows nothing else, and
 `graph_executor` publishes the graph default because an element never sees the
 graph it lives in.
 
-## The deploy bundle's three entry points
+## Deploying a graph — vendored-runtime bundles, not codegen
 
-Every script a bundle ships is a repo file copied verbatim -- the same rule that
-keeps the engine from drifting, applied to the runner:
+`deploy_service.py` does **not** generate source code from each node's config — see
+[README.md](README.md#-deployment) for how a user triggers and runs a bundle. A bundle
+is the real engine, copied verbatim, plus the user's graph:
+`generate_deployment_bundle(graph)` returns a `{path: contents}` dict containing
+`app/elements/**` (every element file, recursively), `app/models/graph.py`,
+`app/services/{ai_service,batching,code_executor,file_service,graph_executor}.py`, the
+graph itself as `graph.json`, plus `requirements.txt`/`Dockerfile`/`docker-compose.yml`/
+`README.md`. `app/routers/*`, `app/main.py` (FastAPI-only) and `deploy_service.py` itself
+(a server-only build tool) are deliberately NOT vendored — confirmed by
+`test_deploy_runner_execution.py::test_deploy_bundle_layout`.
+
+Every script a bundle ships is a repo file copied verbatim — the same rule applied to
+the runner as to the engine:
 
 | Bundle file | Repo file | When it ships |
 |---|---|---|
-| `main.py` | `graph-runner/run.py` | always -- the CLI |
+| `main.py` | `graph-runner/run.py` (dual-purpose: dev CLI *and* bundle entry point) | always |
 | `serve.py` | `graph-runner/serve.py` | when the graph has an interactive node **and** `frontend/dist/runtime.html` exists |
-| `build_exe.py` | `graph-runner/build_exe.py` | always -- PyInstaller one-file build |
+| `build_exe.py` | `graph-runner/build_exe.py` | always — PyInstaller one-file build |
 
 `build_exe.py` turns a bundle into a single executable that needs no Python on
 the target machine; `main.py`'s `_default_graph_path()` is what makes the
 embedded `graph.json` findable there (and lets one dropped beside the executable
 win, so a shipped tool can be re-pointed at an edited graph without a rebuild).
 
-**GUI runtime.** A `gui`/`widget` node's `deploy_needs` sets
-`interactive_ui=True`; `deploy_service._serves_gui` combines that with the
-presence of a built frontend. When both hold, the bundle also gets `static/`
-(the built `frontend/dist`, as bytes -- the bundle dict is
-`Dict[str, str | bytes]`) and `fastapi`/`uvicorn` in `requirements.txt`.
-`serve.py` serves `runtime.html`, which mounts
-`frontend/src/runtime/RuntimeApp.tsx`: the editor's own graph store and
-`GuiWindowLayer`, with the canvas removed. **There is no second widget
-implementation** -- a deployed tool renders through the exact components the
-designer previewed, which is the whole reason this is a web runtime and not a
-native one. `serve.py` defines its handful of endpoints inline rather than
-vendoring `app/routers/*`: a deployed tool must not offer code generation or
-file browsing. Without a built frontend the graph still deploys, headless, and
-the generated README says why.
+**GUI runtime.** A `gui`/`widget` node's `deploy_needs` sets `interactive_ui=True`;
+`deploy_service._serves_gui` combines that with the presence of a built frontend. When
+both hold, the bundle also gets `static/` (the built `frontend/dist`, as bytes — the
+bundle dict is `Dict[str, str | bytes]`) and `fastapi`/`uvicorn` in `requirements.txt`.
+`serve.py` serves `runtime.html`, which mounts `frontend/src/runtime/RuntimeApp.tsx`:
+the editor's own graph store and `GuiWindowLayer`, with the canvas removed. **There is
+no second widget implementation** — a deployed tool renders through the exact
+components the designer previewed, which is the whole reason this is a web runtime and
+not a native one. `serve.py` defines its handful of endpoints inline rather than
+vendoring `app/routers/*`: a deployed tool must not offer code generation or file
+browsing. Without a built frontend the graph still deploys, headless, and the generated
+README says why.
 
-## Deploying a graph — vendored-runtime bundles, not codegen
+Because execution logic is shipped rather than regenerated, a bundle's behavior can
+never drift from the live editor's; `test_deploy_runner_execution.py` proves this by
+writing a real bundle to disk, running its `main.py` as a subprocess, and diffing its
+output against `execute_graph()`'s.
 
-`deploy_service.py` does **not** generate source code from each node's config. A deploy
-bundle is the real engine, copied verbatim, plus the user's graph:
-`generate_deployment_bundle(graph)` returns a `{path: contents}` dict containing
-`app/elements/**` (every element file, recursively), `app/models/graph.py`,
-`app/services/{ai_service,batching,code_executor,file_service,graph_executor}.py`, the
-graph itself as `graph.json`, a `main.py` that is a **verbatim copy of
-`graph-runner/run.py`** (that script's own docstring documents it as dual-purpose: dev
-CLI *and* bundle entry point), plus `requirements.txt`/`Dockerfile`/`docker-compose.yml`/
-`README.md`. `app/routers/*`, `app/main.py` (FastAPI-only) and `deploy_service.py` itself
-(a server-only build tool) are deliberately NOT vendored — confirmed by
-`test_deploy_runner_execution.py::test_deploy_bundle_layout`. Because execution logic is
-shipped rather than regenerated, a bundle's behavior can never drift from the live
-editor's; `test_deploy_runner_execution.py` proves this by writing a real bundle to disk
-and running its `main.py` as a subprocess, then diffing its output against
-`execute_graph()`'s.
+## Frozen builds (PyInstaller) — four places that must stay frozen-aware
+
+`build_editor_exe.py` packages the editor itself into one executable (user-facing
+docs: [README.md](README.md#option-4--standalone-executable)); `graph-runner/build_exe.py`
+does the same for a deploy bundle. A frozen build breaks two assumptions that hold
+everywhere else — **the repo layout is gone** (everything ships under `sys._MEIPASS`)
+and **`sys.executable` is the tool, not a Python**. Four places encode that, and a
+change to any of them needs a rebuilt exe to verify, not just a green test suite:
+
+| File | What it resolves when frozen | Breaks if wrong |
+|---|---|---|
+| `app/main.py` | `frontend/dist` under `sys._MEIPASS` | the exe serves no UI |
+| `app/services/deploy_service.py` | `_APP_ROOT`/`_REPO_ROOT` under `sys._MEIPASS` | 🚀 Deploy fails — it reads `.py` files as text to vendor them, so the exe must ship `app/` and `graph-runner/` as **data**, not just as importable modules |
+| `app/services/code_executor.py` | a real `python` on PATH, probed (`_python_interpreter`) | Python code nodes relaunch the editor instead of running |
+| `app/services/file_service.py` | attachments dir next to the executable | uploads land in a temp dir deleted on exit |
+
+`app/main.py` registers `GET /` **only when no frontend is mounted**: an explicit route
+always wins over a `StaticFiles` mount, so claiming it unconditionally would serve JSON
+at the editor's own entry point.
+
+`_python_interpreter()` probes each candidate by running it, because Windows ships a
+`python.exe` App Execution Alias that `shutil.which` returns happily and that only
+advertises the Microsoft Store. `_run_in_subprocess` decodes subprocess output with
+`errors="replace"` for the same reason: that stub's failure message is in the OS
+locale's encoding, and a decode error would mask the real cause.
 
 ## Cross-cutting services (not per-node-type — read these when a task spans node types)
 
