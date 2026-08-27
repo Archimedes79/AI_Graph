@@ -370,6 +370,14 @@ advertises the Microsoft Store. `_run_in_subprocess` decodes subprocess output w
 `errors="replace"` for the same reason: that stub's failure message is in the OS
 locale's encoding, and a decode error would mask the real cause.
 
+**Verifying a change here needs `smoke_test_exe.py`, not the test suites** — they
+import the modules directly and never see `sys.frozen`. It starts a built executable
+and drives it over HTTP; `.github/workflows/release.yml` runs it against the downloaded
+artifact in both modes. When stopping the executable, note that a `--onefile` build is a
+bootloader whose real server is a *child* process: terminating what you launched leaves
+the server holding its port and its inherited stdout, which hangs a CI job rather than
+failing it. `_terminate_tree` exists for that.
+
 ## Cross-cutting services (not per-node-type — read these when a task spans node types)
 
 - `backend/app/services/graph_executor.py` — topological execution, batching, input/format resolution; delegates per-node work to `elements.registry.NODE_ELEMENTS[node.node_type].execute(...)`.

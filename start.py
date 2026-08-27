@@ -107,7 +107,10 @@ def run_prod_frozen() -> int:
     port = int(os.getenv("AI_GRAPH_PORT", "8000"))
     url = f"http://127.0.0.1:{port}"
     print(f"[start] AI-Graph editor -> {url}   (Ctrl+C to stop)")
-    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    # AI_GRAPH_NO_BROWSER: for CI and for running the tool on a headless box,
+    # where there is no browser to open and the attempt is just noise.
+    if not os.getenv("AI_GRAPH_NO_BROWSER"):
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
     return 0
 

@@ -389,6 +389,21 @@ Prefer adding to or extending an existing large, workflow-level test (a full gra
 through `execute_graph`, or a real vendored deploy bundle actually executed as a
 subprocess) over adding a new test file per node type — see [AGENTS.md](AGENTS.md#tests).
 
+To test a built executable rather than the source it came from — it starts the binary,
+drives it over HTTP and shuts it down again:
+
+```bash
+python smoke_test_exe.py dist/ai-graph.exe
+python smoke_test_exe.py dist/ai-graph.exe --standalone   # with Python stripped from PATH
+```
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs the three checks above on every push and pull request.
+`.github/workflows/release.yml` builds the Windows executable, smoke-tests that
+artifact in both modes, and — when the push is a `v*` tag — attaches it to a GitHub
+release; run it on demand from the Actions tab via **Run workflow**.
+
 ---
 
 ## 📁 Project Structure
