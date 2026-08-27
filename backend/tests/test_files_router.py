@@ -1,5 +1,5 @@
 """
-API tests for POST /api/files/detect-format.
+API tests for the files router (detect-format, browse).
 """
 
 from __future__ import annotations
@@ -72,3 +72,45 @@ def test_delete_attachment_outside_directory_rejected(monkeypatch, tmp_path):
 
     assert response.status_code == 400
     assert outside.exists()
+
+
+def test_browse_lists_directories_and_files(tmp_path):
+    """The picker's listing: folders first, then files, both alphabetical."""
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "b.txt").write_text("b", encoding="utf-8")
+    (tmp_path / "a.md").write_text("a", encoding="utf-8")
+
+    response = client.post("/api/files/browse", json={"path": str(tmp_path)})
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["path"] == str(tmp_path.resolve())
+    assert body["parent"] == str(tmp_path.resolve().parent)
+    assert [e["name"] for e in body["entries"]] == ["sub", "a.md", "b.txt"]
+    assert [e["is_dir"] for e in body["entries"]] == [True, False, False]
+    assert body["roots"]
+
+
+def test_browse_extension_filter_keeps_directories(tmp_path):
+    """A filter hides non-matching FILES only -- hiding folders would make the
+    directories the user is navigating through disappear."""
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "keep.md").write_text("k", encoding="utf-8")
+    (tmp_path / "drop.txt").write_text("d", encoding="utf-8")
+
+    body = client.post("/api/files/browse", json={"path": str(tmp_path), "extensions": ".md"}).json()
+    assert [e["name"] for e in body["entries"]] == ["sub", "keep.md"]
+
+
+def test_browse_a_file_path_opens_its_folder(tmp_path):
+    """Re-opening the picker on an already-chosen file should land next to it."""
+    target = tmp_path / "chosen.txt"
+    target.write_text("x", encoding="utf-8")
+
+    body = client.post("/api/files/browse", json={"path": str(target)}).json()
+    assert body["path"] == str(tmp_path.resolve())
+
+
+def test_browse_missing_directory_is_404(tmp_path):
+    response = client.post("/api/files/browse", json={"path": str(tmp_path / "nope")})
+    assert response.status_code == 404

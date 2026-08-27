@@ -27,6 +27,26 @@ async def detect_format(payload: dict):
     return {"format": fmt}
 
 
+@router.post("/browse")
+async def browse(payload: dict):
+    """
+    List a directory on the machine the engine runs on, for the file/directory
+    pickers. A browser never reveals a chosen file's real location, so a picker
+    that must produce a path the engine can resolve has to browse server-side.
+    """
+    try:
+        return file_service.browse_directory(
+            payload.get("path") or "",
+            file_service.parse_extensions_filter(payload.get("extensions") or ""),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(403, f"Not permitted to read that directory: {exc}") from exc
+    except OSError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.post("/attachments")
 async def upload_attachment(file: UploadFile = File(...)):
     """Save an uploaded context-file attachment inside the project, returning its path."""

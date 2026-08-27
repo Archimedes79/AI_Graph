@@ -26,9 +26,11 @@ Endpoints, deliberately the minimum the runtime page calls:
     POST /api/execute/requirements   what it still needs before running
     GET  /api/runtime/ai-settings    the AI it will call
     POST /api/runtime/ai-settings    point it somewhere else, persistently
+    POST /api/files/browse      list a directory, for the file/directory pickers
+                                (loopback binds only -- see create_app)
 
 The editor's own routers are NOT vendored (they are a build/authoring surface,
-and a deployed tool must not offer code generation or file browsing); these few
+and a deployed tool must not offer code generation or graph editing); these few
 handlers call the vendored services directly instead.
 """
 
@@ -66,7 +68,7 @@ except ImportError:  # pragma: no cover - a headless bundle simply has no serve.
     raise SystemExit(1)
 
 from app.models.graph import ExecutionResult, Graph, RuntimeRequirement  # noqa: E402
-from app.services import ai_settings  # noqa: E402
+from app.services import ai_settings, file_service  # noqa: E402
 from app.services.graph_executor import execute_graph, get_runtime_requirements  # noqa: E402
 
 # `_default_graph_path` lives in the runner entry point, which is called run.py
@@ -115,8 +117,35 @@ _KEY_KEYS = {
 }
 
 
-def create_app(graph_path: Path) -> "FastAPI":
+def _is_loopback(host: str) -> bool:
+    """Whether this bind address only reaches the machine the tool runs on."""
+    return host in ("127.0.0.1", "localhost", "::1")
+
+
+def create_app(graph_path: Path, allow_browse: bool = True) -> "FastAPI":
     app = FastAPI(title="AI-Graph Runtime", docs_url=None, redoc_url=None)
+
+    # A deployed tool still must not offer code generation, and it exposes no
+    # graph editing. File BROWSING is different: a graph whose interface is "pick
+    # a file and process it" is unusable without it, because a browser never
+    # reveals a chosen file's real path and the engine resolves real paths. It is
+    # limited to a loopback bind -- on `--host 0.0.0.0` this would hand the
+    # machine's filesystem listing to the network, which is a different thing
+    # entirely from letting the person at the keyboard pick their own file.
+    if allow_browse:
+        @app.post("/api/files/browse")
+        async def browse(payload: Dict[str, Any]) -> Dict[str, Any]:
+            try:
+                return file_service.browse_directory(
+                    payload.get("path") or "",
+                    file_service.parse_extensions_filter(payload.get("extensions") or ""),
+                )
+            except FileNotFoundError as exc:
+                raise HTTPException(404, str(exc)) from exc
+            except PermissionError as exc:
+                raise HTTPException(403, f"Not permitted to read that directory: {exc}") from exc
+            except OSError as exc:
+                raise HTTPException(400, str(exc)) from exc
 
     @app.get("/api/runtime/graph")
     async def runtime_graph() -> Graph:
@@ -212,7 +241,11 @@ def main() -> int:
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
-    uvicorn.run(create_app(graph_path), host=args.host, port=args.port, log_level="info")
+    allow_browse = _is_loopback(args.host)
+    if not allow_browse:
+        logger.info("Bound to %s, not loopback: the file picker's browse endpoint is disabled.", args.host)
+    app = create_app(graph_path, allow_browse=allow_browse)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0
 
 

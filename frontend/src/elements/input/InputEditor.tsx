@@ -1,7 +1,8 @@
 import React from 'react';
 import type { GraphNode } from '../../types/graph';
 import ContextFileAttachment from '../shared/ContextFileAttachment';
-import { DIMMER, FIELD, LINE, MUTED, SUCCESS } from '../../ui/theme';
+import FileBrowserDialog from '../../components/FileBrowserDialog';
+import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, SUCCESS } from '../../ui/theme';
 
 interface InputEditorProps {
   node: GraphNode;
@@ -33,6 +34,8 @@ export default function InputEditor({
   const mode: 'text' | 'file' | 'directory' =
     (node.config.input_mode || 'text') as 'text' | 'file' | 'directory';
 
+  const [browsing, setBrowsing] = React.useState(false);
+
   const isText = mode === 'text';
   const isFile = mode === 'file';
   const isDirectory = mode === 'directory';
@@ -63,13 +66,34 @@ export default function InputEditor({
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           {isText ? 'Default Text (shown in the run dialog)' : 'Default Path (shown in the run dialog)'}
         </label>
-        <input
-          className="w-full rounded-lg px-3 py-2 text-sm"
-          style={FIELD}
-          value={node.config.value ?? ''}
-          onChange={(e) => setConfig('value', e.target.value)}
-          placeholder={isText ? 'Enter default text…' : isDirectory ? '/path/to/directory' : '/path/to/file'}
-        />
+        <div className="flex items-center gap-2">
+          <input
+            className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm"
+            style={FIELD}
+            value={node.config.value ?? ''}
+            onChange={(e) => setConfig('value', e.target.value)}
+            placeholder={isText ? 'Enter default text…' : isDirectory ? '/path/to/directory' : '/path/to/file'}
+          />
+          {!isText && (
+            <button
+              type="button"
+              className="text-xs px-3 py-2 rounded-lg flex-shrink-0"
+              style={NEUTRAL_BUTTON}
+              onClick={() => setBrowsing(true)}
+            >
+              Browse…
+            </button>
+          )}
+        </div>
+        {browsing && (
+          <FileBrowserDialog
+            mode={isDirectory ? 'directory' : 'file'}
+            initialPath={(node.config.value as string) ?? ''}
+            extensions={(node.config.extra?.extensions as string) ?? ''}
+            onPick={(picked) => { setConfig('value', picked); setBrowsing(false); }}
+            onClose={() => setBrowsing(false)}
+          />
+        )}
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
           Whenever the graph runs, a dialog asks the user for this value (pre-filled with the default above).
         </p>

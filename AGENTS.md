@@ -166,6 +166,26 @@ A canonical widget kind therefore has **two** element files (one per language), 
 registry line per language. Its frontend definition references the local config editor
 and runtime widget; shared shells dispatch through the registry and need no kind switch.
 
+## File and directory pickers browse the SERVER
+
+`<input type="file">` cannot be used to fill any path field in this app. A browser
+deliberately never reveals a chosen file's location — only its name — while the engine
+resolves real absolute paths on the machine it runs on. A native picker therefore
+produced a bare filename that failed later as a file-not-found from whatever the working
+directory happened to be.
+
+One component does this: `frontend/src/components/FileBrowserDialog.tsx`, backed by
+`POST /api/files/browse` → `file_service.browse_directory`. Its three call sites are
+`GraphWindows.tsx` (the before-running prompt), the `input_picker` runtime widget, and
+`InputEditor.tsx` (a node's default path). Wire new path fields to it rather than adding
+a file input.
+
+`graph-runner/serve.py` serves the same route so a deployed tool's picker works too, but
+**only on a loopback bind** (`_is_loopback`): on `--host 0.0.0.0` it would expose the
+host's filesystem listing to the network, which is a different thing from letting the
+person at the keyboard choose their own file. A deployed tool still exposes no code
+generation and no graph editing.
+
 ## GUI runtime window & designer (not per-widget-kind)  
 
 - `frontend/src/components/gui/GuiWindow.tsx` — the floating runtime window shown per `gui` node; lays widgets out and feeds each one its live value.

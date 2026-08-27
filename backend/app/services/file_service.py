@@ -76,6 +76,58 @@ def list_directory(path: str, recursive: bool = False, extensions: Optional[List
     return [str(p) for p in files]
 
 
+def _filesystem_roots() -> List[str]:
+    """Top-level places a browser should offer to jump to: the user's home, plus
+    the drives that actually exist on Windows and `/` everywhere else."""
+    roots: List[str] = [str(Path.home())]
+    if os.name == "nt":
+        roots += [f"{letter}:\\" for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if Path(f"{letter}:\\").exists()]
+    else:
+        roots.append("/")
+    return roots
+
+
+def browse_directory(path: str = "", extensions: Optional[List[str]] = None) -> Dict[str, Any]:
+    """
+    One page of a server-side file browser: the resolved directory, its parent,
+    and its immediate children.
+
+    This exists because the engine resolves REAL paths, while a browser's
+    `<input type="file">` only ever reveals a file's name -- so a picker has to
+    browse the machine the graph will actually run on, not the one the UI is
+    displayed on. Callers decide whether offering it is appropriate (see
+    graph-runner/serve.py, which only exposes it on a loopback bind).
+
+    An empty *path* starts at the user's home directory. Entries that cannot be
+    read are skipped rather than failing the whole listing, since one
+    permission-denied entry should not make a directory unbrowsable.
+    """
+    root = Path(path).expanduser().resolve() if path else Path.home()
+    if not root.exists():
+        raise FileNotFoundError(f"Directory not found: {root}")
+    if not root.is_dir():
+        root = root.parent
+
+    allowed = _normalize_extensions(extensions)
+    directories: List[Dict[str, Any]] = []
+    files: List[Dict[str, Any]] = []
+    for child in root.iterdir():
+        try:
+            is_dir = child.is_dir()
+        except OSError:
+            continue
+        if is_dir:
+            directories.append({"name": child.name, "path": str(child), "is_dir": True})
+        elif not allowed or child.suffix.lower() in allowed:
+            files.append({"name": child.name, "path": str(child), "is_dir": False})
+
+    directories.sort(key=lambda e: e["name"].lower())
+    files.sort(key=lambda e: e["name"].lower())
+
+    parent = str(root.parent) if root.parent != root else None
+    return {"path": str(root), "parent": parent, "entries": directories + files, "roots": _filesystem_roots()}
+
+
 def _normalize_extensions(extensions: Optional[List[str]]) -> Optional[set]:
     """Normalize extensions (with or without a leading '.') to a lowercase set."""
     if not extensions:

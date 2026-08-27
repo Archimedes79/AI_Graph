@@ -107,6 +107,16 @@ export const saveAISettings = (
 ): Promise<{ path: string; effective: RuntimeAISettingsPayload['effective'] }> =>
   api.post('/runtime/ai-settings', body).then((r) => r.data);
 
+// Server-side directory listing for the file/directory pickers. A browser never
+// reveals a chosen file's real location, and the engine resolves real paths, so
+// a picker has to browse the machine the graph runs on. The deployed runtime
+// (graph-runner/serve.py) serves this same route on a loopback bind.
+export const browseDirectory = (
+  path: string,
+  extensions?: string,
+): Promise<{ path: string; parent: string | null; entries: { name: string; path: string; is_dir: boolean }[]; roots: string[] }> =>
+  api.post('/files/browse', { path, extensions: extensions || '' }).then((r) => r.data);
+
 // Context-file attachments (stored project-side, referenced by config_context_file /
 // output_context_file). Keeps the config a plain server path, same as any other file field.
 export const uploadAttachment = (file: File): Promise<{ path: string; name: string }> => {

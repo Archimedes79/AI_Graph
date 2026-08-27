@@ -1,32 +1,18 @@
-import React, { useRef } from 'react';
+import React, { useState } from 'react';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import { valueToText } from '../widgetProps';
+import FileBrowserDialog from '../../FileBrowserDialog';
 import { DANGER_SOFT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '../../../ui/theme';
 
 /** Runtime input_picker widget: unified file or directory picker. */
 export default function InputPickerWidget({ widget, value, onChange }: GuiWidgetRuntimeProps) {
-  const pickerRef = useRef<HTMLInputElement>(null);
   const isDir = widget.mode === 'directory';
   const displayVal = Array.isArray(value) ? `${value.length} file(s) selected` : valueToText(value);
 
-  const [pickWarning, setPickWarning] = React.useState('');
-
-  const handlePick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    // `File.path` is an Electron extension; a browser never exposes the real
-    // location. Writing `file.name` instead used to look like it worked and
-    // then failed server-side with a file-not-found from the working
-    // directory -- say so instead, since the engine resolves a real path.
-    const fullPath = (file as File & { path?: string }).path;
-    if (!fullPath) {
-      setPickWarning(`The browser only reveals the name "${file.name}", not its location. Type or paste the full path instead.`);
-      return;
-    }
-    setPickWarning('');
-    onChange(fullPath);
-  };
+  // Browses the machine the graph runs on. A native `<input type="file">` used
+  // to be wired up here, but a browser only ever exposes a chosen file's name,
+  // never its location -- so it could not produce a path the engine resolves.
+  const [browsing, setBrowsing] = useState(false);
 
   const hasValue = Array.isArray(value) ? value.length > 0 : !!value;
 
@@ -42,7 +28,7 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
           readOnly={Array.isArray(value)}
         />
         <button
-          onClick={() => pickerRef.current?.click()}
+          onClick={() => setBrowsing(true)}
           className="text-xs px-3 py-1.5 rounded-lg flex-shrink-0"
           style={NEUTRAL_BUTTON}
         >
@@ -63,19 +49,18 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
       {Array.isArray(value) && (
         <span className="text-xs" style={{ color: MUTED }}>{displayVal}</span>
       )}
-      {pickWarning && (
-        <span className="text-xs" style={{ color: '#fbbf24' }}>{pickWarning}</span>
-      )}
       {widget.extensions && !isDir && (
         <span className="text-xs" style={{ color: DIMMER }}>Allowed: {widget.extensions}</span>
       )}
-      <input
-        ref={pickerRef}
-        type="file"
-        className="hidden"
-        accept={widget.extensions || undefined}
-        onChange={handlePick}
-      />
+      {browsing && (
+        <FileBrowserDialog
+          mode={isDir ? 'directory' : 'file'}
+          initialPath={Array.isArray(value) ? '' : valueToText(value)}
+          extensions={widget.extensions || ''}
+          onPick={(picked) => { onChange(picked); setBrowsing(false); }}
+          onClose={() => setBrowsing(false)}
+        />
+      )}
     </div>
   );
 }

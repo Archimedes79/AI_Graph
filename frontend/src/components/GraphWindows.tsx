@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
 import type { RuntimeRequirement } from '../types/graph';
 import Modal from './Modal';
+import FileBrowserDialog from './FileBrowserDialog';
 import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
 interface GraphWindowsProps {
@@ -27,6 +28,8 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
   const closeOutputWindow = useGraphStore((s) => s.closeTextOutputWindow);
 
   const [values, setValues] = useState<Record<string, string>>({});
+  /** Key of the requirement whose picker is open, or '' for none. */
+  const [browsing, setBrowsing] = useState('');
 
   // Widget-scoped requirements are keyed "{node_id}::{widget_id}", matching
   // the backend's apply_runtime_values convention; plain node requirements
@@ -46,6 +49,10 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
     .filter((r) => r.direction === 'input' && (values[keyFor(r)] ?? '').trim().length === 0)
     .map((r) => r.label);
   const canSubmit = !!requirements && missing.length === 0;
+
+  // Which picker the open Browse… belongs to: a directory requirement picks a
+  // folder, a file requirement picks a file.
+  const browsingKind = (requirements ?? []).find((r) => keyFor(r) === browsing)?.kind ?? 'file';
 
   return (
     <>
@@ -107,18 +114,43 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
                     <span className="ml-1 text-xs" style={{ color: DIMMER }}>(optional)</span>
                   )}
                 </label>
-                <input
-                  className={`w-full rounded-lg px-3 py-2 text-sm ${req.kind === 'text' ? '' : 'font-mono'}`}
-                  style={FIELD}
-                  value={values[keyFor(req)] ?? ''}
-                  onChange={(e) => setValues((prev) => ({ ...prev, [keyFor(req)]: e.target.value }))}
-                  placeholder={
-                    req.kind === 'text' ? 'Enter text…' : req.kind === 'directory' ? '/path/to/directory' : '/path/to/file'
-                  }
-                  autoFocus={index === 0}
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    className={`flex-1 min-w-0 rounded-lg px-3 py-2 text-sm ${req.kind === 'text' ? '' : 'font-mono'}`}
+                    style={FIELD}
+                    value={values[keyFor(req)] ?? ''}
+                    onChange={(e) => setValues((prev) => ({ ...prev, [keyFor(req)]: e.target.value }))}
+                    placeholder={
+                      req.kind === 'text' ? 'Enter text…' : req.kind === 'directory' ? '/path/to/directory' : '/path/to/file'
+                    }
+                    autoFocus={index === 0}
+                  />
+                  {/* Typing an absolute path from memory was the only way to
+                      answer this dialog; a path field should offer a picker. */}
+                  {req.kind !== 'text' && (
+                    <button
+                      type="button"
+                      className="text-xs px-3 py-2 rounded-lg flex-shrink-0"
+                      style={NEUTRAL_BUTTON}
+                      onClick={() => setBrowsing(keyFor(req))}
+                    >
+                      Browse…
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
+            {browsing && (
+              <FileBrowserDialog
+                mode={browsingKind === 'directory' ? 'directory' : 'file'}
+                initialPath={values[browsing] ?? ''}
+                onPick={(picked) => {
+                  setValues((prev) => ({ ...prev, [browsing]: picked }));
+                  setBrowsing('');
+                }}
+                onClose={() => setBrowsing('')}
+              />
+            )}
           </div>
         </Modal>
       )}
