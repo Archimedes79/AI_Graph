@@ -12,12 +12,12 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
 from app.models.graph import AIProvider
-from app.services import ai_settings
+from app.services import ai_settings, file_service
 
 logger = logging.getLogger(__name__)
 
@@ -171,12 +171,55 @@ async def _stream_chat_completion(
 # Provider helpers
 # ---------------------------------------------------------------------------
 
+# --- Vision ------------------------------------------------------------------
+#
+# Images travel as `data:` URLs and are turned into whatever shape the provider
+# wants here. Four providers share the OpenAI content-parts format, which is why
+# supporting vision is one function rather than one per provider -- LM Studio
+# serving a vision model speaks exactly the same protocol as OpenAI does.
+
+def _openai_user_content(prompt: str, images: Optional[List[str]]):
+    """A user message body: the plain string when there are no images, the
+    OpenAI content-parts list when there are."""
+    if not images:
+        return prompt
+    parts: List[Dict[str, Any]] = []
+    if prompt:
+        parts.append({"type": "text", "text": prompt})
+    for url in images:
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+    return parts
+
+
+def _anthropic_user_content(prompt: str, images: Optional[List[str]]):
+    """Anthropic wants the media type and the base64 payload as separate fields
+    rather than one data URL."""
+    if not images:
+        return prompt
+    parts: List[Dict[str, Any]] = []
+    for url in images:
+        media_type, data = file_service.split_data_url(url)
+        parts.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": data},
+        })
+    if prompt:
+        parts.append({"type": "text", "text": prompt})
+    return parts
+
+
+def _ollama_images(images: Optional[List[str]]) -> List[str]:
+    """Ollama takes bare base64 strings in an `images` key, no media type."""
+    return [file_service.split_data_url(url)[1] for url in images or []]
+
+
 async def _ollama_complete(
     prompt: str,
     system: str,
     model: str,
     temperature: float,
     timeout: float = AI_COMPLETE_TIMEOUT,
+    images: Optional[List[str]] = None,
 ) -> str:
     payload = {
         "model": model,
@@ -185,6 +228,8 @@ async def _ollama_complete(
         "stream": True,
         "options": {"temperature": temperature, "num_predict": AI_MAX_TOKENS},
     }
+    if images:
+        payload["images"] = _ollama_images(images)
     progress = _StreamProgress("ollama", model)
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
         async with client.stream("POST", f"{_ollama_base_url()}/api/generate", json=payload) as response:
@@ -264,6 +309,7 @@ async def _openai_style_complete(
     model: str,
     temperature: float,
     timeout: float = AI_COMPLETE_TIMEOUT,
+    images: Optional[List[str]] = None,
 ) -> str:
     """The one request body every `_OPENAI_STYLE` provider shares."""
     spec = _OPENAI_STYLE[provider]
@@ -283,7 +329,7 @@ async def _openai_style_complete(
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
+    messages.append({"role": "user", "content": _openai_user_content(prompt, images)})
     payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": AI_MAX_TOKENS}
 
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
@@ -298,8 +344,9 @@ async def _openai_style_complete(
 
 async def _openai_complete(
     prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
+    images: Optional[List[str]] = None,
 ) -> str:
-    return await _openai_style_complete("openai", prompt, system, model, temperature, timeout)
+    return await _openai_style_complete("openai", prompt, system, model, temperature, timeout, images)
 
 
 async def _anthropic_complete(
@@ -308,6 +355,7 @@ async def _anthropic_complete(
     model: str,
     temperature: float,
     timeout: float = AI_COMPLETE_TIMEOUT,
+    images: Optional[List[str]] = None,
 ) -> str:
     api_key = _anthropic_api_key()
     if not api_key:
@@ -318,7 +366,7 @@ async def _anthropic_complete(
         "model": model,
         "max_tokens": AI_MAX_TOKENS,
         "temperature": temperature,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [{"role": "user", "content": _anthropic_user_content(prompt, images)}],
     }
     if system:
         payload["system"] = system
@@ -351,20 +399,23 @@ async def _anthropic_complete(
 
 async def _lmstudio_complete(
     prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
+    images: Optional[List[str]] = None,
 ) -> str:
-    return await _openai_style_complete("lmstudio", prompt, system, model, temperature, timeout)
+    return await _openai_style_complete("lmstudio", prompt, system, model, temperature, timeout, images)
 
 
 async def _openai_compatible_complete(
     prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
+    images: Optional[List[str]] = None,
 ) -> str:
-    return await _openai_style_complete("openai_compatible", prompt, system, model, temperature, timeout)
+    return await _openai_style_complete("openai_compatible", prompt, system, model, temperature, timeout, images)
 
 
 async def _github_copilot_complete(
     prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
+    images: Optional[List[str]] = None,
 ) -> str:
-    return await _openai_style_complete("github_copilot", prompt, system, model, temperature, timeout)
+    return await _openai_style_complete("github_copilot", prompt, system, model, temperature, timeout, images)
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +448,7 @@ async def complete(
     model: str = "",
     temperature: float = 0.7,
     provider: str = ai_settings.DEFAULT_SENTINEL,
+    images: Optional[List[str]] = None,
 ) -> str:
     """
     Call the requested AI provider and return the text completion.
@@ -434,17 +486,17 @@ async def complete(
     )
     async def call_provider() -> str:
         if provider == "ollama":
-            return await _ollama_complete(prompt, system, model, temperature)
+            return await _ollama_complete(prompt, system, model, temperature, images=images)
         if provider == "openai":
-            return await _openai_complete(prompt, system, model, temperature)
+            return await _openai_complete(prompt, system, model, temperature, images=images)
         if provider == "openai_compatible":
-            return await _openai_compatible_complete(prompt, system, model, temperature)
+            return await _openai_compatible_complete(prompt, system, model, temperature, images=images)
         if provider == "anthropic":
-            return await _anthropic_complete(prompt, system, model, temperature)
+            return await _anthropic_complete(prompt, system, model, temperature, images=images)
         if provider == "lmstudio":
-            return await _lmstudio_complete(prompt, system, model, temperature)
+            return await _lmstudio_complete(prompt, system, model, temperature, images=images)
         if provider == "github_copilot":
-            return await _github_copilot_complete(prompt, system, model, temperature)
+            return await _github_copilot_complete(prompt, system, model, temperature, images=images)
         raise ValueError(f"Unknown AI provider: {provider}")
 
     for attempt in range(1, AI_MAX_ATTEMPTS + 1):

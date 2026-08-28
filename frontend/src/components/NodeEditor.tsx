@@ -53,7 +53,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // each widget's kind (see WidgetOutputSummary) -- everything else has no
   // output-format concept, so they get no Output tab at all.
   const showManualOutputTab = node.node_type === 'ai' || node.node_type === 'code';
-  const showWidgetOutputTab = node.node_type === 'gui' || node.node_type === 'widget';
+  const showWidgetOutputTab = node.node_type === 'gui';
   const tabs = showManualOutputTab || showWidgetOutputTab
     ? (['config', 'output', 'preview'] as const)
     : (['config', 'preview'] as const);

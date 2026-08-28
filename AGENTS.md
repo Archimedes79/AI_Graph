@@ -134,6 +134,11 @@ DSL-breaking change and is out of scope for the element refactor.
 | `output` | `.../elements/output/output_element.py` | `.../elements/output/outputElement.ts` + `OutputEditor.tsx` |
 | `gui` | `.../elements/gui/gui_element.py` **(Composite, see above)** | `.../elements/gui/guiElement.ts` + `GuiEditor.tsx` (wraps `components/GuiWidgetEditor.tsx`) |
 
+There is no `widget` node type any more: it was a `gui` node holding exactly one
+widget, served by the same element class registered twice, and is migrated to `gui`
+at load time. The palette's single-widget entries still exist — they build a `gui`
+node with one widget in it.
+
 Use `elements/code/code_element.py` and `elements/code/codeElement.ts` as the exact pattern to
 copy for any other node type — same class shape, same method names, same import style.
 
@@ -416,6 +421,13 @@ failing it. `_terminate_tree` exists for that.
   `data:` URL. Put kind-specific display preparation there, never a branch in
   `gui_element.py`.
 - `backend/app/services/ai_service.py`, `code_executor.py`, `file_service.py` — provider-agnostic AI calls, sandboxed code execution, file I/O helpers shared across node types.
+  **Vision** lives in three message builders there (`_openai_user_content`,
+  `_anthropic_user_content`, `_ollama_images`): four providers share the OpenAI
+  content-parts format, so adding it was one function rather than one per provider.
+  `ai_element` passes `images=` only when there are any, so a text-only request is
+  exactly the call it always made. The path→data-URL conversion is
+  `file_service.image_data_url`, shared with the `image_view` widget — an element must
+  never import another element's module.
 - `backend/app/services/code_env.py` — the one environment code nodes run in, and the
   interpreter resolution that used to live in `code_executor`. A node declares packages in
   `config.requirements`; `deploy_service` writes them into a bundle's requirements.txt and

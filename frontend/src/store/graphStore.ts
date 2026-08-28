@@ -161,7 +161,11 @@ const LEGACY_WIDGET_KINDS: Record<string, { kind: GuiWidgetKind; mode: string }>
 function migrateLegacyNode(rawNode: Partial<GraphNode>): Partial<GraphNode> {
   const nodeType = rawNode.node_type as string | undefined;
   let node = rawNode;
-  if (nodeType && nodeType in LEGACY_INPUT_MODES) {
+  if (nodeType === 'widget') {
+    // A `widget` node was a `gui` node holding one widget, never a behaviour of
+    // its own; mirrors the backend's own rewrite for raw JSON that bypasses it.
+    node = { ...node, node_type: 'gui' };
+  } else if (nodeType && nodeType in LEGACY_INPUT_MODES) {
     node = {
       ...node,
       node_type: 'input',
@@ -200,7 +204,7 @@ function migrateLegacyNode(rawNode: Partial<GraphNode>): Partial<GraphNode> {
 // edges' delivered values should be persisted into the target widget's own
 // `value` for the *next* run (see `setExecutionResult` below).
 function isMemoryNode(nodeType: string): boolean {
-  return nodeType === 'data' || nodeType === 'gui' || nodeType === 'widget';
+  return nodeType === 'data' || nodeType === 'gui';
 }
 
 function memoryFeedbackEdgeIds(nodes: GraphNode[], edges: GraphEdge[]): Set<string> {
@@ -273,7 +277,7 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
   // gui/widget node ports are always derived from their widget list -- never
   // trust hand-edited/imported/AI-generated `inputs`/`outputs`, mirroring the
   // backend's defensive sync_gui_node_ports call in execute_graph.
-  return nodeType === 'gui' || nodeType === 'widget' ? syncGuiNodePorts(node) : node;
+  return nodeType === 'gui' ? syncGuiNodePorts(node) : node;
 }
 
 function normalizeGraph(graph: Graph): Graph {

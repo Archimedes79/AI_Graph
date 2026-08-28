@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 def _is_memory_node(node_type: NodeType) -> bool:
     """
     Node types whose output already reflects their own persisted state (a
-    gui/widget node's widget `value`) rather than being freshly computed from
+    gui node's widget `value`) rather than being freshly computed from
     this round's input. An edge feeding one of these can always be excluded
     from cycle detection/ordering -- exactly when doing so is what's needed to
     break a cycle (e.g. gui -> ai -> gui) -- because the target doesn't need
@@ -57,7 +57,7 @@ def _is_memory_node(node_type: NodeType) -> bool:
     (A future general-purpose "memory" node type, not just gui/widget, could
     extend this same rule -- see AGENTS.md's "Memory feedback edges" section.)
     """
-    return node_type in (NodeType.DATA, NodeType.GUI, NodeType.WIDGET)
+    return node_type in (NodeType.DATA, NodeType.GUI)
 
 
 def _memory_feedback_edge_ids(nodes: List[GraphNode], edges: List[GraphEdge]) -> set:

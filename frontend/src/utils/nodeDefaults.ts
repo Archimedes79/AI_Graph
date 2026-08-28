@@ -17,7 +17,6 @@ export const NODE_TYPE_DESCRIPTIONS: Record<NodeType, string> = {
   data: 'Remember a value between runs, so a loop can build on its own last result',
   output: 'Show the result in a window, or write it to a file or directory',
   gui: 'Give the graph its own interface, built from widgets',
-  widget: 'A single interface widget standing on its own',
 };
 
 export const NODE_TYPE_LABELS: Record<NodeType, string> = {
@@ -27,7 +26,6 @@ export const NODE_TYPE_LABELS: Record<NodeType, string> = {
   data: 'Data Node',
   output: 'Output',
   gui: 'GUI Node',
-  widget: 'Widget',
 };
 
 export const NODE_TYPE_COLORS: Record<NodeType, string> = {
@@ -37,7 +35,6 @@ export const NODE_TYPE_COLORS: Record<NodeType, string> = {
   data: '#183b3b',
   output: '#3a2000',
   gui: '#4a1d3a',
-  widget: '#3a1d4a',
 };
 
 export const NODE_TYPE_ICON: Record<NodeType, string> = {
@@ -47,7 +44,6 @@ export const NODE_TYPE_ICON: Record<NodeType, string> = {
   data: '🗃️',
   output: '📤',
   gui: '🖥️',
-  widget: '🧩',
 };
 
 export interface NodePreset {
@@ -65,15 +61,16 @@ export interface NodePreset {
 export const NODE_PRESETS: NodePreset[] = [];
 
 /**
- * One-click standalone `widget` node per creatable GuiWidgetKind -- the same
- * widget kinds offered inside a `gui` node's widget list (see
+ * One-click palette entry per creatable GuiWidgetKind: a `gui` node holding
+ * just that one widget. There is no separate node type for it -- the same
+ * widget kinds are offered inside a `gui` node's widget list (see
  * `CREATABLE_GUI_WIDGET_KINDS`), each pre-populated so it's immediately
  * connectable without opening the config editor first.
  */
 export const WIDGET_PRESETS: NodePreset[] = [
   {
     id: 'widget_input_picker',
-    nodeType: 'widget',
+    nodeType: 'gui',
     label: 'File/Directory Picker',
     icon: '📂',
     description: 'A standalone file or directory picker widget',
@@ -82,7 +79,7 @@ export const WIDGET_PRESETS: NodePreset[] = [
       const { inputs, outputs } = guiWidgetPorts(widget);
       return {
         id,
-        node_type: 'widget',
+        node_type: 'gui',
         label: 'File/Directory Picker',
         description: 'A standalone file or directory picker widget',
         position: { x: 0, y: 0 },
@@ -94,7 +91,7 @@ export const WIDGET_PRESETS: NodePreset[] = [
   },
   {
     id: 'widget_text_io',
-    nodeType: 'widget',
+    nodeType: 'gui',
     label: 'Text I/O',
     icon: '💬',
     description: 'A standalone text input / output / chat widget',
@@ -103,7 +100,7 @@ export const WIDGET_PRESETS: NodePreset[] = [
       const { inputs, outputs } = guiWidgetPorts(widget);
       return {
         id,
-        node_type: 'widget',
+        node_type: 'gui',
         label: 'Text I/O',
         description: 'A standalone text input / output / chat widget',
         position: { x: 0, y: 0 },
@@ -115,7 +112,7 @@ export const WIDGET_PRESETS: NodePreset[] = [
   },
   {
     id: 'widget_plot_window',
-    nodeType: 'widget',
+    nodeType: 'gui',
     label: 'Plot',
     icon: '📊',
     description: 'A standalone plot display widget',
@@ -124,7 +121,7 @@ export const WIDGET_PRESETS: NodePreset[] = [
       const { inputs, outputs } = guiWidgetPorts(widget);
       return {
         id,
-        node_type: 'widget',
+        node_type: 'gui',
         label: 'Plot',
         description: 'A standalone plot display widget',
         position: { x: 0, y: 0 },
@@ -136,7 +133,7 @@ export const WIDGET_PRESETS: NodePreset[] = [
   },
   {
     id: 'widget_image_view',
-    nodeType: 'widget',
+    nodeType: 'gui',
     label: 'Image',
     icon: '🖼️',
     description: 'A standalone image display widget',
@@ -145,7 +142,7 @@ export const WIDGET_PRESETS: NodePreset[] = [
       const { inputs, outputs } = guiWidgetPorts(widget);
       return {
         id,
-        node_type: 'widget',
+        node_type: 'gui',
         label: 'Image',
         description: 'A standalone image display widget',
         position: { x: 0, y: 0 },

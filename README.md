@@ -57,9 +57,10 @@ codebase), see [AGENTS.md](AGENTS.md).
 - **Visual Graph Editor** – drag-and-drop node canvas powered by ReactFlow, with undo/redo (Ctrl+Z / Ctrl+Shift+Z)
 - **Node Types**:
   - **Input** – one node type with a `text` / `file` / `directory` mode; in directory mode it only lists rooted file paths, it does not read content (legacy `text_input` / `file_input` / `directory_input` graphs are migrated to it on load)
-  - **AI Node** – send prompts to Ollama (local LLM), LM Studio, OpenAI, an OpenAI-compatible endpoint, or Anthropic
+  - **AI Node** – send prompts to Ollama (local LLM), LM Studio, OpenAI, an OpenAI-compatible endpoint, Anthropic or GitHub Models; with **Send image inputs as images** it feeds pictures to a vision model instead of pasting their paths into the prompt
   - **Code Node** – execute generated or hand-written Python/JavaScript
   - **Data Node** – persist a `text` or `structure` (JSON) value; the free-text format prompt (AI-assisted, proposes candidate formats against an example file then picks one) carries the actual schema detail
+  - **GUI** – a node carrying the graph's own interface, built from widgets (file/directory picker, text I/O, plot, image). The palette's single-widget entries create one of these holding just that widget; there is no separate node type for them
   - **Output** – capture results, in a window (`write_mode="window"`) or written to disk (legacy `text_output` graphs are migrated on load)
 - **Read-file inputs** – a `read_file_inputs` toggle on Code and AI nodes auto-resolves `file_path` inputs to actual content before running
 - **AI Code Generation** – describe what a node should do; the AI writes the code

@@ -10,7 +10,7 @@ export default function GuiWindowLayer() {
 
   const guiNodes = rfNodes
     .map((n) => n.data.graphNode)
-    .filter((n) => n.node_type === 'gui' || n.node_type === 'widget');
+    .filter((n) => n.node_type === 'gui');
 
   const openNodes = guiNodes.filter((n) => !closed.includes(n.id));
   const closedNodes = guiNodes.filter((n) => closed.includes(n.id));

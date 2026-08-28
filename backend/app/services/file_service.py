@@ -174,6 +174,69 @@ def file_size(path: str) -> int:
     return p.stat().st_size
 
 
+# Above this, a picture is not something to inline into a message or an
+# execution result -- it travels as JSON and would bloat the whole payload.
+MAX_INLINE_IMAGE_BYTES = int(os.getenv("AI_GRAPH_MAX_IMAGE_BYTES", str(8 * 1024 * 1024)))
+
+_IMAGE_EXTENSION_TYPES = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+}
+
+
+def image_media_type(path: str) -> str:
+    """The MIME type of an image file, or "" if it is not a recognised image."""
+    guessed = mimetypes.guess_type(path)[0]
+    if guessed and guessed.startswith("image/"):
+        return guessed
+    suffix = Path(path).suffix.lower()
+    return _IMAGE_EXTENSION_TYPES.get(suffix, "")
+
+
+def is_image_path(value: Any) -> bool:
+    """Whether *value* is a path to an image file that exists."""
+    if not isinstance(value, str) or not value.strip():
+        return False
+    if value.startswith(("data:", "http://", "https://")):
+        return False
+    try:
+        path = Path(value).expanduser()
+        return bool(image_media_type(value)) and path.is_file()
+    except OSError:
+        return False
+
+
+def image_data_url(path: str) -> str:
+    """
+    Read an image file and return it as a `data:` URL.
+
+    One authored copy, used by the image_view widget (which shows the picture)
+    and by the ai node (which sends it to a vision model). Both need the same
+    thing for the same reason: the engine's filesystem is not the browser's, and
+    it is not the model provider's either.
+    """
+    resolved = resolve_path(path)
+    size = file_size(resolved)
+    if size > MAX_INLINE_IMAGE_BYTES:
+        raise ValueError(
+            f"Image is {size / 1024 / 1024:.1f} MB; the limit is "
+            f"{MAX_INLINE_IMAGE_BYTES // 1024 // 1024} MB."
+        )
+    media_type = image_media_type(resolved)
+    if not media_type:
+        raise ValueError(f"Not a recognised image file: {resolved}")
+    return f'data:{media_type};base64,{read_file(resolved, "binary")}'
+
+
+def split_data_url(url: str) -> Tuple[str, str]:
+    """`data:image/png;base64,AAAA` -> `("image/png", "AAAA")`, for providers
+    that want the parts separately rather than as one URL."""
+    header, _, payload = url.partition(",")
+    media_type = header[5:].split(";", 1)[0] if header.startswith("data:") else "image/png"
+    return media_type or "image/png", payload
+
+
 def read_batch(paths: List[Optional[str]], mode: str = "text") -> List[Optional[str]]:
     """Read every path in *paths* (text or binary, per `read_file`), preserving
     `None` entries positionally so results still line up with their inputs."""

@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.elements.gui.widgets.image_view import image_view_element  # noqa: E402
 from app.models.graph import GuiWidget, GuiWidgetKind  # noqa: E402
+from app.services import file_service  # noqa: E402
 
 # Smallest valid PNG: 1x1, transparent.
 _PNG = base64.b64decode(
@@ -63,12 +64,13 @@ async def test_a_missing_file_is_shown_not_raised(tmp_path):
 
 
 async def test_an_oversized_image_is_refused(tmp_path, monkeypatch):
-    monkeypatch.setattr(image_view_element, "MAX_INLINE_BYTES", 10)
+    # The limit lives with the conversion, in file_service, shared with the ai node.
+    monkeypatch.setattr(file_service, "MAX_INLINE_IMAGE_BYTES", 10)
     target = tmp_path / "big.png"
     target.write_bytes(_PNG)
 
     shown = await image_view_element.ImageViewElement().display_value(_widget(), str(target))
-    assert "display limit" in shown
+    assert "the limit is" in shown
 
 
 async def test_a_non_image_is_refused(tmp_path):

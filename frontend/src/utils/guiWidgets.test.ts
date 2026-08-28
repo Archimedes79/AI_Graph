@@ -38,6 +38,7 @@ function blankGuiNode(): GraphNode {
       batch_mode: 'per_item',
       batch_concurrency: 0,
       read_file_inputs: false,
+      send_images: false,
       gui_widgets: [],
       gui_grid_columns: 12,
       extra: {},

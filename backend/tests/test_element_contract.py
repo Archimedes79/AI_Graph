@@ -374,3 +374,32 @@ async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, 
     # deployed graph's AI choice reaches widget-level generation too.
     assert calls[0]["model"] == ""
     assert calls[0]["provider"] == AIProvider.DEFAULT
+
+
+def test_a_legacy_widget_node_loads_as_a_gui_node():
+    """
+    `widget` was a `gui` node holding one widget, served by the same element
+    registered twice. It is gone as a node type; graphs that used it must still
+    load, keeping their widget, their ports and their edges.
+    """
+    graph = Graph.model_validate({
+        "metadata": {"name": "legacy"},
+        "nodes": [{
+            "id": "w", "node_type": "widget", "label": "Picker",
+            "position": {"x": 0, "y": 0}, "inputs": [], "outputs": [],
+            "config": {"gui_widgets": [{"id": "p1", "kind": "input_picker", "mode": "file"}]},
+        }],
+        "edges": [],
+    })
+
+    node = graph.nodes[0]
+    assert node.node_type == NodeType.GUI
+    assert [w.kind for w in node.config.gui_widgets] == [GuiWidgetKind.INPUT_PICKER]
+    # Ports are derived from the widget list, so the edge target id survives.
+    sync_gui_node_ports(node)
+    assert [p.id for p in node.outputs] == ["p1_out"]
+
+
+def test_widget_is_no_longer_a_node_type():
+    assert not hasattr(NodeType, "WIDGET")
+    assert "widget" not in {t.value for t in NodeType}

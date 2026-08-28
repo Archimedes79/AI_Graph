@@ -87,7 +87,7 @@ export default function Toolbar({
         changed = true;
       }
 
-      if (node.node_type === 'gui' || node.node_type === 'widget') {
+      if (node.node_type === 'gui') {
         let widgetsChanged = false;
         for (const widget of node.config.gui_widgets) {
           const key = `${node.id}::${widget.id}`;

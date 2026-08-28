@@ -29,7 +29,7 @@ def _status_error(code: int) -> httpx.HTTPStatusError:
 async def test_a_rate_limit_is_retried_and_can_succeed(monkeypatch):
     attempts = 0
 
-    async def flaky(prompt, system, model, temperature, timeout=None):
+    async def flaky(prompt, system, model, temperature, timeout=None, images=None):
         nonlocal attempts
         attempts += 1
         if attempts < 3:
@@ -46,7 +46,7 @@ async def test_a_rate_limit_is_retried_and_can_succeed(monkeypatch):
 async def test_a_connection_error_is_retried(monkeypatch):
     attempts = 0
 
-    async def flaky(prompt, system, model, temperature, timeout=None):
+    async def flaky(prompt, system, model, temperature, timeout=None, images=None):
         nonlocal attempts
         attempts += 1
         if attempts == 1:
@@ -63,7 +63,7 @@ async def test_a_bad_request_is_not_retried(monkeypatch):
     """A 400 is a configuration mistake -- retrying only delays the message."""
     attempts = 0
 
-    async def rejecting(prompt, system, model, temperature, timeout=None):
+    async def rejecting(prompt, system, model, temperature, timeout=None, images=None):
         nonlocal attempts
         attempts += 1
         raise _status_error(400)
@@ -79,7 +79,7 @@ async def test_a_missing_key_is_not_retried(monkeypatch):
     """Nor is anything that will fail identically every time."""
     attempts = 0
 
-    async def unconfigured(prompt, system, model, temperature, timeout=None):
+    async def unconfigured(prompt, system, model, temperature, timeout=None, images=None):
         nonlocal attempts
         attempts += 1
         raise ValueError("No OpenAI API key configured")
@@ -94,7 +94,7 @@ async def test_a_missing_key_is_not_retried(monkeypatch):
 async def test_it_gives_up_after_the_configured_attempts(monkeypatch):
     attempts = 0
 
-    async def always_down(prompt, system, model, temperature, timeout=None):
+    async def always_down(prompt, system, model, temperature, timeout=None, images=None):
         nonlocal attempts
         attempts += 1
         raise _status_error(503)

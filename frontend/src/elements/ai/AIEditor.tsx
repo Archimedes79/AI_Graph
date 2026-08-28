@@ -99,6 +99,24 @@ export default function AIEditor({
           className="w-full"
         />
       </div>
+      <div>
+        <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
+          <input
+            type="checkbox"
+            checked={!!node.config.send_images}
+            onChange={(e) => setConfig('send_images', e.target.checked)}
+          />
+          Send image inputs as images (vision)
+        </label>
+        <p className="text-xs mt-1" style={{ color: DIMMER }}>
+          An input that is an image file is sent to the model as a picture instead of as a path
+          in the prompt. Needs a model that can see — LM Studio serving a vision model works,
+          as do the hosted ones. Leave &ldquo;Read file contents from paths&rdquo; off for those
+          inputs: that turns the file into base64 text inside the prompt, which a vision model
+          cannot use.
+        </p>
+      </div>
+
       <BatchAndFileInputOptions node={node} setConfig={setConfig} subject="prompt" />
     </>
   );

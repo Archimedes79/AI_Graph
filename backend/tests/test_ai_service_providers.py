@@ -19,7 +19,7 @@ from app.services import ai_service, ai_settings  # noqa: E402
 async def test_complete_dispatches_to_github_copilot(monkeypatch):
     calls = []
 
-    async def fake_github_copilot_complete(prompt, system, model, temperature, timeout=120.0):
+    async def fake_github_copilot_complete(prompt, system, model, temperature, timeout=120.0, images=None):
         calls.append({"prompt": prompt, "system": system, "model": model, "temperature": temperature})
         return "hello from copilot"
 
@@ -217,7 +217,7 @@ async def test_complete_resolves_the_default_sentinel_before_dispatching(clean_a
     know where the runtime AI configuration comes from."""
     seen = {}
 
-    async def fake_lmstudio(prompt, system, model, temperature, timeout=120.0):
+    async def fake_lmstudio(prompt, system, model, temperature, timeout=120.0, images=None):
         seen["model"] = model
         return "ok"
 

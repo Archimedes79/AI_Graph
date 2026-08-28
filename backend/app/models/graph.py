@@ -24,7 +24,6 @@ class NodeType(str, Enum):
     DATA = "data"
     OUTPUT = "output"
     GUI = "gui"
-    WIDGET = "widget"  # a single GuiWidget standalone on the canvas -- see gui_element.py
 
 
 class PortKind(str, Enum):
@@ -216,6 +215,12 @@ class NodeConfig(BaseModel):
     # code / ai node – auto-read file content for file_path-typed inputs
     read_file_inputs: bool = False
 
+    # ai node – send image inputs to the model AS IMAGES rather than as text.
+    # Separate from read_file_inputs on purpose: that one turns a path into
+    # base64 text inside the prompt, which is useless to a vision model. Leave
+    # read_file_inputs off for image inputs and turn this on instead.
+    send_images: bool = False
+
     # output node
     output_label: str = "Result"
     write_mode: Literal["none", "file", "directory", "window"] = "none"  # window displays
@@ -269,7 +274,7 @@ def sync_gui_node_ports(node: GraphNode) -> None:
     directly. A WIDGET node is just a GUI node whose `gui_widgets` happens to
     hold exactly one widget -- same derivation, same element (see gui_element.py).
     """
-    if node.node_type not in (NodeType.GUI, NodeType.WIDGET):
+    if node.node_type != NodeType.GUI:
         return
     inputs: List[Port] = []
     outputs: List[Port] = []
@@ -293,7 +298,14 @@ def sync_gui_node_ports(node: GraphNode) -> None:
 #     names are no longer valid enum values (see AGENTS.md).
 # ---------------------------------------------------------------------------
 
-_LEGACY_NODE_TYPES = {"merge", "split", "text_input", "file_input", "directory_input", "text_output"}
+_LEGACY_NODE_TYPES = {
+    "merge", "split", "text_input", "file_input", "directory_input", "text_output",
+    # `widget` was never a behaviour of its own: it was a `gui` node holding
+    # exactly one widget, served by the same element class registered twice. It
+    # cost a second node type in the DSL, in migrations, in memory-node checks
+    # and in every shared shell that had to write `gui || widget`.
+    "widget",
+}
 
 # legacy widget kind -> (canonical kind, mode)
 _LEGACY_WIDGET_KINDS = {
@@ -355,7 +367,9 @@ def _migrate_legacy_node(node: Any) -> Any:
     node_type = node.get("node_type")
     if node_type in ("merge", "split"):
         return _migrate_legacy_merge_split_node(node)
-    if node_type in _LEGACY_NODE_TYPES:
+    if node_type == "widget":
+        node = {**node, "node_type": "gui"}
+    elif node_type in _LEGACY_NODE_TYPES:
         node = _migrate_legacy_alias_node(node)
     return _migrate_legacy_widgets(node)
 

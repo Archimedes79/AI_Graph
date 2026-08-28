@@ -21,7 +21,7 @@ export type PortKind = 'input' | 'output';
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "NodeType".
  */
-export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui' | 'widget';
+export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "AIProvider".
@@ -139,6 +139,7 @@ export interface NodeConfig {
   select_all_files: boolean;
   selector_code: string;
   selector_prompt: string;
+  send_images: boolean;
   system_prompt: string;
   temperature: number;
   value?: string | null;

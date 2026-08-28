@@ -19,7 +19,7 @@ export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Po
  * `gui_widgets` holds exactly one widget -- same derivation.
  */
 export function syncGuiNodePorts(node: GraphNode): GraphNode {
-  if (node.node_type !== 'gui' && node.node_type !== 'widget') return node;
+  if (node.node_type !== 'gui') return node;
 
   const inputs: Port[] = [];
   const outputs: Port[] = [];

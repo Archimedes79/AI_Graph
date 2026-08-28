@@ -30,7 +30,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
   const icon = NODE_TYPE_ICON[graphNode.node_type] ?? '⬜';
   const status = executionResult ? statusStyles[executionResult.status] : undefined;
   const statusColor = status?.color;
-  const isGuiLike = graphNode.node_type === 'gui' || graphNode.node_type === 'widget';
+  const isGuiLike = graphNode.node_type === 'gui';
 
   const handleEdit = useCallback(() => onEdit(id), [id, onEdit]);
   // The ✕ sits a few pixels from ✏️, deleting is immediate, it silently takes

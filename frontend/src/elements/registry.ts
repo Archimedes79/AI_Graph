@@ -7,7 +7,6 @@ import { codeElement } from './code/codeElement';
 import { dataElement } from './data/dataElement';
 import { outputElement } from './output/outputElement';
 import { guiElement } from './gui/guiElement';
-import { widgetElement } from './widget/widgetElement';
 
 import { inputPickerElement } from './gui/widgets/input_picker/inputPickerElement';
 import { textIoElement } from './gui/widgets/text_io/textIoElement';
@@ -22,7 +21,6 @@ export const NODE_ELEMENTS: Record<NodeType, NodeElementDefinition> = {
   data:             dataElement,
   output:           outputElement,
   gui:              guiElement,
-  widget:           widgetElement,
 };
 
 /** Dispatch table every GuiWidgetKind resolves through -- see AGENTS.md's element contract. */

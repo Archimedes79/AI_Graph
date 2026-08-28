@@ -39,6 +39,7 @@ export function baseNodeConfig(): NodeConfig {
     // 0 = follow the run's default concurrency; see NodeConfig.batch_concurrency.
     batch_concurrency: 0,
     read_file_inputs: false,
+    send_images: false,
     gui_widgets: [],
     gui_grid_columns: 12,
     extra: {},

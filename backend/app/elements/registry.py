@@ -28,9 +28,6 @@ NODE_ELEMENTS: Dict[NodeType, NodeElement] = {
     NodeType.DATA:             DataElement(),
     NodeType.OUTPUT:           _output,
     NodeType.GUI:              _gui,
-    # A WIDGET node is a GUI node whose `gui_widgets` holds exactly one widget --
-    # same element, same execute()/ports() derivation, see gui_element.py.
-    NodeType.WIDGET:           _gui,
 }
 
 GUI_WIDGET_ELEMENTS: Dict[GuiWidgetKind, GuiWidgetElement] = {
