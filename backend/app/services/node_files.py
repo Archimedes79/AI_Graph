@@ -154,7 +154,7 @@ def for_node(node, spec) -> Authored:
         body_holder=node.config,
         prompt_holder=node if spec.prompt_on_node else node.config,
         pointer_holder=node.config,
-        context_file=str(getattr(node.config, "config_context_file", "") or ""),
+        context_file=str(getattr(node.config, "example_file", "") or ""),
         inputs=tuple(p.id for p in node.inputs),
         outputs=tuple(p.id for p in node.outputs),
     )
@@ -164,7 +164,7 @@ def for_widget(widget, spec) -> Authored:
     return Authored(
         label=widget.label or widget.id, ident=widget.id, spec=spec,
         body_holder=widget, prompt_holder=widget, pointer_holder=widget,
-        context_file=str(getattr(widget, "example_input_path", "") or ""),
+        context_file=str(getattr(widget, "example_file", "") or ""),
         # A widget's ports are named by convention and are what the surrounding
         # graph wires to, so they are worth stating in the header.
         inputs=(f"{widget.id}_in",), outputs=(f"{widget.id}_out",),
@@ -237,9 +237,10 @@ def apply(item: Authored, header: Dict[str, Any], body: str) -> None:
         item.prompt = header["prompt"]
     if "context-file" in header:
         item.context_file = header["context-file"]
-        # A node keeps its context file in config; a widget has no such field.
-        if hasattr(item.body_holder, "config_context_file"):
-            item.body_holder.config_context_file = header["context-file"]
+        # `example_file` is the same field name on a node's config and on a
+        # widget, so this is one assignment rather than a branch per level.
+        if hasattr(item.body_holder, "example_file"):
+            item.body_holder.example_file = header["context-file"]
 
 
 def parse(text: str, file_name: str = "node.py") -> Tuple[Dict[str, Any], str]:

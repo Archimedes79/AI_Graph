@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.elements.base import AuthoredFile, DeployNeeds, NodeElement
+from app.elements.base import AuthoredFile, DeployNeeds, Generation, NodeElement
 from app.models.graph import GraphNode, NodeType
 from app.services import ai_service, file_service
 from app.services.batching import reconcile_outputs
@@ -90,6 +90,16 @@ class AIElement(NodeElement):
 
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
         return DeployNeeds(ai=True)
+
+    def generation(self, node: GraphNode) -> Generation:
+        """The system prompt, written from the node's own description -- the one
+        element whose request lives on the node rather than in its config."""
+        return Generation(
+            kind="prompt", prompt_field="description", target_field="system_prompt",
+            prompt_on_node=True,
+            guard="Please add a description first.",
+            success="✅ Prompt generated!",
+        )
 
     def authored_file(self, node: GraphNode) -> AuthoredFile:
         """The system prompt -- the thing actually written for an ai node.

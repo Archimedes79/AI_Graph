@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from app.elements.base import NodeElement
+from app.elements.base import (AuthoredFile, Generation, NodeElement,
+                               SELECTOR_GENERATION, code_extension)
 from app.models.graph import GraphNode, NodeType
 from app.services import code_executor, file_service
 
@@ -41,7 +42,7 @@ class InputElement(NodeElement):
                 selector_code, _ = await ai_service.generate_code(
                     description=cfg.selector_prompt,
                     language=cfg.language or "python",
-                    context='inputs["files"] contains rooted file paths. Return {"files": [...]} with selected paths.',
+                    context=SELECTOR_GENERATION.contract,
                     inputs=["files"], outputs=["files"],
                     model=cfg.ai_model, provider=cfg.ai_provider,
                 )
@@ -55,6 +56,21 @@ class InputElement(NodeElement):
         # mode == "file"
         content: Any = file_service.read_file(path, mode="text")
         return {"content": content, "path": str(path)}
+
+    def generation(self, node: GraphNode) -> Optional[Generation]:
+        """The shared selector contract -- literally the same object the
+        `input_picker` widget returns, because it is the same behaviour at two
+        levels of the object hierarchy. Only directory mode selects anything."""
+        return SELECTOR_GENERATION if _effective_mode(node) == "directory" else None
+
+    def authored_file(self, node: GraphNode) -> Optional[AuthoredFile]:
+        """In directory mode the selector is real code, so it gets a real file --
+        the same one an `input_picker` widget gets. A text or single-file input
+        authors nothing and returns None, as before."""
+        if _effective_mode(node) != "directory":
+            return None
+        return AuthoredFile(body_field="selector_code", prompt_field="selector_prompt",
+                            extension=code_extension(node.config))
 
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
         if not node.config.prompt_at_runtime:

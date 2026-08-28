@@ -118,12 +118,20 @@ class GuiWidget(BaseModel):
     # objects. Empty string means the raw incoming value passes through unchanged.
     code: str = ""
     language: Literal["python", "javascript"] = "python"
-    plot_prompt: str = ""            # design-time prompt used to generate plot transform code
+    # The prompt that generated `code`. Named exactly like NodeConfig.code_prompt
+    # because it is the same thing one level down: a widget's authored triple is
+    # code_prompt / code / code_file, identical to a code node's. It was
+    # `plot_prompt` while plot_window was the only widget generating a snippet,
+    # which is why image_view -- same run(inputs) -> {"value"} contract -- had a
+    # code field and no way to generate it.
+    code_prompt: str = ""
     # The file beside the graph holding this widget's authored code, e.g.
     # "Verlauf.py". Same contract as NodeConfig.code_file one level down: a gui
     # node's widgets live in a folder named after the node, one file each.
     code_file: str = ""
-    example_input_path: str = ""     # optional sample file used as generation context
+    # One sample of what flows in, as a path -- the same field name and meaning
+    # NodeConfig.example_file has. Every generate call on this widget reads it.
+    example_file: str = ""
 
     # GUI-designer layout, in grid cells (12-column grid, row height is uniform).
     # Purely presentational: it never affects ports, execution, or wiring. None
@@ -196,20 +204,21 @@ class NodeConfig(BaseModel):
     data_prompt: str = ""
     data_format_prompt: str = ""
 
-    # Config tab -- optional context file (path) whose content is appended as
-    # extra context to every ✨ Generate call in the Config tab (code, system
-    # prompt, selector code). Read server-side via file_service, same as any
-    # other path field; see routers/ai.py.
-    config_context_file: str = ""
+    # One example of what this element works on, as a path: its content (plus a
+    # parsed preview) is appended as context to EVERY ✨ Generate call on this
+    # node -- body, selector, output format alike. Read server-side via
+    # file_service, same as any other path field; see routers/ai.py.
+    #
+    # There were three fields for this one idea (`config_context_file` here,
+    # `output_context_file` below, `example_input_path` on GuiWidget), so a node
+    # with a sample CSV attached in the Config tab still generated its output
+    # format with no example unless the user attached the same file twice. All
+    # three migrate into this one at load time.
+    example_file: str = ""
 
     # per-node output format declaration (used in AI generation prompts)
     output_format: Literal["text", "json", "csv", "csv_list", "custom"] = "text"
     output_format_prompt: str = ""       # description for custom format
-
-    # Output tab -- optional context file (path) whose content is appended as
-    # extra context when generating output_format_prompt via AI ("Generate
-    # Output Format from prompt"). Independent of config_context_file above.
-    output_context_file: str = ""
 
     # code / ai node – batch handling
     # per_item: run() is invoked once per batch element (existing behaviour).
@@ -372,17 +381,71 @@ def _migrate_legacy_widgets(node: dict) -> dict:
     return migrated
 
 
+# Fields renamed into the shared element vocabulary (see ELEMENT_CONTRACT.md).
+# Same one-time-rewrite mechanism as the legacy node types above, and for the
+# same reason: the old names are not fields any more, so pydantic's
+# extra="ignore" would silently drop the value unless it is moved first.
+_RENAMED_CONFIG_FIELDS = (
+    ("config_context_file", "example_file"),
+    ("output_context_file", "example_file"),
+)
+_RENAMED_WIDGET_FIELDS = (
+    ("plot_prompt", "code_prompt"),
+    ("example_input_path", "example_file"),
+)
+
+
+def _apply_renames(raw: dict, renames: tuple) -> dict:
+    """Move legacy keys onto their new names; the first non-empty value wins.
+
+    Two old fields can map to one new one (a node could carry both a config and
+    an output context file). Keeping whichever is filled in is the honest
+    resolution: they were the same kind of attachment, and a user who set only
+    one meant that one."""
+    result = None
+    for old, new in renames:
+        if old not in raw:
+            continue
+        if result is None:
+            result = dict(raw)
+        value = result.pop(old)
+        if value and not result.get(new):
+            result[new] = value
+    return result if result is not None else raw
+
+
+def _migrate_renamed_fields(node: dict) -> dict:
+    """Apply the field renames to one node dict and to its widgets."""
+    config = node.get("config")
+    if not isinstance(config, dict):
+        return node
+    new_config = _apply_renames(config, _RENAMED_CONFIG_FIELDS)
+    widgets = new_config.get("gui_widgets")
+    if isinstance(widgets, list):
+        new_widgets = [
+            _apply_renames(w, _RENAMED_WIDGET_FIELDS) if isinstance(w, dict) else w
+            for w in widgets
+        ]
+        if any(new is not old for new, old in zip(new_widgets, widgets)):
+            if new_config is config:
+                new_config = dict(config)
+            new_config["gui_widgets"] = new_widgets
+    if new_config is config:
+        return node
+    return {**node, "config": new_config}
+
+
 def _migrate_legacy_node(node: Any) -> Any:
     if not isinstance(node, dict):
         return node
     node_type = node.get("node_type")
     if node_type in ("merge", "split"):
-        return _migrate_legacy_merge_split_node(node)
+        return _migrate_renamed_fields(_migrate_legacy_merge_split_node(node))
     if node_type == "widget":
         node = {**node, "node_type": "gui"}
     elif node_type in _LEGACY_NODE_TYPES:
         node = _migrate_legacy_alias_node(node)
-    return _migrate_legacy_widgets(node)
+    return _migrate_renamed_fields(_migrate_legacy_widgets(node))
 
 
 def _generate_merge_code(mode: str, separator: str) -> str:
@@ -597,6 +660,12 @@ class GenerateCodeRequest(BaseModel):
     context_file: str = ""            # optional path; content is appended to context server-side
     inputs: List[str] = Field(default_factory=list)
     outputs: List[str] = Field(default_factory=list)
+    # Real values for this node's input ports, taken from the last run. When
+    # present, the generated function is executed against them and repaired once
+    # if it fails -- see app.services.code_refine. Omit it and generation stays
+    # a single pass, which is also the way to opt out of running model-written
+    # code before it has been read.
+    sample_inputs: Optional[Dict[str, Any]] = None
     # Empty/DEFAULT -> the server's own code-generation default
     # (AI_GRAPH_GEN_PROVIDER / AI_GRAPH_GEN_MODEL, or ai-settings.json's
     # "codegen" section). The editor normally sends its one configured
@@ -605,10 +674,27 @@ class GenerateCodeRequest(BaseModel):
     ai_model: str = ""
 
 
+class CodeProbeReport(BaseModel):
+    """
+    What happened when the generated code was run against real data.
+
+    `skipped` -- no sample was available, so this was a single pass.
+    `ok`      -- the first attempt ran and returned every declared output port.
+    `repaired`-- the first attempt failed, the second one works.
+    `failed`  -- still broken; `error`/`missing_outputs` say how.
+    """
+    status: Literal["skipped", "ok", "repaired", "failed"] = "skipped"
+    attempts: int = 0
+    error: str = ""
+    missing_outputs: List[str] = Field(default_factory=list)
+    output_preview: str = ""
+
+
 class GenerateCodeResponse(BaseModel):
     code: str
     language: str
     explanation: str = ""
+    probe: CodeProbeReport = Field(default_factory=CodeProbeReport)
 
 
 class GeneratePromptRequest(BaseModel):

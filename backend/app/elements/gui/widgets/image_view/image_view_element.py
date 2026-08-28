@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Tuple
 
-from app.elements.base import AuthoredFile, GuiWidgetElement
+from app.elements.base import AuthoredFile, Generation, GuiWidgetElement, code_extension
 from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
 from app.services import file_service
 
@@ -53,6 +53,26 @@ class ImageViewElement(GuiWidgetElement):
 
     def authored_file(self, widget: GuiWidget) -> AuthoredFile:
         """The optional transform that reshapes an incoming value into a path."""
-        language = str(getattr(widget, "language", "python") or "python").lower()
-        extension = ".js" if language.startswith(("js", "javascript", "node")) else ".py"
-        return AuthoredFile(body_field="code", prompt_field="", extension=extension)
+        return AuthoredFile(body_field="code", prompt_field="code_prompt",
+                            extension=code_extension(widget))
+
+    def generation(self, widget: GuiWidget) -> Generation:
+        """Same snippet contract as plot_window, different destination: a path.
+
+        This widget had the `code` field and no way to generate it, purely
+        because generation was a switch in a shell rather than a declaration
+        here. Declaring it is the whole feature.
+        """
+        return Generation(
+            kind="code", prompt_field="code_prompt", target_field="code",
+            contract=(
+                'Must expose run(inputs: dict) -> dict, receiving {"value": <raw incoming value>} '
+                'and returning {"value": <an image file path, or a list of them>}. The app loads '
+                'and displays the picture itself -- do NOT read, decode or draw the image, and do '
+                'NOT import third-party libraries: the code runs in a sandbox with only the '
+                'standard library available.'
+            ),
+            inputs=("value",), outputs=("value",),
+            guard="Please describe how to get an image path out of the incoming value first.",
+            success="✅ Transform generated!",
+        )

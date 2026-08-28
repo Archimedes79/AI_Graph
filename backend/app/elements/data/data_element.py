@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from app.elements.base import AuthoredFile, NodeElement
+from app.elements.base import AuthoredFile, Generation, NodeElement
 from app.models.graph import GraphNode, NodeType
 
 
@@ -20,6 +20,14 @@ class DataElement(NodeElement):
         value = inputs["input"] if "input" in inputs else node.config.data_value
         node.config.data_value = value
         return {"output": value}
+
+    def generation(self, node: GraphNode) -> Generation:
+        """The format contract every neighbour is then generated against."""
+        return Generation(
+            kind="data_format", prompt_field="data_prompt", target_field="data_format_prompt",
+            guard="Please describe the data format first.",
+            success="✅ Data format generated!",
+        )
 
     def authored_file(self, node: GraphNode) -> AuthoredFile:
         """The format contract -- the text neighbours are generated against.
