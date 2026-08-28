@@ -89,7 +89,7 @@ def test_a_widget_with_nothing_authored_has_no_file():
     (lambda: _node("code", code_prompt="Die Absicht."), "def run(i):\n    return {}", "Die Absicht."),
     (lambda: _node("ai", description="Die Absicht."), "You are careful.", "Die Absicht."),
     (lambda: _node("data", data_prompt="Die Absicht."), "ts: ISO-8601", "Die Absicht."),
-    (lambda: _widget("plot_window", plot_prompt="Die Absicht."), "def run(i):\n    return {}", "Die Absicht."),
+    (lambda: _widget("plot_window", code_prompt="Die Absicht."), "def run(i):\n    return {}", "Die Absicht."),
     (lambda: _widget("input_picker", selector_prompt="Die Absicht."), "def run(i):\n    return {}", "Die Absicht."),
 ])
 def test_everything_round_trips_through_the_same_code(make, body, prompt_text):
