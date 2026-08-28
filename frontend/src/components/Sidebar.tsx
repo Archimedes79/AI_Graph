@@ -1,6 +1,6 @@
 import React from 'react';
 import type { NodeType } from '../types/graph';
-import { NODE_TYPE_ICON, NODE_TYPE_LABELS, WIDGET_PRESETS, type NodePreset } from '../utils/nodeDefaults';
+import { NODE_TYPE_DESCRIPTIONS, NODE_TYPE_ICON, NODE_TYPE_LABELS, WIDGET_PRESETS, type NodePreset } from '../utils/nodeDefaults';
 import { ACCENT, DIMMER, LINE, SURFACE, TEXT } from '../ui/theme';
 
 const CATEGORIES: { label: string; types: NodeType[] }[] = [
@@ -54,6 +54,7 @@ export default function Sidebar({ onAddNode, onAddPreset }: SidebarProps) {
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-white/5"
               style={{ color: TEXT }}
               onClick={() => onAddNode(type)}
+              title={NODE_TYPE_DESCRIPTIONS[type]}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData('application/nodeType', type);

@@ -7,6 +7,7 @@ import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { executeGraph } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import { ACCENT } from '../ui/theme';
+import { delivered } from '../utils/executionStatus';
 
 type RFNode = Node<RFNodeData>;
 
@@ -93,7 +94,7 @@ function collectTextOutputWindows(
     .filter((node) => node.node_type === 'output' && node.config.write_mode === 'window')
     .map((node) => {
       const nodeResult = result.node_results.find((r) => r.node_id === node.id);
-      if (!nodeResult || nodeResult.status !== 'success') return null;
+      if (!nodeResult || !delivered(nodeResult.status)) return null;
       const content = Object.values(nodeResult.outputs)
         .flatMap((value) => (Array.isArray(value) ? value : [value]))
         .filter((value) => value !== null && value !== undefined)
@@ -430,7 +431,7 @@ export const useGraphStore = create<GraphStore>()(
           const graphNode = rfNode.data.graphNode as GraphNode;
           if (graphNode.node_type !== 'data') continue;
           const nodeResult = resultByNodeId.get(graphNode.id);
-          if (nodeResult?.status === 'success' && nodeResult.outputs && 'output' in nodeResult.outputs) {
+          if (delivered(nodeResult?.status) && nodeResult?.outputs && 'output' in nodeResult.outputs) {
             graphNode.config.data_value = nodeResult.outputs.output as any;
           }
         }
@@ -440,7 +441,7 @@ export const useGraphStore = create<GraphStore>()(
         for (const edge of edges) {
           if (!feedbackIds.has(edge.id)) continue;
           const sourceResult = resultByNodeId.get(edge.source_node_id);
-          if (!sourceResult || sourceResult.status !== 'success') continue;
+          if (!sourceResult || !delivered(sourceResult.status)) continue;
           // Prefer the value the backend's own settle pass wrote into the
           // target's NodeResult.inputs: for a display-only widget that is the
           // *transformed* value (apply_display_transform), not the raw source

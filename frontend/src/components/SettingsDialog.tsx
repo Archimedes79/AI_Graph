@@ -2,6 +2,7 @@ import React from 'react';
 import { useSettingsStore } from '../store/settingsStore';
 import { useGraphStore } from '../store/graphStore';
 import ProviderModelSelect from '../elements/shared/ProviderModelSelect';
+import AICredentialsSection from './AICredentialsSection';
 import Modal from './Modal';
 import { ACCENT_TEXT, DIM, PRIMARY_BUTTON, TEXT } from '../ui/theme';
 
@@ -94,6 +95,17 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               line, an <code>AI_GRAPH_AI_PROVIDER</code> environment variable, or an{' '}
               <code>ai-settings.json</code> next to the executable all take precedence over this.
             </div>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>
+              Keys and addresses
+            </h3>
+            <p className="text-xs mb-3" style={{ color: DIM }}>
+              What the providers above need in order to answer. Both choices draw on these,
+              so a key entered once serves generation and execution alike.
+            </p>
+            <AICredentialsSection />
           </section>
       </div>
     </Modal>

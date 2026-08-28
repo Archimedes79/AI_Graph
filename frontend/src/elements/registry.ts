@@ -11,6 +11,7 @@ import { widgetElement } from './widget/widgetElement';
 
 import { inputPickerElement } from './gui/widgets/input_picker/inputPickerElement';
 import { textIoElement } from './gui/widgets/text_io/textIoElement';
+import { imageViewElement } from './gui/widgets/image_view/imageViewElement';
 import { plotWindowElement } from './gui/widgets/plot_window/plotWindowElement';
 
 /** Dispatch table every NodeType resolves through -- see AGENTS.md's element contract. */
@@ -29,4 +30,5 @@ export const GUI_WIDGET_ELEMENTS: Record<GuiWidgetKind, GuiWidgetElementDefiniti
   input_picker:    inputPickerElement,
   text_io:         textIoElement,
   plot_window:     plotWindowElement,
+  image_view:      imageViewElement,
 };

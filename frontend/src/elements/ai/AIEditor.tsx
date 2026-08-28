@@ -29,14 +29,14 @@ export default function AIEditor({
     <>
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-          Text describing the prompt
+          What this node should do
         </label>
         <textarea
           className="w-full rounded-lg px-3 py-2 text-sm resize-none"
           style={{ ...FIELD, minHeight: 96 }}
           value={node.description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Describe the assistant behavior you want in the runtime prompt."
+          placeholder="Describe what this node should do — ✨ Generate turns it into the system prompt below."
         />
       </div>
 
@@ -49,7 +49,7 @@ export default function AIEditor({
       <div>
         <div className="flex items-center justify-between mb-1">
           <label className="text-xs font-medium" style={{ color: MUTED }}>
-            Runtime prompt window
+            System prompt
           </label>
           <button
             onClick={handleGeneratePrompt}

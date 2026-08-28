@@ -51,3 +51,7 @@ backend/app/elements/data/__pycache__/
 
 # Packaged editor deploy artifact (built by start.py --mode package)
 ai-graph-editor-package.zip
+
+# AI credentials written by ⚙ Settings → Keys and addresses. Its default location
+# is the working directory, which for a dev run is this repo -- never commit it.
+ai-settings.json

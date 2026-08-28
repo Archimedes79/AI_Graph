@@ -149,6 +149,7 @@ through the frontend registry; do not add a new per-type switch to those shared 
 | `input_picker` | `backend/app/elements/gui/widgets/input_picker/input_picker_element.py` **(reference)** | `frontend/src/elements/gui/widgets/input_picker/inputPickerElement.ts` + `InputPickerEditor.tsx` **(reference)** |
 | `text_io` | `.../gui/widgets/text_io/text_io_element.py` | `.../elements/gui/widgets/text_io/textIoElement.ts` + `TextIoEditor.tsx` |
 | `plot_window` | `.../gui/widgets/plot_window/plot_window_element.py` (display-only, no output port) | `.../elements/gui/widgets/plot_window/plotWindowElement.ts` + `PlotWindowEditor.tsx` |
+| `image_view` | `.../gui/widgets/image_view/image_view_element.py` (display-only; overrides `display_value`) | `.../elements/gui/widgets/image_view/imageViewElement.ts` + `ImageViewEditor.tsx` |
 
 `plot_window`'s transform snippet runs through the same sandboxed `code_executor` as a
 Code node and is rendered by the dependency-free inline SVG `frontend/src/components/PlotWidget.tsx`
@@ -403,6 +404,17 @@ failing it. `_terminate_tree` exists for that.
 - `backend/app/services/graph_executor.py` — topological execution, batching, input/format resolution; delegates per-node work to `elements.registry.NODE_ELEMENTS[node.node_type].execute(...)`.
 - `backend/app/services/deploy_service.py` — assembles the vendored-runtime deploy bundle described above (which files to copy, `requirements.txt`/Dockerfile generation); does not generate per-node code.
 - `backend/app/services/batching.py` — the shared batch-merge/reconcile helpers described above.
+- **Batch execution** (`_execute_batch_node` in `graph_executor.py`) runs `per_item` items
+  concurrently, bounded by `config.batch_concurrency` (0 = `AI_GRAPH_BATCH_CONCURRENCY`,
+  itself 4). A failed item contributes `None` on every output port rather than aborting
+  the batch, and the node reports `ExecutionStatus.PARTIAL` — which counts as *delivering*,
+  so downstream nodes still run. Anything that reads `outputs` after checking for
+  `success` must accept `partial` too; the frontend has one helper, `utils/executionStatus.ts`.
+- **Display-only widgets** get a last hook before their value reaches the UI:
+  `GuiWidgetElement.display_value(widget, value)`, called by the `gui` composite after the
+  optional transform snippet. `image_view` uses it to turn a server-side path into a
+  `data:` URL. Put kind-specific display preparation there, never a branch in
+  `gui_element.py`.
 - `backend/app/services/ai_service.py`, `code_executor.py`, `file_service.py` — provider-agnostic AI calls, sandboxed code execution, file I/O helpers shared across node types.
 - `frontend/src/components/NodeEditor.tsx` — modal shell (tabs/save-cancel/AI-generate handlers), dispatches to the per-node-type `ConfigEditor`s above.
 - `frontend/src/components/GuiWidgetEditor.tsx` — widget list/add/remove/reorder, dispatches to the per-kind `ConfigEditor`s above.

@@ -11,7 +11,7 @@
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "GuiWidgetKind".
  */
-export type GuiWidgetKind = 'input_picker' | 'text_io' | 'plot_window';
+export type GuiWidgetKind = 'input_picker' | 'text_io' | 'plot_window' | 'image_view';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "PortKind".
@@ -37,7 +37,7 @@ export type DataType = 'text' | 'file_path' | 'binary' | 'json' | 'list' | 'any'
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "ExecutionStatus".
  */
-export type ExecutionStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped';
+export type ExecutionStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'partial';
 
 /**
  * Top-level graph document – this is the Graph DSL schema.
@@ -113,6 +113,7 @@ export interface GraphNode {
 export interface NodeConfig {
   ai_model: string;
   ai_provider: 'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
+  batch_concurrency: number;
   batch_mode: 'per_item' | 'whole_list';
   code: string;
   code_prompt: string;

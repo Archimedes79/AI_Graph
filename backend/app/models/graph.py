@@ -80,6 +80,7 @@ class GuiWidgetKind(str, Enum):
     INPUT_PICKER = "input_picker"     # unified: file | directory
     TEXT_IO = "text_io"               # unified: input | output | both
     PLOT_WINDOW = "plot_window"
+    IMAGE_VIEW = "image_view"       # display-only: shows a picture from a path
 
 
 class GuiWidget(BaseModel):
@@ -199,6 +200,12 @@ class NodeConfig(BaseModel):
     # whole_list: run() is invoked once with the full, unexpanded multi-port list(s),
     # enabling "reduce" style aggregation (e.g. summing counts across all items).
     batch_mode: Literal["per_item", "whole_list"] = "per_item"
+
+    # code / ai node – how many `per_item` batch elements may be in flight at once.
+    # 0 means "use the run's default" (AI_GRAPH_BATCH_CONCURRENCY, itself 4), which
+    # is what makes a thousand-item batch finish in minutes rather than hours. Set
+    # it to 1 on a node whose provider rate-limits, or whose items must run in order.
+    batch_concurrency: int = Field(default=0, ge=0, le=64)
 
     # code / ai node – auto-read file content for file_path-typed inputs
     read_file_inputs: bool = False
@@ -510,6 +517,11 @@ class ExecutionStatus(str, Enum):
     SUCCESS = "success"
     ERROR = "error"
     SKIPPED = "skipped"
+    # Some items of a `per_item` batch failed and the rest succeeded. The node
+    # still delivers its outputs downstream (failed positions carry None, so a
+    # batch stays index-aligned with its input) -- losing 2,000 successful items
+    # because item 1,900 raised is worse than delivering 1,999 and saying so.
+    PARTIAL = "partial"
 
 
 class NodeResult(BaseModel):

@@ -5,6 +5,7 @@ import { NODE_TYPE_COLORS, NODE_TYPE_ICON, NODE_TYPE_LABELS } from '../../utils/
 import { useGraphStore } from '../../store/graphStore';
 import PlotWidget from '../PlotWidget';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../../ui/theme';
+import { delivered } from '../../utils/executionStatus';
 
 // Colour AND a glyph: a red/green 8px dot is unreadable both to a screen
 // reader and to a colour-blind user scanning a canvas for the failed node.
@@ -190,7 +191,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
               Tip: this node remembers its own value, so a feedback edge into it (e.g. AI → text window) breaks the cycle automatically.
             </p>
           )}
-          {executionResult?.status === 'success' && (
+          {executionResult && delivered(executionResult.status) && (
             <div className="text-xs mt-1 px-1 py-0.5 rounded"
               style={{ background: 'rgba(34,197,94,0.1)', color: '#86efac', maxHeight: 40, overflow: 'hidden' }}>
               {JSON.stringify(executionResult.outputs).slice(0, 80)}
@@ -267,7 +268,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
         )}
 
         {/* Execution output preview */}
-        {executionResult?.status === 'success' && (
+        {executionResult && delivered(executionResult.status) && (
           <div
             className="text-xs mt-1 px-1 py-0.5 rounded"
             style={{ background: 'rgba(34,197,94,0.1)', color: '#86efac', maxHeight: 60, overflow: 'hidden' }}

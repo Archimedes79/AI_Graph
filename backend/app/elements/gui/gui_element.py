@@ -77,7 +77,11 @@ class GuiElement(NodeElement):
             _, widget_outputs = gui_widget_ports(widget)
             if not widget_outputs:
                 in_id = f"{widget.id}_in"
-                inputs[in_id] = await apply_display_transform(widget, inputs.get(in_id))
+                shown = await apply_display_transform(widget, inputs.get(in_id))
+                display_element = widget_elements.get(widget.kind)
+                if display_element is not None:
+                    shown = await display_element.display_value(widget, shown)
+                inputs[in_id] = shown
                 continue
             element = widget_elements.get(widget.kind)
             if element is None:

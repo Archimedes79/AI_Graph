@@ -165,6 +165,15 @@ def read_file(path: "str | List[str]", mode: str = "text") -> str:
     return p.read_text(encoding="utf-8", errors="replace")
 
 
+def file_size(path: str) -> int:
+    """Size in bytes of an existing file, for callers that must refuse one that
+    is too large before reading it into memory."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    return p.stat().st_size
+
+
 def read_batch(paths: List[Optional[str]], mode: str = "text") -> List[Optional[str]]:
     """Read every path in *paths* (text or binary, per `read_file`), preserving
     `None` entries positionally so results still line up with their inputs."""

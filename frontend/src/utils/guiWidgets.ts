@@ -68,7 +68,8 @@ export const GUI_WIDGET_KIND_LABELS: Record<GuiWidgetKind, string> = {
   input_picker: 'Input Picker (file or directory)',
   text_io: 'Text I/O (input / output / both)',
   plot_window: 'Plot Window',
+  image_view: 'Image View',
 };
 
 /** Kinds offered when creating a brand-new widget. */
-export const CREATABLE_GUI_WIDGET_KINDS: GuiWidgetKind[] = ['input_picker', 'text_io', 'plot_window'];
+export const CREATABLE_GUI_WIDGET_KINDS: GuiWidgetKind[] = ['input_picker', 'text_io', 'plot_window', 'image_view'];

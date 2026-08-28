@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGraphStore } from '../store/graphStore';
 import { ACCENT, ACCENT_TEXT, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '../ui/theme';
+import { delivered, statusTone } from '../utils/executionStatus';
 
 export default function ResultsPanel() {
   const result = useGraphStore((s) => s.executionResult);
@@ -29,8 +30,8 @@ export default function ResultsPanel() {
           <span
             className="text-xs px-2 py-0.5 rounded font-medium"
             style={{
-              background: result.status === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-              color: result.status === 'success' ? '#86efac' : DANGER_TEXT,
+              background: statusTone(result.status).bg,
+              color: statusTone(result.status).fg,
             }}
           >
             {result.status}
@@ -99,11 +100,8 @@ export default function ResultsPanel() {
                 <span
                   className="text-xs px-1.5 py-0.5 rounded"
                   style={{
-                    background:
-                      nr.status === 'success'
-                        ? 'rgba(34,197,94,0.15)'
-                        : 'rgba(239,68,68,0.15)',
-                    color: nr.status === 'success' ? '#86efac' : DANGER_TEXT,
+                    background: statusTone(nr.status).bg,
+                    color: statusTone(nr.status).fg,
                   }}
                 >
                   {nr.status}
@@ -111,7 +109,14 @@ export default function ResultsPanel() {
               </div>
             </div>
             {nr.error && (
-              <div className="px-3 py-2 text-xs" style={{ color: DANGER_TEXT, background: 'rgba(239,68,68,0.05)' }}>
+              <div
+                className="px-3 py-2 text-xs"
+                style={
+                  nr.status === 'partial'
+                    ? { color: '#fcd34d', background: 'rgba(234,179,8,0.06)' }
+                    : { color: DANGER_TEXT, background: 'rgba(239,68,68,0.05)' }
+                }
+              >
                 {nr.error}
               </div>
             )}
@@ -126,7 +131,7 @@ export default function ResultsPanel() {
                 </pre>
               </div>
             )}
-            {nr.status === 'success' && Object.keys(nr.outputs).length > 0 && (
+            {delivered(nr.status) && Object.keys(nr.outputs).length > 0 && (
               <div className="px-3 py-2" style={{ borderTop: `1px solid ${LINE}` }}>
                 <div className="text-xs font-medium mb-1" style={{ color: DIM }}>Outputs</div>
                 <pre

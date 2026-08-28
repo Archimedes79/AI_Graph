@@ -7,6 +7,7 @@ passing output values along the edges to downstream node inputs.
 
 from __future__ import annotations
 
+import os
 import asyncio
 import csv
 import io
@@ -485,10 +486,55 @@ async def _execute_node(
     return await element.execute(node, inputs, effective_formats)
 
 
-async def _execute_batch_node(node: GraphNode, inputs: Dict[str, Any]) -> Dict[str, Any]:
-    """Run AI/code once per batch item and collect their outputs as lists."""
-    results = [await _execute_node(node, item) for item in batch_inputs(node, inputs)]
-    return merge_batch_outputs(node, results)
+DEFAULT_BATCH_CONCURRENCY = max(1, int(os.getenv("AI_GRAPH_BATCH_CONCURRENCY", "4")))
+
+
+async def _execute_batch_node(node: GraphNode, inputs: Dict[str, Any]) -> tuple[Dict[str, Any], List[str]]:
+    """
+    Run AI/code once per batch item, concurrently, and collect their outputs as
+    lists. Returns the merged outputs plus one message per failed item.
+
+    Two deliberate behaviours, both learned from long batches:
+
+    - **Items run in parallel**, bounded by the node's `batch_concurrency` (or
+      AI_GRAPH_BATCH_CONCURRENCY). This used to be a sequential `await` per item,
+      which made a 2,000-item AI batch take hours of almost entirely idle
+      wall-clock. Set the node's concurrency to 1 to get the old behaviour where
+      a provider rate-limits or order matters.
+    - **One failed item does not discard the rest.** A raising item contributes
+      `None` on every declared output port -- keeping the batch index-aligned
+      with its input, so item 5's output stays item 5's -- and its error is
+      returned for the caller to report as a PARTIAL result.
+    """
+    items = batch_inputs(node, inputs)
+    limit = node.config.batch_concurrency or DEFAULT_BATCH_CONCURRENCY
+    semaphore = asyncio.Semaphore(max(1, limit))
+    empty = {port.id: None for port in node.outputs}
+
+    async def run_item(index: int, item: Dict[str, Any]):
+        async with semaphore:
+            try:
+                return await _execute_node(node, item)
+            except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+                logger.warning("Batch item %d of node %s failed: %s", index, node.id, exc)
+                return exc
+
+    settled = await asyncio.gather(*(run_item(i, item) for i, item in enumerate(items)))
+
+    outputs: List[Dict[str, Any]] = []
+    errors: List[str] = []
+    for index, result in enumerate(settled):
+        if isinstance(result, Exception):
+            errors.append(f"item {index}: {result}")
+            outputs.append(dict(empty))
+        else:
+            outputs.append(result)
+
+    # Every item failed: that is an ordinary node failure, not a partial result.
+    if items and len(errors) == len(items):
+        raise RuntimeError(f"all {len(items)} batch items failed; first error -- {errors[0].split(': ', 1)[-1]}")
+
+    return merge_batch_outputs(node, outputs), errors
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +589,7 @@ async def execute_graph(
                 )
 
             inputs: Dict[str, Any] = {}
+            item_errors: List[str] = []
             node_start = time.monotonic()
             try:
                 inputs = _collect_inputs(node_id, graph.edges, node_outputs, feedback_ids)
@@ -552,20 +599,26 @@ async def execute_graph(
                 inputs = _decode_node_inputs(node, inputs, effective_formats, source_formats)
                 _snapshot_inputs(node, inputs)
                 if node.node_type in (NodeType.AI, NodeType.CODE):
-                    outputs = (
-                        await _execute_node(node, inputs)
-                        if node.config.batch_mode == "whole_list"
-                        else await _execute_batch_node(node, inputs)
-                    )
+                    if node.config.batch_mode == "whole_list":
+                        outputs = await _execute_node(node, inputs)
+                    else:
+                        outputs, item_errors = await _execute_batch_node(node, inputs)
                 else:
                     outputs = await _execute_node(node, inputs, effective_formats)
                 outputs = _decode_node_outputs(node, outputs)
                 _snapshot_outputs(node, outputs)
                 return NodeResult(
                     node_id=node_id,
-                    status=ExecutionStatus.SUCCESS,
+                    # Some batch items failed but others produced values: deliver
+                    # them downstream and report what was lost, rather than
+                    # discarding a long run's work over one bad item.
+                    status=ExecutionStatus.PARTIAL if item_errors else ExecutionStatus.SUCCESS,
                     inputs=inputs,
                     outputs=outputs,
+                    error=(
+                        f"{len(item_errors)} batch item(s) failed: " + "; ".join(item_errors[:5])
+                        if item_errors else None
+                    ),
                     duration_ms=(time.monotonic() - node_start) * 1000,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -581,7 +634,10 @@ async def execute_graph(
         level_results = await asyncio.gather(*(run_node(node_id) for node_id in level))
         for result in level_results:
             result_by_id[result.node_id] = result
-            if result.status == ExecutionStatus.SUCCESS:
+            # PARTIAL counts as delivering: its outputs are real, with None at the
+            # positions whose items failed. Excluding them here would skip every
+            # downstream node over a single bad batch item.
+            if result.status in (ExecutionStatus.SUCCESS, ExecutionStatus.PARTIAL):
                 node_outputs[result.node_id] = result.outputs
             node_results.append(result)
 
@@ -593,9 +649,18 @@ async def execute_graph(
         if node.node_type == NodeType.OUTPUT and node.id in node_outputs:
             final_outputs[node.config.output_label or node.id] = node_outputs[node.id]
 
-    has_error = any(r.status != ExecutionStatus.SUCCESS for r in node_results)
+    # A run where every node either succeeded or delivered a partial batch is not
+    # a failure -- it produced output. It is reported as PARTIAL so the caller can
+    # say so, and only a real error/skip makes the whole run an error.
+    has_error = any(r.status in (ExecutionStatus.ERROR, ExecutionStatus.SKIPPED) for r in node_results)
+    has_partial = any(r.status == ExecutionStatus.PARTIAL for r in node_results)
+    overall = (
+        ExecutionStatus.ERROR if has_error
+        else ExecutionStatus.PARTIAL if has_partial
+        else ExecutionStatus.SUCCESS
+    )
     return ExecutionResult(
-        status=ExecutionStatus.ERROR if has_error else ExecutionStatus.SUCCESS,
+        status=overall,
         node_results=node_results,
         final_outputs=final_outputs,
         duration_ms=(time.monotonic() - start) * 1000,

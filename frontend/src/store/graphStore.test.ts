@@ -28,6 +28,7 @@ function blankConfig() {
     output_label: 'Result',
     write_mode: 'none' as const,
     batch_mode: 'per_item' as const,
+    batch_concurrency: 0,
     read_file_inputs: false,
     gui_widgets: [],
     gui_grid_columns: 12,

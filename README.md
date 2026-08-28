@@ -310,8 +310,10 @@ Two separate settings, both behind **⚙ Settings** in the toolbar:
 
 ### Where the API key goes
 
-**⚙ Settings only picks a provider and model — it has no key field.** A hosted provider
-reads its credential from the environment, or from an `ai-settings.json`:
+**⚙ Settings → Keys and addresses** takes the API key and the server address for every
+provider, and shows which ones already have one. Keys are write-only: they are saved to
+the settings file below and never read back into the browser. You can also write that
+file by hand:
 
 ```json
 {
@@ -323,9 +325,9 @@ reads its credential from the environment, or from an `ai-settings.json`:
 ```
 
 `codegen` is the AI that answers ✨ Generate, `ai` the one the graph calls when it runs —
-so you can generate with a strong hosted model and execute against a local one. The file
-is looked up in the working directory, next to the executable, at `$AI_GRAPH_SETTINGS`,
-and finally `~/.ai-graph/settings.json`. Restart the backend after editing it.
+so you can generate with a strong hosted model and execute against a local one. The file is looked up in the working directory, next to the executable, at
+`$AI_GRAPH_SETTINGS`, and finally `~/.ai-graph/settings.json`. An environment variable of
+the same name always wins over what is stored there.
 
 Two provider names are worth spelling out:
 

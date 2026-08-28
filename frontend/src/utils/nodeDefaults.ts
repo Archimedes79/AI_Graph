@@ -7,6 +7,19 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
   return NODE_ELEMENTS[nodeType].create(id);
 }
 
+// Shown on hover in the palette. The widget presets below carried a description
+// from the start; the node types -- the ones a newcomer meets first -- did not,
+// so "Data Node" had to be guessed from two words and an icon.
+export const NODE_TYPE_DESCRIPTIONS: Record<NodeType, string> = {
+  input: 'A value from outside the graph: typed text, one file, or a directory listing',
+  ai: 'Send a prompt to a local or hosted model and pass on its answer',
+  code: 'Run Python or JavaScript — write it yourself or have the AI generate it',
+  data: 'Remember a value between runs, so a loop can build on its own last result',
+  output: 'Show the result in a window, or write it to a file or directory',
+  gui: 'Give the graph its own interface, built from widgets',
+  widget: 'A single interface widget standing on its own',
+};
+
 export const NODE_TYPE_LABELS: Record<NodeType, string> = {
   input: 'Input',
   ai: 'AI Node',
@@ -114,6 +127,27 @@ export const WIDGET_PRESETS: NodePreset[] = [
         node_type: 'widget',
         label: 'Plot',
         description: 'A standalone plot display widget',
+        position: { x: 0, y: 0 },
+        inputs,
+        outputs,
+        config: { ...baseNodeConfig(), gui_widgets: [widget] },
+      };
+    },
+  },
+  {
+    id: 'widget_image_view',
+    nodeType: 'widget',
+    label: 'Image',
+    icon: '🖼️',
+    description: 'A standalone image display widget',
+    build: (id) => {
+      const widget = createGuiWidget('image_view', 'Image');
+      const { inputs, outputs } = guiWidgetPorts(widget);
+      return {
+        id,
+        node_type: 'widget',
+        label: 'Image',
+        description: 'A standalone image display widget',
         position: { x: 0, y: 0 },
         inputs,
         outputs,

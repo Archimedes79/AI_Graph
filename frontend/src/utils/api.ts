@@ -146,3 +146,22 @@ export const getDockerCompose = (graph: Graph) =>
 // Files
 export const detectFileFormat = (path: string): Promise<{ format: string }> =>
   api.post('/files/detect-format', { path }).then((r) => r.data);
+
+// AI credentials and endpoints for the editor's Settings dialog. Keys are write-
+// only: the server reports whether one is set and where it came from, never its
+// value (see routers/ai.py).
+export interface AISettingsStatus {
+  settings_file: string;
+  settings_file_exists: boolean;
+  endpoints: Record<string, string>;
+  credentials: Record<string, { configured: boolean; source: string }>;
+}
+
+export const getEditorAISettings = (): Promise<AISettingsStatus> =>
+  api.get('/ai/settings').then((r) => r.data);
+
+export const saveEditorAISettings = (body: {
+  endpoints?: Record<string, string>;
+  api_keys?: Record<string, string>;
+  clear_keys?: string[];
+}): Promise<AISettingsStatus> => api.post('/ai/settings', body).then((r) => r.data);

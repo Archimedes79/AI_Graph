@@ -324,6 +324,8 @@ def _make_widget(kind: GuiWidgetKind) -> GuiWidget:
         return GuiWidget(id="w1", kind=kind, mode="both")
     if kind == GuiWidgetKind.PLOT_WINDOW:
         return GuiWidget(id="w1", kind=kind)
+    if kind == GuiWidgetKind.IMAGE_VIEW:
+        return GuiWidget(id="w1", kind=kind)
     raise AssertionError(f"no fixture for {kind}")
 
 

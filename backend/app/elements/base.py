@@ -124,6 +124,18 @@ class GuiWidgetElement(ABC):
         directory-mode file selector) exactly like a NodeElement can.
         """
 
+    async def display_value(self, widget: GuiWidget, value: Any) -> Any:
+        """
+        Last step before a display-only widget's value is handed to the UI, after
+        any transform snippet has run. Default: pass it through unchanged.
+
+        It exists so a widget kind that needs to *prepare* what it shows -- an
+        image_view turning a server-side path into something a browser can
+        render -- does that in its own file, instead of the shared gui composite
+        growing a branch per widget kind.
+        """
+        return value
+
     def runtime_requirement(self, widget: GuiWidget) -> Optional[Dict[str, Any]]:
         """This widget's own requirement dict (`{label, kind}`), or None if it
         never prompts at runtime. Default: never (only a picker widget with no

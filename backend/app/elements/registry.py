@@ -7,6 +7,7 @@ from app.elements.base import GuiWidgetElement, NodeElement
 from app.elements.code.code_element import CodeElement
 from app.elements.data.data_element import DataElement
 from app.elements.gui.gui_element import GuiElement
+from app.elements.gui.widgets.image_view.image_view_element import ImageViewElement
 from app.elements.gui.widgets.input_picker.input_picker_element import InputPickerElement
 from app.elements.gui.widgets.plot_window.plot_window_element import PlotWindowElement
 from app.elements.gui.widgets.text_io.text_io_element import TextIOElement
@@ -36,5 +37,6 @@ GUI_WIDGET_ELEMENTS: Dict[GuiWidgetKind, GuiWidgetElement] = {
     GuiWidgetKind.INPUT_PICKER:     _input_picker,
     GuiWidgetKind.TEXT_IO:          _text_io,
     GuiWidgetKind.PLOT_WINDOW:      PlotWindowElement(),
+    GuiWidgetKind.IMAGE_VIEW:       ImageViewElement(),
 }
 
