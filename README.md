@@ -230,6 +230,19 @@ the graph* on a code, AI or Data node and its authored text moves to
 | Code | `.py` / `.js` | the code, with the prompt in a header comment |
 | AI | `.md` | the system prompt, with its description in front matter |
 | Data | `.md` | the format contract neighbours are generated against |
+| Input (directory) | `.py` / `.js` | the file selector, same contract as a GUI picker's |
+
+### Every element works the same way
+
+A node and a GUI widget are the same kind of thing, and they are configured the same
+way: a name, one file behind it, one 📎 *example input* — a path to a sample file whose
+content is shown to the model — and one ✨ **Generate** button that writes the body from
+your prompt plus what the graph around it says (the neighbours' declared formats, and
+the values the node actually received on the last run).
+
+What the element emits is declared in the same panel, under the body: a format contract
+you write for a Code or AI node, a derived summary for a GUI node. There is no separate
+Output tab.
 | GUI | a folder | one file per widget that has code — a plot transform, a file selector |
 
 These are normal files: a language server helps with the Python, and `git diff` reads
@@ -312,7 +325,8 @@ algorithm.
 `run(inputs: dict) -> dict`, receiving `{"value": <raw incoming data>}` and returning
 `{"value": <plot-ready data>}` — a list of numbers, or a list of `{x, y}` /
 `{label, value}` objects. The AI can generate this transform for you, the same way it
-generates Code node bodies.
+generates Code node bodies — `image_view` takes the same kind of snippet, returning an
+image path instead of points.
 
 ### Generating whole graphs with AI
 
