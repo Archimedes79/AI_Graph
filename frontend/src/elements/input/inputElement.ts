@@ -54,6 +54,11 @@ export const inputElement: NodeElementDefinition = {
     available: (node) => node.config.input_mode === 'directory',
     guard: 'Please describe which files to select first.',
     success: '✅ Selector generated!',
+    promptLabel: 'Prompt text',
+    promptPlaceholder: 'Select Markdown files that contain API documentation',
+    bodyLabel: 'Code window (editable) — run(inputs) receives {"files"} and must return {"files"}',
+    language: true,
+    bodyHeight: 140,
   },
   describeOutput: (node) => {
     const mode = node.config.input_mode ?? 'text';

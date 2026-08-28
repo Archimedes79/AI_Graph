@@ -48,6 +48,25 @@ export interface ElementGeneration<S = any> {
   guard?: string;
   /** Shown when it worked, unless the result has more to say (see probe). */
   success?: string;
+
+  // ---- how the block is labelled -------------------------------------------
+  // Seven editors drew the same five controls -- a prompt box, the 📎 example,
+  // an optional language picker, the ✨ button and the body box -- and differed
+  // only in their wording. The wording belongs to the element; the drawing
+  // belongs to `AuthoredBodyEditor`, which is why these live here rather than
+  // as props somebody has to remember to pass.
+  promptLabel?: string;
+  promptPlaceholder?: string;
+  bodyLabel?: string;
+  bodyPlaceholder?: string;
+  /** Wording for the 📎 attachment, when "Example input" is not specific enough. */
+  exampleLabel?: string;
+  /** Offer a Python/JavaScript picker -- true wherever the body is real code. */
+  language?: boolean;
+  /** Render the body in a monospace box. Defaults to `language`. */
+  mono?: boolean;
+  /** How tall the body box starts out; a system prompt needs less than a module. */
+  bodyHeight?: number;
 }
 
 /** Reading and writing one element's fields, wherever they happen to live. */

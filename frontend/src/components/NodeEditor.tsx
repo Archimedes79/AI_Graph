@@ -102,13 +102,14 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
    */
   const generation = element.generation;
   const canGenerate = !!generation && (generation.available?.(node) ?? true);
+  const fields = nodeFields(node, setConfig, setDescription);
   const handleGenerate = () => {
     if (!generation) return;
     generate.run(buildGeneration({
       element: node.node_type,
       generation,
       subject: node,
-      fields: nodeFields(node, setConfig, setDescription),
+      fields,
       ports: { inputs: node.inputs.map((p) => p.id), outputs: node.outputs.map((p) => p.id) },
       language: node.config.language,
       exampleFile: node.config.example_file,
@@ -238,7 +239,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 node={node}
                 setConfig={setConfig}
                 setDescription={(value: string) => setNode((prev) => (prev ? { ...prev, description: value } : prev))}
+                generation={generation}
+                fields={fields}
                 generating={generating}
+                message={genMessage}
                 onGenerate={handleGenerate}
                 canGenerate={canGenerate}
                 applyMode={applyInputMode}
@@ -272,7 +276,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 ) : null;
               })()}
 
-              {genMessage && (
+              {/* An element with no ✨ button of its own can still have something
+                  to report -- the message is drawn next to the button otherwise. */}
+              {genMessage && !generation && (
                 <div className="text-sm px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: ACCENT_TEXT }}>
                   {genMessage}
                 </div>

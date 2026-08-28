@@ -16,6 +16,12 @@ export const codeElement: NodeElementDefinition = {
     targetField: 'code',
     guard: 'Please add a code generation prompt first.',
     success: '✅ Code generated!',
+    promptLabel: 'Prompt text',
+    promptPlaceholder: 'Describe what the generated code should do.',
+    bodyLabel: 'Code window (editable)',
+    bodyPlaceholder: 'def run(inputs):\n    return {"output": inputs.get("input", "")}',
+    language: true,
+    bodyHeight: 220,
     // What the user chose in THIS node's config, which the graph around it
     // cannot imply: how batches arrive at `run`, and what shape must come back.
     context: (node) => [

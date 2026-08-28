@@ -223,20 +223,20 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
             </div>
 
             {(() => {
-              const ConfigEditor = GUI_WIDGET_ELEMENTS[widget.kind].ConfigEditor;
+              const element = GUI_WIDGET_ELEMENTS[widget.kind];
+              const ConfigEditor = element.ConfigEditor;
               return (
                 <ConfigEditor
                   widget={widget}
+                  generation={element.generation}
+                  fields={widgetFields(widget, (patch) => updateWidget(index, patch))}
                   onUpdate={(patch: Partial<GuiWidget>) => updateWidget(index, patch)}
                   expanded={!!expandedTransform[widget.id]}
                   onToggleExpand={() => toggleTransform(widget.id)}
                   generating={generate.isGenerating(widget.id)}
                   message={generate.message(widget.id)}
                   onGenerate={() => handleGenerate(widget)}
-                  canGenerate={(() => {
-                    const spec = GUI_WIDGET_ELEMENTS[widget.kind].generation;
-                    return !!spec && (spec.available?.(widget) ?? true);
-                  })()}
+                  canGenerate={!!element.generation && (element.generation.available?.(widget) ?? true)}
                 />
               );
             })()}

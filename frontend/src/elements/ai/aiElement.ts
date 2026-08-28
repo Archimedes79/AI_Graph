@@ -12,6 +12,12 @@ export const aiElement: NodeElementDefinition = {
     targetField: 'system_prompt',
     guard: 'Please add a description first.',
     success: '✅ Prompt generated!',
+    promptLabel: 'What this node should do',
+    promptPlaceholder: 'Describe what this node should do — ✨ Generate turns it into the system prompt below.',
+    bodyLabel: 'System prompt',
+    bodyPlaceholder: 'You are a helpful assistant…',
+    mono: true,
+    bodyHeight: 120,
     context: (node) => outputFormatContext(node.config),
   },
   describeOutput: (node) => {

@@ -1,84 +1,37 @@
 import React from 'react';
 import type { GraphNode } from '../../types/graph';
-import ContextFileAttachment from '../shared/ContextFileAttachment';
+import AuthoredBodyEditor from '../shared/AuthoredBodyEditor';
 import BatchAndFileInputOptions from '../shared/BatchAndFileInputOptions';
+import type { ElementGeneration, FieldAccess } from '../shared/generation';
 import CodeRequirements from './CodeRequirements';
-import { DIMMER, FIELD, MUTED, SUCCESS } from '../../ui/theme';
 
 interface CodeEditorProps {
   node: GraphNode;
   setConfig: (key: string, value: unknown) => void;
+  generation: ElementGeneration<GraphNode>;
+  fields: FieldAccess;
   generating: boolean;
+  message?: string;
   onGenerate: () => void;
   contextFile: string;
   onContextFileChange: (path: string) => void;
 }
 
 export default function CodeEditor({
-  node,
-  setConfig,
-  generating,
-  onGenerate,
-  contextFile,
-  onContextFileChange,
+  node, setConfig, generation, fields, generating, message, onGenerate,
+  contextFile, onContextFileChange,
 }: CodeEditorProps) {
   return (
     <>
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-xs font-medium" style={{ color: MUTED }}>
-            Prompt text
-          </label>
-          <button
-            onClick={onGenerate}
-            disabled={generating}
-            className="text-xs px-2 py-1 rounded"
-            style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}
-          >
-            {generating ? '…' : '✨ Generate'}
-          </button>
-        </div>
-        <textarea
-          className="w-full rounded-lg px-3 py-2 text-sm resize-none"
-          style={{ ...FIELD, minHeight: 120 }}
-          value={node.config.code_prompt}
-          onChange={(e) => setConfig('code_prompt', e.target.value)}
-          placeholder="Describe what the generated code should do."
-        />
-      </div>
-
-      <ContextFileAttachment
-        label="Additional data (optional context file)"
-        path={contextFile}
-        onChange={onContextFileChange}
+      <AuthoredBodyEditor
+        generation={generation}
+        fields={fields}
+        exampleFile={contextFile}
+        onExampleFileChange={onContextFileChange}
+        generating={generating}
+        message={message}
+        onGenerate={onGenerate}
       />
-
-      <div className="flex items-center gap-3">
-        <label className="text-xs font-medium" style={{ color: MUTED }}>Language selection</label>
-        <select
-          className="rounded px-2 py-1 text-sm"
-          style={FIELD}
-          value={node.config.language}
-          onChange={(e) => setConfig('language', e.target.value)}
-        >
-          <option value="python">Python</option>
-          <option value="javascript">JavaScript</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-          Code window (editable)
-        </label>
-        <textarea
-          className="w-full rounded-lg px-3 py-2 text-sm resize-none font-mono"
-          style={{ ...FIELD, minHeight: 220 }}
-          value={node.config.code}
-          onChange={(e) => setConfig('code', e.target.value)}
-          placeholder={`def run(inputs):\n    return {"output": inputs.get("input", "")}`}
-          spellCheck={false}
-        />
-      </div>
 
       <CodeRequirements
         requirements={node.config.requirements ?? []}

@@ -291,6 +291,7 @@ writing a new dialog, generate button, or style object:
 |---|---|---|
 | A modal/overlay | `components/Modal.tsx` | a hand-rolled backdrop + panel + header |
 | A ✨ Generate button's state | `elements/shared/useGenerate.ts` | your own `generating`/`message` pair |
+| The prompt / 📎 example / language / ✨ / body block | `elements/shared/AuthoredBodyEditor.tsx` | your own textarea pair per editor |
 | A message for a failed request | `utils/errorText.ts` | `e?.response?.data?.detail ?? …` |
 | Chrome colours and control styles | `ui/theme.ts` | a hex literal in a `style={{}}` |
 | Running a graph | `graphStore.runGraph(graph)` | your own execute/collect-windows loop |
@@ -298,6 +299,15 @@ writing a new dialog, generate button, or style object:
 `Modal` also owns the keyboard and focus behaviour (Escape, focus trap, focus
 restore, `aria-modal`) that no dialog had before, which is the main reason not
 to hand-roll one: a new bespoke overlay silently loses all of it.
+
+`AuthoredBodyEditor` is the whole drawing of an element's authored half. Seven
+editors — four node types and three widget kinds — had written out the same five
+controls, and had drifted: three labels for the one attachment, the ✨ button and
+its message in a different corner of each, and `image_view` with no button at
+all. The **wording** belongs to the element (`ElementGeneration.promptLabel`,
+`bodyLabel`, `bodyPlaceholder`, `language`, …), so an editor passes the
+declaration and adds only what is genuinely its own — a format family, a
+"select all files" checkbox — as `children`.
 
 `ui/theme.ts` holds only chrome that repeats. A colour used once -- a node
 type's tint, a chart accent -- stays where it is used; adding it here would
@@ -495,8 +505,12 @@ win, so a shipped tool can be re-pointed at an edited graph without a rebuild).
 
 **GUI runtime.** A `gui`/`widget` node's `deploy_needs` sets `interactive_ui=True`;
 `deploy_service._serves_gui` combines that with the presence of a built frontend. When
-both hold, the bundle also gets `static/` (the built `frontend/dist`, as bytes — the
-bundle dict is `Dict[str, str | bytes]`) and `fastapi`/`uvicorn` in `requirements.txt`.
+both hold, the bundle also gets `static/` and `fastapi`/`uvicorn` in
+`requirements.txt`. `static/` is **not** all of `frontend/dist`: the editor and the
+runtime are two entry points of one Vite build, so `deploy_service._runtime_static_files`
+walks the closure of what `runtime.html` references and ships only that (as bytes — the
+bundle dict is `Dict[str, str | bytes]`). `index.html` and the editor's own chunks stay
+behind.
 `serve.py` serves `runtime.html`, which mounts `frontend/src/runtime/RuntimeApp.tsx`:
 the editor's own graph store and `GuiWindowLayer`, with the canvas removed. **There is
 no second widget implementation** — a deployed tool renders through the exact
@@ -505,6 +519,17 @@ not a native one. `serve.py` defines its handful of endpoints inline rather than
 vendoring `app/routers/*`: a deployed tool must not offer code generation or file
 browsing. Without a built frontend the graph still deploys, headless, and the generated
 README says why.
+
+**The bundle is a closed list, and that list is the licence boundary.** A bundle may
+contain the vendored engine, the runner scripts, the runtime page, the user's graph, and
+`LICENSE-runtime` — which covers exactly those, and is a separate file from the editor's
+own `LICENSE` precisely so the two sets of terms can differ. Nothing from the editor
+(`routers/`, `main.py`, `deploy_service.py` itself, `node_files.py`, `code_refine.py`,
+the designer's frontend) may ever be vendored. Adding a module to `app/services/` does
+not make it travel: `_PORTABLE_SERVICE_MODULES` is a whitelist, and
+`test_deploy_boundary.py` fails the moment anything crosses either way. Both failure
+modes are silent — a bundle with an extra file in it still runs — which is why they are
+pinned by a test rather than by a convention.
 
 Because execution logic is shipped rather than regenerated, a bundle's behavior can
 never drift from the live editor's; `test_deploy_runner_execution.py` proves this by

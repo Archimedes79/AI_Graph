@@ -1,8 +1,10 @@
 # One shape for every element — concept paper
 
-Status: written 2026-08-28 as a proposal; **steps 1-5 of the migration order in §5 are
-implemented** (branch `element-contract`). Step 6 -- checking the frontend descriptors
-against the backend ones in the contract test -- and step 7's README pass are open.
+Status: written 2026-08-28 as a proposal; **implemented** on branch `element-contract`,
+all seven steps of the migration order in §5, plus one the proposal did not foresee:
+`AuthoredBodyEditor`, which draws the prompt / example / language / ✨ / body block that
+seven editors had each written out. Verified: 280 backend tests and 100 frontend tests
+pass, `tsc --noEmit` is clean.
 Companion to [AGENTS.md](AGENTS.md)'s "Object-oriented element contract", which describes
 what the code does now.
 
