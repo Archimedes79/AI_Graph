@@ -66,7 +66,11 @@ codebase), see [AGENTS.md](AGENTS.md).
 - **AI Prompt Generation** – describe the AI's role; get a system prompt generated
 - **Fan-in / Fan-out** – connect one output to many inputs, or join many into one input port; this is pure edge/port wiring, not a dedicated node -- any actual aggregation (concat/sum/count/etc.) is written as a `code` node
 - **Graph DSL** – graphs are JSON files; readable and writable by humans and AI alike
-- **Execution Engine** – topological execution with full per-node status reporting
+- **Execution Engine** – topological execution with full per-node status reporting; batch
+  items run concurrently, a failed item leaves the rest intact (reported as `partial`), and
+  transient AI failures are retried
+- **Watch and stop a run** – the toolbar names the node in flight and offers Stop, which
+  ends the work rather than just stopping watching it
 - **Deployment Tooling** – export a deploy bundle (vendored engine + graph.json) or a Docker Compose stack
 - **Single-file executable** – every bundle ships a `build_exe.py`; one PyInstaller run turns it into an executable that needs no Python on the target machine
 - **Deployed GUI** – a graph with `gui` nodes deploys *with its interface*: the bundle serves the same widgets in a browser page instead of falling back to console prompts

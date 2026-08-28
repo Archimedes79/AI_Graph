@@ -24,6 +24,9 @@ Endpoints, deliberately the minimum the runtime page calls:
     GET  /api/runtime/graph     the graph this tool ships
     POST /api/execute/          run it
     POST /api/execute/requirements   what it still needs before running
+    POST /api/execute/start     run it in the background, watchably
+    GET  /api/execute/runs/{id}      progress, then the result
+    POST /api/execute/runs/{id}/cancel   stop it
     GET  /api/runtime/ai-settings    the AI it will call
     POST /api/runtime/ai-settings    point it somewhere else, persistently
     POST /api/files/browse      list a directory, for the file/directory pickers
@@ -69,6 +72,7 @@ except ImportError:  # pragma: no cover - a headless bundle simply has no serve.
 
 from app.models.graph import ExecutionResult, Graph, RuntimeRequirement  # noqa: E402
 from app.services import ai_settings, file_service  # noqa: E402
+from app.services import run_registry  # noqa: E402
 from app.services.graph_executor import execute_graph, get_runtime_requirements  # noqa: E402
 
 # `_default_graph_path` lives in the runner entry point, which is called run.py
@@ -160,6 +164,28 @@ def create_app(graph_path: Path, allow_browse: bool = True) -> "FastAPI":
     @app.post("/api/execute/requirements")
     async def requirements(graph: Graph) -> List[RuntimeRequirement]:
         return get_runtime_requirements(graph)
+
+    # The runtime page runs graphs through these so a deployed tool has the same
+    # progress display and Stop button the editor has -- the alternative is a
+    # spinner whose only exit is closing the window.
+    @app.post("/api/execute/start")
+    async def start_run(graph: Graph) -> Dict[str, Any]:
+        run = run_registry.start(graph)
+        return {"run_id": run.id, "total": run.total}
+
+    @app.get("/api/execute/runs/{run_id}")
+    async def get_run(run_id: str) -> Dict[str, Any]:
+        run = run_registry.get(run_id)
+        if run is None:
+            raise HTTPException(404, f"No run '{run_id}'")
+        snapshot = run.snapshot()
+        if run.cancelled and snapshot["result"] is None:
+            snapshot["result"] = run_registry.cancelled_result().model_dump()
+        return snapshot
+
+    @app.post("/api/execute/runs/{run_id}/cancel")
+    async def cancel_run(run_id: str) -> Dict[str, Any]:
+        return {"cancelled": run_registry.cancel(run_id)}
 
     @app.get("/api/runtime/ai-settings")
     async def read_ai_settings() -> Dict[str, Any]:

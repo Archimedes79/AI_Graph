@@ -61,6 +61,7 @@ _PORTABLE_SERVICE_MODULES = [
     "code_executor.py",
     "file_service.py",
     "graph_executor.py",
+    "run_registry.py",
 ]
 
 

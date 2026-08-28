@@ -36,6 +36,8 @@ export default function Toolbar({
   const isExecuting = useGraphStore((s) => s.isExecuting);
   const exportGraph = useGraphStore((s) => s.exportGraph);
   const runGraph = useGraphStore((s) => s.runGraph);
+  const stopRun = useGraphStore((s) => s.stopRun);
+  const runProgress = useGraphStore((s) => s.runProgress);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
   // Subscribe to the stack lengths, not to canUndo/canRedo: selecting a function
@@ -312,15 +314,35 @@ export default function Toolbar({
           </span>
         )}
 
-        {/* Run */}
-        <button
-          onClick={handleRun}
-          disabled={isExecuting}
-          className="px-4 py-1.5 text-xs rounded-lg font-semibold flex items-center gap-2"
-          style={{ background: isExecuting ? '#374151' : ACCENT, color: 'white', opacity: isExecuting ? 0.7 : 1 }}
-        >
-          {isExecuting ? '⏳ Running…' : '▶ Run Graph'}
-        </button>
+        {/* Run, and while running, what it is doing and how to stop it */}
+        {isExecuting && runProgress && (
+          <span
+            className="text-xs tabular-nums"
+            style={{ color: MUTED }}
+            title="Nodes finished, of the total in this graph"
+          >
+            {runProgress.completed}/{runProgress.total}
+            {runProgress.label ? ` · ${runProgress.label}` : ''}
+          </span>
+        )}
+        {isExecuting ? (
+          <button
+            onClick={stopRun}
+            className="px-4 py-1.5 text-xs rounded-lg font-semibold"
+            style={{ background: DANGER, color: 'white' }}
+            title="Stop this run"
+          >
+            ⏹ Stop
+          </button>
+        ) : (
+          <button
+            onClick={handleRun}
+            className="px-4 py-1.5 text-xs rounded-lg font-semibold flex items-center gap-2"
+            style={{ background: ACCENT, color: 'white' }}
+          >
+            ▶ Run Graph
+          </button>
+        )}
 
         <button
           onClick={onOpenSettings}

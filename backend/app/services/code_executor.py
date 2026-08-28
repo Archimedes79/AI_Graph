@@ -88,19 +88,40 @@ async def _run_in_subprocess(cmd: list[str], inputs: Dict[str, Any], label: str)
     `NotImplementedError` for asyncio subprocesses (only `ProactorEventLoop` supports
     them there). `subprocess.run` works under any event loop.
     """
+    # Popen rather than subprocess.run, so a cancelled run can kill the child.
+    # `asyncio.to_thread` cannot be interrupted: cancelling the await returns
+    # control immediately but leaves the worker thread -- and the process it is
+    # waiting on -- running to completion. Stopping a graph would then free the
+    # UI while the work carried on unseen, which is the opposite of what Stop is
+    # for. Holding the Popen lets the cancellation path actually end it.
+    holder: Dict[str, subprocess.Popen] = {}
+
     def _blocking_run() -> subprocess.CompletedProcess:
-        return subprocess.run(
+        process = subprocess.Popen(
             [*cmd, json.dumps(inputs)],
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             env=_sandboxed_env(),
-            timeout=EXECUTION_TIMEOUT,
         )
+        holder["process"] = process
+        try:
+            stdout, stderr = process.communicate(timeout=EXECUTION_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            raise
+        return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
 
     try:
         try:
             completed = await asyncio.to_thread(_blocking_run)
         except subprocess.TimeoutExpired:
             raise TimeoutError(f"{label} execution timed out after {EXECUTION_TIMEOUT}s")
+        except asyncio.CancelledError:
+            process = holder.get("process")
+            if process is not None and process.poll() is None:
+                process.kill()
+            raise
 
         if completed.returncode != 0:
             # errors="replace": a failing interpreter's message is in the OS

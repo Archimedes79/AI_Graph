@@ -37,7 +37,7 @@ export type DataType = 'text' | 'file_path' | 'binary' | 'json' | 'list' | 'any'
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "ExecutionStatus".
  */
-export type ExecutionStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'partial';
+export type ExecutionStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'partial' | 'cancelled';
 
 /**
  * Top-level graph document – this is the Graph DSL schema.

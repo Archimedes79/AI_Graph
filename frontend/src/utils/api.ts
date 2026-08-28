@@ -165,3 +165,27 @@ export const saveEditorAISettings = (body: {
   api_keys?: Record<string, string>;
   clear_keys?: string[];
 }): Promise<AISettingsStatus> => api.post('/ai/settings', body).then((r) => r.data);
+
+// Watchable, stoppable runs. POST /execute/ still exists for scripts that want
+// one blocking call; the editor and the deployed runtime page use these so they
+// can show which node is busy and offer a Stop button.
+export interface RunSnapshot {
+  run_id: string;
+  done: boolean;
+  cancelled: boolean;
+  completed: number;
+  total: number;
+  running: string[];
+  current_label: string;
+  error: string | null;
+  result: ExecutionResult | null;
+}
+
+export const startRun = (graph: Graph): Promise<{ run_id: string; total: number }> =>
+  api.post('/execute/start', graph).then((r) => r.data);
+
+export const getRunSnapshot = (runId: string): Promise<RunSnapshot> =>
+  api.get(`/execute/runs/${runId}`).then((r) => r.data);
+
+export const cancelRun = (runId: string): Promise<{ cancelled: boolean }> =>
+  api.post(`/execute/runs/${runId}/cancel`).then((r) => r.data);

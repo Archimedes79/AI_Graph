@@ -416,6 +416,12 @@ failing it. `_terminate_tree` exists for that.
   `data:` URL. Put kind-specific display preparation there, never a branch in
   `gui_element.py`.
 - `backend/app/services/ai_service.py`, `code_executor.py`, `file_service.py` — provider-agnostic AI calls, sandboxed code execution, file I/O helpers shared across node types.
+- `backend/app/services/run_registry.py` — runs started as asyncio tasks so they can be
+  watched and stopped. **Cancellation is ordinary task cancellation**, which is why
+  `graph_executor`'s per-node `except Exception` must never widen to `BaseException`, and
+  why `code_executor._run_in_subprocess` holds its `Popen`: `asyncio.to_thread` cannot be
+  interrupted, so without that kill a stopped run frees the UI while the child keeps
+  running. Vendored into deploy bundles, so a deployed tool has Stop too.
 - `frontend/src/components/NodeEditor.tsx` — modal shell (tabs/save-cancel/AI-generate handlers), dispatches to the per-node-type `ConfigEditor`s above.
 - `frontend/src/components/GuiWidgetEditor.tsx` — widget list/add/remove/reorder, dispatches to the per-kind `ConfigEditor`s above.
 - `frontend/src/store/graphStore.ts` — Zustand graph state (nodes/edges, load/save, port sync)

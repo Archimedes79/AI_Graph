@@ -4,7 +4,7 @@ import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType, GuiWidgetKind } from '../types/graph';
 import { nodeTypeDefaults, type NodePreset } from '../utils/nodeDefaults';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
-import { executeGraph } from '../utils/api';
+import { cancelRun, getRunSnapshot, startRun } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import { ACCENT } from '../ui/theme';
 import { delivered } from '../utils/executionStatus';
@@ -37,6 +37,11 @@ export interface GraphStore {
   // each committed change, `future` the ones an undo stepped back out of.
   past: string[];
   future: string[];
+
+  /** Live progress of the run in flight, or null when nothing is running. */
+  runProgress: { completed: number; total: number; label: string } | null;
+  /** Id of the run in flight, so it can be stopped. */
+  currentRunId: string | null;
 
   // UI state
   selectedNodeId: string | null;
@@ -98,6 +103,8 @@ export interface GraphStore {
    * the copies had already drifted.
    */
   runGraph: (graph: Graph) => Promise<void>;
+  /** Stop the run in flight. Nodes already finished keep their results. */
+  stopRun: () => Promise<void>;
 }
 
 /**
@@ -304,6 +311,10 @@ const defaultMetadata = (): GraphMetadata => ({
 });
 
 
+// How often a run in flight is polled. Fast enough that the node name keeps up
+// with a quick graph, slow enough not to flood a local server during a long one.
+const RUN_POLL_INTERVAL_MS = 400;
+
 /** How many undo steps are kept. Each entry is a whole serialised graph. */
 const HISTORY_LIMIT = 50;
 
@@ -357,6 +368,8 @@ export const useGraphStore = create<GraphStore>()(
     savedSnapshot: null,
     past: [],
     future: [],
+    runProgress: null,
+    currentRunId: null,
 
     setMetadata: (meta) =>
       set((state) => {
@@ -681,7 +694,35 @@ export const useGraphStore = create<GraphStore>()(
       setExecutionResult(null);
       setTextOutputWindows([]);
       try {
-        const result = await executeGraph(graph);
+        // Started as a background run and polled, rather than awaited as one
+        // blocking request: that is what lets the toolbar name the node in
+        // flight and offer Stop. A run against a slow local model is otherwise
+        // ten minutes of a spinner with no way out but reloading the page.
+        const { run_id: runId, total } = await startRun(graph);
+        set((state) => {
+          state.currentRunId = runId;
+          state.runProgress = { completed: 0, total, label: '' };
+        });
+
+        let snapshot = await getRunSnapshot(runId);
+        while (!snapshot.done) {
+          await new Promise((resolve) => setTimeout(resolve, RUN_POLL_INTERVAL_MS));
+          snapshot = await getRunSnapshot(runId);
+          set((state) => {
+            state.runProgress = {
+              completed: snapshot.completed,
+              total: snapshot.total,
+              label: snapshot.current_label,
+            };
+          });
+        }
+
+        const result: ExecutionResult = snapshot.result ?? {
+          status: snapshot.cancelled ? 'cancelled' : 'error',
+          node_results: [],
+          final_outputs: {},
+          error: snapshot.error ?? 'The run ended without a result.',
+        };
         // setExecutionResult also settles memory-feedback values back into the
         // graph, which is why the result goes through the store rather than
         // being held in a component.
@@ -695,7 +736,22 @@ export const useGraphStore = create<GraphStore>()(
           error: errorText(error, 'Execution failed'),
         });
       } finally {
-        setIsExecuting(false);
+        set((state) => {
+          state.isExecuting = false;
+          state.runProgress = null;
+          state.currentRunId = null;
+        });
+      }
+    },
+
+    stopRun: async () => {
+      const runId = get().currentRunId;
+      if (!runId) return;
+      try {
+        await cancelRun(runId);
+      } catch {
+        // The run may have finished between the click and the request; the
+        // polling loop reports the real outcome either way.
       }
     },
   }))

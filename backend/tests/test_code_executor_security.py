@@ -68,3 +68,35 @@ async def test_code_node_cannot_read_backend_secrets(monkeypatch):
 
     # Secure expectation: the sandbox should not expose backend secrets.
     assert result.get("leaked_key", "") == ""
+
+
+async def test_cancelling_a_code_node_kills_its_subprocess(tmp_path):
+    """
+    Stop must end the work, not just stop watching it.
+
+    `asyncio.to_thread` cannot be interrupted, so cancelling the await used to
+    leave the child process running to completion unseen -- the UI was freed
+    while the machine kept working. The node writes a marker only after its
+    sleep; if the process really died, the marker never appears.
+    """
+    import asyncio
+    from app.services import code_executor
+
+    marker = tmp_path / "finished.txt"
+    code = (
+        "import time, pathlib\n"
+        "def run(inputs):\n"
+        "    time.sleep(4)\n"
+        f"    pathlib.Path(r'{marker}').write_text('finished')\n"
+        "    return {'ok': True}\n"
+    )
+
+    task = asyncio.create_task(code_executor.execute_python(code, {}))
+    await asyncio.sleep(1.0)  # let the interpreter actually start
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    # Well past the node's own sleep: if it had survived, the marker would exist.
+    await asyncio.sleep(5.0)
+    assert not marker.exists(), "the code node's subprocess outlived the cancelled run"

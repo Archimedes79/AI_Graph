@@ -16,7 +16,7 @@ import logging
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from app.models.graph import (
     DataType,
@@ -543,9 +543,22 @@ async def _execute_batch_node(node: GraphNode, inputs: Dict[str, Any]) -> tuple[
 
 async def execute_graph(
     graph: Graph,
+    on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> ExecutionResult:
     """
     Execute the full graph and return an ExecutionResult.
+
+    *on_progress*, when given, is called with `{"type": "node_start"|"node_done",
+    "node_id": ..., "status": ...}` as the run proceeds. It exists so a caller can
+    report which node is running -- a graph against a slow local model is
+    otherwise ten minutes of silence. It must not raise and must not block; the
+    CLI and the deploy bundle pass nothing and behave exactly as before.
+
+    Cancellation is ordinary asyncio task cancellation: cancel the task running
+    this coroutine and `CancelledError` propagates out of the in-flight node
+    (aborting its HTTP request), rather than being swallowed by the per-node
+    `except Exception` -- which is why that clause must never widen to
+    BaseException.
     """
     start = time.monotonic()
     # Publish the graph's own AI default (metadata.ai_defaults) for this run, so
@@ -591,6 +604,8 @@ async def execute_graph(
             inputs: Dict[str, Any] = {}
             item_errors: List[str] = []
             node_start = time.monotonic()
+            if on_progress is not None:
+                on_progress({"type": "node_start", "node_id": node_id, "label": node.label})
             try:
                 inputs = _collect_inputs(node_id, graph.edges, node_outputs, feedback_ids)
                 effective_formats = _effective_input_formats(node, graph.edges, node_map)
@@ -633,6 +648,8 @@ async def execute_graph(
 
         level_results = await asyncio.gather(*(run_node(node_id) for node_id in level))
         for result in level_results:
+            if on_progress is not None:
+                on_progress({"type": "node_done", "node_id": result.node_id, "status": result.status.value})
             result_by_id[result.node_id] = result
             # PARTIAL counts as delivering: its outputs are real, with None at the
             # positions whose items failed. Excluding them here would skip every

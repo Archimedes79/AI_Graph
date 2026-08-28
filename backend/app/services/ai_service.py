@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import asyncio
 import os
 import re
 import time
@@ -370,6 +371,26 @@ async def _github_copilot_complete(
 # Public interface
 # ---------------------------------------------------------------------------
 
+# Transient failures -- a local model still loading, a rate limit, a gateway
+# blip -- used to fail the node and, before batches ran concurrently, the whole
+# run with it. One retry pass costs a few seconds and removes the most common
+# reason a long batch came back with holes in it.
+AI_MAX_ATTEMPTS = max(1, int(os.getenv("AI_MAX_ATTEMPTS", "3")))
+AI_RETRY_BASE_DELAY = float(os.getenv("AI_RETRY_BASE_DELAY", "1.0"))
+
+# Status codes worth retrying: rate limiting, and the 5xx family that means
+# "not you". A 400/401/404 is a configuration mistake -- retrying it just makes
+# the user wait longer for the same message.
+_RETRYABLE_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
+
+
+def _is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _RETRYABLE_STATUS
+    # Connect/read/timeout errors: the request never got a verdict.
+    return isinstance(exc, (httpx.TransportError, httpx.TimeoutException))
+
+
 async def complete(
     prompt: str,
     system: str = "",
@@ -411,27 +432,39 @@ async def complete(
         "AI request -> provider=%s model=%s temperature=%s\n--- system ---\n%s\n--- prompt ---\n%s",
         provider, model, temperature, system, prompt,
     )
-    try:
+    async def call_provider() -> str:
         if provider == "ollama":
-            result = await _ollama_complete(prompt, system, model, temperature)
-        elif provider == "openai":
-            result = await _openai_complete(prompt, system, model, temperature)
-        elif provider == "openai_compatible":
-            result = await _openai_compatible_complete(prompt, system, model, temperature)
-        elif provider == "anthropic":
-            result = await _anthropic_complete(prompt, system, model, temperature)
-        elif provider == "lmstudio":
-            result = await _lmstudio_complete(prompt, system, model, temperature)
-        elif provider == "github_copilot":
-            result = await _github_copilot_complete(prompt, system, model, temperature)
-        else:
-            raise ValueError(f"Unknown AI provider: {provider}")
-    except Exception:
-        logger.exception(
-            "AI request FAILED <- provider=%s model=%s after %.1fs",
-            provider, model, time.monotonic() - start,
-        )
-        raise
+            return await _ollama_complete(prompt, system, model, temperature)
+        if provider == "openai":
+            return await _openai_complete(prompt, system, model, temperature)
+        if provider == "openai_compatible":
+            return await _openai_compatible_complete(prompt, system, model, temperature)
+        if provider == "anthropic":
+            return await _anthropic_complete(prompt, system, model, temperature)
+        if provider == "lmstudio":
+            return await _lmstudio_complete(prompt, system, model, temperature)
+        if provider == "github_copilot":
+            return await _github_copilot_complete(prompt, system, model, temperature)
+        raise ValueError(f"Unknown AI provider: {provider}")
+
+    for attempt in range(1, AI_MAX_ATTEMPTS + 1):
+        try:
+            result = await call_provider()
+            break
+        except Exception as exc:  # noqa: BLE001 - re-raised below unless retryable
+            last = attempt == AI_MAX_ATTEMPTS
+            if last or not _is_retryable(exc):
+                logger.exception(
+                    "AI request FAILED <- provider=%s model=%s after %.1fs (attempt %d/%d)",
+                    provider, model, time.monotonic() - start, attempt, AI_MAX_ATTEMPTS,
+                )
+                raise
+            delay = AI_RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            logger.warning(
+                "AI request failed (%s); retrying in %.1fs -- attempt %d of %d",
+                exc, delay, attempt + 1, AI_MAX_ATTEMPTS,
+            )
+            await asyncio.sleep(delay)
     logger.info(
         "AI response <- provider=%s model=%s after %.1fs (%d chars)\n--- response ---\n%s",
         provider, model, time.monotonic() - start, len(result), result,

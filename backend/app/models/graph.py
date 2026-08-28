@@ -522,6 +522,9 @@ class ExecutionStatus(str, Enum):
     # batch stays index-aligned with its input) -- losing 2,000 successful items
     # because item 1,900 raised is worse than delivering 1,999 and saying so.
     PARTIAL = "partial"
+    # The run was stopped on request. Nodes that had already finished keep their
+    # own status; the run as a whole reports this.
+    CANCELLED = "cancelled"
 
 
 class NodeResult(BaseModel):
