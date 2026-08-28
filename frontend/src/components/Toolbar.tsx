@@ -1,4 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import {
+  ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2,
+} from 'lucide-react';
+import ToolbarButton, { ToolbarSeparator } from './ToolbarButton';
 import { useGraphStore } from '../store/graphStore';
 import { downloadBundle, getDockerCompose, getRuntimeRequirements, generateGraph } from '../utils/api';
 import { errorText } from '../utils/errorText';
@@ -237,69 +241,24 @@ export default function Toolbar({
 
         <div className="flex-1" />
 
-        {/* Actions */}
-        <button
-          onClick={onNewGraph}
-          className="px-3 py-1.5 text-xs rounded-lg"
-          style={NEUTRAL_BUTTON}
-        >
-          New
-        </button>
-        <button
-          onClick={undo}
-          disabled={!undoAvailable}
-          title="Undo (Ctrl+Z)"
-          aria-label="Undo"
-          className="px-2.5 py-1.5 text-xs rounded-lg"
-          style={{ ...NEUTRAL_BUTTON, opacity: undoAvailable ? 1 : 0.4 }}
-        >
-          ↶
-        </button>
-        <button
-          onClick={redo}
-          disabled={!redoAvailable}
-          title="Redo (Ctrl+Shift+Z)"
-          aria-label="Redo"
-          className="px-2.5 py-1.5 text-xs rounded-lg"
-          style={{ ...NEUTRAL_BUTTON, opacity: redoAvailable ? 1 : 0.4 }}
-        >
-          ↷
-        </button>
-        <button
-          onClick={onLoad}
-          className="px-3 py-1.5 text-xs rounded-lg"
-          style={NEUTRAL_BUTTON}
-        >
-          Load
-        </button>
-        <button
-          onClick={onInjectJson}
-          className="px-3 py-1.5 text-xs rounded-lg"
-          style={NEUTRAL_BUTTON}
-        >
-          📋 Copy
-        </button>
-        <button
-          onClick={handleOpenAiGraph}
-          className="px-3 py-1.5 text-xs rounded-lg"
-          style={NEUTRAL_BUTTON}
-        >
-          ✨ AI Graph
-        </button>
-        <button
-          onClick={onSave}
-          className="px-3 py-1.5 text-xs rounded-lg"
-          style={NEUTRAL_BUTTON}
-        >
-          Save
-        </button>
-        <button
-          onClick={onSaveAs}
-          className="px-3 py-1.5 text-xs rounded-lg"
-          style={NEUTRAL_BUTTON}
-        >
-          Save As…
-        </button>
+        {/* Actions, grouped: file · history · authoring · run · project */}
+        <ToolbarButton icon={FilePlus2} label="New" title="New graph" onClick={onNewGraph} />
+        <ToolbarButton icon={FolderOpen} label="Open" title="Open a graph file" onClick={onLoad} />
+        <ToolbarButton icon={Save} label="Save" title="Save (Ctrl+S)" onClick={onSave} />
+        <ToolbarButton icon={SaveAll} title="Save as…" onClick={onSaveAs} />
+
+        <ToolbarSeparator />
+
+        <ToolbarButton icon={Undo2} title="Undo (Ctrl+Z)" onClick={undo} disabled={!undoAvailable} />
+        <ToolbarButton icon={Redo2} title="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={!redoAvailable} />
+
+        <ToolbarSeparator />
+
+        <ToolbarButton icon={ClipboardCopy} title="Copy or paste the graph as JSON" onClick={onInjectJson} />
+        <ToolbarButton icon={Sparkles} label="AI Graph" title="Describe a graph and let the AI build it" onClick={handleOpenAiGraph} />
+
+        <ToolbarSeparator />
+
         {/* A "✅ Saved to …" that survives the next ten edits is a lie about
             what is on disk; it only shows while the graph is actually clean.
             (rfNodes/rfEdges are read above purely to drive this re-render.) */}
@@ -328,43 +287,38 @@ export default function Toolbar({
         {isExecuting ? (
           <button
             onClick={stopRun}
-            className="px-4 py-1.5 text-xs rounded-lg font-semibold"
-            style={{ background: DANGER, color: 'white' }}
             title="Stop this run"
+            className="h-8 px-3.5 rounded-md text-xs font-semibold flex items-center gap-1.5"
+            style={{ background: DANGER, color: 'white' }}
           >
-            ⏹ Stop
+            <Square size={14} strokeWidth={2.5} aria-hidden="true" />
+            Stop
           </button>
         ) : (
           <button
             onClick={handleRun}
-            className="px-4 py-1.5 text-xs rounded-lg font-semibold flex items-center gap-2"
+            title="Run this graph"
+            className="h-8 px-3.5 rounded-md text-xs font-semibold flex items-center gap-1.5"
             style={{ background: ACCENT, color: 'white' }}
           >
-            ▶ Run Graph
+            <Play size={14} strokeWidth={2.5} aria-hidden="true" />
+            Run
           </button>
         )}
 
-        <button
-          onClick={onOpenSettings}
-          className="px-3 py-1.5 text-xs rounded-lg"
-          style={NEUTRAL_BUTTON}
-          title="Code generation AI and this graph's runtime AI default"
-        >
-          ⚙ Settings
-        </button>
+        <ToolbarSeparator />
+
+        <ToolbarButton icon={Settings} title="Code generation AI and this graph's runtime AI default" onClick={onOpenSettings} />
 
         {/* Deploy dropdown */}
         <div className="relative">
-          <button
+          <ToolbarButton
+            icon={Rocket}
+            label={deployBusy ? `${deployBusy}…` : 'Deploy'}
+            title="Package this graph as a standalone tool"
             onClick={() => setShowDeploy(!showDeploy)}
             disabled={!!deployBusy}
-            aria-expanded={showDeploy}
-            aria-haspopup="menu"
-            className="px-3 py-1.5 text-xs rounded-lg flex items-center gap-1"
-            style={{ ...NEUTRAL_BUTTON, opacity: deployBusy ? 0.6 : 1 }}
-          >
-            {deployBusy ? `⏳ ${deployBusy}…` : '🚀 Deploy ▾'}
-          </button>
+          />
         </div>
 
         {deployError && (

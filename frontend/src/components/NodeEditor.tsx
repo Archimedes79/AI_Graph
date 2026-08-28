@@ -64,6 +64,21 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     onClose();
   };
 
+  /**
+   * Close, but not silently over unsaved work.
+   *
+   * Everything edited here -- including a snippet an AI just spent a minute
+   * generating -- lives in this modal's draft until Save. Cancel and Escape
+   * used to discard it without a word, so "✅ Transform generated!" followed by
+   * Escape lost the code and left no trace of why.
+   */
+  const closeWithGuard = () => {
+    const stored = rfNode ? JSON.stringify(rfNode.data.graphNode) : '';
+    if (JSON.stringify(node) !== stored
+        && !window.confirm('Discard the changes to this node?')) return;
+    onClose();
+  };
+
   const setConfig = (key: string, value: unknown) => {
     setNode((prev) =>
       prev ? { ...prev, config: { ...prev.config, [key]: value } } : prev
@@ -208,7 +223,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           onChange={(e) => setNode((prev) => prev ? { ...prev, label: e.target.value } : prev)}
         />
       }
-      onClose={onClose}
+      onClose={closeWithGuard}
       maxWidth="max-w-2xl"
       scrollBody
       // The editor holds unsaved edits; a stray backdrop click must not throw
@@ -218,7 +233,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       footer={
         <>
           <button
-            onClick={onClose}
+            onClick={closeWithGuard}
             className="px-4 py-2 text-sm rounded-lg"
             style={NEUTRAL_BUTTON}
           >

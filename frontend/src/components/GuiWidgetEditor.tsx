@@ -19,7 +19,15 @@ interface GuiWidgetEditorProps {
 export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorProps) {
   const [newWidgetKind, setNewWidgetKind] = useState<GuiWidgetKind>('text_io');
   const [newWidgetLabel, setNewWidgetLabel] = useState('');
-  const [expandedTransform, setExpandedTransform] = useState<Record<string, boolean>>({});
+  // Widgets that already hold code start expanded. Collapsed-by-default is
+  // right for an empty section and wrong for a full one: hiding code the user
+  // (or the AI) has already written is exactly how "where did my code go?"
+  // happens.
+  const [expandedTransform, setExpandedTransform] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      widgets.filter((w) => (w.code ?? '').trim() || (w.selector_code ?? '').trim()).map((w) => [w.id, true]),
+    ),
+  );
   // Same generate state machine as the node editor, keyed per widget because
   // this component hosts one ✨ button per widget rather than one per editor.
   const generate = useGenerate();
@@ -87,7 +95,12 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
         outputs: [isPlot ? 'value' : 'files'],
         ...genAI(),
       }),
-      apply: (result) => applyToWidget(widget.id, isPlot ? { code: result.code } : { selector_code: result.code }),
+      apply: (result) => {
+        applyToWidget(widget.id, isPlot ? { code: result.code } : { selector_code: result.code });
+        // Show what was just written, rather than reporting success over a
+        // section the user would have to know to open.
+        setExpandedTransform((prev) => ({ ...prev, [widget.id]: true }));
+      },
     }, widget.id);
   };
 

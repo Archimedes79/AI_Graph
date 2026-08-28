@@ -10,6 +10,7 @@ import ResultsPanel from './components/ResultsPanel';
 import GuiWindowLayer from './components/gui/GuiWindowLayer';
 import SettingsDialog from './components/SettingsDialog';
 import Modal from './components/Modal';
+import FileBrowserDialog from './components/FileBrowserDialog';
 
 import { useGraphStore } from './store/graphStore';
 import { loadGraphFile, saveGraphFile } from './utils/api';
@@ -167,6 +168,8 @@ export default function App() {
   // a graph was loaded from instead of always downloading to a new location.
   const [filePrompt, setFilePrompt] = useState<{ mode: 'load' | 'save'; path: string; error: string; busy: boolean } | null>(null);
   const [saveStatus, setSaveStatus] = useState('');
+  /** Which file prompt has its browser open ('load' | 'save'), or null. */
+  const [browsingFor, setBrowsingFor] = useState<'load' | 'save' | null>(null);
 
   const suggestedFileName = () =>
     `${useGraphStore.getState().metadata.name.toLowerCase().replace(/\s+/g, '_') || 'graph'}.json`;
@@ -356,15 +359,26 @@ export default function App() {
                 <label className="text-xs font-medium" style={{ color: MUTED }}>
                   File path
                 </label>
-                <input
-                  autoFocus
-                  className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
-                  style={{ ...WELL, color: TEXT }}
-                  value={filePrompt.path}
-                  onChange={(e) => setFilePrompt({ ...filePrompt, path: e.target.value })}
-                  onKeyDown={(e) => e.key === 'Enter' && handleFilePromptConfirm()}
-                  placeholder="/path/to/graph.json"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                    style={{ ...WELL, color: TEXT }}
+                    value={filePrompt.path}
+                    onChange={(e) => setFilePrompt({ ...filePrompt, path: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && handleFilePromptConfirm()}
+                    placeholder="/path/to/graph.json"
+                  />
+                  <button
+                    type="button"
+                    className="px-3 py-2 text-xs rounded-lg flex-shrink-0"
+                    style={NEUTRAL_BUTTON}
+                    disabled={filePrompt.busy}
+                    onClick={() => setBrowsingFor(filePrompt.mode)}
+                  >
+                    Browse…
+                  </button>
+                </div>
 
               {filePrompt.error && (
                 <div className="text-xs" style={{ color: DANGER_TEXT }}>
@@ -373,6 +387,20 @@ export default function App() {
               )}
             </div>
           </Modal>
+        )}
+
+        {filePrompt && browsingFor && (
+          <FileBrowserDialog
+            mode={browsingFor === 'load' ? 'file' : 'save'}
+            initialPath={filePrompt.path}
+            extensions=".json"
+            defaultName={suggestedFileName()}
+            onPick={(picked) => {
+              setFilePrompt({ ...filePrompt, path: picked, error: '' });
+              setBrowsingFor(null);
+            }}
+            onClose={() => setBrowsingFor(null)}
+          />
         )}
 
         {showJsonImport && (
