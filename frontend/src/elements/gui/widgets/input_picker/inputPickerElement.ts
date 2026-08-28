@@ -13,6 +13,10 @@ export const inputPickerElement: GuiWidgetElementDefinition = {
       outputs: [{ id: outId, name: label, kind: 'output', data_type: 'file_path', multi: isDir, required: false, description: '' }],
     };
   },
+  authoredFile: (widget) => ({
+    extension: (widget.language ?? 'python').toLowerCase().startsWith('java') ? '.js' : '.py',
+    what: 'this file selector',
+  }),
   ConfigEditor: InputPickerEditor,
   RuntimeWidget: InputPickerWidget,
 };

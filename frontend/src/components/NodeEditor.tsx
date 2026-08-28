@@ -294,7 +294,19 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 onContextFileChange={(path: string) => setConfig('config_context_file', path)}
               />
 
-              <AuthoredFileOption node={node} setConfig={setConfig} />
+              {(() => {
+                const fileSpec = NODE_ELEMENTS[node.node_type]?.authoredFile?.(node);
+                return fileSpec ? (
+                  <AuthoredFileOption
+                    label={node.label}
+                    fileName={node.config.code_file ?? ''}
+                    extension={fileSpec.extension}
+                    what={fileSpec.what}
+                    folderHint="<graph>.nodes/"
+                    onChange={(name) => setConfig('code_file', name)}
+                  />
+                ) : null;
+              })()}
 
               {genMessage && (
                 <div className="text-sm px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: ACCENT_TEXT }}>

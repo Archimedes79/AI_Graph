@@ -14,6 +14,10 @@ export const plotWindowElement: GuiWidgetElementDefinition = {
       outputs: [],
     };
   },
+  authoredFile: (widget) => ({
+    extension: (widget.language ?? 'python').toLowerCase().startsWith('java') ? '.js' : '.py',
+    what: 'this transform',
+  }),
   ConfigEditor: PlotWindowEditor,
   RuntimeWidget: PlotWindowWidget,
 };

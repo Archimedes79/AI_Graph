@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-from app.elements.base import GuiWidgetElement
+from app.elements.base import AuthoredFile, GuiWidgetElement
 from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
 
 
@@ -20,3 +20,9 @@ class PlotWindowElement(GuiWidgetElement):
         # Display-only: this is never called (see gui/element.py) since a widget
         # with no output port has its in-place transform handled by the caller.
         return None
+
+    def authored_file(self, widget: GuiWidget) -> AuthoredFile:
+        """The data transform that turns incoming data into plot-ready points."""
+        language = str(getattr(widget, "language", "python") or "python").lower()
+        extension = ".js" if language.startswith(("js", "javascript", "node")) else ".py"
+        return AuthoredFile(body_field="code", prompt_field="plot_prompt", extension=extension)

@@ -157,6 +157,7 @@ export interface NodeConfig {
  */
 export interface GuiWidget {
   code?: string;
+  code_file: string;
   example_input_path: string;
   extensions: string;
   h?: number;

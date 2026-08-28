@@ -325,6 +325,28 @@ the router branches on `node_type`:
 | `ai` | `system_prompt` from `description` | `.md`, header as YAML front matter |
 | `data` | `data_format_prompt` from `data_prompt` | `.md` |
 | `input`, `output` | `None` — nothing authored | none |
+| `input_picker` | `selector_code` from `selector_prompt` | `.py` / `.js` |
+| `plot_window` | `code` from `plot_prompt` | `.py` / `.js` |
+| `image_view` | `code` | `.py` / `.js` |
+| `text_io` | `None` | none |
+
+**Widgets are the same object one level down**, so they go through the same code,
+not a parallel copy: `GuiWidgetElement.authored_file()` has the same signature,
+`node_files.Authored` is the single view of "a thing with a name and text somebody
+wrote", and `for_node`/`for_widget` are the entire difference — every function below
+them takes an `Authored` and never learns which it holds. `routers/graph.py` collects
+both into one list (`_authored_items`) and has exactly one read loop and one write
+loop. A `gui` node authors nothing itself (it is a composite), so its slot on disk is
+a *folder* named after it, holding one file per widget:
+
+```
+dashboard.json
+dashboard.nodes/
+  Aufbereiten.py          <- a code node
+  Ansicht/                <- a gui node
+    Verlauf.py            <- its plot_window widget
+    Ordner.py             <- its input_picker widget
+```
 
 A new node type gets files by returning an `AuthoredFile` from its element. The
 extension follows the content: real code gets `.py` and a language server with it,

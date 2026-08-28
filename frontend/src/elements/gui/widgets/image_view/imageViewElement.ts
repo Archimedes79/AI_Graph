@@ -13,6 +13,10 @@ export const imageViewElement: GuiWidgetElementDefinition = {
       outputs: [],
     };
   },
+  authoredFile: (widget) => ({
+    extension: (widget.language ?? 'python').toLowerCase().startsWith('java') ? '.js' : '.py',
+    what: 'this transform',
+  }),
   ConfigEditor: ImageViewEditor,
   RuntimeWidget: ImageViewWidget,
 };

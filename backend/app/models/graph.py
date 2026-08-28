@@ -118,6 +118,10 @@ class GuiWidget(BaseModel):
     code: str = ""
     language: Literal["python", "javascript"] = "python"
     plot_prompt: str = ""            # design-time prompt used to generate plot transform code
+    # The file beside the graph holding this widget's authored code, e.g.
+    # "Verlauf.py". Same contract as NodeConfig.code_file one level down: a gui
+    # node's widgets live in a folder named after the node, one file each.
+    code_file: str = ""
     example_input_path: str = ""     # optional sample file used as generation context
 
     # GUI-designer layout, in grid cells (12-column grid, row height is uniform).

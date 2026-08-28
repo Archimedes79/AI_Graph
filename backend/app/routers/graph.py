@@ -13,7 +13,9 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from app.elements.registry import NODE_ELEMENTS
+import pathlib
+
+from app.elements.registry import GUI_WIDGET_ELEMENTS, NODE_ELEMENTS
 from app.models.graph import Graph
 from app.services import file_service, node_files
 
@@ -124,51 +126,72 @@ def _authored(node):
     return element.authored_file(node) if element is not None else None
 
 
+def _authored_items(graph: Graph, directory) -> "list":
+    """
+    Every file-bearing thing in the graph, as `(folder, Authored)` pairs.
+
+    Nodes and widgets are the same object at two levels, so they are collected
+    into one list here and the read/write loops below never learn which is
+    which. A gui node authors nothing itself -- it is a composite -- so its slot
+    on disk is a folder holding one file per widget.
+    """
+    items = []
+    for node in graph.nodes:
+        element = NODE_ELEMENTS.get(node.node_type)
+        spec = element.authored_file(node) if element is not None else None
+        if spec is not None:
+            items.append((directory, node_files.for_node(node, spec)))
+
+        for widget in node.config.gui_widgets:
+            widget_element = GUI_WIDGET_ELEMENTS.get(widget.kind)
+            widget_spec = widget_element.authored_file(widget) if widget_element is not None else None
+            if widget_spec is not None:
+                items.append((directory / node_files.slug(node.label), node_files.for_widget(widget, widget_spec)))
+    return items
+
+
 def _read_node_files(graph: Graph, graph_path: str) -> None:
     """
-    Fill each node's authored field from its file. The file is authoritative for
-    what a person writes, so this runs on load and the editor never sees a stale
-    copy.
+    Fill each authored field from its file. The file is authoritative for what a
+    person writes, so this runs on load and the editor never sees a stale copy.
 
-    A missing file is left alone rather than blanking the node: a graph whose
+    A missing file is left alone rather than blanking the element: a graph whose
     sibling folder was not copied should still open, with whatever the JSON
     still carries, instead of silently losing it.
     """
     directory = node_files.node_dir(graph_path)
-    for node in graph.nodes:
-        name = (getattr(node.config, "code_file", "") or "").strip()
-        spec = _authored(node)
-        if not name or spec is None:
+    for folder, item in _authored_items(graph, directory):
+        if not item.file_name:
             continue
-        path = directory / name
+        path = folder / item.file_name
         if not path.is_file():
-            logger.warning("Node %s points at %s, which is not there", node.id, path)
+            logger.warning("%s points at %s, which is not there", item.ident, path)
             continue
-        header, body = node_files.parse(path.read_text(encoding="utf-8"), name)
-        node_files.apply_to_node(node, spec, header, body)
+        header, body = node_files.parse(path.read_text(encoding="utf-8"), item.file_name)
+        node_files.apply(item, header, body)
         node_files.remember(path)
 
 
 def _write_node_files(graph: Graph, graph_path: str) -> None:
     """
-    Write one file per node that has opted into having one, and keep the file
-    named after the node: renaming a node on the canvas renames its file, which
-    is the whole reason the name is derived from the label rather than the id.
+    Write one file per element that has opted into having one, named after the
+    element: renaming it on the canvas renames its file, which is the whole
+    reason the name is derived from the label rather than the id.
     """
     directory = node_files.node_dir(graph_path)
-    taken: set = set()
+    taken: dict = {}
 
-    for node in graph.nodes:
-        current = (getattr(node.config, "code_file", "") or "").strip()
-        spec = _authored(node)
-        if not current or spec is None:
+    for folder, item in _authored_items(graph, directory):
+        current = item.file_name
+        if not current:
             continue
-        wanted = node_files.default_file_name(node.label, spec.extension, taken)
-        taken.add(wanted)
+        used = taken.setdefault(str(folder), set())
+        wanted = node_files.default_file_name(item.label, item.spec.extension, used)
+        used.add(wanted)
 
-        directory.mkdir(parents=True, exist_ok=True)
-        old_path = directory / current
-        new_path = directory / wanted
+        folder.mkdir(parents=True, exist_ok=True)
+        old_path = folder / current
+        new_path = folder / wanted
 
         # Never overwrite an edit made outside this app. Whoever saved last
         # would otherwise win silently, which is the one outcome a sync
@@ -179,8 +202,8 @@ def _write_node_files(graph: Graph, graph_path: str) -> None:
 
         if current != wanted and old_path.is_file() and not new_path.exists():
             old_path.rename(new_path)
-        node.config.code_file = wanted
-        new_path.write_text(node_files.render(node, spec, wanted), encoding="utf-8")
+        item.file_name = wanted
+        new_path.write_text(node_files.render(item, wanted), encoding="utf-8")
         node_files.remember(new_path)
 
 
@@ -194,13 +217,23 @@ def _without_externalised_body(graph: Graph) -> dict:
     """
     data = graph.model_dump()
     by_id = {n.id: n for n in graph.nodes}
+
     for raw in data.get("nodes", []):
+        node = by_id[raw["id"]]
         config = raw.get("config") or {}
-        if not (config.get("code_file") or "").strip():
-            continue
-        spec = _authored(by_id[raw["id"]])
-        if spec is not None:
+        element = NODE_ELEMENTS.get(node.node_type)
+        spec = element.authored_file(node) if element is not None else None
+        if spec is not None and (config.get("code_file") or "").strip():
             config[spec.body_field] = ""
+
+        for raw_widget in config.get("gui_widgets") or []:
+            widget = next((w for w in node.config.gui_widgets if w.id == raw_widget.get("id")), None)
+            if widget is None or not (raw_widget.get("code_file") or "").strip():
+                continue
+            widget_element = GUI_WIDGET_ELEMENTS.get(widget.kind)
+            widget_spec = widget_element.authored_file(widget) if widget_element is not None else None
+            if widget_spec is not None:
+                raw_widget[widget_spec.body_field] = ""
     return data
 
 

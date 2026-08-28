@@ -42,4 +42,10 @@ export interface GuiWidgetElementDefinition {
   // rather than being resent on every subsequent round. Omitted/false for
   // widgets whose value is a persistent setting (e.g. input_picker's path).
   clearValueAfterRun?: (widget: GuiWidget) => boolean;
+  /**
+   * What this widget kind keeps in a file, mirroring the backend's
+   * `GuiWidgetElement.authored_file()` -- the same contract as
+   * `NodeElementDefinition.authoredFile` one level down.
+   */
+  authoredFile?: (widget: GuiWidget) => { extension: string; what: string };
 }

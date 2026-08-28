@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Tuple
 
-from app.elements.base import GuiWidgetElement
+from app.elements.base import AuthoredFile, GuiWidgetElement
 from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
 from app.services import file_service
 
@@ -50,3 +50,9 @@ class ImageViewElement(GuiWidgetElement):
         except Exception as exc:  # noqa: BLE001 - shown, not raised
             logger.warning("image_view %s could not load %r: %s", widget.id, value, exc)
             return f"⚠ {exc}"
+
+    def authored_file(self, widget: GuiWidget) -> AuthoredFile:
+        """The optional transform that reshapes an incoming value into a path."""
+        language = str(getattr(widget, "language", "python") or "python").lower()
+        extension = ".js" if language.startswith(("js", "javascript", "node")) else ".py"
+        return AuthoredFile(body_field="code", prompt_field="", extension=extension)

@@ -6,6 +6,7 @@ import { genAI } from '../store/settingsStore';
 import { useGenerate } from '../elements/shared/useGenerate';
 import { PLOT_TRANSFORM_CONTEXT, SELECTOR_CODE_CONTEXT } from '../elements/shared/generationContext';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
+import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, WELL } from '../ui/theme';
 
 interface GuiWidgetEditorProps {
@@ -236,6 +237,22 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
                   onGenerate={() => handleGenerate(widget)}
                 />
               );
+            })()}
+
+            {(() => {
+              const fileSpec = GUI_WIDGET_ELEMENTS[widget.kind].authoredFile?.(widget);
+              return fileSpec ? (
+                <div className="mt-3">
+                  <AuthoredFileOption
+                    label={widget.label || widget.id}
+                    fileName={widget.code_file ?? ''}
+                    extension={fileSpec.extension}
+                    what={fileSpec.what}
+                    folderHint="<graph>.nodes/<node>/"
+                    onChange={(name) => updateWidget(index, { code_file: name })}
+                  />
+                </div>
+              ) : null;
             })()}
           </div>
         ))}

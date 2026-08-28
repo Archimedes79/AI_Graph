@@ -21,6 +21,7 @@ function makeWidget(kind: GuiWidget['kind']): GuiWidget {
     id: 'w1', kind, label: '', extensions: '', size: 'medium',
     recursive: false, select_all_files: true, selector_prompt: '', selector_code: '',
     plot_prompt: '',
+    code_file: '',
     example_input_path: '',
   };
 }

@@ -230,6 +230,7 @@ the graph* on a code, AI or Data node and its authored text moves to
 | Code | `.py` / `.js` | the code, with the prompt in a header comment |
 | AI | `.md` | the system prompt, with its description in front matter |
 | Data | `.md` | the format contract neighbours are generated against |
+| GUI | a folder | one file per widget that has code — a plot transform, a file selector |
 
 These are normal files: a language server helps with the Python, and `git diff` reads
 like text instead of an escaped JSON string. The header makes each file stand on its

@@ -95,52 +95,101 @@ def default_file_name(label: str, extension: str, taken: Optional[set] = None) -
 
 
 # ---------------------------------------------------------------------------
-# Reading and writing the fields an AuthoredFile names
+# One view of "a thing with a name and some text somebody wrote"
 # ---------------------------------------------------------------------------
 
-def get_body(node, spec) -> str:
-    return str(getattr(node.config, spec.body_field, "") or "")
+@dataclass
+class Authored:
+    """
+    A node or a widget, seen through its `AuthoredFile`.
+
+    They are the same object at two levels -- a widget is an element that
+    happens to live inside a gui node -- and roughly everything about putting
+    one in a file is identical: the name, the header, which keys flow back, the
+    conflict check. So the difference is captured once, here, and every function
+    below takes an `Authored` and never learns which of the two it holds.
+    """
+
+    label: str
+    ident: str
+    spec: Any                 # AuthoredFile
+    body_holder: Any          # node.config, or the widget itself
+    prompt_holder: Any        # node, node.config, or the widget itself
+    pointer_holder: Any       # where `code_file` lives
+    context_file: str = ""
+    inputs: Tuple[str, ...] = ()
+    outputs: Tuple[str, ...] = ()
+
+    @property
+    def body(self) -> str:
+        return str(getattr(self.body_holder, self.spec.body_field, "") or "")
+
+    @body.setter
+    def body(self, value: str) -> None:
+        setattr(self.body_holder, self.spec.body_field, value)
+
+    @property
+    def prompt(self) -> str:
+        if not self.spec.prompt_field:
+            return ""
+        return str(getattr(self.prompt_holder, self.spec.prompt_field, "") or "")
+
+    @prompt.setter
+    def prompt(self, value: str) -> None:
+        if self.spec.prompt_field:
+            setattr(self.prompt_holder, self.spec.prompt_field, value)
+
+    @property
+    def file_name(self) -> str:
+        return str(getattr(self.pointer_holder, "code_file", "") or "").strip()
+
+    @file_name.setter
+    def file_name(self, value: str) -> None:
+        self.pointer_holder.code_file = value
 
 
-def set_body(node, spec, value: str) -> None:
-    setattr(node.config, spec.body_field, value)
+def for_node(node, spec) -> Authored:
+    return Authored(
+        label=node.label, ident=node.id, spec=spec,
+        body_holder=node.config,
+        prompt_holder=node if spec.prompt_on_node else node.config,
+        pointer_holder=node.config,
+        context_file=str(getattr(node.config, "config_context_file", "") or ""),
+        inputs=tuple(p.id for p in node.inputs),
+        outputs=tuple(p.id for p in node.outputs),
+    )
 
 
-def get_prompt(node, spec) -> str:
-    if not spec.prompt_field:
-        return ""
-    source = node if spec.prompt_on_node else node.config
-    return str(getattr(source, spec.prompt_field, "") or "")
-
-
-def set_prompt(node, spec, value: str) -> None:
-    if not spec.prompt_field:
-        return
-    target = node if spec.prompt_on_node else node.config
-    setattr(target, spec.prompt_field, value)
+def for_widget(widget, spec) -> Authored:
+    return Authored(
+        label=widget.label or widget.id, ident=widget.id, spec=spec,
+        body_holder=widget, prompt_holder=widget, pointer_holder=widget,
+        context_file=str(getattr(widget, "example_input_path", "") or ""),
+        # A widget's ports are named by convention and are what the surrounding
+        # graph wires to, so they are worth stating in the header.
+        inputs=(f"{widget.id}_in",), outputs=(f"{widget.id}_out",),
+    )
 
 
 # ---------------------------------------------------------------------------
 # Render / parse
 # ---------------------------------------------------------------------------
 
-def _header_lines(label: str, node_id: str, prompt: str, context_file: str,
-                  ports: Tuple[List[str], List[str]], style: CommentStyle) -> List[str]:
-    lines = [style.opening, f"{style.prefix}node:    {label}", f"{style.prefix}id:      {node_id}"]
+def _header_lines(item: Authored, style: CommentStyle) -> List[str]:
+    lines = [style.opening, f"{style.prefix}node:    {item.label}", f"{style.prefix}id:      {item.ident}"]
 
-    if prompt.strip():
+    if item.prompt.strip():
         lines.append(f"{style.prefix}prompt: |")
-        lines.extend(f"{style.prefix}  {line}" for line in prompt.strip().splitlines())
+        lines.extend(f"{style.prefix}  {line}" for line in item.prompt.strip().splitlines())
 
-    if context_file.strip():
-        lines.append(f"{style.prefix}context-file: {context_file.strip()}")
+    if item.context_file.strip():
+        lines.append(f"{style.prefix}context-file: {item.context_file.strip()}")
 
     # Informational: regenerated every write, never read back.
-    inputs, outputs = ports
-    if inputs:
-        lines.append(f"{style.prefix}inputs:  {', '.join(inputs)}")
-    if outputs:
-        lines.append(f"{style.prefix}outputs: {', '.join(outputs)}")
+    if item.inputs:
+        lines.append(f"{style.prefix}inputs:  {', '.join(item.inputs)}")
+    if item.outputs:
+        lines.append(f"{style.prefix}outputs: {', '.join(item.outputs)}")
     lines.append(style.closing)
     return lines
 
@@ -150,7 +199,7 @@ def _is_opening(line: str, style: CommentStyle) -> bool:
 
     These files are meant to be edited by hand, and a person retyping the rule
     with a different number of dashes must not silently turn the whole header
-    into code."""
+    into body."""
     text = line.strip()
     if not style.prefix:
         return text == "---"
@@ -167,16 +216,30 @@ def _is_closing(line: str, style: CommentStyle) -> bool:
     return bool(rest) and set(rest) == {"-"}
 
 
-def render(node, spec, file_name: str) -> str:
-    """The full file: header, blank line, then the node's own authored text."""
+def render(item: Authored, file_name: str) -> str:
+    """The full file: header, blank line, then the authored text."""
     style = style_for(file_name)
-    header = _header_lines(
-        node.label, node.id, get_prompt(node, spec),
-        str(getattr(node.config, "config_context_file", "") or ""),
-        ([p.id for p in node.inputs], [p.id for p in node.outputs]),
-        style,
-    )
-    return "\n".join(header) + "\n\n" + get_body(node, spec).rstrip("\n") + "\n"
+    return "\n".join(_header_lines(item, style)) + "\n\n" + item.body.rstrip("\n") + "\n"
+
+
+def apply(item: Authored, header: Dict[str, Any], body: str) -> None:
+    """
+    Write a parsed file back -- authored fields only.
+
+    `id` is the key that matched this file to this element and is never applied;
+    ports are derived from the wiring, so a header that disagrees with them is
+    stale text, not an instruction.
+    """
+    item.body = body
+    if header.get("node"):
+        item.label = header["node"]
+    if "prompt" in header:
+        item.prompt = header["prompt"]
+    if "context-file" in header:
+        item.context_file = header["context-file"]
+        # A node keeps its context file in config; a widget has no such field.
+        if hasattr(item.body_holder, "config_context_file"):
+            item.body_holder.config_context_file = header["context-file"]
 
 
 def parse(text: str, file_name: str = "node.py") -> Tuple[Dict[str, Any], str]:
@@ -235,22 +298,6 @@ def parse(text: str, file_name: str = "node.py") -> Tuple[Dict[str, Any], str]:
 
     return header, "\n".join(lines[end:]).strip("\n")
 
-
-def apply_to_node(node, spec, header: Dict[str, Any], body: str) -> None:
-    """
-    Write a parsed file back onto a node -- authored fields only.
-
-    `id` is the key that matched this file to this node and is never applied;
-    ports are derived from the wiring, so a header that disagrees with them is
-    stale text, not an instruction.
-    """
-    set_body(node, spec, body)
-    if header.get("node"):
-        node.label = header["node"]
-    if "prompt" in header:
-        set_prompt(node, spec, header["prompt"])
-    if "context-file" in header:
-        node.config.config_context_file = header["context-file"]
 
 
 def node_dir(graph_path: str) -> Path:

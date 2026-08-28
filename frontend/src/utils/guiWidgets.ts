@@ -60,6 +60,7 @@ export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
     selector_prompt: '',
     selector_code: '',
     plot_prompt: '',
+    code_file: '',
     example_input_path: '',
   };
 }

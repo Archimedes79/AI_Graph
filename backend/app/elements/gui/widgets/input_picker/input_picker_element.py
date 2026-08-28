@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.elements.base import GuiWidgetElement, widget_input_or_value
+from app.elements.base import AuthoredFile, GuiWidgetElement, widget_input_or_value
 from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
 from app.services import code_executor, file_service
 
@@ -71,3 +71,9 @@ class InputPickerElement(GuiWidgetElement):
             return None
         label = widget.label or widget.id
         return {"label": label, "kind": "directory" if _is_directory(widget) else "file"}
+
+    def authored_file(self, widget: GuiWidget) -> AuthoredFile:
+        """The directory-mode file selector: run(inputs: {files}) -> {files}."""
+        language = str(getattr(widget, "language", "python") or "python").lower()
+        extension = ".js" if language.startswith(("js", "javascript", "node")) else ".py"
+        return AuthoredFile(body_field="selector_code", prompt_field="selector_prompt", extension=extension)
