@@ -128,6 +128,10 @@ python start.py               # dev mode: uvicorn --reload + vite dev server
 python start.py --mode prod   # prod mode: one process serving API + built UI on :8000
 ```
 
+Dev mode serves the editor at <http://127.0.0.1:3000> and the API at
+<http://127.0.0.1:8000>. If the port is already taken, an earlier `start.py` is still
+running — stop that one first, since two instances cannot share it.
+
 `--mode prod` expects a built frontend (`cd frontend && npm run build` first); it then runs a single `uvicorn` process that serves both the API and the built UI from `frontend/dist`, making it the simplest way to deploy the editor itself to another server.
 
 To hand the editor to another server without cloning the repo or installing Node there, build a self-contained zip instead:

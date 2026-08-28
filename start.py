@@ -58,6 +58,9 @@ def run_dev() -> int:
 
     print(f"[start] backend:  {' '.join(backend_cmd)} (cwd={BACKEND_DIR})")
     print(f"[start] frontend: {' '.join(frontend_cmd)} (cwd={FRONTEND_DIR})")
+    # Dev mode printed the two commands and never the address, unlike --mode
+    # prod -- so the one thing you actually need was the one thing missing.
+    print("[start] AI-Graph editor -> http://127.0.0.1:3000   (Ctrl+C to stop)")
 
     backend = subprocess.Popen(
         backend_cmd, cwd=BACKEND_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,

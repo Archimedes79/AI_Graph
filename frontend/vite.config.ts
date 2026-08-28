@@ -27,6 +27,11 @@ export default defineConfig({
     },
   },
   server: {
+    // Bind IPv4 explicitly. Node 17+ stopped reordering DNS results, so Vite's
+    // default `localhost` resolves to ::1 and binds IPv6 ONLY -- which leaves
+    // http://127.0.0.1:3000 dead while http://localhost:3000 works, and that is
+    // a miserable thing to debug.
+    host: '127.0.0.1',
     port: 3000,
     proxy: {
       '/api': {
