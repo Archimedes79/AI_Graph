@@ -36,6 +36,12 @@ export default function Toolbar({
   const isExecuting = useGraphStore((s) => s.isExecuting);
   const exportGraph = useGraphStore((s) => s.exportGraph);
   const runGraph = useGraphStore((s) => s.runGraph);
+  const undo = useGraphStore((s) => s.undo);
+  const redo = useGraphStore((s) => s.redo);
+  // Subscribe to the stack lengths, not to canUndo/canRedo: selecting a function
+  // never changes identity, so the buttons would never re-enable.
+  const undoAvailable = useGraphStore((s) => s.past.length > 0);
+  const redoAvailable = useGraphStore((s) => s.future.length > 0);
   const executionResult = useGraphStore((s) => s.executionResult);
   const loadGraph = useGraphStore((s) => s.loadGraph);
   const updateNode = useGraphStore((s) => s.updateNode);
@@ -236,6 +242,26 @@ export default function Toolbar({
           style={NEUTRAL_BUTTON}
         >
           New
+        </button>
+        <button
+          onClick={undo}
+          disabled={!undoAvailable}
+          title="Undo (Ctrl+Z)"
+          aria-label="Undo"
+          className="px-2.5 py-1.5 text-xs rounded-lg"
+          style={{ ...NEUTRAL_BUTTON, opacity: undoAvailable ? 1 : 0.4 }}
+        >
+          ↶
+        </button>
+        <button
+          onClick={redo}
+          disabled={!redoAvailable}
+          title="Redo (Ctrl+Shift+Z)"
+          aria-label="Redo"
+          className="px-2.5 py-1.5 text-xs rounded-lg"
+          style={{ ...NEUTRAL_BUTTON, opacity: redoAvailable ? 1 : 0.4 }}
+        >
+          ↷
         </button>
         <button
           onClick={onLoad}

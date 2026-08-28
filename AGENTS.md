@@ -418,7 +418,15 @@ failing it. `_terminate_tree` exists for that.
 - `backend/app/services/ai_service.py`, `code_executor.py`, `file_service.py` — provider-agnostic AI calls, sandboxed code execution, file I/O helpers shared across node types.
 - `frontend/src/components/NodeEditor.tsx` — modal shell (tabs/save-cancel/AI-generate handlers), dispatches to the per-node-type `ConfigEditor`s above.
 - `frontend/src/components/GuiWidgetEditor.tsx` — widget list/add/remove/reorder, dispatches to the per-kind `ConfigEditor`s above.
-- `frontend/src/store/graphStore.ts` — Zustand graph state (nodes/edges, load/save, port sync).
+- `frontend/src/store/graphStore.ts` — Zustand graph state (nodes/edges, load/save, port sync)
+  and the undo history. **A new mutating action must call `get().commit()` first**, which
+  snapshots the state *before* the change; committing an identical state twice is a no-op,
+  so a delete arriving through both the node's button and ReactFlow's `remove` change still
+  costs one Ctrl+Z. Do NOT commit from `setRFNodes`/`setRFEdges` — a drag routes a position
+  change through them on every frame, so drag history comes from `onNodeDragStart` in
+  `GraphCanvas.tsx` instead. Undo restores through `applyGraphSnapshot`, which shares
+  `buildReactFlowGraph` with `loadGraph` and deliberately leaves `savedSnapshot` alone, so
+  undoing back to the last saved state reads as clean again.
 
 ## Tests
 

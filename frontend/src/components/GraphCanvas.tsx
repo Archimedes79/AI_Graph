@@ -51,6 +51,7 @@ export default function GraphCanvas() {
   const setRFEdges = useGraphStore((s) => s.setRFEdges);
   const addNode = useGraphStore((s) => s.addNode);
   const addPresetNode = useGraphStore((s) => s.addPresetNode);
+  const commit = useGraphStore((s) => s.commit);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
@@ -69,9 +70,10 @@ export default function GraphCanvas() {
         type: 'smoothstep',
         style: { stroke: ACCENT, strokeWidth: 2 },
       } as Edge;
+      commit();
       setRFEdges(addEdge(edge, rfEdges));
     },
-    [rfEdges, rfNodes, setRFEdges]
+    [commit, rfEdges, rfNodes, setRFEdges]
   );
 
   const onDrop = useCallback(
@@ -111,9 +113,15 @@ export default function GraphCanvas() {
         nodes={rfNodes}
         edges={rfEdges}
         onNodesChange={(changes: NodeChange[]) => {
+          // A drag reports a position change per frame, so history points come
+          // from onNodeDragStart instead; removals have no such event and are
+          // committed here, before they are applied.
+          if (changes.some((c) => c.type === 'remove')) commit();
           setRFNodes(applyNodeChanges(changes, rfNodes) as typeof rfNodes);
         }}
+        onNodeDragStart={() => commit()}
         onEdgesChange={(changes: EdgeChange[]) => {
+          if (changes.some((c) => c.type === 'remove')) commit();
           setRFEdges(applyEdgeChanges(changes, rfEdges));
         }}
         onConnect={onConnect}

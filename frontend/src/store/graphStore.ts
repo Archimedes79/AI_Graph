@@ -33,6 +33,11 @@ export interface GraphStore {
   // Serialised graph as of the last load/save, for `isDirty`.
   savedSnapshot: string | null;
 
+  // Undo history: serialised graphs, oldest first. `past` holds states before
+  // each committed change, `future` the ones an undo stepped back out of.
+  past: string[];
+  future: string[];
+
   // UI state
   selectedNodeId: string | null;
   editingNodeId: string | null;
@@ -66,6 +71,19 @@ export interface GraphStore {
    * Selection is not part of the exported graph, so this cannot fire on it;
    * moving a node, which is a real change, does.
    */
+  /**
+   * Record the current graph as an undo point, BEFORE the change about to be
+   * made. Committing an identical state twice is a no-op, which is what keeps a
+   * delete that arrives through two paths (the node's own button and ReactFlow's
+   * remove change) from costing two presses of Ctrl+Z.
+   */
+  commit: () => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  /** Internal: replace the graph with a serialised snapshot (used by undo/redo). */
+  applyGraphSnapshot: (json: string) => void;
   isDirty: () => boolean;
   /** Record the current graph as saved (after a successful write to disk). */
   markSaved: () => void;
@@ -285,6 +303,45 @@ const defaultMetadata = (): GraphMetadata => ({
   ai_defaults: { provider: 'default', model: '' },
 });
 
+
+/** How many undo steps are kept. Each entry is a whole serialised graph. */
+const HISTORY_LIMIT = 50;
+
+interface NodeCallbacks {
+  onEdit: (nodeId: string) => void;
+  onDelete: (nodeId: string) => void;
+  onPortEdit: (nodeId: string, portId: string) => void;
+}
+
+/**
+ * Build the ReactFlow node/edge arrays for a graph. Shared by `loadGraph` and by
+ * undo/redo's `applyGraphSnapshot`, so restoring a snapshot can never drift from
+ * loading a file -- they were the same twenty lines twice.
+ */
+function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
+  const rfNodes: Node<RFNodeData>[] = graph.nodes.map((gn) => ({
+    id: gn.id,
+    type: 'graphNode',
+    position: { x: gn.position.x, y: gn.position.y },
+    width: gn.width,
+    height: gn.height,
+    data: { graphNode: gn, ...callbacks },
+  }));
+
+  const rfEdges: Edge[] = graph.edges.map((ge) => ({
+    id: ge.id,
+    source: ge.source_node_id,
+    sourceHandle: ge.source_port_id,
+    target: ge.target_node_id,
+    targetHandle: ge.target_port_id,
+    type: 'smoothstep',
+    animated: false,
+    style: { stroke: ACCENT, strokeWidth: 2 },
+  }));
+
+  return { rfNodes, rfEdges };
+}
+
 export const useGraphStore = create<GraphStore>()(
   immer((set, get) => ({
     rfNodes: [],
@@ -298,6 +355,8 @@ export const useGraphStore = create<GraphStore>()(
     editingNodeId: null,
     editingPort: null,
     savedSnapshot: null,
+    past: [],
+    future: [],
 
     setMetadata: (meta) =>
       set((state) => {
@@ -310,6 +369,7 @@ export const useGraphStore = create<GraphStore>()(
       }),
 
     addNode: (nodeType, position) => {
+      get().commit();
       const id = newId(nodeType);
       const defaults = nodeTypeDefaults(nodeType, id);
       const rfNode: Node<RFNodeData> = {
@@ -329,6 +389,7 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     addPresetNode: (preset, position) => {
+      get().commit();
       const id = newId(preset.nodeType);
       const graphNode = preset.build(id);
       const rfNode: Node<RFNodeData> = {
@@ -348,6 +409,7 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     updateNode: (nodeId, updates) => {
+      get().commit();
       set((state) => {
         const idx = state.rfNodes.findIndex((n: RFNode) => n.id === nodeId);
         if (idx !== -1) {
@@ -372,6 +434,7 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     deleteNode: (nodeId) => {
+      get().commit();
       set((state) => {
         state.rfNodes = state.rfNodes.filter((n: RFNode) => n.id !== nodeId);
         state.rfEdges = state.rfEdges.filter(
@@ -490,25 +553,7 @@ export const useGraphStore = create<GraphStore>()(
         onPortEdit: (nid: string, pid: string) => get().setEditingPort({ nodeId: nid, portId: pid }),
       };
 
-      const rfNodes: Node<RFNodeData>[] = normalizedGraph.nodes.map((gn) => ({
-        id: gn.id,
-        type: 'graphNode',
-        position: { x: gn.position.x, y: gn.position.y },
-        width: gn.width,
-        height: gn.height,
-        data: { graphNode: gn, ...callbacks },
-      }));
-
-      const rfEdges: Edge[] = normalizedGraph.edges.map((ge) => ({
-        id: ge.id,
-        source: ge.source_node_id,
-        sourceHandle: ge.source_port_id,
-        target: ge.target_node_id,
-        targetHandle: ge.target_port_id,
-        type: 'smoothstep',
-        animated: false,
-        style: { stroke: ACCENT, strokeWidth: 2 },
-      }));
+      const { rfNodes, rfEdges } = buildReactFlowGraph(normalizedGraph, callbacks);
 
       set((state) => {
         state.metadata = normalizedGraph.metadata;
@@ -519,6 +564,10 @@ export const useGraphStore = create<GraphStore>()(
         // (Paste JSON, AI Graph, etc.) doesn't know its file path; the caller
         // sets `currentFilePath` explicitly right after loadGraph when it does.
         state.currentFilePath = null;
+        // A different document: its predecessor's undo steps would restore
+        // nodes belonging to a graph that is no longer open.
+        state.past = [];
+        state.future = [];
       });
       // Snapshot through exportGraph() rather than from normalizedGraph: it is
       // the same serialisation isDirty() compares against, so a freshly loaded
@@ -545,6 +594,70 @@ export const useGraphStore = create<GraphStore>()(
       }));
 
       return { metadata, nodes, edges };
+    },
+
+    commit: () => {
+      const snapshot = JSON.stringify(get().exportGraph());
+      set((state) => {
+        if (state.past[state.past.length - 1] === snapshot) return;
+        state.past.push(snapshot);
+        // A bounded stack: undo is for recovering from a mistake, not for
+        // replaying a whole session, and every entry is a full graph.
+        if (state.past.length > HISTORY_LIMIT) state.past.shift();
+        // Any new change abandons the redo branch, as in every editor.
+        state.future = [];
+      });
+    },
+
+    undo: () => {
+      const { past } = get();
+      if (past.length === 0) return;
+      const current = JSON.stringify(get().exportGraph());
+      const previous = past[past.length - 1];
+      set((state) => {
+        state.past.pop();
+        state.future.push(current);
+      });
+      get().applyGraphSnapshot(previous);
+    },
+
+    redo: () => {
+      const { future } = get();
+      if (future.length === 0) return;
+      const current = JSON.stringify(get().exportGraph());
+      const next = future[future.length - 1];
+      set((state) => {
+        state.future.pop();
+        state.past.push(current);
+      });
+      get().applyGraphSnapshot(next);
+    },
+
+    canUndo: () => get().past.length > 0,
+    canRedo: () => get().future.length > 0,
+
+    /**
+     * Restore a serialised graph without touching the history stacks or the
+     * saved-snapshot marker -- undoing back to the last saved state must read as
+     * clean again, and undoing past it as dirty, which falls out of leaving
+     * `savedSnapshot` alone.
+     */
+    applyGraphSnapshot: (json) => {
+      const graph = normalizeGraph(JSON.parse(json) as Graph);
+      const { rfNodes, rfEdges } = buildReactFlowGraph(graph, {
+        onEdit: (nid: string) => get().setEditingNode(nid),
+        onDelete: (nid: string) => get().deleteNode(nid),
+        onPortEdit: (nid: string, pid: string) => get().setEditingPort({ nodeId: nid, portId: pid }),
+      });
+      set((state) => {
+        state.metadata = graph.metadata;
+        state.rfNodes = rfNodes as any;
+        state.rfEdges = rfEdges;
+        // A stale result would point at nodes that may no longer exist.
+        state.executionResult = null;
+        state.editingNodeId = null;
+        state.editingPort = null;
+      });
     },
 
     isDirty: () => {

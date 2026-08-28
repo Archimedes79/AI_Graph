@@ -145,12 +145,34 @@ export default function App() {
     }
   };
 
-  // Ctrl/Cmd+S, because the only other way to save is a trip to the toolbar.
+  // Ctrl/Cmd+S, because the only other way to save is a trip to the toolbar,
+  // and Ctrl/Cmd+Z / Shift+Z / Y for undo and redo.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+
+      if (key === 's') {
         event.preventDefault();
         handleSave();
+        return;
+      }
+
+      // While the caret is in a field, Ctrl+Z belongs to that field's own text
+      // history -- taking it would undo a graph change the user cannot see
+      // instead of the word they just typed.
+      const target = event.target as HTMLElement | null;
+      const typing = !!target && (
+        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      );
+      if (typing) return;
+
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        useGraphStore.getState().undo();
+      } else if ((key === 'z' && event.shiftKey) || key === 'y') {
+        event.preventDefault();
+        useGraphStore.getState().redo();
       }
     };
     window.addEventListener('keydown', onKeyDown);
