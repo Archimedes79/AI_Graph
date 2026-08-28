@@ -372,6 +372,7 @@ def example_settings() -> Dict[str, Any]:
             "openai": "",
             "anthropic": "",
             "openai_compatible": "",
+            "google": "",
             "github": "",
         },
     }

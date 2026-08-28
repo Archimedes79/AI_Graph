@@ -138,12 +138,14 @@ _ENDPOINT_KEYS = {
     "ollama": "ollama_base_url",
     "lmstudio": "lmstudio_base_url",
     "openai_compatible": "openai_compatible_base_url",
+    "google": "google_base_url",
     "github_copilot": "github_models_base_url",
 }
 _CREDENTIAL_KEYS = {
     "openai": "openai",
     "anthropic": "anthropic",
     "openai_compatible": "openai_compatible",
+    "google": "google",
     "github_copilot": "github",
 }
 # Env var that satisfies a provider's credential without the settings file, so
@@ -152,6 +154,7 @@ _CREDENTIAL_ENV = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "openai_compatible": "OPENAI_COMPATIBLE_API_KEY",
+    "google": "GOOGLE_API_KEY",
     "github_copilot": "GITHUB_TOKEN",
 }
 

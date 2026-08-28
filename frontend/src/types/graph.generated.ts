@@ -27,7 +27,7 @@ export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui';
  * via the `definition` "AIProvider".
  */
 export type AIProvider =
-  'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
+  'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "DataType".
@@ -86,7 +86,8 @@ export interface GraphMetadata {
  */
 export interface AIDefaults {
   model: string;
-  provider: 'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
+  provider:
+    'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
 }
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
@@ -112,7 +113,8 @@ export interface GraphNode {
  */
 export interface NodeConfig {
   ai_model: string;
-  ai_provider: 'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'github_copilot';
+  ai_provider:
+    'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
   batch_concurrency: number;
   batch_mode: 'per_item' | 'whole_list';
   code: string;

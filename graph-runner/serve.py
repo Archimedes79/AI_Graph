@@ -112,11 +112,13 @@ _ENDPOINT_KEYS = {
     "ollama": "ollama_base_url",
     "lmstudio": "lmstudio_base_url",
     "openai_compatible": "openai_compatible_base_url",
+    "google": "google_base_url",
 }
 _KEY_KEYS = {
     "openai": "openai",
     "anthropic": "anthropic",
     "openai_compatible": "openai_compatible",
+    "google": "google",
     "github_copilot": "github",
 }
 

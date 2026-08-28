@@ -7,6 +7,7 @@ import { ACCENT_TEXT, DIM, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_B
 const NEEDS_KEY = [
   { id: 'openai', label: 'OpenAI', hint: 'From platform.openai.com' },
   { id: 'anthropic', label: 'Anthropic', hint: 'From console.anthropic.com' },
+  { id: 'google', label: 'Google Gemini', hint: 'Free key from aistudio.google.com/apikey' },
   { id: 'github_copilot', label: 'GitHub Models', hint: 'A GitHub token with the models:read scope' },
   { id: 'openai_compatible', label: 'OpenAI-compatible', hint: 'Whatever your endpoint expects' },
 ];
@@ -15,6 +16,7 @@ const NEEDS_ENDPOINT = [
   { id: 'ollama', label: 'Ollama', placeholder: 'http://localhost:11434' },
   { id: 'lmstudio', label: 'LM Studio', placeholder: 'http://localhost:1234/v1' },
   { id: 'openai_compatible', label: 'OpenAI-compatible', placeholder: 'https://my-endpoint.example.com/v1' },
+  { id: 'google', label: 'Google Gemini', placeholder: 'https://generativelanguage.googleapis.com/v1beta/openai' },
 ];
 
 /**

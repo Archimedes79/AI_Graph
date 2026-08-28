@@ -15,7 +15,28 @@ export const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
   openai: 'OpenAI',
   openai_compatible: 'OpenAI-compatible endpoint',
   anthropic: 'Anthropic',
-  github_copilot: 'GitHub Copilot (GitHub Models, needs GITHUB_TOKEN)',
+  google: 'Google Gemini',
+  github_copilot: 'GitHub Models',
+};
+
+/**
+ * What each provider costs to use, shown in the picker.
+ *
+ * The tool is usable for nothing -- a local model, or a hosted free tier -- and
+ * that was invisible: the list read as seven equivalent choices, so the one
+ * question a newcomer actually has ("which of these will bill me?") had no
+ * answer on screen. Deliberately no numbers: free-tier limits change, and a
+ * stale figure in a dropdown is worse than none.
+ */
+export const AI_PROVIDER_COST: Record<AIProvider, string> = {
+  default: '',
+  ollama: 'free, local',
+  lmstudio: 'free, local',
+  openai: 'paid',
+  openai_compatible: 'depends on the endpoint',
+  anthropic: 'paid',
+  google: 'free tier',
+  github_copilot: 'free tier',
 };
 
 // One probe per page load, shared by every mounted picker: the status answers
@@ -61,9 +82,11 @@ export default function ProviderModelSelect({
   const listId = useId();
 
   const annotate = (value: AIProvider, label: string) => {
+    const cost = AI_PROVIDER_COST[value];
     const local = status?.local?.[value];
-    if (!local) return label;
-    return local.reachable ? `${label} — ✓ running` : `${label} — not running`;
+    // For a local provider, whether it is actually up is the more useful half.
+    const detail = local ? (local.reachable ? '✓ running' : 'not running') : cost;
+    return detail ? `${label} — ${detail}` : label;
   };
   const options = (Object.entries(AI_PROVIDER_LABELS) as [AIProvider, string][])
     .filter(([value]) => value !== 'default' || allowDefault)

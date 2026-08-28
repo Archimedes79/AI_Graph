@@ -51,6 +51,7 @@ class AIProvider(str, Enum):
     OPENAI_COMPATIBLE = "openai_compatible"
     ANTHROPIC = "anthropic"
     LMSTUDIO = "lmstudio"
+    GOOGLE = "google"                  # Gemini via Google's OpenAI-compatible endpoint; free tier
     GITHUB_COPILOT = "github_copilot"  # GitHub Models API, OpenAI-compatible; needs GITHUB_TOKEN
 
 

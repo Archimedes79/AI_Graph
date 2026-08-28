@@ -29,6 +29,10 @@ OPENAI_COMPATIBLE_BASE_URL = os.getenv("OPENAI_COMPATIBLE_BASE_URL", "")
 OPENAI_COMPATIBLE_API_KEY = os.getenv("OPENAI_COMPATIBLE_API_KEY", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_MODELS_BASE_URL = os.getenv("GITHUB_MODELS_BASE_URL", "https://models.github.ai/inference")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+# Google's own OpenAI-compatibility layer for the Gemini API, which is why
+# supporting it is a table entry rather than a provider implementation.
+GOOGLE_BASE_URL = os.getenv("GOOGLE_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
 
 
 # Endpoints and credentials are resolved per call rather than read from the
@@ -72,6 +76,14 @@ def _openai_compatible_api_key() -> str:
 
 def _github_token() -> str:
     return ai_settings.credential("GITHUB_TOKEN", GITHUB_TOKEN, "github")
+
+
+def _google_api_key() -> str:
+    return ai_settings.credential("GOOGLE_API_KEY", GOOGLE_API_KEY, "google")
+
+
+def _google_base_url() -> str:
+    return ai_settings.endpoint("GOOGLE_BASE_URL", GOOGLE_BASE_URL, "google_base_url")
 
 # Local models (ollama/lmstudio) on modest hardware routinely take several
 # minutes -- up to ~10 minutes -- for a large generation prompt with
@@ -291,6 +303,18 @@ _OPENAI_STYLE: Dict[str, _OpenAIStyle] = {
             "or endpoints.openai_compatible_base_url in ai-settings.json)"
         ),
     ),
+    # Gemini, through Google's OpenAI-compatible endpoint. A key from
+    # aistudio.google.com has a free tier, which is what makes it the useful
+    # hosted default for someone who does not want to pay to try the tool.
+    "google": _OpenAIStyle(
+        base_url=_google_base_url,
+        credential=_google_api_key,
+        credential_required=True,
+        missing_credential_error=(
+            "No Google API key configured (GOOGLE_API_KEY, or api_keys.google in "
+            "ai-settings.json). Get one free at https://aistudio.google.com/apikey"
+        ),
+    ),
     "github_copilot": _OpenAIStyle(
         base_url=_github_models_base_url,
         credential=_github_token,
@@ -411,6 +435,13 @@ async def _openai_compatible_complete(
     return await _openai_style_complete("openai_compatible", prompt, system, model, temperature, timeout, images)
 
 
+async def _google_complete(
+    prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
+    images: Optional[List[str]] = None,
+) -> str:
+    return await _openai_style_complete("google", prompt, system, model, temperature, timeout, images)
+
+
 async def _github_copilot_complete(
     prompt: str, system: str, model: str, temperature: float, timeout: float = AI_COMPLETE_TIMEOUT,
     images: Optional[List[str]] = None,
@@ -495,6 +526,8 @@ async def complete(
             return await _anthropic_complete(prompt, system, model, temperature, images=images)
         if provider == "lmstudio":
             return await _lmstudio_complete(prompt, system, model, temperature, images=images)
+        if provider == "google":
+            return await _google_complete(prompt, system, model, temperature, images=images)
         if provider == "github_copilot":
             return await _github_copilot_complete(prompt, system, model, temperature, images=images)
         raise ValueError(f"Unknown AI provider: {provider}")

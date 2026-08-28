@@ -272,7 +272,7 @@ def main() -> None:
     parser.add_argument(
         "--ai-provider", default="", metavar="NAME",
         help="AI provider for this run: ollama | lmstudio | openai | anthropic | "
-             "openai_compatible | github_copilot",
+             "openai_compatible | google | github_copilot",
     )
     parser.add_argument(
         "--ai-model", default="", metavar="MODEL",

@@ -325,13 +325,25 @@ against the Graph schema. Use it from the "✨ AI Graph" toolbar action, or stan
 
 ## 🤖 AI Providers
 
-| Provider | Model | Env var needed |
-|---|---|---|
-| **Ollama** (default) | llama3, mistral, … | `OLLAMA_BASE_URL` (default: localhost) |
-| LM Studio | any locally loaded model | `LMSTUDIO_BASE_URL` (default: `http://localhost:1234/v1`) |
-| OpenAI | gpt-4o, gpt-4-turbo, … | `OPENAI_API_KEY` |
-| Anthropic | claude-3-5-sonnet, … | `ANTHROPIC_API_KEY` |
-| OpenAI-compatible endpoint | Any compatible model | `OPENAI_COMPATIBLE_BASE_URL`, optional `OPENAI_COMPATIBLE_API_KEY` |
+**AI-Graph is usable without paying anyone.** Run a local model, or use a hosted free
+tier; add a paid provider only where you want the extra quality. The provider picker
+says which is which, so the choice is visible rather than something to look up.
+
+| Provider | Cost | Model | Credential |
+|---|---|---|---|
+| **Ollama** (default) | free, local | llama3, mistral, … | `OLLAMA_BASE_URL` (default: localhost) |
+| LM Studio | free, local | any locally loaded model | `LMSTUDIO_BASE_URL` (default: `http://localhost:1234/v1`) |
+| Google Gemini | free tier | gemini-2.0-flash, … | `GOOGLE_API_KEY` — get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| GitHub Models | free tier | many | `GITHUB_TOKEN` with the `models:read` scope |
+| OpenAI | paid | gpt-4o, … | `OPENAI_API_KEY` |
+| Anthropic | paid | claude-sonnet-4-5, … | `ANTHROPIC_API_KEY` |
+| OpenAI-compatible endpoint | depends | any compatible model | `OPENAI_COMPATIBLE_BASE_URL`, optional `OPENAI_COMPATIBLE_API_KEY` |
+
+**Mixing free and paid is already how the graph works**, and is worth knowing: set the
+graph's runtime default to a free provider, then pin the one node that needs more to a
+paid one — an AI node left on *"Use the graph's default"* follows the free default, and
+a node that names a provider keeps it. The code-generation AI is a separate setting
+again, so you can author with a strong model and run on a free one.
 
 Set environment variables in a `.env` file or pass them to Docker Compose.
 
