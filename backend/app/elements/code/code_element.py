@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from app.elements.base import NodeElement
+from app.elements.base import AuthoredFile, NodeElement
 from app.models.graph import GraphNode, NodeType
 from app.services import code_executor
 from app.services.batching import reconcile_outputs
@@ -26,3 +26,9 @@ class CodeElement(NodeElement):
         cfg = node.config
         result = await code_executor.execute_code(cfg.code, cfg.language, inputs, cfg.requirements)
         return reconcile_outputs(node, result)
+
+    def authored_file(self, node: GraphNode) -> AuthoredFile:
+        """The code itself, in a real .py/.js so an editor can help with it."""
+        language = str(getattr(node.config, "language", "python") or "python").lower()
+        extension = ".js" if language.startswith(("js", "javascript", "node")) else ".py"
+        return AuthoredFile(body_field="code", prompt_field="code_prompt", extension=extension)

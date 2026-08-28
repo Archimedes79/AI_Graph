@@ -3,7 +3,6 @@ import type { GraphNode } from '../../types/graph';
 import ContextFileAttachment from '../shared/ContextFileAttachment';
 import BatchAndFileInputOptions from '../shared/BatchAndFileInputOptions';
 import CodeRequirements from './CodeRequirements';
-import { suggestedCodeFileName } from './codeFileName';
 import { DIMMER, FIELD, MUTED, SUCCESS } from '../../ui/theme';
 
 interface CodeEditorProps {
@@ -79,22 +78,6 @@ export default function CodeEditor({
           placeholder={`def run(inputs):\n    return {"output": inputs.get("input", "")}`}
           spellCheck={false}
         />
-      </div>
-
-      <div>
-        <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-          <input
-            type="checkbox"
-            checked={!!node.config.code_file}
-            onChange={(e) => setConfig('code_file', e.target.checked ? suggestedCodeFileName(node) : '')}
-          />
-          Keep this code in a file beside the graph
-        </label>
-        <p className="text-xs mt-1" style={{ color: DIMMER }}>
-          {node.config.code_file
-            ? <>Saved as <span className="font-mono" style={{ color: MUTED }}>{'<graph>'}.nodes/{node.config.code_file}</span> — edit it in any editor; the graph reads it back when it opens. The file is named after this node, so renaming the node renames the file.</>
-            : <>Off, so the code lives inside the graph JSON. Turning it on makes it a real .py/.js file you can open in VS Code, with a readable diff instead of an escaped JSON string.</>}
-        </p>
       </div>
 
       <CodeRequirements

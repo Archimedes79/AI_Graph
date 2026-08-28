@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2,
+  ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2,
 } from 'lucide-react';
 import ToolbarButton, { ToolbarSeparator } from './ToolbarButton';
 import { useGraphStore } from '../store/graphStore';
@@ -17,6 +17,8 @@ interface ToolbarProps {
   onNewGraph: () => void;
   onSave: () => void;
   onSaveAs: () => void;
+  /** Re-read the node files of the open graph. */
+  onReloadNodeFiles: () => void;
   onLoad: () => void;
   onInjectJson: () => void;
   onOpenSettings: () => void;
@@ -27,7 +29,7 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({
-  onNewGraph, onSave, onSaveAs, onLoad, onInjectJson, onOpenSettings, confirmDiscard,
+  onNewGraph, onSave, onSaveAs, onReloadNodeFiles, onLoad, onInjectJson, onOpenSettings, confirmDiscard,
   currentFilePath, saveStatus,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
@@ -42,6 +44,7 @@ export default function Toolbar({
   const runGraph = useGraphStore((s) => s.runGraph);
   const stopRun = useGraphStore((s) => s.stopRun);
   const runProgress = useGraphStore((s) => s.runProgress);
+  const hasNodeFiles = useGraphStore((s) => s.rfNodes.some((n) => !!n.data.graphNode.config.code_file));
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
   // Subscribe to the stack lengths, not to canUndo/canRedo: selecting a function
@@ -246,6 +249,14 @@ export default function Toolbar({
         <ToolbarButton icon={FolderOpen} label="Open" title="Open a graph file" onClick={onLoad} />
         <ToolbarButton icon={Save} label="Save" title="Save (Ctrl+S)" onClick={onSave} />
         <ToolbarButton icon={SaveAll} title="Save as…" onClick={onSaveAs} />
+        {/* Only meaningful once some node keeps its text in a file. */}
+        {hasNodeFiles && (
+          <ToolbarButton
+            icon={RefreshCw}
+            title="Reload the node files from disk (they changed outside the editor)"
+            onClick={onReloadNodeFiles}
+          />
+        )}
 
         <ToolbarSeparator />
 

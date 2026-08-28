@@ -26,6 +26,11 @@ export const loadGraphFile = (path: string): Promise<{ path: string; graph: Grap
 export const saveGraphFile = (path: string, graph: Graph): Promise<{ path: string; graph: Graph }> =>
   api.post('/graphs/file/save', { path, graph }).then((r) => r.data);
 
+// Re-read the node files of an already-open graph. Only needed for the case the
+// conflict check exists for: edited outside while the editor was open.
+export const reloadNodeFiles = (path: string): Promise<{ path: string; graph: Graph }> =>
+  api.post('/graphs/file/reload-nodes', { path }).then((r) => r.data);
+
 // Execution
 export const executeGraph = (graph: Graph): Promise<ExecutionResult> =>
   api.post('/execute/', graph).then((r) => r.data);

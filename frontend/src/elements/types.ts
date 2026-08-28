@@ -14,6 +14,14 @@ export interface NodeElementDefinition {
   nodeType: NodeType;
   ConfigEditor: React.ComponentType<any>;
   create: (id: string) => GraphNode;
+  /**
+   * What this node type keeps in a file beside the graph, mirroring the
+   * backend's `NodeElement.authored_file()`. Omitted for a type with nothing a
+   * person writes at length (input, output), which is what decides whether
+   * NodeEditor offers the option at all -- so the offer follows the element
+   * rather than a list of node types kept somewhere else.
+   */
+  authoredFile?: (node: GraphNode) => { extension: string; what: string };
 }
 
 /**

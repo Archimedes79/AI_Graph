@@ -4,6 +4,7 @@ import { baseNodeConfig } from '../shared/baseNodeConfig';
 
 export const aiElement: NodeElementDefinition = {
   nodeType: 'ai',
+  authoredFile: () => ({ extension: '.md', what: 'this system prompt' }),
   ConfigEditor: AIEditor,
   create: (id) => ({
     id,

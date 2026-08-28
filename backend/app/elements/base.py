@@ -48,6 +48,35 @@ class DeployNeeds:
         )
 
 
+@dataclass(frozen=True)
+class AuthoredFile:
+    """
+    Which of an element's fields is the text a person authors, and which prompt
+    produced it.
+
+    Every element turns out to have the same shape here -- one authored body and
+    one prompt that generated it -- so externalising a node to a file beside the
+    graph is one mechanism (`services/node_files.py`) parameterised per element,
+    rather than a branch per node type in the router:
+
+        code  -> config.code            from config.code_prompt      .py/.js
+        ai    -> config.system_prompt   from node.description        .md
+        data  -> config.data_format_prompt  from config.data_prompt  .md
+
+    `extension` is what makes the file useful in another editor, so it follows
+    the content: real code gets .py/.js and a language server with it; prose
+    gets .md, because prose in a .py is a syntax error. A field that becomes a
+    schema declaration rather than prose is one character of change here.
+    """
+
+    body_field: str
+    prompt_field: str = ""
+    extension: str = ".md"
+    # Where the prompt lives: config (the default) or the node itself, as the
+    # ai node's description does.
+    prompt_on_node: bool = False
+
+
 class NodeElement(ABC):
     """
     Everything one `NodeType` needs to behave as a graph node:
@@ -79,6 +108,13 @@ class NodeElement(ABC):
         anything at runtime.
         """
         return []
+
+    def authored_file(self, node: GraphNode) -> Optional[AuthoredFile]:
+        """What this node keeps in a file beside the graph, or None.
+
+        Default None: an input or output node has nothing a person writes at
+        length, so there is nothing to externalise."""
+        return None
 
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
         """What this node instance needs from the deployed bundle's optional
@@ -140,6 +176,11 @@ class GuiWidgetElement(ABC):
         """This widget's own requirement dict (`{label, kind}`), or None if it
         never prompts at runtime. Default: never (only a picker widget with no
         preset value does; see input_picker_element.py)."""
+        return None
+
+    def authored_file(self, widget: GuiWidget) -> Optional[AuthoredFile]:
+        """Same contract as `NodeElement.authored_file`, one level down: a gui
+        node's file is a folder with one file per widget that authors something."""
         return None
 
     def deploy_needs(self, widget: GuiWidget) -> DeployNeeds:

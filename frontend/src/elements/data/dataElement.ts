@@ -55,6 +55,7 @@ export function connectedOutputDataNodes(
 
 export const dataElement: NodeElementDefinition = {
   nodeType: 'data',
+  authoredFile: () => ({ extension: '.md', what: 'this format contract' }),
   ConfigEditor: DataEditor,
   create: (id) => ({
     id,

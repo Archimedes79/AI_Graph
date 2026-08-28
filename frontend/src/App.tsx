@@ -13,7 +13,7 @@ import Modal from './components/Modal';
 import FileBrowserDialog from './components/FileBrowserDialog';
 
 import { useGraphStore } from './store/graphStore';
-import { loadGraphFile, saveGraphFile } from './utils/api';
+import { loadGraphFile, reloadNodeFiles, saveGraphFile } from './utils/api';
 import { errorText } from './utils/errorText';
 import type { NodeType, Graph } from './types/graph';
 import type { NodePreset } from './utils/nodeDefaults';
@@ -184,6 +184,27 @@ export default function App() {
     setFilePrompt({ mode: 'save', path: currentFilePath ?? suggestedFileName(), error: '', busy: false });
   };
 
+  /**
+   * Take whatever the node files say now.
+   *
+   * The graph is reopened from disk rather than patched field by field: the
+   * files are authoritative for what they carry, so re-reading is the same
+   * operation as opening, and asking first is the same courtesy.
+   */
+  const handleReloadNodeFiles = async () => {
+    if (!currentFilePath) return;
+    if (!confirmDiscard('Reload the node files?')) return;
+    setSaveStatus('Reloading…');
+    try {
+      const result = await reloadNodeFiles(currentFilePath);
+      loadGraph(result.graph);
+      setCurrentFilePath(result.path);
+      setSaveStatus('✅ Node files reloaded');
+    } catch (error) {
+      setSaveStatus(`❌ ${errorText(error, 'Reload failed')}`);
+    }
+  };
+
   const handleSave = async () => {
     if (!currentFilePath) {
       handleOpenSaveAs();
@@ -298,6 +319,7 @@ export default function App() {
           onNewGraph={handleNewGraph}
           onSave={handleSave}
           onSaveAs={handleOpenSaveAs}
+          onReloadNodeFiles={handleReloadNodeFiles}
           onLoad={handleOpenLoad}
           onInjectJson={handleOpenJsonImport}
           onOpenSettings={() => setShowSettings(true)}

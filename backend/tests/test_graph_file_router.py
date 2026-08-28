@@ -169,3 +169,62 @@ def test_a_node_without_a_file_keeps_its_code_in_the_graph(tmp_path):
     stored = json.loads(target.read_text(encoding="utf-8"))
     assert "return {'n': 1}" in stored["nodes"][0]["config"]["code"]
     assert not (tmp_path / "projekt.nodes").exists()
+
+
+# --- two editors, one file --------------------------------------------------
+
+def _saved_project(tmp_path, label="Analyse"):
+    from app.services import node_files
+    node_files.forget_all()
+    target = tmp_path / "projekt.json"
+    client.post("/api/graphs/file/save", json={"path": str(target), "graph": _graph_with_code_file(label)})
+    client.post("/api/graphs/file/load", json={"path": str(target)})
+    return target, tmp_path / "projekt.nodes" / f"{label}.py"
+
+
+def test_saving_over_an_outside_edit_is_refused(tmp_path):
+    """Whoever saved last would otherwise win silently -- the one outcome a sync
+    mechanism must never produce."""
+    import os
+    import time
+
+    target, node_file = _saved_project(tmp_path)
+    time.sleep(0.01)
+    node_file.write_text(node_file.read_text(encoding="utf-8") + "\n# von aussen\n", encoding="utf-8")
+    os.utime(node_file, (time.time() + 2, time.time() + 2))
+
+    response = client.post("/api/graphs/file/save",
+                           json={"path": str(target), "graph": _graph_with_code_file()})
+
+    assert response.status_code == 409
+    assert "changed outside the editor" in response.json()["detail"]
+    assert "# von aussen" in node_file.read_text(encoding="utf-8"), "the outside edit must survive"
+
+
+def test_reloading_takes_the_outside_changes(tmp_path):
+    target, node_file = _saved_project(tmp_path)
+    node_file.write_text(
+        node_file.read_text(encoding="utf-8").replace("return {'n': 1}", "return {'n': 99}"),
+        encoding="utf-8",
+    )
+
+    reloaded = client.post("/api/graphs/file/reload-nodes", json={"path": str(target)}).json()["graph"]
+    assert "return {'n': 99}" in reloaded["nodes"][0]["config"]["code"]
+
+
+def test_after_reloading_saving_works_again(tmp_path):
+    """Taking the changes clears the conflict -- otherwise the editor is stuck."""
+    import os
+    import time
+
+    target, node_file = _saved_project(tmp_path)
+    time.sleep(0.01)
+    node_file.write_text(node_file.read_text(encoding="utf-8") + "\n# von aussen\n", encoding="utf-8")
+    os.utime(node_file, (time.time() + 2, time.time() + 2))
+
+    assert client.post("/api/graphs/file/save",
+                       json={"path": str(target), "graph": _graph_with_code_file()}).status_code == 409
+
+    client.post("/api/graphs/file/reload-nodes", json={"path": str(target)})
+    assert client.post("/api/graphs/file/save",
+                       json={"path": str(target), "graph": _graph_with_code_file()}).status_code == 200

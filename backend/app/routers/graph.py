@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
+from app.elements.registry import NODE_ELEMENTS
 from app.models.graph import Graph
 from app.services import file_service, node_files
 
@@ -108,26 +109,44 @@ class GraphFileSaveRequest(BaseModel):
     graph: Graph
 
 
+class FileChangedError(RuntimeError):
+    """A node file was edited outside this app since it was last read."""
+
+    def __init__(self, file_name: str):
+        super().__init__(file_name)
+        self.file_name = file_name
+
+
+def _authored(node):
+    """This node's file spec, or None. The element decides -- nothing here
+    branches on node_type, so a new type gets files by declaring one."""
+    element = NODE_ELEMENTS.get(node.node_type)
+    return element.authored_file(node) if element is not None else None
+
+
 def _read_node_files(graph: Graph, graph_path: str) -> None:
     """
-    Fill each node's `code` from its file. The file is authoritative for what a
-    person authors, so this runs on load and the editor never sees a stale copy.
+    Fill each node's authored field from its file. The file is authoritative for
+    what a person writes, so this runs on load and the editor never sees a stale
+    copy.
 
     A missing file is left alone rather than blanking the node: a graph whose
-    sibling folder was not copied should still open, with whatever code the JSON
+    sibling folder was not copied should still open, with whatever the JSON
     still carries, instead of silently losing it.
     """
     directory = node_files.node_dir(graph_path)
     for node in graph.nodes:
         name = (getattr(node.config, "code_file", "") or "").strip()
-        if not name:
+        spec = _authored(node)
+        if not name or spec is None:
             continue
         path = directory / name
         if not path.is_file():
             logger.warning("Node %s points at %s, which is not there", node.id, path)
             continue
         header, body = node_files.parse(path.read_text(encoding="utf-8"), name)
-        node_files.apply_to_node(node, header, body)
+        node_files.apply_to_node(node, spec, header, body)
+        node_files.remember(path)
 
 
 def _write_node_files(graph: Graph, graph_path: str) -> None:
@@ -141,33 +160,47 @@ def _write_node_files(graph: Graph, graph_path: str) -> None:
 
     for node in graph.nodes:
         current = (getattr(node.config, "code_file", "") or "").strip()
-        if not current:
+        spec = _authored(node)
+        if not current or spec is None:
             continue
-        wanted = node_files.default_file_name(node.label, node.config.language, taken)
+        wanted = node_files.default_file_name(node.label, spec.extension, taken)
         taken.add(wanted)
 
         directory.mkdir(parents=True, exist_ok=True)
         old_path = directory / current
         new_path = directory / wanted
+
+        # Never overwrite an edit made outside this app. Whoever saved last
+        # would otherwise win silently, which is the one outcome a sync
+        # mechanism must not produce.
+        for candidate in {old_path, new_path}:
+            if node_files.changed_since_seen(candidate):
+                raise FileChangedError(candidate.name)
+
         if current != wanted and old_path.is_file() and not new_path.exists():
             old_path.rename(new_path)
         node.config.code_file = wanted
-        new_path.write_text(node_files.render(node, wanted), encoding="utf-8")
+        new_path.write_text(node_files.render(node, spec, wanted), encoding="utf-8")
+        node_files.remember(new_path)
 
 
-def _without_externalised_code(graph: Graph) -> dict:
+def _without_externalised_body(graph: Graph) -> dict:
     """
-    The JSON to write: a node whose code lives in a file does not repeat it here.
+    The JSON to write: a node whose text lives in a file does not repeat it here.
 
     Two copies of the same text is how they start disagreeing, and the diff
-    noise -- an escaped one-line JSON string -- is exactly what moving code into
-    files was for.
+    noise -- an escaped one-line JSON string -- is exactly what moving authored
+    text into files was for.
     """
     data = graph.model_dump()
-    for node in data.get("nodes", []):
-        config = node.get("config") or {}
-        if (config.get("code_file") or "").strip():
-            config["code"] = ""
+    by_id = {n.id: n for n in graph.nodes}
+    for raw in data.get("nodes", []):
+        config = raw.get("config") or {}
+        if not (config.get("code_file") or "").strip():
+            continue
+        spec = _authored(by_id[raw["id"]])
+        if spec is not None:
+            config[spec.body_field] = ""
     return data
 
 
@@ -195,7 +228,31 @@ async def save_graph_file(payload: GraphFileSaveRequest):
     payload.graph.metadata.updated_at = _now()
     try:
         _write_node_files(payload.graph, resolved)
-        file_service.write_file(resolved, json.dumps(_without_externalised_code(payload.graph), indent=2, default=str))
+    except FileChangedError as exc:
+        raise HTTPException(409, (
+            f"{exc.file_name} was changed outside the editor since it was opened. "
+            "Reload the node files to take those changes, or save to a different path."
+        )) from exc
+    try:
+        file_service.write_file(resolved, json.dumps(_without_externalised_body(payload.graph), indent=2, default=str))
     except OSError as exc:
         raise HTTPException(400, f"Could not write graph file: {exc}") from exc
     return {"path": resolved, "graph": payload.graph.model_dump()}
+
+
+@router.post("/file/reload-nodes")
+async def reload_node_files(payload: GraphFileLoadRequest):
+    """
+    Re-read the node files for an already-open graph.
+
+    The editor reads them when a graph is opened, so this is only for the case
+    the conflict check exists for: edited outside while the editor was open.
+    """
+    resolved = file_service.resolve_path(payload.path)
+    try:
+        raw = file_service.read_file(resolved, mode="text")
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    graph = Graph.model_validate_json(raw)
+    _read_node_files(graph, resolved)
+    return {"path": resolved, "graph": graph.model_dump()}

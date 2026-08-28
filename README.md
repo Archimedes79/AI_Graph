@@ -221,12 +221,24 @@ def run(inputs):
 
 The AI can generate this function for you: just describe what the node should do.
 
-**Keep the code in a real file.** Tick *Keep this code in a file beside the graph* on a
-code node and its body moves to `<graph>.nodes/<Node label>.py` — a normal Python (or
-JavaScript) file you can open in VS Code with a language server, and whose `git diff`
-reads like code instead of an escaped JSON string. A header comment carries the node's
-prompt and context file, so the file makes sense on its own. Edit it anywhere; the graph
-reads it back when it opens, and renaming the node renames the file.
+**A project can be a graph plus one file per node.** Tick *Keep this in a file beside
+the graph* on a code, AI or Data node and its authored text moves to
+`<graph>.nodes/<Node label>.<ext>`:
+
+| Node | File | Contents |
+|---|---|---|
+| Code | `.py` / `.js` | the code, with the prompt in a header comment |
+| AI | `.md` | the system prompt, with its description in front matter |
+| Data | `.md` | the format contract neighbours are generated against |
+
+These are normal files: a language server helps with the Python, and `git diff` reads
+like text instead of an escaped JSON string. The header makes each file stand on its
+own — opening `Analyse.py` tells you which node it is and what it is for. Edit them in
+any editor; the graph reads them back when it opens, and renaming a node renames its
+file.
+
+If a file changed outside while the editor was open, saving refuses rather than
+overwriting it, and the toolbar's ↻ takes the outside changes instead.
 
 **Packages.** Only the standard library is available until a node says otherwise. List what
 it needs in the node editor (`pandas>=2.0`, one per line) and press **Install**. They go

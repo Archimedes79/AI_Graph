@@ -314,18 +314,31 @@ this behavior that could drift from the editor's.
 
 ## A project is a graph plus one file per authored node
 
-`backend/app/services/node_files.py` owns the format. A code node with
-`config.code_file` set keeps its code in `<graph>.nodes/<Node label>.py` (or `.js`)
-beside the graph; the JSON stores the reference and an empty `code`, because two
-copies of the same text is how they start disagreeing.
+`backend/app/services/node_files.py` owns the format; **one mechanism, not one per
+node type**. Every element turns out to have the same shape -- one authored body and
+one prompt that produced it -- so each declares it once and nothing in the service or
+the router branches on `node_type`:
+
+| Element | `authored_file()` returns | File |
+|---|---|---|
+| `code` | `code` from `code_prompt` | `.py` / `.js`, header in `#` / `//` comments |
+| `ai` | `system_prompt` from `description` | `.md`, header as YAML front matter |
+| `data` | `data_format_prompt` from `data_prompt` | `.md` |
+| `input`, `output` | `None` — nothing authored | none |
+
+A new node type gets files by returning an `AuthoredFile` from its element. The
+extension follows the content: real code gets `.py` and a language server with it,
+prose gets `.md`, because prose in a `.py` is a syntax error — a field that becomes a
+schema declaration is one word of change there. The frontend mirrors this with
+`NodeElementDefinition.authoredFile`, which is what decides whether NodeEditor offers
+the option at all.
 
 **The file is authoritative for what a person authors.** `routers/graph.py` reads it
-into `config.code` on `/file/load` and writes it on `/file/save`, so the engine is
-untouched -- `config.code` is still what executes and nothing downstream knows files
-exist. That one router is the whole sync boundary.
+into the element's body field on `/file/load` and writes it on `/file/save`, so the
+engine is untouched — the body field is still what executes and nothing downstream
+knows files exist. That one router is the whole sync boundary.
 
-The header comment is plain `key: value` lines (no YAML parser on either side), and
-which keys flow back is deliberately narrow:
+Which header keys flow back is deliberately narrow:
 
 | Key | |
 |---|---|
@@ -335,11 +348,17 @@ which keys flow back is deliberately narrow:
 
 The file name follows the node's **label**, so the file tree reads like the graph;
 saving renames the file when the label changes and resolves collisions with a numeric
-suffix. A file with no recognisable header is treated as all body, so one can be
-written by hand. A `code_file` pointing at something missing logs and leaves the node's
-existing code alone, so a graph copied without its folder still opens.
+suffix. Fences are matched by shape rather than an exact dash count, and a file with no
+recognisable header is treated as all body, so one can be written by hand.
 
-Deploy is unaffected: the editor holds `config.code` resolved, and a bundle is built
+**Two editors, one file.** Every read and write records the file's mtime and size;
+a write that would land on a file changed since then raises `FileChangedError` and the
+save returns 409 rather than overwriting. `POST /graphs/file/reload-nodes` takes the
+outside changes and clears the conflict — otherwise the editor would be stuck. The
+tracking is in-memory and per-process on purpose: this is a local tool, and a
+stat-based guard that forgets on restart is honest about what it can promise.
+
+Deploy is unaffected: the editor holds the body field resolved, and a bundle is built
 from the graph the browser sends.
 
 ## What the AI knows when it generates

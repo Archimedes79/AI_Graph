@@ -10,6 +10,7 @@ import Modal from './Modal';
 import { useGenerate } from '../elements/shared/useGenerate';
 import { SELECTOR_CODE_CONTEXT, connectedFormatContext, lastRunContext } from '../elements/shared/generationContext';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
+import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
 import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
 import { connectedOutputDataNodes } from '../elements/data/dataElement';
 import { ACCENT, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT } from '../ui/theme';
@@ -292,6 +293,8 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 contextFile={node.config.config_context_file ?? ''}
                 onContextFileChange={(path: string) => setConfig('config_context_file', path)}
               />
+
+              <AuthoredFileOption node={node} setConfig={setConfig} />
 
               {genMessage && (
                 <div className="text-sm px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: ACCENT_TEXT }}>

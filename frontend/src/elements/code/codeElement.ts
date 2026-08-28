@@ -8,6 +8,10 @@ import { baseNodeConfig } from '../shared/baseNodeConfig';
  */
 export const codeElement: NodeElementDefinition = {
   nodeType: 'code',
+  authoredFile: (node) => ({
+    extension: (node.config.language ?? 'python').toLowerCase().startsWith('java') ? '.js' : '.py',
+    what: 'this code',
+  }),
   ConfigEditor: CodeEditor,
   create: (id) => ({
     id,
