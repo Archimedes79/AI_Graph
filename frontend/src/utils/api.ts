@@ -39,6 +39,58 @@ export const getRuntimeRequirements = (graph: Graph): Promise<RuntimeRequirement
   api.post('/execute/requirements', graph).then((r) => r.data);
 
 // AI generation
+/**
+ * What running the generated code against real data revealed. `skipped` means
+ * no sample was sent, so generation was a single pass -- see
+ * backend/app/services/code_refine.py.
+ */
+export interface CodeProbeReport {
+  status: 'skipped' | 'ok' | 'repaired' | 'failed';
+  attempts: number;
+  error: string;
+  missing_outputs: string[];
+  output_preview: string;
+}
+
+export interface GeneratedCode {
+  code: string;
+  language: string;
+  explanation?: string;
+  probe: CodeProbeReport;
+}
+
+/** What one generation returns, whichever element asked -- see GenerateResponse. */
+export interface GenerationResult {
+  /** The generated text. Which field it belongs in is the caller's own business. */
+  result: string;
+  explanation?: string;
+  probe: CodeProbeReport;
+}
+
+/**
+ * Generate one element's authored text.
+ *
+ * `element` is a NodeType or GuiWidgetKind: the server looks up that element's
+ * `Generation` descriptor and takes the generator kind, the contract sentence
+ * and any fixed port names from it, so none of those travel from here. `kind`
+ * is for the one generation that belongs to no element -- the output-format
+ * description, which asks the same question of an ai and a code node.
+ */
+export const generate = (body: {
+  element?: string;
+  kind?: string;
+  description: string;
+  context?: string;
+  context_file?: string;
+  language?: string;
+  inputs?: string[];
+  outputs?: string[];
+  /** Real port values from the last run; enables the verify-and-repair pass. */
+  sample_inputs?: Record<string, unknown>;
+  ai_model?: string;
+  ai_provider?: string;
+}): Promise<GenerationResult> => api.post('/ai/generate', body).then((r) => r.data);
+
 export const generateCode = (body: {
   description: string;
   language?: string;
@@ -48,7 +100,9 @@ export const generateCode = (body: {
   outputs?: string[];
   ai_model?: string;
   ai_provider?: string;
-}) => api.post('/ai/generate-code', body).then((r) => r.data);
+  /** Real port values from the last run; enables the verify-and-repair pass. */
+  sample_inputs?: Record<string, unknown>;
+}): Promise<GeneratedCode> => api.post('/ai/generate-code', body).then((r) => r.data);
 
 export const generatePrompt = (body: {
   description: string;
@@ -124,8 +178,8 @@ export const browseDirectory = (
 ): Promise<{ path: string; parent: string | null; entries: { name: string; path: string; is_dir: boolean }[]; roots: string[] }> =>
   api.post('/files/browse', { path, extensions: extensions || '' }).then((r) => r.data);
 
-// Context-file attachments (stored project-side, referenced by config_context_file /
-// output_context_file). Keeps the config a plain server path, same as any other file field.
+// Example-input attachments (stored project-side, referenced by an element's
+// `example_file`). Keeps the config a plain server path, like any other file field.
 export const uploadAttachment = (file: File): Promise<{ path: string; name: string }> => {
   const form = new FormData();
   form.append('file', file);

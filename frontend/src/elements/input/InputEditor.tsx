@@ -8,7 +8,7 @@ interface InputEditorProps {
   node: GraphNode;
   setConfig: (key: string, value: unknown) => void;
   generating: boolean;
-  handleGenerateSelectorCode: () => void;
+  onGenerate: () => void;
   applyMode?: (mode: 'text' | 'file' | 'directory') => void;
   contextFile: string;
   onContextFileChange: (path: string) => void;
@@ -26,7 +26,7 @@ export default function InputEditor({
   node,
   setConfig,
   generating,
-  handleGenerateSelectorCode,
+  onGenerate,
   applyMode,
   contextFile,
   onContextFileChange,
@@ -174,7 +174,7 @@ export default function InputEditor({
                   Code window (editable) — run(inputs) receives {'{'}"files"{'}'} and must return {'{'}"files"{'}'}
                 </label>
                 <button
-                  onClick={handleGenerateSelectorCode}
+                  onClick={onGenerate}
                   disabled={generating}
                   className="text-xs px-2 py-1 rounded"
                   style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}

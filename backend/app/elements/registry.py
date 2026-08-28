@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional
 
 from app.elements.ai.ai_element import AIElement
-from app.elements.base import GuiWidgetElement, NodeElement
+from app.elements.base import Generation, GuiWidgetElement, NodeElement
 from app.elements.code.code_element import CodeElement
 from app.elements.data.data_element import DataElement
 from app.elements.gui.gui_element import GuiElement
@@ -36,4 +36,27 @@ GUI_WIDGET_ELEMENTS: Dict[GuiWidgetKind, GuiWidgetElement] = {
     GuiWidgetKind.PLOT_WINDOW:      PlotWindowElement(),
     GuiWidgetKind.IMAGE_VIEW:       ImageViewElement(),
 }
+
+
+def generation_for(element: str) -> Optional[Generation]:
+    """The `Generation` descriptor named by a NodeType or GuiWidgetKind value.
+
+    Both levels share one namespace here -- they never collide, and a caller
+    asking "how is this element generated" does not care which level it lives
+    at. Same reason `node_files.Authored` covers both.
+
+    This is what lets the generation endpoint take an element name and put the
+    element's own contract sentence into the prompt itself: the sentence
+    describes what `execute` will do with the snippet, so it stays in the
+    element file and is never copied into the editor.
+    """
+    for enum_cls, table in ((NodeType, NODE_ELEMENTS), (GuiWidgetKind, GUI_WIDGET_ELEMENTS)):
+        try:
+            key = enum_cls(element)
+        except ValueError:
+            continue
+        found = table.get(key)
+        if found is not None:
+            return found.generation()
+    return None
 

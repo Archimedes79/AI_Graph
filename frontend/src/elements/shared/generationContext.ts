@@ -1,35 +1,9 @@
 import type { ExecutionResult, GraphNode } from '../../types/graph';
 import { describeDataFormat } from '../data/dataElement';
-
-/**
- * Context strings handed to the AI that more than one editor needs.
- *
- * The directory file-selector contract is implemented once in the backend
- * (`InputElement` and `InputPickerElement` both run `run(inputs) -> {files}`),
- * so the sentence describing it to the model belongs in one place too -- it was
- * byte-identical in NodeEditor.tsx and GuiWidgetEditor.tsx, which is exactly
- * how two copies of a prompt start drifting.
- */
-export const SELECTOR_CODE_CONTEXT =
-  '`inputs["files"]` is the full list of rooted file paths found in the directory. ' +
-  'Return only the selected paths as {"files": [...]}.';
-
-/**
- * The plot_window widget's data-transform contract (same as a Code node).
- *
- * The chart itself is drawn by the app (`PlotWidget.tsx`, a dependency-free
- * SVG renderer), so the transform must NOT plot anything — it only reshapes
- * the incoming value into the points PlotWidget understands. Spelling that
- * out matters: without it, models reliably reach for matplotlib, which isn't
- * installed in the sandbox and whose figures aren't JSON-serializable anyway.
- */
-export const PLOT_TRANSFORM_CONTEXT =
-  'Must expose run(inputs: dict) -> dict, receiving {"value": <raw incoming data>} ' +
-  'and returning {"value": <plot-ready data>}. Plot-ready data is a JSON-serializable ' +
-  'list of points: either a list of numbers, or a list of {"label": str, "value": number} ' +
-  'objects. The app renders these itself as an SVG bar/line chart — do NOT draw anything ' +
-  'and do NOT import plotting or third-party libraries (no matplotlib, plotly, pandas, ' +
-  'numpy): the code runs in a sandbox with only the standard library available.';
+// Read inside functions only. The registry imports every element and an element
+// imports this module, so touching NODE_ELEMENTS at module scope would read a
+// binding that is still being initialised; at call time it is complete.
+import { NODE_ELEMENTS } from '../registry';
 
 /**
  * What the ✨ Generate buttons tell the AI about the world around a node.
@@ -49,31 +23,29 @@ export const PLOT_TRANSFORM_CONTEXT =
 /** How many characters of a sampled value to include before truncating. */
 const SAMPLE_BUDGET = 1200;
 
-/** What a node emits, in one line, for whichever node type it is. */
+/**
+ * What a node emits, in one line.
+ *
+ * This was a `switch (node.node_type)` -- the last one in shared frontend code.
+ * Each element answers for itself now (`NodeElementDefinition.describeOutput`),
+ * so a new node type describes its output in its own file and nothing here
+ * changes.
+ */
 export function describeNodeOutput(node: GraphNode): string {
-  switch (node.node_type) {
-    case 'data':
-      return describeDataFormat(node);
-    case 'input': {
-      const mode = node.config.input_mode ?? 'text';
-      if (mode === 'directory') return 'a list of file paths';
-      if (mode === 'file') return 'a file path';
-      return 'text';
-    }
-    case 'ai':
-    case 'code': {
-      const format = node.config.output_format;
-      if (!format || format === 'text') return 'text';
-      const detail = format === 'custom' && node.config.output_format_prompt
-        ? `: ${node.config.output_format_prompt}`
-        : '';
-      return `${format}${detail}`;
-    }
-    case 'gui':
-      return 'values from its widgets';
-    default:
-      return '';
-  }
+  return NODE_ELEMENTS[node.node_type]?.describeOutput?.(node) ?? '';
+}
+
+/**
+ * The declared output format as a sentence for the model, or nothing when the
+ * node emits plain text. Both ai and code generation want it, which is why it
+ * is here rather than in either element.
+ */
+export function outputFormatContext(config: GraphNode['config']): string {
+  if (!config.output_format || config.output_format === 'text') return '';
+  const custom = config.output_format === 'custom' && config.output_format_prompt
+    ? ` (${config.output_format_prompt})`
+    : '';
+  return `The function must return output in ${config.output_format} format${custom}.`;
 }
 
 /**
@@ -133,6 +105,24 @@ function preview(value: unknown): string {
  * eight of its rows. Absent before the first run, which is exactly when there is
  * nothing to say.
  */
+/**
+ * The raw values this node's input ports received on the last run.
+ *
+ * `lastRunContext` above renders the same values as prose for the model to read.
+ * This is the machine-readable half: the backend runs the generated function
+ * against it and repairs the code if it fails (see backend/app/services/
+ * code_refine.py). Undefined when the node has never run, which turns the
+ * verification pass off rather than inventing a sample.
+ */
+export function lastRunInputs(
+  nodeId: string,
+  result: ExecutionResult | null,
+): Record<string, unknown> | undefined {
+  const inputs = result?.node_results?.find((r) => r.node_id === nodeId)?.inputs;
+  if (!inputs || Object.keys(inputs).length === 0) return undefined;
+  return inputs;
+}
+
 export function lastRunContext(nodeId: string, result: ExecutionResult | null): string {
   const nodeResult = result?.node_results?.find((r) => r.node_id === nodeId);
   const inputs = nodeResult?.inputs;

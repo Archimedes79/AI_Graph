@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import type { GraphNode } from '../types/graph';
 import { useGraphStore } from '../store/graphStore';
-import { generateCode, generateDataFormat, generatePrompt } from '../utils/api';
-import { genAI } from '../store/settingsStore';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { inputPortsForMode } from '../elements/input/inputElement';
 import { NODE_ELEMENTS } from '../elements/registry';
 import Modal from './Modal';
 import { useGenerate } from '../elements/shared/useGenerate';
-import { SELECTOR_CODE_CONTEXT, connectedFormatContext, lastRunContext } from '../elements/shared/generationContext';
+import { buildGeneration, nodeFields } from '../elements/shared/generation';
+import { connectedFormatContext, lastRunContext, lastRunInputs } from '../elements/shared/generationContext';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
 import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
@@ -18,14 +17,6 @@ import { ACCENT, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON
 interface NodeEditorProps {
   nodeId: string;
   onClose: () => void;
-}
-
-function outputFormatContext(config: GraphNode['config']): string {
-  if (!config.output_format || config.output_format === 'text') return '';
-  const customDescription = config.output_format === 'custom' && config.output_format_prompt
-    ? ` (${config.output_format_prompt})`
-    : '';
-  return `The function must return output in ${config.output_format} format${customDescription}.`;
 }
 
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
@@ -42,7 +33,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const generate = useGenerate();
   const generating = generate.busy;
   const genMessage = generate.message();
-  const [activeTab, setActiveTab] = useState<'config' | 'output' | 'preview'>('config');
+  const [activeTab, setActiveTab] = useState<'config' | 'preview'>('config');
 
   useEffect(() => {
     if (rfNode) {
@@ -52,15 +43,13 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
   if (!node) return null;
 
-  // ai/code are the only node types that actually consume `output_format` at
-  // runtime/codegen time; gui/widget nodes' output is fully determined by
-  // each widget's kind (see WidgetOutputSummary) -- everything else has no
-  // output-format concept, so they get no Output tab at all.
-  const showManualOutputTab = node.node_type === 'ai' || node.node_type === 'code';
-  const showWidgetOutputTab = node.node_type === 'gui';
-  const tabs = showManualOutputTab || showWidgetOutputTab
-    ? (['config', 'output', 'preview'] as const)
-    : (['config', 'preview'] as const);
+  // Every node type has the same two tabs. What a node emits used to be a
+  // third one that two of six types had -- an editable contract for ai/code, a
+  // read-only summary for gui, nothing for the rest. It is a declaration like
+  // any other now (`outputContract`), so it sits in Config under the body and
+  // the tab bar stopped depending on the node type.
+  const element = NODE_ELEMENTS[node.node_type];
+  const tabs = ['config', 'preview'] as const;
   const effectiveTab = (tabs as readonly string[]).includes(activeTab) ? activeTab : 'config';
 
   const save = () => {
@@ -99,52 +88,36 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     lastRunContext(node.id, executionResult),
   ].filter(Boolean).join('\n\n');
 
-  const handleGenerateCode = () => generate.run({
-    guard: () => (node.config.code_prompt ?? '').trim() ? undefined : 'Please add a code generation prompt first.',
-    pending: 'Generating code…',
-    success: '✅ Code generated!',
-    run: () => {
-      const batchContext = node.config.batch_mode === 'whole_list'
-        ? 'Batch mode is `whole_list`: multi input ports arrive in `inputs` as full lists. The generated function must handle or reduce those lists and must not reject an input merely because it is not a string.'
-        : 'Batch mode is `per_item`: each multi input port is expanded before `run(inputs)` is called, so one scalar item from each multi port is passed per invocation.';
-      return generateCode({
-        description: (node.config.code_prompt ?? '').trim(),
-        language: node.config.language,
-        context: [batchContext, outputFormatContext(node.config), surroundingContext()].filter(Boolean).join('\n'),
-        context_file: node.config.config_context_file,
-        inputs: node.inputs.map((p) => p.id),
-        outputs: node.outputs.map((p) => p.id),
-        ...genAI(),
-      });
-    },
-    apply: (result) => setConfig('code', result.code),
-  });
+  const setDescription = (value: string) =>
+    setNode((prev) => (prev ? { ...prev, description: value } : prev));
 
-  const handleGeneratePrompt = () => generate.run({
-    guard: () => node.description ? undefined : 'Please add a description first.',
-    pending: 'Generating system prompt…',
-    success: '✅ Prompt generated!',
-    run: () => generatePrompt({
-      description: node.description,
-      context: [outputFormatContext(node.config), surroundingContext()].filter(Boolean).join('\n'),
-      context_file: node.config.config_context_file,
-      ...genAI(),
-    }),
-    apply: (result) => setConfig('system_prompt', result.system_prompt),
-  });
-
-  const handleGenerateDataFormat = () => generate.run({
-    guard: () => node.config.data_prompt?.trim() ? undefined : 'Please describe the data format first.',
-    pending: 'Generating data format…',
-    success: '✅ Data format generated!',
-    run: () => generateDataFormat({
-      description: (node.config.data_prompt ?? '').trim(),
-      context: `Standard format family: ${node.config.data_format}.\n${surroundingContext()}`,
-      context_file: node.config.config_context_file,
-      ...genAI(),
-    }),
-    apply: (result) => setConfig('data_format_prompt', result.output_format_prompt),
-  });
+  /**
+   * The one ✨ Generate handler.
+   *
+   * There were four here -- code, system prompt, data format, file selector --
+   * and every ConfigEditor was handed all of them so it could use the one it
+   * recognised. They differed only in the things `ElementGeneration` now names,
+   * so the element declares them and this shell no longer knows which node type
+   * it is looking at. Adding a generating node type adds nothing to this file.
+   */
+  const generation = element.generation;
+  const canGenerate = !!generation && (generation.available?.(node) ?? true);
+  const handleGenerate = () => {
+    if (!generation) return;
+    generate.run(buildGeneration({
+      element: node.node_type,
+      generation,
+      subject: node,
+      fields: nodeFields(node, setConfig, setDescription),
+      ports: { inputs: node.inputs.map((p) => p.id), outputs: node.outputs.map((p) => p.id) },
+      language: node.config.language,
+      exampleFile: node.config.example_file,
+      graphContext: surroundingContext(),
+      // The same values `lastRunContext` renders as prose, raw: the backend runs
+      // the generated function against them and repairs it once if it fails.
+      sampleInputs: lastRunInputs(node.id, executionResult),
+    }));
+  };
 
   const applyDataFormat = (format: GraphNode['config']['data_format']) => {
     const structured = format === 'structure';
@@ -165,7 +138,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     } : previous);
   };
 
-  const ConfigEditor = NODE_ELEMENTS[node.node_type].ConfigEditor;
+  const ConfigEditor = element.ConfigEditor;
 
   const applyWidgets = (nextWidgets: GraphNode['config']['gui_widgets']) => {
     setNode((prev) => {
@@ -186,22 +159,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       };
     });
   };
-
-  const handleGenerateSelectorCode = () => generate.run({
-    guard: () => (node.config.selector_prompt ?? '').trim() ? undefined : 'Please describe which files to select first.',
-    pending: 'Generating file selector…',
-    success: '✅ Selector generated!',
-    run: () => generateCode({
-      description: (node.config.selector_prompt ?? '').trim(),
-      language: node.config.language || 'python',
-      context: SELECTOR_CODE_CONTEXT,
-      context_file: node.config.config_context_file,
-      inputs: ['files'],
-      outputs: ['files'],
-      ...genAI(),
-    }),
-    apply: (result) => setConfig('selector_code', result.code),
-  });
 
   const tabBar = (
     <div className="flex border-b" style={{ borderColor: LINE }}>
@@ -282,20 +239,27 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 setConfig={setConfig}
                 setDescription={(value: string) => setNode((prev) => (prev ? { ...prev, description: value } : prev))}
                 generating={generating}
-                handleGenerateSelectorCode={handleGenerateSelectorCode}
+                onGenerate={handleGenerate}
+                canGenerate={canGenerate}
                 applyMode={applyInputMode}
-                handleGeneratePrompt={handleGeneratePrompt}
-                handleGenerateCode={handleGenerateCode}
-                handleGenerateDataFormat={handleGenerateDataFormat}
                 applyDataFormat={applyDataFormat}
                 setDataDebugDirectory={setDataDebugDirectory}
                 applyWidgets={applyWidgets}
-                contextFile={node.config.config_context_file ?? ''}
-                onContextFileChange={(path: string) => setConfig('config_context_file', path)}
+                contextFile={node.config.example_file ?? ''}
+                onContextFileChange={(path: string) => setConfig('example_file', path)}
               />
 
+              {element.outputContract === 'format' && (
+                <OutputFormatEditor
+                  node={node}
+                  setConfig={setConfig}
+                  connectedDataNodes={connectedOutputDataNodes(node.id, graphNodes, graphEdges)}
+                />
+              )}
+              {element.outputContract === 'widgets' && <WidgetOutputSummary node={node} />}
+
               {(() => {
-                const fileSpec = NODE_ELEMENTS[node.node_type]?.authoredFile?.(node);
+                const fileSpec = element.authoredFile?.(node);
                 return fileSpec ? (
                   <AuthoredFileOption
                     label={node.label}
@@ -314,12 +278,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 </div>
               )}
             </div>
-          )}
-
-          {effectiveTab === 'output' && (
-            showWidgetOutputTab
-              ? <WidgetOutputSummary node={node} />
-              : <OutputFormatEditor node={node} setConfig={setConfig} connectedDataNodes={connectedOutputDataNodes(node.id, graphNodes, graphEdges)} />
           )}
 
           {effectiveTab === 'preview' && (

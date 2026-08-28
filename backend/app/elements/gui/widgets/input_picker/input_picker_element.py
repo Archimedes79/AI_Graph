@@ -78,8 +78,8 @@ class InputPickerElement(GuiWidgetElement):
         return AuthoredFile(body_field="selector_code", prompt_field="selector_prompt",
                             extension=code_extension(widget))
 
-    def generation(self, widget: GuiWidget) -> Optional[Generation]:
-        """The shared selector contract -- the same one `InputElement` returns.
-
-        Only in directory mode: a single-file picker selects nothing."""
-        return SELECTOR_GENERATION if (widget.mode or "file") == "directory" else None
+    def generation(self) -> Generation:
+        """The shared selector contract -- literally the same object
+        `InputElement.generation` returns, because it is one behaviour at two
+        levels of the hierarchy. The editor offers it in directory mode only."""
+        return SELECTOR_GENERATION

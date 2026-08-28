@@ -12,7 +12,12 @@ export interface GenerateOptions<T> {
   /** Write the result into the node/widget config. */
   apply: (result: T) => void;
   pending?: string;
-  success: string;
+  /**
+   * What to say when it worked. A function when the result itself decides --
+   * generated code that was verified against real data has more to report than
+   * "done".
+   */
+  success: string | ((result: T) => string);
   failure?: string;
 }
 
@@ -47,8 +52,9 @@ export function useGenerate() {
     setActiveKey(key);
     setMessage(options.pending ?? 'Generating…', key);
     try {
-      options.apply(await options.run());
-      setMessage(options.success, key);
+      const result = await options.run();
+      options.apply(result);
+      setMessage(typeof options.success === 'function' ? options.success(result) : options.success, key);
     } catch (error) {
       setMessage(`❌ ${errorText(error, options.failure ?? 'Generation failed')}`, key);
     } finally {

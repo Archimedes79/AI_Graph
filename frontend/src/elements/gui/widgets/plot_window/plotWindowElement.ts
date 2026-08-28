@@ -1,6 +1,7 @@
 import type { GuiWidgetElementDefinition } from '../../../types';
 import PlotWindowEditor from './PlotWindowEditor';
 import PlotWindowWidget from '../../../../components/gui/widgets/PlotWindowWidget';
+import { codeExtension } from '../../../shared/authoredFileName';
 
 export const plotWindowElement: GuiWidgetElementDefinition = {
   widgetKind: 'plot_window',
@@ -14,10 +15,13 @@ export const plotWindowElement: GuiWidgetElementDefinition = {
       outputs: [],
     };
   },
-  authoredFile: (widget) => ({
-    extension: (widget.language ?? 'python').toLowerCase().startsWith('java') ? '.js' : '.py',
-    what: 'this transform',
-  }),
+  authoredFile: (widget) => ({ extension: codeExtension(widget), what: 'this transform' }),
+  generation: {
+    promptField: 'code_prompt',
+    targetField: 'code',
+    guard: 'Please describe the chart transform you need first.',
+    success: '✅ Transform generated!',
+  },
   ConfigEditor: PlotWindowEditor,
   RuntimeWidget: PlotWindowWidget,
 };

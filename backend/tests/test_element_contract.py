@@ -27,7 +27,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.elements.registry import GUI_WIDGET_ELEMENTS, NODE_ELEMENTS  # noqa: E402
+from app.elements.registry import (  # noqa: E402
+    GUI_WIDGET_ELEMENTS,
+    NODE_ELEMENTS,
+    generation_for,
+)
 from app.models.graph import (  # noqa: E402
     AIProvider,
     DataType,
@@ -374,6 +378,97 @@ async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, 
     # deployed graph's AI choice reaches widget-level generation too.
     assert calls[0]["model"] == ""
     assert calls[0]["provider"] == AIProvider.DEFAULT
+
+
+@pytest.mark.parametrize("node_type, element", list(NODE_ELEMENTS.items()), ids=[t.value for t in NODE_ELEMENTS])
+def test_node_element_declares_its_generation(node_type: NodeType, element, tmp_path):
+    """An element that authors something declares how it is generated, and vice versa.
+
+    These were five hand-written call sites in the editor, which is why
+    `image_view` had an authored field and no way to generate it. Tying the two
+    declarations together here is what stops the next one being forgotten.
+    """
+    node = _make_node(node_type, tmp_path)
+    spec = element.generation()
+    authored = element.authored_file(node)
+    assert (spec is not None) == (authored is not None), (
+        f"{node_type.value}: generation={spec is not None} authored_file={authored is not None}"
+    )
+    if spec is None:
+        return
+    assert spec.kind in ("code", "prompt", "output_format", "data_format")
+    # Both fields it names must actually exist, or the button writes into nothing.
+    holder = node if spec.prompt_on_node else node.config
+    assert hasattr(holder, spec.prompt_field)
+    assert hasattr(node.config, spec.target_field)
+    # The body it fills is the body the file mechanism reads and writes.
+    assert authored.body_field == spec.target_field
+    assert spec.guard and spec.success, "a button with no guard/success message is half-declared"
+    assert generation_for(node_type.value) is spec or generation_for(node_type.value) == spec
+
+
+@pytest.mark.parametrize("widget_kind, element", list(GUI_WIDGET_ELEMENTS.items()), ids=[k.value for k in GUI_WIDGET_ELEMENTS])
+def test_gui_widget_element_declares_its_generation(widget_kind: GuiWidgetKind, element):
+    """Same contract one level down -- a widget is the same object as a node here."""
+    widget = _make_widget(widget_kind)
+    spec = element.generation()
+    authored = element.authored_file(widget)
+    assert (spec is not None) == (authored is not None)
+    if spec is None:
+        return
+    assert hasattr(widget, spec.prompt_field)
+    assert hasattr(widget, spec.target_field)
+    assert authored.body_field == spec.target_field
+    # A widget's snippet is never wired as the node is, so it names its own ports.
+    assert spec.inputs and spec.outputs
+    assert spec.contract, "a snippet contract the model cannot see is a snippet it will get wrong"
+    assert generation_for(widget_kind.value) == spec
+
+
+def test_the_file_selector_is_declared_once_for_both_levels():
+    """`input` (directory mode) and `input_picker` run the identical selector.
+
+    The sentence describing it to the model existed three times -- twice in the
+    editor, once as the input node's runtime fallback -- and had already drifted.
+    """
+    assert NODE_ELEMENTS[NodeType.INPUT].generation() is GUI_WIDGET_ELEMENTS[GuiWidgetKind.INPUT_PICKER].generation()
+
+
+def test_generation_for_an_unknown_element_is_none():
+    assert generation_for("not-an-element") is None
+    assert generation_for("") is None
+
+
+def test_one_example_file_replaces_three_context_fields():
+    """A graph written before the rename keeps its attachment, wherever it sat.
+
+    `config_context_file`, `output_context_file` and a widget's
+    `example_input_path` were three names for one idea; a node that had a sample
+    attached in the Config tab still generated its output format without one.
+    """
+    graph = Graph.model_validate({
+        "nodes": [
+            {"id": "a", "node_type": "code", "label": "A", "position": {"x": 0, "y": 0},
+             "config": {"config_context_file": "sample.csv"}},
+            {"id": "b", "node_type": "code", "label": "B", "position": {"x": 0, "y": 0},
+             "config": {"output_context_file": "shape.json"}},
+            {"id": "c", "node_type": "gui", "label": "C", "position": {"x": 0, "y": 0},
+             "config": {"gui_widgets": [
+                 {"id": "w", "kind": "plot_window", "plot_prompt": "chart it",
+                  "example_input_path": "bev.csv"}]}},
+        ],
+        "edges": [],
+    })
+    by_id = {n.id: n for n in graph.nodes}
+    assert by_id["a"].config.example_file == "sample.csv"
+    assert by_id["b"].config.example_file == "shape.json"
+    widget = by_id["c"].config.gui_widgets[0]
+    assert widget.example_file == "bev.csv"
+    # plot_prompt was the same field code_prompt is, under a name only one
+    # widget kind could use -- which is why image_view never got a prompt.
+    assert widget.code_prompt == "chart it"
+    assert not hasattr(widget, "plot_prompt")
+    assert not hasattr(by_id["a"].config, "config_context_file")
 
 
 def test_a_legacy_widget_node_loads_as_a_gui_node():

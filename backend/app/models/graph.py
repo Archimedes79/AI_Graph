@@ -732,6 +732,47 @@ class GenerateOutputFormatResponse(BaseModel):
     explanation: str = ""
 
 
+class GenerateRequest(BaseModel):
+    """One generation call, whichever element is asking.
+
+    `element` is a NodeType or GuiWidgetKind value; the server looks up that
+    element's `Generation` descriptor and takes the generator kind, the contract
+    sentence and any fixed port names from it. That is why the editor does not
+    send a contract string: it would be a second copy of a sentence describing
+    backend behaviour, and a prompt that exists twice is a prompt that drifts.
+
+    `kind` is for the one generation that belongs to no element -- the output
+    format description, which asks the same question of an ai and a code node.
+    Exactly one of the two is needed.
+    """
+    element: str = ""
+    kind: str = ""
+    description: str
+    context: str = ""
+    context_file: str = ""            # optional path; content is appended to context server-side
+    language: str = "python"
+    inputs: List[str] = Field(default_factory=list)
+    outputs: List[str] = Field(default_factory=list)
+    # Real values from the last run, for the verify-and-repair pass. Ignored for
+    # a fixed-port snippet, which is not wired to the ports the sample is keyed by.
+    sample_inputs: Optional[Dict[str, Any]] = None
+    ai_provider: AIProvider = AIProvider.DEFAULT
+    ai_model: str = ""
+
+
+class GenerateResponse(BaseModel):
+    """What every generation returns: the text, and why.
+
+    One field rather than `code` / `system_prompt` / `output_format_prompt`,
+    because the caller already knows which of its own fields it asked to fill --
+    the element's `target_field` -- and three response shapes for one operation
+    is what made four endpoints out of one.
+    """
+    result: str
+    explanation: str = ""
+    probe: CodeProbeReport = Field(default_factory=CodeProbeReport)
+
+
 class GenerateGraphRequest(BaseModel):
     """Ask the AI to author a full Graph DSL document, not just one node."""
     description: str

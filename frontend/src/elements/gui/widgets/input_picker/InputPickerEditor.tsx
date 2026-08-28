@@ -76,9 +76,9 @@ export default function InputPickerEditor({ widget, onUpdate, generating, messag
             />
             <div className="mb-2">
               <ContextFileAttachment
-                label="Additional data (optional context file)"
-                path={widget.example_input_path ?? ''}
-                onChange={(path) => onUpdate({ example_input_path: path })}
+                label="Example input (optional file)"
+                path={widget.example_file ?? ''}
+                onChange={(path) => onUpdate({ example_file: path })}
               />
             </div>
             <div className="mb-2">

@@ -59,9 +59,9 @@ export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
     select_all_files: true,
     selector_prompt: '',
     selector_code: '',
-    plot_prompt: '',
+    code_prompt: '',
     code_file: '',
-    example_input_path: '',
+    example_file: '',
   };
 }
 

@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import type { GuiWidget, GuiWidgetKind } from '../types/graph';
 import { createGuiWidget, CREATABLE_GUI_WIDGET_KINDS, GUI_WIDGET_KIND_LABELS, sizeToGrid } from '../utils/guiWidgets';
-import { generateCode } from '../utils/api';
-import { genAI } from '../store/settingsStore';
 import { useGenerate } from '../elements/shared/useGenerate';
-import { PLOT_TRANSFORM_CONTEXT, SELECTOR_CODE_CONTEXT } from '../elements/shared/generationContext';
+import { buildGeneration, widgetFields } from '../elements/shared/generation';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
 import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, WELL } from '../ui/theme';
@@ -76,33 +74,33 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
     if (currentIndex !== -1) updateWidget(currentIndex, patch);
   };
 
+  /**
+   * The one ✨ Generate handler, for whichever widget kind asks.
+   *
+   * This was an `isPlot` ternary threaded through eight lines -- prompt field,
+   * guard, success message, contract, both port names, target field -- which is
+   * a kind-switch in a shared shell, the thing the element contract exists to
+   * prevent. It is also why `image_view` had a `code` field with the same
+   * transform contract as plot_window and no button: nobody added the third
+   * branch. Each widget declares it now (`GuiWidgetElementDefinition.generation`)
+   * and this component treats them all alike.
+   */
   const handleGenerate = (widget: GuiWidget) => {
-    const isPlot = widget.kind === 'plot_window';
-    const prompt = ((isPlot ? widget.plot_prompt : widget.selector_prompt) ?? '').trim();
-    return generate.run({
-      guard: () => prompt
-        ? undefined
-        : isPlot
-          ? 'Plot prompt is required before generating transform code.'
-          : 'Please describe which files to select first.',
-      success: isPlot ? '✅ Transform generated!' : '✅ Selector generated!',
-      failure: 'Error generating code',
-      run: () => generateCode({
-        description: prompt,
-        language: widget.language || 'python',
-        context: isPlot ? PLOT_TRANSFORM_CONTEXT : SELECTOR_CODE_CONTEXT,
-        context_file: (widget.example_input_path ?? '').trim() || undefined,
-        inputs: [isPlot ? 'value' : 'files'],
-        outputs: [isPlot ? 'value' : 'files'],
-        ...genAI(),
-      }),
-      apply: (result) => {
-        applyToWidget(widget.id, isPlot ? { code: result.code } : { selector_code: result.code });
+    const spec = GUI_WIDGET_ELEMENTS[widget.kind].generation;
+    if (!spec) return;
+    return generate.run(buildGeneration({
+      element: widget.kind,
+      generation: spec,
+      subject: widget,
+      fields: widgetFields(widget, (patch) => {
+        applyToWidget(widget.id, patch);
         // Show what was just written, rather than reporting success over a
         // section the user would have to know to open.
         setExpandedTransform((prev) => ({ ...prev, [widget.id]: true }));
-      },
-    }, widget.id);
+      }),
+      language: widget.language || 'python',
+      exampleFile: (widget.example_file ?? '').trim(),
+    }), widget.id);
   };
 
   return (
@@ -235,6 +233,10 @@ export default function GuiWidgetEditor({ widgets, onChange }: GuiWidgetEditorPr
                   generating={generate.isGenerating(widget.id)}
                   message={generate.message(widget.id)}
                   onGenerate={() => handleGenerate(widget)}
+                  canGenerate={(() => {
+                    const spec = GUI_WIDGET_ELEMENTS[widget.kind].generation;
+                    return !!spec && (spec.available?.(widget) ?? true);
+                  })()}
                 />
               );
             })()}

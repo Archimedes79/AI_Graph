@@ -1,6 +1,7 @@
 import type { NodeElementDefinition } from '../types';
 import InputEditor from './InputEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
+import { codeExtension } from '../shared/authoredFileName';
 import type { Port } from '../../types/graph';
 
 export function inputPortsForMode(mode: 'text' | 'file' | 'directory'): { inputs: Port[]; outputs: Port[] } {
@@ -41,6 +42,25 @@ export function inputPortsForMode(mode: 'text' | 'file' | 'directory'): { inputs
 export const inputElement: NodeElementDefinition = {
   nodeType: 'input',
   ConfigEditor: InputEditor,
+  // In directory mode the selector is real code and gets a real file -- the
+  // same one an input_picker widget gets, because it is the same behaviour one
+  // level up. A text or single-file input authors nothing.
+  authoredFile: (node) => (node.config.input_mode === 'directory'
+    ? { extension: codeExtension(node.config), what: 'this file selector' }
+    : undefined),
+  generation: {
+    promptField: 'selector_prompt',
+    targetField: 'selector_code',
+    available: (node) => node.config.input_mode === 'directory',
+    guard: 'Please describe which files to select first.',
+    success: '✅ Selector generated!',
+  },
+  describeOutput: (node) => {
+    const mode = node.config.input_mode ?? 'text';
+    if (mode === 'directory') return 'a list of file paths';
+    if (mode === 'file') return 'a file path';
+    return 'text';
+  },
   create: (id) => {
     const ports = inputPortsForMode('text');
     return {

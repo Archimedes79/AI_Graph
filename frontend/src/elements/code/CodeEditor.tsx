@@ -9,7 +9,7 @@ interface CodeEditorProps {
   node: GraphNode;
   setConfig: (key: string, value: unknown) => void;
   generating: boolean;
-  handleGenerateCode: () => void;
+  onGenerate: () => void;
   contextFile: string;
   onContextFileChange: (path: string) => void;
 }
@@ -18,7 +18,7 @@ export default function CodeEditor({
   node,
   setConfig,
   generating,
-  handleGenerateCode,
+  onGenerate,
   contextFile,
   onContextFileChange,
 }: CodeEditorProps) {
@@ -30,7 +30,7 @@ export default function CodeEditor({
             Prompt text
           </label>
           <button
-            onClick={handleGenerateCode}
+            onClick={onGenerate}
             disabled={generating}
             className="text-xs px-2 py-1 rounded"
             style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}

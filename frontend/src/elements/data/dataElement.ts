@@ -56,6 +56,14 @@ export function connectedOutputDataNodes(
 export const dataElement: NodeElementDefinition = {
   nodeType: 'data',
   authoredFile: () => ({ extension: '.md', what: 'this format contract' }),
+  generation: {
+    promptField: 'data_prompt',
+    targetField: 'data_format_prompt',
+    guard: 'Please describe the data format first.',
+    success: '✅ Data format generated!',
+    context: (node) => `Standard format family: ${node.config.data_format}.`,
+  },
+  describeOutput: describeDataFormat,
   ConfigEditor: DataEditor,
   create: (id) => ({
     id,

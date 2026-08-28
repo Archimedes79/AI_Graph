@@ -26,7 +26,7 @@ class PlotWindowElement(GuiWidgetElement):
         return AuthoredFile(body_field="code", prompt_field="code_prompt",
                             extension=code_extension(widget))
 
-    def generation(self, widget: GuiWidget) -> Generation:
+    def generation(self) -> Generation:
         """The transform reshapes data; it must not draw anything.
 
         Spelling that out matters: without it, models reliably reach for

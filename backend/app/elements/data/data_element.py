@@ -21,7 +21,7 @@ class DataElement(NodeElement):
         node.config.data_value = value
         return {"output": value}
 
-    def generation(self, node: GraphNode) -> Generation:
+    def generation(self) -> Generation:
         """The format contract every neighbour is then generated against."""
         return Generation(
             kind="data_format", prompt_field="data_prompt", target_field="data_format_prompt",

@@ -1,8 +1,16 @@
 # One shape for every element — concept paper
 
-Status: **proposal**, written 2026-08-28. Nothing below is implemented yet.
-Companion to [AGENTS.md](AGENTS.md)'s "Object-oriented element contract", which
-describes what exists today.
+Status: written 2026-08-28 as a proposal; **steps 1-5 of the migration order in §5 are
+implemented** (branch `element-contract`). Step 6 -- checking the frontend descriptors
+against the backend ones in the contract test -- and step 7's README pass are open.
+Companion to [AGENTS.md](AGENTS.md)'s "Object-oriented element contract", which describes
+what the code does now.
+
+One thing changed during implementation, for the better: the contract sentence and the
+generator kind do **not** get mirrored into the frontend descriptor. The request names the
+element, and `routers/ai.py`'s single `POST /api/ai/generate` resolves both server-side
+via `registry.generation_for` -- so the sentence describing what `execute()` will do with
+a snippet exists exactly once, in the element file that implements it.
 
 ## The goal, in one sentence
 

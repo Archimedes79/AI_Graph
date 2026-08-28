@@ -120,11 +120,11 @@ export interface NodeConfig {
   code: string;
   code_file: string;
   code_prompt: string;
-  config_context_file: string;
   data_format: 'text' | 'structure';
   data_format_prompt: string;
   data_prompt: string;
   data_value?: unknown;
+  example_file: string;
   extra: {
     [k: string]: unknown;
   };
@@ -132,7 +132,6 @@ export interface NodeConfig {
   gui_widgets: GuiWidget[];
   input_mode: 'text' | 'file' | 'directory';
   language: string;
-  output_context_file: string;
   output_format: 'text' | 'json' | 'csv' | 'csv_list' | 'custom';
   output_format_prompt: string;
   output_label: string;
@@ -160,7 +159,8 @@ export interface NodeConfig {
 export interface GuiWidget {
   code?: string;
   code_file: string;
-  example_input_path: string;
+  code_prompt: string;
+  example_file: string;
   extensions: string;
   h?: number;
   id: string;
@@ -168,7 +168,6 @@ export interface GuiWidget {
   label: string;
   language?: 'python' | 'javascript';
   mode?: string;
-  plot_prompt: string;
   recursive: boolean;
   select_all_files: boolean;
   selector_code: string;

@@ -1,6 +1,7 @@
 import type React from 'react';
 import type { GraphNode, GuiWidget, GuiWidgetKind, NodeType, Port } from '../types/graph';
 import type { GuiWidgetRuntimeProps } from '../components/gui/widgetProps';
+import type { ElementGeneration } from './shared/generation';
 
 /**
  * Everything one NodeType needs to behave as a graph node on the frontend:
@@ -21,7 +22,27 @@ export interface NodeElementDefinition {
    * NodeEditor offers the option at all -- so the offer follows the element
    * rather than a list of node types kept somewhere else.
    */
-  authoredFile?: (node: GraphNode) => { extension: string; what: string };
+  authoredFile?: (node: GraphNode) => { extension: string; what: string } | undefined;
+  /**
+   * The ✨ Generate button this node type offers, mirroring the backend's
+   * `NodeElement.generation()`. Omitted for a type that generates nothing
+   * (output, gui), which is what decides whether a button is drawn at all --
+   * so the offer follows the element rather than a switch in NodeEditor.
+   */
+  generation?: ElementGeneration<GraphNode>;
+  /**
+   * What this node emits, in one line, for the neighbours' generation context.
+   * This replaced a `switch (node.node_type)` in shared code: the last one.
+   */
+  describeOutput?: (node: GraphNode) => string;
+  /**
+   * How this node declares its output, rendered in the Config panel under the
+   * body. `'format'` is the editable output_format contract (ai, code);
+   * `'widgets'` is the derived summary a gui node shows. Omitted means the node
+   * has nothing to declare -- there is no separate Output tab any more, so this
+   * is the whole answer to "what comes out of here".
+   */
+  outputContract?: 'format' | 'widgets';
 }
 
 /**
@@ -47,5 +68,7 @@ export interface GuiWidgetElementDefinition {
    * `GuiWidgetElement.authored_file()` -- the same contract as
    * `NodeElementDefinition.authoredFile` one level down.
    */
-  authoredFile?: (widget: GuiWidget) => { extension: string; what: string };
+  authoredFile?: (widget: GuiWidget) => { extension: string; what: string } | undefined;
+  /** Same contract as `NodeElementDefinition.generation`, one level down. */
+  generation?: ElementGeneration<GuiWidget>;
 }

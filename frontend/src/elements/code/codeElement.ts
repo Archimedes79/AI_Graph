@@ -1,6 +1,8 @@
 import type { NodeElementDefinition } from '../types';
 import CodeEditor from './CodeEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
+import { codeExtension } from '../shared/authoredFileName';
+import { outputFormatContext } from '../shared/generationContext';
 
 /**
  * Reference implementation for AGENTS.md's element contract -- every other
@@ -8,10 +10,29 @@ import { baseNodeConfig } from '../shared/baseNodeConfig';
  */
 export const codeElement: NodeElementDefinition = {
   nodeType: 'code',
-  authoredFile: (node) => ({
-    extension: (node.config.language ?? 'python').toLowerCase().startsWith('java') ? '.js' : '.py',
-    what: 'this code',
-  }),
+  authoredFile: (node) => ({ extension: codeExtension(node.config), what: 'this code' }),
+  generation: {
+    promptField: 'code_prompt',
+    targetField: 'code',
+    guard: 'Please add a code generation prompt first.',
+    success: '✅ Code generated!',
+    // What the user chose in THIS node's config, which the graph around it
+    // cannot imply: how batches arrive at `run`, and what shape must come back.
+    context: (node) => [
+      node.config.batch_mode === 'whole_list'
+        ? 'Batch mode is `whole_list`: multi input ports arrive in `inputs` as full lists. The generated function must handle or reduce those lists and must not reject an input merely because it is not a string.'
+        : 'Batch mode is `per_item`: each multi input port is expanded before `run(inputs)` is called, so one scalar item from each multi port is passed per invocation.',
+      outputFormatContext(node.config),
+    ].filter(Boolean).join('\n'),
+  },
+  describeOutput: (node) => {
+    const format = node.config.output_format;
+    if (!format || format === 'text') return 'text';
+    const detail = format === 'custom' && node.config.output_format_prompt
+      ? `: ${node.config.output_format_prompt}` : '';
+    return `${format}${detail}`;
+  },
+  outputContract: 'format',
   ConfigEditor: CodeEditor,
   create: (id) => ({
     id,

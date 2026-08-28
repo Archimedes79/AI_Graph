@@ -5,6 +5,10 @@ import { baseNodeConfig } from '../shared/baseNodeConfig';
 export const guiElement: NodeElementDefinition = {
   nodeType: 'gui',
   ConfigEditor: GuiEditor,
+  // A composite: it generates nothing itself, and what it emits is decided by
+  // its widgets, which is why the summary is derived rather than editable.
+  describeOutput: () => 'values from its widgets',
+  outputContract: 'widgets',
   create: (id) => ({
     id,
     node_type: 'gui',

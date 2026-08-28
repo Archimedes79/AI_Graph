@@ -39,16 +39,16 @@ export default function PlotWindowEditor({
           <textarea
             className="w-full rounded-lg px-2 py-1.5 text-sm resize-none"
             style={{ ...FIELD_ON_SURFACE, minHeight: 72 }}
-            value={widget.plot_prompt ?? ''}
-            onChange={(e) => onUpdate({ plot_prompt: e.target.value })}
+            value={widget.code_prompt ?? ''}
+            onChange={(e) => onUpdate({ code_prompt: e.target.value })}
             placeholder="Describe the chart transform you need (axes, grouping, aggregation, filters, etc.)"
             spellCheck={false}
           />
           <div className="mt-2">
             <ContextFileAttachment
-              label="Additional data (optional context file)"
-              path={widget.example_input_path ?? ''}
-              onChange={(path) => onUpdate({ example_input_path: path })}
+              label="Example input (optional file)"
+              path={widget.example_file ?? ''}
+              onChange={(path) => onUpdate({ example_file: path })}
             />
           </div>
           <p className="text-xs mb-2" style={{ color: DIMMER }}>

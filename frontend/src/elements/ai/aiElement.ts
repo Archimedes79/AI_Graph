@@ -1,10 +1,27 @@
 import type { NodeElementDefinition } from '../types';
 import AIEditor from './AIEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
+import { outputFormatContext } from '../shared/generationContext';
 
 export const aiElement: NodeElementDefinition = {
   nodeType: 'ai',
   authoredFile: () => ({ extension: '.md', what: 'this system prompt' }),
+  generation: {
+    // The one element whose request lives on the node rather than in its config.
+    promptField: 'description',
+    targetField: 'system_prompt',
+    guard: 'Please add a description first.',
+    success: '✅ Prompt generated!',
+    context: (node) => outputFormatContext(node.config),
+  },
+  describeOutput: (node) => {
+    const format = node.config.output_format;
+    if (!format || format === 'text') return 'text';
+    const detail = format === 'custom' && node.config.output_format_prompt
+      ? `: ${node.config.output_format_prompt}` : '';
+    return `${format}${detail}`;
+  },
+  outputContract: 'format',
   ConfigEditor: AIEditor,
   create: (id) => ({
     id,

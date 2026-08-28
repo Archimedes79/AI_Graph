@@ -7,7 +7,7 @@ interface DataEditorProps {
   node: GraphNode;
   setConfig: (key: string, value: unknown) => void;
   generating: boolean;
-  handleGenerateDataFormat: () => void;
+  onGenerate: () => void;
   applyDataFormat: (format: GraphNode['config']['data_format']) => void;
   setDataDebugDirectory: (path: string) => void;
   contextFile: string;
@@ -24,7 +24,7 @@ export default function DataEditor({
   node,
   setConfig,
   generating,
-  handleGenerateDataFormat,
+  onGenerate,
   applyDataFormat,
   setDataDebugDirectory,
   contextFile,
@@ -58,7 +58,7 @@ export default function DataEditor({
         <div className="flex items-center justify-between mb-1">
           <label className="text-xs font-medium" style={{ color: MUTED }}>Format generation prompt</label>
           <button
-            onClick={handleGenerateDataFormat}
+            onClick={onGenerate}
             disabled={generating}
             className="text-xs px-2 py-1 rounded"
             style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}

@@ -62,6 +62,17 @@ behavior scattered across separate executor files. Base classes live in
   `ports(widget) -> (inputs, outputs)`, `execute(widget, inputs) -> Any`, and the
   widget-level equivalents `runtime_requirement(widget)` / `deploy_needs(widget)`.
 
+Both also declare `generation()`, returning a `Generation` (or `None` for an element
+that authors nothing): which generator writes its body, which field holds the request,
+which field takes the result, the contract sentence the model needs, and any fixed port
+names for a sub-snippet. It takes no node/widget argument — it is a property of the
+element, not of one instance — so `routers/ai.py`'s single `POST /api/ai/generate` can
+resolve it from a request that names only the element (`registry.generation_for`). That
+is what keeps the contract sentence next to the `execute()` it describes instead of
+copied into the editor: the sentence for the file selector used to exist three times and
+had already drifted. Whether the ✨ button is *offered* on a particular node is the
+editor's call (`ElementGeneration.available`), because that depends on the instance.
+
 `graph_executor.py`'s `get_runtime_requirements` and `deploy_service.py`'s
 `requirements.txt` generation both dispatch through these methods now — neither should
 branch on `node.node_type`/`widget.kind` directly; add a new override on the element
@@ -141,6 +152,12 @@ node with one widget in it.
 
 Use `elements/code/code_element.py` and `elements/code/codeElement.ts` as the exact pattern to
 copy for any other node type — same class shape, same method names, same import style.
+
+A node type that authors text declares **both** `authored_file()` and `generation()` or
+neither: the consolidated contract test asserts the two agree, because they are one
+question ("is there something a person writes here?") and answering only half of it is
+exactly how `image_view` ended up with a `code` field and no ✨ button. `input` answers
+yes only in directory mode, where its file selector is real code.
 
 Registry — only touch this if you're **adding a brand-new node type**, not changing an
 existing one: `backend/app/elements/registry.py` and `frontend/src/elements/registry.ts`
@@ -324,11 +341,18 @@ the router branches on `node_type`:
 | `code` | `code` from `code_prompt` | `.py` / `.js`, header in `#` / `//` comments |
 | `ai` | `system_prompt` from `description` | `.md`, header as YAML front matter |
 | `data` | `data_format_prompt` from `data_prompt` | `.md` |
-| `input`, `output` | `None` — nothing authored | none |
+| `input` (directory mode) | `selector_code` from `selector_prompt` | `.py` / `.js` |
+| `input` (text/file), `output` | `None` — nothing authored | none |
 | `input_picker` | `selector_code` from `selector_prompt` | `.py` / `.js` |
-| `plot_window` | `code` from `plot_prompt` | `.py` / `.js` |
-| `image_view` | `code` | `.py` / `.js` |
+| `plot_window`, `image_view` | `code` from `code_prompt` | `.py` / `.js` |
 | `text_io` | `None` | none |
+
+A widget's authored triple is `code_prompt` / `code` / `code_file` — spelled exactly like
+a code node's, one level down. It was `plot_prompt` while plot_window was the only widget
+generating a snippet, which is why `image_view` had the body field and no prompt field to
+generate it from. `code_extension()` in `elements/base.py` (and `codeExtension` in
+`elements/shared/authoredFileName.ts`) is the one place the `language -> .py/.js` decision
+is made; it had been copied into four element files.
 
 **Widgets are the same object one level down**, so they go through the same code,
 not a parallel copy: `GuiWidgetElement.authored_file()` has the same signature,
@@ -397,12 +421,26 @@ from the graph the browser sends.
 3. **`lastRunContext`** — the values the node actually received on the last run, from
    `executionResult` in the store. Run once, then generate, and the model works from real
    data instead of a description of it. Truncated per port; empty before the first run.
-4. **A context file** — the 📎 attachment, read server-side by `routers/ai.py`'s
-   `_with_context_file`, which appends the content plus a parsed preview of up to 8
-   records so the model can see the shape rather than infer it.
+4. **The example file** — the 📎 attachment (`config.example_file`, and the identically
+   named field on a widget), read server-side by `routers/ai.py`'s `_with_context_file`,
+   which appends the content plus a parsed preview of up to 8 records so the model can
+   see the shape rather than infer it. **One field per element**, used by every ✨ button
+   on it: it was three fields (`config_context_file`, `output_context_file`,
+   `example_input_path`), so attaching a sample CSV in the Config tab left the
+   output-format generation with no example unless you attached it a second time.
+5. **The element's own contract sentence** — added server-side from
+   `Generation.contract`, never sent by the editor. See the element contract above.
 
-When adding a Generate button, compose these rather than inventing a fifth context
-string; a prompt that exists twice is a prompt that will drift.
+You do not add a Generate button: you declare `generation()` on the element and both
+shells draw one. `NodeEditor.tsx` and `GuiWidgetEditor.tsx` each hold exactly one
+handler, built by `elements/shared/generation.ts::buildGeneration`, and neither branches
+on node type or widget kind.
+
+There is **no Output tab**. What a node emits is a declaration like any other —
+`NodeElementDefinition.outputContract` (`'format'` for the editable ai/code contract,
+`'widgets'` for a gui node's derived summary) — rendered in the Config panel under the
+body. `describeNodeOutput` resolves through `describeOutput` on the element rather than
+switching on `node_type`; that was the last such switch in shared frontend code.
 
 ## Where the AI configuration lives (two different questions)
 

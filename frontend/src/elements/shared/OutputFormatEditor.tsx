@@ -1,9 +1,8 @@
 import React from 'react';
 import type { GraphNode } from '../../types/graph';
-import { generateOutputFormat } from '../../utils/api';
+import { generate } from '../../utils/api';
 import { genAI } from '../../store/settingsStore';
 import { useGenerate } from './useGenerate';
-import ContextFileAttachment from './ContextFileAttachment';
 import { describeDataFormat } from '../data/dataElement';
 import { ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
 
@@ -24,9 +23,9 @@ const FORMAT_LABELS: Record<string, string> = {
 
 export default function OutputFormatEditor({ node, setConfig, connectedDataNodes = [] }: Props) {
   const format = node.config.output_format ?? 'text';
-  const generate = useGenerate();
-  const generating = generate.busy;
-  const genMessage = generate.message();
+  const runGenerate = useGenerate();
+  const generating = runGenerate.busy;
+  const genMessage = runGenerate.message();
 
   // A downstream Data node's `data_format`/`data_format_prompt` already says
   // what shape this node's output must have -- copying it in beats asking the
@@ -40,18 +39,24 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
     }
   };
 
-  const handleGenerate = () => generate.run({
+  // The one generation that belongs to no element: an ai node and a code node
+  // ask the identical question here, so it is requested by `kind` rather than
+  // by element name. Its example is the element's one `example_file` -- this
+  // panel used to carry a second attachment field of its own, which meant
+  // attaching the same sample CSV twice to get it into both prompts.
+  const handleGenerate = () => runGenerate.run({
     guard: () => (node.config.output_format_prompt || node.description)
       ? undefined
       : 'Please describe the desired format, or fill in the node description, first.',
     pending: 'Generating output format…',
     success: '✅ Format generated!',
-    run: () => generateOutputFormat({
+    run: () => generate({
+      kind: 'output_format',
       description: node.config.output_format_prompt || node.description,
-      context_file: node.config.output_context_file,
+      context_file: node.config.example_file,
       ...genAI(),
     }),
-    apply: (result) => setConfig('output_format_prompt', result.output_format_prompt),
+    apply: (result) => setConfig('output_format_prompt', result.result),
   });
 
   return (
@@ -97,14 +102,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
 
       {format === 'custom' && (
         <div>
-          <div>
-            <ContextFileAttachment
-              label="Context file (optional, e.g. a sample output file)"
-              path={node.config.output_context_file ?? ''}
-              onChange={(path) => setConfig('output_context_file', path)}
-            />
-          </div>
-          <div className="flex items-center justify-between mt-3 mb-1">
+          <div className="flex items-center justify-between mb-1">
             <label className="block text-xs font-medium" style={{ color: MUTED }}>
               Custom format description
             </label>

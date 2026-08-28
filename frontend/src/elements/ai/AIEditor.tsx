@@ -11,7 +11,7 @@ interface AIEditorProps {
   setConfig: (key: string, value: unknown) => void;
   setDescription: (value: string) => void;
   generating: boolean;
-  handleGeneratePrompt: () => void;
+  onGenerate: () => void;
   contextFile: string;
   onContextFileChange: (path: string) => void;
 }
@@ -21,7 +21,7 @@ export default function AIEditor({
   setConfig,
   setDescription,
   generating,
-  handleGeneratePrompt,
+  onGenerate,
   contextFile,
   onContextFileChange,
 }: AIEditorProps) {
@@ -52,7 +52,7 @@ export default function AIEditor({
             System prompt
           </label>
           <button
-            onClick={handleGeneratePrompt}
+            onClick={onGenerate}
             disabled={generating}
             className="text-xs px-2 py-1 rounded"
             style={{ ...PRIMARY_BUTTON, opacity: generating ? 0.5 : 1 }}

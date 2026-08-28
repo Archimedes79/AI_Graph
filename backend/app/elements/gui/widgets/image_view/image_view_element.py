@@ -56,7 +56,7 @@ class ImageViewElement(GuiWidgetElement):
         return AuthoredFile(body_field="code", prompt_field="code_prompt",
                             extension=code_extension(widget))
 
-    def generation(self, widget: GuiWidget) -> Generation:
+    def generation(self) -> Generation:
         """Same snippet contract as plot_window, different destination: a path.
 
         This widget had the `code` field and no way to generate it, purely

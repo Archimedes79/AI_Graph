@@ -14,7 +14,9 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
+from app.elements.registry import generation_for
 from app.models.graph import (
+    CodeProbeReport,
     GenerateCodeRequest,
     GenerateCodeResponse,
     GenerateGraphRequest,
@@ -23,8 +25,10 @@ from app.models.graph import (
     GenerateOutputFormatResponse,
     GeneratePromptRequest,
     GeneratePromptResponse,
+    GenerateRequest,
+    GenerateResponse,
 )
-from app.services import ai_service, ai_settings, code_env, file_service
+from app.services import ai_service, ai_settings, code_env, code_refine, file_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -257,11 +261,86 @@ async def code_env_install(body: Dict[str, Any]):
     }
 
 
+# ---------------------------------------------------------------------------
+# One generation endpoint, for every element.
+#
+# There were four -- generate-code, generate-prompt, generate-output-format,
+# generate-data-format -- with the same request shape, the same _gen_target, the
+# same _with_context_file and the same try/except, differing only in which
+# ai_service function they called and what they named the one string they
+# returned. The editor mirrored that split in five hand-written call sites. What
+# actually varies is declared on the element (see `Generation`), so the dispatch
+# below is a table lookup rather than a branch, and adding a generating element
+# adds no route.
+#
+# The four old routes stay for now: they are the documented API surface and the
+# tests call them directly. They are thin wrappers over the same services.
+# ---------------------------------------------------------------------------
+
+
+def _text_generator(fn):
+    """Adapt one of ai_service's tagged generators to the uniform signature."""
+    async def run(req: GenerateRequest, spec, context: str, model: str, provider: str) -> GenerateResponse:
+        text, explanation = await fn(
+            description=req.description, context=context, model=model, provider=provider,
+        )
+        return GenerateResponse(result=text, explanation=explanation)
+    return run
+
+
+async def _code_generator(req: GenerateRequest, spec, context: str, model: str, provider: str) -> GenerateResponse:
+    """Code, verified against real data when the caller sent some.
+
+    A fixed-port snippet (a selector's `files`, a transform's `value`) declares
+    its own ports and is not wired to the ones a sample is keyed by, so it gets
+    the ordinary single pass rather than a probe against mismatched inputs.
+    """
+    fixed_ports = spec is not None and spec.inputs is not None
+    code, explanation, report = await code_refine.generate_verified_code(
+        description=req.description,
+        language=req.language,
+        context=context,
+        inputs=list(spec.inputs) if fixed_ports else req.inputs,
+        outputs=list(spec.outputs) if fixed_ports and spec.outputs else req.outputs,
+        model=model,
+        provider=provider,
+        sample_inputs=None if fixed_ports else req.sample_inputs,
+    )
+    return GenerateResponse(result=code, explanation=explanation,
+                            probe=CodeProbeReport(**report.as_dict()))
+
+
+_GENERATORS = {
+    "code": _code_generator,
+    "prompt": _text_generator(ai_service.generate_prompt),
+    "output_format": _text_generator(ai_service.generate_output_format),
+    "data_format": _text_generator(ai_service.generate_data_format),
+}
+
+
+@router.post("/generate", response_model=GenerateResponse)
+async def generate(req: GenerateRequest):
+    """Generate one element's authored text, whatever the element is."""
+    spec = generation_for(req.element) if req.element else None
+    if req.element and spec is None:
+        raise HTTPException(400, f"{req.element!r} is not an element that generates anything")
+    kind = spec.kind if spec is not None else req.kind
+    generator = _GENERATORS.get(kind)
+    if generator is None:
+        raise HTTPException(400, f"Unknown generation kind {kind!r}")
+    gen_provider, gen_model = _gen_target(req)
+    # The element's own contract first: it says what the running engine will do
+    # with this snippet, which the rest of the context cannot imply.
+    context = "\n\n".join(part for part in ((spec.contract if spec else ""), req.context) if part)
+    context = _with_context_file(context, req.context_file)
+    return await _generated("generate", generator(req, spec, context, gen_model, gen_provider))
+
+
 @router.post("/generate-code", response_model=GenerateCodeResponse)
 async def generate_code(req: GenerateCodeRequest):
     """Ask the AI to generate code for a node's description."""
     gen_provider, gen_model = _gen_target(req)
-    code, explanation = await _generated("generate_code", ai_service.generate_code(
+    code, explanation, report = await _generated("generate_code", code_refine.generate_verified_code(
         description=req.description,
         language=req.language,
         context=_with_context_file(req.context, req.context_file),
@@ -269,8 +348,13 @@ async def generate_code(req: GenerateCodeRequest):
         outputs=req.outputs,
         model=gen_model,
         provider=gen_provider,
+        # Without a sample this is exactly the old single pass.
+        sample_inputs=req.sample_inputs,
     ))
-    return GenerateCodeResponse(code=code, language=req.language, explanation=explanation)
+    return GenerateCodeResponse(
+        code=code, language=req.language, explanation=explanation,
+        probe=CodeProbeReport(**report.as_dict()),
+    )
 
 
 @router.post("/generate-prompt", response_model=GeneratePromptResponse)

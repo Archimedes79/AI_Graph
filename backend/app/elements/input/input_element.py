@@ -57,11 +57,12 @@ class InputElement(NodeElement):
         content: Any = file_service.read_file(path, mode="text")
         return {"content": content, "path": str(path)}
 
-    def generation(self, node: GraphNode) -> Optional[Generation]:
+    def generation(self) -> Generation:
         """The shared selector contract -- literally the same object the
         `input_picker` widget returns, because it is the same behaviour at two
-        levels of the object hierarchy. Only directory mode selects anything."""
-        return SELECTOR_GENERATION if _effective_mode(node) == "directory" else None
+        levels of the object hierarchy. The editor offers it in directory mode
+        only; a text or single-file input selects nothing."""
+        return SELECTOR_GENERATION
 
     def authored_file(self, node: GraphNode) -> Optional[AuthoredFile]:
         """In directory mode the selector is real code, so it gets a real file --

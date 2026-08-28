@@ -20,9 +20,9 @@ function makeWidget(kind: GuiWidget['kind']): GuiWidget {
   return {
     id: 'w1', kind, label: '', extensions: '', size: 'medium',
     recursive: false, select_all_files: true, selector_prompt: '', selector_code: '',
-    plot_prompt: '',
+    code_prompt: '',
     code_file: '',
-    example_input_path: '',
+    example_file: '',
   };
 }
 
@@ -57,6 +57,31 @@ describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, elem
 
   it('has a defined ConfigEditor component', () => {
     expect(element.ConfigEditor).toBeDefined();
+  });
+
+  it('declares a generation whose fields exist, or declares none at all', () => {
+    const node = element.create(`${nodeType}-gen`);
+    const spec = element.generation;
+    if (!spec) {
+      // Nothing to generate also means nothing to author: the two answers are
+      // the same question, which is what stopped image_view's missing button
+      // from happening again one level down.
+      expect(element.authoredFile?.(node)).toBeFalsy();
+      return;
+    }
+    const fields = spec.promptField === 'description'
+      ? { ...(node.config as unknown as Record<string, unknown>), description: node.description }
+      : (node.config as unknown as Record<string, unknown>);
+    expect(spec.promptField in fields).toBe(true);
+    expect(spec.targetField in (node.config as unknown as Record<string, unknown>)).toBe(true);
+    expect(spec.guard && spec.success).toBeTruthy();
+  });
+
+  it('describes what it emits, or is a node with nothing to say', () => {
+    const node = element.create(`${nodeType}-out`);
+    // An output node ends the graph, so it has no downstream to describe to.
+    const expected = nodeType === 'output' ? undefined : expect.any(String);
+    expect(element.describeOutput?.(node)).toEqual(expected);
   });
 });
 
@@ -101,5 +126,18 @@ describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (wi
 
   it('has a defined ConfigEditor component', () => {
     expect(element.ConfigEditor).toBeDefined();
+  });
+
+  it('declares a generation whose fields exist, or declares none at all', () => {
+    const widget = makeWidget(widgetKind as GuiWidget['kind']);
+    const spec = element.generation;
+    if (!spec) {
+      expect(element.authoredFile?.(widget)).toBeFalsy();
+      return;
+    }
+    const flat = widget as unknown as Record<string, unknown>;
+    expect(spec.promptField in flat).toBe(true);
+    expect(spec.targetField in flat).toBe(true);
+    expect(spec.guard && spec.success).toBeTruthy();
   });
 });

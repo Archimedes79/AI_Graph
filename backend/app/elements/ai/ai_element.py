@@ -91,7 +91,7 @@ class AIElement(NodeElement):
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
         return DeployNeeds(ai=True)
 
-    def generation(self, node: GraphNode) -> Generation:
+    def generation(self) -> Generation:
         """The system prompt, written from the node's own description -- the one
         element whose request lives on the node rather than in its config."""
         return Generation(

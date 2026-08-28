@@ -32,7 +32,7 @@ class CodeElement(NodeElement):
         return AuthoredFile(body_field="code", prompt_field="code_prompt",
                             extension=code_extension(node.config))
 
-    def generation(self, node: GraphNode) -> Generation:
+    def generation(self) -> Generation:
         """Generated against the node's own ports -- `inputs`/`outputs` are left
         unset, which means "whatever this node is actually wired as"."""
         return Generation(
