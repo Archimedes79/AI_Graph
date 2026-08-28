@@ -653,27 +653,6 @@ class RuntimeRequirement(BaseModel):
 # AI-generation request
 # ---------------------------------------------------------------------------
 
-class GenerateCodeRequest(BaseModel):
-    description: str
-    language: str = "python"
-    context: str = ""
-    context_file: str = ""            # optional path; content is appended to context server-side
-    inputs: List[str] = Field(default_factory=list)
-    outputs: List[str] = Field(default_factory=list)
-    # Real values for this node's input ports, taken from the last run. When
-    # present, the generated function is executed against them and repaired once
-    # if it fails -- see app.services.code_refine. Omit it and generation stays
-    # a single pass, which is also the way to opt out of running model-written
-    # code before it has been read.
-    sample_inputs: Optional[Dict[str, Any]] = None
-    # Empty/DEFAULT -> the server's own code-generation default
-    # (AI_GRAPH_GEN_PROVIDER / AI_GRAPH_GEN_MODEL, or ai-settings.json's
-    # "codegen" section). The editor normally sends its one configured
-    # generation AI explicitly; see ai_settings.resolve_gen_target.
-    ai_provider: AIProvider = AIProvider.DEFAULT
-    ai_model: str = ""
-
-
 class CodeProbeReport(BaseModel):
     """
     What happened when the generated code was run against real data.
@@ -688,48 +667,6 @@ class CodeProbeReport(BaseModel):
     error: str = ""
     missing_outputs: List[str] = Field(default_factory=list)
     output_preview: str = ""
-
-
-class GenerateCodeResponse(BaseModel):
-    code: str
-    language: str
-    explanation: str = ""
-    probe: CodeProbeReport = Field(default_factory=CodeProbeReport)
-
-
-class GeneratePromptRequest(BaseModel):
-    description: str
-    context: str = ""
-    context_file: str = ""            # optional path; content is appended to context server-side
-    # Empty/DEFAULT -> the server's own code-generation default
-    # (AI_GRAPH_GEN_PROVIDER / AI_GRAPH_GEN_MODEL, or ai-settings.json's
-    # "codegen" section). The editor normally sends its one configured
-    # generation AI explicitly; see ai_settings.resolve_gen_target.
-    ai_provider: AIProvider = AIProvider.DEFAULT
-    ai_model: str = ""
-
-
-class GeneratePromptResponse(BaseModel):
-    system_prompt: str
-    explanation: str = ""
-
-
-class GenerateOutputFormatRequest(BaseModel):
-    """Ask the AI to describe the expected \"custom\" output format/shape for a node."""
-    description: str
-    context: str = ""
-    context_file: str = ""            # optional path; content is appended to context server-side
-    # Empty/DEFAULT -> the server's own code-generation default
-    # (AI_GRAPH_GEN_PROVIDER / AI_GRAPH_GEN_MODEL, or ai-settings.json's
-    # "codegen" section). The editor normally sends its one configured
-    # generation AI explicitly; see ai_settings.resolve_gen_target.
-    ai_provider: AIProvider = AIProvider.DEFAULT
-    ai_model: str = ""
-
-
-class GenerateOutputFormatResponse(BaseModel):
-    output_format_prompt: str
-    explanation: str = ""
 
 
 class GenerateRequest(BaseModel):

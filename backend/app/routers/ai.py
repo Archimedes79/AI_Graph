@@ -17,14 +17,8 @@ from fastapi import APIRouter, HTTPException
 from app.elements.registry import generation_for
 from app.models.graph import (
     CodeProbeReport,
-    GenerateCodeRequest,
-    GenerateCodeResponse,
     GenerateGraphRequest,
     GenerateGraphResponse,
-    GenerateOutputFormatRequest,
-    GenerateOutputFormatResponse,
-    GeneratePromptRequest,
-    GeneratePromptResponse,
     GenerateRequest,
     GenerateResponse,
 )
@@ -273,15 +267,22 @@ async def code_env_install(body: Dict[str, Any]):
 # below is a table lookup rather than a branch, and adding a generating element
 # adds no route.
 #
-# The four old routes stay for now: they are the documented API surface and the
-# tests call them directly. They are thin wrappers over the same services.
+# `generate-graph` below is deliberately not folded in: it authors a whole Graph
+# document rather than one element's body, so it shares neither the request nor
+# the response.
 # ---------------------------------------------------------------------------
 
 
-def _text_generator(fn):
-    """Adapt one of ai_service's tagged generators to the uniform signature."""
+def _text_generator(name: str):
+    """Adapt one of ai_service's tagged generators to the uniform signature.
+
+    Resolved by name at call time rather than captured at import: a table of
+    frozen function references quietly ignores anything that rebinds
+    `ai_service.generate_prompt` afterwards -- a test double, or a future
+    provider shim -- and does it silently, by reaching the network instead.
+    """
     async def run(req: GenerateRequest, spec, context: str, model: str, provider: str) -> GenerateResponse:
-        text, explanation = await fn(
+        text, explanation = await getattr(ai_service, name)(
             description=req.description, context=context, model=model, provider=provider,
         )
         return GenerateResponse(result=text, explanation=explanation)
@@ -312,9 +313,9 @@ async def _code_generator(req: GenerateRequest, spec, context: str, model: str, 
 
 _GENERATORS = {
     "code": _code_generator,
-    "prompt": _text_generator(ai_service.generate_prompt),
-    "output_format": _text_generator(ai_service.generate_output_format),
-    "data_format": _text_generator(ai_service.generate_data_format),
+    "prompt": _text_generator("generate_prompt"),
+    "output_format": _text_generator("generate_output_format"),
+    "data_format": _text_generator("generate_data_format"),
 }
 
 
@@ -334,66 +335,6 @@ async def generate(req: GenerateRequest):
     context = "\n\n".join(part for part in ((spec.contract if spec else ""), req.context) if part)
     context = _with_context_file(context, req.context_file)
     return await _generated("generate", generator(req, spec, context, gen_model, gen_provider))
-
-
-@router.post("/generate-code", response_model=GenerateCodeResponse)
-async def generate_code(req: GenerateCodeRequest):
-    """Ask the AI to generate code for a node's description."""
-    gen_provider, gen_model = _gen_target(req)
-    code, explanation, report = await _generated("generate_code", code_refine.generate_verified_code(
-        description=req.description,
-        language=req.language,
-        context=_with_context_file(req.context, req.context_file),
-        inputs=req.inputs,
-        outputs=req.outputs,
-        model=gen_model,
-        provider=gen_provider,
-        # Without a sample this is exactly the old single pass.
-        sample_inputs=req.sample_inputs,
-    ))
-    return GenerateCodeResponse(
-        code=code, language=req.language, explanation=explanation,
-        probe=CodeProbeReport(**report.as_dict()),
-    )
-
-
-@router.post("/generate-prompt", response_model=GeneratePromptResponse)
-async def generate_prompt(req: GeneratePromptRequest):
-    """Ask the AI to generate a system prompt from a natural-language description."""
-    gen_provider, gen_model = _gen_target(req)
-    system_prompt, explanation = await _generated("generate_prompt", ai_service.generate_prompt(
-        description=req.description,
-        context=_with_context_file(req.context, req.context_file),
-        model=gen_model,
-        provider=gen_provider,
-    ))
-    return GeneratePromptResponse(system_prompt=system_prompt, explanation=explanation)
-
-
-@router.post("/generate-output-format", response_model=GenerateOutputFormatResponse)
-async def generate_output_format(req: GenerateOutputFormatRequest):
-    """Ask the AI to describe the expected output format/shape from a description."""
-    gen_provider, gen_model = _gen_target(req)
-    fmt, explanation = await _generated("generate_output_format", ai_service.generate_output_format(
-        description=req.description,
-        context=_with_context_file(req.context, req.context_file),
-        model=gen_model,
-        provider=gen_provider,
-    ))
-    return GenerateOutputFormatResponse(output_format_prompt=fmt, explanation=explanation)
-
-
-@router.post("/generate-data-format", response_model=GenerateOutputFormatResponse)
-async def generate_data_format(req: GenerateOutputFormatRequest):
-    """Ask the AI to design a data node's format contract, proposing then picking one option."""
-    gen_provider, gen_model = _gen_target(req)
-    fmt, explanation = await _generated("generate_data_format", ai_service.generate_data_format(
-        description=req.description,
-        context=_with_context_file(req.context, req.context_file),
-        model=gen_model,
-        provider=gen_provider,
-    ))
-    return GenerateOutputFormatResponse(output_format_prompt=fmt, explanation=explanation)
 
 
 @router.post("/generate-graph", response_model=GenerateGraphResponse)

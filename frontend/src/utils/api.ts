@@ -52,13 +52,6 @@ export interface CodeProbeReport {
   output_preview: string;
 }
 
-export interface GeneratedCode {
-  code: string;
-  language: string;
-  explanation?: string;
-  probe: CodeProbeReport;
-}
-
 /** What one generation returns, whichever element asked -- see GenerateResponse. */
 export interface GenerationResult {
   /** The generated text. Which field it belongs in is the caller's own business. */
@@ -90,45 +83,6 @@ export const generate = (body: {
   ai_model?: string;
   ai_provider?: string;
 }): Promise<GenerationResult> => api.post('/ai/generate', body).then((r) => r.data);
-
-export const generateCode = (body: {
-  description: string;
-  language?: string;
-  context?: string;
-  context_file?: string;
-  inputs?: string[];
-  outputs?: string[];
-  ai_model?: string;
-  ai_provider?: string;
-  /** Real port values from the last run; enables the verify-and-repair pass. */
-  sample_inputs?: Record<string, unknown>;
-}): Promise<GeneratedCode> => api.post('/ai/generate-code', body).then((r) => r.data);
-
-export const generatePrompt = (body: {
-  description: string;
-  context?: string;
-  context_file?: string;
-  ai_model?: string;
-  ai_provider?: string;
-}) => api.post('/ai/generate-prompt', body).then((r) => r.data);
-
-export const generateOutputFormat = (body: {
-  description: string;
-  context?: string;
-  context_file?: string;
-  ai_model?: string;
-  ai_provider?: string;
-}): Promise<{ output_format_prompt: string; explanation?: string }> =>
-  api.post('/ai/generate-output-format', body).then((r) => r.data);
-
-export const generateDataFormat = (body: {
-  description: string;
-  context?: string;
-  context_file?: string;
-  ai_model?: string;
-  ai_provider?: string;
-}): Promise<{ output_format_prompt: string; explanation?: string }> =>
-  api.post('/ai/generate-data-format', body).then((r) => r.data);
 
 export const generateGraph = (body: {
   description: string;

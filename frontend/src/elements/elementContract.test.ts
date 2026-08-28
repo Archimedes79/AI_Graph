@@ -13,17 +13,18 @@
  */
 import { describe, it, expect } from 'vitest';
 import { NODE_ELEMENTS, GUI_WIDGET_ELEMENTS } from './registry';
+import { createGuiWidget } from '../utils/guiWidgets';
 import type { GraphNode, GuiWidget } from '../types/graph';
 import { connectedDataFormatContext } from './data/dataElement';
 
+/**
+ * A widget as the app really creates one, with a fixed id so assertions can name
+ * it. This was a hand-written literal -- a second definition of "a new widget"
+ * that drifted from `createGuiWidget` and left optional fields out, which made
+ * the contract test below pass for the wrong reason.
+ */
 function makeWidget(kind: GuiWidget['kind']): GuiWidget {
-  return {
-    id: 'w1', kind, label: '', extensions: '', size: 'medium',
-    recursive: false, select_all_files: true, selector_prompt: '', selector_code: '',
-    code_prompt: '',
-    code_file: '',
-    example_file: '',
-  };
+  return { ...createGuiWidget(kind, ''), id: 'w1' };
 }
 
 describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, element) => {

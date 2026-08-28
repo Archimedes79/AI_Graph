@@ -391,10 +391,14 @@ def test_node_element_declares_its_generation(node_type: NodeType, element, tmp_
     node = _make_node(node_type, tmp_path)
     spec = element.generation()
     authored = element.authored_file(node)
-    assert (spec is not None) == (authored is not None), (
-        f"{node_type.value}: generation={spec is not None} authored_file={authored is not None}"
-    )
+    # The direction that matters: text somebody writes must have a way to be
+    # written for them. The reverse is not an equivalence -- `generation()` is a
+    # property of the element while `authored_file()` looks at one node, and an
+    # input node only authors its selector in directory mode (see below).
+    if authored is not None:
+        assert spec is not None, f"{node_type.value} authors a file and declares no generation"
     if spec is None:
+        assert authored is None
         return
     assert spec.kind in ("code", "prompt", "output_format", "data_format")
     # Both fields it names must actually exist, or the button writes into nothing.
@@ -402,7 +406,8 @@ def test_node_element_declares_its_generation(node_type: NodeType, element, tmp_
     assert hasattr(holder, spec.prompt_field)
     assert hasattr(node.config, spec.target_field)
     # The body it fills is the body the file mechanism reads and writes.
-    assert authored.body_field == spec.target_field
+    if authored is not None:
+        assert authored.body_field == spec.target_field
     assert spec.guard and spec.success, "a button with no guard/success message is half-declared"
     assert generation_for(node_type.value) is spec or generation_for(node_type.value) == spec
 
@@ -423,6 +428,24 @@ def test_gui_widget_element_declares_its_generation(widget_kind: GuiWidgetKind, 
     assert spec.inputs and spec.outputs
     assert spec.contract, "a snippet contract the model cannot see is a snippet it will get wrong"
     assert generation_for(widget_kind.value) == spec
+
+
+def test_an_input_node_authors_its_selector_only_in_directory_mode():
+    """`generation()` answers for the element, `authored_file()` for one node.
+
+    An input node in text or single-file mode selects nothing, so there is no
+    snippet to keep in a file -- while the element still knows how a selector
+    would be generated. The editor asks the same question through
+    `ElementGeneration.available`.
+    """
+    element = NODE_ELEMENTS[NodeType.INPUT]
+    directory = GraphNode(id="d", node_type=NodeType.INPUT, label="D",
+                          config=NodeConfig(input_mode="directory"))
+    text = GraphNode(id="t", node_type=NodeType.INPUT, label="T",
+                     config=NodeConfig(input_mode="text"))
+    assert element.authored_file(directory) is not None
+    assert element.authored_file(directory).body_field == element.generation().target_field
+    assert element.authored_file(text) is None
 
 
 def test_the_file_selector_is_declared_once_for_both_levels():
@@ -469,6 +492,66 @@ def test_one_example_file_replaces_three_context_fields():
     assert widget.code_prompt == "chart it"
     assert not hasattr(widget, "plot_prompt")
     assert not hasattr(by_id["a"].config, "config_context_file")
+
+
+# The frontend element file for each element name. Two languages describe one
+# element, and the halves have to agree about which fields a button reads and
+# writes -- a mismatch is a button that silently writes into nothing.
+_FRONTEND_ELEMENT_FILES = {
+    "input": "input/inputElement.ts",
+    "ai": "ai/aiElement.ts",
+    "code": "code/codeElement.ts",
+    "data": "data/dataElement.ts",
+    "output": "output/outputElement.ts",
+    "gui": "gui/guiElement.ts",
+    "input_picker": "gui/widgets/input_picker/inputPickerElement.ts",
+    "text_io": "gui/widgets/text_io/textIoElement.ts",
+    "plot_window": "gui/widgets/plot_window/plotWindowElement.ts",
+    "image_view": "gui/widgets/image_view/imageViewElement.ts",
+}
+
+_FRONTEND_ELEMENTS_DIR = Path(__file__).parent.parent.parent / "frontend" / "src" / "elements"
+
+
+def _frontend_generation(element_name: str):
+    """The `generation: { ... }` block a frontend element declares, as a dict.
+
+    Read as text rather than executed: this asserts one fact about two languages
+    and is not worth a node runtime in the Python test suite.
+    """
+    source = (_FRONTEND_ELEMENTS_DIR / _FRONTEND_ELEMENT_FILES[element_name]).read_text(encoding="utf-8")
+    start = source.find("\n  generation: {")
+    if start == -1:
+        return None
+    block = source[start:source.index("\n  },", start)]
+    fields = {}
+    for key in ("promptField", "targetField"):
+        marker = f"{key}: '"
+        at = block.find(marker)
+        if at != -1:
+            fields[key] = block[at + len(marker):block.index("'", at + len(marker))]
+    return fields
+
+
+@pytest.mark.skipif(not _FRONTEND_ELEMENTS_DIR.is_dir(), reason="frontend not present")
+@pytest.mark.parametrize("element_name", sorted(_FRONTEND_ELEMENT_FILES))
+def test_both_languages_declare_the_same_generation(element_name: str):
+    """The editor's declaration and the engine's must name the same fields.
+
+    They are deliberately not the same object -- the contract sentence, the
+    generator kind and the fixed ports stay on the backend and are resolved from
+    the element name, so only the two field names are stated twice. This is the
+    check that keeps even those two honest.
+    """
+    backend = generation_for(element_name)
+    frontend = _frontend_generation(element_name)
+    assert (backend is None) == (frontend is None), (
+        f"{element_name}: backend={backend is not None} frontend={frontend is not None}"
+    )
+    if backend is None:
+        return
+    assert frontend["promptField"] == backend.prompt_field
+    assert frontend["targetField"] == backend.target_field
 
 
 def test_a_legacy_widget_node_loads_as_a_gui_node():
