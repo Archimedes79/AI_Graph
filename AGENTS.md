@@ -416,6 +416,12 @@ failing it. `_terminate_tree` exists for that.
   `data:` URL. Put kind-specific display preparation there, never a branch in
   `gui_element.py`.
 - `backend/app/services/ai_service.py`, `code_executor.py`, `file_service.py` — provider-agnostic AI calls, sandboxed code execution, file I/O helpers shared across node types.
+- `backend/app/services/code_env.py` — the one environment code nodes run in, and the
+  interpreter resolution that used to live in `code_executor`. A node declares packages in
+  `config.requirements`; `deploy_service` writes them into a bundle's requirements.txt and
+  `code_executor` checks them before running. **Nothing installs implicitly** — that is an
+  explicit action (the editor's Install button, `main.py --install-requirements`), because
+  it needs the network and can take minutes. Vendored into bundles.
 - `backend/app/services/run_registry.py` — runs started as asyncio tasks so they can be
   watched and stopped. **Cancellation is ordinary task cancellation**, which is why
   `graph_executor`'s per-node `except Exception` must never widen to `BaseException`, and

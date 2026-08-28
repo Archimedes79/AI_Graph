@@ -28,7 +28,7 @@ Bundle = Dict[str, Union[str, bytes]]
 from app.elements.base import DeployNeeds
 from app.elements.registry import NODE_ELEMENTS
 from app.models.graph import Graph
-from app.services import ai_settings
+from app.services import ai_settings, code_env
 
 # Root of the actual `app` package this module lives in -- what gets vendored
 # into the bundle's app/ folder verbatim (never regenerated/rewritten).
@@ -60,6 +60,7 @@ _PORTABLE_SERVICE_MODULES = [
     "batching.py",
     "code_executor.py",
     "file_service.py",
+    "code_env.py",
     "graph_executor.py",
     "run_registry.py",
 ]
@@ -119,6 +120,12 @@ def _requirements_txt(graph: Graph, needs: DeployNeeds) -> str:
     pip requirements for the bundle: pydantic always (app.models.graph), httpx
     only when the graph makes AI calls, and the web server only when the bundle
     actually ships a GUI. A headless bundle stays a two-dependency install.
+
+    Whatever the graph's own code nodes declare is listed separately at the end.
+    Those are not dependencies of the engine -- they belong to the environment
+    code nodes run in (see services/code_env.py) and are installed there by
+    `python main.py --install-requirements`. Listing them here anyway is what
+    stops a bundle from arriving with no record of what its graph imports.
     """
     lines = ["pydantic==2.13.4"]
     if needs.ai:
@@ -126,6 +133,14 @@ def _requirements_txt(graph: Graph, needs: DeployNeeds) -> str:
     if _serves_gui(needs):
         lines.append("fastapi==0.141.1")
         lines.append("uvicorn[standard]==0.52.1")
+
+    node_requirements = code_env.graph_requirements(graph)
+    if node_requirements:
+        lines.append("")
+        lines.append("# Declared by this graph's code nodes. Installed into the code-node")
+        lines.append("# environment by `python main.py --install-requirements`, not here.")
+        lines.extend(node_requirements)
+
     return "\n".join(lines) + "\n"
 
 

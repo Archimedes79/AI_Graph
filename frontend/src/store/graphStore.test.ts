@@ -17,6 +17,7 @@ function blankConfig() {
     language: 'python',
     code: '',
     code_prompt: '',
+    requirements: [],
     data_value: null,
     data_format: 'text' as const,
     data_prompt: '',

@@ -171,6 +171,12 @@ class NodeConfig(BaseModel):
     language: str = "python"             # python | javascript
     code: str = ""                       # generated / user-written code
     code_prompt: str = ""                # stored AI prompt used to generate the code
+    # code node (python) -- pip requirements this snippet needs, e.g. ["pandas>=2.0"].
+    # A code node is the universal escape hatch, but only reaches as far as what it
+    # can import; declaring that here is what lets a deploy bundle's requirements.txt
+    # know about it and what turns a missing package into a sentence instead of a
+    # traceback. Installed into one shared environment -- see services/code_env.py.
+    requirements: List[str] = Field(default_factory=list)
 
     # data node -- a persisted value plus its design-time format contract.
     # The value is updated after a cycle-closing feedback edge settles, making

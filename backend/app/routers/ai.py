@@ -7,6 +7,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import asyncio
 import logging
 import os
 from typing import Any, Dict
@@ -23,7 +24,7 @@ from app.models.graph import (
     GeneratePromptRequest,
     GeneratePromptResponse,
 )
-from app.services import ai_service, ai_settings, file_service
+from app.services import ai_service, ai_settings, code_env, file_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -223,6 +224,34 @@ async def write_ai_settings(body: Dict[str, Any]):
         raise HTTPException(500, f"Could not write {ai_settings.settings_path()}: {exc}") from exc
     return {"settings_file": str(path), "credentials": _credentials_state(),
             "endpoints": {n: str(endpoints.get(k) or "") for n, k in _ENDPOINT_KEYS.items()}}
+
+
+@router.get("/code-env")
+async def code_env_status():
+    """Where code nodes run, and whether that environment exists yet."""
+    return code_env.describe()
+
+
+@router.post("/code-env/install")
+async def code_env_install(body: Dict[str, Any]):
+    """
+    Install the packages a code node declares. Explicit rather than automatic:
+    it needs the network and can take minutes, which a Run button should not do
+    behind the user's back.
+    """
+    requirements = code_env.normalise(body.get("requirements") or [])
+    if not requirements:
+        return {"installed": [], "missing": [], **code_env.describe()}
+    try:
+        installed, log = await asyncio.to_thread(code_env.install, requirements)
+    except RuntimeError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {
+        "installed": installed,
+        "missing": code_env.missing(requirements),
+        "log": log[-4000:],
+        **code_env.describe(),
+    }
 
 
 @router.post("/generate-code", response_model=GenerateCodeResponse)

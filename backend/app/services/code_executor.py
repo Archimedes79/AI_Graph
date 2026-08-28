@@ -16,7 +16,9 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
+
+from app.services import code_env
 
 logger = logging.getLogger(__name__)
 
@@ -36,47 +38,6 @@ _SUBPROCESS_ENV_ALLOWLIST = {
 def _sandboxed_env() -> Dict[str, str]:
     """Minimal environment for a code-node subprocess: no secrets inherited."""
     return {k: v for k, v in os.environ.items() if k.upper() in _SUBPROCESS_ENV_ALLOWLIST}
-
-
-def _is_real_python(candidate: str) -> bool:
-    """
-    Whether `candidate` actually runs Python. Windows ships a `python.exe` App
-    Execution Alias that only advertises the Microsoft Store, and `shutil.which`
-    happily returns it -- so a name on PATH is not evidence of an interpreter.
-    """
-    try:
-        probe = subprocess.run(
-            [candidate, "-c", "print(1)"],
-            capture_output=True, timeout=15, env=_sandboxed_env(),
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return probe.returncode == 0 and probe.stdout.decode(errors="replace").strip() == "1"
-
-
-@functools.lru_cache(maxsize=1)
-def _python_interpreter() -> str:
-    """
-    The interpreter to run a Python code node with. In a PyInstaller build
-    `sys.executable` is the packaged tool itself, so using it would relaunch the
-    tool instead of running the snippet -- a frozen build has to find a real
-    Python on PATH. Cached: this probes subprocesses, and the answer cannot
-    change while the process lives.
-    """
-    if not getattr(sys, "frozen", False):
-        return sys.executable
-
-    for name in ("python", "python3", "py"):
-        found = shutil.which(name)
-        if found and _is_real_python(found):
-            return found
-
-    raise RuntimeError(
-        "Python code nodes need a Python interpreter on PATH when running from a "
-        "packaged executable, and none was found. Install Python from python.org "
-        "(the Microsoft Store stub on PATH does not count), or use a JavaScript "
-        "code node, which needs Node.js instead."
-    )
 
 
 async def _run_in_subprocess(cmd: list[str], inputs: Dict[str, Any], label: str) -> Dict[str, Any]:
@@ -135,11 +96,27 @@ async def _run_in_subprocess(cmd: list[str], inputs: Dict[str, Any], label: str)
         os.unlink(cmd[-1])
 
 
-async def execute_python(code: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_python(
+    code: str, inputs: Dict[str, Any], requirements: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """
     Execute Python code with the given inputs.
     The code must define a `run(inputs)` function that returns a dict.
+
+    *requirements* are the packages the node declared. They are checked before
+    the snippet runs, so a missing one is a sentence naming it rather than an
+    ImportError traceback out of a subprocess -- and nothing is installed here:
+    see code_env for why that is an explicit action.
     """
+    absent = code_env.missing(requirements or [])
+    if absent:
+        raise RuntimeError(
+            "This code node needs " + ", ".join(absent) + ", which "
+            + ("is" if len(absent) == 1 else "are")
+            + " not installed in the code-node environment "
+            + f"({code_env.env_dir()}). Use Install in the node's editor, or run "
+            "`python main.py --install-requirements` for a deployed bundle."
+        )
     wrapper = textwrap.dedent(
         f"""
 import json, sys
@@ -157,7 +134,7 @@ print(json.dumps(_outputs))
         f.write(wrapper)
         tmp_path = f.name
 
-    return await _run_in_subprocess([_python_interpreter(), tmp_path], inputs, "Code")
+    return await _run_in_subprocess([code_env.interpreter(), tmp_path], inputs, "Code")
 
 
 async def execute_javascript(code: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -184,12 +161,13 @@ console.log(JSON.stringify(_outputs));
 
 
 async def execute_code(
-    code: str, language: str, inputs: Dict[str, Any]
+    code: str, language: str, inputs: Dict[str, Any],
+    requirements: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Dispatch to the correct language executor."""
     lang = language.lower()
     if lang in ("python", "py"):
-        return await execute_python(code, inputs)
+        return await execute_python(code, inputs, requirements)
     if lang in ("javascript", "js", "node"):
         return await execute_javascript(code, inputs)
     raise ValueError(f"Unsupported code language: {language}")

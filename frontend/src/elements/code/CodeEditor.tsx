@@ -2,6 +2,7 @@ import React from 'react';
 import type { GraphNode } from '../../types/graph';
 import ContextFileAttachment from '../shared/ContextFileAttachment';
 import BatchAndFileInputOptions from '../shared/BatchAndFileInputOptions';
+import CodeRequirements from './CodeRequirements';
 import { FIELD, MUTED, SUCCESS } from '../../ui/theme';
 
 interface CodeEditorProps {
@@ -78,6 +79,12 @@ export default function CodeEditor({
           spellCheck={false}
         />
       </div>
+
+      <CodeRequirements
+        requirements={node.config.requirements ?? []}
+        onChange={(requirements) => setConfig('requirements', requirements)}
+        language={node.config.language || 'python'}
+      />
 
       <BatchAndFileInputOptions node={node} setConfig={setConfig} subject="code" />
     </>

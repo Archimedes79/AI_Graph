@@ -24,5 +24,5 @@ class CodeElement(NodeElement):
         effective_formats: Optional[Dict[str, Optional[str]]] = None,
     ) -> Dict[str, Any]:
         cfg = node.config
-        result = await code_executor.execute_code(cfg.code, cfg.language, inputs)
+        result = await code_executor.execute_code(cfg.code, cfg.language, inputs, cfg.requirements)
         return reconcile_outputs(node, result)

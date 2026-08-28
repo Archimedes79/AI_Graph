@@ -20,7 +20,9 @@ import asyncio
 import json
 import logging
 import sys
+import time
 from pathlib import Path
+from typing import Optional
 
 # Allow running from the repo root during development. This is a no-op when
 # this file is copied verbatim into a deploy bundle as main.py: there is no
@@ -52,7 +54,7 @@ def _default_graph_path() -> Path:
 
 try:
     from app.models.graph import Graph
-    from app.services import ai_settings
+    from app.services import ai_settings, code_env
     from app.services.graph_executor import (
         apply_runtime_values,
         execute_graph,
@@ -82,7 +84,7 @@ def parse_kv(pairs: list[str]) -> dict:
     return result
 
 
-async def run(graph_path: str, extra_inputs: dict) -> None:
+async def run(graph_path: str, extra_inputs: dict, exit_on_error: bool = True):
     path = Path(graph_path)
     if not path.exists():
         print(f"Error: Graph file not found: {graph_path}", file=sys.stderr)
@@ -153,8 +155,89 @@ async def run(graph_path: str, extra_inputs: dict) -> None:
         print(window["content"], file=sys.stderr)
         print(border, file=sys.stderr)
 
-    if result.status == "error":
+    if result.status == "error" and exit_on_error:
         sys.exit(1)
+    return result
+
+
+def install_requirements(graph_path: str) -> int:
+    """
+    Install the packages this graph's code nodes declare, into the one
+    environment code nodes run in. Separate from running the graph on purpose:
+    it needs the network and can take minutes, which is not something a run
+    should do behind the user's back.
+    """
+    path = Path(graph_path)
+    if not path.exists():
+        print(f"Error: Graph file not found: {graph_path}", file=sys.stderr)
+        return 1
+
+    graph = Graph.model_validate_json(path.read_text(encoding="utf-8"))
+    wanted = code_env.graph_requirements(graph)
+    if not wanted:
+        print("This graph's code nodes declare no packages.", file=sys.stderr)
+        return 0
+
+    listing = "\n  ".join(wanted)
+    print(f"Installing into {code_env.env_dir()}:\n  {listing}", file=sys.stderr)
+    try:
+        installed, log = code_env.install(wanted)
+    except RuntimeError as exc:
+        print(f"\n{exc}", file=sys.stderr)
+        return 1
+    print(log[-2000:], file=sys.stderr)
+    print(f"\nInstalled {len(installed)} package(s).", file=sys.stderr)
+    return 0
+
+
+def parse_interval(text: str) -> float:
+    """
+    Seconds from `30s`, `5m`, `2h`, or a bare number of seconds.
+
+    A plain number is read as seconds because that is what an unsuffixed
+    interval means everywhere else in this file's vocabulary; the suffixes exist
+    so `--every 6h` does not have to be written as 21600.
+    """
+    raw = text.strip().lower()
+    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    factor = units.get(raw[-1:], 1)
+    number = raw[:-1] if raw[-1:] in units else raw
+    try:
+        seconds = float(number)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"Not an interval: {text!r}. Use 45, 30s, 5m, 2h or 1d."
+        ) from exc
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError("An interval must be greater than zero.")
+    return seconds * factor
+
+
+async def run_every(graph_path: str, extra: dict, interval: float, limit: Optional[int]) -> None:
+    """
+    Run the graph repeatedly, *interval* seconds apart.
+
+    The interval is measured between the END of one run and the start of the
+    next, not between starts: a graph that takes longer than its interval would
+    otherwise pile runs on top of each other, and this is a single-process tool
+    with no queue. A failing run is reported and the loop continues -- a
+    scheduled tool that stops at the first bad night is not much of one.
+    """
+    completed = 0
+    while True:
+        started = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n=== run {completed + 1} at {started} ===", file=sys.stderr)
+        try:
+            await run(graph_path, extra, exit_on_error=False)
+        except Exception as exc:  # noqa: BLE001 - keep the schedule alive
+            print(f"Run failed: {exc}", file=sys.stderr)
+        completed += 1
+
+        if limit is not None and completed >= limit:
+            print(f"Completed {completed} run(s); stopping.", file=sys.stderr)
+            return
+        print(f"Next run in {interval:g}s -- Ctrl+C to stop.", file=sys.stderr)
+        await asyncio.sleep(interval)
 
 
 def main() -> None:
@@ -199,6 +282,20 @@ def main() -> None:
         "--ai-force", action="store_true",
         help="Also override AI nodes that pin their own provider",
     )
+    parser.add_argument(
+        "--every", default="", metavar="INTERVAL",
+        help="Run repeatedly, waiting INTERVAL between runs (30s, 5m, 2h, 1d). "
+             "Ctrl+C to stop. This is the whole scheduler: no service to install.",
+    )
+    parser.add_argument(
+        "--times", type=int, default=None, metavar="N",
+        help="With --every: stop after N runs instead of running until interrupted",
+    )
+    parser.add_argument(
+        "--install-requirements", action="store_true",
+        help="Install what this graph's code nodes declare into the code-node "
+             "environment, then exit",
+    )
     args = parser.parse_args()
 
     ai_settings.set_override(args.ai_provider, args.ai_model, args.ai_force)
@@ -209,7 +306,15 @@ def main() -> None:
     if args.inputs:
         extra.update(parse_kv(args.inputs))
 
-    asyncio.run(run(args.graph or str(_default_graph_path()), extra))
+    graph_path = args.graph or str(_default_graph_path())
+
+    if args.install_requirements:
+        sys.exit(install_requirements(graph_path))
+
+    if args.every:
+        asyncio.run(run_every(graph_path, extra, parse_interval(args.every), args.times))
+    else:
+        asyncio.run(run(graph_path, extra))
 
 
 if __name__ == "__main__":

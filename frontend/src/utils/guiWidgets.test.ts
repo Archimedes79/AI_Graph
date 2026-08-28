@@ -24,6 +24,7 @@ function blankGuiNode(): GraphNode {
       language: 'python',
       code: '',
       code_prompt: '',
+      requirements: [],
       data_value: null,
       data_format: 'text',
       data_prompt: '',

@@ -135,6 +135,7 @@ export interface NodeConfig {
   output_label: string;
   prompt_at_runtime: boolean;
   read_file_inputs: boolean;
+  requirements: string[];
   select_all_files: boolean;
   selector_code: string;
   selector_prompt: string;
