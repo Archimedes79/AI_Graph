@@ -172,6 +172,17 @@ A canonical widget kind therefore has **two** element files (one per language), 
 registry line per language. Its frontend definition references the local config editor
 and runtime widget; shared shells dispatch through the registry and need no kind switch.
 
+## Dropping a graph file
+
+`App.tsx` listens for `dragover`/`drop` on the **window**, not on the canvas. A file
+dropped a few pixels outside the canvas would otherwise be opened by the *browser*,
+navigating away and taking the unsaved graph with it. The handler ignores anything that
+is not a real file, so `GraphCanvas`'s palette drop is untouched, and it goes through the
+same `parseGraphJson` + `confirmDiscard` every other load path uses — a drop must not
+become the one route that destroys unsaved work silently. The loaded graph has no
+`currentFilePath`: a browser never reveals where a dropped file lives (same reason the
+pickers browse server-side, below).
+
 ## File and directory pickers browse the SERVER
 
 `<input type="file">` cannot be used to fill any path field in this app. A browser

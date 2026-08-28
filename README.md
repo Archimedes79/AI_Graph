@@ -54,7 +54,7 @@ codebase), see [AGENTS.md](AGENTS.md).
 
 ## ✨ Features
 
-- **Visual Graph Editor** – drag-and-drop node canvas powered by ReactFlow, with undo/redo (Ctrl+Z / Ctrl+Shift+Z)
+- **Visual Graph Editor** – drag-and-drop node canvas powered by ReactFlow, with undo/redo (Ctrl+Z / Ctrl+Shift+Z). Drop a graph `.json` anywhere on the window to open it — the examples in `examples/` load this way
 - **Node Types**:
   - **Input** – one node type with a `text` / `file` / `directory` mode; in directory mode it only lists rooted file paths, it does not read content (legacy `text_input` / `file_input` / `directory_input` graphs are migrated to it on load)
   - **AI Node** – send prompts to Ollama (local LLM), LM Studio, OpenAI, an OpenAI-compatible endpoint, Anthropic or GitHub Models; with **Send image inputs as images** it feeds pictures to a vision model instead of pasting their paths into the prompt

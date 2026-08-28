@@ -88,6 +88,56 @@ export default function App() {
     return parsed as Graph;
   }, []);
 
+  /**
+   * Load a graph JSON dropped anywhere on the window.
+   *
+   * Registered on the window rather than on the canvas for two reasons: a file
+   * dropped just outside the canvas would otherwise make the BROWSER open it,
+   * navigating away and taking the unsaved graph with it -- and having to hit
+   * the canvas exactly is a poor way to load a file. Palette drags are
+   * untouched: this only ever reacts to a real file.
+   *
+   * The browser does not reveal where a dropped file lives, so the loaded graph
+   * has no file path and Save will ask for one, exactly as after Paste JSON.
+   */
+  const handleGraphFileDrop = useCallback(async (file: File) => {
+    if (!/\.json$/i.test(file.name)) {
+      setSaveStatus(`❌ ${file.name} is not a .json graph file.`);
+      return;
+    }
+    let graph: Graph;
+    try {
+      graph = parseGraphJson(await file.text());
+    } catch (error) {
+      setSaveStatus(`❌ ${errorText(error, `Could not read ${file.name}`)}`);
+      return;
+    }
+    if (!confirmDiscard(`Load ${file.name}?`)) return;
+    loadGraph(graph);
+    setCurrentFilePath(null);
+    setSaveStatus(`✅ Loaded ${file.name}`);
+  }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath]);
+
+  useEffect(() => {
+    const onDragOver = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes('Files')) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    };
+    const onDrop = (event: DragEvent) => {
+      const file = event.dataTransfer?.files?.[0];
+      if (!file) return;   // a palette drag: leave it to the canvas
+      event.preventDefault();
+      void handleGraphFileDrop(file);
+    };
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [handleGraphFileDrop]);
+
   // Add a node in the center of the canvas
   const handleAddNode = useCallback(
     (nodeType: NodeType) => {
