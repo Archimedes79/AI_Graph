@@ -93,6 +93,15 @@ export interface GraphStore {
   /** Record the current graph as saved (after a successful write to disk). */
   markSaved: () => void;
   /**
+   * Adopt the `code_file` names a save came back with.
+   *
+   * Saving renames a node's file to follow its label, so the name on disk can
+   * differ from the one that was sent. Deliberately not an undo step and
+   * deliberately not `updateNode`: it is bookkeeping about where the file went,
+   * not a change the user made.
+   */
+  syncNodeFileNames: (graph: Graph) => void;
+  /**
    * Execute *graph* and put the whole outcome into the store: the result, the
    * text-output windows, the busy flag, and a synthesised error result if the
    * request itself fails.
@@ -683,6 +692,16 @@ export const useGraphStore = create<GraphStore>()(
       // A never-saved graph counts as dirty only once it has something in it.
       if (savedSnapshot === null) return get().rfNodes.length > 0;
       return current !== savedSnapshot;
+    },
+
+    syncNodeFileNames: (graph) => {
+      const names = new Map(graph.nodes.map((n) => [n.id, n.config?.code_file ?? '']));
+      set((state) => {
+        for (const rfNode of state.rfNodes) {
+          const name = names.get(rfNode.id);
+          if (name !== undefined) rfNode.data.graphNode.config.code_file = name;
+        }
+      });
     },
 
     markSaved: () => {

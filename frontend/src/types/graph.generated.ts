@@ -116,6 +116,7 @@ export interface NodeConfig {
   batch_concurrency: number;
   batch_mode: 'per_item' | 'whole_list';
   code: string;
+  code_file: string;
   code_prompt: string;
   config_context_file: string;
   data_format: 'text' | 'structure';

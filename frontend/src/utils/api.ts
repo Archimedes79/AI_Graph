@@ -21,7 +21,9 @@ export const exportGraph = (id: string) => api.get(`/graphs/${id}/export`).then(
 export const loadGraphFile = (path: string): Promise<{ path: string; graph: Graph }> =>
   api.post('/graphs/file/load', { path }).then((r) => r.data);
 
-export const saveGraphFile = (path: string, graph: Graph): Promise<{ path: string }> =>
+// Returns the graph as written: saving renames a node's file to follow its
+// label, so `config.code_file` can come back different from what was sent.
+export const saveGraphFile = (path: string, graph: Graph): Promise<{ path: string; graph: Graph }> =>
   api.post('/graphs/file/save', { path, graph }).then((r) => r.data);
 
 // Execution

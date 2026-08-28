@@ -221,6 +221,13 @@ def run(inputs):
 
 The AI can generate this function for you: just describe what the node should do.
 
+**Keep the code in a real file.** Tick *Keep this code in a file beside the graph* on a
+code node and its body moves to `<graph>.nodes/<Node label>.py` — a normal Python (or
+JavaScript) file you can open in VS Code with a language server, and whose `git diff`
+reads like code instead of an escaped JSON string. A header comment carries the node's
+prompt and context file, so the file makes sense on its own. Edit it anywhere; the graph
+reads it back when it opens, and renaming the node renames the file.
+
 **Packages.** Only the standard library is available until a node says otherwise. List what
 it needs in the node editor (`pandas>=2.0`, one per line) and press **Install**. They go
 into one environment — `~/.ai-graph/code-env`, or `AI_GRAPH_CODE_ENV` — shared by the

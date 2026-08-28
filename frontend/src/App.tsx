@@ -35,6 +35,7 @@ export default function App() {
   const setCurrentFilePath = useGraphStore((s) => s.setCurrentFilePath);
   const isDirty = useGraphStore((s) => s.isDirty);
   const markSaved = useGraphStore((s) => s.markSaved);
+  const syncNodeFileNames = useGraphStore((s) => s.syncNodeFileNames);
 
   // The browser's own "leave site?" prompt. Nothing else stands between an
   // hour of wiring and an accidental Cmd-R or tab close: the graph lives only
@@ -190,7 +191,8 @@ export default function App() {
     }
     setSaveStatus('Saving\u2026');
     try {
-      await saveGraphFile(currentFilePath, exportGraph());
+      const result = await saveGraphFile(currentFilePath, exportGraph());
+      if (result.graph) syncNodeFileNames(result.graph);
       markSaved();
       setSaveStatus(`\u2705 Saved to ${currentFilePath}`);
     } catch (error) {
@@ -248,6 +250,7 @@ export default function App() {
       } else {
         const result = await saveGraphFile(path, exportGraph());
         setCurrentFilePath(result.path);
+        if (result.graph) syncNodeFileNames(result.graph);
         markSaved();
         setSaveStatus(`\u2705 Saved to ${result.path}`);
       }

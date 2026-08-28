@@ -170,6 +170,12 @@ class NodeConfig(BaseModel):
     language: str = "python"             # python | javascript
     code: str = ""                       # generated / user-written code
     code_prompt: str = ""                # stored AI prompt used to generate the code
+    # code node -- the file beside the graph that holds this node's code, e.g.
+    # "Analyse.py". Set means the file is authoritative: it is read into `code`
+    # when the graph is loaded and written back when it is saved, so a project is
+    # a graph plus one text file per authored node rather than one JSON blob with
+    # code escaped inside it. Empty keeps the code in the graph, as before.
+    code_file: str = ""
     # code node (python) -- pip requirements this snippet needs, e.g. ["pandas>=2.0"].
     # A code node is the universal escape hatch, but only reaches as far as what it
     # can import; declaring that here is what lets a deploy bundle's requirements.txt

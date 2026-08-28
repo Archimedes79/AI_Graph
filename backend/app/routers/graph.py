@@ -4,6 +4,7 @@ Graph CRUD + DSL import/export router.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Dict, List
@@ -13,7 +14,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from app.models.graph import Graph
-from app.services import file_service
+from app.services import file_service, node_files
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/graphs", tags=["graphs"])
@@ -107,6 +108,69 @@ class GraphFileSaveRequest(BaseModel):
     graph: Graph
 
 
+def _read_node_files(graph: Graph, graph_path: str) -> None:
+    """
+    Fill each node's `code` from its file. The file is authoritative for what a
+    person authors, so this runs on load and the editor never sees a stale copy.
+
+    A missing file is left alone rather than blanking the node: a graph whose
+    sibling folder was not copied should still open, with whatever code the JSON
+    still carries, instead of silently losing it.
+    """
+    directory = node_files.node_dir(graph_path)
+    for node in graph.nodes:
+        name = (getattr(node.config, "code_file", "") or "").strip()
+        if not name:
+            continue
+        path = directory / name
+        if not path.is_file():
+            logger.warning("Node %s points at %s, which is not there", node.id, path)
+            continue
+        header, body = node_files.parse(path.read_text(encoding="utf-8"), name)
+        node_files.apply_to_node(node, header, body)
+
+
+def _write_node_files(graph: Graph, graph_path: str) -> None:
+    """
+    Write one file per node that has opted into having one, and keep the file
+    named after the node: renaming a node on the canvas renames its file, which
+    is the whole reason the name is derived from the label rather than the id.
+    """
+    directory = node_files.node_dir(graph_path)
+    taken: set = set()
+
+    for node in graph.nodes:
+        current = (getattr(node.config, "code_file", "") or "").strip()
+        if not current:
+            continue
+        wanted = node_files.default_file_name(node.label, node.config.language, taken)
+        taken.add(wanted)
+
+        directory.mkdir(parents=True, exist_ok=True)
+        old_path = directory / current
+        new_path = directory / wanted
+        if current != wanted and old_path.is_file() and not new_path.exists():
+            old_path.rename(new_path)
+        node.config.code_file = wanted
+        new_path.write_text(node_files.render(node, wanted), encoding="utf-8")
+
+
+def _without_externalised_code(graph: Graph) -> dict:
+    """
+    The JSON to write: a node whose code lives in a file does not repeat it here.
+
+    Two copies of the same text is how they start disagreeing, and the diff
+    noise -- an escaped one-line JSON string -- is exactly what moving code into
+    files was for.
+    """
+    data = graph.model_dump()
+    for node in data.get("nodes", []):
+        config = node.get("config") or {}
+        if (config.get("code_file") or "").strip():
+            config["code"] = ""
+    return data
+
+
 @router.post("/file/load")
 async def load_graph_file(payload: GraphFileLoadRequest):
     """Read a graph JSON DSL from an absolute server-side path (the editor's "Load")."""
@@ -119,6 +183,7 @@ async def load_graph_file(payload: GraphFileLoadRequest):
         graph = Graph.model_validate_json(raw)
     except Exception as exc:
         raise HTTPException(400, f"Invalid graph JSON: {exc}") from exc
+    _read_node_files(graph, resolved)
     return {"path": resolved, "graph": graph.model_dump()}
 
 
@@ -129,7 +194,8 @@ async def save_graph_file(payload: GraphFileSaveRequest):
     resolved = file_service.resolve_path(payload.path)
     payload.graph.metadata.updated_at = _now()
     try:
-        file_service.write_file(resolved, payload.graph.model_dump_json(indent=2))
+        _write_node_files(payload.graph, resolved)
+        file_service.write_file(resolved, json.dumps(_without_externalised_code(payload.graph), indent=2, default=str))
     except OSError as exc:
         raise HTTPException(400, f"Could not write graph file: {exc}") from exc
-    return {"path": resolved}
+    return {"path": resolved, "graph": payload.graph.model_dump()}

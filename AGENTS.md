@@ -312,6 +312,36 @@ and any element's `execute` can import it without a circular-import trick. Since
 deploy bundle vendors `batching.py` verbatim (see below), there is no second copy of
 this behavior that could drift from the editor's.
 
+## A project is a graph plus one file per authored node
+
+`backend/app/services/node_files.py` owns the format. A code node with
+`config.code_file` set keeps its code in `<graph>.nodes/<Node label>.py` (or `.js`)
+beside the graph; the JSON stores the reference and an empty `code`, because two
+copies of the same text is how they start disagreeing.
+
+**The file is authoritative for what a person authors.** `routers/graph.py` reads it
+into `config.code` on `/file/load` and writes it on `/file/save`, so the engine is
+untouched -- `config.code` is still what executes and nothing downstream knows files
+exist. That one router is the whole sync boundary.
+
+The header comment is plain `key: value` lines (no YAML parser on either side), and
+which keys flow back is deliberately narrow:
+
+| Key | |
+|---|---|
+| body, `node`, `prompt`, `context-file` | **authored** — the file wins, applied on load |
+| `id` | the key matching file to node; never applied |
+| `inputs`, `outputs` | derived from the wiring; regenerated on write, ignored on read — a text file renaming a port would silently break edges |
+
+The file name follows the node's **label**, so the file tree reads like the graph;
+saving renames the file when the label changes and resolves collisions with a numeric
+suffix. A file with no recognisable header is treated as all body, so one can be
+written by hand. A `code_file` pointing at something missing logs and leaves the node's
+existing code alone, so a graph copied without its folder still opens.
+
+Deploy is unaffected: the editor holds `config.code` resolved, and a bundle is built
+from the graph the browser sends.
+
 ## What the AI knows when it generates
 
 `frontend/src/elements/shared/generationContext.ts` is the one place that answers
