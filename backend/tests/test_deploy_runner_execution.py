@@ -178,7 +178,7 @@ def test_deploy_bundle_layout(tmp_path):
     a vendored app/ package alongside graph.json/main.py/requirements.txt,
     not a monolithic generated script."""
     graph = _text_to_code_to_output_graph()
-    bundle = generate_deployment_bundle(graph)
+    bundle = deploy_service.generate_deployment_bundle(graph)
 
     assert "graph.json" in bundle
     assert "main.py" in bundle
@@ -260,7 +260,7 @@ def test_gui_graph_bundles_the_web_runtime(tmp_path, monkeypatch):
     _fake_built_frontend(tmp_path, monkeypatch)
     graph = _gui_workflow_graph(tmp_path / "sample.txt")
 
-    bundle = generate_deployment_bundle(graph)
+    bundle = deploy_service.generate_deployment_bundle(graph)
 
     repo_root = Path(__file__).parent.parent.parent
     assert bundle["serve.py"] == (repo_root / "graph-runner" / "serve.py").read_text(encoding="utf-8")
@@ -295,3 +295,17 @@ def test_gui_graph_without_a_built_frontend_still_deploys_headless(tmp_path, mon
     assert "serve.py" not in bundle
     assert "main.py" in bundle
     assert "fastapi" not in bundle["requirements.txt"]
+
+
+def test_a_bundle_ships_the_licence():
+    """
+    The licence's Notices section requires that anyone who receives any part of
+    the software also receives the terms -- and a bundle is exactly that: the
+    engine, copied verbatim, handed to someone else.
+    """
+    graph = Graph.model_validate({"metadata": {"name": "x"}, "nodes": [], "edges": []})
+    bundle = deploy_service.generate_deployment_bundle(graph)
+
+    assert "LICENSE" in bundle
+    assert "PolyForm Noncommercial License 1.0.0" in bundle["LICENSE"]
+    assert bundle["LICENSE"].startswith("Required Notice:")

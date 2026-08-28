@@ -490,3 +490,18 @@ AI-Graph/
 
 For the detailed per-node-type/per-widget-kind file map (which class to edit for a
 given change), see [AGENTS.md](AGENTS.md).
+
+---
+
+## 📄 Licence
+
+AI-Graph is **source-available, not open source**: [PolyForm Noncommercial
+1.0.0](LICENSE).
+
+- Any **noncommercial** use is permitted — personal, research, teaching, and
+  noncommercial organisations. Use it, change it, share it.
+- **Commercial use needs a separate licence** from the copyright holder. Open an
+  issue to ask for one.
+
+Every deploy bundle carries a copy of the licence, because a bundle ships the
+engine itself: whoever receives the software has to receive the terms with it.

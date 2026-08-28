@@ -144,6 +144,11 @@ def _requirements_txt(graph: Graph, needs: DeployNeeds) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _license() -> str:
+    """The project's LICENSE, copied verbatim into every bundle."""
+    return (_REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
+
+
 def _main_py() -> str:
     """
     The bundle's entrypoint: the exact source of graph-runner/run.py, verbatim.
@@ -348,4 +353,8 @@ def generate_deployment_bundle(graph: Graph) -> Bundle:
     bundle["Dockerfile"] = _dockerfile(needs)
     bundle["docker-compose.yml"] = generate_docker_compose(graph)
     bundle["README.md"] = _readme(graph, needs)
+    # A bundle vendors the engine verbatim and is handed to someone else, so it
+    # is a distribution of the software -- and the licence's Notices section
+    # requires that whoever receives any part of it also receives the terms.
+    bundle["LICENSE"] = _license()
     return bundle
