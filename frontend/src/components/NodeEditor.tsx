@@ -8,10 +8,10 @@ import { inputPortsForMode } from '../elements/input/inputElement';
 import { NODE_ELEMENTS } from '../elements/registry';
 import Modal from './Modal';
 import { useGenerate } from '../elements/shared/useGenerate';
-import { SELECTOR_CODE_CONTEXT } from '../elements/shared/generationContext';
+import { SELECTOR_CODE_CONTEXT, connectedFormatContext, lastRunContext } from '../elements/shared/generationContext';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
-import { connectedDataFormatContext, connectedOutputDataNodes } from '../elements/data/dataElement';
+import { connectedOutputDataNodes } from '../elements/data/dataElement';
 import { ACCENT, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT } from '../ui/theme';
 
 interface NodeEditorProps {
@@ -32,6 +32,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const updateNode = useGraphStore((s) => s.updateNode);
   const graphNodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
   const graphEdges = useGraphStore((s) => s.rfEdges);
+  // The last run's per-node values: the best generation context available, and
+  // it was sitting in the store unused.
+  const executionResult = useGraphStore((s) => s.executionResult);
 
   const [node, setNode] = useState<GraphNode | null>(null);
   // One state machine for all four ✨ Generate buttons in this editor.
@@ -85,9 +88,15 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     );
   };
 
-  const connectedDataContext = () => {
-    return connectedDataFormatContext(node.id, graphNodes, graphEdges);
-  };
+  /**
+   * Everything the generator should know beyond the user's own description:
+   * what the neighbours declare, and what actually flowed through this node the
+   * last time the graph ran.
+   */
+  const surroundingContext = () => [
+    connectedFormatContext(node.id, graphNodes, graphEdges),
+    lastRunContext(node.id, executionResult),
+  ].filter(Boolean).join('\n\n');
 
   const handleGenerateCode = () => generate.run({
     guard: () => (node.config.code_prompt ?? '').trim() ? undefined : 'Please add a code generation prompt first.',
@@ -100,7 +109,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       return generateCode({
         description: (node.config.code_prompt ?? '').trim(),
         language: node.config.language,
-        context: [batchContext, outputFormatContext(node.config), connectedDataContext()].filter(Boolean).join('\n'),
+        context: [batchContext, outputFormatContext(node.config), surroundingContext()].filter(Boolean).join('\n'),
         context_file: node.config.config_context_file,
         inputs: node.inputs.map((p) => p.id),
         outputs: node.outputs.map((p) => p.id),
@@ -116,7 +125,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     success: '✅ Prompt generated!',
     run: () => generatePrompt({
       description: node.description,
-      context: [outputFormatContext(node.config), connectedDataContext()].filter(Boolean).join('\n'),
+      context: [outputFormatContext(node.config), surroundingContext()].filter(Boolean).join('\n'),
       context_file: node.config.config_context_file,
       ...genAI(),
     }),
@@ -129,7 +138,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     success: '✅ Data format generated!',
     run: () => generateDataFormat({
       description: (node.config.data_prompt ?? '').trim(),
-      context: `Standard format family: ${node.config.data_format}.\n${connectedDataContext()}`,
+      context: `Standard format family: ${node.config.data_format}.\n${surroundingContext()}`,
       context_file: node.config.config_context_file,
       ...genAI(),
     }),

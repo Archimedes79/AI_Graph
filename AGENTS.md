@@ -312,6 +312,27 @@ and any element's `execute` can import it without a circular-import trick. Since
 deploy bundle vendors `batching.py` verbatim (see below), there is no second copy of
 this behavior that could drift from the editor's.
 
+## What the AI knows when it generates
+
+`frontend/src/elements/shared/generationContext.ts` is the one place that answers
+"what does the model see besides the user's sentence". Every ✨ Generate button joins:
+
+1. **Port names** — `inputs`/`outputs` go with a code request, and the backend's system
+   prompt tells the model the returned dict's keys must match them exactly.
+2. **`connectedFormatContext`** — the declared contract of every directly wired
+   neighbour, for *all* node types (it once covered `data` nodes only, so the commonest
+   wiring of all, an input feeding a code node, contributed nothing). Deduplicated: two
+   ports into one neighbour are two edges but one fact.
+3. **`lastRunContext`** — the values the node actually received on the last run, from
+   `executionResult` in the store. Run once, then generate, and the model works from real
+   data instead of a description of it. Truncated per port; empty before the first run.
+4. **A context file** — the 📎 attachment, read server-side by `routers/ai.py`'s
+   `_with_context_file`, which appends the content plus a parsed preview of up to 8
+   records so the model can see the shape rather than infer it.
+
+When adding a Generate button, compose these rather than inventing a fifth context
+string; a prompt that exists twice is a prompt that will drift.
+
 ## Where the AI configuration lives (two different questions)
 
 There are two AI choices in this system and they deliberately live in different
