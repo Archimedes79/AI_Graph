@@ -3,7 +3,7 @@ The licence boundary, enforced.
 
 A deploy bundle is handed to somebody else, so what it may contain is a closed
 list: the vendored engine, the runner scripts, the runtime page, the user's own
-graph, and `LICENSE-runtime`, which covers exactly those. Nothing from the
+graph, and the licence. Nothing from the
 editor -- `app/routers/**`, `app/main.py`, `deploy_service.py` itself,
 `node_files.py`, the designer's frontend -- may ever end up in one.
 
@@ -96,19 +96,17 @@ def test_every_vendored_python_file_is_its_repo_file_verbatim():
 
 # --- the licence ------------------------------------------------------------
 
-def test_a_bundle_carries_the_runtime_licence_not_the_editors():
+def test_a_bundle_carries_the_licence():
     """
-    The bundle's terms come from `LICENSE-runtime`, the file that covers the
-    files a bundle contains. Both licence files currently hold the same text,
-    so today this test only pins down *which file is read* -- which is the
-    whole point: the day the terms diverge, this is what stops the editor's
-    licence from being shipped to somebody who never received the editor.
+    A bundle vendors the engine and is handed to someone else, and the licence's
+    Notices section requires that whoever receives any part of the software
+    receives the terms with it.
     """
-    runtime_licence = REPO_ROOT / "LICENSE-runtime"
-    assert runtime_licence.is_file(), "LICENSE-runtime is what a bundle ships under"
+    licence = REPO_ROOT / "LICENSE"
+    assert licence.is_file()
 
     bundle = deploy_service.generate_deployment_bundle(_headless_graph())
-    assert bundle["LICENSE"] == runtime_licence.read_text(encoding="utf-8")
+    assert bundle["LICENSE"] == licence.read_text(encoding="utf-8")
 
 
 # --- the frontend: the runtime entry point, and what it reaches -------------

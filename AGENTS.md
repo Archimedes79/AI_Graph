@@ -596,10 +596,8 @@ vendoring `app/routers/*`: a deployed tool must not offer code generation or fil
 browsing. Without a built frontend the graph still deploys, headless, and the generated
 README says why.
 
-**The bundle is a closed list, and that list is the licence boundary.** A bundle may
-contain the vendored engine, the runner scripts, the runtime page, the user's graph, and
-`LICENSE-runtime` — which covers exactly those, and is a separate file from the editor's
-own `LICENSE` precisely so the two sets of terms can differ. Nothing from the editor
+**The bundle is a closed list.** A bundle may contain the vendored engine, the runner
+scripts, the runtime page, the user's graph and the licence. Nothing from the editor
 (`routers/`, `main.py`, `deploy_service.py` itself, `node_files.py`, `code_refine.py`,
 the designer's frontend) may ever be vendored. Adding a module to `app/services/` does
 not make it travel: `_PORTABLE_SERVICE_MODULES` is a whitelist, and

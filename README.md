@@ -161,16 +161,10 @@ AI-Graph is **source-available, not open source**: [PolyForm Noncommercial
 
 **What you build with AI-Graph is yours.** Your graph, and the code generated
 into it, belong to you. A deploy bundle contains nothing but that plus the
-runtime engine, and the engine ships under its own
-[`LICENSE-runtime`](LICENSE-runtime) — which is why every bundle carries a copy
-of the terms: whoever receives the software has to receive them with it. No part
-of the editor (the canvas, the generator, the deploy tool itself) ever travels
-in a bundle; `backend/tests/test_deploy_boundary.py` fails if one starts to.
-
-The two licence files hold the same text today. They are separate because the
-intention is for a *deployed tool's* terms to become permissive and stay that
-way, unbounded in time, independently of the editor's — and `LICENSE-runtime`
-is the one file that changes when that is settled.
+runtime engine — no part of the editor (the canvas, the generator, the deploy
+tool itself) ever travels in one, and `backend/tests/test_deploy_boundary.py`
+fails if one starts to. Every bundle carries a copy of the licence, because
+whoever receives the software has to receive the terms with it.
 
 Licensing is not final. If you want to use AI-Graph commercially, open an
 issue — that conversation is welcome.

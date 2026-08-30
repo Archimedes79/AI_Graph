@@ -8,10 +8,10 @@ plus the user's `graph.json` and a thin `main.py` (the exact source of
 the same `execute_graph()` as the live editor/CLI, so the two can never
 diverge. See AGENTS.md's "Object-oriented element contract" section.
 
-What a bundle may contain is a closed list, and that list is the licence
-boundary: the vendored engine, the runner scripts, the runtime page, the user's
-graph -- and `LICENSE-runtime`, which covers exactly those. No editor file is
-ever vendored; `tests/test_deploy_boundary.py` fails if one starts to be.
+What a bundle may contain is a closed list: the vendored engine, the runner
+scripts, the runtime page, the user's graph and the licence. No editor file is
+ever vendored -- not the canvas, not the generator, not this module itself --
+and `tests/test_deploy_boundary.py` fails if one starts to be.
 
 Every script this module ships is likewise an existing repo file copied
 verbatim, never a string assembled here: `main.py` is `graph-runner/run.py`
@@ -155,15 +155,13 @@ def _requirements_txt(graph: Graph, needs: DeployNeeds) -> str:
 
 def _license() -> str:
     """
-    The licence a bundle ships under: `LICENSE-runtime`, which covers exactly
-    what a bundle contains -- the vendored engine, the runner scripts and the
-    runtime page. The editor's own `LICENSE` never travels with a bundle,
-    because no editor file does (see `_runtime_static_files` and
-    `_PORTABLE_SERVICE_MODULES`). Today the two files hold the same terms;
-    keeping them separate is what makes changing the bundle's terms a
-    one-file edit instead of a refactor.
+    The project's LICENSE, copied verbatim into every bundle.
+
+    Not decoration: a bundle vendors the engine and is handed to someone else,
+    and the licence's Notices section requires that whoever receives any part of
+    the software receives the terms with it.
     """
-    return (_REPO_ROOT / "LICENSE-runtime").read_text(encoding="utf-8")
+    return (_REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
 
 
 def _main_py() -> str:
@@ -196,8 +194,8 @@ def _serve_py() -> str:
 # The editor and the deployed runtime are two entry points of ONE Vite build,
 # so `frontend/dist` holds both: `index.html` plus the editor's chunks next to
 # `runtime.html` plus the runtime's. A bundle ships only what `runtime.html`
-# reaches -- shipping the rest would put the designer into every deployed tool
-# and would cross the line `LICENSE-runtime` draws.
+# reaches -- shipping the rest would put the whole designer into every deployed
+# tool, which is not what a deployed graph is.
 _RUNTIME_ENTRY = "runtime.html"
 # Suffixes worth scanning for references to other built files. Everything else
 # (images, fonts) is a leaf: it can be referenced, it never references.
