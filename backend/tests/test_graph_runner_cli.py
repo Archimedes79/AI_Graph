@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import builtins
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -88,3 +89,52 @@ async def test_runner_resolves_widget_scoped_gui_requirements_independently(tmp_
     widget_values = {w.id: w.value for w in gui_node.config.gui_widgets}
     assert widget_values["w1"] == file_value
     assert widget_values["w2"] == dir_value
+
+@pytest.mark.asyncio
+async def test_inputs_can_target_a_widget_that_already_holds_a_value(tmp_path, capsys, monkeypatch):
+    """
+    `--inputs node::widget=…` must reach the widget.
+
+    Overrides used to be applied by a hand-rolled loop that matched node ids
+    only, so a widget-scoped key was dropped without a word -- and because the
+    prompt loop then skipped it as "supplied", the graph ran against whatever
+    path it was saved with. Pointing a deployed tool at a file from a script is
+    most of what a bundle is for, so this is the case that matters.
+    """
+    runner = _load_runner_module()
+
+    data = tmp_path / "echt.txt"
+    data.write_text("die richtige Datei", encoding="utf-8")
+
+    graph_path = tmp_path / "g.json"
+    graph_path.write_text(json.dumps({
+        "metadata": {"name": "picker"},
+        "nodes": [
+            {
+                "id": "panel", "node_type": "gui", "label": "Panel",
+                "position": {"x": 0, "y": 0}, "inputs": [], "outputs": [],
+                "config": {"gui_widgets": [{
+                    "id": "picker", "kind": "input_picker", "mode": "file",
+                    "label": "Datei", "value": "hoffentlich_nicht_diese.txt",
+                }]},
+            },
+            {
+                "id": "out", "node_type": "output", "label": "Ergebnis",
+                "position": {"x": 300, "y": 0},
+                "inputs": [{"id": "value", "name": "Value", "kind": "input",
+                            "data_type": "any", "multi": True, "required": False}],
+                "outputs": [], "config": {"output_label": "Pfad", "write_mode": "window"},
+            },
+        ],
+        "edges": [{"id": "e1", "source_node_id": "panel", "source_port_id": "picker_out",
+                   "target_node_id": "out", "target_port_id": "value"}],
+    }), encoding="utf-8")
+
+    monkeypatch.setattr(builtins, "input", lambda prompt: (_ for _ in ()).throw(EOFError(prompt)))
+
+    await runner.run(str(graph_path), {"panel::picker": str(data)})
+
+    out = capsys.readouterr().out
+    assert '"status": "success"' in out
+    assert str(data) in out.replace("\\\\", "\\")
+    assert "hoffentlich_nicht_diese" not in out

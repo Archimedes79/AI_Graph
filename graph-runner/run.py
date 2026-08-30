@@ -102,11 +102,14 @@ async def run(graph_path: str, extra_inputs: dict, exit_on_error: bool = True):
         ai_defaults.model,
     )
 
-    # Inject explicit CLI overrides into any node's config.value (by node ID)
+    # `apply_runtime_values` already understands both key shapes -- a plain node
+    # id and the `node_id::widget_id` one the prompt loop below uses. Doing it by
+    # hand here matched node ids only, so `--inputs panel::picker=/data.csv` was
+    # dropped without a word: the loop below then skipped prompting for it too,
+    # and the graph ran against whatever path it was saved with. Pointing a
+    # deployed tool at a file from a script is most of what a bundle is for.
     if extra_inputs:
-        for node in graph.nodes:
-            if node.id in extra_inputs:
-                node.config.value = extra_inputs[node.id]
+        apply_runtime_values(graph, extra_inputs)
 
     # Prompt interactively for any remaining values the graph needs
     resolved: dict = {}
