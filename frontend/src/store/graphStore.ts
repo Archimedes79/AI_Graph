@@ -8,6 +8,7 @@ import { cancelRun, getRunSnapshot, startRun } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import { ACCENT } from '../ui/theme';
 import { delivered } from '../utils/executionStatus';
+import { NODE_ELEMENTS } from '../elements/registry';
 
 type RFNode = Node<RFNodeData>;
 
@@ -39,7 +40,14 @@ export interface GraphStore {
   future: string[];
 
   /** Live progress of the run in flight, or null when nothing is running. */
-  runProgress: { completed: number; total: number; label: string } | null;
+  runProgress: {
+    completed: number;
+    total: number;
+    label: string;
+    itemDone: number;
+    itemTotal: number;
+    idleSeconds: number | null;
+  } | null;
   /** Id of the run in flight, so it can be stopped. */
   currentRunId: string | null;
 
@@ -125,7 +133,7 @@ function collectTextOutputWindows(
   result: ExecutionResult,
 ): { nodeId: string; label: string; content: string }[] {
   return graph.nodes
-    .filter((node) => node.node_type === 'output' && node.config.write_mode === 'window')
+    .filter((node) => NODE_ELEMENTS[node.node_type]?.showsResultWindow?.(node) ?? false)
     .map((node) => {
       const nodeResult = result.node_results.find((r) => r.node_id === node.id);
       if (!nodeResult || !delivered(nodeResult.status)) return null;
@@ -213,7 +221,7 @@ function migrateLegacyNode(rawNode: Partial<GraphNode>): Partial<GraphNode> {
 // edges' delivered values should be persisted into the target widget's own
 // `value` for the *next* run (see `setExecutionResult` below).
 function isMemoryNode(nodeType: string): boolean {
-  return nodeType === 'data' || nodeType === 'gui';
+  return NODE_ELEMENTS[nodeType as GraphNode['node_type']]?.isMemory ?? false;
 }
 
 function memoryFeedbackEdgeIds(nodes: GraphNode[], edges: GraphEdge[]): Set<string> {
@@ -516,12 +524,15 @@ export const useGraphStore = create<GraphStore>()(
           target_port_id: e.targetHandle ?? 'input',
         }));
         const resultByNodeId = new Map(result.node_results.map((r) => [r.node_id, r]));
+        // An acyclic memory node still updates: it delivered a value this round,
+        // and that value is what the next round starts from.
         for (const rfNode of state.rfNodes) {
           const graphNode = rfNode.data.graphNode as GraphNode;
-          if (graphNode.node_type !== 'data') continue;
+          const element = NODE_ELEMENTS[graphNode.node_type];
+          if (!element?.isMemory || !element.settleMemoryValue) continue;
           const nodeResult = resultByNodeId.get(graphNode.id);
           if (delivered(nodeResult?.status) && nodeResult?.outputs && 'output' in nodeResult.outputs) {
-            graphNode.config.data_value = nodeResult.outputs.output as any;
+            element.settleMemoryValue(graphNode, 'output', nodeResult.outputs.output);
           }
         }
         const feedbackIds = memoryFeedbackEdgeIds(nodes, edges);
@@ -542,17 +553,9 @@ export const useGraphStore = create<GraphStore>()(
           const targetIdx = state.rfNodes.findIndex((n: RFNode) => n.id === edge.target_node_id);
           if (targetIdx === -1) continue;
           const targetNode = state.rfNodes[targetIdx].data.graphNode as GraphNode;
-          if (targetNode.node_type === 'data') {
-            targetNode.config.data_value = value as any;
-            continue;
-          }
-          const widgetId = edge.target_port_id.endsWith('_in')
-            ? edge.target_port_id.slice(0, -'_in'.length)
-            : edge.target_port_id;
-          const widgets = targetNode.config.gui_widgets;
-          const widget = Array.isArray(widgets) ? widgets.find((w) => w.id === widgetId) : undefined;
-          if (!widget) continue;
-          widget.value = value as any;
+          NODE_ELEMENTS[targetNode.node_type]?.settleMemoryValue?.(
+            targetNode, edge.target_port_id, value,
+          );
         }
       }),
 
@@ -724,7 +727,9 @@ export const useGraphStore = create<GraphStore>()(
         const { run_id: runId, total } = await startRun(graph);
         set((state) => {
           state.currentRunId = runId;
-          state.runProgress = { completed: 0, total, label: '' };
+          state.runProgress = {
+            completed: 0, total, label: '', itemDone: 0, itemTotal: 0, idleSeconds: null,
+          };
         });
 
         let snapshot = await getRunSnapshot(runId);
@@ -736,6 +741,12 @@ export const useGraphStore = create<GraphStore>()(
               completed: snapshot.completed,
               total: snapshot.total,
               label: snapshot.current_label,
+              // `?? 0` rather than a required field: a deployed bundle may be
+              // serving an older snapshot shape, and a missing counter should
+              // mean "no items to show", not NaN in the toolbar.
+              itemDone: snapshot.item_done ?? 0,
+              itemTotal: snapshot.item_total ?? 0,
+              idleSeconds: snapshot.idle_seconds ?? null,
             };
           });
         }

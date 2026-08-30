@@ -14,6 +14,7 @@ from app.services import file_service
 
 class OutputElement(NodeElement):
     node_type = NodeType.OUTPUT
+    config_fields = ("value", "prompt_at_runtime", "write_mode", "output_label")
 
     async def execute(
         self,

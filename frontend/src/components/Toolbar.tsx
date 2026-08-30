@@ -13,6 +13,17 @@ import GraphWindows from './GraphWindows';
 import Modal from './Modal';
 import { ACCENT, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
+/**
+ * How long a node may go without producing anything before the toolbar says so.
+ *
+ * A local model thinking for twenty seconds is normal and needs no commentary;
+ * one silent for a minute is the case where the only question a user has is
+ * "is this still alive or do I reload the page?". Comfortably under
+ * AI_STREAM_IDLE_TIMEOUT (120s), so the notice appears well before the request
+ * would be given up on.
+ */
+const STALLED_AFTER_SECONDS = 45;
+
 interface ToolbarProps {
   onNewGraph: () => void;
   onSave: () => void;
@@ -289,10 +300,30 @@ export default function Toolbar({
           <span
             className="text-xs tabular-nums"
             style={{ color: MUTED }}
-            title="Nodes finished, of the total in this graph"
+            title={
+              'Nodes finished, of the total in this graph'
+              + (runProgress.itemTotal > 1 ? '; then items finished within the running node' : '')
+            }
           >
             {runProgress.completed}/{runProgress.total}
             {runProgress.label ? ` · ${runProgress.label}` : ''}
+            {/* Only worth showing for a real batch: "1/1" on every single-item
+                node is noise that makes the useful case harder to spot. */}
+            {runProgress.itemTotal > 1 ? ` · ${runProgress.itemDone}/${runProgress.itemTotal}` : ''}
+          </span>
+        )}
+        {/* Said only once it is worth saying. Below the threshold a run is
+            visibly working, and a ticking "1s… 2s…" would be pure anxiety;
+            above it, silence is the thing the user cannot otherwise tell from
+            a hang. */}
+        {isExecuting && runProgress && runProgress.idleSeconds !== null
+          && runProgress.idleSeconds > STALLED_AFTER_SECONDS && (
+          <span
+            className="text-xs tabular-nums"
+            style={{ color: DIM }}
+            title="No output from the model since this long. The run is still waiting, not stopped."
+          >
+            ⏳ {Math.round(runProgress.idleSeconds)}s
           </span>
         )}
         {isExecuting ? (

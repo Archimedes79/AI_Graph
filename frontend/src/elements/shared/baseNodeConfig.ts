@@ -11,6 +11,8 @@ export function baseNodeConfig(): NodeConfig {
     value: '',
     prompt_at_runtime: false,
     input_mode: 'text',
+    recursive: false,
+    extensions: '',
     select_all_files: true,
     selector_prompt: '',
     selector_code: 'def run(inputs):\n    # inputs["files"] is the full list of file paths in the directory\n    return {"files": inputs.get("files", [])}\n',

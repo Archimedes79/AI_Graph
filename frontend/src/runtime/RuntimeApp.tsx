@@ -6,6 +6,7 @@ import RuntimeAISettings from './RuntimeAISettings';
 import { getRuntimeGraph, getRuntimeRequirements } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
+import { NODE_ELEMENTS } from '../elements/registry';
 import type { Graph, RuntimeRequirement } from '../types/graph';
 import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
@@ -95,7 +96,7 @@ export default function RuntimeApp() {
   // squeezed into a header span next to the buttons.
   const runError = status === 'error' ? executionResult?.error : '';
   const hasWidgets = rfNodes.some(
-    (n) => n.data.graphNode.node_type === 'gui',
+    (n) => NODE_ELEMENTS[n.data.graphNode.node_type]?.hasRuntimeWindow ?? false,
   );
 
   return (

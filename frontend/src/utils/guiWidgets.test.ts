@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { GraphNode } from '../types/graph';
 import { syncGuiNodePorts, createGuiWidget } from './guiWidgets';
+import { DEFAULT_WIDGET_SPAN } from '../components/gui/layout';
+import { baseNodeConfig } from '../elements/shared/baseNodeConfig';
 
 function blankGuiNode(): GraphNode {
   return {
@@ -11,38 +13,10 @@ function blankGuiNode(): GraphNode {
     position: { x: 0, y: 0 },
     inputs: [],
     outputs: [],
-    config: {
-      prompt_at_runtime: false,
-      input_mode: 'text',
-      select_all_files: true,
-      selector_prompt: '',
-      selector_code: '',
-      ai_provider: 'default',
-      ai_model: '',
-      system_prompt: '',
-      temperature: 0.7,
-      language: 'python',
-      code: '',
-      code_prompt: '',
-      code_file: '',
-      requirements: [],
-      data_value: null,
-      data_format: 'text',
-      data_prompt: '',
-      data_format_prompt: '',
-      example_file: '',
-      output_format: 'text',
-      output_format_prompt: '',
-      output_label: 'Result',
-      write_mode: 'none',
-      batch_mode: 'per_item',
-      batch_concurrency: 0,
-      read_file_inputs: false,
-      send_images: false,
-      gui_widgets: [],
-      gui_grid_columns: 12,
-      extra: {},
-    },
+    // The shared defaults rather than a copy of them: this file tests port
+    // synchronisation, and a hand-listed config made it break whenever an
+    // unrelated field was added to the DSL.
+    config: baseNodeConfig(),
   };
 }
 
@@ -142,5 +116,21 @@ describe('syncGuiNodePorts', () => {
     expect(afterRemoval.outputs.find((p) => p.id === `${c.id}_out`)).toEqual(beforeCOut);
     expect(afterRemoval.inputs.find((p) => p.id === `${b.id}_in`)).toBeUndefined();
     expect(afterRemoval.outputs.find((p) => p.id === `${b.id}_out`)).toBeUndefined();
+  });
+});
+
+describe('createGuiWidget sizing', () => {
+  it('gives a new widget concrete cells and no size preset', () => {
+    // `size` was a second way of saying what w/h say, so the same widget could
+    // be described twice and disagree. There is one encoding now.
+    const widget = createGuiWidget('text_io', 'A');
+    expect({ w: widget.w, h: widget.h }).toEqual(DEFAULT_WIDGET_SPAN);
+    expect('size' in widget).toBe(false);
+  });
+
+  it('leaves a new widget unplaced, so it stacks until it is dragged', () => {
+    const widget = createGuiWidget('text_io', 'A');
+    expect(widget.x).toBeUndefined();
+    expect(widget.y).toBeUndefined();
   });
 });

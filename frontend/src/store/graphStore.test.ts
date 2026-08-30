@@ -2,41 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { useGraphStore } from './graphStore';
 import type { Graph, GraphNode } from '../types/graph';
 import { createGuiWidget, guiWidgetPorts } from '../utils/guiWidgets';
+import { baseNodeConfig } from '../elements/shared/baseNodeConfig';
 
-function blankConfig() {
-  return {
-    prompt_at_runtime: false,
-    input_mode: 'text' as const,
-    select_all_files: true,
-    selector_prompt: '',
-    selector_code: '',
-    ai_provider: 'default' as const,
-    ai_model: '',
-    system_prompt: '',
-    temperature: 0.7,
-    language: 'python',
-    code: '',
-    code_prompt: '',
-    code_file: '',
-    requirements: [],
-    data_value: null,
-    data_format: 'text' as const,
-    data_prompt: '',
-    data_format_prompt: '',
-    example_file: '',
-    output_format: 'text' as const,
-    output_format_prompt: '',
-    output_label: 'Result',
-    write_mode: 'none' as const,
-    batch_mode: 'per_item' as const,
-    batch_concurrency: 0,
-    read_file_inputs: false,
-    send_images: false,
-    gui_widgets: [],
-    gui_grid_columns: 12,
-    extra: {},
-  };
-}
+// The same defaults every node type is created with. Copied out field by field
+// here once, which meant adding a field to NodeConfig broke this file for a
+// reason that had nothing to do with what it tests.
+const blankConfig = baseNodeConfig;
 
 function graphNode(overrides: Partial<GraphNode>): GraphNode {
   return {

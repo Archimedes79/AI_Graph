@@ -3,7 +3,7 @@ import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import type { RFNodeData } from '../../types/graph';
 import { NODE_TYPE_COLORS, NODE_TYPE_ICON, NODE_TYPE_LABELS } from '../../utils/nodeDefaults';
 import { useGraphStore } from '../../store/graphStore';
-import PlotWidget from '../PlotWidget';
+import { GUI_WIDGET_ELEMENTS } from '../../elements/registry';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../../ui/theme';
 import { delivered } from '../../utils/executionStatus';
 
@@ -151,9 +151,16 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
             <div className="flex flex-col gap-1 items-end">
               <span className="text-xs font-semibold mb-0.5" style={{ color: DIMMER }}>IN ←</span>
               {graphNode.inputs.map((port) => {
-                const plotWidget = graphNode.config.gui_widgets.find(
-                  (w) => w.kind === 'plot_window' && `${w.id}_in` === port.id
+                // Whether anything is previewed under this port is the widget
+                // element's answer, not this component's: it used to look for
+                // `kind === 'plot_window'` by name, which is a widget-kind
+                // switch inside a shared renderer.
+                const previewWidget = graphNode.config.gui_widgets.find(
+                  (w) => `${w.id}_in` === port.id && GUI_WIDGET_ELEMENTS[w.kind]?.CanvasPreview
                 );
+                const CanvasPreview = previewWidget
+                  ? GUI_WIDGET_ELEMENTS[previewWidget.kind].CanvasPreview
+                  : undefined;
                 return (
                   <React.Fragment key={port.id}>
                     <div className="relative flex items-center gap-1.5" style={{ marginRight: -12 }}>
@@ -175,9 +182,9 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
                         onClick={(e) => { e.stopPropagation(); data.onPortEdit(id, port.id); }}
                       />
                     </div>
-                    {plotWidget && (
+                    {CanvasPreview && (
                       <div className="mt-1 mb-1 w-full">
-                        <PlotWidget data={executionResult?.inputs?.[port.id]} />
+                        <CanvasPreview data={executionResult?.inputs?.[port.id]} />
                       </div>
                     )}
                   </React.Fragment>

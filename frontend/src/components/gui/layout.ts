@@ -9,22 +9,13 @@ export const GUI_GRID_COLUMNS = 12;
 export const GUI_GRID_ROW_HEIGHT = 56;
 
 /**
- * Cell footprint for a widget size. The single source of truth: `createGuiWidget`
- * and the size dropdown stamp these onto new/resized widgets (via `sizeToGrid` in
- * utils/guiWidgets.ts, which re-exports this), and `defaultSpan` below uses the
- * same table for widgets the designer never placed. Two tables lived here before
- * and disagreed on three of six numbers, so the same "medium" widget rendered at
- * a different height depending on whether it had ever been sized.
+ * Cells a widget occupies when it has no size of its own yet.
+ *
+ * There used to be a `size` preset (small/medium/large) mapped onto w/h, which
+ * meant one widget could be described two ways and disagree. The preset is
+ * gone; a widget is created at this footprint and resized by dragging it.
  */
-export const SIZE_SPAN: Record<GuiWidget['size'], { w: number; h: number }> = {
-  small: { w: 3, h: 2 },
-  medium: { w: 6, h: 4 },
-  large: { w: 12, h: 6 },
-};
-
-export function sizeToGrid(size: GuiWidget['size']): { w: number; h: number } {
-  return SIZE_SPAN[size] ?? SIZE_SPAN.medium;
-}
+export const DEFAULT_WIDGET_SPAN = { w: 6, h: 4 };
 
 export interface WidgetPlacement {
   widget: GuiWidget;
@@ -32,10 +23,6 @@ export interface WidgetPlacement {
   y: number;
   w: number;
   h: number;
-}
-
-export function defaultSpan(widget: GuiWidget): { w: number; h: number } {
-  return sizeToGrid(widget.size);
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -53,9 +40,8 @@ export function resolveWidgetLayout(widgets: GuiWidget[], columns: number = GUI_
   let flowY = 0;
 
   for (const widget of widgets) {
-    const span = defaultSpan(widget);
-    const w = clamp(Math.round(widget.w ?? span.w), 1, columns);
-    const h = Math.max(1, Math.round(widget.h ?? span.h));
+    const w = clamp(Math.round(widget.w ?? DEFAULT_WIDGET_SPAN.w), 1, columns);
+    const h = Math.max(1, Math.round(widget.h ?? DEFAULT_WIDGET_SPAN.h));
     const isPlaced = widget.x !== undefined && widget.y !== undefined;
 
     if (isPlaced) {

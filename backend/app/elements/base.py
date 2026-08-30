@@ -12,11 +12,16 @@ the surrounding engine.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
-from app.models.graph import GraphNode, GuiWidget, GuiWidgetKind, NodeType, Port
+from app.models.graph import (DataType, GraphNode, GuiWidget, GuiWidgetKind, NodeType,
+                              Port, PortKind)
+from app.services import code_executor
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -139,7 +144,122 @@ SELECTOR_GENERATION = Generation(
 )
 
 
-class NodeElement(ABC):
+# `NodeConfig` fields that belong to no single element, so every element may
+# read them and none has to declare them:
+#   example_file -- the one sample attached to a node, read by every ✨ generate
+#   code_file    -- the authored file's name, uniform across authoring elements
+#                   (`node_files.Authored.file_name` reads it for all of them)
+#   extra        -- the DSL's documented passthrough bag
+SHARED_CONFIG_FIELDS: Tuple[str, ...] = ("example_file", "code_file", "extra")
+
+
+class Element(ABC):
+    """
+    What a node and a GUI widget have in common, which is nearly everything.
+
+    `NodeElement` and `GuiWidgetElement` declared `authored_file`, `generation`
+    and `deploy_needs` separately, with identical signatures and identical
+    meanings -- and `gui_element.py` already calls itself a Composite, a pattern
+    whose whole point is that leaf and container implement one component
+    interface. They did not. The cost was concrete: `node_files.Authored`
+    existed only to view the two through one lens, and `input`/`input_picker` --
+    documented as "the same contract implemented once at both levels" -- had
+    already drifted apart in the code that runs their shared selector.
+
+    What stays split, one level down, is what genuinely differs: a node is
+    addressed by the graph and has real ports; a widget is addressed by its
+    owning node and derives `{id}_in`/`{id}_out`. Forcing those into one shape
+    would buy uniformity by making every reader carry fields that never apply.
+    """
+
+    # Which config fields this element owns -- see `NodeElement.config_fields`
+    # below for why the question needs asking at all. On a widget these name
+    # `GuiWidget` fields instead; the question is the same one level down.
+    config_fields: ClassVar[Tuple[str, ...]] = ()
+
+    # ---- the snippet this element authors ------------------------------------
+
+    # What a failure of that snippet costs. "fatal" fails the element and, with
+    # it, the node; "cosmetic" is displayed and nothing downstream notices --
+    # correct for a display widget, whose transform breaking must not take its
+    # sibling widgets down with it.
+    snippet_failure: ClassVar[str] = "fatal"
+
+    def authored_file(self, subject: Any) -> Optional[AuthoredFile]:
+        """What this element keeps in a file beside the graph, or None.
+
+        Default None: an input or output node has nothing a person writes at
+        length, so there is nothing to externalise."""
+        return None
+
+    def generation(self) -> Optional[Generation]:
+        """How this element's body is written by an AI, or None if it isn't.
+
+        Takes no subject: this is a property of the element, not of one
+        instance, which is what lets the server resolve it from a request that
+        names only the element. Whether the button is *offered* on a particular
+        node (an input node selects files only in directory mode) is the
+        editor's call -- see `available` on the frontend definition."""
+        return None
+
+    def deploy_needs(self, subject: Any) -> DeployNeeds:
+        """What this instance needs from the deployed bundle's requirements.txt
+        / optional runtime setup. Default: nothing extra."""
+        return DeployNeeds()
+
+    async def run_snippet(
+        self, subject: Any, inputs: Dict[str, Any], body: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Execute this element's authored body against *inputs*.
+
+        *body* overrides what `authored_file()` points at, for the one case that
+        needs it: a selector generated at run time because the editor never
+        generated one. Passing it beats assigning it to the config first --
+        that made running a node quietly rewrite it.
+
+        Four elements wrote these steps out by hand -- find the body, find the
+        language, call the sandbox, decide what a failure means -- and the
+        copies had begun to disagree. Where the body lives is already declared
+        by `authored_file()`, so this needs no new declaration of its own.
+
+        An empty body passes *inputs* straight through. That used to mean three
+        different things: a code node called the sandbox regardless and failed
+        with a `NameError` out of a subprocess, the selectors guarded first, and
+        the display transform passed through. Pass-through is the sane default;
+        an element for which an empty body is a real error says so by overriding
+        (see `CodeElement`).
+        """
+        if body is None:
+            spec = self.authored_file(subject)
+            if spec is None:
+                return inputs
+            body = str(getattr(self._body_holder(subject), spec.body_field, "") or "")
+        if not body.strip():
+            return inputs
+
+        language = str(getattr(subject, "language", "") or "python")
+        # `requirements` exists on NodeConfig and not on GuiWidget -- the one
+        # real asymmetry between the levels here, and it costs a default.
+        requirements = list(getattr(subject, "requirements", ()) or ())
+        try:
+            return await code_executor.execute_code(body, language, inputs, requirements)
+        except Exception as exc:  # noqa: BLE001 - re-raised below unless cosmetic
+            if self.snippet_failure != "cosmetic":
+                raise
+            label = getattr(subject, "label", "") or getattr(subject, "id", "?")
+            logger.warning("Snippet of %s failed: %s", label, exc)
+            return {"value": f"⚠ {label}: transform failed:\n{exc}"}
+
+    def _body_holder(self, subject: Any) -> Any:
+        """Where `AuthoredFile.body_field` is read from.
+
+        A widget holds its own body; a node holds it in `config`. One line, and
+        the only thing `run_snippet` needs to know about the two levels.
+        """
+        return subject
+
+
+class NodeElement(Element):
     """
     Everything one `NodeType` needs to behave as a graph node:
       - `execute` -- run this node, live in the editor/API/CLI, or in a
@@ -151,6 +271,38 @@ class NodeElement(ABC):
     """
 
     node_type: ClassVar[NodeType]
+
+    def _body_holder(self, subject: GraphNode) -> Any:
+        return subject.config
+
+    # Which `NodeConfig` fields this element owns -- what its behaviour reads and
+    # what its editor writes.
+    #
+    # `NodeConfig` is one flat model of ~30 fields shared by every node type, so
+    # nothing in the DSL said which of them an `output` node has any business
+    # with (it uses two). That silence is why `recursive`/`extensions` could sit
+    # in `extra` on the input node while being real fields on the widget doing
+    # the identical job: with no per-element schema, the untyped bag is the only
+    # place a new field obviously fits.
+    #
+    # Declaring ownership here does not split the wire format -- graphs stay flat
+    # and permissive, and old ones load unchanged. It makes the question
+    # answerable, and `test_element_contract.py` holds each element to its
+    # answer: a field read in an element file and not named here is drift.
+    config_fields: ClassVar[Tuple[str, ...]] = ()
+
+    # This node keeps its value between runs, so an edge into it can close a
+    # cycle: the executor leaves such an edge out of the topological order and
+    # settles the freshly computed value afterwards, for the *next* round.
+    #
+    # `graph_executor` decided this with a hard-coded
+    # `node_type in (DATA, GUI)` -- the last switch on node type in shared
+    # backend code, next to a comment anticipating a general-purpose memory
+    # node. Asking the element instead is what makes that node a new file rather
+    # than an edit to the executor. Mirrored by `isMemory` on the frontend
+    # definition; the two must agree, or "memory" means different things
+    # depending on which half is asked.
+    is_memory: ClassVar[bool] = False
 
     @abstractmethod
     async def execute(
@@ -171,31 +323,6 @@ class NodeElement(ABC):
         """
         return []
 
-    def authored_file(self, node: GraphNode) -> Optional[AuthoredFile]:
-        """What this node keeps in a file beside the graph, or None.
-
-        Default None: an input or output node has nothing a person writes at
-        length, so there is nothing to externalise."""
-        return None
-
-    def generation(self) -> Optional[Generation]:
-        """How this node type's body is generated by an AI, or None if it isn't.
-
-        Takes no node: this is a property of the element, not of one instance,
-        which is what lets the server resolve it from a request that names only
-        the element. Whether the button is *offered* on a particular node (an
-        input node selects files only in directory mode) is the editor's call --
-        see `NodeElementDefinition.available` on the frontend.
-
-        Default None: an `output` node has no authored body, and a `gui` node is
-        a composite whose widgets answer this for themselves."""
-        return None
-
-    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
-        """What this node instance needs from the deployed bundle's optional
-        runtime setup / requirements.txt. Default: nothing extra."""
-        return DeployNeeds()
-
 
 def widget_input_or_value(widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
     """A widget's incoming wired value, falling back to its own stored value.
@@ -208,11 +335,12 @@ def widget_input_or_value(widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
     return raw if raw is not None else widget.value
 
 
-class GuiWidgetElement(ABC):
+class GuiWidgetElement(Element):
     """
     Everything one `GuiWidgetKind` needs to behave as a `gui` node's
     sub-element -- the same facets as NodeElement, one level down in the
-    object hierarchy. A `gui` node's own NodeElement (`elements/gui/gui_element.py`)
+    object hierarchy, and now literally the same base class for the ones that
+    do not differ. A `gui` node's own NodeElement (`elements/gui/gui_element.py`)
     is a Composite: its `execute` dispatches to each of its widgets'
     GuiWidgetElement in turn (looked up in `registry.GUI_WIDGET_ELEMENTS`) and
     merges their results, which is what makes the gui node "an object hierarchy
@@ -253,17 +381,37 @@ class GuiWidgetElement(ABC):
         preset value does; see input_picker_element.py)."""
         return None
 
-    def authored_file(self, widget: GuiWidget) -> Optional[AuthoredFile]:
-        """Same contract as `NodeElement.authored_file`, one level down: a gui
-        node's file is a folder with one file per widget that authors something."""
+
+class DisplayWidget(GuiWidgetElement):
+    """
+    A widget that only shows what arrives: one input port, no output port, and
+    an optional transform whose failure is cosmetic.
+
+    `plot_window` and `image_view` had byte-identical `ports()`,
+    `authored_file()` and `execute()` -- three methods and about a hundred lines
+    written out twice -- and differed in exactly the three strings describing
+    what their snippet should produce. That is duplication, not a design, and it
+    is the reason this one intermediate class exists: it carries code, not a
+    label.
+    """
+
+    # The generated snippet reshapes a value for display; if it raises, the
+    # widget shows the reason and its siblings carry on.
+    snippet_failure = "cosmetic"
+
+    def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:
+        return (
+            [Port(id=f"{widget.id}_in", name=widget.label or widget.id, kind=PortKind.INPUT,
+                  data_type=DataType.ANY, multi=True, required=False)],
+            [],
+        )
+
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+        # Never called: a widget with no output port has its in-place transform
+        # applied by the composite instead (see gui/gui_element.py).
         return None
 
-    def generation(self) -> Optional[Generation]:
-        """Same contract as `NodeElement.generation`, one level down."""
-        return None
-
-    def deploy_needs(self, widget: GuiWidget) -> DeployNeeds:
-        """What this widget needs from the deployed bundle. Default: nothing
-        extra -- the sandboxed runner a data-transform snippet uses is vendored
-        unconditionally."""
-        return DeployNeeds()
+    def authored_file(self, widget: GuiWidget) -> AuthoredFile:
+        """The optional transform that reshapes the incoming value."""
+        return AuthoredFile(body_field="code", prompt_field="code_prompt",
+                            extension=code_extension(widget))

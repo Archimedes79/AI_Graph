@@ -11,13 +11,14 @@ import asyncio
 import os
 import re
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
 from app.models.graph import AIProvider
-from app.services import ai_settings, file_service
+from app.services import ai_settings, file_service, skeleton
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,21 @@ AI_STREAM_IDLE_TIMEOUT = float(os.getenv("AI_STREAM_IDLE_TIMEOUT", "120"))
 # console instead of just waiting for the final result.
 _STREAM_PROGRESS_LOG_INTERVAL = 5.0
 
+# Liveness for whoever is watching this run.
+#
+# `complete()` is called from inside a node element, which knows nothing about a
+# run watching it -- and threading a callback down through every element's
+# `execute` signature to reach here would move run bookkeeping into the element
+# contract, where it does not belong. A ContextVar keeps it out: each asyncio
+# Task inherits its own copy, so nodes running concurrently in one level never
+# report activity for each other.
+#
+# Called with the number of characters received so far, at the same throttled
+# cadence as the progress log. Must not raise and must not block.
+stream_activity: ContextVar[Optional[Callable[[int], None]]] = ContextVar(
+    "ai_stream_activity", default=None
+)
+
 
 def _provider_error_detail(body: str) -> str:
     """The provider's own explanation, dug out of whatever JSON shape it used.
@@ -182,10 +198,16 @@ class _StreamProgress:
         self._chunks.append(piece)
         now = time.monotonic()
         if now - self._last_logged >= _STREAM_PROGRESS_LOG_INTERVAL:
+            received = sum(len(c) for c in self._chunks)
             logger.info(
                 "AI stream progress <- provider=%s model=%s after %.1fs (%d chars so far)",
-                self._provider, self._model, now - self._start, sum(len(c) for c in self._chunks),
+                self._provider, self._model, now - self._start, received,
             )
+            # Same cadence, but out to the UI rather than the console: this is
+            # what lets a watcher tell "slow" from "hung" during a long call.
+            report = stream_activity.get()
+            if report is not None:
+                report(received)
             self._last_logged = now
 
     def text(self) -> str:
@@ -510,9 +532,28 @@ AI_RETRY_BASE_DELAY = float(os.getenv("AI_RETRY_BASE_DELAY", "1.0"))
 _RETRYABLE_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
 
 
+class EmptyCompletionError(RuntimeError):
+    """A provider answered successfully with no content at all.
+
+    Every provider path ends in `_StreamProgress.text()`, which is `""` when no
+    chunk ever arrived -- a 200 with an empty stream. That raised nothing, so the
+    retry loop below saw success, and the node returned an empty string
+    downstream and reported SUCCESS. A local model still loading (LM Studio,
+    ollama) does exactly this, which made "the graph ran and produced nothing"
+    the single most confusing failure the editor could show.
+
+    Retryable on purpose: an empty answer is almost always transient. The cost
+    is that a *deliberately* empty answer now takes AI_MAX_ATTEMPTS before
+    failing -- the right side to err on, because a visible error beats a silent
+    empty string flowing into the rest of the graph.
+    """
+
+
 def _is_retryable(exc: Exception) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in _RETRYABLE_STATUS
+    if isinstance(exc, EmptyCompletionError):
+        return True
     # Connect/read/timeout errors: the request never got a verdict.
     return isinstance(exc, (httpx.TransportError, httpx.TimeoutException))
 
@@ -588,6 +629,14 @@ async def complete(
     for attempt in range(1, AI_MAX_ATTEMPTS + 1):
         try:
             result = await call_provider()
+            # Checked here rather than in each provider function: all seven end
+            # in `_StreamProgress.text()`, so one guard covers every provider
+            # including the next one somebody adds.
+            if not result.strip():
+                raise EmptyCompletionError(
+                    f"{provider}/{model} returned no content. The model may still be "
+                    "loading, or the request exceeded its context window."
+                )
             break
         except Exception as exc:  # noqa: BLE001 - re-raised below unless retryable
             last = attempt == AI_MAX_ATTEMPTS
@@ -618,10 +667,17 @@ async def generate_code(
     outputs: list[str] | None = None,
     model: str = "",
     provider: AIProvider = AIProvider.DEFAULT,
+    sample_inputs: Optional[Dict[str, Any]] = None,
+    sources: Optional[Dict[str, str]] = None,
 ) -> tuple[str, str]:
     """
     Ask the LLM to generate code that maps *inputs* to *outputs*.
     Returns (code, explanation).
+
+    *sample_inputs* (what the ports carried on the last run) and *sources* (the
+    label of the node feeding each port) are optional and only sharpen the
+    skeleton the model is asked to complete -- with neither, it still gets the
+    signature instead of a comma-separated list of port names.
     """
     inputs = inputs or []
     outputs = outputs or []
@@ -639,19 +695,23 @@ async def generate_code(
     ]
     if context:
         prompt_parts.append(f"\nContext:\n{context}")
-    if inputs:
-        prompt_parts.append(f"\nInputs: {', '.join(inputs)}")
-    if outputs:
-        prompt_parts.append(f"\nOutputs: {', '.join(outputs)}")
+    if inputs or outputs:
+        # The signature rather than a list of port names. A model told
+        # "Inputs: text, files" has to guess every type and every shape; the
+        # skeleton states them, with the values the ports actually carried last
+        # run when the caller supplied a sample.
         prompt_parts.append(
-            f"\nYour function must return a dict whose keys are exactly: {outputs!r}. "
-            "Use these exact strings as the dict keys - do not rename, abbreviate, "
-            "reorder, or invent additional keys, and include every one of them."
+            "\nComplete this function. Keep the signature and the returned keys exactly as they are:\n\n"
+            + skeleton.render(language, inputs, outputs, sample=sample_inputs, sources=sources)
+        )
+    if outputs:
+        prompt_parts.append(
+            f"\nThe returned dict's keys must be exactly: {outputs!r}. "
+            "Downstream nodes look values up by these exact strings - do not rename, "
+            "abbreviate, reorder, or invent additional keys, and include every one of them."
         )
     prompt_parts.append(
-        "\nThe function must be named `run` and accept a dict named `inputs` "
-        "and return a dict named `outputs`. "
-        f"Use only the {language} standard library unless the description requires otherwise."
+        f"\nUse only the {language} standard library unless the description requires otherwise."
     )
     raw = await complete("\n".join(prompt_parts), system, model, 0.2, provider)
 

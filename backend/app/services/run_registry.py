@@ -43,6 +43,14 @@ class Run:
     completed: int = 0
     running: List[str] = field(default_factory=list)
     current_label: str = ""
+    # Progress *within* the node in flight: how many batch items have finished,
+    # and when it last showed any sign of life. Both are approximations when a
+    # level runs several nodes at once -- exactly like `current_label`, which
+    # has always named whichever started last. A watcher wants "is it moving",
+    # and for that the newest number is the right one.
+    item_done: int = 0
+    item_total: int = 0
+    last_activity: Optional[float] = None
     result: Optional[ExecutionResult] = None
     error: Optional[str] = None
     cancelled: bool = False
@@ -63,6 +71,15 @@ class Run:
             "total": self.total,
             "running": list(self.running),
             "current_label": self.current_label,
+            "item_done": self.item_done,
+            "item_total": self.item_total,
+            # Seconds since the running node last showed life, or None when
+            # nothing has reported yet. The UI turns this into "still working"
+            # vs. "nothing for 90s", which is the actual question during a long
+            # call against a local model.
+            "idle_seconds": (
+                None if self.last_activity is None else time.monotonic() - self.last_activity
+            ),
             "error": self.error,
             "result": self.result.model_dump() if self.result is not None else None,
         }
@@ -84,19 +101,42 @@ def _prune() -> None:
         del _runs[oldest.id]
 
 
+def _apply_progress(run: Run, event: Dict[str, Any]) -> None:
+    """Fold one `execute_graph` progress event into *run*.
+
+    Module-level rather than a closure inside `start()` so the mapping from
+    event to snapshot can be tested without executing a graph -- it is the part
+    with rules in it (what resets when, what accumulates), while `start()` is
+    just plumbing.
+    """
+    kind = event.get("type")
+    if kind == "node_start":
+        run.running.append(event["node_id"])
+        run.current_label = event.get("label") or event["node_id"]
+        # A new node reports on its own scale; carrying the previous node's item
+        # count over would show "143/500" against work that has no items at all.
+        run.item_done = run.item_total = 0
+        run.last_activity = time.monotonic()
+    elif kind == "node_done":
+        run.completed += 1
+        if event["node_id"] in run.running:
+            run.running.remove(event["node_id"])
+        run.item_done = run.item_total = 0
+    elif kind == "batch_progress":
+        run.item_done = int(event.get("done") or 0)
+        run.item_total = int(event.get("total") or 0)
+        run.last_activity = time.monotonic()
+    elif kind == "activity":
+        run.last_activity = time.monotonic()
+
+
 def start(graph: Graph) -> Run:
     """Begin executing *graph* in the background and return its Run handle."""
     _prune()
     run = Run(id=uuid.uuid4().hex, total=len(graph.nodes))
 
     def on_progress(event: Dict[str, Any]) -> None:
-        if event.get("type") == "node_start":
-            run.running.append(event["node_id"])
-            run.current_label = event.get("label") or event["node_id"]
-        elif event.get("type") == "node_done":
-            run.completed += 1
-            if event["node_id"] in run.running:
-                run.running.remove(event["node_id"])
+        _apply_progress(run, event)
 
     async def execute() -> None:
         try:

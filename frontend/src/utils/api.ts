@@ -69,6 +69,7 @@ export const generate = (body: {
   outputs?: string[];
   /** Real port values from the last run; enables the verify-and-repair pass. */
   sample_inputs?: Record<string, unknown>;
+  input_sources?: Record<string, string>;
   ai_model?: string;
   ai_provider?: string;
 }): Promise<GenerationResult> => api.post('/ai/generate', body).then((r) => r.data);
@@ -181,6 +182,13 @@ export interface RunSnapshot {
   total: number;
   running: string[];
   current_label: string;
+  // Progress *within* the node in flight. `completed/total` counts nodes, which
+  // does not move at all while one node grinds through a 500-item batch or a
+  // single long streaming call -- the two cases that look exactly like a hang.
+  item_done: number;
+  item_total: number;
+  /** Seconds since the running node last showed life; null before anything reported. */
+  idle_seconds: number | null;
   error: string | null;
   result: ExecutionResult | null;
 }

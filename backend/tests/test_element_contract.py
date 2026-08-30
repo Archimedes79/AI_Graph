@@ -258,7 +258,7 @@ async def test_directory_input_applies_extension_filter(tmp_path):
         outputs=[_port("files", PortKind.OUTPUT, DataType.FILE_PATH, multi=True),
                  _port("count", PortKind.OUTPUT, DataType.TEXT)],
         config=NodeConfig(value=str(tmp_path), input_mode="directory",
-                          select_all_files=True, extra={"extensions": ".md"}),
+                          select_all_files=True, extensions=".md"),
     )
     result = await NODE_ELEMENTS[NodeType.INPUT].execute(node, {})
     assert sorted(Path(p).name for p in result["files"]) == ["a.md", "b.md"]
@@ -494,6 +494,32 @@ def test_one_example_file_replaces_three_context_fields():
     assert not hasattr(by_id["a"].config, "config_context_file")
 
 
+def test_a_widget_size_preset_becomes_the_cells_it_stood_for():
+    """`size` was a third way of saying what `w`/`h` already say.
+
+    Three encodings of one layout -- the preset, the widget list's order, and
+    w/h -- meant the same widget could be described three times and disagree.
+    """
+    graph = Graph.model_validate({
+        "nodes": [{
+            "id": "g", "node_type": "gui", "label": "G", "position": {"x": 0, "y": 0},
+            "config": {"gui_widgets": [
+                {"id": "small", "kind": "text_io", "size": "small"},
+                {"id": "large", "kind": "text_io", "size": "large"},
+                # An explicit layout must survive a stale preset: the preset was
+                # only ever shorthand for setting these two numbers.
+                {"id": "placed", "kind": "text_io", "size": "small", "w": 9, "h": 5},
+            ]}},
+        ],
+        "edges": [],
+    })
+    by_id = {w.id: w for w in graph.nodes[0].config.gui_widgets}
+    assert (by_id["small"].w, by_id["small"].h) == (3, 2)
+    assert (by_id["large"].w, by_id["large"].h) == (12, 6)
+    assert (by_id["placed"].w, by_id["placed"].h) == (9, 5)
+    assert not hasattr(by_id["small"], "size")
+
+
 # The frontend element file for each element name. Two languages describe one
 # element, and the halves have to agree about which fields a button reads and
 # writes -- a mismatch is a button that silently writes into nothing.
@@ -581,3 +607,196 @@ def test_a_legacy_widget_node_loads_as_a_gui_node():
 def test_widget_is_no_longer_a_node_type():
     assert not hasattr(NodeType, "WIDGET")
     assert "widget" not in {t.value for t in NodeType}
+
+
+def test_directory_selection_settings_move_out_of_the_untyped_bag():
+    """`extra` was the DSL's passthrough, and two real settings were hiding in it.
+
+    A `GuiWidget` declared `recursive`/`extensions` as fields while the `input`
+    node -- the same behaviour one level up -- kept them in `extra`, so one
+    contract was described two ways. Anything else in `extra` is untouched.
+    """
+    graph = Graph.model_validate({
+        "nodes": [{
+            "id": "d", "node_type": "input", "label": "Dir", "position": {"x": 0, "y": 0},
+            "config": {
+                "input_mode": "directory",
+                "extra": {"recursive": True, "extensions": ".md, .txt", "mine": "kept"},
+            },
+        }],
+        "edges": [],
+    })
+    config = graph.nodes[0].config
+    assert config.recursive is True
+    assert config.extensions == ".md, .txt"
+    assert config.extra == {"mine": "kept"}
+
+
+# ---------------------------------------------------------------------------
+# Which config fields does an element own?
+# ---------------------------------------------------------------------------
+#
+# `NodeConfig` is one flat model of ~30 fields shared by every node type, so the
+# DSL never said which of them a given element has any business with -- an
+# `output` node is created carrying `selector_code`, `system_prompt` and
+# `gui_widgets`, and uses two fields. That silence is why `recursive` and
+# `extensions` could live in `extra` on the input node while being real fields
+# on the widget doing the identical job.
+#
+# `NodeElement.config_fields` answers the question; this holds each element to
+# its answer. It does not split the wire format: graphs stay flat, and old ones
+# load unchanged.
+
+_ELEMENT_SOURCES = {
+    NodeType.INPUT:  "input/input_element.py",
+    NodeType.AI:     "ai/ai_element.py",
+    NodeType.CODE:   "code/code_element.py",
+    NodeType.DATA:   "data/data_element.py",
+    NodeType.OUTPUT: "output/output_element.py",
+    NodeType.GUI:    "gui/gui_element.py",
+}
+
+
+def _config_fields_read_by(source: str) -> set:
+    """Every NodeConfig field name the source actually reads off a config.
+
+    Comments are stripped first, so the prose explaining a field never counts as
+    a use of it -- otherwise every declaration would justify itself.
+    """
+    import re
+    body = "\n".join(line.split("#")[0] for line in source.splitlines())
+    known = set(NodeConfig.model_fields)
+    return {
+        match.group(1)
+        for match in re.finditer(r"\b(?:cfg|config|node\.config)\.(\w+)", body)
+        if match.group(1) in known
+    }
+
+
+@pytest.mark.parametrize("node_type", sorted(_ELEMENT_SOURCES, key=lambda t: t.value))
+def test_every_config_field_an_element_reads_is_declared(node_type):
+    from app.elements.base import SHARED_CONFIG_FIELDS
+
+    path = Path(__file__).parent.parent / "app" / "elements" / _ELEMENT_SOURCES[node_type]
+    used = _config_fields_read_by(path.read_text(encoding="utf-8"))
+    declared = set(NODE_ELEMENTS[node_type].config_fields) | set(SHARED_CONFIG_FIELDS)
+
+    undeclared = used - declared
+    assert not undeclared, (
+        f"{node_type.value} reads {sorted(undeclared)} but does not declare them in "
+        f"config_fields. Either add them, or stop reading another element's field."
+    )
+
+
+@pytest.mark.parametrize("node_type", sorted(_ELEMENT_SOURCES, key=lambda t: t.value))
+def test_declared_config_fields_exist_in_the_dsl(node_type):
+    """A declaration naming a field that no longer exists is worse than none:
+    it reads as a guarantee and checks nothing."""
+    unknown = set(NODE_ELEMENTS[node_type].config_fields) - set(NodeConfig.model_fields)
+    assert not unknown, f"{node_type.value} declares fields that are not in NodeConfig: {sorted(unknown)}"
+
+
+def test_no_element_claims_a_shared_field_as_its_own():
+    """`example_file`/`code_file`/`extra` belong to every element by contract, so
+    naming one locally suggests a private meaning it does not have."""
+    from app.elements.base import SHARED_CONFIG_FIELDS
+
+    for node_type, element in NODE_ELEMENTS.items():
+        overlap = set(element.config_fields) & set(SHARED_CONFIG_FIELDS)
+        assert not overlap, f"{node_type.value} redeclares shared field(s) {sorted(overlap)}"
+
+
+def test_the_output_node_owns_almost_nothing():
+    """The concrete symptom this contract exists for.
+
+    An output node writes a value somewhere. It was constructed carrying every
+    AI, code, data and gui field in the DSL, and nothing said otherwise.
+    """
+    assert len(NODE_ELEMENTS[NodeType.OUTPUT].config_fields) <= 4
+    assert len(NodeConfig.model_fields) > 25
+
+
+@pytest.mark.skipif(not _FRONTEND_ELEMENTS_DIR.is_dir(), reason="frontend not present")
+@pytest.mark.parametrize("node_type", sorted(NODE_ELEMENTS, key=lambda t: t.value))
+def test_both_languages_agree_on_which_nodes_are_memory(node_type):
+    """Memory must not mean two different things depending on who is asked.
+
+    The executor excludes an edge into a memory node from topological ordering;
+    the editor persists the settled value for the next run. Both used to decide
+    with their own hard-coded `(data, gui)` list -- two lists, one rule, and no
+    check that they matched.
+    """
+    source = (_FRONTEND_ELEMENTS_DIR / _FRONTEND_ELEMENT_FILES[node_type.value]).read_text(encoding="utf-8")
+    frontend_says = "isMemory: true" in source
+    assert frontend_says == NODE_ELEMENTS[node_type].is_memory, (
+        f"{node_type.value}: backend is_memory={NODE_ELEMENTS[node_type].is_memory}, "
+        f"frontend isMemory={frontend_says}"
+    )
+
+
+def test_a_memory_element_can_store_what_settles_into_it():
+    """`is_memory` without somewhere to put the value is a promise with no
+    implementation: the frontend half must also declare `settleMemoryValue`."""
+    for node_type, element in NODE_ELEMENTS.items():
+        if not element.is_memory:
+            continue
+        source = (_FRONTEND_ELEMENTS_DIR / _FRONTEND_ELEMENT_FILES[node_type.value]).read_text(encoding="utf-8")
+        assert "settleMemoryValue" in source, (
+            f"{node_type.value} is a memory element but declares no settleMemoryValue"
+        )
+
+
+# ---------------------------------------------------------------------------
+# The shared snippet runner
+# ---------------------------------------------------------------------------
+#
+# Four elements wrote out the same four steps -- find the body, find the
+# language, call the sandbox, decide what a failure costs -- and the copies had
+# begun to disagree (the selector's contract sentence existed twice, in two
+# wordings). `Element.run_snippet` is those steps, once.
+
+
+async def test_a_display_widget_survives_its_own_broken_transform():
+    """Cosmetic by declaration, not by a try/except in the composite.
+
+    A plot whose transform raises must show the reason and leave its sibling
+    widgets' outputs intact -- a failure here has no downstream port to corrupt.
+    """
+    from app.elements.gui.gui_element import apply_display_transform
+
+    widget = GuiWidget(id="w", kind=GuiWidgetKind.PLOT_WINDOW, label="Chart",
+                       code="def run(inputs):\n    raise ValueError('boom')\n")
+    shown = await apply_display_transform(widget, [1, 2, 3])
+    assert isinstance(shown, str) and "transform failed" in shown and "Chart" in shown
+
+
+async def test_an_empty_transform_passes_the_value_through():
+    from app.elements.gui.gui_element import apply_display_transform
+
+    widget = GuiWidget(id="w", kind=GuiWidgetKind.PLOT_WINDOW, label="Chart", code="")
+    assert await apply_display_transform(widget, [1, 2, 3]) == [1, 2, 3]
+
+
+async def test_a_code_node_with_no_code_says_so():
+    """It used to reach the sandbox anyway and come back as a NameError out of a
+    subprocess, which named neither the node nor the actual problem."""
+    node = GraphNode(id="c", node_type=NodeType.CODE, label="Empty",
+                     outputs=[_port("output", PortKind.OUTPUT)], config=NodeConfig(code=""))
+    with pytest.raises(RuntimeError, match="no code"):
+        await NODE_ELEMENTS[NodeType.CODE].execute(node, {})
+
+
+def test_the_two_display_widgets_share_one_implementation():
+    """plot_window and image_view had byte-identical ports/execute/authored_file.
+
+    If a future widget kind reimplements them instead of inheriting, this is the
+    check that notices.
+    """
+    from app.elements.base import DisplayWidget
+
+    for kind in (GuiWidgetKind.PLOT_WINDOW, GuiWidgetKind.IMAGE_VIEW):
+        element = GUI_WIDGET_ELEMENTS[kind]
+        assert isinstance(element, DisplayWidget)
+        assert type(element).ports is DisplayWidget.ports
+        assert type(element).authored_file is DisplayWidget.authored_file
+        assert element.snippet_failure == "cosmetic"

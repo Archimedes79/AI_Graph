@@ -130,3 +130,79 @@ async def test_every_item_failing_is_still_a_node_error(monkeypatch):
 
     assert work.status == ExecutionStatus.ERROR
     assert result.status == ExecutionStatus.ERROR
+
+
+# ---------------------------------------------------------------------------
+# Progress inside a node
+# ---------------------------------------------------------------------------
+#
+# node_start/node_done alone make a 500-item batch one "running" node for
+# twenty minutes with nothing moving -- indistinguishable from a hang.
+
+
+async def test_batch_progress_is_reported_per_item(monkeypatch):
+    async def fake_execute_node(node, item, effective_formats=None):
+        return {"result": item.get("value")}
+
+    monkeypatch.setattr(graph_executor, "_execute_node", _only_for_work(fake_execute_node))
+
+    events: list[dict] = []
+    await execute_graph(_graph("", [1, 2, 3, 4]), on_progress=events.append)
+
+    batch = [e for e in events if e["type"] == "batch_progress"]
+    assert [e["done"] for e in batch] == [0, 1, 2, 3, 4], "expected one event per item, plus the opening total"
+    assert {e["total"] for e in batch} == {4}
+    assert {e["node_id"] for e in batch} == {"work"}
+
+
+async def test_a_failing_item_still_counts_as_finished(monkeypatch):
+    """Progress must track work *completed*, not work that succeeded -- otherwise
+    a batch with failures appears to stall at the first bad item."""
+    async def half_failing(node, item, effective_formats=None):
+        if item.get("value") == 2:
+            raise RuntimeError("nope")
+        return {"result": item.get("value")}
+
+    monkeypatch.setattr(graph_executor, "_execute_node", _only_for_work(half_failing))
+
+    events: list[dict] = []
+    result = await execute_graph(_graph("", [1, 2, 3]), on_progress=events.append)
+
+    assert result.status == ExecutionStatus.PARTIAL
+    assert max(e["done"] for e in events if e["type"] == "batch_progress") == 3
+
+
+async def test_whole_list_nodes_report_no_batch_progress(monkeypatch):
+    """A whole_list node runs once; there are no items to count."""
+    async def fake_execute_node(node, item, effective_formats=None):
+        return {"result": item.get("value")}
+
+    monkeypatch.setattr(graph_executor, "_execute_node", _only_for_work(fake_execute_node))
+
+    graph = _graph("", [1, 2, 3])
+    graph.nodes[1].config.batch_mode = "whole_list"
+    events: list[dict] = []
+    await execute_graph(graph, on_progress=events.append)
+
+    assert not [e for e in events if e["type"] == "batch_progress"]
+
+
+async def test_a_streaming_ai_call_reports_activity_for_its_own_node(monkeypatch):
+    """The liveness ContextVar reaches ai_service from inside a node's execute,
+    without any element having to pass a callback."""
+    from app.services import ai_service
+
+    async def fake_execute_node(node, item, effective_formats=None):
+        report = ai_service.stream_activity.get()
+        assert report is not None, "executor did not publish a liveness callback"
+        report(1234)
+        return {"result": item.get("value")}
+
+    monkeypatch.setattr(graph_executor, "_execute_node", _only_for_work(fake_execute_node))
+
+    events: list[dict] = []
+    await execute_graph(_graph("", [1]), on_progress=events.append)
+
+    activity = [e for e in events if e["type"] == "activity"]
+    assert activity and activity[0]["node_id"] == "work"
+    assert activity[0]["received"] == 1234

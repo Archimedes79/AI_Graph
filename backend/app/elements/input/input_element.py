@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from app.elements.base import (AuthoredFile, Generation, NodeElement,
                                SELECTOR_GENERATION, code_extension)
 from app.models.graph import GraphNode, NodeType
-from app.services import code_executor, file_service
+from app.services import file_service
 
 
 def _effective_mode(node: GraphNode) -> str:
@@ -16,6 +16,17 @@ def _effective_mode(node: GraphNode) -> str:
 
 class InputElement(NodeElement):
     node_type = NodeType.INPUT
+    config_fields = (
+        "value", "prompt_at_runtime", "input_mode",
+        # Directory mode. Same names the input_picker widget uses, because it is
+        # the same contract at two levels (see SELECTOR_GENERATION).
+        "recursive", "extensions", "select_all_files",
+        "selector_prompt", "selector_code", "language",
+        # Only for the last-resort selector generation at run time, when the
+        # editor never generated one. The input_picker widget deliberately
+        # passes no provider for the same call -- worth reconciling.
+        "ai_provider", "ai_model",
+    )
 
     async def execute(
         self, node: GraphNode, inputs: Dict[str, Any], effective_formats=None
@@ -33,8 +44,8 @@ class InputElement(NodeElement):
         path = file_service.resolve_path(raw_path)
 
         if mode == "directory":
-            recursive = cfg.extra.get("recursive", False)
-            extensions = file_service.parse_extensions_filter(cfg.extra.get("extensions", ""))
+            recursive = cfg.recursive
+            extensions = file_service.parse_extensions_filter(cfg.extensions)
             files = file_service.list_directory(path, recursive=recursive, extensions=extensions)
             selector_code = cfg.selector_code.strip()
             if not cfg.select_all_files and not selector_code and cfg.selector_prompt.strip():
@@ -47,9 +58,10 @@ class InputElement(NodeElement):
                     model=cfg.ai_model, provider=cfg.ai_provider,
                 )
             if not cfg.select_all_files and selector_code:
-                selected = await code_executor.execute_code(
-                    selector_code, cfg.language or "python", {"files": files}
-                )
+                # Same call the input_picker widget makes for the same snippet,
+                # now through the same code -- the two had drifted while being
+                # documented as one contract at two levels.
+                selected = await self.run_snippet(node, {"files": files}, selector_code)
                 files = selected.get("files", files)
             return {"files": files, "count": len(files)}
 

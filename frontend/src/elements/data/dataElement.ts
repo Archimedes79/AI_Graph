@@ -55,6 +55,12 @@ export function connectedOutputDataNodes(
 
 export const dataElement: NodeElementDefinition = {
   nodeType: 'data',
+  // A data node IS the graph's register: it holds its value between runs, which
+  // is what lets a feedback edge into it close a cycle.
+  isMemory: true,
+  // One node, one remembered value.
+  settleMemoryValue: (node, _portId, value) => { node.config.data_value = value as never; },
+  ownsDescription: true,
   authoredFile: () => ({ extension: '.md', what: 'this format contract' }),
   generation: {
     promptField: 'data_prompt',

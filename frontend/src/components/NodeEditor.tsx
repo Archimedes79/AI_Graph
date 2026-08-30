@@ -7,7 +7,7 @@ import { NODE_ELEMENTS } from '../elements/registry';
 import Modal from './Modal';
 import { useGenerate } from '../elements/shared/useGenerate';
 import { buildGeneration, nodeFields } from '../elements/shared/generation';
-import { connectedFormatContext, lastRunContext, lastRunInputs } from '../elements/shared/generationContext';
+import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs } from '../elements/shared/generationContext';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
 import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
@@ -117,6 +117,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // The same values `lastRunContext` renders as prose, raw: the backend runs
       // the generated function against them and repairs it once if it fails.
       sampleInputs: lastRunInputs(node.id, executionResult),
+      inputSources: inputSources(node.id, graphNodes, graphEdges),
     }));
   };
 
@@ -218,7 +219,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       }
     >
       <div className="px-6 py-5">
-          {node.node_type !== 'code' && node.node_type !== 'ai' && node.node_type !== 'data' && (
+          {/* Only for elements whose own editor does not already ask what the
+              node is for. An ai node's description IS its generation prompt, so
+              drawing this above it showed the same box twice. */}
+          {!NODE_ELEMENTS[node.node_type]?.ownsDescription && (
             <div className="mb-4">
               <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
                 Description (optional)

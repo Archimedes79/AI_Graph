@@ -4,6 +4,7 @@ import { baseNodeConfig } from '../shared/baseNodeConfig';
 
 export const outputElement: NodeElementDefinition = {
   nodeType: 'output',
+  showsResultWindow: (node) => node.config.write_mode === 'window',
   ConfigEditor: OutputEditor,
   create: (id) => ({
     id,

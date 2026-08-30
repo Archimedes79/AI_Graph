@@ -11,25 +11,40 @@ import type { ElementGeneration } from './shared/generation';
  * execution and deploy codegen are backend-only concerns -- see
  * `backend/app/elements/base.py` and AGENTS.md's "Entity contract" section.
  */
-export interface NodeElementDefinition {
-  nodeType: NodeType;
+/**
+ * What a node definition and a widget definition have in common -- the frontend
+ * half of `Element` in `backend/app/elements/base.py`.
+ *
+ * They are two interfaces rather than one because what differs genuinely
+ * differs: only a node is created from the palette (`create`), only a widget
+ * derives ports and draws itself at runtime. Merging them into a single
+ * interface with everything optional would drop the guarantee that a node type
+ * *has* a `create` -- uniformity bought by making every reader check for fields
+ * that always exist.
+ */
+export interface ElementDefinitionBase<S> {
+  /** The element's own config panel; the shell renders it and knows nothing else. */
   ConfigEditor: React.ComponentType<any>;
+  /**
+   * What this element keeps in a file beside the graph, mirroring the backend's
+   * `Element.authored_file()`. Omitted for an element with nothing a person
+   * writes at length (input, output), which is what decides whether the editor
+   * offers the option at all -- so the offer follows the element rather than a
+   * list of types kept somewhere else.
+   */
+  authoredFile?: (subject: S) => { extension: string; what: string } | undefined;
+  /**
+   * The ✨ Generate button this element offers, mirroring the backend's
+   * `Element.generation()`. Omitted for an element that generates nothing
+   * (output, text_io), which is what decides whether a button is drawn at all --
+   * so the offer follows the element rather than a switch in a shell.
+   */
+  generation?: ElementGeneration<S>;
+}
+
+export interface NodeElementDefinition extends ElementDefinitionBase<GraphNode> {
+  nodeType: NodeType;
   create: (id: string) => GraphNode;
-  /**
-   * What this node type keeps in a file beside the graph, mirroring the
-   * backend's `NodeElement.authored_file()`. Omitted for a type with nothing a
-   * person writes at length (input, output), which is what decides whether
-   * NodeEditor offers the option at all -- so the offer follows the element
-   * rather than a list of node types kept somewhere else.
-   */
-  authoredFile?: (node: GraphNode) => { extension: string; what: string } | undefined;
-  /**
-   * The ✨ Generate button this node type offers, mirroring the backend's
-   * `NodeElement.generation()`. Omitted for a type that generates nothing
-   * (output, gui), which is what decides whether a button is drawn at all --
-   * so the offer follows the element rather than a switch in NodeEditor.
-   */
-  generation?: ElementGeneration<GraphNode>;
   /**
    * What this node emits, in one line, for the neighbours' generation context.
    * This replaced a `switch (node.node_type)` in shared code: the last one.
@@ -43,6 +58,48 @@ export interface NodeElementDefinition {
    * is the whole answer to "what comes out of here".
    */
   outputContract?: 'format' | 'widgets';
+
+  // ---- facets shared shells used to decide by node_type ---------------------
+  // Each of these replaced a `node.node_type === '…'` written into a component
+  // or the store. They are here for the same reason `describeOutput` is: the
+  // shell asks the element, so a new node type answers in its own file and
+  // nothing shared changes.
+
+  /**
+   * This node keeps its value between runs, so an edge into it can close a
+   * cycle -- the executor excludes such an edge from topological ordering and
+   * settles the fresh value afterwards for the *next* round.
+   *
+   * Must agree with the backend's `NodeElement.is_memory`: memory meaning two
+   * different things depending on which half is asked would be worse than the
+   * hard-coded list this replaced.
+   */
+  isMemory?: boolean;
+
+  /**
+   * Store a value that arrived on *portId* as this node's remembered state, so
+   * the next run starts from it. Only meaningful when `isMemory`.
+   *
+   * Where the value goes differs per element -- a data node has one
+   * `data_value`, a gui node has one value per widget -- and that was written
+   * out as a `node_type === 'data'` branch in the store, twice. The element
+   * knows its own storage; the store only knows which edge settled.
+   */
+  settleMemoryValue?: (node: GraphNode, portId: string, value: unknown) => void;
+
+  /**
+   * This element's own editor already covers what the node is for -- a prompt
+   * box, a code body -- so the shell must not draw a second "Description" field
+   * above it. For `ai` the description IS the generation prompt, which is why
+   * showing it twice was confusing rather than merely redundant.
+   */
+  ownsDescription?: boolean;
+
+  /** This node carries the graph's interface: it gets a live runtime window. */
+  hasRuntimeWindow?: boolean;
+
+  /** Does this particular node display its result in a window when the run ends? */
+  showsResultWindow?: (node: GraphNode) => boolean;
 }
 
 /**
@@ -53,22 +110,24 @@ export interface NodeElementDefinition {
  * GuiWidgetEditor.tsx, `RuntimeWidget` is what actually draws in the floating
  * GuiWindow and lets the user interact with it.
  */
-export interface GuiWidgetElementDefinition {
+export interface GuiWidgetElementDefinition extends ElementDefinitionBase<GuiWidget> {
   widgetKind: GuiWidgetKind;
   ports: (widget: GuiWidget) => { inputs: Port[]; outputs: Port[] };
-  ConfigEditor: React.ComponentType<any>;
   RuntimeWidget: React.ComponentType<GuiWidgetRuntimeProps>;
   // Optional: widget's stored value is a one-shot "message" that should be
   // cleared once a run has consumed it (e.g. a chat-style text_io widget),
   // rather than being resent on every subsequent round. Omitted/false for
   // widgets whose value is a persistent setting (e.g. input_picker's path).
   clearValueAfterRun?: (widget: GuiWidget) => boolean;
+
   /**
-   * What this widget kind keeps in a file, mirroring the backend's
-   * `GuiWidgetElement.authored_file()` -- the same contract as
-   * `NodeElementDefinition.authoredFile` one level down.
+   * Rendered on the graph canvas beneath this widget's input port, showing what
+   * last arrived there. Omitted for widget kinds with nothing worth previewing
+   * at that size.
+   *
+   * `GraphNodeComponent` used to look for `kind === 'plot_window'` itself --
+   * a widget-kind switch inside the shared node renderer, which is exactly what
+   * this contract exists to prevent.
    */
-  authoredFile?: (widget: GuiWidget) => { extension: string; what: string } | undefined;
-  /** Same contract as `NodeElementDefinition.generation`, one level down. */
-  generation?: ElementGeneration<GuiWidget>;
+  CanvasPreview?: React.ComponentType<{ data: unknown }>;
 }

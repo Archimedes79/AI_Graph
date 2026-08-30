@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.elements.base import (AuthoredFile, Generation, GuiWidgetElement,
                                SELECTOR_GENERATION, code_extension, widget_input_or_value)
 from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
-from app.services import code_executor, file_service
+from app.services import file_service
 
 
 def _is_directory(widget: GuiWidget) -> bool:
@@ -48,13 +48,16 @@ class InputPickerElement(GuiWidgetElement):
         files = file_service.list_directory(path, recursive=widget.recursive, extensions=extensions)
 
         selector_code = widget.selector_code.strip()
-        language = widget.language or "python"
         if not widget.select_all_files and not selector_code and widget.selector_prompt.strip():
             from app.services import ai_service
             selector_code, _ = await ai_service.generate_code(
                 description=widget.selector_prompt,
-                language=language,
-                context='inputs["files"] contains rooted file paths. Return {"files": [...]} with selected paths.',
+                language=widget.language or "python",
+                # The shared contract sentence, not a second wording of it. This
+                # call had its own paraphrase while the input node used
+                # SELECTOR_GENERATION.contract -- one contract, two texts, which
+                # is exactly the drift the shared descriptor exists to prevent.
+                context=SELECTOR_GENERATION.contract,
                 inputs=["files"], outputs=["files"],
                 # No provider argument: a widget carries none any more, so this
                 # last-resort generation follows whatever AI the run is
@@ -63,7 +66,7 @@ class InputPickerElement(GuiWidgetElement):
                 # normally generated ahead of time via the ✨ button instead.
             )
         if not widget.select_all_files and selector_code:
-            selected = await code_executor.execute_code(selector_code, language, {"files": files})
+            selected = await self.run_snippet(widget, {"files": files}, selector_code)
             files = selected.get("files", files)
         return files
 

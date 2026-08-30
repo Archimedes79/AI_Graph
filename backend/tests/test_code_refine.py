@@ -30,8 +30,12 @@ def _scripted(monkeypatch, *codes: str):
     remaining = list(codes)
     contexts: list[str] = []
 
+    # **_ rather than a copy of the real signature: this stub is here to script
+    # what comes back, and pinning the caller's argument list made it fail
+    # whenever generate_code learned a new optional argument -- a failure about
+    # the test, not about the two-pass behaviour it covers.
     async def fake_generate_code(description, language="python", context="", inputs=None,
-                                 outputs=None, model="", provider="default"):
+                                 outputs=None, model="", provider="default", **_):
         contexts.append(context)
         return remaining.pop(0), "explanation"
 
@@ -123,7 +127,7 @@ async def test_a_failing_repair_pass_falls_back_to_the_first_attempt(monkeypatch
     calls = {"n": 0}
 
     async def flaky(description, language="python", context="", inputs=None,
-                    outputs=None, model="", provider="default"):
+                    outputs=None, model="", provider="default", **_):
         calls["n"] += 1
         if calls["n"] == 1:
             return WRONG_KEY, "explanation"

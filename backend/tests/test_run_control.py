@@ -143,3 +143,55 @@ async def test_a_failing_node_leaves_the_run_reportable(monkeypatch):
     # result rather than the task raising.
     assert snapshot["done"] is True
     assert snapshot["result"]["status"] == ExecutionStatus.ERROR.value
+
+
+# ---------------------------------------------------------------------------
+# What a watcher sees below the node level
+# ---------------------------------------------------------------------------
+
+
+def _run_with(events: list) -> run_registry.Run:
+    """A Run fed a hand-written progress stream, without executing anything.
+
+    The mapping from event to snapshot is the part worth pinning down; that the
+    executor emits those events is `test_batch_concurrency.py`'s job.
+    """
+    run = run_registry.Run(id="r", total=3)
+    for event in events:
+        run_registry._apply_progress(run, event)
+    return run
+
+
+def test_batch_counters_reach_the_snapshot():
+    run = _run_with([
+        {"type": "node_start", "node_id": "a", "label": "Analyse"},
+        {"type": "batch_progress", "node_id": "a", "done": 143, "total": 500},
+    ])
+    snapshot = run.snapshot()
+    assert (snapshot["item_done"], snapshot["item_total"]) == (143, 500)
+    assert snapshot["current_label"] == "Analyse"
+
+
+def test_a_new_node_clears_the_previous_node_s_item_count():
+    """Carrying 143/500 into a node with no items at all would be a lie."""
+    run = _run_with([
+        {"type": "node_start", "node_id": "a", "label": "Analyse"},
+        {"type": "batch_progress", "node_id": "a", "done": 143, "total": 500},
+        {"type": "node_done", "node_id": "a", "status": "success"},
+        {"type": "node_start", "node_id": "b", "label": "Write"},
+    ])
+    snapshot = run.snapshot()
+    assert (snapshot["item_done"], snapshot["item_total"]) == (0, 0)
+
+
+def test_idle_seconds_is_none_until_something_reports():
+    assert run_registry.Run(id="r", total=1).snapshot()["idle_seconds"] is None
+
+
+def test_activity_keeps_idle_seconds_small():
+    run = _run_with([
+        {"type": "node_start", "node_id": "a", "label": "Ask"},
+        {"type": "activity", "node_id": "a", "received": 2048},
+    ])
+    idle = run.snapshot()["idle_seconds"]
+    assert idle is not None and idle < 1.0

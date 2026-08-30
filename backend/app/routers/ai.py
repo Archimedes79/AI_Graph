@@ -306,6 +306,7 @@ async def _code_generator(req: GenerateRequest, spec, context: str, model: str, 
         model=model,
         provider=provider,
         sample_inputs=None if fixed_ports else req.sample_inputs,
+        sources=None if fixed_ports else (req.input_sources or None),
     )
     return GenerateResponse(result=code, explanation=explanation,
                             probe=CodeProbeReport(**report.as_dict()))

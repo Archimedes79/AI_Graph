@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import type { GraphNode } from '../../types/graph';
-import GuiWidgetEditor from '../../components/GuiWidgetEditor';
+import type { GraphNode, GuiWidget } from '../../types/graph';
+import GuiWidgetProperties from '../../components/GuiWidgetEditor';
 import GuiDesigner from '../../components/gui/GuiDesigner';
-import { ACCENT, DIMMER, LINE, TEXT } from '../../ui/theme';
+import { LINE } from '../../ui/theme';
 
 interface GuiEditorProps {
   node: GraphNode;
@@ -10,45 +10,43 @@ interface GuiEditorProps {
   applyWidgets: (widgets: GraphNode['config']['gui_widgets']) => void;
 }
 
+/**
+ * A gui node is designed on its canvas, not described in a list.
+ *
+ * There used to be a `widgets | designer` tab switch here, with the same widget
+ * list editable in both -- and a third encoding of layout (the `size` preset)
+ * on top. One canvas, one selection, one properties panel: adding a widget puts
+ * it on the grid, selecting it shows what it is, and nothing but dragging
+ * decides where it sits.
+ */
 export default function GuiEditor({ node, setConfig, applyWidgets }: GuiEditorProps) {
-  const [mode, setMode] = useState<'widgets' | 'designer'>('widgets');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const widgets = node.config.gui_widgets;
+  const selected = widgets.find((w) => w.id === selectedId) ?? null;
+
+  /** Patch the selected widget, found by its stable id rather than an index. */
+  const updateSelected = (patch: Partial<GuiWidget>) => {
+    if (!selected) return;
+    applyWidgets(widgets.map((w) => (w.id === selected.id ? { ...w, ...patch } : w)));
+  };
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3">
-        {(['widgets', 'designer'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setMode(tab)}
-            className="text-xs px-3 py-1.5 rounded-lg capitalize"
-            style={{
-              background: mode === tab ? ACCENT : LINE,
-              color: mode === tab ? 'white' : TEXT,
-            }}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      <GuiDesigner
+        widgets={widgets}
+        onChange={applyWidgets}
+        columns={node.config.gui_grid_columns}
+        onGridChange={(patch) => {
+          if (patch.columns !== undefined) setConfig('gui_grid_columns', patch.columns);
+        }}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
 
-      {mode === 'widgets' ? (
-        <>
-          <p className="text-xs mb-3" style={{ color: DIMMER }}>
-            Ports are generated automatically from the widgets below.
-            Adding, removing, or reordering a widget updates ports immediately.
-          </p>
-
-          <GuiWidgetEditor widgets={node.config.gui_widgets} onChange={applyWidgets} />
-        </>
-      ) : (
-        <GuiDesigner
-          widgets={node.config.gui_widgets}
-          onChange={applyWidgets}
-          columns={node.config.gui_grid_columns}
-          onGridChange={(patch) => {
-            if (patch.columns !== undefined) setConfig('gui_grid_columns', patch.columns);
-          }}
-        />
+      {widgets.length > 0 && (
+        <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${LINE}` }}>
+          <GuiWidgetProperties widget={selected} onChange={updateSelected} />
+        </div>
       )}
     </div>
   );

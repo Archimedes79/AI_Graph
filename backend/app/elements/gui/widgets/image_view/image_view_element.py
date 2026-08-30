@@ -3,31 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
-from app.elements.base import AuthoredFile, Generation, GuiWidgetElement, code_extension
-from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
+from app.elements.base import DisplayWidget, Generation
+from app.models.graph import GuiWidget, GuiWidgetKind
 from app.services import file_service
 
 logger = logging.getLogger(__name__)
 
 
-class ImageViewElement(GuiWidgetElement):
+class ImageViewElement(DisplayWidget):
     widget_kind = GuiWidgetKind.IMAGE_VIEW
-
-    def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:
-        in_id = f"{widget.id}_in"
-        label = widget.label or widget.id
-        return (
-            [Port(id=in_id, name=label, kind=PortKind.INPUT, data_type=DataType.ANY,
-                  multi=True, required=False)],
-            [],
-        )
-
-    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
-        # Display-only, like plot_window: the caller applies the in-place
-        # transform instead of calling this.
-        return None
+    config_fields = ("code", "code_prompt", "language")
 
     async def display_value(self, widget: GuiWidget, value: Any) -> Any:
         """
@@ -36,7 +23,10 @@ class ImageViewElement(GuiWidgetElement):
         already a data/http URL passes through; a list becomes a list of the
         same, so a directory picker wired straight in shows a contact sheet.
 
-        A failure here is cosmetic, exactly as for a plot transform: the widget
+        The one thing this widget does that a plot does not, and therefore the
+        only method it overrides beyond its snippet's contract.
+
+        A failure here is cosmetic, exactly as for a transform: the widget
         displays the reason instead of taking the whole node down with it.
         """
         if isinstance(value, list):
@@ -50,11 +40,6 @@ class ImageViewElement(GuiWidgetElement):
         except Exception as exc:  # noqa: BLE001 - shown, not raised
             logger.warning("image_view %s could not load %r: %s", widget.id, value, exc)
             return f"⚠ {exc}"
-
-    def authored_file(self, widget: GuiWidget) -> AuthoredFile:
-        """The optional transform that reshapes an incoming value into a path."""
-        return AuthoredFile(body_field="code", prompt_field="code_prompt",
-                            extension=code_extension(widget))
 
     def generation(self) -> Generation:
         """Same snippet contract as plot_window, different destination: a path.

@@ -37,7 +37,7 @@ tests in `test_element_contract.py` / `elementContract.test.ts` are parametrized
 node type/widget kind precisely so a single-element change can be verified without
 touching or re-running assertions for unrelated elements. `python checkpoint.py` runs
 both full suites plus the build/package steps in the right order before a release —
-see [README.md](README.md#-quick-start).
+see [docs/install.md](docs/install.md).
 
 ## Object-oriented element contract
 
@@ -46,6 +46,14 @@ live-execution behavior (and for widgets its ports) in one file, rather than the
 behavior scattered across separate executor files. Base classes live in
 `backend/app/elements/base.py`:
 
+- `Element` — what a node and a widget have in common, which is nearly everything:
+  `authored_file(subject)`, `generation()`, `deploy_needs(subject)`, `config_fields`,
+  and `run_snippet(subject, inputs)`. Both classes below extend it. They were separate
+  roots declaring the same three methods with the same signatures, while
+  `gui_element.py` already called itself a Composite — a pattern whose point is that
+  leaf and container share one component interface. What stays split one level down is
+  what genuinely differs: a node has real ports and is addressed by the graph, a widget
+  derives `{id}_in`/`{id}_out` and is addressed by its owning node.
 - `NodeElement` — one per `NodeType`. Implements `async execute(node, inputs,
   effective_formats=None) -> dict` (live execution — this is the ONLY behavior an
   element implements; there is no separate deploy-codegen method, see "Deploying a
@@ -61,6 +69,31 @@ behavior scattered across separate executor files. Base classes live in
 - `GuiWidgetElement` — one per `GuiWidgetKind`, the `gui` node's sub-elements. Implements
   `ports(widget) -> (inputs, outputs)`, `execute(widget, inputs) -> Any`, and the
   widget-level equivalents `runtime_requirement(widget)` / `deploy_needs(widget)`.
+
+`Element.run_snippet(subject, inputs)` executes whatever body `authored_file()` points
+at, in the sandbox, and `snippet_failure` says what a failure costs — `"fatal"` (the
+default; a code node's snippet IS its behaviour) or `"cosmetic"` (a display widget's
+transform, shown as a `⚠ …` value so a broken chart never takes its sibling widgets
+down). Four elements wrote those steps out by hand before this and had begun to
+disagree. An empty body passes the inputs through; an element for which that is a real
+error overrides `execute` and says so (see `CodeElement`).
+
+`DisplayWidget` is the one intermediate class, for `plot_window` and `image_view`: their
+`ports()`, `execute()` and `authored_file()` were byte-identical and they differ only in
+the strings describing what their snippet should produce. It exists because it carries
+code, not because it names a category — an intermediate class that only holds a label is
+ceremony, and the varying part of "how does this body run" is data, not a subclass.
+
+`config_fields` names the `NodeConfig` (or `GuiWidget`) fields an element owns. `NodeConfig`
+is one flat model of ~30 fields shared by every node type, so nothing in the DSL said which
+of them an `output` node had any business with (it uses two) — and that silence is why
+`recursive`/`extensions` sat in `extra` on the input node while being real fields on the
+widget doing the identical job. It does **not** split the wire format: graphs stay flat and
+permissive, old ones load unchanged. `test_element_contract.py` holds each element to its
+declaration by scanning its source.
+
+`is_memory` (see "Memory-feedback edges" below) is declared on the element rather than
+listed in the executor.
 
 Both also declare `generation()`, returning a `Generation` (or `None` for an element
 that authors nothing): which generator writes its body, which field holds the request,
@@ -132,7 +165,27 @@ only that one file plus its reference sibling, never the engine.
 **Scope boundary (deliberate, not an oversight):** `NodeConfig` / `GuiWidget` stay one
 shared, flat Pydantic/TS schema across all node types and widget kinds (see "Shared
 contracts" below) rather than a per-type schema class — splitting that is a much larger,
-DSL-breaking change and is out of scope for the element refactor.
+DSL-breaking change and is out of scope for the element refactor. `config_fields` gives
+the ownership question an answer and a test without paying that price; the split itself
+is still not worth it.
+
+Two further steps were designed and deliberately **not** taken, so nobody re-derives them
+from scratch:
+
+- **Element instances instead of singletons.** Elements are one stateless instance per
+  kind, with all state passed in per call. Per-node instances (`element_for(node)`, the
+  registry becoming a factory) would let `self.node`/`self.cfg` replace threading state
+  through every signature — 9 lookup sites in app code. The reason it is not done is that
+  the payoff is structural only: the backend is stateless per request anyway, so the
+  instances would be constructed and discarded per call, and the frontend has no classes
+  at all, so it would widen the asymmetry AGENTS.md asks to keep narrow.
+- **Sync moving onto the element.** `node_files.Authored` (77 lines) exists only to view a
+  node and a widget through one lens, and after the step above it would be the element
+  itself, deleting the adapter. It depends on that step, so it waits with it. If it is
+  ever done: `render`/`parse` stay in `node_files` (the format varies by file extension,
+  not by element) and `_seen` **must** stay module-global — it is the "changed on disk
+  since we last looked" guard, and on per-request instances it would be forgotten on every
+  call, silently disabling the overwrite protection.
 
 ## Adding/changing a node type's behavior
 
@@ -175,7 +228,7 @@ through the frontend registry; do not add a new per-type switch to those shared 
 
 `plot_window`'s transform snippet runs through the same sandboxed `code_executor` as a
 Code node and is rendered by the dependency-free inline SVG `frontend/src/components/PlotWidget.tsx`
-(user-facing contract: see [README.md](README.md#-gui-nodes)).
+(user-facing contract: see [docs/graphs.md](docs/graphs.md#gui-nodes)).
 
 Use `elements/gui/widgets/input_picker/input_picker_element.py` and
 `elements/gui/widgets/input_picker/inputPickerElement.ts` as the exact pattern to copy
@@ -224,19 +277,33 @@ generation and no graph editing.
 
 - `frontend/src/components/gui/GuiWindow.tsx` — the floating runtime window shown per `gui` node; lays widgets out and feeds each one its live value.
 - `frontend/src/components/gui/GuiWindowLayer.tsx` — mounts one window per `gui` node.
-- `frontend/src/components/gui/GuiDesigner.tsx` — grid layout designer writing `x`/`y`/`w`/`h` onto widgets.
-- `frontend/src/components/gui/layout.ts` — pure grid-resolution helper (fallback to list order); unit-tested in `layout.test.ts`.
+- `frontend/src/components/gui/GuiDesigner.tsx` — **the** gui-node editor: add, select,
+  move, resize and remove widgets on one grid, writing only `x`/`y`/`w`/`h`. There is no
+  `widgets | designer` tab switch and no `size` preset any more: a gui node had
+  two-and-a-half ways to say how big a widget is (the preset, the list's order, and
+  `w`/`h`), so the same widget could be described three times and disagree.
+- `frontend/src/components/GuiWidgetEditor.tsx` — the properties panel for the *selected*
+  widget: name, mode, and its element's own `ConfigEditor`. Not a list.
+- `frontend/src/components/gui/layout.ts` — pure grid-resolution helper (unplaced widgets
+  stack top to bottom); unit-tested in `layout.test.ts`.
 - `frontend/src/components/gui/widgetProps.ts` — the shared `{ widget, value, onChange }` contract every runtime widget implements.
 
 ## Memory-feedback edges (data/gui/widget nodes)
 
 Why this exists and how it looks in a graph (`gui → ai → gui`): see
-[README.md](README.md#cyclic-graphs-gui--ai--gui). The rest of this section is the
+[docs/graphs.md](docs/graphs.md#cyclic-graphs-gui--ai--gui). The rest of this section is the
 implementation, which is agent-relevant because it's never per-node-type: no
 `elements/<type>/<type>_element.py` should know about it.
 
-Logic lives in exactly one backend place — `graph_executor.py`:
-`_is_memory_node`, `_memory_feedback_edge_ids` (Kahn's algorithm, marking one
+Which node types are memory is **declared by the element** (`NodeElement.is_memory`,
+mirrored by `isMemory` on the frontend definition and checked across both in
+`test_element_contract.py`) — it was a hard-coded `node_type in (DATA, GUI)` in the
+executor, the last switch on node type in shared backend code. Where a settled value is
+stored is likewise the element's own answer (`settleMemoryValue` on the frontend
+definition): a data node has one `data_value`, a gui node one value per widget.
+
+The rest of the logic lives in exactly one backend place — `graph_executor.py`:
+`_is_memory_node` (which now just asks the element), `_memory_feedback_edge_ids` (Kahn's algorithm, marking one
 memory-targeting edge as feedback at a time until the graph is acyclic; used by
 `_topological_sort`/`_topological_levels`/`_collect_inputs`/`_blocked_required_port`),
 and `_settle_memory_feedback` — a same-round pass that runs after all topological
@@ -422,8 +489,17 @@ from the graph the browser sends.
 `frontend/src/elements/shared/generationContext.ts` is the one place that answers
 "what does the model see besides the user's sentence". Every ✨ Generate button joins:
 
-1. **Port names** — `inputs`/`outputs` go with a code request, and the backend's system
-   prompt tells the model the returned dict's keys must match them exactly.
+1. **The skeleton** — `backend/app/services/skeleton.py` renders the function signature
+   the model is asked to complete: a `TypedDict` of the input ports (a JSDoc typedef for
+   JavaScript), typed from the last run's values, each line saying which node feeds it,
+   and a `return` naming the output ports. This replaced `Inputs: text, files` — names
+   with no type, no shape and no origin, which is the least informative form of the most
+   important fact, and which small local models guess badly from. `TypedDict`, not a
+   dataclass: it *is* a dict at run time, so `code_executor` needs no change and the
+   annotation cannot become a second contract that disagrees with the ports. The same
+   renderer fills an empty `.py`/`.js` node file (`node_files.render`) — **written, never
+   read back**, exactly like the `inputs:`/`outputs:` header lines, because a text file
+   allowed to rename a port would silently detach edges.
 2. **`connectedFormatContext`** — the declared contract of every directly wired
    neighbour, for *all* node types (it once covered `data` nodes only, so the commonest
    wiring of all, an input feeding a code node, contributed nothing). Deduplicated: two
@@ -457,7 +533,7 @@ switching on `node_type`; that was the last such switch in shared frontend code.
 There are two AI choices in this system and they deliberately live in different
 places — what each one does, where to set it in the UI, and the runtime-AI override
 precedence are documented for users in
-[README.md](README.md#choosing-the-ai-once-not-per-node). This section is only the
+[docs/ai-providers.md](docs/ai-providers.md#choosing-the-ai-once-not-per-node). This section is only the
 implementation pointers; do not merge the two choices, and do not add a third copy of
 either:
 
@@ -479,7 +555,7 @@ graph it lives in.
 ## Deploying a graph — vendored-runtime bundles, not codegen
 
 `deploy_service.py` does **not** generate source code from each node's config — see
-[README.md](README.md#-deployment) for how a user triggers and runs a bundle. A bundle
+[docs/deployment.md](docs/deployment.md#deploying-a-graph) for how a user triggers and runs a bundle. A bundle
 is the real engine, copied verbatim, plus the user's graph:
 `generate_deployment_bundle(graph)` returns a `{path: contents}` dict containing
 `app/elements/**` (every element file, recursively), `app/models/graph.py`,
@@ -539,7 +615,7 @@ output against `execute_graph()`'s.
 ## Frozen builds (PyInstaller) — four places that must stay frozen-aware
 
 `build_editor_exe.py` packages the editor itself into one executable (user-facing
-docs: [README.md](README.md#option-4--standalone-executable)); `graph-runner/build_exe.py`
+docs: [docs/install.md](docs/install.md#option-4--standalone-executable)); `graph-runner/build_exe.py`
 does the same for a deploy bundle. A frozen build breaks two assumptions that hold
 everywhere else — **the repo layout is gone** (everything ships under `sys._MEIPASS`)
 and **`sys.executable` is the tool, not a Python**. Four places encode that, and a
@@ -586,7 +662,20 @@ failing it. `_terminate_tree` exists for that.
   optional transform snippet. `image_view` uses it to turn a server-side path into a
   `data:` URL. Put kind-specific display preparation there, never a branch in
   `gui_element.py`.
+- `backend/app/services/skeleton.py` — the typed stub described under "What the AI knows"
+  above; used by `ai_service.generate_code` and by `node_files.render`. Vendored into
+  deploy bundles, because an input node whose selector was never generated in the editor
+  generates one on its first run.
 - `backend/app/services/ai_service.py`, `code_executor.py`, `file_service.py` — provider-agnostic AI calls, sandboxed code execution, file I/O helpers shared across node types.
+  **An empty completion is a failure**, not a success: every provider path ends in
+  `_StreamProgress.text()`, which is `""` when the stream carried nothing (a 200 from a
+  model still loading). That raised nothing, so the node reported SUCCESS and passed an
+  empty string downstream. `EmptyCompletionError` is retryable, like a 429.
+  **Progress below the node**: `execute_graph`'s `on_progress` also emits
+  `batch_progress` (items finished within one node) and `activity` (an AI stream is
+  alive, published through the `ai_service.stream_activity` ContextVar so no element has
+  to pass a callback). `node_start`/`node_done` alone made a 500-item batch, or one long
+  streaming call, indistinguishable from a hang.
   **Vision** lives in three message builders there (`_openai_user_content`,
   `_anthropic_user_content`, `_ollama_images`): four providers share the OpenAI
   content-parts format, so adding it was one function rather than one per provider.

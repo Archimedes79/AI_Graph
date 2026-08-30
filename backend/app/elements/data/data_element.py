@@ -10,6 +10,8 @@ from app.models.graph import GraphNode, NodeType
 
 class DataElement(NodeElement):
     node_type = NodeType.DATA
+    is_memory = True
+    config_fields = ("data_value", "data_format", "data_prompt", "data_format_prompt")
 
     async def execute(
         self,

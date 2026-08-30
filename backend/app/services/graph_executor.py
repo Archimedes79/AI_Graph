@@ -54,10 +54,15 @@ def _is_memory_node(node_type: NodeType) -> bool:
     value into that widget's `value` so it's what the *next* round's output
     reflects. An edge into a memory node that ISN'T part of any cycle is left
     alone and still delivers same-round, e.g. a plain ai -> gui display wire.
-    (A future general-purpose "memory" node type, not just gui/widget, could
-    extend this same rule -- see AGENTS.md's "Memory feedback edges" section.)
+
+    Answered by the element rather than by a list here: this was the last
+    `switch` on node type left in shared backend code, and the list is exactly
+    what a new memory-holding node type would have had to come and edit. Now it
+    declares `is_memory = True` in its own file and nothing in the executor
+    changes -- see AGENTS.md's "Memory feedback edges" section.
     """
-    return node_type in (NodeType.DATA, NodeType.GUI)
+    element = NODE_ELEMENTS.get(node_type)
+    return element is not None and element.is_memory
 
 
 def _memory_feedback_edge_ids(nodes: List[GraphNode], edges: List[GraphEdge]) -> set:
@@ -489,7 +494,11 @@ async def _execute_node(
 DEFAULT_BATCH_CONCURRENCY = max(1, int(os.getenv("AI_GRAPH_BATCH_CONCURRENCY", "4")))
 
 
-async def _execute_batch_node(node: GraphNode, inputs: Dict[str, Any]) -> tuple[Dict[str, Any], List[str]]:
+async def _execute_batch_node(
+    node: GraphNode,
+    inputs: Dict[str, Any],
+    on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+) -> tuple[Dict[str, Any], List[str]]:
     """
     Run AI/code once per batch item, concurrently, and collect their outputs as
     lists. Returns the merged outputs plus one message per failed item.
@@ -511,13 +520,34 @@ async def _execute_batch_node(node: GraphNode, inputs: Dict[str, Any]) -> tuple[
     semaphore = asyncio.Semaphore(max(1, limit))
     empty = {port.id: None for port in node.outputs}
 
+    # Progress *inside* the node. Without it a 500-item batch is a single
+    # "running" node for twenty minutes with nothing moving, which is
+    # indistinguishable from a hang. Reported as a count rather than per item:
+    # items finish out of order (they run concurrently), so which one finished
+    # is not useful, and how many have is.
+    done = 0
+
+    def note_item_done() -> None:
+        nonlocal done
+        done += 1
+        if on_progress is not None:
+            on_progress({"type": "batch_progress", "node_id": node.id, "done": done, "total": len(items)})
+
+    if on_progress is not None and items:
+        on_progress({"type": "batch_progress", "node_id": node.id, "done": 0, "total": len(items)})
+
     async def run_item(index: int, item: Dict[str, Any]):
         async with semaphore:
             try:
-                return await _execute_node(node, item)
+                outcome = await _execute_node(node, item)
             except Exception as exc:  # noqa: BLE001 - reported, not swallowed
                 logger.warning("Batch item %d of node %s failed: %s", index, node.id, exc)
-                return exc
+                outcome = exc
+        # Deliberately not in a `finally`: CancelledError is not an Exception
+        # and must skip this, so stopping a run does not report phantom
+        # progress on its way out.
+        note_item_done()
+        return outcome
 
     settled = await asyncio.gather(*(run_item(i, item) for i, item in enumerate(items)))
 
@@ -548,11 +578,18 @@ async def execute_graph(
     """
     Execute the full graph and return an ExecutionResult.
 
-    *on_progress*, when given, is called with `{"type": "node_start"|"node_done",
-    "node_id": ..., "status": ...}` as the run proceeds. It exists so a caller can
-    report which node is running -- a graph against a slow local model is
-    otherwise ten minutes of silence. It must not raise and must not block; the
-    CLI and the deploy bundle pass nothing and behave exactly as before.
+    *on_progress*, when given, is called as the run proceeds with one of:
+
+        {"type": "node_start",     "node_id", "label"}
+        {"type": "node_done",      "node_id", "status"}
+        {"type": "batch_progress", "node_id", "done", "total"}   -- items within one node
+        {"type": "activity",       "node_id", "received"}        -- an AI stream is alive
+
+    It exists so a caller can report which node is running -- a graph against a
+    slow local model is otherwise ten minutes of silence. The last two answer the
+    question the first two cannot: a 500-item batch, or one long streaming call,
+    looks identical to a hang while it is working. It must not raise and must not
+    block; the CLI and the deploy bundle pass nothing and behave exactly as before.
 
     Cancellation is ordinary asyncio task cancellation: cancel the task running
     this coroutine and `CancelledError` propagates out of the in-flight node
@@ -606,6 +643,15 @@ async def execute_graph(
             node_start = time.monotonic()
             if on_progress is not None:
                 on_progress({"type": "node_start", "node_id": node_id, "label": node.label})
+                # Publish liveness for anything this node awaits. Set inside
+                # run_node, which gather() runs as its own Task: each node gets
+                # its own copy of the context, so two AI nodes in one level
+                # never report activity for each other.
+                ai_service.stream_activity.set(
+                    lambda received, _id=node_id: on_progress(
+                        {"type": "activity", "node_id": _id, "received": received}
+                    )
+                )
             try:
                 inputs = _collect_inputs(node_id, graph.edges, node_outputs, feedback_ids)
                 effective_formats = _effective_input_formats(node, graph.edges, node_map)
@@ -617,7 +663,7 @@ async def execute_graph(
                     if node.config.batch_mode == "whole_list":
                         outputs = await _execute_node(node, inputs)
                     else:
-                        outputs, item_errors = await _execute_batch_node(node, inputs)
+                        outputs, item_errors = await _execute_batch_node(node, inputs, on_progress)
                 else:
                     outputs = await _execute_node(node, inputs, effective_formats)
                 outputs = _decode_node_outputs(node, outputs)

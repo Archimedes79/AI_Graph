@@ -19,7 +19,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.elements.registry import GUI_WIDGET_ELEMENTS, NODE_ELEMENTS  # noqa: E402
-from app.models.graph import Graph, GuiWidget, GuiWidgetKind  # noqa: E402
+from app.models.graph import (Graph, GraphNode, GuiWidget, GuiWidgetKind, NodeConfig,  # noqa: E402
+                              NodeType, Port, PortKind)
 from app.services import node_files  # noqa: E402
 
 
@@ -211,3 +212,50 @@ def test_a_hand_written_file_without_a_header_is_all_body():
     header, body = node_files.parse("def run(inputs):\n    return 1\n", "Analyse.py")
     assert header == {}
     assert body == "def run(inputs):\n    return 1"
+
+
+def test_an_empty_code_file_is_written_as_its_skeleton():
+    """An empty .py told a reader nothing the header had not already said.
+
+    The stub states the signature the body has to fill in, one line per port --
+    written, never read back, exactly like the `inputs:`/`outputs:` header lines.
+    """
+    node = GraphNode(
+        id="n1", node_type=NodeType.CODE, label="Analyse",
+        inputs=[Port(id="text", name="Text", kind=PortKind.INPUT)],
+        outputs=[Port(id="summary", name="Summary", kind=PortKind.OUTPUT)],
+        config=NodeConfig(code=""),
+    )
+    spec = NODE_ELEMENTS[NodeType.CODE].authored_file(node)
+    rendered = node_files.render(node_files.for_node(node, spec), "Analyse.py")
+
+    assert "def run(inputs: Inputs) -> dict:" in rendered
+    assert '"summary": ...' in rendered
+    # Still parseable as a header plus a body, and the body is the stub.
+    header, body = node_files.parse(rendered, "Analyse.py")
+    assert header["node"] == "Analyse"
+    assert "def run" in body
+
+
+def test_a_written_body_is_never_replaced_by_the_skeleton():
+    node = GraphNode(
+        id="n1", node_type=NodeType.CODE, label="Analyse",
+        inputs=[Port(id="text", name="Text", kind=PortKind.INPUT)],
+        outputs=[Port(id="summary", name="Summary", kind=PortKind.OUTPUT)],
+        config=NodeConfig(code="def run(inputs):\n    return {'summary': 'x'}\n"),
+    )
+    spec = NODE_ELEMENTS[NodeType.CODE].authored_file(node)
+    rendered = node_files.render(node_files.for_node(node, spec), "Analyse.py")
+    assert "TypedDict" not in rendered
+    assert "'summary': 'x'" in rendered
+
+
+def test_a_prose_body_gets_no_skeleton():
+    """An ai node's file is a system prompt; a Python stub in it is nonsense."""
+    node = GraphNode(
+        id="n2", node_type=NodeType.AI, label="Ask", description="ask things",
+        config=NodeConfig(system_prompt=""),
+    )
+    spec = NODE_ELEMENTS[NodeType.AI].authored_file(node)
+    rendered = node_files.render(node_files.for_node(node, spec), "Ask.md")
+    assert "def run" not in rendered

@@ -48,6 +48,11 @@ def _as_image_url(value) -> Optional[str]:
 
 class AIElement(NodeElement):
     node_type = NodeType.AI
+    config_fields = (
+        "system_prompt", "ai_provider", "ai_model", "temperature", "send_images",
+        "output_format", "output_format_prompt",
+        "batch_mode", "batch_concurrency", "read_file_inputs",
+    )
 
     async def execute(
         self,

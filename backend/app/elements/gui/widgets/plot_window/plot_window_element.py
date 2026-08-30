@@ -2,29 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
-
-from app.elements.base import AuthoredFile, Generation, GuiWidgetElement, code_extension
-from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
+from app.elements.base import DisplayWidget, Generation
+from app.models.graph import GuiWidgetKind
 
 
-class PlotWindowElement(GuiWidgetElement):
+class PlotWindowElement(DisplayWidget):
+    """Ports, execute and authored_file are the display-widget contract; what
+    is left is the one thing that makes this a chart rather than a picture."""
+
     widget_kind = GuiWidgetKind.PLOT_WINDOW
-
-    def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:
-        in_id = f"{widget.id}_in"
-        label = widget.label or widget.id
-        return [Port(id=in_id, name=label, kind=PortKind.INPUT, data_type=DataType.ANY, multi=True, required=False)], []
-
-    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
-        # Display-only: this is never called (see gui/element.py) since a widget
-        # with no output port has its in-place transform handled by the caller.
-        return None
-
-    def authored_file(self, widget: GuiWidget) -> AuthoredFile:
-        """The data transform that turns incoming data into plot-ready points."""
-        return AuthoredFile(body_field="code", prompt_field="code_prompt",
-                            extension=code_extension(widget))
+    config_fields = ("code", "code_prompt", "language")
 
     def generation(self) -> Generation:
         """The transform reshapes data; it must not draw anything.

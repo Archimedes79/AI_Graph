@@ -125,6 +125,7 @@ export interface NodeConfig {
   data_prompt: string;
   data_value?: unknown;
   example_file: string;
+  extensions: string;
   extra: {
     [k: string]: unknown;
   };
@@ -137,6 +138,7 @@ export interface NodeConfig {
   output_label: string;
   prompt_at_runtime: boolean;
   read_file_inputs: boolean;
+  recursive: boolean;
   requirements: string[];
   select_all_files: boolean;
   selector_code: string;
@@ -172,7 +174,6 @@ export interface GuiWidget {
   select_all_files: boolean;
   selector_code: string;
   selector_prompt: string;
-  size: 'small' | 'medium' | 'large';
   value?: unknown;
   w?: number;
   x?: number | null;

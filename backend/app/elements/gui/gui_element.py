@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional
 
 from app.elements.base import GuiWidgetElement, NodeElement, DeployNeeds
 from app.models.graph import GraphNode, GuiWidgetKind, NodeType, gui_widget_ports, sync_gui_node_ports
-from app.services import code_executor
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +34,15 @@ async def apply_display_transform(widget, raw_value: Any) -> Any:
     same-round wires and by graph_executor._settle_memory_feedback for
     feedback wires, so a plot fed through a cycle is transformed identically.
     """
-    if not widget.code.strip():
-        return raw_value  # no transform: display the incoming value as-is
-    try:
-        transformed = await code_executor.execute_code(widget.code, widget.language, {"value": raw_value})
-        return transformed.get("value", raw_value)
-    except Exception as exc:  # noqa: BLE001
-        label = widget.label or widget.id
-        logger.warning("Display transform of widget %s failed: %s", label, exc)
-        return f"⚠ {label}: transform failed:\n{exc}"
+    element = _widget_elements().get(widget.kind)
+    if element is None:
+        return raw_value
+    # The element runs its own snippet and decides what a failure costs
+    # (`snippet_failure = "cosmetic"` for a display widget), rather than this
+    # composite repeating the body lookup, the language lookup and the
+    # try/except that three other elements also wrote out.
+    transformed = await element.run_snippet(widget, {"value": raw_value})
+    return transformed.get("value", raw_value)
 
 
 def _widget_elements() -> Dict[GuiWidgetKind, GuiWidgetElement]:
@@ -57,6 +56,8 @@ def _widget_elements() -> Dict[GuiWidgetKind, GuiWidgetElement]:
 
 class GuiElement(NodeElement):
     node_type = NodeType.GUI
+    is_memory = True
+    config_fields = ("gui_widgets", "gui_grid_columns")
 
     async def execute(
         self,

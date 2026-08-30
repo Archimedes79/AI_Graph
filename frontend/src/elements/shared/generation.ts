@@ -135,6 +135,12 @@ export interface GenerationRequest<S> {
   graphContext?: string;
   /** Raw last-run values, for the backend's verify-and-repair pass. */
   sampleInputs?: Record<string, unknown>;
+  /**
+   * Which node feeds each input port, by label. Only the editor knows the
+   * wiring, and it is what lets the generated skeleton say where a value came
+   * from -- the part no type annotation can express.
+   */
+  inputSources?: Record<string, string>;
 }
 
 /**
@@ -163,6 +169,7 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
       inputs: request.ports?.inputs,
       outputs: request.ports?.outputs,
       sample_inputs: request.sampleInputs,
+      input_sources: request.inputSources,
       ...genAI(),
     }),
     apply: (result) => fields.set(spec.targetField, result.result),

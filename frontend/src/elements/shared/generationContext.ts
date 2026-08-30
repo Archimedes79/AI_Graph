@@ -134,3 +134,33 @@ export function lastRunContext(nodeId: string, result: ExecutionResult | null): 
   });
   return `Actual values this node received on its last run -- generate against these, not against a guess:\n${lines.join('\n')}`;
 }
+
+/**
+ * Which node feeds each of *nodeId*'s input ports, by label.
+ *
+ * The wiring is the one thing a generation request cannot otherwise carry, and
+ * it is what turns a skeleton line from `files: list[str]` into
+ * `files: list[str]  # from "Ordner"` — provenance, which no type expresses.
+ *
+ * A port fed by several nodes (fan-in) names them all: that a value is a list
+ * *because two nodes write into it* is exactly the case generated code gets
+ * wrong when it assumes a scalar.
+ */
+export function inputSources(
+  nodeId: string,
+  nodes: GraphNode[],
+  edges: Array<{ source: string; target: string; targetHandle?: string | null }>,
+): Record<string, string> {
+  const labelById = new Map(nodes.map((node) => [node.id, node.label]));
+  const byPort: Record<string, string[]> = {};
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue;
+    const port = edge.targetHandle ?? 'input';
+    const label = labelById.get(edge.source);
+    if (!label) continue;
+    (byPort[port] ??= []).push(label);
+  }
+  return Object.fromEntries(
+    Object.entries(byPort).map(([port, labels]) => [port, [...new Set(labels)].join('" + "')]),
+  );
+}

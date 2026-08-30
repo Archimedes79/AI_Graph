@@ -77,7 +77,7 @@ export default function InputEditor({
           <FileBrowserDialog
             mode={isDirectory ? 'directory' : 'file'}
             initialPath={(node.config.value as string) ?? ''}
-            extensions={(node.config.extra?.extensions as string) ?? ''}
+            extensions={node.config.extensions ?? ''}
             onPick={(picked) => { setConfig('value', picked); setBrowsing(false); }}
             onClose={() => setBrowsing(false)}
           />
@@ -92,8 +92,8 @@ export default function InputEditor({
           <label className="flex items-center gap-2 mb-2 text-sm" style={{ color: MUTED }}>
             <input
               type="checkbox"
-              checked={!!node.config.extra?.recursive}
-              onChange={(e) => setConfig('extra', { ...node.config.extra, recursive: e.target.checked })}
+              checked={!!node.config.recursive}
+              onChange={(e) => setConfig('recursive', e.target.checked)}
             />
             Recursive
           </label>
@@ -104,8 +104,8 @@ export default function InputEditor({
             <input
               className="w-full rounded-lg px-3 py-2 text-sm font-mono"
               style={FIELD}
-              value={(node.config.extra?.extensions as string) ?? ''}
-              onChange={(e) => setConfig('extra', { ...node.config.extra, extensions: e.target.value })}
+              value={node.config.extensions ?? ''}
+              onChange={(e) => setConfig('extensions', e.target.value)}
               placeholder="Leave empty for all file types"
             />
           </div>

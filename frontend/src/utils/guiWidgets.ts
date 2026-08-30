@@ -2,7 +2,7 @@
 // backend/app/models/graph.py: gui_widget_ports / sync_gui_node_ports 1:1.
 import type { GraphNode, GuiWidget, GuiWidgetKind, Port } from '../types/graph';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
-import { sizeToGrid } from '../components/gui/layout';
+import { DEFAULT_WIDGET_SPAN } from '../components/gui/layout';
 
 /** Return the (inputs, outputs) a single GUI widget contributes to its node. */
 export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Port[] } {
@@ -32,18 +32,12 @@ export function syncGuiNodePorts(node: GraphNode): GraphNode {
   return { ...node, inputs, outputs };
 }
 
-/** Map a named size to its default grid dimensions. */
-// Grid math lives in components/gui/layout.ts (the unit-tested home for it,
-// see AGENTS.md); re-exported here so the widget helpers keep one import.
-export { sizeToGrid } from '../components/gui/layout';
-
 let widgetCounter = 1;
 export function newGuiWidgetId(): string {
   return `widget-${widgetCounter++}-${Date.now()}`;
 }
 
 export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
-  const size = 'medium';
   return {
     id: newGuiWidgetId(),
     kind,
@@ -51,8 +45,9 @@ export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
     value: '',
     extensions: '',
     mode: kind === 'input_picker' ? 'file' : kind === 'text_io' ? 'both' : '',
-    size,
-    ...sizeToGrid(size),
+    // No x/y: an unplaced widget stacks below the others until it is dragged,
+    // which is what makes "add" work without asking where to put it.
+    ...DEFAULT_WIDGET_SPAN,
     code: '',
     language: 'python',
     recursive: false,

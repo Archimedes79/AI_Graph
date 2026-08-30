@@ -4,6 +4,17 @@ import { baseNodeConfig } from '../shared/baseNodeConfig';
 
 export const guiElement: NodeElementDefinition = {
   nodeType: 'gui',
+  // Its widgets keep their values between runs, so an edge into one closes a
+  // cycle the same way a data node does.
+  isMemory: true,
+  // One value per widget, addressed by the port the edge landed on: a gui
+  // node's ports are named '<widgetId>_in' / '_out' by construction.
+  settleMemoryValue: (node, portId, value) => {
+    const widgetId = portId.endsWith('_in') ? portId.slice(0, -'_in'.length) : portId;
+    const widget = node.config.gui_widgets?.find((w) => w.id === widgetId);
+    if (widget) widget.value = value as never;
+  },
+  hasRuntimeWindow: true,
   ConfigEditor: GuiEditor,
   // A composite: it generates nothing itself, and what it emits is decided by
   // its widgets, which is why the summary is derived rather than editable.

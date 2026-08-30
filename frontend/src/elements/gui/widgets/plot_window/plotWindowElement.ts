@@ -2,6 +2,7 @@ import type { GuiWidgetElementDefinition } from '../../../types';
 import PlotWindowEditor from './PlotWindowEditor';
 import PlotWindowWidget from '../../../../components/gui/widgets/PlotWindowWidget';
 import { codeExtension } from '../../../shared/authoredFileName';
+import PlotWidget from '../../../../components/PlotWidget';
 
 export const plotWindowElement: GuiWidgetElementDefinition = {
   widgetKind: 'plot_window',
@@ -27,6 +28,10 @@ export const plotWindowElement: GuiWidgetElementDefinition = {
     language: true,
     bodyHeight: 100,
   },
+  // What last arrived on this widget's input port, charted on the graph
+  // canvas itself. GraphNodeComponent used to look for this widget kind by
+  // name; it asks the element now.
+  CanvasPreview: PlotWidget,
   ConfigEditor: PlotWindowEditor,
   RuntimeWidget: PlotWindowWidget,
 };

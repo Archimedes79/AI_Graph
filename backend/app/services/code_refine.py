@@ -151,6 +151,7 @@ async def generate_verified_code(
     model: str,
     provider: Any,
     sample_inputs: Optional[Dict[str, Any]] = None,
+    sources: Optional[Dict[str, str]] = None,
 ) -> tuple[str, str, ProbeReport]:
     """
     Generate code and, when a sample is available, verify it by running it.
@@ -162,6 +163,10 @@ async def generate_verified_code(
     code, explanation = await ai_service.generate_code(
         description=description, language=language, context=context,
         inputs=inputs, outputs=outputs, model=model, provider=provider,
+        # The same sample that verifies the result also types the skeleton
+        # the model is asked to complete -- pass 1 gets to see the shapes
+        # that, before, only the repair pass ever learned.
+        sample_inputs=sample_inputs, sources=sources,
     )
 
     report = ProbeReport()
@@ -192,6 +197,7 @@ async def generate_verified_code(
         repaired, repaired_explanation = await ai_service.generate_code(
             description=description, language=language, context=repair_context,
             inputs=inputs, outputs=outputs, model=model, provider=provider,
+            sample_inputs=sample_inputs, sources=sources,
         )
     except Exception as exc:
         # The repair pass is a bonus, never a reason to fail the request: hand

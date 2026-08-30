@@ -96,7 +96,12 @@ class GuiWidget(BaseModel):
     value: Optional[Any] = None      # literal/default value or a chosen file/directory path
     extensions: str = ""             # input_picker (directory mode) extension filter, e.g. ".md, .txt"
     mode: str = ""                   # input_picker: "file" | "directory"; text_io: "input" | "output" | "both"
-    size: Literal["small", "medium", "large"] = "medium"
+    # There is no `size` field any more. A gui node had two-and-a-half ways to
+    # say how big a widget is -- a small/medium/large preset mapped onto w/h, the
+    # widget list's order (used as the layout for anything the designer had never
+    # placed), and w/h themselves -- so the same widget could be described three
+    # times and disagree. `w`/`h` below is the one encoding; `size` migrates into
+    # it at load time (see `_migrate_widget_size`).
 
     # input_picker (directory mode) – same file-selection contract as the input
     # node's NodeConfig fields, kept per-widget so a standalone widget node has
@@ -155,7 +160,15 @@ class NodeConfig(BaseModel):
     # unified input node
     input_mode: Literal["text", "file", "directory"] = "text"
 
-    # input node (directory mode) – file selection
+    # input node (directory mode) – file selection.
+    # `recursive` and `extensions` lived in `extra` here while the identical
+    # settings on `GuiWidget` were typed fields, so one behaviour was declared
+    # two ways -- and `extra` is the bag you reach for when the schema cannot
+    # speak per element, which is exactly the thing to fix rather than work
+    # around. Same names as the widget's, because it is the same contract at two
+    # levels (see `SELECTOR_GENERATION`); migrated out of `extra` on load.
+    recursive: bool = False
+    extensions: str = ""                 # e.g. ".md, .txt"; empty means every file
     select_all_files: bool = True
     selector_prompt: str = ""
     selector_code: str = ""              # run(inputs: {files}) -> {files}
@@ -414,16 +427,36 @@ def _apply_renames(raw: dict, renames: tuple) -> dict:
     return result if result is not None else raw
 
 
+def _migrate_extra_selection_fields(config: dict) -> dict:
+    """Lift the input node's `recursive`/`extensions` out of `extra`.
+
+    They were the only typed settings the DSL kept in the untyped bag, while the
+    identical settings on a `GuiWidget` were real fields -- one behaviour
+    declared two ways. Anything else in `extra` stays: it is still the passthrough
+    it was always documented to be.
+    """
+    extra = config.get("extra")
+    if not isinstance(extra, dict) or not ({"recursive", "extensions"} & extra.keys()):
+        return config
+    remaining = {k: v for k, v in extra.items() if k not in ("recursive", "extensions")}
+    migrated = {**config, "extra": remaining}
+    for key in ("recursive", "extensions"):
+        if key in extra and not config.get(key):
+            migrated[key] = extra[key]
+    return migrated
+
+
 def _migrate_renamed_fields(node: dict) -> dict:
     """Apply the field renames to one node dict and to its widgets."""
     config = node.get("config")
     if not isinstance(config, dict):
         return node
-    new_config = _apply_renames(config, _RENAMED_CONFIG_FIELDS)
+    new_config = _migrate_extra_selection_fields(_apply_renames(config, _RENAMED_CONFIG_FIELDS))
     widgets = new_config.get("gui_widgets")
     if isinstance(widgets, list):
         new_widgets = [
-            _apply_renames(w, _RENAMED_WIDGET_FIELDS) if isinstance(w, dict) else w
+            _migrate_widget_size(_apply_renames(w, _RENAMED_WIDGET_FIELDS))
+            if isinstance(w, dict) else w
             for w in widgets
         ]
         if any(new is not old for new, old in zip(new_widgets, widgets)):
@@ -433,6 +466,28 @@ def _migrate_renamed_fields(node: dict) -> dict:
     if new_config is config:
         return node
     return {**node, "config": new_config}
+
+
+# The cell footprint each retired `size` preset stood for. Only ever read by the
+# migration below -- new widgets are created with w/h directly.
+_LEGACY_SIZE_SPAN = {"small": (3, 2), "medium": (6, 4), "large": (12, 6)}
+
+
+def _migrate_widget_size(widget: dict) -> dict:
+    """Turn a retired `size` preset into the `w`/`h` it always meant.
+
+    Not a `_apply_renames` entry: that moves a value to another key, and this is
+    a computation -- one name expanded into two numbers. A widget that already
+    carries w/h keeps them; the preset was only ever a shorthand for setting
+    those, so an explicit layout must win over a stale preset.
+    """
+    if "size" not in widget:
+        return widget
+    migrated = dict(widget)
+    span = _LEGACY_SIZE_SPAN.get(str(migrated.pop("size") or ""), _LEGACY_SIZE_SPAN["medium"])
+    migrated.setdefault("w", span[0])
+    migrated.setdefault("h", span[1])
+    return migrated
 
 
 def _migrate_legacy_node(node: Any) -> Any:
@@ -693,6 +748,11 @@ class GenerateRequest(BaseModel):
     # Real values from the last run, for the verify-and-repair pass. Ignored for
     # a fixed-port snippet, which is not wired to the ports the sample is keyed by.
     sample_inputs: Optional[Dict[str, Any]] = None
+    # Which node feeds each input port, by label. Only the editor knows this --
+    # the wiring is not in the request otherwise -- and it is what turns a
+    # skeleton line from `files: list[str]` into `files: list[str]  # from
+    # "Ordner"`, which is the part no type can express.
+    input_sources: Dict[str, str] = Field(default_factory=dict)
     ai_provider: AIProvider = AIProvider.DEFAULT
     ai_model: str = ""
 

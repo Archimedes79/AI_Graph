@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.services import skeleton
+
 BANNER = "--- ai-graph ---"
 
 
@@ -217,9 +219,27 @@ def _is_closing(line: str, style: CommentStyle) -> bool:
 
 
 def render(item: Authored, file_name: str) -> str:
-    """The full file: header, blank line, then the authored text."""
+    """The full file: header, blank line, then the authored text.
+
+    An element that authors *code* and has none yet gets the skeleton instead of
+    an empty file -- the signature it has to fill in, with one line per port. An
+    empty .py told a reader nothing that the header had not already said.
+
+    The skeleton is written, never read back: `parse` returns whatever the body
+    is, and if the user leaves the stub untouched it is simply a function that
+    returns placeholders. Ports stay derived from the wiring, exactly as the
+    `inputs:`/`outputs:` header lines are.
+    """
     style = style_for(file_name)
-    return "\n".join(_header_lines(item, style)) + "\n\n" + item.body.rstrip("\n") + "\n"
+    body = item.body.rstrip("\n")
+    if not body.strip():
+        extension = Path(file_name).suffix.lower()
+        if extension in (".py", ".js"):
+            body = skeleton.render(
+                "javascript" if extension == ".js" else "python",
+                item.inputs, item.outputs,
+            ).rstrip("\n")
+    return "\n".join(_header_lines(item, style)) + "\n\n" + body + "\n"
 
 
 def apply(item: Authored, header: Dict[str, Any], body: str) -> None:

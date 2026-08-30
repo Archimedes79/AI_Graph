@@ -105,3 +105,59 @@ async def test_it_gives_up_after_the_configured_attempts(monkeypatch):
     with pytest.raises(httpx.HTTPStatusError):
         await ai_service.complete("hi", provider="lmstudio", model="m")
     assert attempts == 3
+
+
+# ---------------------------------------------------------------------------
+# An empty answer is a failure, not a success
+# ---------------------------------------------------------------------------
+#
+# Every provider path ends in `_StreamProgress.text()`, which is "" when the
+# stream carried no chunk -- a 200 with nothing in it. That raised nothing, so
+# the node reported SUCCESS and passed an empty string on. LM Studio serving a
+# model that is still loading does exactly this.
+
+
+async def test_an_empty_answer_is_retried_and_can_succeed(monkeypatch):
+    attempts = 0
+
+    async def slow_to_wake(prompt, system, model, temperature, timeout=None, images=None):
+        nonlocal attempts
+        attempts += 1
+        return "" if attempts == 1 else "awake"
+
+    monkeypatch.setattr(ai_service, "_lmstudio_complete", slow_to_wake)
+
+    assert await ai_service.complete("hi", provider="lmstudio", model="m") == "awake"
+    assert attempts == 2
+
+
+async def test_a_whitespace_only_answer_counts_as_empty(monkeypatch):
+    """Blank is blank: a model that emits only a newline delivered nothing."""
+    attempts = 0
+
+    async def blank(prompt, system, model, temperature, timeout=None, images=None):
+        nonlocal attempts
+        attempts += 1
+        return "\n  \n"
+
+    monkeypatch.setattr(ai_service, "_lmstudio_complete", blank)
+    monkeypatch.setattr(ai_service, "AI_MAX_ATTEMPTS", 2)
+
+    with pytest.raises(ai_service.EmptyCompletionError):
+        await ai_service.complete("hi", provider="lmstudio", model="m")
+    assert attempts == 2
+
+
+async def test_the_empty_answer_error_names_provider_and_model(monkeypatch):
+    """The message is the whole value here: it has to say what did not answer."""
+
+    async def blank(prompt, system, model, temperature, timeout=None, images=None):
+        return ""
+
+    monkeypatch.setattr(ai_service, "_lmstudio_complete", blank)
+    monkeypatch.setattr(ai_service, "AI_MAX_ATTEMPTS", 1)
+
+    with pytest.raises(ai_service.EmptyCompletionError) as caught:
+        await ai_service.complete("hi", provider="lmstudio", model="qwen3-8b")
+    assert "lmstudio" in str(caught.value)
+    assert "qwen3-8b" in str(caught.value)

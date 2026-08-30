@@ -68,6 +68,10 @@ _PORTABLE_SERVICE_MODULES = [
     "code_env.py",
     "graph_executor.py",
     "run_registry.py",
+    # ai_service imports it for the code-generation prompt, which a bundle still
+    # reaches: an input node whose selector was never generated in the editor
+    # generates one on its first run.
+    "skeleton.py",
 ]
 
 
