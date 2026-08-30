@@ -100,8 +100,7 @@ Every one of them is executed by the test suite, so they cannot quietly rot.
 | Graph | What it shows | Needs a model |
 |---|---|---|
 | [hello_world.json](examples/hello_world.json) | The smallest graph there is | no |
-| [plotter.json](examples/plotter.json) | CSV → code node → chart, plus the values as text | no |
-| [plotter_interactive.json](examples/plotter_interactive.json) | The same chart, but the file is picked at run time — picker and plot in one GUI node | no |
+| [plotter_interactive.json](examples/plotter_interactive.json) | Pick a CSV at run time, reshape it in a code node, chart it — picker and plot in one GUI node | no |
 | [text_summary.json](examples/text_summary.json) | Summarize each story in a folder, then summarize the summaries: the same AI node twice, differing only in `batch_mode` | yes |
 | [bla_counter.json](examples/bla_counter.json) | A counter that remembers across runs (memory feedback) | no |
 | [gui_file_to_ai_to_text.json](examples/gui_file_to_ai_to_text.json) | Pick a file, run it through AI, read the answer in a window | yes |
@@ -110,7 +109,7 @@ A path inside a graph resolves against the working directory, so run the ones th
 files from the repository root:
 
 ```bash
-python graph-runner/run.py examples/plotter.json
+python graph-runner/run.py examples/plotter_interactive.json
 ```
 
 ## Quick start

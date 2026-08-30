@@ -119,32 +119,6 @@ def test_every_example_says_what_it_is(path: Path):
     assert graph.metadata.description.strip(), f"{path.name} has no description"
 
 
-async def test_the_plotter_turns_the_csv_into_points(at_repo_root):
-    """The plotter needs no AI and no network, so it runs here exactly as it
-    runs for a user."""
-    graph = Graph.model_validate(json.loads((EXAMPLES / "plotter.json").read_text(encoding="utf-8")))
-    result = await execute_graph(graph)
-
-    assert result.status == ExecutionStatus.SUCCESS, result.error
-    points = next(r for r in result.node_results if r.node_id == "points").outputs["points"]
-    assert len(points) == 5
-    assert [p["label"] for p in points] == ["Indien", "China", "USA", "Indonesien", "Pakistan"]
-    # Scaled to millions and sorted largest first -- what the node's prompt says.
-    assert points[0]["value"] == 1430.0
-    assert points == sorted(points, key=lambda p: p["value"], reverse=True)
-
-
-async def test_the_plotter_feeds_the_chart_widget(at_repo_root):
-    """The plot widget is display-only: its value arrives on its *input* port,
-    which is where the runtime window reads it from."""
-    graph = Graph.model_validate(json.loads((EXAMPLES / "plotter.json").read_text(encoding="utf-8")))
-    result = await execute_graph(graph)
-
-    chart = next(r for r in result.node_results if r.node_id == "chart")
-    shown = chart.inputs["plot_in"]
-    assert isinstance(shown, list) and shown[0]["label"] == "Indien"
-
-
 async def test_the_summary_example_summarises_each_story_then_all_of_them(at_repo_root, stub_ai):
     """The point of this example is the two batch modes, so that is what is checked.
 
@@ -182,8 +156,9 @@ async def test_the_summary_example_delivers_both_levels_to_its_output(at_repo_ro
     assert isinstance(outputs["gesamt"], str)
 
 
-async def test_the_interactive_plotter_charts_the_picked_file(at_repo_root):
-    """The picker's stored value stands in for a click, so this runs headless too.
+async def test_the_plotter_turns_the_picked_csv_into_points(at_repo_root):
+    """The plotter needs no AI and no network, so it runs here exactly as it runs
+    for a user -- the picker's stored value stands in for the click.
 
     It also covers `read_file_inputs`: the code node declares a `file_path` input
     and receives the file's *text*, without ever touching the filesystem itself.
@@ -195,9 +170,22 @@ async def test_the_interactive_plotter_charts_the_picked_file(at_repo_root):
 
     assert result.status == ExecutionStatus.SUCCESS, result.error
     points = next(r for r in result.node_results if r.node_id == "points").outputs["points"]
-    assert [p["label"] for p in points][:2] == ["Indien", "China"]
+    assert len(points) == 5
+    assert [p["label"] for p in points] == ["Indien", "China", "USA", "Indonesien", "Pakistan"]
+    # Scaled to millions and sorted largest first -- what the node's prompt says.
+    assert points[0]["value"] == 1430.0
+    assert points == sorted(points, key=lambda p: p["value"], reverse=True)
 
-    # The chart is display-only: its value lands on its own input port, which is
-    # where the runtime window reads it from.
+
+async def test_the_plotter_feeds_the_chart_widget(at_repo_root):
+    """The plot widget is display-only: its value arrives on its *input* port,
+    which is where the runtime window reads it from."""
+    graph = Graph.model_validate(
+        json.loads((EXAMPLES / "plotter_interactive.json").read_text(encoding="utf-8"))
+    )
+    result = await execute_graph(graph)
+
     panel = next(r for r in result.node_results if r.node_id == "panel")
-    assert panel.inputs["chart_in"][0]["value"] == 1430.0
+    shown = panel.inputs["chart_in"]
+    assert isinstance(shown, list) and shown[0]["label"] == "Indien"
+    assert shown[0]["value"] == 1430.0

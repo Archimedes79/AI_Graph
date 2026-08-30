@@ -18,12 +18,18 @@ the graph file.** The two examples that read data from disk therefore run from t
 repository root, not from `graph-runner/`:
 
 ```bash
-python graph-runner/run.py examples/plotter.json
+python graph-runner/run.py examples/plotter_interactive.json
 python graph-runner/run.py examples/text_summary.json
 ```
 
 Both prompt for their path before running, so any other location works too — the
 value in the graph is only the default.
+
+The same rule bites once more after deployment: **a bundle ships the tool, not the
+data.** `main.py` reads its `graph.json` from its own directory, so a relative data
+path in the graph resolves inside the bundle, where the file is not. Either pick the
+file in the bundle's own interface (what a graph with a picker or a
+`prompt_at_runtime` input is for), or store an absolute path before deploying.
 
 Override text input nodes:
 ```bash
