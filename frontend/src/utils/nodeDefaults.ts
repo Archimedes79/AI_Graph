@@ -55,17 +55,13 @@ export interface NodePreset {
   build: (id: string) => GraphNode;
 }
 
-// File-reading presets were removed: Input's "file" mode (and input_picker's
-// file mode + a downstream node's `read_file_inputs`) already reads a file's
-// content directly with no AI/code involved -- see AGENTS.md's element table.
-export const NODE_PRESETS: NodePreset[] = [];
-
 /**
  * One-click palette entry per creatable GuiWidgetKind: a `gui` node holding
  * just that one widget. There is no separate node type for it -- the same
  * widget kinds are offered inside a `gui` node's widget list (see
  * `CREATABLE_GUI_WIDGET_KINDS`), each pre-populated so it's immediately
- * connectable without opening the config editor first.
+ * connectable without opening the config editor first. Also what resolves a
+ * palette drag/drop by preset id (GraphCanvas).
  */
 export const WIDGET_PRESETS: NodePreset[] = [
   {
@@ -153,6 +149,3 @@ export const WIDGET_PRESETS: NodePreset[] = [
     },
   },
 ];
-
-/** Every preset across both sections of the Sidebar palette -- used to resolve a drag/drop by preset id. */
-export const ALL_NODE_PRESETS: NodePreset[] = [...NODE_PRESETS, ...WIDGET_PRESETS];

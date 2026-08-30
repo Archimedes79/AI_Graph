@@ -47,6 +47,11 @@ async def test_github_copilot_complete_calls_expected_endpoint(monkeypatch):
     captured = {}
 
     class FakeStreamResponse:
+        # `is_error` is what ai_service._raise_for_status_with_body checks: it
+        # reads the body before raising, so a provider's own explanation
+        # survives into the error message. A success double just says no.
+        is_error = False
+
         def raise_for_status(self):
             pass
 
@@ -117,6 +122,24 @@ def test_default_sentinel_falls_back_when_nothing_is_configured(clean_ai_setting
     assert ai_settings.resolve_target("default", "") == ("ollama", "llama3")
     # A graph written before the sentinel existed has an empty provider.
     assert ai_settings.resolve_target("", "") == ("ollama", "llama3")
+
+
+def test_hosted_provider_without_a_model_never_gets_an_ollama_tag(clean_ai_settings):
+    """Regression: one global fallback model ("llama3", an ollama tag) used to
+    be handed to every provider, so picking Google in the dropdown without
+    also typing a model asked Google for `models/llama3` -- answered with a
+    bare `404 Not Found` that reads like a broken endpoint."""
+    for provider in ("google", "openai", "anthropic", "github_copilot"):
+        resolved_provider, resolved_model = ai_settings.resolve_target(provider, "")
+        assert resolved_provider == provider
+        assert resolved_model == ai_settings.DEFAULT_MODELS[provider]
+        assert resolved_model != "llama3"
+
+
+def test_openai_compatible_has_no_guessable_model(clean_ai_settings):
+    """Its endpoint is whatever the user pointed it at, so there is no model to
+    guess -- callers turn the empty model into "name one" (see ai_service)."""
+    assert ai_settings.resolve_target("openai_compatible", "") == ("openai_compatible", "")
 
 
 def test_unconfigured_machine_uses_the_local_provider_that_is_running(clean_ai_settings, monkeypatch):

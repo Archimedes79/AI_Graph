@@ -111,6 +111,50 @@ AI_STREAM_IDLE_TIMEOUT = float(os.getenv("AI_STREAM_IDLE_TIMEOUT", "120"))
 _STREAM_PROGRESS_LOG_INTERVAL = 5.0
 
 
+def _provider_error_detail(body: str) -> str:
+    """The provider's own explanation, dug out of whatever JSON shape it used.
+
+    OpenAI-style errors are `{"error": {"message": ...}}`; Google wraps the
+    same object in a list. Anything unrecognised falls back to the raw body,
+    truncated -- a partial sentence still beats no sentence.
+    """
+    try:
+        parsed = json.loads(body)
+    except (ValueError, TypeError):
+        return body[:500]
+    if isinstance(parsed, list):
+        parsed = parsed[0] if parsed else {}
+    if isinstance(parsed, dict):
+        error = parsed.get("error", parsed)
+        if isinstance(error, dict):
+            message = error.get("message") or error.get("detail")
+            if message:
+                return str(message)
+    return body[:500]
+
+
+async def _raise_for_status_with_body(response: httpx.Response) -> None:
+    """`raise_for_status()` for a *streaming* response, with the provider's
+    explanation kept.
+
+    A streamed response's body has not been read when the status line arrives,
+    so httpx's own error is only "Client error '404 Not Found' for url ..." --
+    which reads like a broken endpoint even when the provider said something
+    precise and actionable ("this model is no longer available"). That sentence
+    is the entire diagnosis, so read the body before raising.
+    """
+    if not response.is_error:
+        return
+    body = (await response.aread()).decode("utf-8", errors="replace").strip()
+    detail = _provider_error_detail(body)
+    raise httpx.HTTPStatusError(
+        f"{response.status_code} {response.reason_phrase} from {response.request.url}"
+        + (f" -- {detail}" if detail else ""),
+        request=response.request,
+        response=response,
+    )
+
+
 def _stream_timeout(connect_write_pool_budget: float) -> httpx.Timeout:
     return httpx.Timeout(connect_write_pool_budget, read=AI_STREAM_IDLE_TIMEOUT)
 
@@ -164,7 +208,7 @@ async def _stream_chat_completion(
     """
     progress = _StreamProgress(provider, model)
     async with client.stream("POST", url, json={**payload, "stream": True}, headers=headers) as response:
-        response.raise_for_status()
+        await _raise_for_status_with_body(response)
         async for line in response.aiter_lines():
             if not line.startswith("data:"):
                 continue
@@ -245,7 +289,7 @@ async def _ollama_complete(
     progress = _StreamProgress("ollama", model)
     async with httpx.AsyncClient(timeout=_stream_timeout(timeout)) as client:
         async with client.stream("POST", f"{_ollama_base_url()}/api/generate", json=payload) as response:
-            response.raise_for_status()
+            await _raise_for_status_with_body(response)
             async for line in response.aiter_lines():
                 if not line:
                     continue
@@ -403,7 +447,7 @@ async def _anthropic_complete(
         async with client.stream(
             "POST", "https://api.anthropic.com/v1/messages", json={**payload, "stream": True}, headers=headers,
         ) as response:
-            response.raise_for_status()
+            await _raise_for_status_with_body(response)
             async for line in response.aiter_lines():
                 if not line.startswith("data:"):
                     continue
@@ -501,6 +545,15 @@ async def complete(
     requested_provider = str(getattr(provider, "value", provider) or "")
     requested_model = str(getattr(model, "value", model) or "")
     provider, model = ai_settings.resolve_target(requested_provider, requested_model)
+    if not model:
+        # Only reachable for `openai_compatible`, the one provider whose
+        # endpoint is user-supplied and so has no default model to fall back
+        # on. Say that here rather than calling with an empty model name and
+        # letting the endpoint answer with a 404 that reads like a bad URL.
+        raise ValueError(
+            f"No model configured for provider '{provider}'. Name one on the AI node, "
+            "or set ai.model in ai-settings.json / AI_GRAPH_AI_MODEL."
+        )
     if (provider, model) != (requested_provider, requested_model):
         logger.info(
             "AI target resolved: %s/%s -> %s/%s",

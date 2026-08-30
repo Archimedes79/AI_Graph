@@ -85,8 +85,8 @@ codebase), see [AGENTS.md](AGENTS.md).
 ### Option 1 – Docker Compose (recommended)
 
 ```bash
-git clone https://github.com/Archimedes79/AI-Graph.git
-cd AI-Graph
+git clone https://github.com/Archimedes79/AI_Graph.git
+cd AI_Graph
 docker compose up --build
 ```
 
@@ -553,5 +553,18 @@ AI-Graph is **source-available, not open source**: [PolyForm Noncommercial
 - **Commercial use needs a separate licence** from the copyright holder. Open an
   issue to ask for one.
 
-Every deploy bundle carries a copy of the licence, because a bundle ships the
-engine itself: whoever receives the software has to receive the terms with it.
+**What you build with AI-Graph is yours.** Your graph, and the code generated
+into it, belong to you. A deploy bundle contains nothing but that plus the
+runtime engine, and the engine ships under its own
+[`LICENSE-runtime`](LICENSE-runtime) — which is why every bundle carries a copy
+of the terms: whoever receives the software has to receive them with it. No part
+of the editor (the canvas, the generator, the deploy tool itself) ever travels
+in a bundle; `backend/tests/test_deploy_boundary.py` fails if one starts to.
+
+The two licence files hold the same text today. They are separate because the
+intention is for a *deployed tool's* terms to become permissive and stay that
+way, unbounded in time, independently of the editor's — and `LICENSE-runtime`
+is the one file that changes when that is settled.
+
+Licensing is not final. If you want to use AI-Graph commercially, open an
+issue — that conversation is welcome.

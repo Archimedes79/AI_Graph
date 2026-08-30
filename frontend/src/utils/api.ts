@@ -8,14 +8,6 @@ const api = axios.create({
   timeout: 660_000,
 });
 
-// Graph CRUD
-export const listGraphs = () => api.get('/graphs/').then((r) => r.data);
-export const createGraph = (graph: Graph) => api.post('/graphs/', graph).then((r) => r.data);
-export const getGraph = (id: string) => api.get(`/graphs/${id}`).then((r) => r.data);
-export const updateGraph = (id: string, graph: Graph) => api.put(`/graphs/${id}`, graph).then((r) => r.data);
-export const deleteGraph = (id: string) => api.delete(`/graphs/${id}`).then((r) => r.data);
-export const exportGraph = (id: string) => api.get(`/graphs/${id}/export`).then((r) => r.data);
-
 // File-based Load/Save (New/Load/Save/Save As), reading and writing an absolute
 // server-side path so repeated saves round-trip to the same file it was loaded from.
 export const loadGraphFile = (path: string): Promise<{ path: string; graph: Graph }> =>
@@ -32,9 +24,6 @@ export const reloadNodeFiles = (path: string): Promise<{ path: string; graph: Gr
   api.post('/graphs/file/reload-nodes', { path }).then((r) => r.data);
 
 // Execution
-export const executeGraph = (graph: Graph): Promise<ExecutionResult> =>
-  api.post('/execute/', graph).then((r) => r.data);
-
 export const getRuntimeRequirements = (graph: Graph): Promise<RuntimeRequirement[]> =>
   api.post('/execute/requirements', graph).then((r) => r.data);
 

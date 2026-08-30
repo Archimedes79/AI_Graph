@@ -241,12 +241,28 @@ def test_deploy_bundle_default_graph_path_resolution(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def _fake_built_frontend(tmp_path: Path, monkeypatch) -> Path:
-    """Stand in for `npm run build`'s output so these tests don't need node."""
+    """
+    Stand in for `npm run build`'s output so these tests don't need node.
+
+    Shaped like the real thing: ONE dist holding both entry points, each
+    pointing at its own chunk, plus a chunk they share. That is what makes
+    "the bundle ships the runtime half only" a testable claim rather than a
+    coincidence of an empty fixture.
+    """
     dist = tmp_path / "dist"
     (dist / "assets").mkdir(parents=True)
-    (dist / "runtime.html").write_text("<!doctype html><div id=root></div>", encoding="utf-8")
-    (dist / "index.html").write_text("<!doctype html><div id=root></div>", encoding="utf-8")
-    (dist / "assets" / "runtime.js").write_text("console.log(1)", encoding="utf-8")
+    (dist / "runtime.html").write_text(
+        '<!doctype html><script src="/assets/runtime.js"></script>'
+        '<img src="/assets/logo.png"><div id=root></div>',
+        encoding="utf-8",
+    )
+    (dist / "index.html").write_text(
+        '<!doctype html><script src="/assets/editor.js"></script><div id=root></div>',
+        encoding="utf-8",
+    )
+    (dist / "assets" / "runtime.js").write_text("import './shared.js'; console.log(1)", encoding="utf-8")
+    (dist / "assets" / "editor.js").write_text("import './shared.js'; console.log('canvas')", encoding="utf-8")
+    (dist / "assets" / "shared.js").write_text("export const widgets = {}", encoding="utf-8")
     # A binary asset, to pin down that the bundle carries bytes intact.
     (dist / "assets" / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n binary")
     monkeypatch.setattr(deploy_service, "_FRONTEND_DIST", dist)
@@ -264,8 +280,11 @@ def test_gui_graph_bundles_the_web_runtime(tmp_path, monkeypatch):
 
     repo_root = Path(__file__).parent.parent.parent
     assert bundle["serve.py"] == (repo_root / "graph-runner" / "serve.py").read_text(encoding="utf-8")
-    assert bundle["static/runtime.html"] == b"<!doctype html><div id=root></div>"
+    assert b'<div id=root>' in bundle["static/runtime.html"]
     assert bundle["static/assets/logo.png"] == b"\x89PNG\r\n\x1a\n binary"
+    # The shared chunk travels because runtime.js imports it; the editor's own
+    # entry and page do not (see test_deploy_boundary.py).
+    assert "static/assets/shared.js" in bundle
     # The CLI entry point is still there: the same bundle runs headless.
     assert "main.py" in bundle
 

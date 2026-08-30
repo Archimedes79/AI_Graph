@@ -7,13 +7,10 @@ The code module must expose a `run(inputs: dict) -> dict` function.
 from __future__ import annotations
 
 import asyncio
-import functools
 import json
 import logging
 import os
-import shutil
 import subprocess
-import sys
 import tempfile
 import textwrap
 from typing import Any, Dict, List, Optional

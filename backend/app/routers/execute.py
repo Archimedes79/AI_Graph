@@ -57,14 +57,3 @@ async def get_run(run_id: str):
 async def cancel_run(run_id: str):
     """Stop a run. Nodes already finished keep their results."""
     return {"cancelled": run_registry.cancel(run_id)}
-
-
-@router.post("/{graph_id}", response_model=ExecutionResult)
-async def execute_stored_graph(graph_id: str):
-    """Execute a previously stored graph by its ID."""
-    from app.routers.graph import _store  # local import to avoid circular deps
-
-    if graph_id not in _store:
-        raise HTTPException(404, f"Graph '{graph_id}' not found")
-    result = await graph_executor.execute_graph(_store[graph_id])
-    return result

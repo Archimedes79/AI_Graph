@@ -9,6 +9,7 @@ builder of its own, the table would not be doing its job.
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -46,11 +47,21 @@ async def test_complete_dispatches_to_google(monkeypatch):
 
 
 async def test_a_missing_key_says_where_to_get_a_free_one(monkeypatch):
-    """The error is the only place a newcomer will look."""
-    monkeypatch.setattr(ai_service, "_google_api_key", lambda: "")
+    """The error is the only place a newcomer will look.
+
+    Patch the credential on the `_OPENAI_STYLE` entry, not the module
+    attribute: the table captured the function object at import time, so
+    rebinding `ai_service._google_api_key` leaves the spec pointing at the
+    original -- which used to let this test fall through to a real HTTP call
+    against Google on every run.
+    """
+    spec = ai_service._OPENAI_STYLE["google"]
+    monkeypatch.setitem(
+        ai_service._OPENAI_STYLE, "google", replace(spec, credential=lambda: ""),
+    )
 
     with pytest.raises(ValueError) as excinfo:
-        await ai_service._google_complete("hi", "", "gemini-2.0-flash", 0.7)
+        await ai_service._google_complete("hi", "", "gemini-flash-lite-latest", 0.7)
 
     assert "aistudio.google.com" in str(excinfo.value)
 

@@ -45,7 +45,31 @@ logger = logging.getLogger(__name__)
 DEFAULT_SENTINEL = "default"
 
 FALLBACK_PROVIDER = "ollama"
-FALLBACK_MODEL = "llama3"
+
+# The model to call when a provider was chosen but no model was named.
+#
+# This is per provider on purpose: there used to be one global fallback
+# ("llama3", an ollama tag), which meant picking Google or OpenAI in the
+# dropdown without also typing a model asked *that* provider for a model named
+# `llama3` -- and a hosted provider answers an unknown model with a bare
+# `404 Not Found`, which reads like the endpoint is wrong rather than the model.
+# `openai_compatible` is deliberately absent: its endpoint is whatever the user
+# pointed it at, so there is no model anyone could guess for it.
+#
+# Google gets a `-latest` alias rather than a pinned version on purpose: Google
+# retires numbered Gemini releases for new users ("this model is no longer
+# available to new users"), so a pinned default rots into a 404 for exactly the
+# newcomers a default exists to serve.
+DEFAULT_MODELS = {
+    "ollama": "llama3",
+    "openai": "gpt-4o-mini",
+    "anthropic": "claude-opus-5",
+    "google": "gemini-flash-lite-latest",
+    "github_copilot": "gpt-4o-mini",
+}
+
+# Kept as the last resort for the built-in default provider (ollama).
+FALLBACK_MODEL = DEFAULT_MODELS["ollama"]
 
 SETTINGS_FILENAME = "ai-settings.json"
 
@@ -93,8 +117,22 @@ def candidate_paths() -> list[Path]:
 
 
 def settings_path() -> Path:
-    """The settings file in use: the first existing candidate, else the first
-    candidate, which is where `save()` will create it."""
+    """
+    The settings file in use.
+
+    An explicitly configured `AI_GRAPH_SETTINGS` wins outright, whether or not
+    the file exists yet: "use this file" has to hold for the first write too,
+    or `save()` silently lands somewhere else. It did -- pointing the variable
+    at a not-yet-created file fell through to the first *existing* candidate,
+    so the test suite wrote its fixtures into the developer's own
+    ai-settings.json instead of its tmp_path.
+
+    Otherwise: the first candidate that exists, else the first candidate, which
+    is where `save()` will create it.
+    """
+    explicit = os.getenv("AI_GRAPH_SETTINGS", "")
+    if explicit:
+        return Path(explicit).expanduser()
     candidates = candidate_paths()
     for path in candidates:
         if path.is_file():
@@ -208,11 +246,19 @@ def _first_reachable_local_provider() -> str:
 
 
 def _default_model_for(provider: str) -> str:
-    """A usable model when none was configured: for a local provider, the
-    first model it actually serves (an LM Studio model id or an installed
-    ollama tag beats guessing 'llama3'); empty otherwise."""
+    """
+    A usable model when none was configured.
+
+    For a local provider that is running, the first model it actually serves --
+    an LM Studio model id or an installed ollama tag beats any guess. Otherwise
+    that provider's own documented default (`DEFAULT_MODELS`), which is empty
+    for `openai_compatible`, where only the user knows what their endpoint
+    serves.
+    """
     models = probe_local_models(provider)
-    return models[0] if models else ""
+    if models:
+        return models[0]
+    return DEFAULT_MODELS.get(provider, "")
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +314,7 @@ def _runtime_target() -> Tuple[str, str]:
         # falling back to the static default.
         provider = _first_reachable_local_provider() or FALLBACK_PROVIDER
     if not model:
-        model = _default_model_for(provider) or FALLBACK_MODEL
+        model = _default_model_for(provider)
     return provider, model
 
 
@@ -288,9 +334,11 @@ def resolve_target(provider: str, model: str) -> Tuple[str, str]:
     resolved_provider = provider if provider and provider != DEFAULT_SENTINEL else runtime_provider
     resolved_model = model or (runtime_model if resolved_provider == runtime_provider else "")
     # A node that pins a provider but not a model gets that provider's own
-    # first served model (for a running local provider) before the static
-    # fallback -- "llama3" is meaningless to an LM Studio endpoint.
-    return resolved_provider, resolved_model or _default_model_for(resolved_provider) or FALLBACK_MODEL
+    # default -- a running local provider's first served model, else the entry
+    # in DEFAULT_MODELS. Only `openai_compatible` can come back empty; the
+    # caller turns that into "name a model" rather than sending "" to an
+    # endpoint that would answer with something unhelpful.
+    return resolved_provider, resolved_model or _default_model_for(resolved_provider)
 
 
 def resolve_gen_target(provider: str, model: str) -> Tuple[str, str]:

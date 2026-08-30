@@ -8,6 +8,11 @@ plus the user's `graph.json` and a thin `main.py` (the exact source of
 the same `execute_graph()` as the live editor/CLI, so the two can never
 diverge. See AGENTS.md's "Object-oriented element contract" section.
 
+What a bundle may contain is a closed list, and that list is the licence
+boundary: the vendored engine, the runner scripts, the runtime page, the user's
+graph -- and `LICENSE-runtime`, which covers exactly those. No editor file is
+ever vendored; `tests/test_deploy_boundary.py` fails if one starts to be.
+
 Every script this module ships is likewise an existing repo file copied
 verbatim, never a string assembled here: `main.py` is `graph-runner/run.py`
 and `build_exe.py` is `graph-runner/build_exe.py`. Only the few files that
@@ -145,8 +150,16 @@ def _requirements_txt(graph: Graph, needs: DeployNeeds) -> str:
 
 
 def _license() -> str:
-    """The project's LICENSE, copied verbatim into every bundle."""
-    return (_REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
+    """
+    The licence a bundle ships under: `LICENSE-runtime`, which covers exactly
+    what a bundle contains -- the vendored engine, the runner scripts and the
+    runtime page. The editor's own `LICENSE` never travels with a bundle,
+    because no editor file does (see `_runtime_static_files` and
+    `_PORTABLE_SERVICE_MODULES`). Today the two files hold the same terms;
+    keeping them separate is what makes changing the bundle's terms a
+    one-file edit instead of a refactor.
+    """
+    return (_REPO_ROOT / "LICENSE-runtime").read_text(encoding="utf-8")
 
 
 def _main_py() -> str:
@@ -176,17 +189,60 @@ def _serve_py() -> str:
     return (_REPO_ROOT / "graph-runner" / "serve.py").read_text(encoding="utf-8")
 
 
+# The editor and the deployed runtime are two entry points of ONE Vite build,
+# so `frontend/dist` holds both: `index.html` plus the editor's chunks next to
+# `runtime.html` plus the runtime's. A bundle ships only what `runtime.html`
+# reaches -- shipping the rest would put the designer into every deployed tool
+# and would cross the line `LICENSE-runtime` draws.
+_RUNTIME_ENTRY = "runtime.html"
+# Suffixes worth scanning for references to other built files. Everything else
+# (images, fonts) is a leaf: it can be referenced, it never references.
+_REFERENCING_SUFFIXES = {".html", ".js", ".mjs", ".css", ".json", ".map"}
+
+
+def _runtime_static_files() -> Dict[str, Path]:
+    """
+    {dist-relative path: file} for `runtime.html` and, transitively, every
+    built file it references -- the closure over Vite's content-hashed names.
+
+    Deliberately over-inclusive rather than clever: a file is "referenced" when
+    its name appears in another file's text. Vite's hashed names make a false
+    positive practically impossible, and the failure mode of a miss (a deployed
+    page missing a chunk) is far worse than that of an extra file.
+    """
+    all_files = {
+        path.relative_to(_FRONTEND_DIST).as_posix(): path
+        for path in sorted(_FRONTEND_DIST.rglob("*"))
+        if path.is_file()
+    }
+    if _RUNTIME_ENTRY not in all_files:
+        return {}
+
+    reachable = {_RUNTIME_ENTRY}
+    pending = [_RUNTIME_ENTRY]
+    while pending:
+        path = all_files[pending.pop()]
+        if path.suffix.lower() not in _REFERENCING_SUFFIXES:
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for rel, candidate in all_files.items():
+            if rel not in reachable and candidate.name in text:
+                reachable.add(rel)
+                pending.append(rel)
+
+    return {rel: all_files[rel] for rel in sorted(reachable)}
+
+
 def _vendor_static_files() -> Bundle:
     """
-    The built frontend, copied into the bundle as `static/`. Read as bytes so a
-    future binary asset (a font, an image) ships intact; text files stay text
-    only by virtue of being written back out unchanged.
+    The runtime half of the built frontend, copied into the bundle as
+    `static/`. Read as bytes so a binary asset (a font, an image) ships intact;
+    text files stay text only by virtue of being written back out unchanged.
     """
-    files: Bundle = {}
-    for path in sorted(_FRONTEND_DIST.rglob("*")):
-        if path.is_file():
-            files[f"static/{path.relative_to(_FRONTEND_DIST).as_posix()}"] = path.read_bytes()
-    return files
+    return {
+        f"static/{rel}": path.read_bytes()
+        for rel, path in _runtime_static_files().items()
+    }
 
 
 def _dockerfile(needs: DeployNeeds) -> str:

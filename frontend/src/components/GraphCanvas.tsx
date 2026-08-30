@@ -18,7 +18,7 @@ import 'reactflow/dist/style.css';
 import { useGraphStore } from '../store/graphStore';
 import GraphNodeComponent from './nodes/GraphNodeComponent';
 import type { NodeType } from '../types/graph';
-import { ALL_NODE_PRESETS } from '../utils/nodeDefaults';
+import { WIDGET_PRESETS } from '../utils/nodeDefaults';
 import { ACCENT, LINE, PANEL, SUNKEN, SURFACE } from '../ui/theme';
 
 const nodeTypes = { graphNode: GraphNodeComponent };
@@ -92,7 +92,7 @@ export default function GraphCanvas() {
       });
 
       if (presetId) {
-        const preset = ALL_NODE_PRESETS.find((p) => p.id === presetId);
+        const preset = WIDGET_PRESETS.find((p) => p.id === presetId);
         if (preset) addPresetNode(preset, position);
         return;
       }

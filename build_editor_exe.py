@@ -113,10 +113,12 @@ def build(name: str, onedir: bool, skip_build: bool) -> int:
     cmd += _add_data(BACKEND_DIR / "app", "app")
     # Same reason: a bundle's main.py/serve.py/build_exe.py are these files.
     cmd += _add_data(REPO_ROOT / "graph-runner", "graph-runner")
-    # And the licence, which every exported bundle carries: the licence's own
+    # And the licences. `LICENSE` is the editor's own; `LICENSE-runtime` is the
+    # one deploy_service copies into every exported bundle -- the licence's own
     # Notices section requires that whoever receives the software receives the
     # terms, so Deploy inside a frozen build has to be able to read it.
     cmd += _add_data(REPO_ROOT / "LICENSE", ".")
+    cmd += _add_data(REPO_ROOT / "LICENSE-runtime", ".")
 
     cmd.append(str(_ENTRY))
 
