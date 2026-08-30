@@ -18,7 +18,8 @@ cloud bill.
   store, no framework, no glue code.
 - **You ship a tool, not a prototype.** 🚀 Deploy packages the graph with the real
   execution engine; one PyInstaller run makes it an executable that needs no Python on
-  the target machine. A graph with `gui` nodes deploys *with its interface*.
+  the target machine — `--embed-python` puts an interpreter inside it, so even the
+  code nodes run there. A graph with `gui` nodes deploys *with its interface*.
 - **Nothing is hidden.** Typed ports say what flows between nodes, generated code stays
   visible and editable, graphs are plain JSON, and a node's body can live in its own
   `.py`/`.md` file beside the graph — so `git diff` reads like text.

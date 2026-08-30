@@ -20,6 +20,11 @@ Linux binary on Linux, the macOS binary on macOS.
 A `graph.json` placed next to the finished executable takes precedence over
 the embedded one (see `_default_graph_path` in main.py), so the same binary
 can be re-pointed at an edited graph without rebuilding it.
+
+If this tool has Python code nodes, add `--embed-python`: it ships an
+interpreter inside the executable so those nodes run on a machine with no
+Python installed. Nodes that declare packages (pandas and the like) still need
+a real Python on the target, because the embeddable interpreter has no pip.
 """
 
 from __future__ import annotations
@@ -27,9 +32,13 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+
+import python_embed
 
 HERE = Path(__file__).resolve().parent
 
@@ -48,7 +57,7 @@ def _add_data(src: Path, dest: str) -> list[str]:
     return ["--add-data", f"{src}{os.pathsep}{dest}"]
 
 
-def build(name: str, onedir: bool, windowed: bool) -> int:
+def build(name: str, onedir: bool, windowed: bool, embed_python: str) -> int:
     if importlib.util.find_spec("PyInstaller") is None:
         print("PyInstaller is not installed. Install it first:", file=sys.stderr)
         print("    pip install pyinstaller", file=sys.stderr)
@@ -86,17 +95,36 @@ def build(name: str, onedir: bool, windowed: bool) -> int:
         # at runtime, so static analysis alone misses them.
         cmd += ["--collect-all", "uvicorn"]
 
+    # The interpreter code nodes run in, if this tool is to carry one. Staged in
+    # a scratch directory so the bundle folder itself stays exactly as shipped.
+    scratch = tempfile.mkdtemp(prefix="ai-graph-embed-") if embed_python else ""
+    if embed_python:
+        try:
+            packed = python_embed.provision(Path(scratch), embed_python)
+        except RuntimeError as exc:
+            shutil.rmtree(scratch, ignore_errors=True)
+            print(f"[build_exe] {exc}", file=sys.stderr)
+            return 1
+        cmd += _add_data(packed, python_embed.DIR_NAME)
+
     cmd.append(str(entry))
 
     print("[build_exe]", " ".join(cmd))
-    result = subprocess.run(cmd, cwd=HERE)
+    try:
+        result = subprocess.run(cmd, cwd=HERE)
+    finally:
+        if scratch:
+            shutil.rmtree(scratch, ignore_errors=True)
     if result.returncode != 0:
         return result.returncode
 
-    produced = HERE / "dist" / (name if not onedir else f"{name}/")
+    exe_name = f"{name}.exe" if sys.platform == "win32" else name
+    produced = HERE / "dist" / (name if onedir else exe_name)
     print()
     print(f"[build_exe] Done -> {produced}")
     print("[build_exe] Ship that single file; it needs no Python on the target machine.")
+    if embed_python:
+        print("[build_exe] It carries its own Python, so stdlib code nodes run there too.")
     return 0
 
 
@@ -117,8 +145,14 @@ def main() -> int:
         "--windowed", action="store_true",
         help="GUI bundles only: build without a console window",
     )
+    parser.add_argument(
+        "--embed-python", nargs="?", const="auto", default="", metavar="PATH",
+        help="ship a Python interpreter inside the executable, so this tool's code "
+             "nodes run on a machine with no Python (adds ~23 MB). Downloads the "
+             "embeddable package, or unpacks the zip/directory given.",
+    )
     args = parser.parse_args()
-    return build(args.name, args.onedir, args.windowed)
+    return build(args.name, args.onedir, args.windowed, args.embed_python)
 
 
 if __name__ == "__main__":

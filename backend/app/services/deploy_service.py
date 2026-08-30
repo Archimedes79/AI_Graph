@@ -164,31 +164,26 @@ def _license() -> str:
     return (_REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
 
 
-def _main_py() -> str:
-    """
-    The bundle's entrypoint: the exact source of graph-runner/run.py, verbatim.
-    That file already documents itself as safe to vendor in as main.py -- its
-    dev-only sys.path shim for a sibling `backend/` directory is a no-op once
-    copied alongside a bundle's own `app/` instead.
-    """
-    return (_REPO_ROOT / "graph-runner" / "run.py").read_text(encoding="utf-8")
+# What a bundle's own scripts are, and what each is called there. Every one is
+# copied verbatim -- the same rule as the vendored engine, for the same reason:
+# a bundle that ran assembled-here strings could drift from the editor.
+# graph-runner/run.py documents itself as safe to vendor as main.py (its dev-only
+# sys.path shim for a sibling `backend/` is a no-op beside a bundle's own `app/`),
+# and the others carry no repo assumptions either.
+_RUNNER_FILES = {
+    # entrypoint: loads graph.json through the vendored engine
+    "main.py": "run.py",
+    # PyInstaller build: turns the bundle into one executable that needs no
+    # Python on the target -- the closest thing a graph has to an installer
+    "build_exe.py": "build_exe.py",
+    # ...and what that build ships an interpreter with, for --embed-python
+    "python_embed.py": "python_embed.py",
+}
 
 
-def _build_exe_py() -> str:
-    """
-    The bundle's PyInstaller build script: the exact source of
-    `graph-runner/build_exe.py`, verbatim -- same rule as `main.py` above.
-    It turns the bundle into one self-contained executable that needs no
-    Python on the target machine, which is the closest thing a graph has to
-    a classic software installer.
-    """
-    return (_REPO_ROOT / "graph-runner" / "build_exe.py").read_text(encoding="utf-8")
-
-
-def _serve_py() -> str:
-    """The bundle's web entry point: the exact source of
-    `graph-runner/serve.py`, verbatim -- same rule as `main.py`."""
-    return (_REPO_ROOT / "graph-runner" / "serve.py").read_text(encoding="utf-8")
+def _runner_file(name: str) -> str:
+    """The source of one graph-runner/*.py, verbatim."""
+    return (_REPO_ROOT / "graph-runner" / name).read_text(encoding="utf-8")
 
 
 # The editor and the deployed runtime are two entry points of ONE Vite build,
@@ -394,6 +389,7 @@ def generate_deployment_bundle(graph: Graph) -> Bundle:
       - main.py            – graph-runner/run.py, verbatim
       - build_exe.py       – graph-runner/build_exe.py, verbatim (PyInstaller
                              one-file build; no Python needed on the target)
+      - python_embed.py    – what --embed-python uses to ship an interpreter
       - requirements.txt   – pip deps (pydantic always, httpx if the graph uses AI)
       - Dockerfile / docker-compose.yml / README.md – optional run helpers
     Unlike the old codegen approach, the graph definition IS needed at runtime
@@ -402,10 +398,10 @@ def generate_deployment_bundle(graph: Graph) -> Bundle:
     needs = _deploy_needs(graph)
     bundle: Bundle = dict(_vendor_app_files())
     bundle["graph.json"] = graph.model_dump_json(indent=2)
-    bundle["main.py"] = _main_py()
-    bundle["build_exe.py"] = _build_exe_py()
+    for target, source in _RUNNER_FILES.items():
+        bundle[target] = _runner_file(source)
     if _serves_gui(needs):
-        bundle["serve.py"] = _serve_py()
+        bundle["serve.py"] = _runner_file("serve.py")
         bundle.update(_vendor_static_files())
     bundle["requirements.txt"] = _requirements_txt(graph, needs)
     bundle["Dockerfile"] = _dockerfile(needs)

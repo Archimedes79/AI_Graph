@@ -5,6 +5,7 @@ installed into one environment shared by editor, executable and bundle.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -92,3 +93,82 @@ def test_a_deploy_bundle_lists_what_the_graph_imports():
     assert "pandas>=2.0" in requirements
     # ...without claiming it is an engine dependency.
     assert "pydantic" in requirements
+
+
+@pytest.fixture(autouse=True)
+def _forget_probed_interpreters():
+    """
+    `base_python` and `embedded_python` cache a subprocess probe for the life of
+    the process, which is right in production and wrong in a test that fakes one.
+    """
+    code_env.base_python.cache_clear()
+    code_env.embedded_python.cache_clear()
+    yield
+    code_env.base_python.cache_clear()
+    code_env.embedded_python.cache_clear()
+
+
+def _ship_an_interpreter(tmp_path, monkeypatch):
+    """Pretend this build carries `python-embed/`, without needing a real one."""
+    name = "python.exe" if os.name == "nt" else "python3"
+    shipped = tmp_path / code_env.EMBEDDED_DIR_NAME / name
+    shipped.parent.mkdir(parents=True, exist_ok=True)
+    shipped.write_text("")
+    monkeypatch.setattr(code_env, "_embedded_roots", lambda: [tmp_path])
+    monkeypatch.setattr(code_env, "_is_real_python", lambda candidate: True)
+    return str(shipped)
+
+
+def test_a_build_can_carry_its_own_interpreter(tmp_path, monkeypatch):
+    """The point of --embed-python: a machine with no Python is not a dead end."""
+    shipped = _ship_an_interpreter(tmp_path, monkeypatch)
+    assert code_env.embedded_python() == shipped
+
+
+def test_a_machine_python_is_preferred_over_the_shipped_one(tmp_path, monkeypatch):
+    """
+    Packages get installed into a real Python, never into the shipped one, so
+    reaching for the shipped one first would take capability away from machines
+    that already worked.
+    """
+    _ship_an_interpreter(tmp_path, monkeypatch)
+    monkeypatch.setattr(code_env, "base_python", lambda: "/usr/bin/python3")
+    monkeypatch.setattr(code_env, "env_python", lambda env=None: Path("/nowhere/python"))
+    assert code_env.interpreter() == "/usr/bin/python3"
+
+
+def test_the_shipped_interpreter_runs_code_when_there_is_nothing_else(tmp_path, monkeypatch):
+    shipped = _ship_an_interpreter(tmp_path, monkeypatch)
+    monkeypatch.setattr(code_env, "base_python", lambda: None)
+    monkeypatch.setattr(code_env, "env_python", lambda env=None: Path("/nowhere/python"))
+    assert code_env.interpreter() == shipped
+
+
+def test_the_shipped_interpreter_says_it_cannot_install(tmp_path, monkeypatch):
+    """
+    python.org's embeddable package has no pip and no venv, so offering Install
+    would be a dead end -- the status has to distinguish run from install.
+    """
+    _ship_an_interpreter(tmp_path, monkeypatch)
+    monkeypatch.setattr(code_env, "base_python", lambda: None)
+    monkeypatch.setattr(code_env, "env_python", lambda env=None: Path("/nowhere/python"))
+
+    status = code_env.describe()
+    assert status["has_interpreter"] is True
+    assert status["can_install"] is False
+
+    with pytest.raises(RuntimeError) as excinfo:
+        code_env.create_env()
+    assert "no pip" in str(excinfo.value)
+
+
+def test_without_any_interpreter_nothing_claims_to_run(monkeypatch):
+    monkeypatch.setattr(code_env, "_embedded_roots", lambda: [])
+    monkeypatch.setattr(code_env, "base_python", lambda: None)
+    monkeypatch.setattr(code_env, "env_python", lambda env=None: Path("/nowhere/python"))
+
+    status = code_env.describe()
+    assert status["has_interpreter"] is False
+    assert status["can_install"] is False
+    with pytest.raises(RuntimeError):
+        code_env.interpreter()

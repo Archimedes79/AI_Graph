@@ -12,12 +12,13 @@ from: it starts the executable, drives it over HTTP, and shuts it down.
 Two modes, because the executable makes two different promises:
 
   default      Everything works, including Python code nodes -- which shell out
-               to a `python` on PATH (see code_executor._python_interpreter).
+               to a `python` on PATH (see services/code_env.py).
   --standalone The exe is launched with every Python directory stripped from
                PATH, proving the EDITOR itself needs no Python to boot and
-               serve. Code-node execution is deliberately not asserted here;
-               that is the one capability documented as needing an interpreter
-               on the target machine.
+               serve. What it asserts about code nodes depends on the build: one
+               made with `--embed-python` carries an interpreter, so code nodes
+               must run here too and are checked; a build without one has no
+               interpreter to reach and the check is skipped with a note.
 
 Exits non-zero on the first failed check, printing what was expected.
 """
@@ -74,20 +75,28 @@ def _request(url: str, payload: bytes | None = None, timeout: float = 300.0):
 
 def _child_env(standalone: bool) -> dict[str, str]:
     """
-    The environment the executable is launched with. In --standalone mode every
-    PATH entry that looks like a Python installation is removed, so the exe has
-    to stand on its own embedded runtime.
+    The environment the executable is launched with. In --standalone mode PATH is
+    cut back until no interpreter is reachable at all -- the only way to prove the
+    executable stands on what it ships rather than on what the machine happens to
+    have.
+
+    On Windows that means System32 and nothing else. Dropping the entries that
+    merely LOOK like a Python installation is not enough: `py.exe`, the launcher
+    Windows keeps in C:\\Windows, survives that filter, and `code_env.base_python`
+    tries `py` -- so the build would quietly have been measured against the
+    machine's Python while claiming to need none.
     """
     env = dict(os.environ)
     if not standalone:
         return env
 
-    sep = os.pathsep
-    kept = [
-        entry for entry in env.get("PATH", "").split(sep)
-        if entry and "python" not in entry.lower()
-    ]
-    env["PATH"] = sep.join(kept)
+    if sys.platform == "win32":
+        env["PATH"] = str(Path(env.get("SystemRoot", r"C:\Windows")) / "System32")
+    else:
+        env["PATH"] = os.pathsep.join(
+            entry for entry in env.get("PATH", "").split(os.pathsep)
+            if entry and "python" not in entry.lower()
+        )
     return env
 
 
@@ -137,8 +146,47 @@ def _wait_for_health(base: str, process: subprocess.Popen) -> bool:
     return False
 
 
-def _execute_graph(base: str, graph_name: str) -> dict:
-    payload = (EXAMPLES / graph_name).read_bytes()
+# A code node written out here rather than taken from examples/, because this
+# check must not depend on a file the graph reads: it has to fail for exactly
+# one reason, "the executable could not run Python". It leans on the standard
+# library on purpose -- a build that ships its own interpreter keeps the stdlib
+# as a zip inside python-embed/, so importing from it is what proves the shipped
+# runtime is intact rather than merely present.
+_CODE_NODE_SNIPPET = """import json, sqlite3, statistics
+
+def run(inputs):
+    rows = json.loads('[1, 2, 3, 4]')
+    db = sqlite3.connect(':memory:')
+    db.execute('create table t (n int)')
+    db.executemany('insert into t values (?)', [(n,) for n in rows])
+    total = db.execute('select sum(n) from t').fetchone()[0]
+    db.close()
+    return {
+        'word_count': len('the quick brown fox jumps over the lazy dog'.split()),
+        'stdlib_total': int(total),
+        'median': statistics.median(rows),
+    }
+"""
+
+_CODE_NODE_GRAPH = json.dumps({
+    "metadata": {"name": "Smoke: a Python code node"},
+    "nodes": [{
+        "id": "transform", "node_type": "code", "label": "Count",
+        "position": {"x": 0, "y": 0}, "inputs": [],
+        "outputs": [
+            {"id": name, "name": name, "kind": "output",
+             "data_type": "any", "multi": False, "required": False}
+            for name in ("word_count", "stdlib_total", "median")
+        ],
+        "config": {"language": "python", "code": _CODE_NODE_SNIPPET},
+    }],
+    "edges": [],
+}).encode("utf-8")
+
+
+def _execute_graph(base: str, graph: bytes | str) -> dict:
+    """Run a graph given as bytes, or by the name of a file in examples/."""
+    payload = graph if isinstance(graph, bytes) else (EXAMPLES / graph).read_bytes()
     _, body = _request(f"{base}/api/execute/", payload)
     return json.loads(body)
 
@@ -165,7 +213,7 @@ def run_checks(base: str, standalone: bool, tmp_dir: Path) -> Checks:
     # TEXT, which a frozen build can only do if it ships them as data -- so this
     # is the check that catches a packaging regression, not just a broken route.
     bundle_path = tmp_dir / "smoke_bundle.zip"
-    status, body = _request(f"{base}/api/deploy/bundle", (EXAMPLES / "text_transform.json").read_bytes())
+    status, body = _request(f"{base}/api/deploy/bundle", (EXAMPLES / "bla_counter.json").read_bytes())
     bundle_path.write_bytes(body)
     c.check("deploy bundle exports", status, 200)
 
@@ -182,13 +230,30 @@ def run_checks(base: str, standalone: bool, tmp_dir: Path) -> Checks:
         runner = (REPO_ROOT / "graph-runner" / "run.py").read_text(encoding="utf-8")
         c.check("bundle main.py is graph-runner/run.py verbatim", vendored_main == runner, True)
 
-    if standalone:
-        print("  ----  code-node execution not asserted (--standalone: no Python on PATH by design)")
-    else:
-        result = _execute_graph(base, "text_transform.json")
+    status, body = _request(f"{base}/api/ai/code-env")
+    code_env = json.loads(body)
+    c.check("code-node environment status reachable", status, 200)
+
+    def _assert_code_node_runs(label: str) -> None:
+        result = _execute_graph(base, _CODE_NODE_GRAPH)
         transform = next((n for n in result.get("node_results", []) if n["node_id"] == "transform"), {})
-        c.check("Python code node executes", result.get("status"), "success")
-        c.check("code node produced its output", transform.get("outputs", {}).get("word_count"), 9)
+        outputs = transform.get("outputs", {})
+        c.check(label, result.get("status"), "success")
+        c.check("code node produced its output", outputs.get("word_count"), 9)
+        c.check("the interpreter's standard library works", outputs.get("stdlib_total"), 10)
+
+    if not standalone:
+        _assert_code_node_runs("Python code node executes")
+    elif code_env.get("embedded_python"):
+        # The point of --embed-python, and the only place it can be proven: no
+        # Python is reachable on PATH, so a code node that runs here can only be
+        # running on the interpreter this executable shipped with.
+        c.check("no machine Python was found (so this proves what it claims)",
+                code_env.get("base_python"), "")
+        _assert_code_node_runs("Python code node executes on the shipped interpreter")
+    else:
+        print("  ----  code-node execution not asserted "
+              "(--standalone and this build ships no interpreter; see --embed-python)")
 
     return c
 

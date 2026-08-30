@@ -208,7 +208,12 @@ export interface CodeEnvStatus {
   env_dir: string;
   env_exists: boolean;
   base_python: string;
+  /** A stdlib-only interpreter shipped inside this build, if it carries one. */
+  embedded_python: string;
+  /** Whether Python code nodes can run at all. */
   has_interpreter: boolean;
+  /** Whether packages can be added -- false when only the shipped one is there. */
+  can_install: boolean;
 }
 
 export const getCodeEnv = (): Promise<CodeEnvStatus> =>

@@ -573,11 +573,20 @@ the runner as to the engine:
 | `main.py` | `graph-runner/run.py` (dual-purpose: dev CLI *and* bundle entry point) | always |
 | `serve.py` | `graph-runner/serve.py` | when the graph has an interactive node **and** `frontend/dist/runtime.html` exists |
 | `build_exe.py` | `graph-runner/build_exe.py` | always — PyInstaller one-file build |
+| `python_embed.py` | `graph-runner/python_embed.py` | always — what `build_exe.py --embed-python` uses |
+
+They are vendored by one loop over `_RUNNER_FILES` in `deploy_service`, not by a
+function each: the rule is the same for all of them, so the code should be too.
 
 `build_exe.py` turns a bundle into a single executable that needs no Python on
 the target machine; `main.py`'s `_default_graph_path()` is what makes the
 embedded `graph.json` findable there (and lets one dropped beside the executable
 win, so a shipped tool can be re-pointed at an edited graph without a rebuild).
+`--embed-python` closes the last hole in "needs no Python": a code node is a
+*subprocess* and needs an interpreter, so the build ships python.org's embeddable
+one. It is stdlib-only (no pip, no venv), which is exactly the line — nodes that
+import only the standard library run anywhere, nodes that declare packages still
+need a real Python and are told so.
 
 **GUI runtime.** A `gui`/`widget` node's `deploy_needs` sets `interactive_ui=True`;
 `deploy_service._serves_gui` combines that with the presence of a built frontend. When
@@ -623,7 +632,7 @@ change to any of them needs a rebuilt exe to verify, not just a green test suite
 |---|---|---|
 | `app/main.py` | `frontend/dist` under `sys._MEIPASS` | the exe serves no UI |
 | `app/services/deploy_service.py` | `_APP_ROOT`/`_REPO_ROOT` under `sys._MEIPASS` | 🚀 Deploy fails — it reads `.py` files as text to vendor them, so the exe must ship `app/` and `graph-runner/` as **data**, not just as importable modules |
-| `app/services/code_executor.py` | a real `python` on PATH, probed (`_python_interpreter`) | Python code nodes relaunch the editor instead of running |
+| `app/services/code_env.py` | a real `python` on PATH, probed — then the `python-embed/` the build ships (`base_python` → `embedded_python`) | Python code nodes relaunch the editor instead of running, or fail on a machine with no Python |
 | `app/services/file_service.py` | attachments dir next to the executable | uploads land in a temp dir deleted on exit |
 
 `app/main.py` registers `GET /` **only when no frontend is mounted**: an explicit route
@@ -687,6 +696,13 @@ failing it. `_terminate_tree` exists for that.
   `code_executor` checks them before running. **Nothing installs implicitly** — that is an
   explicit action (the editor's Install button, `main.py --install-requirements`), because
   it needs the network and can take minutes. Vendored into bundles.
+  `interpreter()` resolves best-first — managed env, machine Python, then the
+  `python-embed/` a `--embed-python` build ships — and that order is deliberate: only
+  the first two can have packages installed into them, so the shipped one is a
+  fallback and never a replacement. `describe()` therefore answers two questions, not
+  one: `has_interpreter` (can code nodes run?) and `can_install` (can packages be
+  added?), because a build carrying its own interpreter can do the first and not the
+  second. Provisioning it is `graph-runner/python_embed.py`, build-time only.
 - `backend/app/services/run_registry.py` — runs started as asyncio tasks so they can be
   watched and stopped. **Cancellation is ordinary task cancellation**, which is why
   `graph_executor`'s per-node `except Exception` must never widen to `BaseException`, and

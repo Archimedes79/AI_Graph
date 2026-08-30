@@ -67,6 +67,13 @@ python serve.py                # browser interface (GUI graphs, see below)
 python build_exe.py            # -> dist/<name>, a single executable
 ```
 
+If the graph has Python code nodes, build the executable with
+`python build_exe.py --embed-python`: it ships an interpreter inside the binary, so
+those nodes run on a machine with no Python installed — which is the whole point of
+handing someone an executable. Nodes that declare packages still need a real Python
+on the target, because the embeddable interpreter has no `pip`; see
+[install.md](install.md#code-nodes-and-the-target-machine) for the full split.
+
 **Graphs with a GUI deploy with their GUI.** If the graph contains `gui`/`widget`
 nodes and the editor has a built frontend (`cd frontend && npm run build`), the
 bundle also gets `serve.py` and a `static/` folder. `python serve.py` opens the

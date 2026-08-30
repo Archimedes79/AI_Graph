@@ -76,8 +76,9 @@ The zip above still expects Python and `pip install` on the target machine. To h
 someone a file they just run, build the editor into one executable:
 
 ```bash
-pip install pyinstaller          # build machine only
-python build_editor_exe.py       # -> dist/ai-graph[.exe]
+pip install pyinstaller                        # build machine only
+python build_editor_exe.py                     # -> dist/ai-graph[.exe]
+python build_editor_exe.py --embed-python      # ...carrying its own interpreter
 ```
 
 Run it (or double-click it) and it serves the editor on
@@ -91,11 +92,40 @@ verify-and-package pipeline and builds the executable at the end.
 Cross-compiling is not supported: build the Windows `.exe` on Windows, the Linux
 binary on Linux, the macOS binary on macOS.
 
-Two things still come from the target machine, because they are separate interpreters
-that cannot be embedded: **Python code nodes need a `python` on PATH** (a real one —
-the Microsoft Store stub is detected and rejected with a clear message) and
-**JavaScript code nodes need `node`**. Everything else — AI calls, file I/O, GUI
-widgets, deploy-bundle export — works standalone.
+### Code nodes and the target machine
+
+A code node runs its snippet in a *subprocess*, so it needs an interpreter of its
+own — that is the one thing the executable cannot simply absorb.
+
+**`--embed-python` ships one inside the executable.** It downloads python.org’s
+embeddable package (~15 MB in the binary, ~23 MB unpacked) matching the Python that
+built it, and code nodes then run on a machine with no Python installed at all. This
+is what the released binaries are built with, and the reason matters: on Windows the
+`python.exe` on PATH is usually the Microsoft Store stub, which is not an interpreter
+— it is detected and rejected rather than silently failing.
+
+What the shipped interpreter is *not* is a complete Python installation: python.org
+builds the embeddable package without `pip` and without `venv`. So the split is:
+
+| Code node | Without `--embed-python` | With `--embed-python` |
+|---|---|---|
+| imports only the standard library | needs a `python` on PATH | **runs anywhere** |
+| declares packages (`pandas`, `pillow`, …) | needs a `python` on PATH | still needs one — the editor says so instead of offering an Install button that cannot work |
+| JavaScript | needs `node` | needs `node` |
+
+Order of preference at run time: the managed environment (`~/.ai-graph/code-env`),
+then a real Python found on the machine, then the shipped one. A machine Python is
+never displaced by the shipped one, because only the former can have packages
+installed into it.
+
+Building offline, or from an archive you verified yourself:
+`--embed-python path/to/python-3.14.3-embed-amd64.zip` (a directory works too).
+An interpreter dropped into a `python-embed/` folder **next to** the finished
+executable is found first of all, so a shipped tool can be given one without
+rebuilding it.
+
+Everything else — AI calls, file I/O, GUI widgets, deploy-bundle export — works
+standalone either way.
 
 ---
 
@@ -122,8 +152,13 @@ drives it over HTTP and shuts it down again:
 
 ```bash
 python smoke_test_exe.py dist/ai-graph.exe
-python smoke_test_exe.py dist/ai-graph.exe --standalone   # with Python stripped from PATH
+python smoke_test_exe.py dist/ai-graph.exe --standalone   # with no interpreter reachable
 ```
+
+`--standalone` cuts PATH back until nothing on the machine can run Python, which
+tests both claims at once: that the editor boots on its own embedded runtime, and —
+for a build made with `--embed-python` — that code nodes run on the interpreter the
+build ships. Without such a build the code-node check is skipped with a note.
 
 ### Continuous integration
 

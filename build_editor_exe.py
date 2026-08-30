@@ -22,10 +22,14 @@ PyInstaller is needed on the BUILD machine only:
 Cross-compiling is not supported -- build the Windows .exe on Windows, the
 Linux binary on Linux, the macOS binary on macOS.
 
-Two capabilities still depend on the target machine, because they shell out to
-an interpreter that cannot be embedded: Python code nodes need a `python` on
-PATH, JavaScript code nodes need `node`. Everything else (AI calls, file I/O,
-GUI widgets, deploy-bundle export) works standalone.
+Code nodes shell out to an interpreter, so they are the one thing that depends
+on the target machine. `--embed-python` closes that for Python: it ships
+python.org's embeddable interpreter inside the executable, and code nodes that
+import only the standard library then run on a machine with no Python at all.
+Packages (pandas and friends) still need a real Python installed, because the
+embeddable package has no pip -- and JavaScript code nodes still need `node`.
+Everything else (AI calls, file I/O, GUI widgets, deploy-bundle export) is
+standalone either way.
 """
 
 from __future__ import annotations
@@ -43,6 +47,13 @@ REPO_ROOT = Path(__file__).resolve().parent
 BACKEND_DIR = REPO_ROOT / "backend"
 FRONTEND_DIR = REPO_ROOT / "frontend"
 FRONTEND_DIST = FRONTEND_DIR / "dist"
+RUNNER_DIR = REPO_ROOT / "graph-runner"
+
+# The same module a deploy bundle's own build_exe.py uses, from the same file:
+# an editor executable and a tool built out of one ship their interpreter the
+# same way, or the promise differs depending on which button you pressed.
+sys.path.insert(0, str(RUNNER_DIR))
+import python_embed  # noqa: E402
 
 # Entry point: start.py serves the embedded API+UI in-process when frozen.
 _ENTRY = REPO_ROOT / "start.py"
@@ -71,7 +82,7 @@ def _ensure_frontend(skip_build: bool) -> bool:
     return True
 
 
-def build(name: str, onedir: bool, skip_build: bool) -> int:
+def build(name: str, onedir: bool, skip_build: bool, embed_python: str) -> int:
     if importlib.util.find_spec("PyInstaller") is None:
         print("PyInstaller is not installed. Install it first:", file=sys.stderr)
         print("    pip install pyinstaller", file=sys.stderr)
@@ -118,6 +129,17 @@ def build(name: str, onedir: bool, skip_build: bool) -> int:
     # receives the terms, so Deploy inside a frozen build must be able to read it.
     cmd += _add_data(REPO_ROOT / "LICENSE", ".")
 
+    # The interpreter code nodes run in, if this build is to carry one. It goes
+    # into the scratch tree, not the repo: it is a build input, not a source file.
+    if embed_python:
+        try:
+            packed = python_embed.provision(work_root, embed_python)
+        except RuntimeError as exc:
+            shutil.rmtree(work_root, ignore_errors=True)
+            print(f"[build] {exc}", file=sys.stderr)
+            return 1
+        cmd += _add_data(packed, python_embed.DIR_NAME)
+
     cmd.append(str(_ENTRY))
 
     print("[build]", " ".join(cmd))
@@ -132,6 +154,11 @@ def build(name: str, onedir: bool, skip_build: bool) -> int:
     print()
     print(f"[build] Done -> {produced}")
     print("[build] Ship it; it needs no Python, Node or pip on the target machine.")
+    if embed_python:
+        print("[build] It carries its own Python, so stdlib code nodes run there too.")
+    else:
+        print("[build] Python code nodes will need a python on the target's PATH "
+              "(--embed-python ships one).")
     print("[build] Run it (or double-click) -> http://127.0.0.1:8000")
     return 0
 
@@ -167,8 +194,14 @@ def main() -> int:
         "--skip-build", action="store_true",
         help="reuse the existing frontend/dist instead of rebuilding it",
     )
+    parser.add_argument(
+        "--embed-python", nargs="?", const="auto", default="", metavar="PATH",
+        help="ship a Python interpreter inside the executable, so stdlib code nodes "
+             "run on a machine with no Python (adds ~23 MB). Downloads the embeddable "
+             "package matching this interpreter, or unpacks the zip/directory given.",
+    )
     args = parser.parse_args()
-    return build(args.name, args.onedir, args.skip_build)
+    return build(args.name, args.onedir, args.skip_build, args.embed_python)
 
 
 if __name__ == "__main__":

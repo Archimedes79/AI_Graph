@@ -66,7 +66,7 @@ def main() -> int:
     parser.add_argument("--verify-only", action="store_true", help="run the checks but produce no package")
     parser.add_argument("--keep-going", action="store_true", help="run every step even after a failure")
     parser.add_argument("--exe", action="store_true",
-                        help="also build a standalone executable (needs PyInstaller on this machine)")
+                        help="also build a standalone executable, carrying its own Python (needs PyInstaller on this machine)")
     args = parser.parse_args()
 
     python = backend_python()
@@ -90,7 +90,12 @@ def main() -> int:
         ]
         if args.exe:
             steps.append(
-                Step("Build standalone executable", [python, "build_editor_exe.py", "--skip-build"], REPO_ROOT,
+                # --embed-python because that is how the release is built: an exe
+                # verified here without one would differ from the one people
+                # download, in the capability most likely to be missing on their
+                # machine. Build without it directly if you want the smaller file.
+                Step("Build standalone executable",
+                     [python, "build_editor_exe.py", "--skip-build", "--embed-python"], REPO_ROOT,
                      "Install PyInstaller first:  pip install pyinstaller")
             )
 

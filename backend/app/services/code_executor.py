@@ -107,12 +107,20 @@ async def execute_python(
     """
     absent = code_env.missing(requirements or [])
     if absent:
+        # Pointing at Install would be a dead end when this build is running on
+        # the interpreter it ships: that one has no pip, so the honest next step
+        # is installing a real Python rather than pressing a button that cannot work.
+        remedy = (
+            code_env.EMBEDDED_ONLY_MESSAGE
+            if not code_env.describe()["can_install"]
+            else "Use Install in the node's editor, or run "
+                 "`python main.py --install-requirements` for a deployed bundle."
+        )
         raise RuntimeError(
             "This code node needs " + ", ".join(absent) + ", which "
             + ("is" if len(absent) == 1 else "are")
             + " not installed in the code-node environment "
-            + f"({code_env.env_dir()}). Use Install in the node's editor, or run "
-            "`python main.py --install-requirements` for a deployed bundle."
+            + f"({code_env.env_dir()}). {remedy}"
         )
     wrapper = textwrap.dedent(
         f"""

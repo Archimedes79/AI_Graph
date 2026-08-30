@@ -17,6 +17,12 @@ our own) at `~/.ai-graph/code-env`, or wherever `AI_GRAPH_CODE_ENV` points. A
 graph declares what it needs on its code nodes (`config.requirements`), and
 those packages are installed into that one environment.
 
+A build can also carry an interpreter of its own, so that a machine with no
+Python is no longer a dead end (`embedded_python`, written by
+graph-runner/python_embed.py at build time). It is a stdlib-only interpreter and
+sits last in `interpreter()`: it makes code nodes that import only the standard
+library run everywhere, and changes nothing where a real Python already exists.
+
 Deliberately NOT automatic: nothing here installs anything as a side effect of
 running a graph. Installing packages is a decision, sometimes a slow one and
 always a network one, so it is an explicit action -- the editor's Install
@@ -58,6 +64,18 @@ NO_INTERPRETER_MESSAGE = (
     "stub that Windows puts there by default is not one. (A JavaScript code node "
     "needs Node.js instead.)"
 )
+
+EMBEDDED_ONLY_MESSAGE = (
+    "Code nodes here run on the Python that ships inside this build, which has "
+    "the standard library but no pip -- so packages cannot be installed into it. "
+    "Install Python from python.org and make sure it is on PATH; then this "
+    "environment can be built and the packages installed."
+)
+
+# The directory a build ships an interpreter in. Written by
+# graph-runner/python_embed.py at build time and looked for here at run time;
+# the name is the contract between those two halves.
+EMBEDDED_DIR_NAME = "python-embed"
 
 
 def _child_env() -> Dict[str, str]:
@@ -125,6 +143,46 @@ def base_python() -> Optional[str]:
     return None
 
 
+def _embedded_roots() -> List[Path]:
+    """
+    Where a shipped interpreter could be, most-specific first.
+
+    Beside the executable wins over the one packed inside it, mirroring how
+    `graph.json` already resolves in a bundle (see run.py `_default_graph_path`):
+    a shipped tool can be given an interpreter -- or a better one -- by dropping
+    a folder next to it, without rebuilding anything. In a checkout neither path
+    holds a `python-embed`, so this simply finds nothing.
+    """
+    roots = [Path(sys.executable).parent]
+    unpacked = getattr(sys, "_MEIPASS", None)
+    if unpacked:
+        roots.append(Path(unpacked))
+    return roots
+
+
+@functools.lru_cache(maxsize=1)
+def embedded_python() -> Optional[str]:
+    """
+    The stdlib-only interpreter this build ships, or None.
+
+    This is the fallback that makes a built executable honest on a machine with
+    no Python: code nodes that import only the standard library run, rather than
+    failing on a Microsoft Store stub. It is deliberately LAST in `interpreter()`
+    -- a real Python found on the machine can have packages installed into it and
+    can build the managed environment, and this one can do neither.
+
+    Cached for the same reason as `base_python`: it probes a subprocess and the
+    answer cannot change while the process lives.
+    """
+    names = ("python.exe", "python3.exe") if os.name == "nt" else ("python3", "python", "bin/python3")
+    for root in _embedded_roots():
+        for name in names:
+            candidate = root / EMBEDDED_DIR_NAME / name
+            if candidate.is_file() and _is_real_python(str(candidate)):
+                return str(candidate)
+    return None
+
+
 def env_dir() -> Path:
     """
     Where the managed environment lives.
@@ -146,8 +204,14 @@ def env_python(env: Optional[Path] = None) -> Path:
 
 def interpreter() -> str:
     """
-    The interpreter a code node runs in: the managed environment when it exists,
-    otherwise the base Python. Raises when there is no interpreter at all.
+    The interpreter a code node runs in, best first: the managed environment,
+    then a real Python on the machine, then the one this build ships. Raises
+    when there is none at all.
+
+    The order is what keeps this addition from changing anything that already
+    worked -- the shipped interpreter is reached only where the alternative was
+    failing outright, and never displaces a machine Python that may have
+    packages installed in it.
     """
     explicit = os.getenv("AI_GRAPH_CODE_PYTHON", "").strip()
     if explicit:
@@ -157,10 +221,10 @@ def interpreter() -> str:
     if managed.is_file():
         return str(managed)
 
-    base = base_python()
-    if base is None:
-        raise RuntimeError(NO_INTERPRETER_MESSAGE)
-    return base
+    for candidate in (base_python(), embedded_python()):
+        if candidate is not None:
+            return candidate
+    raise RuntimeError(NO_INTERPRETER_MESSAGE)
 
 
 def missing(requirements: Iterable[str]) -> List[str]:
@@ -213,7 +277,10 @@ def create_env() -> Path:
 
     base = base_python()
     if base is None:
-        raise RuntimeError(NO_INTERPRETER_MESSAGE)
+        # A shipped interpreter cannot stand in here: python.org's embeddable
+        # package has neither `venv` nor `pip`, so the answer is a different
+        # sentence -- "install Python to add packages", not "nothing can run".
+        raise RuntimeError(EMBEDDED_ONLY_MESSAGE if embedded_python() else NO_INTERPRETER_MESSAGE)
 
     env.parent.mkdir(parents=True, exist_ok=True)
     logger.info("Creating the code-node environment at %s", env)
@@ -258,12 +325,19 @@ def install(requirements: Iterable[str]) -> Tuple[List[str], str]:
 def describe() -> Dict[str, object]:
     """What the editor shows: where the environment is and whether it exists."""
     env = env_dir()
+    exists = env_python(env).is_file()
     base = base_python()
+    embedded = embedded_python()
     return {
         "env_dir": str(env),
-        "env_exists": env_python(env).is_file(),
+        "env_exists": exists,
         "base_python": base or "",
-        "has_interpreter": base is not None or env_python(env).is_file(),
+        "embedded_python": embedded or "",
+        # Two different questions, and conflating them is what would mislead:
+        # a build that ships its own interpreter can RUN stdlib code nodes while
+        # being unable to INSTALL anything for them.
+        "has_interpreter": exists or base is not None or embedded is not None,
+        "can_install": exists or base is not None,
     }
 
 

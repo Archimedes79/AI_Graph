@@ -37,6 +37,9 @@ export default function CodeRequirements({ requirements, onChange, language }: C
 
   const text = (requirements ?? []).join('\n');
   const hasAny = (requirements ?? []).length > 0;
+  // `=== false` on purpose: while the status is still loading (or failed to
+  // load) the button stays live rather than being greyed out on no evidence.
+  const canInstall = env?.can_install !== false;
 
   const install = async () => {
     setInstalling(true);
@@ -67,10 +70,12 @@ export default function CodeRequirements({ requirements, onChange, language }: C
         </label>
         <button
           onClick={install}
-          disabled={installing || !hasAny}
+          disabled={installing || !hasAny || !canInstall}
           className="text-xs px-2 py-1 rounded"
-          style={{ ...PRIMARY_BUTTON, opacity: installing || !hasAny ? 0.5 : 1 }}
-          title="Install these into the environment code nodes run in"
+          style={{ ...PRIMARY_BUTTON, opacity: installing || !hasAny || !canInstall ? 0.5 : 1 }}
+          title={canInstall
+            ? 'Install these into the environment code nodes run in'
+            : 'This build ships a Python without pip; install Python from python.org to add packages'}
         >
           {installing ? 'Installing…' : 'Install'}
         </button>
@@ -98,6 +103,13 @@ export default function CodeRequirements({ requirements, onChange, language }: C
           No Python interpreter was found, so Python code nodes cannot run here at all.
           Install Python from python.org and make sure it is on PATH — the Microsoft Store
           stub Windows puts there does not count.
+        </p>
+      )}
+      {env && env.has_interpreter && !env.can_install && (
+        <p className="text-xs mt-1" style={{ color: DIMMER }}>
+          Code nodes are running on the Python shipped inside this build, which has the
+          standard library but no pip — so nothing can be installed for them. Install
+          Python from python.org and put it on PATH to use the packages above.
         </p>
       )}
       {message && (

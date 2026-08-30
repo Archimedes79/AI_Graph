@@ -41,8 +41,12 @@ jobs:
         working-directory: frontend
 
       # Builds frontend/dist first, then freezes it into the executable.
+      # --embed-python ships an interpreter inside it: whoever downloads this is
+      # unlikely to have Python installed, and without one their code nodes
+      # cannot run at all. It costs ~15 MB of download and makes the standalone
+      # smoke job below able to prove the claim instead of skipping it.
       - name: Build executable
-        run: python build_editor_exe.py
+        run: python build_editor_exe.py --embed-python
 
       - uses: actions/upload-artifact@v4
         with:
@@ -59,8 +63,10 @@ jobs:
       matrix:
         # full:       everything, including a Python code node (which shells out
         #             to the runner's Python, exactly as it would on a user's box)
-        # standalone: Python stripped from PATH, proving the editor itself boots
-        #             and serves on its own embedded runtime
+        # standalone: PATH cut back until no interpreter is reachable, so both
+        #             claims are tested at once -- that the editor boots on its
+        #             own embedded runtime, and that code nodes run on the Python
+        #             the build ships rather than on the machine's
         mode: [full, standalone]
     steps:
       # The repo is needed for examples/ and for the byte-identical comparison
