@@ -154,7 +154,7 @@ def _add_tree(zf: zipfile.ZipFile, src: Path, arc_prefix: str) -> None:
 
 
 def build_package(output: Path | None = None, skip_build: bool = False) -> Path:
-    """Zip the backend app, requirements.txt, built frontend, start.py and README
+    """Zip the backend app, requirements.txt, built frontend, start.py, README and docs
     into a distributable package for deploying the editor to another server."""
     dist_dir = FRONTEND_DIR / "dist"
     if skip_build:
@@ -175,6 +175,7 @@ def build_package(output: Path | None = None, skip_build: bool = False) -> Path:
         _add_tree(zf, dist_dir, "frontend/dist")
         zf.write(REPO_ROOT / "start.py", "start.py")
         zf.write(REPO_ROOT / "README.md", "README.md")
+        _add_tree(zf, REPO_ROOT / "docs", "docs")
 
     print(f"[package] Wrote {output} ({output.stat().st_size / 1024:.0f} KB)")
     print("[package] On the target server: unzip, `pip install -r backend/requirements.txt`")
