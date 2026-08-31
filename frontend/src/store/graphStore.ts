@@ -329,7 +329,7 @@ const defaultMetadata = (): GraphMetadata => ({
   // the backend resolves to its own fallback; whoever runs a deployed copy can
   // override it without editing the graph -- see backend/app/services/ai_settings.py.
   ai_defaults: { provider: 'default', model: '' },
-  gui_scheme: 'indigo',
+  gui_scheme: 'night',
 });
 
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ACCENT, DIM } from '../ui/theme';
+import { ACCENT, DIM, HOVER, RAISE } from '../ui/theme';
 
 interface PlotWidgetProps {
   data: unknown;
@@ -67,7 +67,7 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
     return (
       <div
         className="text-xs px-2 py-1.5 rounded whitespace-pre-wrap break-words"
-        style={{ background: 'rgba(255,255,255,0.05)', color: DIM, maxHeight: 160, overflowY: 'auto' }}
+        style={{ background: HOVER, color: DIM, maxHeight: 160, overflowY: 'auto' }}
       >
         {text || 'No chartable data'}
       </div>
@@ -88,7 +88,7 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 4 }}
+      style={{ background: RAISE, borderRadius: 4 }}
     >
       <line x1={padding} x2={width - padding} y1={scaleY(0)} y2={scaleY(0)} stroke="#334155" strokeWidth={1} />
       {useBars

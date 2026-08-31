@@ -135,11 +135,12 @@ describe('createGuiWidget sizing', () => {
   });
 
   it('sizes page furniture the way a document would', () => {
-    // A heading is the full width and *two* rows, rendered bottom-aligned: the
-    // air lands above it and none below, which is a document's vertical rhythm
-    // -- a section title belongs to what follows, not to what came before.
+    // A heading is the full width and one row, like every other text block:
+    // it used to get a second row to hang from the bottom of, which was the
+    // only text on the page that did not start where the others start. Air
+    // between sections is the spacer's job.
     const heading = createGuiWidget('text', 'Titel', 'heading');
-    expect({ w: heading.w, h: heading.h }).toEqual({ w: 16, h: 2 });
+    expect({ w: heading.w, h: heading.h }).toEqual({ w: 16, h: 1 });
     expect(heading.tone).toBe('plain');
 
     // A rule and a spacer are a single row of the grid and nothing else.

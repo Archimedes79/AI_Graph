@@ -4,7 +4,7 @@ import { generate } from '../../utils/api';
 import { genAI } from '../../store/settingsStore';
 import { useGenerate } from './useGenerate';
 import { describeDataFormat } from '../data/dataElement';
-import { ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
+import { ACCENT_FILL, ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
 
 interface Props {
   node: GraphNode;
@@ -134,7 +134,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
       {format !== 'text' && (
         <div
           className="text-xs rounded-lg px-3 py-2"
-          style={{ background: 'var(--gui-accent-fill, rgba(99,102,241,0.10))', border: '1px solid var(--gui-accent-fill, rgba(99,102,241,0.10))', color: ACCENT_TEXT }}
+          style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}
         >
           <strong>Note:</strong> When generating code for this node, the AI will be instructed to produce{' '}
           <strong>{FORMAT_LABELS[format] ?? format}</strong>.

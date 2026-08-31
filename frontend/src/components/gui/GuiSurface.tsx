@@ -155,7 +155,7 @@ export default function GuiSurface({
               // 10px left of the box beneath it broke the one thing a document
               // must get right, which is a single left margin.
               padding: bare ? '2px 10px' : '6px 10px',
-              outline: selected ? '2px solid var(--gui-accent, #6366f1)' : 'none',
+              outline: selected ? `2px solid ${ACCENT}` : 'none',
               outlineOffset: 1,
               opacity: draggingId === widget.id ? 0.55 : 1,
             }}

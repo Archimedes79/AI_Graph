@@ -703,19 +703,22 @@ class GraphMetadata(BaseModel):
     # a whole, so it belongs here rather than on any one node -- and a closed
     # set rather than a colour, so a deployed tool can look like itself without
     # anyone being able to make it look wrong.
-    gui_scheme: Literal["indigo", "teal", "slate"] = "indigo"
+    gui_scheme: Literal["night", "paper", "graphite"] = "night"
 
     @field_validator("gui_scheme", mode="before")
     @classmethod
     def _migrate_scheme(cls, value: object) -> object:
-        """A graph saved with a scheme that no longer exists still opens.
+        """A graph saved with an older scheme still opens.
 
-        Two of the five were dropped as bad choices rather than renamed, so
-        there is nothing to map them to: they fall back to the default. A
-        `Literal` would otherwise refuse the file outright, which is a
-        heavy price for a colour.
+        A scheme used to be an accent colour; it is the whole palette now,
+        so the old ids name something that no longer exists. The two that
+        have a successor are mapped to it and the rest fall back to the
+        default -- a `Literal` would otherwise refuse the file outright,
+        which is a heavy price for a colour.
         """
-        return value if value in ("indigo", "teal", "slate") else "indigo"
+        renamed = {"indigo": "night", "slate": "graphite", "teal": "graphite"}
+        value = renamed.get(value, value)  # type: ignore[arg-type]
+        return value if value in ("night", "paper", "graphite") else "night"
 
 
 class Graph(BaseModel):

@@ -6,7 +6,7 @@ const emptyGraph: Graph = {
   metadata: {
     name: 'Undo test', version: '1.0.0', description: '', author: '', tags: [],
     ai_defaults: { provider: 'default', model: '' },
-  gui_scheme: 'indigo',
+  gui_scheme: 'night',
   },
   nodes: [],
   edges: [],

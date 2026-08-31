@@ -4,7 +4,7 @@ import { useGraphStore } from '../store/graphStore';
 import ProviderModelSelect from '../elements/shared/ProviderModelSelect';
 import AICredentialsSection from './AICredentialsSection';
 import Modal from './Modal';
-import { ACCENT_TEXT, DIM, PRIMARY_BUTTON, TEXT } from '../ui/theme';
+import { ACCENT_FILL, ACCENT_TEXT, DIM, PRIMARY_BUTTON, TEXT } from '../ui/theme';
 
 interface SettingsDialogProps {
   onClose: () => void;
@@ -88,7 +88,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
             />
             <div
               className="text-xs rounded-lg px-3 py-2 mt-3"
-              style={{ background: 'var(--gui-accent-fill, rgba(99,102,241,0.10))', border: '1px solid var(--gui-accent-fill, rgba(99,102,241,0.10))', color: ACCENT_TEXT }}
+              style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}
             >
               When this graph is deployed, whoever runs it can point it somewhere else without
               editing it — <code>--ai-provider</code>/<code>--ai-model</code> on the command

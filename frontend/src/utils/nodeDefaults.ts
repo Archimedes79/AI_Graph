@@ -27,13 +27,16 @@ export const NODE_TYPE_LABELS: Record<NodeType, string> = {
   gui: 'GUI Node',
 };
 
+// One tint per node type, from the active scheme. A dark navy behind a node
+// is right on Nacht and unreadable on Papier, so the tints belong to the
+// scheme like every other colour -- the fallback is the default scheme's.
 export const NODE_TYPE_COLORS: Record<NodeType, string> = {
-  input: '#1e3a5f',
-  ai: '#2d1b4e',
-  code: '#1a3a2a',
-  data: '#183b3b',
-  output: '#3a2000',
-  gui: '#4a1d3a',
+  input: 'var(--ui-node-input, #1e3a5f)',
+  ai: 'var(--ui-node-ai, #2d1b4e)',
+  code: 'var(--ui-node-code, #1a3a2a)',
+  data: 'var(--ui-node-data, #183b3b)',
+  output: 'var(--ui-node-output, #3a2000)',
+  gui: 'var(--ui-node-gui, #4a1d3a)',
 };
 
 export const NODE_TYPE_ICON: Record<NodeType, string> = {

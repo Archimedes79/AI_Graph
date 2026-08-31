@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
 import { GuiSurfacePage } from '../components/gui/DesignerTab';
+import { useSchemeOnRoot } from '../components/gui/useScheme';
 import GraphWindows from '../components/GraphWindows';
 import RuntimeAISettings from './RuntimeAISettings';
 import { getRuntimeGraph, getRuntimeRequirements } from '../utils/api';
@@ -30,6 +31,8 @@ export default function RuntimeApp() {
   const rfNodes = useGraphStore((s) => s.rfNodes);
   const metadata = useGraphStore((s) => s.metadata);
   const isExecuting = useGraphStore((s) => s.isExecuting);
+  // A deployed tool looks like the thing that was designed, scheme included.
+  useSchemeOnRoot(metadata.gui_scheme);
   const executionResult = useGraphStore((s) => s.executionResult);
   const runGraph = useGraphStore((s) => s.runGraph);
 

@@ -12,7 +12,7 @@ import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
 import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
 import { connectedOutputDataNodes } from '../elements/data/dataElement';
-import { ACCENT, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT } from '../ui/theme';
+import { ACCENT, ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT } from '../ui/theme';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -261,7 +261,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
               {/* An element with no ✨ button of its own can still have something
                   to report -- the message is drawn next to the button otherwise. */}
               {genMessage && !generation && (
-                <div className="text-sm px-3 py-2 rounded" style={{ background: 'var(--gui-accent-fill, rgba(99,102,241,0.10))', color: ACCENT_TEXT }}>
+                <div className="text-sm px-3 py-2 rounded" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>
                   {genMessage}
                 </div>
               )}

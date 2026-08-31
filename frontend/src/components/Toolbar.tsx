@@ -11,7 +11,7 @@ import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { genAI } from '../store/settingsStore';
 import GraphWindows from './GraphWindows';
 import Modal from './Modal';
-import { ACCENT, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../ui/theme';
+import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
 /**
  * How long a node may go without producing anything before the toolbar says so.
@@ -379,24 +379,24 @@ export default function Toolbar({
       {showDeploy && (
         <div
           className="fixed z-50"
-          style={{ top: 56, right: 16, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 8, minWidth: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
+          style={{ top: 56, right: 16, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 8, minWidth: 200, boxShadow: '0 8px 32px var(--ui-scrim, rgba(0,0,0,0.5))' }}
         >
           <button
-            className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
+            className="w-full text-left px-4 py-3 text-sm hover-raise transition-colors"
             style={{ color: TEXT }}
             onClick={handleDownloadBundle}
           >
             📦 Download Bundle (zip)
           </button>
           <button
-            className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
+            className="w-full text-left px-4 py-3 text-sm hover-raise transition-colors"
             style={{ color: TEXT }}
             onClick={handleDockerCompose}
           >
             🐳 View Docker Compose
           </button>
           <button
-            className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors border-t"
+            className="w-full text-left px-4 py-3 text-sm hover-raise transition-colors border-t"
             style={{ color: MUTED, borderColor: LINE }}
             onClick={() => setShowDeploy(false)}
           >
@@ -479,7 +479,7 @@ export default function Toolbar({
             )}
 
             {aiResult && (
-              <div className="text-xs px-3 py-2 rounded" style={{ background: 'var(--gui-accent-fill, rgba(99,102,241,0.10))', color: ACCENT_TEXT }}>
+              <div className="text-xs px-3 py-2 rounded" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>
                 {aiResult.explanation || 'Graph generated.'} ({aiResult.graph.nodes.length} node{aiResult.graph.nodes.length === 1 ? '' : 's'},{' '}
                 {aiResult.graph.edges.length} edge{aiResult.graph.edges.length === 1 ? '' : 's'})
               </div>

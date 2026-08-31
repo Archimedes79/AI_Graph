@@ -145,14 +145,17 @@ export default function GraphCanvas() {
         />
         <MiniMap
           style={PANEL}
+          // The minimap paints SVG `fill` attributes, where a CSS variable does
+          // not resolve -- so the scheme's tint is read off the document here
+          // instead of handed over as `var(--ui-node-ai)`. It was a second,
+          // hard-coded copy of four of the six tints before that, which is why
+          // a data node was the wrong colour on a map of its own graph.
           nodeColor={(node) => {
-            const colors: Record<string, string> = {
-              input: '#1e3a5f',
-              ai: '#2d1b4e',
-              code: '#1a3a2a',
-              output: '#3a2000',
-            };
-            return colors[node.data?.graphNode?.node_type] ?? SURFACE;
+            const type = node.data?.graphNode?.node_type;
+            const tint = type
+              ? getComputedStyle(document.documentElement).getPropertyValue(`--ui-node-${type}`).trim()
+              : '';
+            return tint || SURFACE;
           }}
         />
       </ReactFlow>

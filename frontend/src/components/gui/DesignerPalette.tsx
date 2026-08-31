@@ -82,7 +82,7 @@ export default function DesignerPalette({
           {group.entries.map((entry) => (
             <button
               key={`${entry.kind}:${entry.mode ?? ''}`}
-              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-left transition-colors hover:bg-white/5"
+              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-left transition-colors hover-raise"
               style={{ color: TEXT }}
               onClick={() => onAdd(entry.kind, entry.mode)}
               // Without preventDefault the browser starts a text selection instead,

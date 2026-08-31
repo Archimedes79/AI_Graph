@@ -69,7 +69,7 @@ export interface GraphMetadata {
   author: string;
   created_at?: string | null;
   description: string;
-  gui_scheme: 'indigo' | 'teal' | 'slate';
+  gui_scheme: 'night' | 'paper' | 'graphite';
   name: string;
   tags: string[];
   updated_at?: string | null;

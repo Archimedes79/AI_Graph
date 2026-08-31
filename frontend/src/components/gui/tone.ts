@@ -9,7 +9,7 @@
 // Named by role, not by appearance, so the names stay true when the palette
 // changes (see ui/theme.ts, which is built on the same rule).
 import type { CSSProperties } from 'react';
-import { ACCENT, ACCENT_FILL, LINE, SUNKEN } from '../../ui/theme';
+import { ACCENT, ACCENT_FILL, LINE, RAISE, SUNKEN } from '../../ui/theme';
 
 export type Tone = 'plain' | 'raised' | 'sunken' | 'accent';
 
@@ -43,7 +43,7 @@ export function toneStyle(tone: Tone | undefined): CSSProperties {
       };
     case 'raised':
     default:
-      return { background: 'rgba(255,255,255,0.03)', border: `1px solid ${LINE}` };
+      return { background: RAISE, border: `1px solid ${LINE}` };
   }
 }
 

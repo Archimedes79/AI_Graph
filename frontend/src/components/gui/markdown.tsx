@@ -1,5 +1,5 @@
 import React from 'react';
-import { ACCENT_TEXT, LINE, MUTED, TEXT } from '../../ui/theme';
+import { ACCENT_TEXT, HOVER, LINE, MUTED, TEXT } from '../../ui/theme';
 
 /**
  * A small markdown renderer, built as React elements rather than HTML.
@@ -29,7 +29,7 @@ function inline(text: string, keyPrefix: string): React.ReactNode[] {
     const key = `${keyPrefix}-i${index++}`;
     if (token.startsWith('`')) {
       parts.push(
-        <code key={key} style={{ background: 'rgba(255,255,255,0.06)', padding: '0 4px', borderRadius: 3 }}>
+        <code key={key} style={{ background: HOVER, padding: '0 4px', borderRadius: 3 }}>
           {token.slice(1, -1)}
         </code>,
       );

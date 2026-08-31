@@ -4,7 +4,7 @@ import type { RFNodeData } from '../../types/graph';
 import { NODE_TYPE_COLORS, NODE_TYPE_ICON, NODE_TYPE_LABELS } from '../../utils/nodeDefaults';
 import { useGraphStore } from '../../store/graphStore';
 import { GUI_WIDGET_ELEMENTS } from '../../elements/registry';
-import { ACCENT, DANGER, DANGER_TEXT, DIMMER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../../ui/theme';
+import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../../ui/theme';
 import { delivered } from '../../utils/executionStatus';
 
 // Colour AND a glyph: a red/green 8px dot is unreadable both to a screen
@@ -73,7 +73,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
       {/* Header */}
       <div
         className="flex items-center justify-between px-3 py-2 cursor-pointer"
-        style={{ background: 'rgba(0,0,0,0.3)' }}
+        style={{ background: HEADER }}
         onDoubleClick={handleEdit}
       >
         <div className="flex items-center gap-2 overflow-hidden">
@@ -254,7 +254,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
         {graphNode.config.value && (
           <div
             className="text-xs truncate mt-1 px-1 py-0.5 rounded"
-            style={{ background: 'rgba(255,255,255,0.05)', color: MUTED }}
+            style={{ background: HOVER, color: MUTED }}
             title={graphNode.config.value}
           >
             {graphNode.config.value.length > 30
@@ -267,7 +267,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
         {graphNode.node_type === 'data' && graphNode.config.data_value != null && (
           <div
             className="text-xs truncate mt-1 px-1 py-0.5 rounded font-mono"
-            style={{ background: 'rgba(255,255,255,0.05)', color: MUTED }}
+            style={{ background: HOVER, color: MUTED }}
             title={dataValuePreview(graphNode.config.data_value)}
           >
             {dataValuePreview(graphNode.config.data_value).slice(0, 30)}
@@ -328,7 +328,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
       {/* Type badge */}
       <div
         className="px-3 py-1 text-xs"
-        style={{ color: DIMMER, background: 'rgba(0,0,0,0.2)', textAlign: 'right' }}
+        style={{ color: DIMMER, background: HEADER, textAlign: 'right' }}
       >
         {NODE_TYPE_LABELS[graphNode.node_type]}
       </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import ContextFileAttachment from './ContextFileAttachment';
 import type { ElementGeneration, FieldAccess } from './generation';
-import { ACCENT_TEXT, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
+import { ACCENT_FILL, ACCENT_TEXT, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
 
 interface Props {
   generation: ElementGeneration<any>;
@@ -101,7 +101,7 @@ export default function AuthoredBodyEditor({
             spellCheck={!mono}
           />
           {message && (
-            <div className="text-xs mt-2 px-2 py-1.5 rounded" style={{ background: 'var(--gui-accent-fill, rgba(99,102,241,0.10))', color: ACCENT_TEXT }}>
+            <div className="text-xs mt-2 px-2 py-1.5 rounded" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>
               {message}
             </div>
           )}

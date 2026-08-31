@@ -57,7 +57,7 @@ export default function Sidebar({ onAddNode }: SidebarProps) {
           {cat.types.map((type) => (
             <button
               key={type}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-white/5"
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover-raise"
               style={{ color: TEXT }}
               onClick={() => onAddNode(type)}
               title={NODE_TYPE_DESCRIPTIONS[type]}

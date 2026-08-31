@@ -118,10 +118,10 @@ function defaultSpanFor(kind: GuiWidgetKind, mode?: string): { w: number; h: num
     return mode === 'vertical' ? { w: 1, h: 4 } : { w: 16, h: 1 };
   }
   if (kind === 'text') {
-    // Two rows for a heading, and it renders bottom-aligned inside them: the
-    // spare height becomes air ABOVE it, which is a document's vertical rhythm
-    // -- a section title belongs to what follows, not to what came before.
-    if (mode === 'heading') return { w: 16, h: 2 };
+    // One row for a heading. It used to get two and hang from the bottom of
+    // them, which produced air above it -- at the price of being the only text
+    // on the page that did not start where every other block starts.
+    if (mode === 'heading') return { w: 16, h: 1 };
     if (mode === 'caption') return { w: 16, h: 1 };
     return { w: 16, h: 3 };
   }

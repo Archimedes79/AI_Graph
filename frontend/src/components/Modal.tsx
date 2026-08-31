@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { LINE, MUTED, PANEL, SUNKEN, TEXT } from '../ui/theme';
+import { LINE, MUTED, PANEL, SCRIM, SUNKEN, TEXT } from '../ui/theme';
 
 interface ModalProps {
   title: React.ReactNode;
@@ -93,7 +93,7 @@ export default function Modal({
   return (
     <div
       className="fixed inset-0 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.7)', zIndex }}
+      style={{ background: SCRIM, zIndex }}
       onClick={dismissOnBackdrop ? onClose : undefined}
     >
       <div
