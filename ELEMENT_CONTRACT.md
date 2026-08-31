@@ -100,11 +100,20 @@ Six facets, declared once per element, all optional except the first two:
 | Facet | Node element | Widget element | Today |
 |---|---|---|---|
 | identity | `node_type`, `create()`, `label` | `widget_kind`, `ports()`, `label` | uniform |
-| behaviour | `execute()` | `execute()` | uniform |
+| behaviour | `execute() -> {port_id: value}` | `execute() -> {port_id: value}` | uniform |
 | authored file | `authored_file()` | `authored_file()` | uniform |
 | **example input** | `example_field` | `example_field` | **3 names** |
 | **generation** | `generation()` | `generation()` | **5 sites** |
 | **output contract** | `output_contract()` | `output_contract()` | **tab for 2 of 6** |
+
+**Behaviour has one shape, at both levels.** `execute` returns a dict keyed by
+the ports the element declared — never a bare value, not even for an element
+with exactly one output. A widget used to return its value plain and let the
+gui composite invent the key `{id}_out`, which read as a harmless shortcut and
+was not one: a widget that wants to report *why* it produced nothing (a picker
+whose file has gone) needs a second port, and a bare return has nowhere to put
+one. `test_element_contract` asserts the shape and that no element produces a
+port it never declared.
 
 ### 2.1 `Generation` — one descriptor, five call sites collapse into one
 

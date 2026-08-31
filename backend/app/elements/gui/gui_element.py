@@ -88,7 +88,10 @@ class GuiElement(NodeElement):
             element = widget_elements.get(widget.kind)
             if element is None:
                 raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
-            result[f"{widget.id}_out"] = await element.execute(widget, inputs)
+            # Merged, not wrapped: the widget names its own ports, the same way
+            # a node does. This composite used to invent the key, which quietly
+            # limited every widget to exactly one output forever.
+            result.update(await element.execute(widget, inputs))
         return result
 
     def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:

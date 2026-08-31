@@ -44,6 +44,7 @@ from app.models.graph import (  # noqa: E402
     NodeType,
     Port,
     PortKind,
+    gui_widget_ports,
     sync_gui_node_ports,
 )
 from app.services import ai_service  # noqa: E402
@@ -358,10 +359,23 @@ async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, 
     sync_gui_node_ports(empty_node)
     assert empty_node.config.gui_widgets == [] and empty_node.inputs == [] and empty_node.outputs == []
 
-    # 2. Executed.
+    # 2. Executed -- and its result is keyed by the ports it declared.
+    #
+    # One rule for every element, node and widget alike: `execute` returns
+    # {port_id: value}. A widget used to return its value plain and let the gui
+    # composite invent the key, on the grounds that a widget has only one output
+    # port. One rule with one exception is two rules, and that one had a price:
+    # a widget that wants to say *why* it produced nothing -- a picker whose
+    # file is gone -- needs a second port, and a bare return has nowhere to put
+    # it. This is the assertion that keeps the shortcut from coming back.
     in_id = f"{widget.id}_in"
     inputs = {in_id: ""} if any(p.id == in_id for p in gui_node.inputs) else {}
-    await element.execute(widget, inputs)  # asserting only that this doesn't raise
+    produced = await element.execute(widget, inputs)
+    declared = {port.id for port in gui_widget_ports(widget)[1]}
+    assert isinstance(produced, dict), f"{widget_kind} returned {type(produced).__name__}, not a port dict"
+    assert set(produced) <= declared, (
+        f"{widget_kind} produced ports it never declared: {set(produced) - declared}"
+    )
 
     # 3. Saving and loading works.
     restored = GuiWidget.model_validate_json(widget.model_dump_json())

@@ -36,21 +36,22 @@ class InputPickerElement(GuiWidgetElement):
             ],
         )
 
-    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        out = f"{widget.id}_out"
         raw = widget_input_or_value(widget, inputs)
         is_dir = _is_directory(widget)
         if not raw:
-            return [] if is_dir else None
+            return {out: [] if is_dir else None}
         if not is_dir:
-            return str(file_service.resolve_path(raw))
+            return {out: str(file_service.resolve_path(raw))}
 
         # The same behaviour the input node runs in directory mode, through the
         # same code -- see `list_selected_files`.
-        return await list_selected_files(self, widget, DirectorySource(
+        return {out: await list_selected_files(self, widget, DirectorySource(
             path=raw, recursive=widget.recursive, extensions=widget.extensions,
             select_all=widget.select_all_files, selector_code=widget.selector_code,
             selector_prompt=widget.selector_prompt, language=widget.language or "python",
-        ))
+        ))}
 
     def runtime_requirement(self, widget: GuiWidget) -> Optional[Dict[str, Any]]:
         if widget.value:

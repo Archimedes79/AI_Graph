@@ -354,13 +354,22 @@ class GuiWidgetElement(Element):
         """The (inputs, outputs) this widget contributes to its owning gui node."""
 
     @abstractmethod
-    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Compute this widget's `{id}_out` port value. Display-only widgets with
-        no output port (currently only plot_window) instead mutate `inputs` in
-        place and their return value is ignored -- see `gui/element.py`. Async
-        so a widget can await a sandboxed code run / AI call (e.g. input_picker's
-        directory-mode file selector) exactly like a NodeElement can.
+        Compute this widget's output ports: `{port_id: value}`, exactly as a
+        NodeElement does one level up.
+
+        A widget has at most one output port today, so this used to return that
+        value plain and let the gui composite wrap it. One rule with one
+        exception is two rules, and this was the expensive one to keep: a widget
+        that wants to report *why* it produced nothing -- a picker whose file is
+        missing -- needs a second port, and a bare return has nowhere to put it.
+
+        Display-only widgets have no output ports and never reach here; the
+        composite transforms their incoming value instead.
+
+        Async so a widget can await a sandboxed code run or an AI call (e.g.
+        input_picker's directory-mode file selector), exactly like a NodeElement.
         """
 
     async def display_value(self, widget: GuiWidget, value: Any) -> Any:
@@ -454,10 +463,10 @@ class StaticWidget(GuiWidgetElement):
     def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:
         return ([], [])
 
-    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Dict[str, Any]:
         # Never called: the gui composite only executes widgets that have an
         # output port, and these have none.
-        return None
+        return {}
 
 
 class DisplayWidget(GuiWidgetElement):
@@ -484,10 +493,12 @@ class DisplayWidget(GuiWidgetElement):
             [],
         )
 
-    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Dict[str, Any]:
         # Never called: a widget with no output port has its in-place transform
-        # applied by the composite instead (see gui/gui_element.py).
-        return None
+        # applied by the composite instead (see gui/gui_element.py). No ports,
+        # so no port values -- the empty dict rather than None, because the rule
+        # is "returns {port_id: value}" with no exception for the empty case.
+        return {}
 
     def authored_file(self, widget: GuiWidget) -> AuthoredFile:
         """The optional transform that reshapes the incoming value."""
