@@ -23,8 +23,15 @@ import type { ElementGeneration } from './shared/generation';
  * that always exist.
  */
 export interface ElementDefinitionBase<S> {
-  /** The element's own config panel; the shell renders it and knows nothing else. */
-  ConfigEditor: React.ComponentType<any>;
+  /**
+   * The element's own config panel; the shell renders it and knows nothing else.
+   *
+   * Optional, because some elements genuinely have nothing to configure. A rule
+   * and a spacer each had a component whose whole body was one sentence saying
+   * so, in a file of its own — two files to render "nothing to set here".
+   * Absent says it better than a sentence does.
+   */
+  ConfigEditor?: React.ComponentType<any>;
   /**
    * What this element keeps in a file beside the graph, mirroring the backend's
    * `Element.authored_file()`. Omitted for an element with nothing a person

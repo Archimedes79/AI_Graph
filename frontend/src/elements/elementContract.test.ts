@@ -27,6 +27,9 @@ function makeWidget(kind: GuiWidget['kind']): GuiWidget {
   return { ...createGuiWidget(kind, ''), id: 'w1' };
 }
 
+/** The blocks that carry no settings at all -- page furniture, not fields. */
+const STATIC_KINDS_WITHOUT_SETTINGS = ['divider', 'spacer'];
+
 describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, element) => {
   it('create() produces a valid GraphNode shape', () => {
     const node = element.create(`${nodeType}-1`);
@@ -57,6 +60,8 @@ describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, elem
   });
 
   it('has a defined ConfigEditor component', () => {
+    // Every node type has settings; only page furniture does not (see the
+    // widget suite below).
     expect(element.ConfigEditor).toBeDefined();
   });
 
@@ -125,8 +130,16 @@ describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (wi
     expect(element.RuntimeWidget).toBeDefined();
   });
 
-  it('has a defined ConfigEditor component', () => {
-    expect(element.ConfigEditor).toBeDefined();
+  it('has a config editor, or genuinely nothing to configure', () => {
+    // Optional: a rule and a spacer have no settings of their own, and a
+    // component whose whole body says so is worse than its absence. What must
+    // hold is that an element with settings draws them itself -- the shells
+    // still know no widget kind.
+    if (element.ConfigEditor === undefined) {
+      expect(STATIC_KINDS_WITHOUT_SETTINGS).toContain(widgetKind);
+      return;
+    }
+    expect(typeof element.ConfigEditor).toBe('function');
   });
 
   it('declares a generation whose fields exist, or declares none at all', () => {

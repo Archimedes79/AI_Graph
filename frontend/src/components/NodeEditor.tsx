@@ -217,7 +217,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           )}
 
           <div className="space-y-4">
-              <ConfigEditor
+              {ConfigEditor && <ConfigEditor
                 node={node}
                 setConfig={setConfig}
                 setDescription={(value: string) => setNode((prev) => (prev ? { ...prev, description: value } : prev))}
@@ -233,7 +233,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 applyWidgets={applyWidgets}
                 contextFile={node.config.example_file ?? ''}
                 onContextFileChange={(path: string) => setConfig('example_file', path)}
-              />
+              />}
 
               {element.outputContract === 'format' && (
                 <OutputFormatEditor

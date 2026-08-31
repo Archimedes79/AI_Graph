@@ -145,18 +145,20 @@ Wähle einen Block auf der Seite aus.
         <span className="text-xs" style={{ color: DIMMER }}>Zellen von {GUI_GRID_COLUMNS}</span>
       </div>
 
-      <ConfigEditor
-        widget={widget}
-        generation={element.generation}
-        fields={widgetFields(widget, onChange)}
-        onUpdate={onChange}
-        expanded={expanded}
-        onToggleExpand={() => setExpanded((prev) => !prev)}
-        generating={generate.isGenerating(widget.id)}
-        message={generate.message(widget.id)}
-        onGenerate={handleGenerate}
-        canGenerate={!!element.generation && (element.generation.available?.(widget) ?? true)}
-      />
+      {ConfigEditor && (
+        <ConfigEditor
+          widget={widget}
+          generation={element.generation}
+          fields={widgetFields(widget, onChange)}
+          onUpdate={onChange}
+          expanded={expanded}
+          onToggleExpand={() => setExpanded((prev) => !prev)}
+          generating={generate.isGenerating(widget.id)}
+          message={generate.message(widget.id)}
+          onGenerate={handleGenerate}
+          canGenerate={!!element.generation && (element.generation.available?.(widget) ?? true)}
+        />
+      )}
 
       {fileSpec && (
         <div className="mt-3">
