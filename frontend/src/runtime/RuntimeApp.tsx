@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
-import { GuiSurfacePage } from '../components/gui/DesignerTab';
+import { GuiSurfacePage } from '../components/gui/GuiPage';
 import { useSchemeOnRoot } from '../components/gui/useScheme';
 import GraphWindows from '../components/GraphWindows';
 import RuntimeAISettings from './RuntimeAISettings';

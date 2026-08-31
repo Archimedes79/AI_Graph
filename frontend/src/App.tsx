@@ -5,6 +5,7 @@ import Toolbar from './components/Toolbar';
 import Sidebar from './components/Sidebar';
 import GraphCanvas from './components/GraphCanvas';
 import DesignerTab from './components/gui/DesignerTab';
+import PreviewTab from './components/gui/PreviewTab';
 import ViewTabs, { type EditorView } from './components/ViewTabs';
 import { useSchemeOnRoot } from './components/gui/useScheme';
 import NodeEditor from './components/NodeEditor';
@@ -350,6 +351,7 @@ export default function App() {
           <ResultsPanel />
         </div>
         {view === 'design' && <DesignerTab />}
+        {view === 'preview' && <PreviewTab />}
 
 
         {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}

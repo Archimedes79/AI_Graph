@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import type { GraphNode, GuiWidget, GuiWidgetKind } from '../../types/graph';
 import { useGraphStore } from '../../store/graphStore';
 import { syncGuiNodePorts } from '../../utils/guiWidgets';
-import GuiDesigner from './GuiDesigner';
+import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { type PaletteEntry } from './DesignerPalette';
 import { createGuiWidget } from '../../utils/guiWidgets';
-import GuiSurface, { useGuiNodes, useSurfaceBlocks, type SurfaceBlock } from './GuiSurface';
+import { useGuiNodes, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { routePage } from './pageWrite';
 import GuiWidgetProperties from '../GuiWidgetEditor';
 import { SCHEMES, type SchemeId } from './scheme';
@@ -191,7 +191,7 @@ export default function DesignerTab() {
         className="flex-1 overflow-auto px-8 py-6"
         style={dragEntry ? { outline: `2px dashed ${ACCENT}`, outlineOffset: -6 } : undefined}
       >
-        <GuiDesigner
+        <DesignerSurface
           dropIndex={dragEntry ? dropIndex : null}
           blocks={blocks}
           onChange={applyWidgets}
@@ -252,30 +252,6 @@ export default function DesignerTab() {
           <span>{dragEntry.label}</span>
         </div>
       )}
-    </div>
-  );
-}
-
-/** The same page, read-only chrome: what a deployed tool shows. */
-export function GuiSurfacePage() {
-  const updateNode = useGraphStore((s) => s.updateNode);
-  const blocks = useSurfaceBlocks();
-
-  const setWidgetValue = (block: SurfaceBlock, value: string) => {
-    updateNode(block.node.id, {
-      config: {
-        ...block.node.config,
-        gui_widgets: block.node.config.gui_widgets.map(
-          (w) => (w.id === block.widget.id ? { ...w, value } : w),
-        ),
-      },
-    });
-  };
-
-  if (blocks.length === 0) return null;
-  return (
-    <div className="flex-1 overflow-auto px-8 py-6">
-      <GuiSurface blocks={blocks} onWidgetValue={setWidgetValue} />
     </div>
   );
 }

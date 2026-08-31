@@ -3,16 +3,20 @@ import { useGraphStore } from '../store/graphStore';
 import { NODE_ELEMENTS } from '../elements/registry';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE } from '../ui/theme';
 
-export type EditorView = 'graph' | 'design';
+export type EditorView = 'graph' | 'design' | 'preview';
 
 /**
  * Graph and interface, side by side as two views of one document.
  *
- * They are not two documents: the interface is derived from the graph's gui
- * nodes, so a block added here is a port added there. The tab exists because
- * designing a page inside a node's config dialog meant designing it through a
- * keyhole — and because the deployed tool *is* this page, so it deserves to be
- * looked at the way its user will.
+ * They are not separate documents: the interface is derived from the graph's
+ * gui nodes, so a block added there is a port added here. The design tab exists
+ * because designing a page inside a node's config dialog meant designing it
+ * through a keyhole.
+ *
+ * The third is the same page with the builder's affordances gone — literally
+ * the component a deployed tool runs, not a rendition of it. A preview built
+ * from its own code is a preview that can flatter; this one cannot, and it is
+ * where you check what you are about to hand someone.
  */
 export default function ViewTabs({
   view, onChange,
@@ -26,6 +30,7 @@ export default function ViewTabs({
   const tabs: { id: EditorView; label: string; hint: string }[] = [
     { id: 'graph', label: 'Graph', hint: 'Nodes und Verbindungen' },
     { id: 'design', label: 'Oberfläche', hint: 'Die Seite, die das Werkzeug zeigt' },
+    { id: 'preview', label: 'Vorschau', hint: 'Genau das, was ausgeliefert läuft — ohne Bearbeiten' },
   ];
 
   return (
