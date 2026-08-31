@@ -6,6 +6,7 @@ import GuiDesigner from './GuiDesigner';
 import DesignerPalette, { type PaletteEntry } from './DesignerPalette';
 import { createGuiWidget } from '../../utils/guiWidgets';
 import GuiSurface, { useGuiNodes, useSurfaceBlocks, type SurfaceBlock } from './GuiSurface';
+import { routePage } from './pageWrite';
 import GuiWidgetProperties from '../GuiWidgetEditor';
 import { SCHEMES, type SchemeId } from './scheme';
 import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '../../ui/theme';
@@ -32,24 +33,9 @@ export default function DesignerTab() {
   const ownerOf = (widgetId: string) => blocks.find((b) => b.widget.id === widgetId)?.node ?? null;
   const selected = blocks.find((b) => b.widget.id === selectedId)?.widget ?? null;
 
-  /**
-   * Write a new page back to the nodes it came from.
-   *
-   * A block keeps its owner: reordering rearranges the page, it does not move a
-   * widget between nodes. Moving one would silently move a port to a different
-   * node and take its edges with it -- more than a drag should ever mean.
-   */
+  /** Write a new page back to the nodes it is stored in (see pageWrite.ts). */
   const applyWidgets = (next: GuiWidget[]) => {
-    const nodes = [...new Set(blocks.map((b) => b.node))];
-    const byNode = new Map<string, GuiWidget[]>();
-    for (const widget of next) {
-      const owner = ownerOf(widget.id) ?? nodes[0];
-      if (!owner) continue;
-      byNode.set(owner.id, [...(byNode.get(owner.id) ?? []), widget]);
-    }
-    for (const node of nodes) {
-      const widgets = byNode.get(node.id) ?? [];
-      if (JSON.stringify(widgets) === JSON.stringify(node.config.gui_widgets)) continue;
+    for (const { node, widgets } of routePage(guiNodes, blocks, next)) {
       updateNode(node.id, syncGuiNodePorts({ ...node, config: { ...node.config, gui_widgets: widgets } }));
     }
   };
@@ -64,8 +50,7 @@ export default function DesignerTab() {
    */
   const addWidget = (kind: GuiWidgetKind, mode?: string, at?: number) => {
     const widget = createGuiWidget(kind, '', mode);
-    const target = blocks[blocks.length - 1]?.node ?? guiNodes[0];
-    if (target) {
+    if (guiNodes.length > 0) {
       const next = blocks.map((b) => b.widget);
       next.splice(at ?? next.length, 0, widget);
       applyWidgets(next);
