@@ -18,11 +18,16 @@ VS Code's .vscode/tasks.json.
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
+import urllib.error
+import urllib.request
 import webbrowser
 import zipfile
 from pathlib import Path
@@ -32,6 +37,27 @@ BACKEND_DIR = REPO_ROOT / "backend"
 FRONTEND_DIR = REPO_ROOT / "frontend"
 
 _PACKAGE_EXCLUDE_DIRS = {"__pycache__", ".venv", "node_modules", "tests"}
+
+BACKEND_PORT = 8000
+FRONTEND_PORT = 3000
+FRONTEND_FALLBACK_PORT = 3002
+
+
+def _port_in_use(port: int, host: str = "127.0.0.1") -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.3)
+        return sock.connect_ex((host, port)) == 0
+
+
+def _own_backend_already_running(port: int = BACKEND_PORT) -> bool:
+    """Distinguish a leftover `start.py` backend from anything else holding
+    the port, via the /health route's fixed service name."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.5) as resp:
+            body = json.loads(resp.read())
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+    return body.get("service") == "ai-graph-backend"
 
 
 def _venv_python() -> str:
@@ -45,22 +71,38 @@ def _venv_python() -> str:
     return shutil.which("python") or shutil.which("python3") or "python"
 
 
-def _stream_output(process: subprocess.Popen, prefix: str) -> None:
+def _stream_output(process: subprocess.Popen, prefix: str, on_line=None) -> None:
     assert process.stdout is not None
     for line in process.stdout:
         print(f"[{prefix}] {line}", end="")
+        if on_line is not None:
+            on_line(line)
+
+
+_VITE_URL_RE = re.compile(r"Local:\s+(http://\S+)")
 
 
 def run_dev() -> int:
+    if _own_backend_already_running():
+        # A previous `start.py` is still up: starting a second backend would
+        # just fail to bind :8000, and a second frontend would be a stray
+        # duplicate tab of the same editor -- so don't launch anything new.
+        frontend_port = FRONTEND_FALLBACK_PORT if _port_in_use(FRONTEND_PORT) else FRONTEND_PORT
+        print(f"[start] AI-Graph is already running -> http://127.0.0.1:{frontend_port}   (backend on :{BACKEND_PORT})")
+        return 0
+
     python = _venv_python()
-    backend_cmd = [python, "-m", "uvicorn", "app.main:app", "--reload", "--reload-dir", "app", "--port", "8000"]
+    backend_cmd = [python, "-m", "uvicorn", "app.main:app", "--reload", "--reload-dir", "app", "--port", str(BACKEND_PORT)]
     frontend_cmd = ["npm", "run", "dev"]
+    if _port_in_use(FRONTEND_PORT):
+        # Held by something that isn't our own dev server (checked above): go
+        # straight to the one fixed fallback instead of Vite's default cascading
+        # probe (3001, 3002, ...), which is noisy and lands on a different port
+        # every time depending on whatever else is running on the machine.
+        frontend_cmd += ["--", "--port", str(FRONTEND_FALLBACK_PORT), "--strictPort"]
 
     print(f"[start] backend:  {' '.join(backend_cmd)} (cwd={BACKEND_DIR})")
     print(f"[start] frontend: {' '.join(frontend_cmd)} (cwd={FRONTEND_DIR})")
-    # Dev mode printed the two commands and never the address, unlike --mode
-    # prod -- so the one thing you actually need was the one thing missing.
-    print("[start] AI-Graph editor -> http://127.0.0.1:3000   (Ctrl+C to stop)")
 
     backend = subprocess.Popen(
         backend_cmd, cwd=BACKEND_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -70,9 +112,18 @@ def run_dev() -> int:
         shell=(sys.platform == "win32"),
     )
 
+    def _announce_frontend_url(line: str) -> None:
+        # Vite's dev-server port is a guess (3000) until it actually binds one --
+        # port 3000 in use silently shifts it to 3001/3002/..., so printing a
+        # fixed address up front is wrong exactly when a stale process is still
+        # holding the port. Read the real URL back out of Vite's own banner.
+        match = _VITE_URL_RE.search(line)
+        if match:
+            print(f"[start] AI-Graph editor -> {match.group(1)}   (Ctrl+C to stop)")
+
     threads = [
         threading.Thread(target=_stream_output, args=(backend, "backend"), daemon=True),
-        threading.Thread(target=_stream_output, args=(frontend, "frontend"), daemon=True),
+        threading.Thread(target=_stream_output, args=(frontend, "frontend", _announce_frontend_url), daemon=True),
     ]
     for t in threads:
         t.start()
