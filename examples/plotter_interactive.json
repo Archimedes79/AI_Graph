@@ -4,8 +4,18 @@
     "version": "1.0.0",
     "description": "The same chart as plotter.json, but the file is picked while the graph runs: one GUI node holds both the file picker and the plot, so the whole tool is a single window. Paths are relative to the working directory, so run this from the repository root.",
     "author": "",
-    "tags": ["example", "plot", "csv", "gui"],
-    "ai_defaults": { "provider": "default", "model": "" }
+    "tags": [
+      "example",
+      "plot",
+      "csv",
+      "gui"
+    ],
+    "created_at": null,
+    "updated_at": "2026-08-31T20:23:22.476276+00:00",
+    "ai_defaults": {
+      "provider": "default",
+      "model": ""
+    }
   },
   "nodes": [
     {
@@ -13,56 +23,136 @@
       "node_type": "gui",
       "label": "Plotter",
       "description": "Pick a CSV at the top, see it charted below. A gui node's ports are derived from its widgets, so the picker's output and the plot's input are the node's own ports.",
-      "position": { "x": 120, "y": 80 },
-      "width": 420,
-      "height": 340,
+      "position": {
+        "x": 120.0,
+        "y": 80.0
+      },
+      "width": 659.0,
+      "height": 284.0,
       "inputs": [
-        { "id": "chart_in", "name": "Diagramm", "kind": "input", "data_type": "any", "multi": true, "required": false, "description": "" }
+        {
+          "id": "chart_in",
+          "name": "Diagramm",
+          "kind": "input",
+          "data_type": "any",
+          "multi": true,
+          "required": false,
+          "description": "",
+          "format": null,
+          "debug_directory": null
+        }
       ],
       "outputs": [
-        { "id": "picker_out", "name": "CSV", "kind": "output", "data_type": "file_path", "multi": false, "required": false, "description": "" }
+        {
+          "id": "picker_out",
+          "name": "CSV",
+          "kind": "output",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": "",
+          "format": null,
+          "debug_directory": null
+        }
       ],
       "config": {
+        "value": null,
+        "prompt_at_runtime": false,
+        "input_mode": "text",
+        "recursive": false,
+        "extensions": "",
+        "select_all_files": true,
+        "selector_prompt": "",
+        "selector_code": "",
+        "ai_provider": "default",
+        "ai_model": "",
+        "system_prompt": "",
+        "temperature": 0.7,
+        "language": "python",
+        "code": "",
+        "code_prompt": "",
+        "code_file": "",
+        "requirements": [],
+        "data_value": null,
+        "data_format": "text",
+        "data_prompt": "",
+        "data_format_prompt": "",
+        "example_file": "",
+        "output_format": "text",
+        "output_format_prompt": "",
+        "batch_mode": "per_item",
+        "batch_concurrency": 0,
+        "read_file_inputs": false,
+        "send_images": false,
+        "output_label": "Result",
+        "write_mode": "none",
         "gui_widgets": [
           {
             "id": "picker",
             "kind": "input_picker",
             "label": "CSV",
-            "value": "examples/bev_data.csv",
-            "mode": "file",
+            "value": "D:\\Daten\\Dropbox\\Dokumente\\AI_Graph\\examples\\bev_data.csv",
             "extensions": "",
+            "mode": "file",
             "recursive": false,
             "select_all_files": true,
             "selector_prompt": "",
             "selector_code": "",
-            "x": 0,
-            "y": 0,
-            "w": 12,
-            "h": 2,
             "code": "",
             "language": "python",
             "code_prompt": "",
             "code_file": "",
-            "example_file": ""
+            "example_file": "",
+            "x": 0,
+            "y": 0,
+            "w": 12,
+            "h": 2
           },
           {
             "id": "chart",
             "kind": "plot_window",
             "label": "Diagramm",
-            "value": null,
+            "value": [
+              {
+                "label": "Indien",
+                "value": 1430
+              },
+              {
+                "label": "China",
+                "value": 1410
+              },
+              {
+                "label": "USA",
+                "value": 340
+              },
+              {
+                "label": "Indonesien",
+                "value": 278
+              },
+              {
+                "label": "Pakistan",
+                "value": 240
+              }
+            ],
+            "extensions": "",
             "mode": "",
-            "x": 0,
-            "y": 2,
-            "w": 12,
-            "h": 6,
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
             "code": "",
             "language": "python",
             "code_prompt": "",
             "code_file": "",
-            "example_file": ""
+            "example_file": "",
+            "x": 0,
+            "y": 2,
+            "w": 12,
+            "h": 6
           }
         ],
-        "gui_grid_columns": 12
+        "gui_grid_columns": 12,
+        "extra": {}
       }
     },
     {
@@ -70,25 +160,89 @@
       "node_type": "code",
       "label": "Zu Punkten",
       "description": "`read_file_inputs` turns the picked path into the file's text before this runs, so the node never touches the filesystem itself.",
-      "position": { "x": 620, "y": 200 },
+      "position": {
+        "x": 252.10112359550556,
+        "y": 515.5617977528091
+      },
+      "width": 240.0,
+      "height": 184.0,
       "inputs": [
-        { "id": "csv", "name": "CSV", "kind": "input", "data_type": "file_path", "multi": false, "required": false, "description": "Resolved to the file's content before the node runs" }
+        {
+          "id": "csv",
+          "name": "CSV",
+          "kind": "input",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": "Resolved to the file's content before the node runs",
+          "format": null,
+          "debug_directory": null
+        }
       ],
       "outputs": [
-        { "id": "points", "name": "Points", "kind": "output", "data_type": "json", "multi": false, "required": false, "description": "[{label, value}] ready to plot" }
+        {
+          "id": "points",
+          "name": "Points",
+          "kind": "output",
+          "data_type": "json",
+          "multi": false,
+          "required": false,
+          "description": "[{label, value}] ready to plot",
+          "format": null,
+          "debug_directory": null
+        }
       ],
       "config": {
+        "value": null,
+        "prompt_at_runtime": false,
+        "input_mode": "text",
+        "recursive": false,
+        "extensions": "",
+        "select_all_files": true,
+        "selector_prompt": "",
+        "selector_code": "",
+        "ai_provider": "default",
+        "ai_model": "",
+        "system_prompt": "",
+        "temperature": 0.7,
         "language": "python",
-        "read_file_inputs": true,
-        "batch_mode": "whole_list",
-        "output_format": "json",
+        "code": "import csv\nimport io\n\n\ndef run(inputs):\n    \"\"\"CSV text -> plot-ready points.\n\n    The chart is drawn by the app, so this only reshapes data: a list of\n    {\"label\": str, \"value\": number}. Column names are read from the header\n    rather than hard-coded, so the same node plots any two-column CSV.\n    \"\"\"\n    rows = list(csv.DictReader(io.StringIO(inputs.get(\"csv\") or \"\")))\n    if not rows:\n        return {\"points\": []}\n\n    columns = list(rows[0].keys())\n    label_column = columns[0]\n    value_column = columns[1] if len(columns) > 1 else columns[0]\n\n    points = []\n    for row in rows:\n        raw = str(row.get(value_column) or \"\").strip().replace(\" \", \"\").replace(\".\", \"\")\n        raw = raw.replace(\",\", \".\")\n        try:\n            value = float(raw)\n        except ValueError:\n            continue  # a stray footer line is not a data point\n        points.append({\"label\": str(row.get(label_column) or \"\"), \"value\": round(value / 1_000_000, 1)})\n\n    points.sort(key=lambda point: point[\"value\"], reverse=True)\n    return {\"points\": points}\n",
         "code_prompt": "Turn the CSV into a list of {label, value} points, largest first, scaled to millions.",
-        "code": "import csv\nimport io\n\n\ndef run(inputs):\n    \"\"\"CSV text -> plot-ready points.\n\n    The chart is drawn by the app, so this only reshapes data: a list of\n    {\"label\": str, \"value\": number}. Column names are read from the header\n    rather than hard-coded, so the same node plots any two-column CSV.\n    \"\"\"\n    rows = list(csv.DictReader(io.StringIO(inputs.get(\"csv\") or \"\")))\n    if not rows:\n        return {\"points\": []}\n\n    columns = list(rows[0].keys())\n    label_column = columns[0]\n    value_column = columns[1] if len(columns) > 1 else columns[0]\n\n    points = []\n    for row in rows:\n        raw = str(row.get(value_column) or \"\").strip().replace(\" \", \"\").replace(\".\", \"\")\n        raw = raw.replace(\",\", \".\")\n        try:\n            value = float(raw)\n        except ValueError:\n            continue  # a stray footer line is not a data point\n        points.append({\"label\": str(row.get(label_column) or \"\"), \"value\": round(value / 1_000_000, 1)})\n\n    points.sort(key=lambda point: point[\"value\"], reverse=True)\n    return {\"points\": points}\n"
+        "code_file": "",
+        "requirements": [],
+        "data_value": null,
+        "data_format": "text",
+        "data_prompt": "",
+        "data_format_prompt": "",
+        "example_file": "",
+        "output_format": "json",
+        "output_format_prompt": "",
+        "batch_mode": "whole_list",
+        "batch_concurrency": 0,
+        "read_file_inputs": true,
+        "send_images": false,
+        "output_label": "Result",
+        "write_mode": "none",
+        "gui_widgets": [],
+        "gui_grid_columns": 12,
+        "extra": {}
       }
     }
   ],
   "edges": [
-    { "id": "e1", "source_node_id": "panel", "source_port_id": "picker_out", "target_node_id": "points", "target_port_id": "csv" },
-    { "id": "e2", "source_node_id": "points", "source_port_id": "points", "target_node_id": "panel", "target_port_id": "chart_in" }
+    {
+      "id": "e1",
+      "source_node_id": "panel",
+      "source_port_id": "picker_out",
+      "target_node_id": "points",
+      "target_port_id": "csv"
+    },
+    {
+      "id": "e2",
+      "source_node_id": "points",
+      "source_port_id": "points",
+      "target_node_id": "panel",
+      "target_port_id": "chart_in"
+    }
   ]
 }

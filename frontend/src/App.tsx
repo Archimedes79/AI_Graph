@@ -4,24 +4,25 @@ import { ReactFlowProvider } from 'reactflow';
 import Toolbar from './components/Toolbar';
 import Sidebar from './components/Sidebar';
 import GraphCanvas from './components/GraphCanvas';
+import DesignerTab from './components/gui/DesignerTab';
+import ViewTabs, { type EditorView } from './components/ViewTabs';
 import NodeEditor from './components/NodeEditor';
 import ConnectorEditor from './components/ConnectorEditor';
 import ResultsPanel from './components/ResultsPanel';
-import GuiWindowLayer from './components/gui/GuiWindowLayer';
+
 import SettingsDialog from './components/SettingsDialog';
 import Modal from './components/Modal';
 import FileBrowserDialog from './components/FileBrowserDialog';
 
 import { useGraphStore } from './store/graphStore';
+import { NODE_ELEMENTS } from './elements/registry';
 import { loadGraphFile, reloadNodeFiles, saveGraphFile } from './utils/api';
 import { errorText } from './utils/errorText';
 import type { NodeType, Graph } from './types/graph';
-import type { NodePreset } from './utils/nodeDefaults';
 import { DANGER_TEXT, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT, WELL } from './ui/theme';
 
 export default function App() {
   const addNode = useGraphStore((s) => s.addNode);
-  const addPresetNode = useGraphStore((s) => s.addPresetNode);
   const editingNodeId = useGraphStore((s) => s.editingNodeId);
   const setEditingNode = useGraphStore((s) => s.setEditingNode);
   const editingPort = useGraphStore((s) => s.editingPort);
@@ -61,6 +62,21 @@ export default function App() {
   );
 
   const [showSettings, setShowSettings] = useState(false);
+  const [view, setView] = useState<EditorView>('graph');
+
+  // Editing a gui node means editing the page, and the page has its own tab --
+  // at the size it will really be, next to the blocks it will really sit
+  // beside. A dialog with a Config tab that only says 'go to the other tab'
+  // and a Preview tab that shows nothing useful is a dialog worth not opening.
+  const editingGuiNode = useGraphStore((s) => {
+    const node = s.rfNodes.find((n) => n.id === s.editingNodeId)?.data.graphNode;
+    return !!node && !!NODE_ELEMENTS[node.node_type]?.hasRuntimeWindow;
+  });
+  useEffect(() => {
+    if (!editingGuiNode) return;
+    setView('design');
+    setEditingNode(null);
+  }, [editingGuiNode, setEditingNode]);
   const [showJsonImport, setShowJsonImport] = useState(false);
   const [jsonImportValue, setJsonImportValue] = useState('');
   const [jsonImportError, setJsonImportError] = useState('');
@@ -146,13 +162,6 @@ export default function App() {
       addNode(nodeType, { x: 200 + Math.random() * 200, y: 100 + Math.random() * 200 });
     },
     [addNode]
-  );
-
-  const handleAddPreset = useCallback(
-    (preset: NodePreset) => {
-      addPresetNode(preset, { x: 200 + Math.random() * 200, y: 100 + Math.random() * 200 });
-    },
-    [addPresetNode]
   );
 
   const handleNewGraph = () => {
@@ -328,17 +337,21 @@ export default function App() {
           saveStatus={saveStatus}
         />
 
-        <div className="flex flex-1 overflow-hidden">
-          <Sidebar onAddNode={handleAddNode} onAddPreset={handleAddPreset} />
+        <ViewTabs view={view} onChange={setView} />
+
+        {/* Both views stay mounted: the graph keeps its ReactFlow viewport, and
+            switching back does not reset the canvas or lose a selection. */}
+        <div className="flex flex-1 overflow-hidden" style={{ display: view === 'graph' ? 'flex' : 'none' }}>
+          <Sidebar onAddNode={handleAddNode} />
           <GraphCanvas />
           <ResultsPanel />
         </div>
+        {view === 'design' && <DesignerTab />}
 
-        <GuiWindowLayer />
 
         {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
 
-        {editingNodeId && (
+        {editingNodeId && !editingGuiNode && (
           <NodeEditor
             nodeId={editingNodeId}
             onClose={() => setEditingNode(null)}

@@ -7,9 +7,13 @@ from app.elements.base import Generation, GuiWidgetElement, NodeElement
 from app.elements.code.code_element import CodeElement
 from app.elements.data.data_element import DataElement
 from app.elements.gui.gui_element import GuiElement
+from app.elements.gui.widgets.divider.divider_element import DividerElement
 from app.elements.gui.widgets.image_view.image_view_element import ImageViewElement
 from app.elements.gui.widgets.input_picker.input_picker_element import InputPickerElement
 from app.elements.gui.widgets.plot_window.plot_window_element import PlotWindowElement
+from app.elements.gui.widgets.spacer.spacer_element import SpacerElement
+from app.elements.gui.widgets.table.table_element import TableElement
+from app.elements.gui.widgets.text.text_element import TextElement
 from app.elements.gui.widgets.text_io.text_io_element import TextIOElement
 from app.elements.input.input_element import InputElement
 from app.elements.output.output_element import OutputElement
@@ -35,6 +39,11 @@ GUI_WIDGET_ELEMENTS: Dict[GuiWidgetKind, GuiWidgetElement] = {
     GuiWidgetKind.TEXT_IO:          _text_io,
     GuiWidgetKind.PLOT_WINDOW:      PlotWindowElement(),
     GuiWidgetKind.IMAGE_VIEW:       ImageViewElement(),
+    GuiWidgetKind.TABLE:            TableElement(),
+    # Page furniture: no ports, never executed -- see StaticWidget.
+    GuiWidgetKind.TEXT:             TextElement(),
+    GuiWidgetKind.DIVIDER:          DividerElement(),
+    GuiWidgetKind.SPACER:           SpacerElement(),
 }
 
 

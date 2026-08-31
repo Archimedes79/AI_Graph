@@ -25,6 +25,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import textwrap
 import threading
 import urllib.error
 import urllib.request
@@ -80,6 +81,11 @@ def _stream_output(process: subprocess.Popen, prefix: str, on_line=None) -> None
 
 
 _VITE_URL_RE = re.compile(r"Local:\s+(http://\S+)")
+# Vite colors its banner (bold "Local", cyan URL, ...) even when piped on
+# Windows, so the raw line has escape codes sitting inside "Local:" and
+# inside the port digits -- invisible once a terminal renders them, but
+# enough to break a regex match against the literal text.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def run_dev() -> int:
@@ -117,7 +123,7 @@ def run_dev() -> int:
         # port 3000 in use silently shifts it to 3001/3002/..., so printing a
         # fixed address up front is wrong exactly when a stale process is still
         # holding the port. Read the real URL back out of Vite's own banner.
-        match = _VITE_URL_RE.search(line)
+        match = _VITE_URL_RE.search(_ANSI_RE.sub("", line))
         if match:
             print(f"[start] AI-Graph editor -> {match.group(1)}   (Ctrl+C to stop)")
 
@@ -227,11 +233,63 @@ def build_package(output: Path | None = None, skip_build: bool = False) -> Path:
         zf.write(REPO_ROOT / "start.py", "start.py")
         zf.write(REPO_ROOT / "README.md", "README.md")
         _add_tree(zf, REPO_ROOT / "docs", "docs")
+        # The instructions have to travel WITH the zip. They used to be printed
+        # by this function -- to the person building the package, who already
+        # knows them -- while whoever unzipped it found only the project README,
+        # which explains what AI-Graph is and not how to start this folder.
+        zf.writestr("START-HERE.md", _package_instructions())
 
     print(f"[package] Wrote {output} ({output.stat().st_size / 1024:.0f} KB)")
-    print("[package] On the target server: unzip, `pip install -r backend/requirements.txt`")
-    print("[package]  (ideally inside a venv), then run `python start.py --mode prod`.")
+    print("[package] Unzip it and follow START-HERE.md (it ships inside the zip).")
     return output
+
+
+def _package_instructions() -> str:
+    """The four commands that turn this zip into a running editor.
+
+    A source package, deliberately: it runs anywhere Python does. If you want
+    something to double-click with no Python at all, that is the executable --
+    `build_editor_exe.py` here, or the "Build executable" workflow on GitHub.
+    """
+    return textwrap.dedent(
+        """\
+        # Start here
+
+        This is the AI-Graph editor as a source package: the backend, the built
+        user interface, and the launcher. You need Python 3.10 or newer. There is
+        no Node and no build step -- the interface is already built.
+
+        ## Windows
+
+            python -m venv .venv
+            .venv\\Scripts\\activate
+            pip install -r backend/requirements.txt
+            python start.py --mode prod
+
+        ## macOS / Linux
+
+            python3 -m venv .venv
+            source .venv/bin/activate
+            pip install -r backend/requirements.txt
+            python start.py --mode prod
+
+        Then open <http://127.0.0.1:8000>. `Ctrl+C` stops it.
+
+        `AI_GRAPH_PORT=9000` runs it on another port.
+
+        ## Not what you wanted?
+
+        - **One file to double-click, no Python** -> build the executable instead:
+          `python build_editor_exe.py` in a full checkout, or download the artifact
+          from the repository's "Build executable" workflow.
+        - **Run one graph, without the editor** -> use a deploy bundle: open the
+          graph in the editor and press "Deploy".
+        - **Docker** -> `docker compose up --build` in a full checkout.
+
+        The four documents in `docs/` cover installation, the graph DSL, AI
+        providers and deployment in more depth.
+        """
+    )
 
 
 def main() -> int:

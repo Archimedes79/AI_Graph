@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType, GuiWidgetKind } from '../types/graph';
-import { nodeTypeDefaults, type NodePreset } from '../utils/nodeDefaults';
+import { nodeTypeDefaults } from '../utils/nodeDefaults';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { cancelRun, getRunSnapshot, startRun } from '../utils/api';
 import { errorText } from '../utils/errorText';
@@ -59,8 +59,8 @@ export interface GraphStore {
   // Actions
   setMetadata: (meta: Partial<GraphMetadata>) => void;
   setCurrentFilePath: (path: string | null) => void;
-  addNode: (nodeType: NodeType, position: { x: number; y: number }) => void;
-  addPresetNode: (preset: NodePreset, position: { x: number; y: number }) => void;
+  /** Add a node and return its id, so a caller can immediately fill it in. */
+  addNode: (nodeType: NodeType, position: { x: number; y: number }) => string;
   updateNode: (nodeId: string, updates: Partial<GraphNode>) => void;
   deleteNode: (nodeId: string) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
@@ -329,6 +329,7 @@ const defaultMetadata = (): GraphMetadata => ({
   // the backend resolves to its own fallback; whoever runs a deployed copy can
   // override it without editing the graph -- see backend/app/services/ai_settings.py.
   ai_defaults: { provider: 'default', model: '' },
+  gui_scheme: 'indigo',
 });
 
 
@@ -420,27 +421,9 @@ export const useGraphStore = create<GraphStore>()(
       set((state) => {
         state.rfNodes.push(rfNode as any);
       });
+      return id;
     },
 
-    addPresetNode: (preset, position) => {
-      get().commit();
-      const id = newId(preset.nodeType);
-      const graphNode = preset.build(id);
-      const rfNode: Node<RFNodeData> = {
-        id,
-        type: 'graphNode',
-        position,
-        data: {
-          graphNode,
-          onEdit: (nid) => get().setEditingNode(nid),
-          onDelete: (nid) => get().deleteNode(nid),
-          onPortEdit: (nid, pid) => get().setEditingPort({ nodeId: nid, portId: pid }),
-        },
-      };
-      set((state) => {
-        state.rfNodes.push(rfNode as any);
-      });
-    },
 
     updateNode: (nodeId, updates) => {
       get().commit();

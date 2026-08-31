@@ -37,17 +37,21 @@ export function newGuiWidgetId(): string {
   return `widget-${widgetCounter++}-${Date.now()}`;
 }
 
-export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
+export function createGuiWidget(kind: GuiWidgetKind, label = '', mode?: string): GuiWidget {
   return {
     id: newGuiWidgetId(),
     kind,
     label,
     value: '',
     extensions: '',
-    mode: kind === 'input_picker' ? 'file' : kind === 'text_io' ? 'both' : '',
-    // No x/y: an unplaced widget stacks below the others until it is dragged,
-    // which is what makes "add" work without asking where to put it.
-    ...DEFAULT_WIDGET_SPAN,
+    mode: mode ?? (kind === 'input_picker' ? 'file' : kind === 'text_io' ? 'both'
+      : kind === 'text' ? 'body'
+      : kind === 'divider' || kind === 'spacer' ? 'horizontal' : ''),
+    // No x/y: the order of the list is the position, so a new block simply goes
+    // last -- "add" never has to ask where to put it.
+    ...defaultSpanFor(kind, mode),
+    // Page furniture carries no box; everything else lifts off the page.
+    tone: STATIC_KINDS.includes(kind) ? 'plain' : 'raised',
     code: '',
     language: 'python',
     recursive: false,
@@ -61,11 +65,49 @@ export function createGuiWidget(kind: GuiWidgetKind, label = ''): GuiWidget {
 }
 
 export const GUI_WIDGET_KIND_LABELS: Record<GuiWidgetKind, string> = {
-  input_picker: 'Input Picker (file or directory)',
-  text_io: 'Text I/O (input / output / both)',
-  plot_window: 'Plot Window',
-  image_view: 'Image View',
+  text: 'Text / Überschrift',
+  divider: 'Trennlinie',
+  spacer: 'Abstand',
+  input_picker: 'Datei-/Ordnerauswahl',
+  text_io: 'Textfeld (Eingabe / Ausgabe / beides)',
+  table: 'Tabelle',
+  plot_window: 'Diagramm',
+  image_view: 'Bild',
 };
 
-/** Kinds offered when creating a brand-new widget. */
-export const CREATABLE_GUI_WIDGET_KINDS: GuiWidgetKind[] = ['input_picker', 'text_io', 'plot_window', 'image_view'];
+/**
+ * Kinds offered when adding a block, in the order a page is usually built:
+ * furniture first, then fields, then displays.
+ */
+export const CREATABLE_GUI_WIDGET_KINDS: GuiWidgetKind[] = [
+  'text', 'divider', 'spacer',
+  'input_picker', 'text_io',
+  'table', 'plot_window', 'image_view',
+];
+
+/** Page furniture: no ports, no behaviour. Mirrors `StaticWidget` on the backend. */
+export const STATIC_KINDS: GuiWidgetKind[] = ['text', 'divider', 'spacer'];
+
+/**
+ * A sensible first size per kind, so a new block never lands absurdly shaped.
+ *
+ * A heading is one row and the full width because that is what a heading is;
+ * you should not have to resize it before it looks right.
+ */
+function defaultSpanFor(kind: GuiWidgetKind, mode?: string): { w: number; h: number } {
+  if (kind === 'divider' || kind === 'spacer') {
+    // A vertical rule or gap stands between two things side by side, so it is
+    // narrow and tall; a horizontal one ends a section, so it is the reverse.
+    return mode === 'vertical' ? { w: 1, h: 4 } : { w: 16, h: 1 };
+  }
+  if (kind === 'text') {
+    // Two rows for a heading, and it renders bottom-aligned inside them: the
+    // spare height becomes air ABOVE it, which is a document's vertical rhythm
+    // -- a section title belongs to what follows, not to what came before.
+    if (mode === 'heading') return { w: 16, h: 2 };
+    if (mode === 'caption') return { w: 16, h: 1 };
+    return { w: 16, h: 3 };
+  }
+  if (kind === 'input_picker') return { w: 6, h: 2 };
+  return DEFAULT_WIDGET_SPAN;
+}

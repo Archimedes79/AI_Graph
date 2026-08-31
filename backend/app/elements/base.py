@@ -382,6 +382,84 @@ class GuiWidgetElement(Element):
         return None
 
 
+@dataclass(frozen=True)
+class DirectorySource:
+    """What a directory selector needs, from either level.
+
+    `InputElement` (directory mode) and `InputPickerElement` run the identical
+    behaviour -- list a directory, optionally filter by extension, optionally
+    narrow it with an authored snippet -- and wrote it out twice. The two copies
+    had already disagreed once, on which contract sentence to hand the model.
+    This is the shape both build, so the behaviour below exists once.
+    """
+
+    path: str
+    recursive: bool
+    extensions: str
+    select_all: bool
+    selector_code: str
+    selector_prompt: str
+    language: str
+
+
+async def list_selected_files(element: "GuiWidgetElement | NodeElement",
+                              subject: Any, source: DirectorySource) -> List[str]:
+    """The rooted paths in *source*, after the element's own selector snippet.
+
+    A selector that was never generated in the editor is generated here, on the
+    first run -- the last-resort path a deployed bundle relies on.
+    """
+    from app.services import file_service
+
+    resolved = file_service.resolve_path(source.path)
+    files = file_service.list_directory(
+        resolved,
+        recursive=source.recursive,
+        extensions=file_service.parse_extensions_filter(source.extensions),
+    )
+    if source.select_all:
+        return files
+
+    code = source.selector_code.strip()
+    if not code and source.selector_prompt.strip():
+        from app.services import ai_service
+
+        code, _ = await ai_service.generate_code(
+            description=source.selector_prompt,
+            language=source.language,
+            context=SELECTOR_GENERATION.contract,
+            inputs=["files"], outputs=["files"],
+        )
+    if not code:
+        return files
+    selected = await element.run_snippet(subject, {"files": files}, code)
+    return selected.get("files", files)
+
+
+class StaticWidget(GuiWidgetElement):
+    """
+    A widget that is part of the page rather than part of the graph: a heading,
+    a paragraph, a rule. It contributes **no ports at all** and never executes.
+
+    An interface built only from inputs and outputs cannot be laid out -- there
+    was no way to write a title. These are what make a gui node a document
+    rather than a stack of labelled boxes, and they are elements like any other
+    so that the designer, the runtime window and the deploy bundle need to learn
+    nothing about them.
+
+    Their text is `widget.value`, the same field every other widget holds its
+    own content in.
+    """
+
+    def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:
+        return ([], [])
+
+    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
+        # Never called: the gui composite only executes widgets that have an
+        # output port, and these have none.
+        return None
+
+
 class DisplayWidget(GuiWidgetElement):
     """
     A widget that only shows what arrives: one input port, no output port, and

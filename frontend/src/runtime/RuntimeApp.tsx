@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
-import GuiWindowLayer from '../components/gui/GuiWindowLayer';
+import { GuiSurfacePage } from '../components/gui/DesignerTab';
 import GraphWindows from '../components/GraphWindows';
 import RuntimeAISettings from './RuntimeAISettings';
 import { getRuntimeGraph, getRuntimeRequirements } from '../utils/api';
@@ -15,7 +15,7 @@ import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE,
  *
  * This is the *same* application as the editor with the canvas taken away: it
  * loads the bundle's one graph into the ordinary graph store and mounts the
- * ordinary `GuiWindowLayer`, so every widget a graph author placed in the
+ * ordinary `GuiSurface`, so every widget a graph author placed in the
  * designer renders here through the exact component the editor used --
  * `GuiWindow`, `PlotWidget`, each element's `RuntimeWidget`. There is no
  * second implementation of a widget anywhere, which is why a deployed tool
@@ -175,7 +175,7 @@ export default function RuntimeApp() {
           </div>
         )}
 
-        <GuiWindowLayer />
+        <GuiSurfacePage />
         <GraphWindows
           requirements={pendingRequirements}
           onSubmit={handleRequirementsSubmit}

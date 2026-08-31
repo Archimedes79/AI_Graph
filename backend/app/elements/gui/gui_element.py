@@ -57,7 +57,7 @@ def _widget_elements() -> Dict[GuiWidgetKind, GuiWidgetElement]:
 class GuiElement(NodeElement):
     node_type = NodeType.GUI
     is_memory = True
-    config_fields = ("gui_widgets", "gui_grid_columns")
+    config_fields = ("gui_widgets",)
 
     async def execute(
         self,

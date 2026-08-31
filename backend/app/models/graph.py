@@ -81,6 +81,13 @@ class GuiWidgetKind(str, Enum):
     TEXT_IO = "text_io"               # unified: input | output | both
     PLOT_WINDOW = "plot_window"
     IMAGE_VIEW = "image_view"       # display-only: shows a picture from a path
+    TABLE = "table"                 # display-only: shows rows
+    # Page furniture: no ports, never executed. An interface built only from
+    # inputs and outputs cannot be laid out -- there was no way to write a
+    # title. See `StaticWidget` in elements/base.py.
+    TEXT = "text"                   # prose; `mode` picks heading | body | caption
+    DIVIDER = "divider"
+    SPACER = "spacer"               # deliberate empty space
 
 
 class GuiWidget(BaseModel):
@@ -95,7 +102,8 @@ class GuiWidget(BaseModel):
     label: str = ""
     value: Optional[Any] = None      # literal/default value or a chosen file/directory path
     extensions: str = ""             # input_picker (directory mode) extension filter, e.g. ".md, .txt"
-    mode: str = ""                   # input_picker: "file" | "directory"; text_io: "input" | "output" | "both"
+    mode: str = ""                   # input_picker: "file" | "directory"; text_io: "input" | "output" | "both";
+                                     # text: "heading" | "body" | "caption"
     # There is no `size` field any more. A gui node had two-and-a-half ways to
     # say how big a widget is -- a small/medium/large preset mapped onto w/h, the
     # widget list's order (used as the layout for anything the designer had never
@@ -138,13 +146,23 @@ class GuiWidget(BaseModel):
     # NodeConfig.example_file has. Every generate call on this widget reads it.
     example_file: str = ""
 
-    # GUI-designer layout, in grid cells (12-column grid, row height is uniform).
-    # Purely presentational: it never affects ports, execution, or wiring. None
-    # means "not placed yet" -- the designer falls back to list order.
-    x: Optional[int] = None
-    y: Optional[int] = None
-    w: int = 6
+    # Size on the page, in grid cells. Purely presentational: never affects
+    # ports, execution or wiring.
+    #
+    # There is no `x`/`y`. **The order of this list is the position** -- widgets
+    # flow left to right and wrap, the way text does in a browser. Free
+    # positioning is what made every interface look hand-arranged and slightly
+    # wrong; a document flow is decent by default, which is the whole point.
+    # The cell is square (see GUI_GRID_COLUMNS in the frontend's layout.ts), so
+    # `w` and `h` are one unit rather than two unrelated pixel counts.
+    w: int = 8
     h: int = 4
+
+    # How this block sits on the page, by role rather than by colour. A closed
+    # set, not a colour picker: every value comes from the one palette, so no
+    # combination can look wrong. `plain` is what makes a heading a heading
+    # rather than a labelled box.
+    tone: Literal["plain", "raised", "sunken", "accent"] = "raised"
 
 
 class NodeConfig(BaseModel):
@@ -259,12 +277,12 @@ class NodeConfig(BaseModel):
     write_mode: Literal["none", "file", "directory", "window"] = "none"  # window displays
                                           # result(s) in a text window
 
-    # gui node – ordered list of composed widgets; ports are derived from this
+    # gui node – the page, in order: ports are derived from this list, and so is
+    # the layout. There is no `gui_grid_columns` any more; the grid is a fixed
+    # 16 square cells inside a capped content width, the way a browser gives an
+    # HTML document one width and no further settings. A page nobody has to
+    # configure is a page that cannot be configured badly.
     gui_widgets: List[GuiWidget] = Field(default_factory=list)
-    # gui node – background column raster the designer/runtime window lay
-    # widgets out on horizontally (row height is a fixed constant, see
-    # frontend/src/components/gui/layout.ts).
-    gui_grid_columns: int = 12
 
     extra: Dict[str, Any] = Field(default_factory=dict)
 
@@ -342,6 +360,8 @@ _LEGACY_NODE_TYPES = {
 
 # legacy widget kind -> (canonical kind, mode)
 _LEGACY_WIDGET_KINDS = {
+    # A heading was prose in a different size; it is `text` in heading mode now.
+    "heading": ("text", "heading"),
     "file_open": ("input_picker", "file"),
     "directory_open": ("input_picker", "directory"),
     "text_window": ("text_io", "both"),
@@ -463,6 +483,8 @@ def _migrate_renamed_fields(node: dict) -> dict:
             if new_config is config:
                 new_config = dict(config)
             new_config["gui_widgets"] = new_widgets
+    # Last, because it reorders the list the steps above rewrote in place.
+    new_config = _migrate_widget_flow(new_config)
     if new_config is config:
         return node
     return {**node, "config": new_config}
@@ -471,6 +493,53 @@ def _migrate_renamed_fields(node: dict) -> dict:
 # The cell footprint each retired `size` preset stood for. Only ever read by the
 # migration below -- new widgets are created with w/h directly.
 _LEGACY_SIZE_SPAN = {"small": (3, 2), "medium": (6, 4), "large": (12, 6)}
+
+
+def _migrate_widget_flow(config: dict) -> dict:
+    """Turn a placed 12-column layout into a document flow.
+
+    Widgets used to carry `x`/`y` on a 12-column grid, with the list order as a
+    fallback for anything never placed. Order is now the only position, so the
+    coordinates become a **sort key** and then go away: reading order,
+    top row first, left to right within a row. That is what the user saw, so it
+    is what they get back.
+
+    `w`/`h` are rescaled 12 -> 16 columns. The old row height happened to equal
+    the new cell size, so `h` carries over unchanged.
+    """
+    widgets = config.get("gui_widgets")
+    if not isinstance(widgets, list) or not any(
+        isinstance(w, dict) and ("x" in w or "y" in w) for w in widgets
+    ):
+        return config
+
+    def sort_key(pair):
+        index, widget = pair
+        if not isinstance(widget, dict):
+            return (0, 0, index)
+        x, y = widget.get("x"), widget.get("y")
+        # Never placed: it used to stack below everything, so it sorts last but
+        # keeps its position relative to the other unplaced ones.
+        if x is None or y is None:
+            return (1, 10**6, index)
+        return (0, int(y), int(x))
+
+    ordered = [w for _, w in sorted(enumerate(widgets), key=sort_key)]
+    migrated = []
+    for widget in ordered:
+        if not isinstance(widget, dict):
+            migrated.append(widget)
+            continue
+        placed = dict(widget)
+        old_w = placed.pop("x", None), placed.pop("y", None)
+        del old_w
+        if isinstance(placed.get("w"), int):
+            placed["w"] = max(1, min(16, round(placed["w"] * 16 / 12)))
+        migrated.append(placed)
+
+    new_config = {**config, "gui_widgets": migrated}
+    new_config.pop("gui_grid_columns", None)
+    return new_config
 
 
 def _migrate_widget_size(widget: dict) -> dict:
@@ -629,6 +698,12 @@ class GraphMetadata(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     ai_defaults: AIDefaults = Field(default_factory=AIDefaults)
+    # How the graph's interface looks: one closed choice for the whole page
+    # (see frontend/src/components/gui/scheme.ts). Presentation of the graph as
+    # a whole, so it belongs here rather than on any one node -- and a closed
+    # set rather than a colour, so a deployed tool can look like itself without
+    # anyone being able to make it look wrong.
+    gui_scheme: Literal["indigo", "teal", "amber", "rose", "slate"] = "indigo"
 
 
 class Graph(BaseModel):

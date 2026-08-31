@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GraphNode } from '../types/graph';
-import { syncGuiNodePorts, createGuiWidget } from './guiWidgets';
+import { syncGuiNodePorts, createGuiWidget, guiWidgetPorts } from './guiWidgets';
 import { DEFAULT_WIDGET_SPAN } from '../components/gui/layout';
 import { baseNodeConfig } from '../elements/shared/baseNodeConfig';
 
@@ -128,9 +128,37 @@ describe('createGuiWidget sizing', () => {
     expect('size' in widget).toBe(false);
   });
 
-  it('leaves a new widget unplaced, so it stacks until it is dragged', () => {
+  it('carries no coordinates at all — the list order is the position', () => {
     const widget = createGuiWidget('text_io', 'A');
-    expect(widget.x).toBeUndefined();
-    expect(widget.y).toBeUndefined();
+    expect('x' in widget).toBe(false);
+    expect('y' in widget).toBe(false);
+  });
+
+  it('sizes page furniture the way a document would', () => {
+    // A heading is the full width and *two* rows, rendered bottom-aligned: the
+    // air lands above it and none below, which is a document's vertical rhythm
+    // -- a section title belongs to what follows, not to what came before.
+    const heading = createGuiWidget('text', 'Titel', 'heading');
+    expect({ w: heading.w, h: heading.h }).toEqual({ w: 16, h: 2 });
+    expect(heading.tone).toBe('plain');
+
+    // A rule and a spacer are a single row of the grid and nothing else.
+    for (const kind of ['divider', 'spacer'] as const) {
+      const block = createGuiWidget(kind, '');
+      expect({ w: block.w, h: block.h }).toEqual({ w: 16, h: 1 });
+      expect(block.tone).toBe('plain');
+    }
+  });
+
+  it('gives everything else a box to sit in', () => {
+    expect(createGuiWidget('plot_window', 'P').tone).toBe('raised');
+  });
+
+  it('page furniture contributes no ports', () => {
+    for (const kind of ['text', 'divider', 'spacer'] as const) {
+      const ports = guiWidgetPorts(createGuiWidget(kind, kind));
+      expect(ports.inputs).toEqual([]);
+      expect(ports.outputs).toEqual([]);
+    }
   });
 });

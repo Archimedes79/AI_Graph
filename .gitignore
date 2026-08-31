@@ -55,3 +55,6 @@ ai-graph-editor-package.zip
 # AI credentials written by ⚙ Settings → Keys and addresses. Its default location
 # is the working directory, which for a dev run is this repo -- never commit it.
 ai-settings.json
+
+# Local editor/agent scratch, not part of the project.
+.claude/

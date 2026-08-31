@@ -43,7 +43,6 @@ export function baseNodeConfig(): NodeConfig {
     read_file_inputs: false,
     send_images: false,
     gui_widgets: [],
-    gui_grid_columns: 12,
     extra: {},
   };
 }

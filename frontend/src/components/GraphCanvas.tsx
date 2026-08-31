@@ -18,7 +18,6 @@ import 'reactflow/dist/style.css';
 import { useGraphStore } from '../store/graphStore';
 import GraphNodeComponent from './nodes/GraphNodeComponent';
 import type { NodeType } from '../types/graph';
-import { WIDGET_PRESETS } from '../utils/nodeDefaults';
 import { ACCENT, LINE, PANEL, SUNKEN, SURFACE } from '../ui/theme';
 
 const nodeTypes = { graphNode: GraphNodeComponent };
@@ -50,7 +49,6 @@ export default function GraphCanvas() {
   const setRFNodes = useGraphStore((s) => s.setRFNodes);
   const setRFEdges = useGraphStore((s) => s.setRFEdges);
   const addNode = useGraphStore((s) => s.addNode);
-  const addPresetNode = useGraphStore((s) => s.addPresetNode);
   const commit = useGraphStore((s) => s.commit);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -81,9 +79,11 @@ export default function GraphCanvas() {
       event.preventDefault();
       if (!reactFlowWrapper.current || !rfInstance) return;
 
-      const presetId = event.dataTransfer.getData('application/nodePreset');
+      // Only node types are dropped now. There used to be a second kind of
+      // payload for the standalone widget presets; a gui node's blocks are
+      // added inside it, on its page, so nothing drops a widget onto a canvas.
       const nodeType = event.dataTransfer.getData('application/nodeType') as NodeType;
-      if (!presetId && !nodeType) return;
+      if (!nodeType) return;
 
       const bounds = reactFlowWrapper.current.getBoundingClientRect();
       const position = rfInstance.project({
@@ -91,15 +91,9 @@ export default function GraphCanvas() {
         y: event.clientY - bounds.top,
       });
 
-      if (presetId) {
-        const preset = WIDGET_PRESETS.find((p) => p.id === presetId);
-        if (preset) addPresetNode(preset, position);
-        return;
-      }
-
       addNode(nodeType, position);
     },
-    [rfInstance, addNode, addPresetNode]
+    [rfInstance, addNode]
   );
 
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {

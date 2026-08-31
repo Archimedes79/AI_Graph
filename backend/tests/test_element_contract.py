@@ -169,8 +169,7 @@ async def _assert_ai_call_path(node_type: NodeType, element, tmp_path: Path, mon
                  _port("count", PortKind.OUTPUT, DataType.TEXT)],
         config=NodeConfig(
             value=str(tmp_path), select_all_files=False, selector_code="",
-            selector_prompt="pick files", ai_model="m2", ai_provider=AIProvider.OLLAMA,
-            input_mode="directory",
+            selector_prompt="pick files", input_mode="directory",
         ),
     )
     await element.execute(node, {})
@@ -178,8 +177,10 @@ async def _assert_ai_call_path(node_type: NodeType, element, tmp_path: Path, mon
     assert calls[0]["description"] == "pick files"
     assert calls[0]["inputs"] == ["files"]
     assert calls[0]["outputs"] == ["files"]
-    assert calls[0]["model"] == "m2"
-    assert calls[0]["provider"] == AIProvider.OLLAMA
+    # No model and no provider: this last-resort generation follows whatever AI
+    # the run is configured with, exactly as the input_picker widget's identical
+    # call always did. The node used to pass its own `ai_model`/`ai_provider`
+    # here -- one behaviour, two answers, depending on which level you asked.
 
 
 @pytest.mark.parametrize("node_type, element", list(NODE_ELEMENTS.items()), ids=[t.value for t in NODE_ELEMENTS])
@@ -329,6 +330,13 @@ def _make_widget(kind: GuiWidgetKind) -> GuiWidget:
     if kind == GuiWidgetKind.PLOT_WINDOW:
         return GuiWidget(id="w1", kind=kind)
     if kind == GuiWidgetKind.IMAGE_VIEW:
+        return GuiWidget(id="w1", kind=kind)
+    if kind == GuiWidgetKind.TABLE:
+        return GuiWidget(id="w1", kind=kind)
+    # Page furniture: no ports, no behaviour. Prose carries its role in `mode`.
+    if kind == GuiWidgetKind.TEXT:
+        return GuiWidget(id="w1", kind=kind, mode="heading", value="Ein Titel")
+    if kind in (GuiWidgetKind.DIVIDER, GuiWidgetKind.SPACER):
         return GuiWidget(id="w1", kind=kind)
     raise AssertionError(f"no fixture for {kind}")
 

@@ -11,7 +11,8 @@
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "GuiWidgetKind".
  */
-export type GuiWidgetKind = 'input_picker' | 'text_io' | 'plot_window' | 'image_view';
+export type GuiWidgetKind =
+  'input_picker' | 'text_io' | 'plot_window' | 'image_view' | 'table' | 'text' | 'divider' | 'spacer';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "PortKind".
@@ -68,6 +69,7 @@ export interface GraphMetadata {
   author: string;
   created_at?: string | null;
   description: string;
+  gui_scheme: 'indigo' | 'teal' | 'amber' | 'rose' | 'slate';
   name: string;
   tags: string[];
   updated_at?: string | null;
@@ -129,7 +131,6 @@ export interface NodeConfig {
   extra: {
     [k: string]: unknown;
   };
-  gui_grid_columns: number;
   gui_widgets: GuiWidget[];
   input_mode: 'text' | 'file' | 'directory';
   language: string;
@@ -174,10 +175,9 @@ export interface GuiWidget {
   select_all_files: boolean;
   selector_code: string;
   selector_prompt: string;
+  tone: 'plain' | 'raised' | 'sunken' | 'accent';
   value?: unknown;
   w?: number;
-  x?: number | null;
-  y?: number | null;
 }
 /**
  * This interface was referenced by `Graph`'s JSON-Schema

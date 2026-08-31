@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.elements.base import (AuthoredFile, Generation, NodeElement,
-                               SELECTOR_GENERATION, code_extension)
+from app.elements.base import (AuthoredFile, DirectorySource, Generation, NodeElement,
+                               SELECTOR_GENERATION, code_extension, list_selected_files)
 from app.models.graph import GraphNode, NodeType
 from app.services import file_service
 
@@ -22,10 +22,6 @@ class InputElement(NodeElement):
         # the same contract at two levels (see SELECTOR_GENERATION).
         "recursive", "extensions", "select_all_files",
         "selector_prompt", "selector_code", "language",
-        # Only for the last-resort selector generation at run time, when the
-        # editor never generated one. The input_picker widget deliberately
-        # passes no provider for the same call -- worth reconciling.
-        "ai_provider", "ai_model",
     )
 
     async def execute(
@@ -41,31 +37,18 @@ class InputElement(NodeElement):
         if not raw_path:
             return {"content": "", "path": ""} if mode == "file" else {"files": [], "count": 0}
 
-        path = file_service.resolve_path(raw_path)
-
         if mode == "directory":
-            recursive = cfg.recursive
-            extensions = file_service.parse_extensions_filter(cfg.extensions)
-            files = file_service.list_directory(path, recursive=recursive, extensions=extensions)
-            selector_code = cfg.selector_code.strip()
-            if not cfg.select_all_files and not selector_code and cfg.selector_prompt.strip():
-                from app.services import ai_service
-                selector_code, _ = await ai_service.generate_code(
-                    description=cfg.selector_prompt,
-                    language=cfg.language or "python",
-                    context=SELECTOR_GENERATION.contract,
-                    inputs=["files"], outputs=["files"],
-                    model=cfg.ai_model, provider=cfg.ai_provider,
-                )
-            if not cfg.select_all_files and selector_code:
-                # Same call the input_picker widget makes for the same snippet,
-                # now through the same code -- the two had drifted while being
-                # documented as one contract at two levels.
-                selected = await self.run_snippet(node, {"files": files}, selector_code)
-                files = selected.get("files", files)
+            # The same behaviour the input_picker widget runs, through the same
+            # code: one contract at two levels, implemented once.
+            files = await list_selected_files(self, node, DirectorySource(
+                path=raw_path, recursive=cfg.recursive, extensions=cfg.extensions,
+                select_all=cfg.select_all_files, selector_code=cfg.selector_code,
+                selector_prompt=cfg.selector_prompt, language=cfg.language or "python",
+            ))
             return {"files": files, "count": len(files)}
 
         # mode == "file"
+        path = file_service.resolve_path(raw_path)
         content: Any = file_service.read_file(path, mode="text")
         return {"content": content, "path": str(path)}
 
