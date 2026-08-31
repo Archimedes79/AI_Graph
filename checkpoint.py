@@ -76,6 +76,10 @@ def main() -> int:
         steps += [
             Step("Generated types are current", ["npm", "run", "gen:types:check"], FRONTEND_DIR,
                  "Run `npm run gen:types` and commit graph.generated.ts."),
+            # vitest does not type-check, so --verify-only used to pass on code
+            # that could not build. This is the same tsc the build runs, without
+            # the bundling.
+            Step("Frontend types", ["npm", "run", "typecheck"], FRONTEND_DIR),
             Step("Backend tests", [python, "-m", "pytest", "tests", "-q"], BACKEND_DIR),
             Step("Frontend tests", ["npm", "run", "test"], FRONTEND_DIR),
         ]

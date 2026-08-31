@@ -145,7 +145,7 @@ useful class story here, so these are plain objects, not classes):
   interact + save/load") and `create(id) -> GraphNode` (the node's starting state when
   dragged onto the canvas — "interact with the user" at creation time).
 - `GuiWidgetElementDefinition` — `ports(widget)`, `ConfigEditor`, and `RuntimeWidget`
-  (what actually draws in the floating `GuiWindow` and lets the user interact with it).
+  (what actually draws inside a `GuiBlock` on the page and lets the user interact with it).
 
 Each frontend element's files live together in one folder, e.g.
 `frontend/src/elements/code/codeElement.ts` + `frontend/src/elements/code/CodeEditor.tsx`
@@ -236,7 +236,7 @@ for any other widget kind.
 
 Registry: `backend/app/elements/registry.py` (`GUI_WIDGET_ELEMENTS`) on the backend, and
 `frontend/src/elements/registry.ts` (`GUI_WIDGET_ELEMENTS`, whose `RuntimeWidget` field is
-what `GuiWindow.tsx` renders) on the frontend.
+what `GuiPage.tsx` renders) on the frontend.
 
 A canonical widget kind therefore has **two** element files (one per language), plus one
 registry line per language. Its frontend definition references the local config editor
@@ -273,19 +273,39 @@ host's filesystem listing to the network, which is a different thing from lettin
 person at the keyboard choose their own file. A deployed tool still exposes no code
 generation and no graph editing.
 
-## GUI runtime window & designer (not per-widget-kind)  
+## The page, the designer, and the boundary between them
 
-- `frontend/src/components/gui/GuiWindow.tsx` — the floating runtime window shown per `gui` node; lays widgets out and feeds each one its live value.
-- `frontend/src/components/gui/GuiWindowLayer.tsx` — mounts one window per `gui` node.
-- `frontend/src/components/gui/GuiDesigner.tsx` — **the** gui-node editor: add, select,
-  move, resize and remove widgets on one grid, writing only `x`/`y`/`w`/`h`. There is no
-  `widgets | designer` tab switch and no `size` preset any more: a gui node had
-  two-and-a-half ways to say how big a widget is (the preset, the list's order, and
-  `w`/`h`), so the same widget could be described three times and disagree.
+A graph has **one** page, not a window per gui node: every gui node's blocks flow down
+one 16-column grid in graph order, and the order *is* the position, so there are no
+coordinates to keep in sync.
+
+- `frontend/src/components/gui/GuiPage.tsx` — **the deployment boundary.** What a user
+  of the finished tool sees: the grid (`PageGrid`), one block (`GuiBlock`), the page
+  (`GuiPage`), and `GuiSurfacePage`, which is what a bundle actually renders. No
+  selection, no drag grip, no resize corner.
+- `frontend/src/components/gui/DesignerSurface.tsx` — the same parts plus what a
+  *builder* needs: selection, a grip to reorder by, a corner to resize by, an insertion
+  line. It composes `GuiBlock`; it does not switch a flag inside it.
+- `frontend/src/components/gui/DesignerTab.tsx` — the Oberfläche tab: palette on the
+  left, page in the middle, properties on the right, and the palette-to-page drag.
+- `frontend/src/components/gui/PreviewTab.tsx` — the Vorschau tab: `GuiSurfacePage`,
+  the very component a bundle runs, so the preview cannot flatter.
+- `frontend/src/components/gui/pageWrite.ts` — `routePage`, which turns the flat page
+  back into per-node widget lists. Pure, because its one bug was silent.
+
+**Why a module split and not a flag or a base class.** `editing={false}` leaves the code
+in the bundle — dead code, not absent code — and a runtime class extending an editor
+class ships the base for the same reason. Only the import graph decides what a bundle
+contains, so `src/runtime/boundary.test.ts` walks it from `runtime/main.tsx` and fails
+if any editor module is reachable. Before that split, a deployed tool downloaded the
+palette, the grip and the properties panel in a chunk it never used.
 - `frontend/src/components/GuiWidgetEditor.tsx` — the properties panel for the *selected*
   widget: name, mode, and its element's own `ConfigEditor`. Not a list.
-- `frontend/src/components/gui/layout.ts` — pure grid-resolution helper (unplaced widgets
-  stack top to bottom); unit-tested in `layout.test.ts`.
+- `frontend/src/components/gui/layout.ts` — pure grid geometry: 16 columns, square
+  cells, a capped page width; unit-tested in `layout.test.ts`.
+- `frontend/src/components/gui/scheme.ts` — the whole palette per colour scheme, as CSS
+  variables. Every colour in `ui/theme.ts` is a `var()` into it, which is why one switch
+  repaints editor, canvas, page and deployed tool at once.
 - `frontend/src/components/gui/widgetProps.ts` — the shared `{ widget, value, onChange }` contract every runtime widget implements.
 
 ## Memory-feedback edges (data/gui/widget nodes)
@@ -310,7 +330,7 @@ and `_settle_memory_feedback` — a same-round pass that runs after all topologi
 levels finish executing, writing each feedback edge's fresh source value directly into
 the target data node's `config.data_value` or widget's persisted `value` (read by the
 *next* round's output) and into that round's own `NodeResult.inputs` (so the frontend, which already prioritizes
-`nodeResult.inputs[widget_id + "_in"]` for display in `GuiWindow.tsx`, shows the fresh
+`nodeResult.inputs[widget_id + "_in"]` for display in `GuiPage.tsx`, shows the fresh
 value immediately, same round). A deploy bundle vendors `graph_executor.py` verbatim, so
 this logic never needs a second implementation for deploy.
 
@@ -597,7 +617,7 @@ walks the closure of what `runtime.html` references and ships only that (as byte
 bundle dict is `Dict[str, str | bytes]`). `index.html` and the editor's own chunks stay
 behind.
 `serve.py` serves `runtime.html`, which mounts `frontend/src/runtime/RuntimeApp.tsx`:
-the editor's own graph store and `GuiWindowLayer`, with the canvas removed. **There is
+the editor's own graph store and `GuiSurfacePage`, with the canvas removed. **There is
 no second widget implementation** — a deployed tool renders through the exact
 components the designer previewed, which is the whole reason this is a web runtime and
 not a native one. `serve.py` defines its handful of endpoints inline rather than

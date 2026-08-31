@@ -15,7 +15,8 @@
     "ai_defaults": {
       "provider": "default",
       "model": ""
-    }
+    },
+    "gui_scheme": "night"
   },
   "nodes": [
     {
@@ -88,6 +89,46 @@
         "write_mode": "none",
         "gui_widgets": [
           {
+            "id": "title",
+            "kind": "text",
+            "label": "",
+            "value": "CSV-Plotter",
+            "extensions": "",
+            "mode": "heading",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
+            "code": "",
+            "language": "python",
+            "code_prompt": "",
+            "code_file": "",
+            "example_file": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1
+          },
+          {
+            "id": "intro",
+            "kind": "text",
+            "label": "",
+            "value": "Eine CSV-Datei wählen und ▶ Run drücken. Die erste Spalte ist die x-Achse, jede weitere wird als Reihe gezeichnet.",
+            "extensions": "",
+            "mode": "body",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
+            "code": "",
+            "language": "python",
+            "code_prompt": "",
+            "code_file": "",
+            "example_file": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 2
+          },
+          {
             "id": "picker",
             "kind": "input_picker",
             "label": "CSV",
@@ -103,37 +144,35 @@
             "code_prompt": "",
             "code_file": "",
             "example_file": "",
-            "x": 0,
-            "y": 0,
-            "w": 12,
+            "tone": "sunken",
+            "w": 10,
             "h": 2
+          },
+          {
+            "id": "rule",
+            "kind": "divider",
+            "label": "",
+            "value": "",
+            "extensions": "",
+            "mode": "horizontal",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
+            "code": "",
+            "language": "python",
+            "code_prompt": "",
+            "code_file": "",
+            "example_file": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1
           },
           {
             "id": "chart",
             "kind": "plot_window",
             "label": "Diagramm",
-            "value": [
-              {
-                "label": "Indien",
-                "value": 1430
-              },
-              {
-                "label": "China",
-                "value": 1410
-              },
-              {
-                "label": "USA",
-                "value": 340
-              },
-              {
-                "label": "Indonesien",
-                "value": 278
-              },
-              {
-                "label": "Pakistan",
-                "value": 240
-              }
-            ],
+            "value": "",
             "extensions": "",
             "mode": "",
             "recursive": false,
@@ -145,10 +184,29 @@
             "code_prompt": "",
             "code_file": "",
             "example_file": "",
-            "x": 0,
-            "y": 2,
-            "w": 12,
-            "h": 6
+            "tone": "plain",
+            "w": 16,
+            "h": 7
+          },
+          {
+            "id": "note",
+            "kind": "text",
+            "label": "",
+            "value": "Beispieldaten: examples/bev_data.csv",
+            "extensions": "",
+            "mode": "caption",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
+            "code": "",
+            "language": "python",
+            "code_prompt": "",
+            "code_file": "",
+            "example_file": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1
           }
         ],
         "gui_grid_columns": 12,

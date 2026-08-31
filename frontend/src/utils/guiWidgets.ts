@@ -34,7 +34,7 @@ export function syncGuiNodePorts(node: GraphNode): GraphNode {
 }
 
 let widgetCounter = 1;
-export function newGuiWidgetId(): string {
+function newGuiWidgetId(): string {
   return `widget-${widgetCounter++}-${Date.now()}`;
 }
 
@@ -74,19 +74,6 @@ export const GUI_WIDGET_KIND_LABELS: Record<GuiWidgetKind, string> = {
   plot_window: 'Diagramm',
   image_view: 'Bild',
 };
-
-/**
- * Kinds offered when adding a block, in the order a page is usually built:
- * furniture first, then fields, then displays.
- */
-export const CREATABLE_GUI_WIDGET_KINDS: GuiWidgetKind[] = [
-  'text', 'divider', 'spacer',
-  'input_picker', 'text_io',
-  'table', 'plot_window', 'image_view',
-];
-
-/** Page furniture: no ports, no behaviour. Mirrors `StaticWidget` on the backend. */
-export const STATIC_KINDS: GuiWidgetKind[] = ['text', 'divider', 'spacer'];
 
 /**
  * A sensible first appearance per kind -- the counterpart of defaultSpanFor.

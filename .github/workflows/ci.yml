@@ -1,9 +1,9 @@
 name: CI
 
-# The fast gate: the same three checks `checkpoint.py --verify-only` runs
-# locally, on every push and pull request. The executable is built by
-# release.yml instead, because a Windows build is minutes rather than seconds
-# and is only interesting for something you intend to hand to someone.
+# The fast gate: the same checks `checkpoint.py --verify-only` runs locally, on
+# every push and pull request. The executable is built by release.yml instead,
+# because a Windows build is minutes rather than seconds and is only interesting
+# for something you intend to hand to someone.
 
 on:
   # Every branch, not just main: in a repo where most work lands as a direct
@@ -47,6 +47,13 @@ jobs:
       # frontend fail in a way that looks unrelated to the real cause.
       - name: Generated types are current
         run: npm run gen:types:check
+        working-directory: frontend
+
+      # `npm run test` is vitest, which does not type-check: for a while a push
+      # could be green while `npm run build` was broken, and the first anyone
+      # heard of it was at release time.
+      - name: Frontend types
+        run: npm run typecheck
         working-directory: frontend
 
       - name: Backend tests

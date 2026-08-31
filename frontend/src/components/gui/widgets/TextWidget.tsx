@@ -21,7 +21,7 @@ const ROLES = {
 
 export type TextRole = keyof typeof ROLES;
 
-export function textRole(mode: string | undefined): TextRole {
+function textRole(mode: string | undefined): TextRole {
   return (mode && mode in ROLES ? mode : 'body') as TextRole;
 }
 

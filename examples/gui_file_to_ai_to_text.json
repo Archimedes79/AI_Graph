@@ -4,7 +4,12 @@
     "version": "1.0.0",
     "description": "A single GUI node holds a File Open widget and a Text Window widget. The chosen file is summarized by the AI node, whose answer is fed back into the Text Window. Because that closing edge points back at the same GUI node it would form a cycle, so it is automatically excluded from cycle detection (a gui/widget node is a 'memory' element) and its value is written into the Text Window's own stored value once the round finishes -- so it shows the fresh answer immediately, and the NEXT run's output reflects it too.",
     "author": "AI-Graph",
-    "tags": ["example", "gui", "memory-feedback"]
+    "tags": [
+      "example",
+      "gui",
+      "memory-feedback"
+    ],
+    "gui_scheme": "night"
   },
   "nodes": [
     {
@@ -12,15 +17,42 @@
       "node_type": "gui",
       "label": "Summarizer Window",
       "description": "Pick a file, read the summary",
-      "position": { "x": 120, "y": 160 },
+      "position": {
+        "x": 120,
+        "y": 160
+      },
       "width": 320,
       "height": 240,
       "inputs": [
-        { "id": "w-answer_in", "name": "Summary", "kind": "input", "data_type": "any", "multi": false, "required": false, "description": "" }
+        {
+          "id": "w-answer_in",
+          "name": "Summary",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "outputs": [
-        { "id": "w-source_out", "name": "Source File", "kind": "output", "data_type": "file_path", "multi": false, "required": false, "description": "" },
-        { "id": "w-answer_out", "name": "Summary", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+        {
+          "id": "w-source_out",
+          "name": "Source File",
+          "kind": "output",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "w-answer_out",
+          "name": "Summary",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "config": {
         "value": null,
@@ -34,34 +66,104 @@
         "separator": "\n",
         "gui_widgets": [
           {
-            "id": "w-source",
-            "kind": "input_picker",
-            "mode": "file",
-            "label": "Source File",
-            "value": null,
+            "id": "title",
+            "kind": "text",
+            "label": "",
+            "value": "Datei zusammenfassen",
             "extensions": "",
-            "size": "medium",
+            "mode": "heading",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
             "code": "",
             "language": "python",
-            "x": 0,
-            "y": 0,
-            "w": 12,
+            "code_prompt": "",
+            "code_file": "",
+            "example_file": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1
+          },
+          {
+            "id": "intro",
+            "kind": "text",
+            "label": "",
+            "value": "Eine Textdatei wählen, ▶ Run drücken — die Zusammenfassung erscheint unten.",
+            "extensions": "",
+            "mode": "body",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
+            "code": "",
+            "language": "python",
+            "code_prompt": "",
+            "code_file": "",
+            "example_file": "",
+            "tone": "plain",
+            "w": 16,
             "h": 2
+          },
+          {
+            "id": "w-source",
+            "kind": "input_picker",
+            "label": "Quelldatei",
+            "value": null,
+            "extensions": "",
+            "mode": "file",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
+            "code": "",
+            "language": "python",
+            "code_prompt": "",
+            "code_file": "",
+            "example_file": "",
+            "tone": "sunken",
+            "w": 10,
+            "h": 2
+          },
+          {
+            "id": "rule",
+            "kind": "divider",
+            "label": "",
+            "value": "",
+            "extensions": "",
+            "mode": "horizontal",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
+            "code": "",
+            "language": "python",
+            "code_prompt": "",
+            "code_file": "",
+            "example_file": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1
           },
           {
             "id": "w-answer",
             "kind": "text_io",
-            "mode": "both",
-            "label": "Summary",
+            "label": "Zusammenfassung",
             "value": "",
             "extensions": "",
-            "size": "large",
+            "mode": "output",
+            "recursive": false,
+            "select_all_files": true,
+            "selector_prompt": "",
+            "selector_code": "",
             "code": "",
             "language": "python",
-            "x": 0,
-            "y": 2,
-            "w": 12,
-            "h": 6
+            "code_prompt": "",
+            "code_file": "",
+            "example_file": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 7
           }
         ],
         "extra": {}
@@ -72,12 +174,31 @@
       "node_type": "ai",
       "label": "Summarize File",
       "description": "Summarizes the content of the chosen file",
-      "position": { "x": 560, "y": 200 },
+      "position": {
+        "x": 560,
+        "y": 200
+      },
       "inputs": [
-        { "id": "prompt", "name": "Prompt", "kind": "input", "data_type": "file_path", "multi": false, "required": false, "description": "" }
+        {
+          "id": "prompt",
+          "name": "Prompt",
+          "kind": "input",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "outputs": [
-        { "id": "output", "name": "Output", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+        {
+          "id": "output",
+          "name": "Output",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "config": {
         "value": null,

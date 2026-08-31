@@ -106,8 +106,6 @@ export const SCHEMES: Scheme[] = [
   },
 ];
 
-export const DEFAULT_SCHEME: SchemeId = 'night';
-
 export function scheme(id: string | undefined): Scheme {
   return SCHEMES.find((s) => s.id === id) ?? SCHEMES[0];
 }

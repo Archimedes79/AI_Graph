@@ -107,7 +107,7 @@ export function widgetFields(
  * before handing it over, so there is more to report than "done" -- and when it
  * still does not run, saying so now is kinder than letting the next ▶ Run say it.
  */
-export function probeMessage(probe: CodeProbeReport | undefined, fallback: string): string {
+function probeMessage(probe: CodeProbeReport | undefined, fallback: string): string {
   switch (probe?.status) {
     case 'ok':
       return '✅ Generated and verified against the last run\'s data.';

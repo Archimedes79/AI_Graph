@@ -5,7 +5,7 @@ import { LINE, MUTED, SUNKEN, TEXT } from '../../ui/theme';
 
 // Single source of truth for the provider dropdown -- previously duplicated
 // verbatim in AIEditor.tsx, CodeEditor.tsx, and GuiWidgetEditor.tsx.
-export const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
+const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
   // Shown only where `allowDefault` is set; the caller supplies the wording,
   // because "default" means something different design-time (the server's
   // generation AI) than at runtime (the graph's own AI default).
@@ -28,7 +28,7 @@ export const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
  * answer on screen. Deliberately no numbers: free-tier limits change, and a
  * stale figure in a dropdown is worse than none.
  */
-export const AI_PROVIDER_COST: Record<AIProvider, string> = {
+const AI_PROVIDER_COST: Record<AIProvider, string> = {
   default: '',
   ollama: 'free, local',
   lmstudio: 'free, local',
@@ -48,7 +48,7 @@ const fetchStatus = () => {
   return statusPromise;
 };
 
-export function useProviderStatus(): ProviderStatus | null {
+function useProviderStatus(): ProviderStatus | null {
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   useEffect(() => {
     let mounted = true;
