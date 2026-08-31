@@ -2,8 +2,7 @@ import React from 'react';
 import type { GuiWidget } from '../../types/graph';
 import { useGraphStore } from '../../store/graphStore';
 import { blockValue, GuiBlock, PageGrid, type SurfaceBlock } from './GuiPage';
-import { resolveWidgetLayout, GUI_GRID_COLUMNS } from './layout';
-import { useContainerCell } from './useContainerCell';
+import { cellsFromDrag, resolveWidgetLayout, GUI_GRID_COLUMNS, GUI_MAX_CELL } from './layout';
 import { ACCENT, MUTED } from '../../ui/theme';
 
 /**
@@ -34,7 +33,8 @@ export default function DesignerSurface({
   dropIndex?: number | null;
 }) {
   const executionResult = useGraphStore((s) => s.executionResult);
-  const { cell } = useContainerCell();
+  // Reported by the grid below, because only the grid element knows it.
+  const [cell, setCell] = React.useState(GUI_MAX_CELL);
   const placements = resolveWidgetLayout(blocks.map((b) => b.widget));
 
   const widgets = blocks.map((b) => b.widget);
@@ -85,8 +85,8 @@ export default function DesignerSurface({
       if (!state) return;
       onChange(widgetsRef.current.map((w) => (w.id === state.id ? {
         ...w,
-        w: Math.max(1, Math.min(GUI_GRID_COLUMNS, state.w + Math.round((event.clientX - state.x) / cell))),
-        h: Math.max(1, state.h + Math.round((event.clientY - state.y) / cell)),
+        w: Math.max(1, Math.min(GUI_GRID_COLUMNS, state.w + cellsFromDrag(event.clientX - state.x, cell))),
+        h: Math.max(1, state.h + cellsFromDrag(event.clientY - state.y, cell)),
       } : w)));
     };
     const onUp = () => {
@@ -106,7 +106,7 @@ export default function DesignerSurface({
     <div onMouseDown={() => onSelect(null)}>
       {/* An empty page is still a page: without a minimum height the grid is
           zero pixels tall and there is nothing to aim a first element at. */}
-      <PageGrid minRows={4}>
+      <PageGrid minRows={4} onCell={setCell}>
         {placements.map((placement, index) => {
           const block = blocks[index];
           const { widget } = placement;

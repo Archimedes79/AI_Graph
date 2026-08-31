@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GuiWidget } from '../../types/graph';
-import {
-  cellSize, GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_CELL, GUI_MAX_WIDTH, resolveWidgetLayout,
-} from './layout';
+import { GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_CELL, GUI_MAX_WIDTH, cellSize, cellsFromDrag, resolveWidgetLayout } from './layout';
 
 function widget(id: string, w?: number, h?: number): GuiWidget {
   return { id, kind: 'text_io', label: id, w: w as number, h: h as number } as GuiWidget;
@@ -52,5 +50,23 @@ describe('cellSize', () => {
 
   it('never returns something unusable for a container with no width yet', () => {
     expect(cellSize(0)).toBeGreaterThan(0);
+  });
+});
+
+describe('cellsFromDrag', () => {
+  it('counts the gap as part of a cell of travel', () => {
+    // The pitch of the grid is cell + gap. Measuring in bare cells is what made
+    // a resize lag behind the pointer, and lag further the further you dragged.
+    const cell = 35;
+    expect(cellsFromDrag(cell + GUI_GAP, cell)).toBe(1);
+    expect(cellsFromDrag(3 * (cell + GUI_GAP), cell)).toBe(3);
+    expect(cellsFromDrag(5 * (cell + GUI_GAP), cell)).toBe(5);
+  });
+
+  it('rounds to the nearest cell, and counts backwards', () => {
+    const cell = 56;
+    expect(cellsFromDrag(0, cell)).toBe(0);
+    expect(cellsFromDrag(30, cell)).toBe(0);
+    expect(cellsFromDrag(-(2 * (cell + GUI_GAP)), cell)).toBe(-2);
   });
 });

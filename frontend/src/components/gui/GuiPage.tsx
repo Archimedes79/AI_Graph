@@ -72,15 +72,28 @@ export function blockValue(
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */
 export function PageGrid({
-  children, minRows, gridRef,
+  children, minRows, gridRef, onCell,
 }: {
   children: React.ReactNode;
   /** Keep this much height when empty, so there is a page to aim at. */
   minRows?: number;
   gridRef?: React.MutableRefObject<HTMLDivElement | null>;
+  /**
+   * The measured cell size, whenever it changes.
+   *
+   * Only the grid element knows it -- it comes from that element's own width.
+   * A caller that needs it (the resize drag, which converts pixels to cells)
+   * used to call `useContainerCell` a second time and never attach its ref, so
+   * it silently got the uncapped default instead of the truth: a five-cell drag
+   * moved a block four cells, and the further you dragged the further the block
+   * fell behind the pointer.
+   */
+  onCell?: (cell: number) => void;
 }) {
   const pageScheme = useGraphStore((s) => s.metadata.gui_scheme);
   const { ref, cell } = useContainerCell();
+
+  React.useEffect(() => { onCell?.(cell); }, [cell, onCell]);
 
   return (
     <div
