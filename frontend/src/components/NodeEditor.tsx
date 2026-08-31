@@ -33,7 +33,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const generate = useGenerate();
   const generating = generate.busy;
   const genMessage = generate.message();
-  const [activeTab, setActiveTab] = useState<'config' | 'preview'>('config');
 
   useEffect(() => {
     if (rfNode) {
@@ -43,14 +42,13 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
   if (!node) return null;
 
-  // Every node type has the same two tabs. What a node emits used to be a
-  // third one that two of six types had -- an editable contract for ai/code, a
-  // read-only summary for gui, nothing for the rest. It is a declaration like
-  // any other now (`outputContract`), so it sits in Config under the body and
-  // the tab bar stopped depending on the node type.
+  // No tabs. There were two: Config, and a Preview that printed the node's own
+  // JSON. Nobody edits a graph by reading its serialization -- it answered a
+  // question ("what did that setting actually store?") that the file on disk
+  // answers better, and it cost every node a tab bar to get to the one tab that
+  // does something. What a node emits was a third tab for two of six types; it
+  // is a declaration now (`outputContract`) and sits in Config under the body.
   const element = NODE_ELEMENTS[node.node_type];
-  const tabs = ['config', 'preview'] as const;
-  const effectiveTab = (tabs as readonly string[]).includes(activeTab) ? activeTab : 'config';
 
   const save = () => {
     updateNode(nodeId, node);
@@ -162,24 +160,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     });
   };
 
-  const tabBar = (
-    <div className="flex border-b" style={{ borderColor: LINE }}>
-      {tabs.map((tab) => (
-        <button
-          key={tab}
-          className="px-5 py-3 text-sm capitalize transition-colors"
-          style={{
-            color: effectiveTab === tab ? ACCENT : MUTED,
-            borderBottom: effectiveTab === tab ? `2px solid ${ACCENT}` : '2px solid transparent',
-            background: 'transparent',
-          }}
-          onClick={() => setActiveTab(tab)}
-        >
-          {tab}
-        </button>
-      ))}
-    </div>
-  );
 
   return (
     <Modal
@@ -198,7 +178,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // The editor holds unsaved edits; a stray backdrop click must not throw
       // them away. Escape is left working because it is what Cancel does.
       dismissOnBackdrop={false}
-      subHeader={tabBar}
       footer={
         <>
           <button
@@ -237,8 +216,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
             </div>
           )}
 
-          {effectiveTab === 'config' && (
-            <div className="space-y-4">
+          <div className="space-y-4">
               <ConfigEditor
                 node={node}
                 setConfig={setConfig}
@@ -283,23 +261,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
               {/* An element with no ✨ button of its own can still have something
                   to report -- the message is drawn next to the button otherwise. */}
               {genMessage && !generation && (
-                <div className="text-sm px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: ACCENT_TEXT }}>
+                <div className="text-sm px-3 py-2 rounded" style={{ background: 'var(--gui-accent-fill, rgba(99,102,241,0.10))', color: ACCENT_TEXT }}>
                   {genMessage}
                 </div>
               )}
-            </div>
-          )}
-
-          {effectiveTab === 'preview' && (
-            <div>
-              <pre
-                className="text-xs rounded-lg p-4 overflow-auto"
-                style={{ background: SUNKEN, color: MUTED, border: `1px solid ${LINE}`, maxHeight: 400 }}
-              >
-                {JSON.stringify(node, null, 2)}
-              </pre>
-            </div>
-          )}
+          </div>
       </div>
     </Modal>
   );

@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import GraphCanvas from './components/GraphCanvas';
 import DesignerTab from './components/gui/DesignerTab';
 import ViewTabs, { type EditorView } from './components/ViewTabs';
+import { schemeVars } from './components/gui/scheme';
 import NodeEditor from './components/NodeEditor';
 import ConnectorEditor from './components/ConnectorEditor';
 import ResultsPanel from './components/ResultsPanel';
@@ -63,6 +64,7 @@ export default function App() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [view, setView] = useState<EditorView>('graph');
+  const guiScheme = useGraphStore((s) => s.metadata.gui_scheme);
 
   // Editing a gui node means editing the page, and the page has its own tab --
   // at the size it will really be, next to the blocks it will really sit
@@ -323,7 +325,14 @@ export default function App() {
 
   return (
     <ReactFlowProvider>
-      <div className="flex flex-col h-screen overflow-hidden" style={{ background: SUNKEN }}>
+      {/* The page's scheme, set once on the shell. Every ACCENT in the editor
+          is `var(--gui-accent)` (ui/theme.ts), so choosing Petrol for the tool
+          being built also turns the tool building it -- the alternative was
+          designing a green interface inside an indigo one. */}
+      <div
+        className="flex flex-col h-screen overflow-hidden"
+        style={{ background: SUNKEN, ...schemeVars(guiScheme) }}
+      >
         <Toolbar
           onNewGraph={handleNewGraph}
           onSave={handleSave}

@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -703,7 +703,19 @@ class GraphMetadata(BaseModel):
     # a whole, so it belongs here rather than on any one node -- and a closed
     # set rather than a colour, so a deployed tool can look like itself without
     # anyone being able to make it look wrong.
-    gui_scheme: Literal["indigo", "teal", "amber", "rose", "slate"] = "indigo"
+    gui_scheme: Literal["indigo", "teal", "slate"] = "indigo"
+
+    @field_validator("gui_scheme", mode="before")
+    @classmethod
+    def _migrate_scheme(cls, value: object) -> object:
+        """A graph saved with a scheme that no longer exists still opens.
+
+        Two of the five were dropped as bad choices rather than renamed, so
+        there is nothing to map them to: they fall back to the default. A
+        `Literal` would otherwise refuse the file outright, which is a
+        heavy price for a colour.
+        """
+        return value if value in ("indigo", "teal", "slate") else "indigo"
 
 
 class Graph(BaseModel):

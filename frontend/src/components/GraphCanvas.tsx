@@ -122,6 +122,12 @@ export default function GraphCanvas() {
         nodeTypes={nodeTypes}
         defaultEdgeOptions={edgeOptions}
         fitView
+        // Fit, but never magnify. A two-node graph used to open at ~180%, so
+        // the node text was half again the size of the panel text beside it and
+        // the first thing anyone did was zoom out. 100% is the honest starting
+        // point -- one type size across the whole window -- and a graph too big
+        // for the viewport is still shrunk to fit.
+        fitViewOptions={{ maxZoom: 1, padding: 0.25 }}
         onInit={setRfInstance}
         onDrop={onDrop}
         onDragOver={onDragOver}

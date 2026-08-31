@@ -27,9 +27,23 @@ export const DIM = '#64748b';
 /** Hints and disabled-ish detail; the faintest readable step. */
 export const DIMMER = '#475569';
 
-export const ACCENT = '#6366f1';
+/**
+ * The accent, and the tint and text that go with it.
+ *
+ * A `var()` rather than a literal so that the page's colour scheme
+ * (components/gui/scheme.ts, set on the app root) reaches the whole editor and
+ * not only the designed page -- picking Petrol and still editing in Indigo made
+ * the choice look like a preview of someone else's tool. The fallback is the
+ * default scheme, so anything rendered outside the app root still has a colour.
+ *
+ * CSS variables resolve in style properties only, never in SVG presentation
+ * attributes -- an SVG shape must take these through `style`, not `fill=`.
+ */
+export const ACCENT = 'var(--gui-accent, #6366f1)';
 /** Text/detail on an accent-tinted background. */
-export const ACCENT_TEXT = '#a5b4fc';
+export const ACCENT_TEXT = 'var(--gui-accent-text, #a5b4fc)';
+/** The accent at low opacity: hints, tinted notes, the accent tone's fill. */
+export const ACCENT_FILL = 'var(--gui-accent-fill, var(--gui-accent-fill, rgba(99,102,241,0.10)))';
 
 export const SUCCESS = '#22c55e';
 export const DANGER = '#ef4444';

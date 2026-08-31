@@ -56,10 +56,12 @@ interface GuiSurfaceProps {
   onResizeStart?: (widgetId: string, event: React.MouseEvent, w: number, h: number) => void;
   /** Local edits in flight, so typing is not overwritten by the last run. */
   overrides?: Record<string, string>;
+  /** Draw an insertion line before this block, for a drag in flight. */
+  dropIndex?: number | null;
 }
 
 export default function GuiSurface({
-  blocks, onWidgetValue, editing = false, selectedId, onSelect, onReorder, onResizeStart, overrides,
+  blocks, onWidgetValue, editing = false, selectedId, onSelect, onReorder, onResizeStart, overrides, dropIndex,
 }: GuiSurfaceProps) {
   const executionResult = useGraphStore((s) => s.executionResult);
   // One scheme for the whole page, stored with the graph rather than per node.
@@ -110,9 +112,18 @@ export default function GuiSurface({
     <div
       ref={ref}
       data-gui-surface
-      style={{ ...gridStyle(cell), ...schemeVars(pageScheme) }}
+      style={{
+        ...gridStyle(cell),
+        ...schemeVars(pageScheme),
+        // An empty page is still a page: without this the grid is zero pixels
+        // tall and there is nothing to aim a first element at.
+        minHeight: editing ? cell * 4 : undefined,
+      }}
       onMouseDown={() => onSelect?.(null)}
     >
+      {/* The insertion line sits in the flow as a grid item of its own, so it
+          lands exactly where the dropped element will -- a line drawn over the
+          page would have to re-derive the same position and could disagree. */}
       {placements.map((placement, index) => {
         const block = blocks[index];
         const { widget } = placement;
@@ -129,8 +140,9 @@ export default function GuiSurface({
         const selected = editing && widget.id === selectedId;
 
         return (
+          <React.Fragment key={widget.id}>
+          {dropIndex === index && <InsertionLine />}
           <div
-            key={widget.id}
             ref={(element) => {
               if (element) blockRefs.current.set(widget.id, element);
               else blockRefs.current.delete(widget.id);
@@ -207,8 +219,17 @@ export default function GuiSurface({
               />
             )}
           </div>
+          </React.Fragment>
         );
       })}
+      {dropIndex !== null && dropIndex !== undefined && dropIndex >= placements.length && <InsertionLine />}
     </div>
+  );
+}
+
+/** Where a dragged element would land: one grid row, full width, accent. */
+function InsertionLine() {
+  return (
+    <div style={{ gridColumn: 'span 16', height: 2, background: ACCENT, borderRadius: 2 }} />
   );
 }

@@ -100,12 +100,12 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
             const yValue = scaleY(p.value);
             const y = Math.min(yZero, yValue);
             const h = Math.max(1, Math.abs(yValue - yZero));
-            return <rect key={i} x={x} y={y} width={w} height={h} fill={ACCENT} />;
+            return <rect key={i} x={x} y={y} width={w} height={h} style={{ fill: ACCENT }} />;
           })
         : (
           <polyline
             fill="none"
-            stroke={ACCENT}
+            style={{ stroke: ACCENT }}
             strokeWidth={1.5}
             points={points
               .map((p, i) => `${padding + (i / (points.length - 1)) * plotW},${scaleY(p.value)}`)

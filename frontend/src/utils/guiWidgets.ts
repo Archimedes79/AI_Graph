@@ -3,6 +3,7 @@
 import type { GraphNode, GuiWidget, GuiWidgetKind, Port } from '../types/graph';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
 import { DEFAULT_WIDGET_SPAN } from '../components/gui/layout';
+import type { Tone } from '../components/gui/tone';
 
 /** Return the (inputs, outputs) a single GUI widget contributes to its node. */
 export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Port[] } {
@@ -50,8 +51,7 @@ export function createGuiWidget(kind: GuiWidgetKind, label = '', mode?: string):
     // No x/y: the order of the list is the position, so a new block simply goes
     // last -- "add" never has to ask where to put it.
     ...defaultSpanFor(kind, mode),
-    // Page furniture carries no box; everything else lifts off the page.
-    tone: STATIC_KINDS.includes(kind) ? 'plain' : 'raised',
+    tone: defaultToneFor(kind, mode),
     code: '',
     language: 'python',
     recursive: false,
@@ -87,6 +87,23 @@ export const CREATABLE_GUI_WIDGET_KINDS: GuiWidgetKind[] = [
 
 /** Page furniture: no ports, no behaviour. Mirrors `StaticWidget` on the backend. */
 export const STATIC_KINDS: GuiWidgetKind[] = ['text', 'divider', 'spacer'];
+
+/**
+ * A sensible first appearance per kind -- the counterpart of defaultSpanFor.
+ *
+ * Only what you *operate* gets a frame. A box around a heading, a plot or a
+ * table is a box around something that already has a shape of its own, and a
+ * page of them reads as an inspector rather than a document; a field you type
+ * into, on the other hand, has to look like a field or nobody clicks it.
+ *
+ * A default, not a rule: every block's `tone` is still yours to change in the
+ * properties panel, which is where "lift this one out" belongs.
+ */
+function defaultToneFor(kind: GuiWidgetKind, mode?: string): Tone {
+  if (kind === 'input_picker') return 'sunken';
+  if (kind === 'text_io' && mode !== 'output') return 'sunken';
+  return 'plain';
+}
 
 /**
  * A sensible first size per kind, so a new block never lands absurdly shaped.

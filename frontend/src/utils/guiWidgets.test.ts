@@ -150,8 +150,15 @@ describe('createGuiWidget sizing', () => {
     }
   });
 
-  it('gives everything else a box to sit in', () => {
-    expect(createGuiWidget('plot_window', 'P').tone).toBe('raised');
+  it('frames what you operate, and nothing else', () => {
+    // Only fields get a box by default. A plot and a table already have a shape
+    // of their own, and framing them turned the page into an inspector.
+    expect(createGuiWidget('plot_window', 'P').tone).toBe('plain');
+    expect(createGuiWidget('table', 'T').tone).toBe('plain');
+    expect(createGuiWidget('input_picker', 'F').tone).toBe('sunken');
+    expect(createGuiWidget('text_io', 'In', 'input').tone).toBe('sunken');
+    // ...except a text block that only ever shows output, which is prose.
+    expect(createGuiWidget('text_io', 'Out', 'output').tone).toBe('plain');
   });
 
   it('page furniture contributes no ports', () => {

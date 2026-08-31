@@ -10,7 +10,7 @@
 // Stored on `metadata.extra.gui_scheme`: presentation of the whole graph, not a
 // property of any node, and the one place graph-level settings already live.
 
-export type SchemeId = 'indigo' | 'teal' | 'amber' | 'rose' | 'slate';
+export type SchemeId = 'indigo' | 'teal' | 'slate';
 
 export interface Scheme {
   id: SchemeId;
@@ -23,11 +23,17 @@ export interface Scheme {
   accentFill: string;
 }
 
+// Three, deliberately. The two that went were a warm one and a red one, and
+// both turned "which scheme" into a taste question with a wrong answer -- red
+// reads as an error on a page that also reports errors. What is left is one
+// cool, one green-blue and one neutral: enough for a tool to feel chosen, few
+// enough not to spend an afternoon on.
+//
+// The literals stay literal here: this file is where the variables come from,
+// so a `var(--gui-accent-fill)` in this list would define itself.
 export const SCHEMES: Scheme[] = [
   { id: 'indigo', label: 'Indigo', accent: '#6366f1', accentText: '#a5b4fc', accentFill: 'rgba(99,102,241,0.10)' },
   { id: 'teal', label: 'Petrol', accent: '#14b8a6', accentText: '#5eead4', accentFill: 'rgba(20,184,166,0.10)' },
-  { id: 'amber', label: 'Bernstein', accent: '#d97706', accentText: '#fcd34d', accentFill: 'rgba(217,119,6,0.12)' },
-  { id: 'rose', label: 'Rosé', accent: '#e11d48', accentText: '#fda4af', accentFill: 'rgba(225,29,72,0.10)' },
   { id: 'slate', label: 'Graphit', accent: '#64748b', accentText: '#cbd5e1', accentFill: 'rgba(100,116,139,0.14)' },
 ];
 

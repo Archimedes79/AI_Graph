@@ -145,7 +145,7 @@ export default function RuntimeAISettings({ onClose }: RuntimeAISettingsProps) {
           {effective && (
             <div
               className="text-xs rounded-lg px-3 py-2"
-              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: ACCENT_TEXT }}
+              style={{ background: 'var(--gui-accent-fill, rgba(99,102,241,0.10))', border: '1px solid var(--gui-accent-fill, rgba(99,102,241,0.10))', color: ACCENT_TEXT }}
             >
               Currently calling <strong>{effective.provider}</strong> / <strong>{effective.model}</strong>
               <div style={{ color: DIM }} className="mt-1 font-mono">{effective.settings_file}</div>

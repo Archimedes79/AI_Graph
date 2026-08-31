@@ -85,7 +85,9 @@ export default function DesignerPalette({
               className="w-full flex items-center gap-3 px-4 py-2 text-sm text-left transition-colors hover:bg-white/5"
               style={{ color: TEXT }}
               onClick={() => onAdd(entry.kind, entry.mode)}
-              onMouseDown={(e) => onDragStart(entry, e)}
+              // Without preventDefault the browser starts a text selection instead,
+              // which looks exactly like a drag that does nothing.
+              onMouseDown={(e) => { e.preventDefault(); onDragStart(entry, e); }}
               title={entry.label}
             >
               <span className="text-base w-5 text-center">{entry.icon}</span>

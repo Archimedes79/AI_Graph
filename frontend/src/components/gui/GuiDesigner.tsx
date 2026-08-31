@@ -14,6 +14,8 @@ interface GuiDesignerProps {
   selectedId: string | null;
   onSelect: (widgetId: string | null) => void;
   overrides?: Record<string, string>;
+  /** Where a palette drag in flight would land, drawn as an insertion line. */
+  dropIndex?: number | null;
 }
 
 /**
@@ -26,7 +28,7 @@ interface GuiDesignerProps {
  * using are the same page.
  */
 export default function GuiDesigner({
-  blocks, onChange, onWidgetValue, selectedId, onSelect, overrides,
+  blocks, onChange, onWidgetValue, selectedId, onSelect, overrides, dropIndex,
 }: GuiDesignerProps) {
   const { cell } = useContainerCell();
   const widgets = blocks.map((b) => b.widget);
@@ -87,6 +89,7 @@ export default function GuiDesigner({
         onReorder={reorder}
         onResizeStart={(id, e, w, h) => { resize.current = { id, x: e.clientX, y: e.clientY, w, h }; }}
         overrides={overrides}
+        dropIndex={dropIndex}
       />
     </div>
   );

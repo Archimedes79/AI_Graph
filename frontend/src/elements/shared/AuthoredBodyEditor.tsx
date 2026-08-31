@@ -101,7 +101,7 @@ export default function AuthoredBodyEditor({
             spellCheck={!mono}
           />
           {message && (
-            <div className="text-xs mt-2 px-2 py-1.5 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: ACCENT_TEXT }}>
+            <div className="text-xs mt-2 px-2 py-1.5 rounded" style={{ background: 'var(--gui-accent-fill, rgba(99,102,241,0.10))', color: ACCENT_TEXT }}>
               {message}
             </div>
           )}

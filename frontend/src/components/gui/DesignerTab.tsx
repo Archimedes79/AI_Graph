@@ -8,7 +8,7 @@ import { createGuiWidget } from '../../utils/guiWidgets';
 import GuiSurface, { useGuiNodes, useSurfaceBlocks, type SurfaceBlock } from './GuiSurface';
 import GuiWidgetProperties from '../GuiWidgetEditor';
 import { SCHEMES, type SchemeId } from './scheme';
-import { DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE } from '../../ui/theme';
+import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '../../ui/theme';
 
 /**
  * The graph's interface, on one page, built on the page itself.
@@ -86,34 +86,55 @@ export default function DesignerTab() {
    * Dragging a new element out of the palette and onto the page.
    *
    * Pointer events rather than HTML5 drag-and-drop, for the same reason the
-   * reorder uses them: this way it works every time, it can be tested, and the
-   * element lands **where you let go** instead of always at the end.
+   * reorder uses them: this way it works inside live inputs, it can be tested,
+   * and the element lands **where you let go** instead of always at the end.
+   *
+   * The drop target is the whole page column, not the grid. The grid is only as
+   * tall as its contents, which on an empty page is zero pixels -- so the first
+   * element anyone ever tried to drag had to be released on an invisible line,
+   * and the gesture looked broken exactly when it mattered most.
    */
   const [dragEntry, setDragEntry] = useState<PaletteEntry | null>(null);
+  const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+
+  /** Where in the page order a release at this point would land. */
+  const indexAt = (event: MouseEvent): number | null => {
+    const zone = document.querySelector('[data-gui-dropzone]');
+    if (!zone) return null;
+    const box = zone.getBoundingClientRect();
+    if (event.clientX < box.left || event.clientX > box.right
+        || event.clientY < box.top || event.clientY > box.bottom) return null;
+    const grid = zone.querySelector('[data-gui-surface]');
+    const children = grid ? [...grid.children] : [];
+    for (let i = 0; i < children.length; i += 1) {
+      const rect = children[i].getBoundingClientRect();
+      // Before the first block whose middle is past the pointer: on a page that
+      // flows, "here" means "in front of the thing I am pointing above".
+      if (event.clientY < rect.top + rect.height / 2) return i;
+    }
+    return children.length;
+  };
+
   useEffect(() => {
     if (!dragEntry) return;
-    const onUp = (event: MouseEvent) => {
-      setDragEntry(null);
-      const grid = document.querySelector('[data-gui-surface]');
-      if (!grid) return;
-      const box = grid.getBoundingClientRect();
-      if (event.clientX < box.left || event.clientX > box.right
-          || event.clientY < box.top || event.clientY > box.bottom) return;
-      // Which block was under the pointer? Insert before it; past the last one,
-      // append. That is what "drop it here" means on a page that flows.
-      let index = blocks.length;
-      [...grid.children].forEach((child, position) => {
-        const childBox = child.getBoundingClientRect();
-        if (index === blocks.length
-            && event.clientY < childBox.bottom
-            && event.clientX < childBox.right) {
-          index = position;
-        }
-      });
-      addWidget(dragEntry.kind, dragEntry.mode, index);
+    const onMove = (event: MouseEvent) => {
+      setDragPoint({ x: event.clientX, y: event.clientY });
+      setDropIndex(indexAt(event));
     };
+    const onUp = (event: MouseEvent) => {
+      const index = indexAt(event);
+      setDragEntry(null);
+      setDragPoint(null);
+      setDropIndex(null);
+      if (index !== null) addWidget(dragEntry.kind, dragEntry.mode, index);
+    };
+    window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-    return () => window.removeEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
   }, [dragEntry, blocks.length]);
 
   const selectedIndex = blocks.findIndex((b) => b.widget.id === selectedId);
@@ -180,8 +201,13 @@ export default function DesignerTab() {
     <div className="flex-1 flex overflow-hidden" style={{ background: SUNKEN }}>
       <DesignerPalette onAdd={addWidget} onDragStart={(entry) => setDragEntry(entry)} />
 
-      <div className="flex-1 overflow-auto px-8 py-6">
+      <div
+        data-gui-dropzone
+        className="flex-1 overflow-auto px-8 py-6"
+        style={dragEntry ? { outline: `2px dashed ${ACCENT}`, outlineOffset: -6 } : undefined}
+      >
         <GuiDesigner
+          dropIndex={dragEntry ? dropIndex : null}
           blocks={blocks}
           onChange={applyWidgets}
           onWidgetValue={setWidgetValue}
@@ -226,6 +252,21 @@ export default function DesignerTab() {
           </p>
         )}
       </aside>
+
+      {/* The element under the cursor while it is being dragged. Without it the
+          only feedback was the result, which on a failed drop is no feedback. */}
+      {dragEntry && dragPoint && (
+        <div
+          className="fixed pointer-events-none rounded-lg px-3 py-1.5 text-sm flex items-center gap-2"
+          style={{
+            left: dragPoint.x + 12, top: dragPoint.y + 12, zIndex: 60,
+            background: SURFACE, border: `1px solid ${ACCENT}`, color: TEXT, opacity: 0.95,
+          }}
+        >
+          <span>{dragEntry.icon}</span>
+          <span>{dragEntry.label}</span>
+        </div>
+      )}
     </div>
   );
 }

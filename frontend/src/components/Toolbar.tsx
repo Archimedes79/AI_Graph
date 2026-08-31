@@ -479,7 +479,7 @@ export default function Toolbar({
             )}
 
             {aiResult && (
-              <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(99,102,241,0.1)', color: ACCENT_TEXT }}>
+              <div className="text-xs px-3 py-2 rounded" style={{ background: 'var(--gui-accent-fill, rgba(99,102,241,0.10))', color: ACCENT_TEXT }}>
                 {aiResult.explanation || 'Graph generated.'} ({aiResult.graph.nodes.length} node{aiResult.graph.nodes.length === 1 ? '' : 's'},{' '}
                 {aiResult.graph.edges.length} edge{aiResult.graph.edges.length === 1 ? '' : 's'})
               </div>
