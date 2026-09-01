@@ -98,7 +98,16 @@ def run_dev() -> int:
         return 0
 
     python = _venv_python()
-    backend_cmd = [python, "-m", "uvicorn", "app.main:app", "--reload", "--reload-dir", "app", "--port", str(BACKEND_PORT)]
+    # Run from the repository root, with the backend only on the import path:
+    # a relative path typed into Save or a file picker resolves against the
+    # server's working directory, and resolving it inside `backend/` is how
+    # graphs came to be saved next to the source code.
+    backend_cmd = [
+        python, "-m", "uvicorn", "app.main:app",
+        "--app-dir", str(BACKEND_DIR),
+        "--reload", "--reload-dir", str(BACKEND_DIR / "app"),
+        "--port", str(BACKEND_PORT),
+    ]
     frontend_cmd = ["npm", "run", "dev"]
     if _port_in_use(FRONTEND_PORT):
         # Held by something that isn't our own dev server (checked above): go
@@ -107,11 +116,11 @@ def run_dev() -> int:
         # every time depending on whatever else is running on the machine.
         frontend_cmd += ["--", "--port", str(FRONTEND_FALLBACK_PORT), "--strictPort"]
 
-    print(f"[start] backend:  {' '.join(backend_cmd)} (cwd={BACKEND_DIR})")
+    print(f"[start] backend:  {' '.join(backend_cmd)} (cwd={REPO_ROOT})")
     print(f"[start] frontend: {' '.join(frontend_cmd)} (cwd={FRONTEND_DIR})")
 
     backend = subprocess.Popen(
-        backend_cmd, cwd=BACKEND_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        backend_cmd, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
     frontend = subprocess.Popen(
         frontend_cmd, cwd=FRONTEND_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -186,11 +195,13 @@ def run_prod() -> int:
         return 1
 
     python = _venv_python()
-    backend_cmd = [python, "-m", "uvicorn", "app.main:app", "--port", "8000"]
-    print(f"[start] backend: {' '.join(backend_cmd)} (cwd={BACKEND_DIR})")
+    # Same reason as dev mode: the working directory is the project, so a
+    # relative path a person types lands where they are working.
+    backend_cmd = [python, "-m", "uvicorn", "app.main:app", "--app-dir", str(BACKEND_DIR), "--port", "8000"]
+    print(f"[start] backend: {' '.join(backend_cmd)} (cwd={REPO_ROOT})")
     print("[start] Serving built frontend from frontend/dist on the same port.")
 
-    process = subprocess.Popen(backend_cmd, cwd=BACKEND_DIR)
+    process = subprocess.Popen(backend_cmd, cwd=REPO_ROOT)
     try:
         return process.wait()
     except KeyboardInterrupt:

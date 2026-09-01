@@ -41,12 +41,36 @@ export interface CodeProbeReport {
   output_preview: string;
 }
 
+/**
+ * One request to a model, as it happened.
+ *
+ * For looking at, not for acting on. Generation is a black box otherwise —
+ * press the button, wait, get text or an error — and when the error says the
+ * context window may be overloaded there is no way to check that against what
+ * was actually sent. Code generation is not even one call: it generates, runs
+ * the result against real inputs, and repairs it.
+ */
+export interface AICall {
+  provider: string;
+  model: string;
+  system: string;
+  prompt: string;
+  /** Counted on the server, so the number has one source rather than one per client. */
+  sent_chars: number;
+  reply: string | null;
+  reply_chars: number;
+  seconds: number;
+  error: string | null;
+}
+
 /** What one generation returns, whichever element asked -- see GenerateResponse. */
 export interface GenerationResult {
   /** The generated text. Which field it belongs in is the caller's own business. */
   result: string;
   explanation?: string;
   probe: CodeProbeReport;
+  /** Every model call this generation made, in order. */
+  calls?: AICall[];
 }
 
 /**

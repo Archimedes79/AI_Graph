@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { errorText } from '../../utils/errorText';
+import type { AICall } from '../../utils/api';
 
 export interface GenerateOptions<T> {
   /**
@@ -38,6 +39,8 @@ export interface GenerateOptions<T> {
 export function useGenerate() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Record<string, string>>({});
+  // What the last generation actually sent and got back, per button.
+  const [transcripts, setTranscripts] = useState<Record<string, AICall[]>>({});
 
   const setMessage = useCallback((text: string, key = '') => {
     setMessages((prev) => ({ ...prev, [key]: text }));
@@ -53,9 +56,15 @@ export function useGenerate() {
     setMessage(options.pending ?? 'Generating…', key);
     try {
       const result = await options.run();
+      // Kept whether or not it worked out: a transcript is opened when
+      // something went wrong, so the failing case is the one that needs it.
+      const calls = (result as { calls?: AICall[] })?.calls;
+      if (calls) setTranscripts((prev) => ({ ...prev, [key]: calls }));
       options.apply(result);
       setMessage(typeof options.success === 'function' ? options.success(result) : options.success, key);
     } catch (error) {
+      const calls = (error as { response?: { data?: { calls?: AICall[] } } })?.response?.data?.calls;
+      if (calls) setTranscripts((prev) => ({ ...prev, [key]: calls }));
       setMessage(`❌ ${errorText(error, options.failure ?? 'Generation failed')}`, key);
     } finally {
       setActiveKey(null);
@@ -68,6 +77,8 @@ export function useGenerate() {
     /** Is any button in this component mid-flight? */
     busy: activeKey !== null,
     message: (key = '') => messages[key] ?? '',
+    /** Every model call the last generation on this button made. */
+    transcript: (key = '') => transcripts[key] ?? [],
     setMessage,
     run,
   };

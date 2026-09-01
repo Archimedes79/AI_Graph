@@ -20,7 +20,7 @@ export const codeElement: NodeElementDefinition = {
     promptLabel: 'Prompt text',
     promptPlaceholder: 'Describe what the generated code should do.',
     bodyLabel: 'Code window (editable)',
-    bodyPlaceholder: 'def run(inputs):\n    return {"output": inputs.get("input", "")}',
+    bodyPlaceholder: 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}',
     language: true,
     bodyHeight: 220,
     // What the user chose in THIS node's config, which the graph around it
@@ -49,6 +49,6 @@ export const codeElement: NodeElementDefinition = {
     position: { x: 0, y: 0 },
     inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
     outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: 'One result per input item' }],
-    config: { ...baseNodeConfig(), code: 'def run(inputs):\n    return {"output": inputs.get("input", "")}\n' },
+    config: { ...baseNodeConfig(), code: 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n' },
   }),
 };

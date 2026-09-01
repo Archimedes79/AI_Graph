@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { configuredSettings, fromFile } from './settings.ts';
+import { candidatePaths, configuredSettings, fromFile } from './settings.ts';
 
 /**
  * A key belongs in a file, not in a terminal on every run — and not in the
@@ -55,7 +55,24 @@ describe('ai-settings.json', () => {
   it('is nothing at all when there is no file', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-empty-'));
     try {
-      expect(fromFile(dir).apiKeys ?? {}).toEqual({});
+      // Named outright, so the search cannot fall through to a real settings
+      // file on this machine -- which is how this test used to pass by luck,
+      // and how it started reading a developer's own key when one appeared
+      // beside the engine.
+      const env = { AI_GRAPH_SETTINGS: join(dir, 'ai-settings.json') };
+      expect(fromFile(dir, env)).toEqual({});
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the named file and only that one, even before it exists', async () => {
+    // `save()` has to land where the variable says, or the first write goes
+    // somewhere else than every read after it.
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-named-'));
+    try {
+      const named = join(dir, 'elsewhere.json');
+      expect(candidatePaths(dir, { AI_GRAPH_SETTINGS: named })).toEqual([named]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

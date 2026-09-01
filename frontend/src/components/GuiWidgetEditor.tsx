@@ -5,6 +5,7 @@ import { useGenerate } from '../elements/shared/useGenerate';
 import { buildGeneration, widgetFields } from '../elements/shared/generation';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
 import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
+import { GenerationReport } from '../elements/shared/GenerationTranscript';
 import { GUI_GRID_COLUMNS } from './gui/layout';
 import { TONES, TONE_LABELS, type Tone } from './gui/tone';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, MUTED, NEUTRAL_BUTTON, WELL } from '../ui/theme';
@@ -146,6 +147,7 @@ Wähle einen Block auf der Seite aus.
       </div>
 
       {ConfigEditor && (
+        <GenerationReport calls={generate.transcript(widget.id)}>
         <ConfigEditor
           widget={widget}
           generation={element.generation}
@@ -158,6 +160,7 @@ Wähle einen Block auf der Seite aus.
           onGenerate={handleGenerate}
           canGenerate={!!element.generation && (element.generation.available?.(widget) ?? true)}
         />
+        </GenerationReport>
       )}
 
       {fileSpec && (

@@ -850,6 +850,24 @@ class GenerateRequest(BaseModel):
     ai_model: str = ""
 
 
+class AICall(BaseModel):
+    """One request to a model, as it happened.
+
+    Kept for looking at rather than for acting on: an editor shows it, nothing
+    reads it back. `sent_chars` is counted on the server so that "how much did
+    I send" has one answer rather than one per client.
+    """
+    provider: str = ""
+    model: str = ""
+    system: str = ""
+    prompt: str = ""
+    sent_chars: int = 0
+    reply: Optional[str] = None
+    reply_chars: int = 0
+    seconds: float = 0.0
+    error: Optional[str] = None
+
+
 class GenerateResponse(BaseModel):
     """What every generation returns: the text, and why.
 
@@ -861,6 +879,12 @@ class GenerateResponse(BaseModel):
     result: str
     explanation: str = ""
     probe: CodeProbeReport = Field(default_factory=CodeProbeReport)
+    # Every model call this generation made, in order: what was sent, what came
+    # back, how long it took. Code generation is not one call -- it generates,
+    # runs the result against real inputs and repairs it -- and without this
+    # there is no way to see which pass went wrong, or to check a "context
+    # window may be overloaded" against what was actually sent.
+    calls: List["AICall"] = Field(default_factory=list)
 
 
 class GenerateGraphRequest(BaseModel):

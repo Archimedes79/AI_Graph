@@ -10,6 +10,7 @@ import { buildGeneration, nodeFields } from '../elements/shared/generation';
 import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs } from '../elements/shared/generationContext';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
+import GenerationTranscript, { GenerationReport } from '../elements/shared/GenerationTranscript';
 import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
 import { connectedOutputDataNodes } from '../elements/data/dataElement';
 import { ACCENT, ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT } from '../ui/theme';
@@ -216,6 +217,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
             </div>
           )}
 
+          <GenerationReport calls={generate.transcript()}>
           <div className="space-y-4">
               {ConfigEditor && <ConfigEditor
                 node={node}
@@ -265,7 +267,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                   {genMessage}
                 </div>
               )}
+              {!generation && <GenerationTranscript />}
           </div>
+          </GenerationReport>
       </div>
     </Modal>
   );

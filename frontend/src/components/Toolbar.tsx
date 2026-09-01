@@ -37,11 +37,19 @@ interface ToolbarProps {
   confirmDiscard: (action: string) => boolean;
   currentFilePath: string | null;
   saveStatus: string;
+  /**
+   * Show the graph's page.
+   *
+   * Pressing Run when a block on the page has nothing in it used to open a
+   * dialog asking for the same value the block asks for, one tab away — two
+   * places to fill in one field, and the one you were not looking at.
+   */
+  onShowInterface: () => void;
 }
 
 export default function Toolbar({
   onNewGraph, onSave, onSaveAs, onReloadNodeFiles, onLoad, onInjectJson, onOpenSettings, confirmDiscard,
-  currentFilePath, saveStatus,
+  currentFilePath, saveStatus, onShowInterface,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
   // Subscribed to so the toolbar re-renders when the graph changes and the
@@ -84,6 +92,20 @@ export default function Toolbar({
     const graph = exportGraph();
     try {
       const requirements = await getRuntimeRequirements(graph);
+
+      // A requirement that belongs to a block is one the *page* asks for, and
+      // the page is a better place to answer it than a dialog: it has the
+      // label, the Browse button and the rest of the form around it. So show
+      // the page instead of asking, and let the next Run go through.
+      const onThePage = requirements.filter((r) => r.widget_id);
+      if (onThePage.length > 0) {
+        onShowInterface();
+        return;
+      }
+
+      // What is left belongs to nodes with nothing on the page — an input set
+      // to ask, an output set to ask where to write. Those have nowhere else
+      // to be answered.
       if (requirements.length > 0) {
         setPendingGraph(graph);
         setPendingRequirements(requirements);

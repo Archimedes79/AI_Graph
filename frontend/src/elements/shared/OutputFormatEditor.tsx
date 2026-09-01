@@ -3,6 +3,7 @@ import type { GraphNode } from '../../types/graph';
 import { generate } from '../../utils/api';
 import { genAI } from '../../store/settingsStore';
 import { useGenerate } from './useGenerate';
+import GenerationTranscript, { GenerationReport } from './GenerationTranscript';
 import { describeDataFormat } from '../data/dataElement';
 import { ACCENT_FILL, ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
 
@@ -128,6 +129,9 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
           {genMessage && (
             <div className="text-xs mt-1" style={{ color: MUTED }}>{genMessage}</div>
           )}
+          <GenerationReport calls={runGenerate.transcript()}>
+            <GenerationTranscript />
+          </GenerationReport>
         </div>
       )}
 

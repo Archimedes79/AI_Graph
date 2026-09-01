@@ -22,18 +22,28 @@ import { settingsFromEnv, type ProviderSettings } from './providers.ts';
 
 const FILENAME = 'ai-settings.json';
 
-/** Where the file is looked for, in order. */
-export function candidatePaths(cwd = process.cwd()): string[] {
+/**
+ * Where the file is looked for, in order.
+ *
+ * `AI_GRAPH_SETTINGS` is not the first of several candidates but the only one:
+ * "use this file" has to mean that even when the file is not there yet, or the
+ * search quietly falls through to some other machine-wide file and the answer
+ * depends on what else happens to be installed. The Python half settled this
+ * the same way, for the same reason.
+ */
+export function candidatePaths(
+  cwd = process.cwd(),
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  if (env.AI_GRAPH_SETTINGS) return [env.AI_GRAPH_SETTINGS];
   const beside = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..');
-  const paths = [
-    process.env.AI_GRAPH_SETTINGS,
+  return [...new Set([
     join(cwd, FILENAME),
     // Beside the bundle, which is the deployed equivalent of a config file:
     // a recipient drops one next to `run.sh` and never sets a variable.
     join(beside, FILENAME),
     join(homedir(), '.ai-graph', 'settings.json'),
-  ].filter(Boolean) as string[];
-  return [...new Set(paths)];
+  ])];
 }
 
 interface SettingsFile {
@@ -43,8 +53,11 @@ interface SettingsFile {
 }
 
 /** The file's contents, or nothing. A malformed file is ignored, not fatal. */
-export function fromFile(cwd = process.cwd()): Partial<ProviderSettings> {
-  for (const path of candidatePaths(cwd)) {
+export function fromFile(
+  cwd = process.cwd(),
+  env: Record<string, string | undefined> = process.env,
+): Partial<ProviderSettings> {
+  for (const path of candidatePaths(cwd, env)) {
     if (!existsSync(path)) continue;
     try {
       const parsed = JSON.parse(readFileSync(path, 'utf8')) as SettingsFile;
@@ -73,7 +86,10 @@ export function configuredSettings(
   env: Record<string, string | undefined> = process.env,
   cwd = process.cwd(),
 ): Partial<ProviderSettings> {
-  const file = fromFile(cwd);
+  // The same environment for both halves: reading the file through
+  // `process.env` while everything else follows the argument made the answer
+  // depend on the machine the caller was trying to hold still.
+  const file = fromFile(cwd, env);
   const environment = settingsFromEnv(env);
   return {
     ...file,

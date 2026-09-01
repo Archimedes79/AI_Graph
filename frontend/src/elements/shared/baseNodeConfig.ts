@@ -15,7 +15,7 @@ export function baseNodeConfig(): NodeConfig {
     extensions: '',
     select_all_files: true,
     selector_prompt: '',
-    selector_code: 'def run(inputs):\n    # inputs["files"] is the full list of file paths in the directory\n    return {"files": inputs.get("files", [])}\n',
+    selector_code: 'function run(inputs) {\n  // inputs.files is the full list of file paths in the directory\n  return { files: inputs.files ?? [] };\n}\n',
     // 'default' -> follow the graph's metadata.ai_defaults (and whatever
     // overrides it at run time). There is no gen_ai_* pair any more: the
     // code-generation AI is one editor-wide setting, see store/settingsStore.ts.

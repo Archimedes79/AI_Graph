@@ -126,6 +126,40 @@ stream_activity: ContextVar[Optional[Callable[[int], None]]] = ContextVar(
     "ai_stream_activity", default=None
 )
 
+# Every model call of the current request, in order, for anyone who wants to
+# see what was sent. Set to a list by a caller that cares; left None otherwise,
+# so a run that nobody is watching records nothing.
+#
+# A ContextVar for the same reason as the one above: two generations in flight
+# at once must not write into each other's record, and `complete()` is the one
+# place every call goes through.
+transcript: ContextVar[Optional[List[Dict[str, Any]]]] = ContextVar(
+    "ai_transcript", default=None
+)
+
+
+def _record(provider: str, model: str, system: str, prompt: str) -> Optional[Dict[str, Any]]:
+    """Start an entry for this call. Returns it so the answer can be added."""
+    log = transcript.get()
+    if log is None:
+        return None
+    entry: Dict[str, Any] = {
+        "provider": provider,
+        "model": model,
+        "system": system,
+        "prompt": prompt,
+        # Counted here rather than in the browser: "how much did I send" is the
+        # question a context-window error raises, and the answer should not
+        # depend on which half is asked.
+        "sent_chars": len(system) + len(prompt),
+        "reply": None,
+        "reply_chars": 0,
+        "seconds": 0.0,
+        "error": None,
+    }
+    log.append(entry)
+    return entry
+
 
 def _provider_error_detail(body: str) -> str:
     """The provider's own explanation, dug out of whatever JSON shape it used.
@@ -609,6 +643,7 @@ async def complete(
         "AI request -> provider=%s model=%s temperature=%s\n--- system ---\n%s\n--- prompt ---\n%s",
         provider, model, temperature, system, prompt,
     )
+    entry = _record(provider, model, system, prompt)
     async def call_provider() -> str:
         if provider == "ollama":
             return await _ollama_complete(prompt, system, model, temperature, images=images)
@@ -645,6 +680,11 @@ async def complete(
                     "AI request FAILED <- provider=%s model=%s after %.1fs (attempt %d/%d)",
                     provider, model, time.monotonic() - start, attempt, AI_MAX_ATTEMPTS,
                 )
+                # A transcript that showed only successes would be silent about
+                # exactly the case someone opens it for.
+                if entry is not None:
+                    entry["error"] = str(exc)
+                    entry["seconds"] = round(time.monotonic() - start, 2)
                 raise
             delay = AI_RETRY_BASE_DELAY * (2 ** (attempt - 1))
             logger.warning(
@@ -656,6 +696,10 @@ async def complete(
         "AI response <- provider=%s model=%s after %.1fs (%d chars)\n--- response ---\n%s",
         provider, model, time.monotonic() - start, len(result), result,
     )
+    if entry is not None:
+        entry["reply"] = result
+        entry["reply_chars"] = len(result)
+        entry["seconds"] = round(time.monotonic() - start, 2)
     return result
 
 

@@ -201,3 +201,85 @@ def test_a_failing_generator_is_a_500_with_the_providers_own_message(monkeypatch
     response = client.post("/api/ai/generate", json={"element": "code", "description": "x"})
     assert response.status_code == 500
     assert "LM Studio is not running" in response.text
+
+
+# --- the transcript ----------------------------------------------------------
+#
+# Generation is a black box from outside: press the button, wait, get text or an
+# error. When the error is "the context window may be overloaded" there is no
+# way to check it, because nobody can see what was sent -- and code generation
+# is not one call, it generates, runs the result and repairs it.
+
+@pytest.mark.asyncio
+async def test_the_response_carries_every_model_call_that_was_made(monkeypatch):
+    """Two passes, both in the record, in order."""
+    sent = []
+
+    async def fake_complete(prompt, system="", model="", temperature=0.7, provider="", images=None):
+        # Go through the real recorder rather than around it: what is under
+        # test is that `complete` records, not that a fake can append.
+        entry = ai_service._record(provider or "stub", model or "stub-model", system, prompt)
+        sent.append(prompt)
+        reply = f"reply {len(sent)}"
+        if entry is not None:
+            entry["reply"] = reply
+            entry["reply_chars"] = len(reply)
+        return reply
+
+    async def two_passes(**kwargs):
+        await fake_complete("first pass", system="be brief")
+        await fake_complete("second pass, repairing")
+        return CODE, "explained", code_refine.ProbeReport()
+
+    monkeypatch.setattr(ai_service, "complete", fake_complete)
+    monkeypatch.setattr(code_refine, "generate_verified_code", two_passes)
+
+    response = client.post("/api/ai/generate", json={
+        "element": "code", "description": "count the rows", "language": "javascript",
+    })
+    assert response.status_code == 200, response.text
+
+    calls = response.json()["calls"]
+    assert [call["prompt"] for call in calls] == ["first pass", "second pass, repairing"]
+    assert calls[0]["system"] == "be brief"
+    # Counted on the server, so "how much did I send" has one answer.
+    assert calls[0]["sent_chars"] == len("first pass") + len("be brief")
+    assert calls[0]["reply"] == "reply 1"
+
+
+@pytest.mark.asyncio
+async def test_a_generation_nobody_is_watching_records_nothing(monkeypatch):
+    """The recorder is opt-in, so a run outside the route costs nothing."""
+    captured = []
+
+    async def fake_complete(prompt, system="", model="", temperature=0.7, provider="", images=None):
+        captured.append(ai_service._record(provider, model, system, prompt))
+        return "text"
+
+    monkeypatch.setattr(ai_service, "complete", fake_complete)
+    await ai_service.complete("outside any request")
+    assert captured == [None]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_generation_still_reports_what_it_sent(monkeypatch):
+    """The transcript matters most when there is no answer to show."""
+
+    async def fails(**kwargs):
+        entry = ai_service._record("stub", "stub-model", "be brief", "the one prompt")
+        if entry is not None:
+            entry["error"] = "returned no content"
+        raise RuntimeError("stub-model returned no content")
+
+    monkeypatch.setattr(code_refine, "generate_verified_code", fails)
+
+    response = client.post("/api/ai/generate", json={
+        "element": "code", "description": "count the rows", "language": "javascript",
+    })
+    assert response.status_code == 500
+
+    body = response.json()
+    # The message keeps its usual place, so every existing reader still works.
+    assert "returned no content" in body["detail"]
+    assert [call["prompt"] for call in body["calls"]] == ["the one prompt"]
+    assert body["calls"][0]["error"] == "returned no content"

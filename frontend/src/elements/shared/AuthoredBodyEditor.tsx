@@ -1,5 +1,6 @@
 import React from 'react';
 import ContextFileAttachment from './ContextFileAttachment';
+import GenerationTranscript from './GenerationTranscript';
 import type { ElementGeneration, FieldAccess } from './generation';
 import { ACCENT_FILL, ACCENT_TEXT, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
 
@@ -105,6 +106,7 @@ export default function AuthoredBodyEditor({
               {message}
             </div>
           )}
+          <GenerationTranscript />
         </div>
       )}
     </>

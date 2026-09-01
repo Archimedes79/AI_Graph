@@ -16,7 +16,10 @@ export const plotWindowElement: GuiWidgetElementDefinition = {
     success: '✅ Transform generated!',
     promptLabel: 'Prompt',
     promptPlaceholder: 'Describe the chart transform you need (axes, grouping, aggregation, filters, etc.)',
-    bodyLabel: 'Plotting code (optional)',
+    // "Optional" on its own was a half-truth: without it the block is handed
+    // whatever arrived, and unless that is already a list of points there is
+    // nothing to draw.
+    bodyLabel: 'Plotting code — optional only if the incoming value is already points',
     language: true,
     bodyHeight: 100,
   },

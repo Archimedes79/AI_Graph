@@ -13,9 +13,11 @@ import os
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 from app.elements.registry import generation_for
 from app.models.graph import (
+    AICall,
     CodeProbeReport,
     GenerateGraphRequest,
     GenerateGraphResponse,
@@ -335,7 +337,29 @@ async def generate(req: GenerateRequest):
     # with this snippet, which the rest of the context cannot imply.
     context = "\n\n".join(part for part in ((spec.contract if spec else ""), req.context) if part)
     context = _with_context_file(context, req.context_file)
-    return await _generated("generate", generator(req, spec, context, gen_model, gen_provider))
+
+    # Record every model call this generation makes, so the editor can show what
+    # was sent. Set per request rather than globally: two generations in flight
+    # must not write into each other's transcript.
+    calls: list = []
+    token = ai_service.transcript.set(calls)
+    try:
+        response = await _generated("generate", generator(req, spec, context, gen_model, gen_provider))
+    except HTTPException as exc:
+        # The failing generation is the one whose transcript is worth reading --
+        # "no content, the model may still be loading or the request exceeded
+        # its context window" is only answerable by seeing what was sent. An
+        # HTTPException body is a bare `detail`, so the error is returned rather
+        # than raised, to carry `calls` alongside it in the same shape a success
+        # has. `detail` keeps its place, so every existing reader still works.
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail, "calls": [AICall(**call).model_dump() for call in calls]},
+        )
+    finally:
+        ai_service.transcript.reset(token)
+    response.calls = [AICall(**call) for call in calls]
+    return response
 
 
 @router.post("/generate-graph", response_model=GenerateGraphResponse)

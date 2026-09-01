@@ -95,10 +95,14 @@ def candidate_paths() -> list[Path]:
     dropping a settings file next to it -- the deployed equivalent of an
     application's config file.
     """
-    paths: list[Path] = []
     explicit = os.getenv("AI_GRAPH_SETTINGS", "")
     if explicit:
-        paths.append(Path(explicit).expanduser())
+        # The only candidate, not the first of several: "use this file" has to
+        # hold when the file is not there yet, or the search falls through to
+        # whatever else happens to sit on this machine. `settings_path()` below
+        # already says this for writing; reading was still falling through.
+        return [Path(explicit).expanduser()]
+    paths: list[Path] = []
     paths.append(Path.cwd() / SETTINGS_FILENAME)
     if getattr(sys, "frozen", False) or getattr(sys, "_MEIPASS", None):
         paths.append(Path(sys.executable).parent / SETTINGS_FILENAME)

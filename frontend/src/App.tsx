@@ -338,6 +338,7 @@ export default function App() {
           onOpenSettings={() => setShowSettings(true)}
           confirmDiscard={confirmDiscard}
           currentFilePath={currentFilePath}
+          onShowInterface={() => setView('preview')}
           saveStatus={saveStatus}
         />
 
