@@ -141,6 +141,7 @@ All four ways, with their trade-offs, are in [docs/install.md](docs/install.md).
 AI-Graph/
 ├── backend/          # FastAPI backend (app/models, app/routers, app/elements, app/services)
 ├── frontend/         # React + TypeScript + ReactFlow editor (src/elements, src/components, src/store)
+├── engine/           # The TypeScript engine: runs a graph, ships as a bundle, no build step
 ├── graph-runner/     # run.py (CLI) / serve.py (GUI runtime) / build_exe.py — vendored into every deploy bundle
 ├── docs/             # The documents linked above
 ├── examples/         # Example graph JSON files

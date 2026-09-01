@@ -572,6 +572,54 @@ passes its node's configured pair to `complete()` and knows nothing else, and
 `graph_executor` publishes the graph default because an element never sees the
 graph it lives in.
 
+## The TypeScript engine (`engine/`) — and the two-engine rule
+
+There are two engines. `backend/app/services/graph_executor.py` is the older
+one; `engine/` is a TypeScript engine that does the same thing, and
+`engine/src/differential.test.ts` + `differentialAi.test.ts` run the example
+graphs through **both** and diff what every node produced. That test is the
+contract between them: while both exist, a change to what running a graph means
+belongs in both halves, and the test says so within seconds.
+
+It has earned its place. It found, in order: an input node emitting invented
+port names; batching keyed off the shape of a value instead of the declared
+ports; an empty list treated as one run rather than none; a prompt printed to
+stdout where the JSON result also goes; an AI node handed filenames instead of
+file contents; and a list reaching a prompt as `['a', 'b']`, brackets and all.
+Two of those were defects in the *older* engine.
+
+**Structure.** One class per node type and widget kind (`engine/src/elements/`),
+on `NodeElement` / `WidgetElement`, with:
+
+- `config(subject)` — this element's own settings, and the only reader of the
+  stored record. There is no `config_fields` list here and no test parsing
+  source to enforce ownership: the type is the declaration.
+- `execute(subject, inputs, runtime)` — returns `{port_id: value}`, always.
+- `batchMode`, `readsFileInputs`, `isMemory`, `runtimeRequirements` — declared,
+  carried out by the executor. Fanning out and reading wired files lived inside
+  elements once, and the copies disagreed.
+
+**Services arrive as a `Runtime`** (`files`, `code`, `ai`), never as an import.
+`engine/src/host/node.ts` is the only file that knows an operating system
+exists, which is what lets the same engine run in a browser tab later and in a
+test with three fakes today.
+
+**No build step, ever.** Node runs the engine by *stripping* types, so a bundle
+is a copy rather than a compilation. That rules out the few TypeScript features
+needing emitted code — parameter properties, enums, namespaces, decorators —
+and `engine/src/strippable.test.ts` holds the whole engine to it. The first
+violation failed nowhere except on a machine running a bundle.
+
+**Running and shipping.**
+
+```
+node engine/src/main.ts graph.json                 # once
+node engine/src/main.ts graph.json --every 5m      # again after each run ends
+node engine/src/main.ts graph.json --bundle ./out  # a runnable copy for someone else
+```
+
+stdout is the result and nothing else; questions and progress go to stderr.
+
 ## Deploying a graph — vendored-runtime bundles, not codegen
 
 `deploy_service.py` does **not** generate source code from each node's config — see
