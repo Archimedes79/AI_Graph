@@ -75,7 +75,12 @@ class AIElement(NodeElement):
                 if urls:
                     images.extend(urls)
                     continue
-            prompt_parts.append(str(val) if not isinstance(val, str) else val)
+            # A list becomes its items, one per paragraph -- not `str(list)`,
+            # which puts brackets, quotes and commas into the prompt and makes
+            # the model read around a language's syntax to find the text. Three
+            # summaries wired into a node should arrive as three paragraphs.
+            for item in (val if isinstance(val, list) else [val]):
+                prompt_parts.append(item if isinstance(item, str) else str(item))
         prompt = "\n\n".join(prompt_parts)
         format_instruction = output_format_instruction(cfg)
         system = f"{cfg.system_prompt}\n\n{format_instruction}" if format_instruction else cfg.system_prompt

@@ -10,7 +10,8 @@ import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
-import type { AiRequest, AiService, CodeRunner, FileService, Runtime } from '../element.ts';
+import type { CodeRunner, FileService, Runtime } from '../element.ts';
+import { aiService, settingsFromEnv } from '../ai/providers.ts';
 
 export const nodeFiles: FileService = {
   resolve: (path: string) => resolve(path),
@@ -123,15 +124,20 @@ function capture(command: string, args: string[]): Promise<string> {
   });
 }
 
-/** No model configured: a clear sentence beats a stack trace from a null client. */
-export const noAi: AiService = {
-  async complete(_request: AiRequest): Promise<string> {
-    throw new Error('No AI provider is configured for this runtime.');
-  },
-};
-
+/**
+ * The engine wired to this machine.
+ *
+ * The model provider is configured from the environment, the same variable
+ * names the Python engine reads, so one machine's configuration serves both
+ * while they coexist.
+ */
 export function nodeRuntime(overrides: Partial<Runtime> = {}): Runtime {
-  return { files: nodeFiles, code: nodeCode, ai: noAi, ...overrides };
+  return {
+    files: nodeFiles,
+    code: nodeCode,
+    ai: aiService(settingsFromEnv(process.env)),
+    ...overrides,
+  };
 }
 
 export { sep as pathSeparator };

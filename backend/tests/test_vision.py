@@ -94,6 +94,26 @@ async def test_an_image_path_is_sent_as_an_image_not_as_prompt_text(tmp_path, mo
     assert str(picture) not in seen["prompt"]
 
 
+async def test_a_list_reaches_the_prompt_as_paragraphs_not_as_a_repr(monkeypatch):
+    """Three summaries wired into a node are three paragraphs, not `['a', 'b']`.
+
+    `str(list)` put brackets, quotes and commas into the prompt and made the
+    model read around Python's syntax to find the text. Found by running the
+    summary example through both engines: the TypeScript one serialised the
+    same list as JSON, and the two prompts differed by exactly the punctuation.
+    """
+    seen = {}
+
+    async def fake_complete(prompt, system, model, temperature, provider, images=None):
+        seen["prompt"] = prompt
+        return "ok"
+
+    monkeypatch.setattr(ai_service, "complete", fake_complete)
+    await NODE_ELEMENTS[NodeType.AI].execute(_ai_node(send_images=False), {"summaries": ["first", "second"]})
+
+    assert seen["prompt"] == "first\n\nsecond"
+
+
 async def test_several_images_all_travel(tmp_path, monkeypatch):
     """A directory picker wired straight in sends every file, not the first."""
     paths = []

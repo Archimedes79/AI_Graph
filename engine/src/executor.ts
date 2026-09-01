@@ -23,6 +23,8 @@
 
 import type { Graph, GraphEdge, GraphNode, ExecutionResult, NodeResult, NodeStatus } from './graph.ts';
 import type { NodeElement, Runtime } from './element.ts';
+import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
+import { readFileInputs } from './fileInputs.ts';
 
 export interface Registry {
   node(type: string): NodeElement<unknown> | undefined;
@@ -204,7 +206,13 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
       runtime.report?.({ type: 'node_start', node_id: nodeId });
 
       try {
-        const produced = await element.execute(node, inputs, runtime);
+        // What the run reports having received is what came off the wires --
+        // the paths, not the megabytes behind them. Only the element sees the
+        // contents.
+        const given = element.readsFileInputs(node)
+          ? await readFileInputs(node, inputs, runtime)
+          : inputs;
+        const produced = await runNode(element, node, given, runtime);
         outputs.set(nodeId, produced);
         results.push({ node_id: nodeId, status: 'success', inputs, outputs: produced, error: null });
         runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'success' });
@@ -229,6 +237,51 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
     outputs: finalOutputs(nodes, outputs, registry),
     error: failed.size ? [...failed].map((id) => `${id} failed`).join('; ') : null,
   };
+}
+
+/**
+ * Run one node, fanning out if it asked to.
+ *
+ * A failing item contributes null on every declared port, keeping the results
+ * index-aligned with their inputs, and its message is reported rather than
+ * ending the batch: one bad row out of two thousand should cost one row.
+ */
+async function runNode(
+  element: NodeElement<unknown>,
+  node: GraphNode,
+  inputs: Record<string, unknown>,
+  runtime: Runtime,
+): Promise<Record<string, unknown>> {
+  if (element.batchMode(node) !== 'per_item') {
+    return reconcileOutputs(node, await element.execute(node, inputs, runtime));
+  }
+
+  const items = batchItems(node, inputs);
+  const produced: Record<string, unknown>[] = new Array(items.length);
+  let next = 0;
+  let done = 0;
+
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = next++;
+      if (index >= items.length) return;
+      try {
+        produced[index] = reconcileOutputs(node, await element.execute(node, items[index], runtime));
+      } catch (error) {
+        produced[index] = Object.fromEntries(node.outputs.map((p) => [p.id, null]));
+        runtime.report?.({
+          type: 'activity',
+          node_id: node.id,
+          message: `item ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+      runtime.report?.({ type: 'batch', node_id: node.id, done: ++done, total: items.length });
+    }
+  };
+
+  const workers = Math.max(1, Math.min(element.batchConcurrency(node), items.length));
+  await Promise.all(Array.from({ length: workers }, worker));
+  return mergeBatchOutputs(node, produced);
 }
 
 /**

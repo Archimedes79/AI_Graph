@@ -1,4 +1,4 @@
-import { NodeElement, type Runtime } from '../element.ts';
+import { NodeElement, type AuthoredFile, type Runtime } from '../element.ts';
 import type { GraphNode } from '../graph.ts';
 
 export interface AiConfig {
@@ -7,9 +7,6 @@ export interface AiConfig {
   model: string;
   temperature: number;
   sendImages: boolean;
-  readFileInputs: boolean;
-  perItem: boolean;
-  batchConcurrency: number;
   /** What the model is told to produce. A generation input, not a runtime check. */
   outputFormat: string;
   outputFormatPrompt: string;
@@ -18,9 +15,15 @@ export interface AiConfig {
 /**
  * A node that asks a model.
  *
- * The prompt is whatever arrives on `prompt`; anything on `context` is appended
- * under a heading, which is the one piece of prompt assembly the engine does —
- * everything else about the wording belongs to the person who wrote it.
+ * The prompt is **everything wired into it**, joined by blank lines, in port
+ * order. Not a port named `prompt`: a node with two inputs wired to two
+ * different upstream nodes should send both, and naming one of them would make
+ * the second silently disappear. What the node itself adds is the system
+ * prompt — the part someone wrote.
+ *
+ * Running once per item is not here. A node that fans out does so the same way
+ * a code node does, in the executor, because "run this once per element" is a
+ * property of the graph rather than of asking a model.
  */
 export class AiElement extends NodeElement<AiConfig> {
   readonly nodeType = 'ai' as const;
@@ -33,69 +36,78 @@ export class AiElement extends NodeElement<AiConfig> {
       model: String(c.ai_model ?? ''),
       temperature: Number(c.temperature ?? 0.7),
       sendImages: c.send_images === true,
-      readFileInputs: c.read_file_inputs === true,
-      perItem: c.batch_mode === 'per_item',
-      batchConcurrency: Number(c.batch_concurrency ?? 0) || 4,
       outputFormat: String(c.output_format ?? 'text'),
       outputFormatPrompt: String(c.output_format_prompt ?? ''),
     };
   }
 
+  /**
+   * The system prompt is what someone writes for an ai node — markdown, not a
+   * script that calls the model. Such a script would be a second copy of what
+   * the provider layer already does, and would drift from it immediately.
+   */
+  override authoredFile(): AuthoredFile {
+    return { bodyField: 'system_prompt', nameField: 'code_file', extension: '.md', what: 'this prompt' };
+  }
+
+  override deployNeeds() {
+    return { requirements: [], needsInterface: false };
+  }
+
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const settings = this.config(node);
-    const ask = async (item: Record<string, unknown>): Promise<string> => {
-      const prompt = [
-        String(item.prompt ?? ''),
-        item.context ? `\n\nContext:\n${asText(item.context)}` : '',
-      ].join('');
-      return runtime.ai.complete({
-        prompt,
-        system: settings.systemPrompt,
+    const parts: string[] = [];
+    const images: string[] = [];
+
+    for (const value of Object.values(inputs)) {
+      if (value === null || value === undefined) continue;
+      if (settings.sendImages) {
+        // An input that *is* an image becomes an image in the request rather
+        // than a path pasted into the prompt. A list is expanded, so a folder
+        // picker wired straight in sends every file.
+        const candidates = Array.isArray(value) ? value : [value];
+        const urls = candidates.map(asImageUrl).filter((url): url is string => url !== null);
+        if (urls.length) {
+          images.push(...urls);
+          continue;
+        }
+      }
+      // A list becomes its items, one per paragraph -- not a serialization of
+      // the list, which puts brackets, quotes and commas into the prompt and
+      // makes the model read around syntax to find the text. Three summaries
+      // wired into a node should arrive as three paragraphs.
+      for (const item of Array.isArray(value) ? value : [value]) {
+        parts.push(typeof item === 'string' ? item : JSON.stringify(item));
+      }
+    }
+
+    const instruction = formatInstruction(settings);
+    return {
+      output: await runtime.ai.complete({
+        prompt: parts.join('\n\n'),
+        system: instruction ? `${settings.systemPrompt}\n\n${instruction}` : settings.systemPrompt,
         provider: settings.provider,
         model: settings.model,
         temperature: settings.temperature,
-        images: settings.sendImages ? asList(item.images) : undefined,
-      });
+        ...(images.length ? { images } : {}),
+      }),
     };
-
-    if (!settings.perItem) return { output: await ask(inputs) };
-
-    const prompts = asList(inputs.prompt);
-    const answers: string[] = new Array(prompts.length);
-    let next = 0;
-    let done = 0;
-
-    const worker = async (): Promise<void> => {
-      for (;;) {
-        const index = next++;
-        if (index >= prompts.length) return;
-        try {
-          answers[index] = await ask({ ...inputs, prompt: prompts[index] });
-        } catch (error) {
-          answers[index] = '';
-          runtime.report?.({
-            type: 'activity',
-            node_id: node.id,
-            message: `item ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
-          });
-        }
-        runtime.report?.({ type: 'batch', node_id: node.id, done: ++done, total: prompts.length });
-      }
-    };
-
-    const workers = Math.max(1, Math.min(settings.batchConcurrency, prompts.length));
-    await Promise.all(Array.from({ length: workers }, worker));
-    return { output: answers };
   }
 }
 
-function asText(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value)) return value.map(asText).join('\n\n');
-  return JSON.stringify(value);
+/** What the node was told to ask for, as a sentence the model can follow. */
+function formatInstruction(settings: AiConfig): string {
+  if (settings.outputFormat === 'custom') return settings.outputFormatPrompt;
+  if (settings.outputFormat === 'json') return 'Respond with JSON and nothing else.';
+  if (settings.outputFormat.startsWith('csv')) return 'Respond with CSV and nothing else.';
+  return '';
 }
 
-function asList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String);
-  return value === undefined || value === null ? [] : [String(value)];
+const IMAGE_SUFFIX = /\.(png|jpe?g|gif|webp|bmp)$/i;
+
+/** An image path or data URL, or null for anything that is just text. */
+function asImageUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  if (value.startsWith('data:image/')) return value;
+  return IMAGE_SUFFIX.test(value) ? value : null;
 }

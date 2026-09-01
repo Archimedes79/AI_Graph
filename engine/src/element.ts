@@ -182,6 +182,36 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
   /** This node carries the graph's interface. */
   readonly hasInterface: boolean = false;
 
+  /**
+   * Whether this node runs once for the whole list or once per item.
+   *
+   * A declaration, not an implementation: the fan-out itself belongs to the
+   * executor, so "run this once per element" works the same for a code node and
+   * an AI node and would work for a third kind without either being told. Both
+   * used to carry their own copy of the loop, and the copies had begun to
+   * differ in what an empty list meant.
+   */
+  batchMode(node: GraphNode): 'whole' | 'per_item' {
+    return node.config.batch_mode === 'per_item' ? 'per_item' : 'whole';
+  }
+
+  /** How many items of a fan-out may be in flight at once. */
+  batchConcurrency(node: GraphNode): number {
+    return Number(node.config.batch_concurrency ?? 0) || 4;
+  }
+
+  /**
+   * Whether a wired file path should arrive as the file's *content*.
+   *
+   * Declared, like batching, and carried out by the executor: a code node and
+   * an AI node both want it and neither should own it. It lived inside the code
+   * element for a while, which is why an AI node summarising a folder was
+   * handed three filenames and dutifully summarised those.
+   */
+  readsFileInputs(node: GraphNode): boolean {
+    return node.config.read_file_inputs === true;
+  }
+
   /** Run once, for inputs already collected from the wires. */
   abstract execute(
     node: GraphNode,
