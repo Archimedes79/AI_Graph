@@ -61,7 +61,6 @@ export const dataElement: NodeElementDefinition = {
   // One node, one remembered value.
   settleMemoryValue: (node, _portId, value) => { node.config.data_value = value as never; },
   ownsDescription: true,
-  authoredFile: () => ({ extension: '.md', what: 'this format contract' }),
   generation: {
     promptField: 'data_prompt',
     targetField: 'data_format_prompt',

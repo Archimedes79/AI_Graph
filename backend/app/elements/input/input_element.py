@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from app.elements.base import (AuthoredFile, DirectorySource, Generation, NodeElement,
-                               SELECTOR_GENERATION, list_selected_files)
+from app.elements.base import (AuthoredFile, Generation, NodeElement,
+                               SELECTOR_GENERATION)
 from app.models.graph import GraphNode, NodeType
-from app.services import file_service
 
 
 def _effective_mode(node: GraphNode) -> str:

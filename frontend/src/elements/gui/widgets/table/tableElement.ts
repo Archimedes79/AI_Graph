@@ -5,7 +5,6 @@ import TableWidget from '../../../../components/gui/widgets/TableWidget';
 /** Display-only, like plot_window: takes rows to show, emits nothing. */
 export const tableElement: GuiWidgetElementDefinition = {
   widgetKind: 'table',
-  authoredFile: (widget) => ({ extension: '.js', what: 'this transform' }),
   generation: {
     promptField: 'code_prompt',
     targetField: 'code',

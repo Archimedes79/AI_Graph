@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Tuple
 
-from app.elements.base import (AuthoredFile, DirectorySource, Generation, GuiWidgetElement,
-                               SELECTOR_GENERATION, list_selected_files,
-                               widget_input_or_value)
+from app.elements.base import (AuthoredFile, Generation, GuiWidgetElement,
+                               SELECTOR_GENERATION)
 from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
-from app.services import file_service
 
 
 def _is_directory(widget: GuiWidget) -> bool:

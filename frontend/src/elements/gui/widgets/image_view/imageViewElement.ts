@@ -5,7 +5,6 @@ import ImageViewWidget from '../../../../components/gui/widgets/ImageViewWidget'
 export const imageViewElement: GuiWidgetElementDefinition = {
   widgetKind: 'image_view',
   // Display-only, like plot_window: takes something to show, emits nothing.
-  authoredFile: (widget) => ({ extension: '.js', what: 'this transform' }),
   // Same snippet contract as plot_window, different destination: a path. This
   // widget had the code field and no button, purely because generation used to
   // be a switch in a shell rather than a declaration here.

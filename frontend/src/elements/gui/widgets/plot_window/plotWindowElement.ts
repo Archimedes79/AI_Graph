@@ -7,7 +7,6 @@ export const plotWindowElement: GuiWidgetElementDefinition = {
   widgetKind: 'plot_window',
   // Display-only, like an `output` node with write_mode="window": accepts data to
   // plot, no downstream port.
-  authoredFile: (widget) => ({ extension: '.js', what: 'this transform' }),
   generation: {
     promptField: 'code_prompt',
     targetField: 'code',

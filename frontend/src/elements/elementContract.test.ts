@@ -17,6 +17,7 @@ import { NODE_ELEMENTS, GUI_WIDGET_ELEMENTS } from './registry';
 import { createGuiWidget } from '../utils/guiWidgets';
 import type { GraphNode, GuiWidget } from '../types/graph';
 import { connectedDataFormatContext } from './data/dataElement';
+import { nodeLogic, widgetLogic } from './shared/logic';
 
 /**
  * A widget as the app really creates one, with a fixed id so assertions can name
@@ -73,7 +74,7 @@ describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, elem
       // Nothing to generate also means nothing to author: the two answers are
       // the same question, which is what stopped image_view's missing button
       // from happening again one level down.
-      expect(element.authoredFile?.(node)).toBeFalsy();
+      expect(nodeLogic(node)).toBeFalsy();
       return;
     }
     const fields = spec.promptField === 'description'
@@ -150,7 +151,7 @@ describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (wi
     const widget = makeWidget(widgetKind as GuiWidget['kind']);
     const spec = element.generation;
     if (!spec) {
-      expect(element.authoredFile?.(widget)).toBeFalsy();
+      expect(widgetLogic(widget)).toBeFalsy();
       return;
     }
     const flat = widget as unknown as Record<string, unknown>;

@@ -27,6 +27,7 @@
 
 import type { GraphNode, Port, RawConfig, WidgetKind, NodeType } from './graph.ts';
 import type { RuntimeRequirement } from './runtimeValues.ts';
+import type { Logic } from './logic.ts';
 
 // ---------------------------------------------------------------------------
 // The world an element is allowed to touch
@@ -79,17 +80,6 @@ export interface Runtime {
 // Declared facets
 // ---------------------------------------------------------------------------
 
-/** A body the user writes at length, optionally kept in a file beside the graph. */
-export interface AuthoredFile {
-  /** Where the body is stored inside this element's config. */
-  bodyField: string;
-  /** Where the chosen file name is stored. */
-  nameField: string;
-  extension: string;
-  /** For the editor's sentence: "keep <what> in a file". */
-  what: string;
-}
-
 /** What a deploy bundle must carry for this element to run elsewhere. */
 export interface DeployNeeds {
   /** The bundle needs the interface: a page, not just a CLI. */
@@ -115,8 +105,15 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
   /** This element's settings, defaulted and migrated. The only reader of `S.config`. */
   abstract config(subject: S): C;
 
-  /** The body this element lets a user write, if it lets them write one. */
-  authoredFile(_subject: S): AuthoredFile | undefined {
+  /**
+   * What this element does, if a person writes it: the request, the body, and
+   * how to run it. `undefined` for an element that authors nothing -- an
+   * output node has no text anyone writes at length.
+   *
+   * This replaced a declaration of *field names* that every caller then used to
+   * reach into an untyped config. See `logic.ts` for what that cost.
+   */
+  logic(_subject: S): Logic | undefined {
     return undefined;
   }
 
@@ -128,30 +125,26 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
   }
 
   /**
-   * Run this element's authored body over *inputs*.
+   * Run this element's body, applying this element's failure policy.
    *
-   * An absent or empty body passes the inputs through. That is the sane
-   * default and used to mean three different things in three elements: one
-   * called the sandbox anyway and failed with a NameError out of a subprocess,
-   * one guarded first, one passed through. An element for which an empty body
-   * is a real error says so by overriding.
+   * The running itself belongs to `Logic`; what is here is the one thing that
+   * does not -- whether a broken body costs the whole node or only the block
+   * that would have shown its result.
    */
   async runSnippet(
     subject: S,
     inputs: Record<string, unknown>,
     runtime: Runtime,
-    override?: string,
   ): Promise<Record<string, unknown>> {
-    const spec = this.authoredFile(subject);
-    const body = override ?? (spec ? String(subject.config[spec.bodyField] ?? '') : '');
-    if (!body.trim()) return inputs;
-
+    const logic = this.logic(subject);
+    if (!logic) return inputs;
     try {
-      return await runtime.code.run(body, inputs);
+      return await logic.run(inputs, runtime.code);
     } catch (error) {
       if (this.snippetFailure !== 'cosmetic') throw error;
       const reason = error instanceof Error ? error.message : String(error);
-      return { value: `⚠ ${subject.id}: transform failed:\n${reason}` };
+      return { value: `⚠ ${subject.id}: transform failed:
+${reason}` };
     }
   }
 }

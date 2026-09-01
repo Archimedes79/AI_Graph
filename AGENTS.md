@@ -46,40 +46,36 @@ live-execution behavior (and for widgets its ports) in one file, rather than the
 behavior scattered across separate executor files. Base classes live in
 `backend/app/elements/base.py`:
 
-- `Element` — what a node and a widget have in common, which is nearly everything:
-  `authored_file(subject)`, `generation()`, `deploy_needs(subject)`, `config_fields`,
-  and `run_snippet(subject, inputs)`. Both classes below extend it. They were separate
+- `Element` — what a node and a widget have in common: `authored_file(subject)` and
+  `generation()`. Execution moved to the TypeScript engine (`engine/src/`), so what
+  remains here is the *authoring* half: which body a person writes, and how an AI
+  writes it. Both classes below extend it. They were separate
   roots declaring the same three methods with the same signatures, while
   `gui_element.py` already called itself a Composite — a pattern whose point is that
   leaf and container share one component interface. What stays split one level down is
   what genuinely differs: a node has real ports and is addressed by the graph, a widget
   derives `{id}_in`/`{id}_out` and is addressed by its owning node.
-- `NodeElement` — one per `NodeType`. Implements `async execute(node, inputs,
-  effective_formats=None) -> dict` (live execution — this is the ONLY behavior an
-  element implements; there is no separate deploy-codegen method, see "Deploying a
-  graph" below). Also implements `runtime_requirements(node)` (what interactive input
-  the live editor/CLI must prompt for before running — defaults to a no-op on the base
-  class) and `deploy_needs(node) -> DeployNeeds` (what this node changes about the
-  deployed bundle: `httpx` for AI calls, the web runtime for an interactive node —
-  merge-able via `DeployNeeds.__or__`). `DeployNeeds` carries **only** needs that
-  actually change the bundle; fields for "reads files" and "runs code" existed,
-  were computed by six elements, and were read by nobody, because those services
-  are stdlib-only and vendored unconditionally. Stateless singleton; all
-  node-specific data comes from the `GraphNode` argument, never `self`.
-- `GuiWidgetElement` — one per `GuiWidgetKind`, the `gui` node's sub-elements. Implements
-  `ports(widget) -> (inputs, outputs)`, `execute(widget, inputs) -> Any`, and the
-  widget-level equivalents `runtime_requirement(widget)` / `deploy_needs(widget)`.
+- `NodeElement` — one per `NodeType`. Declares `authored_file(node)` and
+  `generation()`. Stateless singleton; all node-specific data comes from the
+  `GraphNode` argument, never `self`. Execution, ports-from-settings, batching,
+  memory and deploy needs all live on the engine's `NodeElement`
+  (`engine/src/element.ts`) — the class here is the editor's half.
+- `GuiWidgetElement` — one per `GuiWidgetKind`, the `gui` node's sub-elements. Declares
+  `ports(widget) -> (inputs, outputs)` plus the same authoring pair.
 
-`Element.run_snippet(subject, inputs)` executes whatever body `authored_file()` points
-at, in the sandbox, and `snippet_failure` says what a failure costs — `"fatal"` (the
-default; a code node's snippet IS its behaviour) or `"cosmetic"` (a display widget's
-transform, shown as a `⚠ …` value so a broken chart never takes its sibling widgets
-down). Four elements wrote those steps out by hand before this and had begun to
-disagree. An empty body passes the inputs through; an element for which that is a real
-error overrides `execute` and says so (see `CodeElement`).
+Running a body is the engine's job, and it belongs to **`Logic`**
+(`engine/src/logic.ts`): the request, the body, and how to run it, as one object. An
+element hands out a `Logic` (`Element.logic(subject)`) instead of naming the config
+keys its two halves live in — that indirection is why `selectFiles` used to take the
+element itself plus `subject: unknown` and cast it `as never`. `snippet_failure` stays
+on the element, because whether a broken body costs the whole node (`"fatal"`) or only
+the block that would have shown it (`"cosmetic"`) is a property of the element, not of
+the body. A `Logic`'s `kind` — `code`, `prompt` or `spec` — decides who executes it:
+the sandbox, the model, or nobody (a data node's format contract is read by its
+neighbours' generation prompts and never run).
 
 `DisplayWidget` is the one intermediate class, for `plot_window` and `image_view`: their
-`ports()`, `execute()` and `authored_file()` were byte-identical and they differ only in
+`ports()` and authored body were byte-identical and they differ only in
 the strings describing what their snippet should produce. It exists because it carries
 code, not because it names a category — an intermediate class that only holds a label is
 ceremony, and the varying part of "how does this body run" is data, not a subclass.
@@ -448,7 +444,7 @@ A widget's authored triple is `code_prompt` / `code` / `code_file` — spelled e
 a code node's, one level down. It was `plot_prompt` while plot_window was the only widget
 generating a snippet, which is why `image_view` had the body field and no prompt field to
 generate it from. `code_extension()` in `elements/base.py` (and `codeExtension` in
-`elements/shared/authoredFileName.ts`) is the one place the `language -> .py/.js` decision
+`engine/src/logic.ts`) is the one place the `kind -> .js/.md` decision
 is made; it had been copied into four element files.
 
 **Widgets are the same object one level down**, so they go through the same code,
@@ -665,7 +661,8 @@ one. It is stdlib-only (no pip, no venv), which is exactly the line — nodes th
 import only the standard library run anywhere, nodes that declare packages still
 need a real Python and are told so.
 
-**GUI runtime.** A `gui`/`widget` node's `deploy_needs` sets `interactive_ui=True`;
+**GUI runtime.** A `gui`/`widget` node's `deployNeeds` sets `needsInterface`
+(`engine/src/element.ts`);
 `deploy_service._serves_gui` combines that with the presence of a built frontend. When
 both hold, the bundle also gets `static/` and `fastapi`/`uvicorn` in
 `requirements.txt`. `static/` is **not** all of `frontend/dist`: the editor and the

@@ -10,6 +10,7 @@ import { buildGeneration, nodeFields } from '../elements/shared/generation';
 import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs } from '../elements/shared/generationContext';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
+import { nodeLogic } from '../elements/shared/logic';
 import GenerationTranscript, { GenerationReport } from '../elements/shared/GenerationTranscript';
 import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
 import { connectedOutputDataNodes } from '../elements/data/dataElement';
@@ -246,13 +247,13 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
               {element.outputContract === 'widgets' && <WidgetOutputSummary node={node} />}
 
               {(() => {
-                const fileSpec = element.authoredFile?.(node);
-                return fileSpec ? (
+                const logic = nodeLogic(node);
+                return logic ? (
                   <AuthoredFileOption
                     label={node.label}
                     fileName={node.config.code_file ?? ''}
-                    extension={fileSpec.extension}
-                    what={fileSpec.what}
+                    extension={logic.extension}
+                    what={logic.what}
                     folderHint="<graph>.nodes/"
                     onChange={(name) => setConfig('code_file', name)}
                   />

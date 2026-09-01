@@ -1,4 +1,5 @@
-import { NodeElement, type AuthoredFile, type Runtime } from '../element.ts';
+import { NodeElement, type Runtime } from '../element.ts';
+import { Logic, logicFrom } from '../logic.ts';
 import type { GraphNode } from '../graph.ts';
 
 /** What a code node stores. Its own fields, and no one else's. */
@@ -27,13 +28,9 @@ export class CodeElement extends NodeElement<CodeConfig> {
     };
   }
 
-  override authoredFile(_node: GraphNode): AuthoredFile {
-    return {
-      bodyField: 'code',
-      nameField: 'code_file',
-      extension: '.js',
-      what: "this node's code",
-    };
+  override logic(node: GraphNode): Logic {
+    return logicFrom(node, 'code', { body: 'code', prompt: 'code_prompt', file: 'code_file' },
+                     "this node's code");
   }
 
   async execute(
@@ -41,14 +38,14 @@ export class CodeElement extends NodeElement<CodeConfig> {
     inputs: Record<string, unknown>,
     runtime: Runtime,
   ): Promise<Record<string, unknown>> {
-    const settings = this.config(node);
-    if (!settings.code.trim()) {
+    const logic = this.logic(node);
+    if (logic.isEmpty) {
       throw new Error(`${node.label || node.id}: this code node has no code to run.`);
     }
 
     // Once, for whatever it was handed. Fanning out and reading wired files
     // into their content are the executor's business (see `batchMode` and
     // `readsFileInputs`), so this stays one call.
-    return runtime.code.run(settings.code, inputs);
+    return logic.run(inputs, runtime.code);
   }
 }

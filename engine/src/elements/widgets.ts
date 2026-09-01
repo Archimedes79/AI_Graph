@@ -7,9 +7,11 @@
 
 import {
   DisplayWidget, StaticWidget, WidgetElement,
-  type AuthoredFile, type Runtime, type Widget,
+  type Runtime, type Widget,
 } from '../element.ts';
 import type { Port } from '../graph.ts';
+import { Logic, logicFrom } from '../logic.ts';
+import { selectFiles } from './io.ts';
 import { imageDataUrl, isInlineUrl } from '../images.ts';
 
 function port(id: string, name: string, kind: 'input' | 'output', dataType: Port['data_type'], multi = false): Port {
@@ -72,7 +74,6 @@ export interface PickerConfig {
   /** Comma-separated suffixes a directory listing keeps. */
   extensions: string;
   selectAll: boolean;
-  selectorCode: string;
 }
 
 /**
@@ -93,18 +94,14 @@ export class InputPickerElement extends WidgetElement<PickerConfig> {
       recursive: c.recursive === true,
       extensions: String(c.extensions ?? ''),
       selectAll: c.select_all_files !== false,
-      selectorCode: String(c.selector_code ?? ''),
     };
   }
 
-  override authoredFile(widget: Widget): AuthoredFile | undefined {
+  override logic(widget: Widget): Logic | undefined {
     if (!this.config(widget).directory) return undefined;
-    return {
-      bodyField: 'selector_code',
-      nameField: 'code_file',
-      extension: '.js',
-      what: 'this file selector',
-    };
+    return logicFrom(widget, 'code',
+                     { body: 'selector_code', prompt: 'selector_prompt', file: 'code_file' },
+                     'this file selector');
   }
 
   ports(widget: Widget) {
@@ -121,19 +118,10 @@ export class InputPickerElement extends WidgetElement<PickerConfig> {
     if (!settings.path) return { [out]: settings.directory ? [] : null };
     if (!settings.directory) return { [out]: runtime.files.resolve(settings.path) };
 
-    const extensions = settings.extensions
-      .split(',').map((e) => e.trim()).filter(Boolean)
-      .map((e) => (e.startsWith('.') ? e : `.${e}`));
-    let files = await runtime.files.list(settings.path, {
-      recursive: settings.recursive,
-      extensions: extensions.length ? extensions : undefined,
-    });
-
-    if (!settings.selectAll && settings.selectorCode.trim()) {
-      const chosen = await this.runSnippet(widget, { files }, runtime, settings.selectorCode);
-      if (Array.isArray(chosen.files)) files = chosen.files.map(String);
-    }
-    return { [out]: files };
+    // Literally the function the input node calls: listing a folder, filtering
+    // it and narrowing it with an authored selector is one behaviour, and this
+    // block had drifted into a second copy of it.
+    return { [out]: await selectFiles(this.logic(widget), settings, settings.path, runtime) };
   }
 }
 
@@ -206,8 +194,9 @@ abstract class TransformingDisplay extends DisplayWidget<TransformConfig> {
     };
   }
 
-  override authoredFile(): AuthoredFile {
-    return { bodyField: 'code', nameField: 'code_file', extension: '.js', what: 'this transform' };
+  override logic(widget: Widget): Logic {
+    return logicFrom(widget, 'code', { body: 'code', prompt: 'code_prompt', file: 'code_file' },
+                     'this transform');
   }
 }
 

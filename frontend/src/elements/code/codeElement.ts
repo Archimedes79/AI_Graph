@@ -10,7 +10,6 @@ import { outputFormatContext } from '../shared/generationContext';
 export const codeElement: NodeElementDefinition = {
   nodeType: 'code',
   ownsDescription: true,
-  authoredFile: (node) => ({ extension: '.js', what: 'this code' }),
   generation: {
     promptField: 'code_prompt',
     targetField: 'code',

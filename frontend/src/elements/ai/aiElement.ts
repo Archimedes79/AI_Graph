@@ -8,7 +8,6 @@ export const aiElement: NodeElementDefinition = {
   // The description IS this element's generation prompt, drawn by its own
   // editor -- a second Description field above it showed the same box twice.
   ownsDescription: true,
-  authoredFile: () => ({ extension: '.md', what: 'this system prompt' }),
   generation: {
     // The one element whose request lives on the node rather than in its config.
     promptField: 'description',

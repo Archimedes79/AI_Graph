@@ -5,11 +5,9 @@ display in a text window (`write_mode == "window"`).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
 
 from app.elements.base import NodeElement
-from app.models.graph import GraphNode, NodeType
-from app.services import file_service
+from app.models.graph import NodeType
 
 
 class OutputElement(NodeElement):

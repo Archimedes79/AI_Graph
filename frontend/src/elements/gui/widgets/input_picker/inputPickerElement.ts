@@ -4,7 +4,6 @@ import InputPickerWidget from '../../../../components/gui/widgets/InputPickerWid
 
 export const inputPickerElement: GuiWidgetElementDefinition = {
   widgetKind: 'input_picker',
-  authoredFile: (widget) => ({ extension: '.js', what: 'this file selector' }),
   // The same declaration the input node carries, because it is the same
   // behaviour one level down -- the backend returns literally the same object.
   generation: {

@@ -15,42 +15,13 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, List, Optional, Tuple
 
-from app.models.graph import (DataType, GraphNode, GuiWidget, GuiWidgetKind, NodeType,
-                              Port, PortKind)
-from app.services import code_executor
+from app.models.graph import DataType, GuiWidget, GuiWidgetKind, NodeType, Port, PortKind
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class DeployNeeds:
-    """
-    What one node's (or widget's) behavior needs from the deployed bundle's
-    `requirements.txt` / optional runtime setup -- aggregated across every node
-    via `|`. All fields default to False: most elements need nothing extra.
-    """
-
-    # Only needs that actually change the bundle belong here. `file_service`
-    # and `code_executor` are stdlib-only and vendored unconditionally, so
-    # "this node reads files" or "this node runs code" can never affect what
-    # gets shipped -- fields for those existed, were computed by six elements,
-    # and were read by nobody. Add one back the moment a need genuinely changes
-    # the bundle; that is exactly what this class is for.
-
-    ai: bool = False             # -> httpx in requirements.txt
-    # This node has an interface a user operates while the graph runs, so the
-    # bundle must ship the web runtime (serve.py + the built page) rather than
-    # falling back to console prompts. Set by the gui element; deploy_service
-    # asks for it here instead of inspecting node_type itself.
-    interactive_ui: bool = False
-
-    def __or__(self, other: "DeployNeeds") -> "DeployNeeds":
-        return DeployNeeds(
-            ai=self.ai or other.ai,
-            interactive_ui=self.interactive_ui or other.interactive_ui,
-        )
 
 
 @dataclass(frozen=True)
@@ -147,8 +118,8 @@ class Element(ABC):
     """
     What a node and a GUI widget have in common, which is nearly everything.
 
-    `NodeElement` and `GuiWidgetElement` declared `authored_file`, `generation`
-    and `deploy_needs` separately, with identical signatures and identical
+    `NodeElement` and `GuiWidgetElement` declared `authored_file` and
+    `generation` separately, with identical signatures and identical
     meanings -- and `gui_element.py` already calls itself a Composite, a pattern
     whose whole point is that leaf and container implement one component
     interface. They did not. The cost was concrete: `node_files.Authored`
@@ -160,6 +131,11 @@ class Element(ABC):
     addressed by the graph and has real ports; a widget is addressed by its
     owning node and derives `{id}_in`/`{id}_out`. Forcing those into one shape
     would buy uniformity by making every reader carry fields that never apply.
+
+    This is the *authoring* half only. Running a body belongs to the engine's
+    `Logic` (`engine/src/logic.ts`), which is also where the editor now asks
+    what an element authors -- so the pair below is the last place the question
+    is answered twice, and it is answered from the same field names.
     """
 
     # Which config fields this element owns -- see `NodeElement.config_fields`
@@ -192,10 +168,6 @@ class Element(ABC):
         editor's call -- see `available` on the frontend definition."""
         return None
 
-    def deploy_needs(self, subject: Any) -> DeployNeeds:
-        """What this instance needs from the deployed bundle's requirements.txt
-        / optional runtime setup. Default: nothing extra."""
-        return DeployNeeds()
 
 class NodeElement(Element):
     """
@@ -240,15 +212,6 @@ class NodeElement(Element):
     is_memory: ClassVar[bool] = False
 
 
-def widget_input_or_value(widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
-    """A widget's incoming wired value, falling back to its own stored value.
-
-    Shared by widget kinds that are simple overridable pickers (input_picker)
-    -- kinds with different precedence (e.g. text_io in "both" mode, where the
-    widget's own value wins first) implement it inline instead.
-    """
-    raw = inputs.get(f"{widget.id}_in")
-    return raw if raw is not None else widget.value
 
 
 class GuiWidgetElement(Element):
@@ -269,56 +232,8 @@ class GuiWidgetElement(Element):
     def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:
         """The (inputs, outputs) this widget contributes to its owning gui node."""
 
-@dataclass(frozen=True)
-class DirectorySource:
-    """What a directory selector needs, from either level.
-
-    `InputElement` (directory mode) and `InputPickerElement` run the identical
-    behaviour -- list a directory, optionally filter by extension, optionally
-    narrow it with an authored snippet -- and wrote it out twice. The two copies
-    had already disagreed once, on which contract sentence to hand the model.
-    This is the shape both build, so the behaviour below exists once.
-    """
-
-    path: str
-    recursive: bool
-    extensions: str
-    select_all: bool
-    selector_code: str
-    selector_prompt: str
 
 
-async def list_selected_files(element: "GuiWidgetElement | NodeElement",
-                              subject: Any, source: DirectorySource) -> List[str]:
-    """The rooted paths in *source*, after the element's own selector snippet.
-
-    A selector that was never generated in the editor is generated here, on the
-    first run -- the last-resort path a deployed bundle relies on.
-    """
-    from app.services import file_service
-
-    resolved = file_service.resolve_path(source.path)
-    files = file_service.list_directory(
-        resolved,
-        recursive=source.recursive,
-        extensions=file_service.parse_extensions_filter(source.extensions),
-    )
-    if source.select_all:
-        return files
-
-    code = source.selector_code.strip()
-    if not code and source.selector_prompt.strip():
-        from app.services import ai_service
-
-        code, _ = await ai_service.generate_code(
-            description=source.selector_prompt,
-            context=SELECTOR_GENERATION.contract,
-            inputs=["files"], outputs=["files"],
-        )
-    if not code:
-        return files
-    selected = await element.run_snippet(subject, {"files": files}, code)
-    return selected.get("files", files)
 
 
 class StaticWidget(GuiWidgetElement):

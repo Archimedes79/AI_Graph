@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from app.elements.base import AuthoredFile, DeployNeeds, Generation, NodeElement
+from app.elements.base import AuthoredFile, Generation, NodeElement
 from app.models.graph import GraphNode, NodeType
-from app.services import ai_service, file_service
+from app.services import file_service
 
 _FORMAT_LABELS = {
     "json": "a JSON object or array",
@@ -15,17 +15,6 @@ _FORMAT_LABELS = {
 }
 
 
-def output_format_instruction(cfg) -> str:
-    """A one-line instruction derived from config.output_format/output_format_prompt,
-    shared by the AI node's runtime prompt and (via NodeEditor.tsx's mirrored logic)
-    the AI-assisted code/prompt generation context. Empty for the default 'text' format."""
-    fmt = cfg.output_format
-    if not fmt or fmt == "text":
-        return ""
-    if fmt == "custom":
-        description = f" ({cfg.output_format_prompt})" if cfg.output_format_prompt else ""
-        return f"Respond in the following format{description}."
-    return f"Respond with {_FORMAT_LABELS.get(fmt, fmt)}."
 
 
 def _as_image_url(value) -> Optional[str]:
@@ -53,8 +42,6 @@ class AIElement(NodeElement):
         "batch_mode", "batch_concurrency", "read_file_inputs",
     )
 
-    def deploy_needs(self, node: GraphNode) -> DeployNeeds:
-        return DeployNeeds(ai=True)
 
     def generation(self) -> Generation:
         """The system prompt, written from the node's own description -- the one

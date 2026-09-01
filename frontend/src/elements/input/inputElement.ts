@@ -9,12 +9,6 @@ import type { Port } from '../../types/graph';
 export const inputElement: NodeElementDefinition = {
   nodeType: 'input',
   ConfigEditor: InputEditor,
-  // In directory mode the selector is real code and gets a real file -- the
-  // same one an input_picker widget gets, because it is the same behaviour one
-  // level up. A text or single-file input authors nothing.
-  authoredFile: (node) => (node.config.input_mode === 'directory'
-    ? { extension: '.js', what: 'this file selector' }
-    : undefined),
   generation: {
     promptField: 'selector_prompt',
     targetField: 'selector_code',

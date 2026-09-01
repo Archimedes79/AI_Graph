@@ -1,4 +1,5 @@
-import { NodeElement, type AuthoredFile, type Runtime } from '../element.ts';
+import { NodeElement, type Runtime } from '../element.ts';
+import { Logic, logicFrom } from '../logic.ts';
 import type { GraphNode } from '../graph.ts';
 import { imageDataUrl, imageMediaType } from '../images.ts';
 
@@ -47,8 +48,12 @@ export class AiElement extends NodeElement<AiConfig> {
    * script that calls the model. Such a script would be a second copy of what
    * the provider layer already does, and would drift from it immediately.
    */
-  override authoredFile(): AuthoredFile {
-    return { bodyField: 'system_prompt', nameField: 'code_file', extension: '.md', what: 'this prompt' };
+  override logic(node: GraphNode): Logic {
+    // The request is the node's own description, not a config field: an ai
+    // node's description IS what you asked the model to be.
+    return logicFrom(node, 'prompt',
+                     { body: 'system_prompt', prompt: 'description', file: 'code_file', promptOnSubject: true },
+                     'this prompt');
   }
 
   override deployNeeds() {

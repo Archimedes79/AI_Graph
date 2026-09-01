@@ -3,6 +3,7 @@ import type { GuiWidget } from '../types/graph';
 import { GUI_WIDGET_KIND_LABELS } from '../utils/guiWidgets';
 import { useGenerate } from '../elements/shared/useGenerate';
 import { buildGeneration, widgetFields } from '../elements/shared/generation';
+import { widgetLogic } from '../elements/shared/logic';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
 import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
 import { GenerationReport } from '../elements/shared/GenerationTranscript';
@@ -51,7 +52,7 @@ Wähle einen Block auf der Seite aus.
 
   const element = GUI_WIDGET_ELEMENTS[widget.kind];
   const ConfigEditor = element.ConfigEditor;
-  const fileSpec = element.authoredFile?.(widget);
+  const logic = widgetLogic(widget);
 
   /**
    * The one ✨ Generate handler, for whichever widget kind asks.
@@ -162,13 +163,13 @@ Wähle einen Block auf der Seite aus.
         </GenerationReport>
       )}
 
-      {fileSpec && (
+      {logic && (
         <div className="mt-3">
           <AuthoredFileOption
             label={widget.label || widget.id}
             fileName={widget.code_file ?? ''}
-            extension={fileSpec.extension}
-            what={fileSpec.what}
+            extension={logic.extension}
+            what={logic.what}
             folderHint="<graph>.nodes/<node>/"
             onChange={(name) => onChange({ code_file: name })}
           />

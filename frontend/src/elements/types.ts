@@ -33,14 +33,6 @@ export interface ElementDefinitionBase<S> {
    */
   ConfigEditor?: React.ComponentType<any>;
   /**
-   * What this element keeps in a file beside the graph, mirroring the backend's
-   * `Element.authored_file()`. Omitted for an element with nothing a person
-   * writes at length (input, output), which is what decides whether the editor
-   * offers the option at all -- so the offer follows the element rather than a
-   * list of types kept somewhere else.
-   */
-  authoredFile?: (subject: S) => { extension: string; what: string } | undefined;
-  /**
    * The ✨ Generate button this element offers, mirroring the backend's
    * `Element.generation()`. Omitted for an element that generates nothing
    * (output, text_io), which is what decides whether a button is drawn at all --

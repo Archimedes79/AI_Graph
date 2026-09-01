@@ -1,4 +1,5 @@
-import { NodeElement, type AuthoredFile, type Runtime } from '../element.ts';
+import { NodeElement, type Runtime } from '../element.ts';
+import { Logic, logicFrom } from '../logic.ts';
 import type { GraphNode } from '../graph.ts';
 import { port } from './port.ts';
 
@@ -8,7 +9,6 @@ export interface InputConfig {
   recursive: boolean;
   extensions: string;
   selectAll: boolean;
-  selectorCode: string;
   promptAtRuntime: boolean;
 }
 
@@ -33,7 +33,6 @@ export class InputElement extends NodeElement<InputConfig> {
       recursive: c.recursive === true,
       extensions: String(c.extensions ?? ''),
       selectAll: c.select_all_files !== false,
-      selectorCode: String(c.selector_code ?? ''),
       promptAtRuntime: c.prompt_at_runtime === true,
     };
   }
@@ -64,14 +63,11 @@ export class InputElement extends NodeElement<InputConfig> {
   }
 
   /** Only a folder listing is authored: a text or single-file input selects nothing. */
-  override authoredFile(node: GraphNode): AuthoredFile | undefined {
+  override logic(node: GraphNode): Logic | undefined {
     if (this.config(node).mode !== 'directory') return undefined;
-    return {
-      bodyField: 'selector_code',
-      nameField: 'code_file',
-      extension: '.js',
-      what: 'this file selector',
-    };
+    return logicFrom(node, 'code',
+                     { body: 'selector_code', prompt: 'selector_prompt', file: 'code_file' },
+                     'this file selector');
   }
 
   override runtimeRequirements(node: GraphNode) {
@@ -107,7 +103,7 @@ export class InputElement extends NodeElement<InputConfig> {
       return { content: await runtime.files.read(path), path };
     }
 
-    const files = await selectFiles(this, node, settings, raw, runtime);
+    const files = await selectFiles(this.logic(node), settings, raw, runtime);
     return { files, count: files.length };
   }
 }
@@ -120,9 +116,8 @@ export class InputElement extends NodeElement<InputConfig> {
  * stops the two from drifting apart the first time either is changed.
  */
 export async function selectFiles(
-  element: { runSnippet: (subject: never, inputs: Record<string, unknown>, runtime: Runtime, body?: string) => Promise<Record<string, unknown>> },
-  subject: unknown,
-  settings: { recursive: boolean; extensions: string; selectAll: boolean; selectorCode: string },
+  logic: Logic | undefined,
+  settings: { recursive: boolean; extensions: string; selectAll: boolean },
   path: string,
   runtime: Runtime,
 ): Promise<string[]> {
@@ -135,8 +130,8 @@ export async function selectFiles(
     extensions: extensions.length ? extensions : undefined,
   });
 
-  if (!settings.selectAll && settings.selectorCode.trim()) {
-    const chosen = await element.runSnippet(subject as never, { files }, runtime, settings.selectorCode);
+  if (!settings.selectAll && logic && !logic.isEmpty) {
+    const chosen = await logic.run({ files }, runtime.code);
     if (Array.isArray(chosen.files)) files = chosen.files.map(String);
   }
   return files;
