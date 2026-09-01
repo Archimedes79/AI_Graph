@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { GraphNode } from '../types/graph';
 import { useGraphStore } from '../store/graphStore';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
-import { inputPortsForMode } from '../elements/input/inputElement';
+import { derivedNodePorts } from '../utils/guiWidgets';
 import { NODE_ELEMENTS } from '../elements/registry';
 import Modal from './Modal';
 import { useGenerate } from '../elements/shared/useGenerate';
@@ -150,13 +150,13 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const applyInputMode = (mode: 'text' | 'file' | 'directory') => {
     setNode((prev) => {
       if (!prev) return prev;
-      const ports = inputPortsForMode(mode);
-      return {
-        ...prev,
-        inputs: ports.inputs,
-        outputs: ports.outputs,
-        config: { ...prev.config, input_mode: mode },
-      };
+      // Changing the mode changes the ports, and the element is what knows
+      // which: a folder emits  and , a file  and
+      // . This used to be a second list here, which is how one of them
+      // came to disagree with what the node actually emits.
+      const next = { ...prev, config: { ...prev.config, input_mode: mode } };
+      const ports = derivedNodePorts(next);
+      return ports ? { ...next, inputs: ports.inputs, outputs: ports.outputs } : next;
     });
   };
 

@@ -11,6 +11,21 @@ import { parseWidget } from '@engine/elements/gui.ts';
 import { DEFAULT_WIDGET_SPAN } from '../components/gui/layout';
 import type { Tone } from '../components/gui/tone';
 
+/**
+ * The ports a node has, when they follow from its settings rather than being
+ * named by hand.
+ *
+ * Null for a code, AI, data or output node: a person names those to match the
+ * code they wrote or the prompt they gave, so the graph is the authority and
+ * an element declaring `input` and `value` for them would invent a contract
+ * nobody agreed to. Input and gui nodes are the other kind, and this is the
+ * only place either is worked out.
+ */
+export function derivedNodePorts(node: GraphNode): { inputs: Port[]; outputs: Port[] } | null {
+  const element = engineRegistry.node(node.node_type);
+  return (element?.derivedPorts(node as never) ?? null) as { inputs: Port[]; outputs: Port[] } | null;
+}
+
 /** Return the (inputs, outputs) a single GUI widget contributes to its node. */
 export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Port[] } {
   const element = engineRegistry.widget(widget.kind);

@@ -1,5 +1,6 @@
 import { NodeElement, type AuthoredFile, type Runtime } from '../element.ts';
 import type { GraphNode } from '../graph.ts';
+import { port } from './port.ts';
 
 export interface InputConfig {
   value: string;
@@ -36,6 +37,31 @@ export class InputElement extends NodeElement<InputConfig> {
       selectorCode: String(c.selector_code ?? ''),
       language: String(c.language ?? 'python'),
       promptAtRuntime: c.prompt_at_runtime === true,
+    };
+  }
+
+  override derivedPorts(node: GraphNode) {
+    const { mode } = this.config(node);
+    const path = port('path', 'Path', 'input', 'file_path', false, 'Override the configured path');
+
+    if (mode === 'text') {
+      return { inputs: [], outputs: [port('output', 'Output', 'output', 'text')] };
+    }
+    if (mode === 'directory') {
+      return {
+        inputs: [path],
+        outputs: [
+          port('files', 'Files', 'output', 'file_path', true, 'Rooted file paths'),
+          port('count', 'Count', 'output', 'text'),
+        ],
+      };
+    }
+    return {
+      inputs: [path],
+      outputs: [
+        port('content', 'Content', 'output', 'text'),
+        port('path', 'Path', 'output', 'file_path', false, 'Always includes the root'),
+      ],
     };
   }
 

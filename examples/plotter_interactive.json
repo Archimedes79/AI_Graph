@@ -25,11 +25,11 @@
       "label": "Plotter",
       "description": "Pick a CSV at the top, see it charted below. A gui node's ports are derived from its widgets, so the picker's output and the plot's input are the node's own ports.",
       "position": {
-        "x": 120.0,
-        "y": 80.0
+        "x": 120,
+        "y": 80
       },
-      "width": 659.0,
-      "height": 284.0,
+      "width": 659,
+      "height": 284,
       "inputs": [
         {
           "id": "chart_in",
@@ -38,9 +38,7 @@
           "data_type": "any",
           "multi": true,
           "required": false,
-          "description": "",
-          "format": null,
-          "debug_directory": null
+          "description": ""
         }
       ],
       "outputs": [
@@ -51,9 +49,7 @@
           "data_type": "file_path",
           "multi": false,
           "required": false,
-          "description": "",
-          "format": null,
-          "debug_directory": null
+          "description": ""
         }
       ],
       "config": {
@@ -222,8 +218,8 @@
         "x": 252.10112359550556,
         "y": 515.5617977528091
       },
-      "width": 240.0,
-      "height": 184.0,
+      "width": 240,
+      "height": 184,
       "inputs": [
         {
           "id": "csv",

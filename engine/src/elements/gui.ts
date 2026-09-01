@@ -54,8 +54,8 @@ export class GuiElement extends NodeElement<GuiConfig> {
     return { widgets: Array.isArray(raw) ? raw.map(parseWidget) : [] };
   }
 
-  /** The ports this node has, which is the union of its blocks' ports. */
-  ports(node: GraphNode): { inputs: Port[]; outputs: Port[] } {
+  /** Derived: the union of its blocks' ports. Nobody names these by hand. */
+  override derivedPorts(node: GraphNode): { inputs: Port[]; outputs: Port[] } {
     const inputs: Port[] = [];
     const outputs: Port[] = [];
     for (const widget of this.config(node).widgets) {

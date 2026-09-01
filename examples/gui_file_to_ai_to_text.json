@@ -26,7 +26,7 @@
       "inputs": [
         {
           "id": "w-answer_in",
-          "name": "Summary",
+          "name": "Zusammenfassung",
           "kind": "input",
           "data_type": "any",
           "multi": false,
@@ -37,18 +37,9 @@
       "outputs": [
         {
           "id": "w-source_out",
-          "name": "Source File",
+          "name": "Quelldatei",
           "kind": "output",
           "data_type": "file_path",
-          "multi": false,
-          "required": false,
-          "description": ""
-        },
-        {
-          "id": "w-answer_out",
-          "name": "Summary",
-          "kind": "output",
-          "data_type": "text",
           "multi": false,
           "required": false,
           "description": ""

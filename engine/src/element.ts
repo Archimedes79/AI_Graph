@@ -173,6 +173,27 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
   abstract readonly nodeType: NodeType;
 
   /**
+   * The ports this node has, *when they follow from its settings*.
+   *
+   * Two kinds of node, and the difference is worth naming. An input node's
+   * ports follow from its mode — text has one output, a folder has `files` and
+   * `count` — and a gui node's follow from its blocks. Nobody names those, and
+   * a copy of them in the editor is a copy that can disagree with what the
+   * element emits, which is exactly how an input node came to emit `output`
+   * where its ports said `files`.
+   *
+   * A code, AI, data or output node is the other kind: a person names its ports
+   * to match the code they wrote or the prompt they gave. `count_per_file` has
+   * an input called `file`; `total` produces `bla_count` and `summary`. Those
+   * are the graph's, not the element's, and returning null says so — the test
+   * that checks declarations against real graphs is what made the distinction
+   * visible in the first place.
+   */
+  derivedPorts(_node: GraphNode): { inputs: Port[]; outputs: Port[] } | null {
+    return null;
+  }
+
+  /**
    * This node keeps its value between runs, so an edge into it can close a
    * cycle: the executor leaves such an edge out of the ordering and settles the
    * fresh value afterwards, for the *next* round.
