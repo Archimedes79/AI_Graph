@@ -1,5 +1,6 @@
 import { NodeElement, type AuthoredFile, type Runtime } from '../element.ts';
 import type { GraphNode } from '../graph.ts';
+import { imageDataUrl, imageMediaType } from '../images.ts';
 
 export interface AiConfig {
   systemPrompt: string;
@@ -65,8 +66,16 @@ export class AiElement extends NodeElement<AiConfig> {
         // An input that *is* an image becomes an image in the request rather
         // than a path pasted into the prompt. A list is expanded, so a folder
         // picker wired straight in sends every file.
+        //
+        // Read here, not passed as a path: the provider's machine is not this
+        // one, so a filename would arrive as a filename and the model would
+        // dutifully talk about the filename.
         const candidates = Array.isArray(value) ? value : [value];
-        const urls = candidates.map(asImageUrl).filter((url): url is string => url !== null);
+        const urls: string[] = [];
+        for (const candidate of candidates) {
+          const url = await asImageUrl(candidate, runtime);
+          if (url) urls.push(url);
+        }
         if (urls.length) {
           images.push(...urls);
           continue;
@@ -103,11 +112,21 @@ function formatInstruction(settings: AiConfig): string {
   return '';
 }
 
-const IMAGE_SUFFIX = /\.(png|jpe?g|gif|webp|bmp)$/i;
-
-/** An image path or data URL, or null for anything that is just text. */
-function asImageUrl(value: unknown): string | null {
+/**
+ * An image, inlined — or null for anything that is just text.
+ *
+ * A file that looks like an image but cannot be read (missing, too large, not
+ * actually one) counts as text: it goes into the prompt as the string it is,
+ * which is what someone wiring a filename in would expect, rather than failing
+ * the whole node over a picture it was optional to send.
+ */
+async function asImageUrl(value: unknown, runtime: Runtime): Promise<string | null> {
   if (typeof value !== 'string') return null;
   if (value.startsWith('data:image/')) return value;
-  return IMAGE_SUFFIX.test(value) ? value : null;
+  if (!imageMediaType(value)) return null;
+  try {
+    return await imageDataUrl(value, runtime.files);
+  } catch {
+    return null;
+  }
 }

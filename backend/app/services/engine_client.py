@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # Where the engine lives, from the repo and from a frozen build alike.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_ENGINE_MAIN = _REPO_ROOT / "engine" / "src" / "main.ts"
+ENGINE_MAIN = _REPO_ROOT / "engine" / "src" / "main.ts"
 
 _START_TIMEOUT = 30.0
 _process: Optional[subprocess.Popen] = None
@@ -52,7 +52,7 @@ def _free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-def _node() -> str:
+def node_command() -> str:
     found = shutil.which("node")
     if not found:
         raise EngineUnavailable(
@@ -69,11 +69,11 @@ def start() -> str:
     if _process is not None and _process.poll() is None:
         return _base_url
 
-    if not _ENGINE_MAIN.exists():
-        raise EngineUnavailable(f"The engine is missing: expected {_ENGINE_MAIN}")
+    if not ENGINE_MAIN.exists():
+        raise EngineUnavailable(f"The engine is missing: expected {ENGINE_MAIN}")
 
     port = _free_port()
-    command = [_node(), str(_ENGINE_MAIN), "graph.json", "--serve", "--port", str(port)]
+    command = [node_command(), str(ENGINE_MAIN), "graph.json", "--serve", "--port", str(port)]
     logger.info("Starting the engine: %s", " ".join(command))
 
     _process = subprocess.Popen(

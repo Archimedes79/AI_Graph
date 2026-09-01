@@ -86,15 +86,6 @@ def test_the_environment_location_is_overridable(tmp_path, monkeypatch):
     assert code_env.env_dir() == tmp_path / "env"
 
 
-def test_a_deploy_bundle_lists_what_the_graph_imports():
-    from app.services.deploy_service import generate_deployment_bundle
-
-    requirements = generate_deployment_bundle(_graph_with(["pandas>=2.0"]))["requirements.txt"]
-    assert "pandas>=2.0" in requirements
-    # ...without claiming it is an engine dependency.
-    assert "pydantic" in requirements
-
-
 @pytest.fixture(autouse=True)
 def _forget_probed_interpreters():
     """

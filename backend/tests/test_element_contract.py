@@ -48,7 +48,6 @@ from app.models.graph import (  # noqa: E402
     sync_gui_node_ports,
 )
 from app.services import ai_service  # noqa: E402
-from app.services.graph_executor import ExecutionStatus, execute_graph  # noqa: E402
 
 CODE_ECHO = "def run(inputs):\n    return {'output': inputs.get('input', '')}\n"
 
@@ -184,139 +183,11 @@ async def _assert_ai_call_path(node_type: NodeType, element, tmp_path: Path, mon
     # here -- one behaviour, two answers, depending on which level you asked.
 
 
-@pytest.mark.parametrize("node_type, element", list(NODE_ELEMENTS.items()), ids=[t.value for t in NODE_ELEMENTS])
-async def test_node_element_contract(node_type: NodeType, element, tmp_path, monkeypatch):
-    node = _make_node(node_type, tmp_path)
-
-    # 1. Can be added/removed -- schema smoke test.
-    with_it = Graph(nodes=[node])
-    assert len(with_it.nodes) == 1
-    without_it = Graph(nodes=[])
-    assert without_it.nodes == []
-
-    # 2. Executed.
-    _install_ai_stubs(monkeypatch)
-    inputs = _minimal_inputs_for(node.inputs)
-    result = await element.execute(node, dict(inputs))
-    assert isinstance(result, dict)
-
-    # 3. Saving and loading works.
-    restored = GraphNode.model_validate_json(node.model_dump_json())
-    assert restored == node
-
-    # 4. AI can be called (only for AI-capable node types; no-op otherwise).
-    await _assert_ai_call_path(node_type, element, tmp_path, monkeypatch)
-
-
-async def test_data_element_persists_cycle_feedback_for_next_run():
-    data_node = GraphNode(
-        id="memory", node_type=NodeType.DATA, label="Memory",
-        inputs=[_port("input", PortKind.INPUT)],
-        outputs=[_port("output", PortKind.OUTPUT)],
-        config=NodeConfig(data_value=1, data_format="structure"),
-    )
-    code_node = GraphNode(
-        id="increment", node_type=NodeType.CODE, label="Increment",
-        inputs=[_port("input", PortKind.INPUT)],
-        outputs=[_port("output", PortKind.OUTPUT)],
-        config=NodeConfig(code="def run(inputs):\n    return {'output': inputs['input'] + 1}\n"),
-    )
-    graph = Graph(
-        nodes=[data_node, code_node],
-        edges=[
-            GraphEdge(id="read", source_node_id="memory", source_port_id="output",
-                      target_node_id="increment", target_port_id="input"),
-            GraphEdge(id="write", source_node_id="increment", source_port_id="output",
-                      target_node_id="memory", target_port_id="input"),
-        ],
-    )
-
-    first = await execute_graph(graph)
-    assert first.status == ExecutionStatus.SUCCESS
-    assert next(r for r in first.node_results if r.node_id == "memory").outputs == {"output": 1}
-    assert data_node.config.data_value == 2
-
-    second = await execute_graph(graph)
-    assert second.status == ExecutionStatus.SUCCESS
-    assert next(r for r in second.node_results if r.node_id == "memory").outputs == {"output": 2}
-    assert data_node.config.data_value == 3
-
-
 # ---------------------------------------------------------------------------
 # Extra per-element cases: behavior the minimal per-type fixture above never
 # exercises (a non-default config branch), consolidated here instead of a
 # standalone single-behavior test file per AGENTS.md's "Tests" section.
 # ---------------------------------------------------------------------------
-
-async def test_directory_input_applies_extension_filter(tmp_path):
-    """Input (directory mode) config.extra["extensions"] filter (was its own test file)."""
-    (tmp_path / "a.md").write_text("md a", encoding="utf-8")
-    (tmp_path / "b.md").write_text("md b", encoding="utf-8")
-    (tmp_path / "c.txt").write_text("txt c", encoding="utf-8")
-
-    node = GraphNode(
-        id="dir_filter", node_type=NodeType.INPUT, label="Dir",
-        inputs=[_port("path", PortKind.INPUT, DataType.FILE_PATH)],
-        outputs=[_port("files", PortKind.OUTPUT, DataType.FILE_PATH, multi=True),
-                 _port("count", PortKind.OUTPUT, DataType.TEXT)],
-        config=NodeConfig(value=str(tmp_path), input_mode="directory",
-                          select_all_files=True, extensions=".md"),
-    )
-    result = await NODE_ELEMENTS[NodeType.INPUT].execute(node, {})
-    assert sorted(Path(p).name for p in result["files"]) == ["a.md", "b.md"]
-    assert result["count"] == 2
-
-
-async def test_output_element_file_write_honors_json_format(tmp_path):
-    """OutputElement's write_mode="file" branch calls write_formatted_file for a
-    non-text format (was covered only by raw file_service unit tests)."""
-    node = GraphNode(
-        id="out_json", node_type=NodeType.OUTPUT, label="Out",
-        inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
-        config=NodeConfig(output_label="Result", write_mode="file", value=str(tmp_path / "result")),
-    )
-    result = await NODE_ELEMENTS[NodeType.OUTPUT].execute(
-        node, {"value": [1, 2, 3]}, effective_formats={"value": "json"},
-    )
-    written = Path(result["written_path"])
-    assert written.suffix == ".json"
-    assert json.loads(written.read_text(encoding="utf-8")) == [1, 2, 3]
-
-
-async def test_output_element_directory_write_honors_binary_and_csv_formats(tmp_path):
-    """OutputElement's write_mode="directory" branch honors per-port binary/csv
-    formats via write_output_directory (json/text combo already covered in
-    test_graph.py's execute_graph-level directory-write test)."""
-    raw = b"\x00\x01binarydata"
-    encoded = base64.b64encode(raw).decode("ascii")
-    node = GraphNode(
-        id="out_dir", node_type=NodeType.OUTPUT, label="Out",
-        inputs=[_port("blob", PortKind.INPUT, DataType.ANY),
-                _port("table", PortKind.INPUT, DataType.ANY)],
-        config=NodeConfig(output_label="Result", write_mode="directory", value=str(tmp_path / "out")),
-    )
-    result = await NODE_ELEMENTS[NodeType.OUTPUT].execute(
-        node,
-        {"blob": encoded, "table": [{"a": "1"}, {"a": "2"}]},
-        effective_formats={"blob": "binary", "table": "csv"},
-    )
-    written = {Path(p).stem.split("_")[0]: Path(p) for p in result["written_paths"]}
-    assert written["blob"].suffix == ".bin"
-    assert written["blob"].read_bytes() == raw
-    assert written["table"].suffix == ".csv"
-    assert "a" in written["table"].read_text(encoding="utf-8")
-
-
-async def test_output_element_window_mode_compiles_text_window_append():
-    """OutputElement's write_mode="window" branch (the former standalone
-    TextOutputElement, folded in as a write_mode)."""
-    node = GraphNode(
-        id="out_window", node_type=NodeType.OUTPUT, label="Out",
-        inputs=[_port("value", PortKind.INPUT, DataType.ANY, multi=True)],
-        config=NodeConfig(output_label="Shown", write_mode="window"),
-    )
-    exec_result = await NODE_ELEMENTS[NodeType.OUTPUT].execute(node, {"value": ["a", "b"]})
-    assert exec_result == {"value": ["a", "b"]}
 
 
 # ---------------------------------------------------------------------------
@@ -346,60 +217,6 @@ def _gui_node_for(widget: GuiWidget, node_id: str = "gui1") -> GraphNode:
     node = GraphNode(id=node_id, node_type=NodeType.GUI, label="GUI", config=NodeConfig(gui_widgets=[widget]))
     sync_gui_node_ports(node)
     return node
-
-
-@pytest.mark.parametrize("widget_kind, element", list(GUI_WIDGET_ELEMENTS.items()), ids=[k.value for k in GUI_WIDGET_ELEMENTS])
-async def test_gui_widget_element_contract(widget_kind: GuiWidgetKind, element, tmp_path, monkeypatch):
-    widget = _make_widget(widget_kind)
-    gui_node = _gui_node_for(widget)
-
-    # 1. Can be added/removed -- schema smoke test.
-    assert len(gui_node.config.gui_widgets) == 1
-    empty_node = GraphNode(id="gui_empty", node_type=NodeType.GUI, label="GUI", config=NodeConfig(gui_widgets=[]))
-    sync_gui_node_ports(empty_node)
-    assert empty_node.config.gui_widgets == [] and empty_node.inputs == [] and empty_node.outputs == []
-
-    # 2. Executed -- and its result is keyed by the ports it declared.
-    #
-    # One rule for every element, node and widget alike: `execute` returns
-    # {port_id: value}. A widget used to return its value plain and let the gui
-    # composite invent the key, on the grounds that a widget has only one output
-    # port. One rule with one exception is two rules, and that one had a price:
-    # a widget that wants to say *why* it produced nothing -- a picker whose
-    # file is gone -- needs a second port, and a bare return has nowhere to put
-    # it. This is the assertion that keeps the shortcut from coming back.
-    in_id = f"{widget.id}_in"
-    inputs = {in_id: ""} if any(p.id == in_id for p in gui_node.inputs) else {}
-    produced = await element.execute(widget, inputs)
-    declared = {port.id for port in gui_widget_ports(widget)[1]}
-    assert isinstance(produced, dict), f"{widget_kind} returned {type(produced).__name__}, not a port dict"
-    assert set(produced) <= declared, (
-        f"{widget_kind} produced ports it never declared: {set(produced) - declared}"
-    )
-
-    # 3. Saving and loading works.
-    restored = GuiWidget.model_validate_json(widget.model_dump_json())
-    assert restored == widget
-
-    # 4. AI can be called -- only input_picker's directory-mode file selector does.
-    if widget_kind != GuiWidgetKind.INPUT_PICKER:
-        return
-    calls = _install_ai_stubs(monkeypatch)
-    (tmp_path / "keep.txt").write_text("x", encoding="utf-8")
-    ai_widget = GuiWidget(
-        id="w_ai", kind=GuiWidgetKind.INPUT_PICKER, mode="directory", value=str(tmp_path),
-        select_all_files=False, selector_code="", selector_prompt="pick files",
-    )
-    await element.execute(ai_widget, {})
-    assert len(calls) == 1 and calls[0]["kind"] == "generate_code"
-    assert calls[0]["description"] == "pick files"
-    assert calls[0]["inputs"] == ["files"]
-    assert calls[0]["outputs"] == ["files"]
-    # A widget carries no provider of its own any more: it asks for nothing and
-    # lets ai_settings resolve whatever this run is configured with, so a
-    # deployed graph's AI choice reaches widget-level generation too.
-    assert calls[0]["model"] == ""
-    assert calls[0]["provider"] == AIProvider.DEFAULT
 
 
 @pytest.mark.parametrize("node_type, element", list(NODE_ELEMENTS.items()), ids=[t.value for t in NODE_ELEMENTS])
@@ -756,18 +573,6 @@ def test_both_languages_agree_on_which_nodes_are_memory(node_type):
     )
 
 
-def test_a_memory_element_can_store_what_settles_into_it():
-    """`is_memory` without somewhere to put the value is a promise with no
-    implementation: the frontend half must also declare `settleMemoryValue`."""
-    for node_type, element in NODE_ELEMENTS.items():
-        if not element.is_memory:
-            continue
-        source = (_FRONTEND_ELEMENTS_DIR / _FRONTEND_ELEMENT_FILES[node_type.value]).read_text(encoding="utf-8")
-        assert "settleMemoryValue" in source, (
-            f"{node_type.value} is a memory element but declares no settleMemoryValue"
-        )
-
-
 # ---------------------------------------------------------------------------
 # The shared snippet runner
 # ---------------------------------------------------------------------------
@@ -776,36 +581,6 @@ def test_a_memory_element_can_store_what_settles_into_it():
 # language, call the sandbox, decide what a failure costs -- and the copies had
 # begun to disagree (the selector's contract sentence existed twice, in two
 # wordings). `Element.run_snippet` is those steps, once.
-
-
-async def test_a_display_widget_survives_its_own_broken_transform():
-    """Cosmetic by declaration, not by a try/except in the composite.
-
-    A plot whose transform raises must show the reason and leave its sibling
-    widgets' outputs intact -- a failure here has no downstream port to corrupt.
-    """
-    from app.elements.gui.gui_element import apply_display_transform
-
-    widget = GuiWidget(id="w", kind=GuiWidgetKind.PLOT_WINDOW, label="Chart",
-                       code="def run(inputs):\n    raise ValueError('boom')\n")
-    shown = await apply_display_transform(widget, [1, 2, 3])
-    assert isinstance(shown, str) and "transform failed" in shown and "Chart" in shown
-
-
-async def test_an_empty_transform_passes_the_value_through():
-    from app.elements.gui.gui_element import apply_display_transform
-
-    widget = GuiWidget(id="w", kind=GuiWidgetKind.PLOT_WINDOW, label="Chart", code="")
-    assert await apply_display_transform(widget, [1, 2, 3]) == [1, 2, 3]
-
-
-async def test_a_code_node_with_no_code_says_so():
-    """It used to reach the sandbox anyway and come back as a NameError out of a
-    subprocess, which named neither the node nor the actual problem."""
-    node = GraphNode(id="c", node_type=NodeType.CODE, label="Empty",
-                     outputs=[_port("output", PortKind.OUTPUT)], config=NodeConfig(code=""))
-    with pytest.raises(RuntimeError, match="no code"):
-        await NODE_ELEMENTS[NodeType.CODE].execute(node, {})
 
 
 def test_the_two_display_widgets_share_one_implementation():

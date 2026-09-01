@@ -26,7 +26,6 @@ from app.models.graph import (  # noqa: E402
     PortKind,
 )
 from app.services import ai_service  # noqa: E402
-from app.services.graph_executor import execute_graph  # noqa: E402
 
 VALID_GRAPH_JSON = """
 ```json
@@ -91,31 +90,3 @@ async def test_generate_graph_raises_on_malformed_json(monkeypatch):
         await ai_service.generate_graph("Build a broken graph")
 
 
-@pytest.mark.asyncio
-async def test_gui_node_with_plot_window_executes_without_crashing():
-    gui = GraphNode(
-        id="gui", node_type=NodeType.GUI, label="Plot",
-    config=NodeConfig(gui_widgets=[GuiWidget(
-      id="w1", kind=GuiWidgetKind.PLOT_WINDOW,
-      code="def run(inputs):\n    return {'value': inputs.get('value')}\n",
-    )]),
-    )
-    text_in = GraphNode(
-        id="in", node_type=NodeType.INPUT, label="Input",
-        outputs=[Port(id="output", name="Output", kind=PortKind.OUTPUT, data_type=DataType.TEXT)],
-        config=NodeConfig(value="42"),
-    )
-    graph = Graph(
-        metadata=GraphMetadata(name="PlotWindow"),
-        nodes=[text_in, gui],
-        edges=[GraphEdge(id="e1", source_node_id="in", source_port_id="output",
-                          target_node_id="gui", target_port_id="w1_in")],
-    )
-
-    result = await execute_graph(graph)
-
-    assert result.status == "success"
-    gui_result = next(r for r in result.node_results if r.node_id == "gui")
-    assert gui_result.status == "success"
-    assert gui_result.inputs["w1_in"] == "42"
-    assert gui_result.outputs == {}

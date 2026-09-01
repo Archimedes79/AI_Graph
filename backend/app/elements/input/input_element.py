@@ -24,34 +24,6 @@ class InputElement(NodeElement):
         "selector_prompt", "selector_code", "language",
     )
 
-    async def execute(
-        self, node: GraphNode, inputs: Dict[str, Any], effective_formats=None
-    ) -> Dict[str, Any]:
-        cfg = node.config
-        mode = _effective_mode(node)
-
-        if mode == "text":
-            return {"output": cfg.value or inputs.get("value", "") or inputs.get("path", "")}
-
-        raw_path = cfg.value or inputs.get("path", "")
-        if not raw_path:
-            return {"content": "", "path": ""} if mode == "file" else {"files": [], "count": 0}
-
-        if mode == "directory":
-            # The same behaviour the input_picker widget runs, through the same
-            # code: one contract at two levels, implemented once.
-            files = await list_selected_files(self, node, DirectorySource(
-                path=raw_path, recursive=cfg.recursive, extensions=cfg.extensions,
-                select_all=cfg.select_all_files, selector_code=cfg.selector_code,
-                selector_prompt=cfg.selector_prompt, language=cfg.language or "python",
-            ))
-            return {"files": files, "count": len(files)}
-
-        # mode == "file"
-        path = file_service.resolve_path(raw_path)
-        content: Any = file_service.read_file(path, mode="text")
-        return {"content": content, "path": str(path)}
-
     def generation(self) -> Generation:
         """The shared selector contract -- literally the same object the
         `input_picker` widget returns, because it is the same behaviour at two
@@ -67,11 +39,3 @@ class InputElement(NodeElement):
             return None
         return AuthoredFile(body_field="selector_code", prompt_field="selector_prompt",
                             extension=code_extension(node.config))
-
-    def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
-        if not node.config.prompt_at_runtime:
-            return []
-        return [{
-            "node_id": node.id, "label": node.label, "kind": _effective_mode(node),
-            "direction": "input", "current_value": node.config.value or "",
-        }]

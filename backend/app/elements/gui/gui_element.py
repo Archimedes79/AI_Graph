@@ -59,55 +59,6 @@ class GuiElement(NodeElement):
     is_memory = True
     config_fields = ("gui_widgets",)
 
-    async def execute(
-        self,
-        node: GraphNode,
-        inputs: Dict[str, Any],
-        effective_formats: Optional[Dict[str, Optional[str]]] = None,
-    ) -> Dict[str, Any]:
-        sync_gui_node_ports(node)  # defensive: ports must reflect the current widget list
-        widget_elements = _widget_elements()
-        result: Dict[str, Any] = {}
-        for widget in node.config.gui_widgets:
-            # Display-only widgets (e.g. plot_window) declare no output port and
-            # therefore need no element behavior beyond an optional in-place
-            # transform of the raw incoming value -- there is no downstream
-            # port to carry the result through. Because nothing downstream
-            # depends on it, a failure here is cosmetic: it becomes the widget's
-            # displayed value instead of failing the whole node (which used to
-            # take every sibling widget's output down with it).
-            _, widget_outputs = gui_widget_ports(widget)
-            if not widget_outputs:
-                in_id = f"{widget.id}_in"
-                shown = await apply_display_transform(widget, inputs.get(in_id))
-                display_element = widget_elements.get(widget.kind)
-                if display_element is not None:
-                    shown = await display_element.display_value(widget, shown)
-                inputs[in_id] = shown
-                continue
-            element = widget_elements.get(widget.kind)
-            if element is None:
-                raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
-            # Merged, not wrapped: the widget names its own ports, the same way
-            # a node does. This composite used to invent the key, which quietly
-            # limited every widget to exactly one output forever.
-            result.update(await element.execute(widget, inputs))
-        return result
-
-    def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
-        widget_elements = _widget_elements()
-        reqs: List[Dict[str, Any]] = []
-        for widget in node.config.gui_widgets:
-            element = widget_elements.get(widget.kind)
-            req = element.runtime_requirement(widget) if element is not None else None
-            if req is None:
-                continue
-            reqs.append({
-                "node_id": node.id, "direction": "input", "current_value": "",
-                "widget_id": widget.id, **req,
-            })
-        return reqs
-
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
         widget_elements = _widget_elements()
         # A gui/widget node IS the graph's interface, so a bundle containing one

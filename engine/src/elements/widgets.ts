@@ -10,6 +10,7 @@ import {
   type AuthoredFile, type Runtime, type Widget,
 } from '../element.ts';
 import type { Port } from '../graph.ts';
+import { imageDataUrl, isInlineUrl } from '../images.ts';
 
 function port(id: string, name: string, kind: 'input' | 'output', dataType: Port['data_type'], multi = false): Port {
   return { id, name, kind, data_type: dataType, multi, required: false, description: '' };
@@ -222,6 +223,31 @@ export class PlotWindowElement extends TransformingDisplay {
 /** An image, by path. */
 export class ImageViewElement extends TransformingDisplay {
   readonly widgetKind = 'image_view' as const;
+
+  /**
+   * Whatever arrived, turned into something a browser can render.
+   *
+   * A path is read and inlined; a value that is already a data or http URL
+   * passes through; a list becomes a list of the same, so a folder picker
+   * wired straight in shows a contact sheet. The one thing this block does
+   * that a chart does not.
+   *
+   * A failure is shown, not raised — the same rule as a failing transform.
+   * Nothing downstream depends on a picture, and taking the whole node down
+   * would take every sibling block's output with it.
+   */
+  override async displayValue(widget: Widget, value: unknown, runtime: Runtime): Promise<unknown> {
+    if (Array.isArray(value)) {
+      return Promise.all(value.map((item) => this.displayValue(widget, item, runtime)));
+    }
+    if (typeof value !== 'string' || !value.trim()) return value;
+    if (isInlineUrl(value)) return value;
+    try {
+      return await imageDataUrl(value, runtime.files);
+    } catch (error) {
+      return `⚠ ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
 }
 
 /** Rows to show, as a list of objects. */

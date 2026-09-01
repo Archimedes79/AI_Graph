@@ -151,9 +151,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     setNode((prev) => {
       if (!prev) return prev;
       // Changing the mode changes the ports, and the element is what knows
-      // which: a folder emits  and , a file  and
-      // . This used to be a second list here, which is how one of them
-      // came to disagree with what the node actually emits.
+      // which: a folder emits files and count, a file content and path. This
+      // used to be a second list here, which is how one of them came to
+      // disagree with what the node actually emits.
       const next = { ...prev, config: { ...prev.config, input_mode: mode } };
       const ports = derivedNodePorts(next);
       return ports ? { ...next, inputs: ports.inputs, outputs: ports.outputs } : next;

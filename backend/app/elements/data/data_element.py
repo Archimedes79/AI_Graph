@@ -13,16 +13,6 @@ class DataElement(NodeElement):
     is_memory = True
     config_fields = ("data_value", "data_format", "data_prompt", "data_format_prompt")
 
-    async def execute(
-        self,
-        node: GraphNode,
-        inputs: Dict[str, Any],
-        effective_formats: Optional[Dict[str, Optional[str]]] = None,
-    ) -> Dict[str, Any]:
-        value = inputs["input"] if "input" in inputs else node.config.data_value
-        node.config.data_value = value
-        return {"output": value}
-
     def generation(self) -> Generation:
         """The format contract every neighbour is then generated against."""
         return Generation(

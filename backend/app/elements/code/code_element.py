@@ -11,7 +11,6 @@ from typing import Any, Dict, Optional
 from app.elements.base import AuthoredFile, Generation, NodeElement, code_extension
 from app.models.graph import GraphNode, NodeType
 
-from app.services.batching import reconcile_outputs
 
 
 class CodeElement(NodeElement):
@@ -23,20 +22,6 @@ class CodeElement(NodeElement):
         "output_format", "output_format_prompt",
         "batch_mode", "batch_concurrency", "read_file_inputs",
     )
-
-    async def execute(
-        self,
-        node: GraphNode,
-        inputs: Dict[str, Any],
-        effective_formats: Optional[Dict[str, Optional[str]]] = None,
-    ) -> Dict[str, Any]:
-        if not node.config.code.strip():
-            # The base passes an empty body through; for this element the body
-            # IS the behaviour, so an empty one is a mistake worth naming. It
-            # used to reach the sandbox regardless and come back as a NameError
-            # out of a subprocess.
-            raise RuntimeError("This code node has no code yet.")
-        return reconcile_outputs(node, await self.run_snippet(node, inputs))
 
     def authored_file(self, node: GraphNode) -> AuthoredFile:
         """The code itself, in a real .py/.js so an editor can help with it."""

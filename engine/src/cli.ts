@@ -27,6 +27,7 @@ import { serve } from './host/serve.ts';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 export interface CliOptions {
   graphPath: string;
@@ -156,7 +157,14 @@ export async function runEvery(options: CliOptions): Promise<number> {
 /** Write the graph and the engine somewhere someone else can run them. */
 export async function makeBundle(options: CliOptions): Promise<number> {
   const graph = parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')));
-  const written = await writeBundle(graph, options.bundle!);
+  // The built page, when this checkout has one. A bundle without it still
+  // runs on the terminal; with it, the recipient gets the tool they were
+  // shown. Looked up rather than passed, because the person writing a bundle
+  // should not have to know where a build lands.
+  const built = resolve(fileURLToPath(import.meta.url), '..', '..', '..', 'frontend', 'dist');
+  const written = await writeBundle(graph, options.bundle!, {
+    pageDir: existsSync(join(built, 'runtime.html')) ? built : undefined,
+  });
   process.stderr.write(
     `Wrote ${written.length} files to ${options.bundle}
 `

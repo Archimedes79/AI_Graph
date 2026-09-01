@@ -1,0 +1,79 @@
+{
+  "metadata": {
+    "name": "Untitled Graph",
+    "version": "1.0.0",
+    "description": "",
+    "author": "",
+    "tags": [],
+    "created_at": null,
+    "updated_at": "2026-09-01T21:01:59.317973+00:00",
+    "ai_defaults": {
+      "provider": "default",
+      "model": ""
+    },
+    "gui_scheme": "night"
+  },
+  "nodes": [
+    {
+      "id": "input-1-1788296498858",
+      "node_type": "input",
+      "label": "Input",
+      "description": "A text value, file, or directory",
+      "position": {
+        "x": 301.542169154189,
+        "y": 188.16850556598104
+      },
+      "width": null,
+      "height": null,
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Output",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "",
+          "format": null,
+          "debug_directory": null
+        }
+      ],
+      "config": {
+        "value": "",
+        "prompt_at_runtime": false,
+        "input_mode": "text",
+        "recursive": false,
+        "extensions": "",
+        "select_all_files": true,
+        "selector_prompt": "",
+        "selector_code": "def run(inputs):\n    # inputs[\"files\"] is the full list of file paths in the directory\n    return {\"files\": inputs.get(\"files\", [])}\n",
+        "ai_provider": "default",
+        "ai_model": "",
+        "system_prompt": "",
+        "temperature": 0.7,
+        "language": "python",
+        "code": "",
+        "code_prompt": "",
+        "code_file": "",
+        "requirements": [],
+        "data_value": null,
+        "data_format": "text",
+        "data_prompt": "",
+        "data_format_prompt": "",
+        "example_file": "",
+        "output_format": "text",
+        "output_format_prompt": "",
+        "batch_mode": "per_item",
+        "batch_concurrency": 0,
+        "read_file_inputs": false,
+        "send_images": false,
+        "output_label": "Result",
+        "write_mode": "none",
+        "gui_widgets": [],
+        "extra": {}
+      }
+    }
+  ],
+  "edges": []
+}

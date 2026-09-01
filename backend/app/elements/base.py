@@ -207,58 +207,6 @@ class Element(ABC):
         / optional runtime setup. Default: nothing extra."""
         return DeployNeeds()
 
-    async def run_snippet(
-        self, subject: Any, inputs: Dict[str, Any], body: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Execute this element's authored body against *inputs*.
-
-        *body* overrides what `authored_file()` points at, for the one case that
-        needs it: a selector generated at run time because the editor never
-        generated one. Passing it beats assigning it to the config first --
-        that made running a node quietly rewrite it.
-
-        Four elements wrote these steps out by hand -- find the body, find the
-        language, call the sandbox, decide what a failure means -- and the
-        copies had begun to disagree. Where the body lives is already declared
-        by `authored_file()`, so this needs no new declaration of its own.
-
-        An empty body passes *inputs* straight through. That used to mean three
-        different things: a code node called the sandbox regardless and failed
-        with a `NameError` out of a subprocess, the selectors guarded first, and
-        the display transform passed through. Pass-through is the sane default;
-        an element for which an empty body is a real error says so by overriding
-        (see `CodeElement`).
-        """
-        if body is None:
-            spec = self.authored_file(subject)
-            if spec is None:
-                return inputs
-            body = str(getattr(self._body_holder(subject), spec.body_field, "") or "")
-        if not body.strip():
-            return inputs
-
-        language = str(getattr(subject, "language", "") or "python")
-        # `requirements` exists on NodeConfig and not on GuiWidget -- the one
-        # real asymmetry between the levels here, and it costs a default.
-        requirements = list(getattr(subject, "requirements", ()) or ())
-        try:
-            return await code_executor.execute_code(body, language, inputs, requirements)
-        except Exception as exc:  # noqa: BLE001 - re-raised below unless cosmetic
-            if self.snippet_failure != "cosmetic":
-                raise
-            label = getattr(subject, "label", "") or getattr(subject, "id", "?")
-            logger.warning("Snippet of %s failed: %s", label, exc)
-            return {"value": f"⚠ {label}: transform failed:\n{exc}"}
-
-    def _body_holder(self, subject: Any) -> Any:
-        """Where `AuthoredFile.body_field` is read from.
-
-        A widget holds its own body; a node holds it in `config`. One line, and
-        the only thing `run_snippet` needs to know about the two levels.
-        """
-        return subject
-
-
 class NodeElement(Element):
     """
     Everything one `NodeType` needs to behave as a graph node:
@@ -271,9 +219,6 @@ class NodeElement(Element):
     """
 
     node_type: ClassVar[NodeType]
-
-    def _body_holder(self, subject: GraphNode) -> Any:
-        return subject.config
 
     # Which `NodeConfig` fields this element owns -- what its behaviour reads and
     # what its editor writes.
@@ -304,25 +249,6 @@ class NodeElement(Element):
     # depending on which half is asked.
     is_memory: ClassVar[bool] = False
 
-    @abstractmethod
-    async def execute(
-        self,
-        node: GraphNode,
-        inputs: Dict[str, Any],
-        effective_formats: Optional[Dict[str, Optional[str]]] = None,
-    ) -> Dict[str, Any]:
-        """Run this node once for the given already-resolved/decoded inputs."""
-
-    def runtime_requirements(self, node: GraphNode) -> List[Dict[str, Any]]:
-        """
-        Requirement dicts (`{node_id, label, kind, direction, current_value}`,
-        matching `RuntimeRequirement`'s fields) this node instance wants the user
-        prompted for before the graph runs -- web UI dialog, CLI, or a deployed
-        bundle's stdin prompts. Default: none; most node types never prompt for
-        anything at runtime.
-        """
-        return []
-
 
 def widget_input_or_value(widget: GuiWidget, inputs: Dict[str, Any]) -> Any:
     """A widget's incoming wired value, falling back to its own stored value.
@@ -352,44 +278,6 @@ class GuiWidgetElement(Element):
     @abstractmethod
     def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:
         """The (inputs, outputs) this widget contributes to its owning gui node."""
-
-    @abstractmethod
-    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Compute this widget's output ports: `{port_id: value}`, exactly as a
-        NodeElement does one level up.
-
-        A widget has at most one output port today, so this used to return that
-        value plain and let the gui composite wrap it. One rule with one
-        exception is two rules, and this was the expensive one to keep: a widget
-        that wants to report *why* it produced nothing -- a picker whose file is
-        missing -- needs a second port, and a bare return has nowhere to put it.
-
-        Display-only widgets have no output ports and never reach here; the
-        composite transforms their incoming value instead.
-
-        Async so a widget can await a sandboxed code run or an AI call (e.g.
-        input_picker's directory-mode file selector), exactly like a NodeElement.
-        """
-
-    async def display_value(self, widget: GuiWidget, value: Any) -> Any:
-        """
-        Last step before a display-only widget's value is handed to the UI, after
-        any transform snippet has run. Default: pass it through unchanged.
-
-        It exists so a widget kind that needs to *prepare* what it shows -- an
-        image_view turning a server-side path into something a browser can
-        render -- does that in its own file, instead of the shared gui composite
-        growing a branch per widget kind.
-        """
-        return value
-
-    def runtime_requirement(self, widget: GuiWidget) -> Optional[Dict[str, Any]]:
-        """This widget's own requirement dict (`{label, kind}`), or None if it
-        never prompts at runtime. Default: never (only a picker widget with no
-        preset value does; see input_picker_element.py)."""
-        return None
-
 
 @dataclass(frozen=True)
 class DirectorySource:
@@ -463,12 +351,6 @@ class StaticWidget(GuiWidgetElement):
     def ports(self, widget: GuiWidget) -> Tuple[List[Port], List[Port]]:
         return ([], [])
 
-    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        # Never called: the gui composite only executes widgets that have an
-        # output port, and these have none.
-        return {}
-
-
 class DisplayWidget(GuiWidgetElement):
     """
     A widget that only shows what arrives: one input port, no output port, and
@@ -492,13 +374,6 @@ class DisplayWidget(GuiWidgetElement):
                   data_type=DataType.ANY, multi=True, required=False)],
             [],
         )
-
-    async def execute(self, widget: GuiWidget, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        # Never called: a widget with no output port has its in-place transform
-        # applied by the composite instead (see gui/gui_element.py). No ports,
-        # so no port values -- the empty dict rather than None, because the rule
-        # is "returns {port_id: value}" with no exception for the empty case.
-        return {}
 
     def authored_file(self, widget: GuiWidget) -> AuthoredFile:
         """The optional transform that reshapes the incoming value."""

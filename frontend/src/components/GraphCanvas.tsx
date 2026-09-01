@@ -17,6 +17,7 @@ import 'reactflow/dist/style.css';
 
 import { useGraphStore } from '../store/graphStore';
 import GraphNodeComponent from './nodes/GraphNodeComponent';
+import { removalsToApply } from './nodeRemoval';
 import type { NodeType } from '../types/graph';
 import { ACCENT, LINE, PANEL, SUNKEN, SURFACE } from '../ui/theme';
 
@@ -110,8 +111,13 @@ export default function GraphCanvas() {
           // A drag reports a position change per frame, so history points come
           // from onNodeDragStart instead; removals have no such event and are
           // committed here, before they are applied.
-          if (changes.some((c) => c.type === 'remove')) commit();
-          setRFNodes(applyNodeChanges(changes, rfNodes) as typeof rfNodes);
+          const kept = removalsToApply(
+            changes,
+            (id) => rfNodes.find((n) => n.id === id)?.data.graphNode,
+            window.confirm,
+          );
+          if (kept.some((c) => c.type === 'remove')) commit();
+          setRFNodes(applyNodeChanges(kept, rfNodes) as typeof rfNodes);
         }}
         onNodeDragStart={() => commit()}
         onEdgesChange={(changes: EdgeChange[]) => {

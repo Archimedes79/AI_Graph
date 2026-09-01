@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 from app.elements.base import AuthoredFile, DeployNeeds, Generation, NodeElement
 from app.models.graph import GraphNode, NodeType
 from app.services import ai_service, file_service
-from app.services.batching import reconcile_outputs
 
 _FORMAT_LABELS = {
     "json": "a JSON object or array",
@@ -53,50 +52,6 @@ class AIElement(NodeElement):
         "output_format", "output_format_prompt",
         "batch_mode", "batch_concurrency", "read_file_inputs",
     )
-
-    async def execute(
-        self,
-        node: GraphNode,
-        inputs: Dict[str, Any],
-        effective_formats: Optional[Dict[str, Optional[str]]] = None,
-    ) -> Dict[str, Any]:
-        cfg = node.config
-        prompt_parts = []
-        images: List[str] = []
-        for port_id, val in inputs.items():
-            if val is None:
-                continue
-            # With send_images on, an input that IS an image becomes an image in
-            # the request instead of a path pasted into the prompt. A list is
-            # expanded, so a directory picker wired straight in sends every file.
-            if cfg.send_images:
-                candidates = val if isinstance(val, list) else [val]
-                urls = [url for url in (_as_image_url(c) for c in candidates) if url]
-                if urls:
-                    images.extend(urls)
-                    continue
-            # A list becomes its items, one per paragraph -- not `str(list)`,
-            # which puts brackets, quotes and commas into the prompt and makes
-            # the model read around a language's syntax to find the text. Three
-            # summaries wired into a node should arrive as three paragraphs.
-            for item in (val if isinstance(val, list) else [val]):
-                prompt_parts.append(item if isinstance(item, str) else str(item))
-        prompt = "\n\n".join(prompt_parts)
-        format_instruction = output_format_instruction(cfg)
-        system = f"{cfg.system_prompt}\n\n{format_instruction}" if format_instruction else cfg.system_prompt
-        # `images` is passed only when there are any, so a text-only node makes
-        # exactly the call it always made -- including for anything stubbing
-        # ai_service.complete, and for an older vendored copy in a bundle.
-        extra = {"images": images} if images else {}
-        response = await ai_service.complete(
-            prompt=prompt,
-            system=system,
-            model=cfg.ai_model,
-            temperature=cfg.temperature,
-            provider=cfg.ai_provider,
-            **extra,
-        )
-        return reconcile_outputs(node, {"output": response})
 
     def deploy_needs(self, node: GraphNode) -> DeployNeeds:
         return DeployNeeds(ai=True)
