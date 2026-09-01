@@ -121,9 +121,27 @@ cd AI_Graph
 docker compose up --build
 ```
 
-The editor is then at <http://localhost:3000>. Without Docker, `python start.py` starts
-both servers, and `python build_editor_exe.py` builds an executable you can double-click.
-All four ways, with their trade-offs, are in [docs/install.md](docs/install.md).
+The editor is then at <http://localhost:3000>. Without Docker:
+
+```bash
+start.cmd          # Windows — type the extension; plain `start` is a cmd built-in
+./start.sh         # everywhere else
+```
+
+Both find an interpreter rather than assuming one: `python start.py` is wrong on
+any Windows machine that never installed Python from python.org, where `python`
+is a Microsoft Store stub that prints an advertisement and exits.
+
+`python build_editor_exe.py` builds an executable you can double-click. All four
+ways, with their trade-offs, are in [docs/install.md](docs/install.md).
+
+**Running a graph needs no editor and no Python at all:**
+
+```bash
+node engine/src/main.ts examples/hello_world.json          # once
+node engine/src/main.ts my.json --serve                    # with its page
+node engine/src/main.ts my.json --bundle ./out             # to hand to someone
+```
 
 ## Documentation
 
@@ -142,6 +160,7 @@ AI-Graph/
 ├── backend/          # FastAPI backend (app/models, app/routers, app/elements, app/services)
 ├── frontend/         # React + TypeScript + ReactFlow editor (src/elements, src/components, src/store)
 ├── engine/           # The TypeScript engine: runs a graph, ships as a bundle, no build step
+├── start.cmd/.sh     # Start the editor; finds an interpreter instead of assuming one
 ├── graph-runner/     # run.py (CLI) / serve.py (GUI runtime) / build_exe.py — vendored into every deploy bundle
 ├── docs/             # The documents linked above
 ├── examples/         # Example graph JSON files
