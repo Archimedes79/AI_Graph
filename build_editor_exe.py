@@ -118,15 +118,16 @@ def build(name: str, onedir: bool, skip_build: bool, embed_python: str) -> int:
 
     # The built editor UI, served by app/main.py's StaticFiles mount.
     cmd += _add_data(FRONTEND_DIST, "frontend/dist")
-    # The app package AS SOURCE, not just as importable modules: deploy_service
-    # vendors these .py files verbatim into every bundle a user exports, so the
-    # exe has to carry readable copies, not only compiled ones.
+    # The app package as source. Less load-bearing than it was -- bundles are
+    # no longer assembled from these files -- but the editor still reads its own
+    # elements to answer what a node authors and what its generate button offers.
     cmd += _add_data(BACKEND_DIR / "app", "app")
-    # Same reason: a bundle's main.py/serve.py/build_exe.py are these files.
-    cmd += _add_data(REPO_ROOT / "graph-runner", "graph-runner")
-    # And the licence, which deploy_service copies into every exported bundle:
-    # its own Notices section requires that whoever receives the software
-    # receives the terms, so Deploy inside a frozen build must be able to read it.
+    # The engine, as source, because that is exactly how it runs: Node strips
+    # the types and executes the .ts files. A frozen editor that cannot read
+    # these cannot run a graph at all, and cannot write a bundle either.
+    cmd += _add_data(REPO_ROOT / "engine" / "src", "engine/src")
+    # The licence: its Notices section requires that whoever receives the
+    # software receives the terms, so a frozen build must be able to read it.
     cmd += _add_data(REPO_ROOT / "LICENSE", ".")
 
     # The interpreter code nodes run in, if this build is to carry one. It goes

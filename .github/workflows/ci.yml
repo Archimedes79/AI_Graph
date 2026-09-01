@@ -30,7 +30,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -68,9 +68,8 @@ jobs:
         run: npm run test
         working-directory: frontend
 
-      # The engine's suite runs the example graphs through both engines and
-      # diffs them, so it needs Python and Node together — which is why it is a
-      # step of the shared gate rather than of either half.
+      # The engine's suite runs every example end to end, and a code node's
+      # body is Python, so this step needs both runtimes present.
       - name: Engine types
         run: npm run typecheck
         working-directory: engine

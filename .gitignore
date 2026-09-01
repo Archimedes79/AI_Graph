@@ -61,3 +61,6 @@ ai-settings.json
 
 # The engine's installed packages.
 engine/node_modules/
+
+# A graph saved by a test run, not part of the project.
+backend/untitled_graph.json

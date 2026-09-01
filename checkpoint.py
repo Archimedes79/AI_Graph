@@ -82,10 +82,9 @@ def main() -> int:
             # the bundling.
             Step("Frontend types", ["npm", "run", "typecheck"], FRONTEND_DIR),
             Step("Backend tests", [python, "-m", "pytest", "tests", "-q"], BACKEND_DIR),
-            # The engine's suite ends in a differential test: the same example
-            # graphs through the TypeScript engine and through graph-runner's
-            # Python one, with the outputs diffed. It needs both to be present,
-            # which is why it runs here rather than in either half.
+            # The engine's suite runs every example end to end, and a code
+            # node's body is Python, so it needs both runtimes present -- which
+            # is why it runs here rather than inside either half.
             Step("Engine types", ["npm", "run", "typecheck"], ENGINE_DIR),
             Step("Engine tests", ["npm", "run", "test"], ENGINE_DIR),
             Step("Frontend tests", ["npm", "run", "test"], FRONTEND_DIR),

@@ -209,9 +209,9 @@ def run_checks(base: str, standalone: bool, tmp_dir: Path) -> Checks:
     result = _execute_graph(base, "hello_world.json")
     c.check("graph without a code node executes", result.get("status"), "success")
 
-    # A deploy bundle is assembled by reading the vendored engine's .py files as
-    # TEXT, which a frozen build can only do if it ships them as data -- so this
-    # is the check that catches a packaging regression, not just a broken route.
+    # A bundle is the engine copied beside the graph, and a frozen build can
+    # only copy what it ships as data -- so this is the check that catches a
+    # packaging regression rather than merely a broken route.
     bundle_path = tmp_dir / "smoke_bundle.zip"
     status, body = _request(f"{base}/api/deploy/bundle", (EXAMPLES / "bla_counter.json").read_bytes())
     bundle_path.write_bytes(body)
@@ -219,16 +219,16 @@ def run_checks(base: str, standalone: bool, tmp_dir: Path) -> Checks:
 
     with zipfile.ZipFile(bundle_path) as z:
         names = z.namelist()
-        for required in ("graph.json", "main.py", "requirements.txt", "app/services/graph_executor.py"):
+        for required in ("graph.json", "run.sh", "run.cmd", "README.md", "engine/main.ts"):
             c.check(f"bundle contains {required}", required in names, True)
 
-        vendored = z.read("app/services/graph_executor.py").decode("utf-8")
-        source = (REPO_ROOT / "backend" / "app" / "services" / "graph_executor.py").read_text(encoding="utf-8")
-        c.check("vendored engine is byte-identical to the repo's", vendored == source, True)
+        vendored = z.read("engine/executor.ts").decode("utf-8")
+        source = (REPO_ROOT / "engine" / "src" / "executor.ts").read_text(encoding="utf-8")
+        c.check("the bundled engine is byte-identical to the repo's", vendored == source, True)
 
-        vendored_main = z.read("main.py").decode("utf-8")
-        runner = (REPO_ROOT / "graph-runner" / "run.py").read_text(encoding="utf-8")
-        c.check("bundle main.py is graph-runner/run.py verbatim", vendored_main == runner, True)
+        # Its tests stay behind: a recipient has nothing to compare against, and
+        # a bundle carrying a test suite invites someone to run it and worry.
+        c.check("no tests are shipped", any(n.endswith(".test.ts") for n in names), False)
 
     status, body = _request(f"{base}/api/ai/code-env")
     code_env = json.loads(body)
