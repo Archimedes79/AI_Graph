@@ -148,8 +148,7 @@ automatically excluded from execution ordering — no manual "deferred" marking 
 and settles into the node's stored value once the round finishes, ready for the *next*
 run. See [examples/gui_file_to_ai_to_text.json](../examples/gui_file_to_ai_to_text.json)
 for a working File Open → AI → Text Window graph, and
-[AGENTS.md](../AGENTS.md#memory-feedback-edges-dataguiwidget-nodes) for the underlying
-algorithm.
+[engine/src/executor.ts](../engine/src/executor.ts) for the underlying algorithm.
 
 ### Plot window data transforms
 

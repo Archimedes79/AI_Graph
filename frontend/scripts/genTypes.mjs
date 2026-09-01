@@ -2,8 +2,8 @@
 /**
  * Regenerate frontend/src/types/graph.generated.ts from the backend's Graph
  * DSL Pydantic models (backend/app/models/graph.py). This is the frontend
- * half of the schema-deduplication bridge described in AGENTS.md's "Shared
- * contracts" section:
+ * half of the schema-deduplication bridge -- `models/graph.py` is the one
+ * definition of the Graph DSL, and this derives the TypeScript from it:
  *
  *   backend/app/models/graph.py
  *     -> backend/scripts/export_graph_schema.py (pydantic model_json_schema)

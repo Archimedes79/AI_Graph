@@ -297,7 +297,7 @@ def gui_widget_ports(widget: GuiWidget) -> tuple[List[Port], List[Port]]:
     """
     Return the (inputs, outputs) a single GUI widget contributes to its node.
     Delegates to that widget kind's `GuiWidgetElement.ports()` (see
-    `app.elements.base` / AGENTS.md) so the widget's own class is the single
+    `app.elements.base`) so the widget's own class is the single
     source of truth for its ports -- this module only orchestrates the
     resulting DSL. Local import: `app.elements.registry` imports this module,
     so importing it at module level here would be circular.
@@ -339,7 +339,7 @@ def sync_gui_node_ports(node: GraphNode) -> None:
 #     -> `input`, `text_output` -> `output`) and widget kinds (`file_open`/
 #     `directory_open` -> `input_picker`, `text_window`/`chat_window` ->
 #     `text_io`) were retired in favor of their unified elements; the alias
-#     names are no longer valid enum values (see AGENTS.md).
+#     names are no longer valid enum values.
 # ---------------------------------------------------------------------------
 
 _LEGACY_NODE_TYPES = {
@@ -407,7 +407,7 @@ def _migrate_legacy_widgets(node: dict) -> dict:
     return migrated
 
 
-# Fields renamed into the shared element vocabulary (see AGENTS.md).
+# Fields renamed into the shared element vocabulary.
 # Same one-time-rewrite mechanism as the legacy node types above, and for the
 # same reason: the old names are not fields any more, so pydantic's
 # extra="ignore" would silently drop the value unless it is moved first.
@@ -641,7 +641,7 @@ class GraphEdge(BaseModel):
     # back onto one (e.g. gui -> ai -> the same gui) is auto-excluded from
     # cycle detection and settled into the target widget's own persisted
     # `value` once the rest of the round has executed, instead of blocking on
-    # it. See graph_executor.py's "memory feedback" section and AGENTS.md.
+    # it. See the engine's executor for how a feedback edge is settled.
 
 
 class AIDefaults(BaseModel):
@@ -704,7 +704,7 @@ class Graph(BaseModel):
     def _migrate_legacy_nodes(cls, data: Any) -> Any:
         """Run _migrate_legacy_node on every raw node dict before node_type /
         widget kind is validated against its enum -- the migration insertion
-        point for legacy graphs (see AGENTS.md)."""
+        point for legacy graphs."""
         if isinstance(data, dict):
             nodes = data.get("nodes")
             if isinstance(nodes, list):

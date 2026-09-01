@@ -1,8 +1,7 @@
 /**
  * Shared logic for generating frontend/src/types/graph.generated.ts from the
  * backend's Graph DSL Pydantic models. Used by both `genTypes.mjs` (writes
- * the file) and `checkTypesUpToDate.mjs` (verifies it's not stale) -- see
- * AGENTS.md's "Shared contracts" section.
+ * the file) and `checkTypesUpToDate.mjs` (verifies it's not stale).
  */
 import { compile } from 'json-schema-to-typescript';
 import { execFileSync } from 'node:child_process';

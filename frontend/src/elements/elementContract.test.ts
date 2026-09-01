@@ -3,9 +3,8 @@
  *
  * Walks every registered NodeElementDefinition (`registry.ts::NODE_ELEMENTS`)
  * and GuiWidgetElementDefinition (`registry.ts::GUI_WIDGET_ELEMENTS`) and
- * asserts the handful of universal properties every element must satisfy --
- * see AGENTS.md's "Object-oriented element contract". This REPLACES ad-hoc
- * per-element unit tests: when adding a new NodeType/GuiWidgetKind, extend
+ * asserts the handful of universal properties every element must satisfy.
+ * This REPLACES ad-hoc per-element unit tests: when adding a new NodeType/GuiWidgetKind, extend
  * this file instead of adding a new one. The deep execute()-vs-compile()
  * check only makes sense on the backend (see
  * backend/tests/test_element_contract.py) -- only the backend actually

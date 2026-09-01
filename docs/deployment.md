@@ -91,8 +91,9 @@ curl -X POST http://localhost:8000/api/deploy/bundle \
   --output bundle.zip
 ```
 
-See [AGENTS.md](../AGENTS.md#deploying-a-graph--vendored-runtime-bundles-not-codegen) for
-exactly which files a bundle contains and why it can never drift from the editor.
+See [engine/src/bundle.ts](../engine/src/bundle.ts) for exactly which files a bundle
+contains and why it can never drift from the editor: the engine is copied verbatim
+rather than generated.
 
 ## Deploying the editor itself
 

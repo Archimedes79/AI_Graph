@@ -4,7 +4,7 @@ import { baseNodeConfig } from '../shared/baseNodeConfig';
 import { outputFormatContext } from '../shared/generationContext';
 
 /**
- * Reference implementation for AGENTS.md's element contract -- every other
+ * Reference implementation of the element contract -- every other
  * NodeElementDefinition should look structurally identical to this one.
  */
 export const codeElement: NodeElementDefinition = {

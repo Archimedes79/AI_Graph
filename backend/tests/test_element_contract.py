@@ -3,9 +3,8 @@ Consolidated element-contract test.
 
 Walks every registered `NodeElement` (`elements.registry.NODE_ELEMENTS`) and
 `GuiWidgetElement` (`elements.registry.GUI_WIDGET_ELEMENTS`) and asserts the
-handful of universal properties every element must satisfy -- see AGENTS.md's
-"Object-oriented element contract". This REPLACES ad-hoc per-element unit
-tests: when adding a new NodeType/GuiWidgetKind, extend the per-type tables
+handful of universal properties every element must satisfy. This REPLACES
+ad-hoc per-element unit tests: when adding a new NodeType/GuiWidgetKind, extend the per-type tables
 below instead of adding a new test file.
 
 There is no more `compile()` to check for consistency against `execute()`:
@@ -186,7 +185,7 @@ async def _assert_ai_call_path(node_type: NodeType, element, tmp_path: Path, mon
 # ---------------------------------------------------------------------------
 # Extra per-element cases: behavior the minimal per-type fixture above never
 # exercises (a non-default config branch), consolidated here instead of a
-# standalone single-behavior test file per AGENTS.md's "Tests" section.
+# standalone single-behavior test file.
 # ---------------------------------------------------------------------------
 
 

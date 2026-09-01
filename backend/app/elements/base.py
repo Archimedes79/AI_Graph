@@ -3,11 +3,8 @@ Object-oriented core of the Graph DSL.
 
 Every `NodeType` and `GuiWidgetKind` is exactly one class ("element") owning ALL
 of its behavior in one file: live execution and (for widgets) which ports it
-contributes. Deploy bundles ship this exact code (see `deploy_service.py`)
-rather than a regenerated equivalent, so there is no separate codegen contract
-to implement. See AGENTS.md's "Object-oriented element contract" section for
-the full list of what an element must implement and what it can assume about
-the surrounding engine.
+contributes. This is the authoring half; the engine (`engine/src/element.ts`)
+holds the half that runs.
 """
 
 from __future__ import annotations

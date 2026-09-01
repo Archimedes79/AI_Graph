@@ -145,7 +145,7 @@ npm run test
 
 Prefer adding to or extending an existing large, workflow-level test (a full graph run
 through `execute_graph`, or a real vendored deploy bundle actually executed as a
-subprocess) over adding a new test file per node type — see [AGENTS.md](../AGENTS.md#tests).
+subprocess) over adding a new test file per node type.
 
 To test a built executable rather than the source it came from — it starts the binary,
 drives it over HTTP and shuts it down again:

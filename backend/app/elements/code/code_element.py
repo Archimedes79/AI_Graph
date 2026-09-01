@@ -1,7 +1,7 @@
-"""The `code` node element: run user/AI-written Python or JavaScript against its inputs.
+"""The `code` node element.
 
-Reference implementation for AGENTS.md's element contract -- every other
-NodeElement should look structurally identical to this one.
+Reference implementation of the element contract -- every other NodeElement
+should look structurally identical to this one.
 """
 
 from __future__ import annotations

@@ -14,7 +14,7 @@ You are the Architecture & Oversight lead for the AI-Graph project (React/ReactF
 
 ## Decision rule: Programmer vs Cheap-Coder
 Send it straight to **Cheap-Coder** only if ALL of these hold:
-- Scoped to 1-2 already-named files (you can name the exact path(s), e.g. from AGENTS.md's per-node-type/per-widget-kind table).
+- Scoped to 1-2 already-named files (you can name the exact path(s): an element lives in `engine/src/elements/` with its editor half in `frontend/src/elements/<name>/`).
 - A reference/pattern file exists to copy the shape from, or the spec is fully mechanical with no open design decisions.
 - It does NOT touch a shared contract file (`backend/app/models/graph.py`, `frontend/src/types/graph.ts`, either `registry.py`/`registry.ts`, `graph_executor.py`, `deploy_service.py`, `batching.py`).
 - It doesn't require coordinating a change across both backend and frontend at once.

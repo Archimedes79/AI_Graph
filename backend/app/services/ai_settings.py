@@ -76,7 +76,7 @@ SETTINGS_FILENAME = "ai-settings.json"
 # Set by execute_graph() from the graph's metadata.ai_defaults at the start of
 # every run (priority 4), and by the CLI/GUI runtime as a run-level override
 # (priority 1). Module-level because the element that needs it -- the ai node --
-# deliberately never sees the graph it lives in (see AGENTS.md).
+# deliberately never sees the graph it lives in.
 _graph_defaults: Tuple[str, str] = ("", "")
 _override: Tuple[str, str] = ("", "")
 _override_force: bool = False

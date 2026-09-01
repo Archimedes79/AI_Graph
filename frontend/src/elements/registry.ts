@@ -17,7 +17,7 @@ import { textElement } from './gui/widgets/text/textElement';
 import { dividerElement } from './gui/widgets/divider/dividerElement';
 import { spacerElement } from './gui/widgets/spacer/spacerElement';
 
-/** Dispatch table every NodeType resolves through -- see AGENTS.md's element contract. */
+/** Dispatch table every NodeType resolves through. */
 export const NODE_ELEMENTS: Record<NodeType, NodeElementDefinition> = {
   input:            inputElement,
   ai:               aiElement,
@@ -27,7 +27,7 @@ export const NODE_ELEMENTS: Record<NodeType, NodeElementDefinition> = {
   gui:              guiElement,
 };
 
-/** Dispatch table every GuiWidgetKind resolves through -- see AGENTS.md's element contract. */
+/** Dispatch table every GuiWidgetKind resolves through. */
 export const GUI_WIDGET_ELEMENTS: Record<GuiWidgetKind, GuiWidgetElementDefinition> = {
   input_picker:    inputPickerElement,
   text_io:         textIoElement,

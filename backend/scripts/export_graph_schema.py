@@ -3,7 +3,7 @@
 Export the Graph DSL's Pydantic models as a single JSON Schema document.
 
 This is the bridge half of the backend/frontend schema-deduplication story
-(see AGENTS.md's "Shared contracts" section): `backend/app/models/graph.py` is
+(the shared contract): `backend/app/models/graph.py` is
 the one authored schema, and `frontend/src/types/graph.generated.ts` is
 generated from this script's output by `frontend/scripts/genTypes.mjs` (run
 via `npm run gen:types`). Nothing here has any side effect on the app itself

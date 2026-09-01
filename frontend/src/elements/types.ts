@@ -9,7 +9,7 @@ import type { ElementGeneration } from './shared/generation';
  * (NodeEditor.tsx dispatches to it), `create` is "interact with the user" at
  * node-creation time (Sidebar.tsx drag/drop -> graphStore.addNode). Live
  * execution and deploy codegen are backend-only concerns -- see
- * `backend/app/elements/base.py` and AGENTS.md's "Entity contract" section.
+ * `backend/app/elements/base.py`.
  */
 /**
  * What a node definition and a widget definition have in common -- the frontend

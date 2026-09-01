@@ -1,5 +1,5 @@
-// Graph DSL types – re-exported from the generated types (see AGENTS.md's
-// "Shared contracts" section). `graph.generated.ts` is produced from
+// Graph DSL types – re-exported from the generated types.
+// `graph.generated.ts` is produced from
 // `backend/app/models/graph.py` via `npm run gen:types`; do not hand-edit it.
 // Only genuinely frontend-only types (no backend model, e.g. ReactFlow node
 // data) belong in this file.
