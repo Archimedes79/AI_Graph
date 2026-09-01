@@ -106,8 +106,16 @@ export class EmptyCompletionError extends Error {
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
 export class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
+  // A plain field, not a parameter property. Node runs this engine by stripping
+  // types, and a `readonly` in a constructor's parameter list is one of the few
+  // things it cannot strip — it would have to emit an assignment. A bundle must
+  // need no build step, so the engine stays inside what stripping allows;
+  // `strippable.test.ts` holds the whole engine to that.
+  readonly status: number;
+
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
     this.name = 'HttpError';
   }
 }

@@ -3,6 +3,7 @@
 //     node src/main.ts graph.json                     once
 //     node src/main.ts graph.json --inputs key=value  answering what it asks
 //     node src/main.ts graph.json --every 5m           again, after each run
+//     node src/main.ts graph.json --bundle ./out       hand it to someone else
 //
 // The same entry point a bundle uses, so what someone receives is the thing
 // that was tested rather than a second launcher written for them. It is also
@@ -20,6 +21,7 @@ import { executeGraph } from './executor.ts';
 import { registry } from './registry.ts';
 import { nodeRuntime } from './host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from './runtimeValues.ts';
+import { writeBundle } from './bundle.ts';
 
 export interface CliOptions {
   graphPath: string;
@@ -28,6 +30,8 @@ export interface CliOptions {
   every?: number;
   /** Stop after this many runs. Undefined means keep going. */
   limit?: number;
+  /** Write a runnable copy here instead of running it. */
+  bundle?: string;
 }
 
 /**
@@ -57,6 +61,8 @@ export function parseArgs(argv: string[]): CliOptions {
       options.every = parseInterval(argv[++i] ?? '');
     } else if (arg === '--limit') {
       options.limit = Number(argv[++i]);
+    } else if (arg === '--bundle') {
+      options.bundle = argv[++i] ?? 'bundle';
     } else if (!options.graphPath) {
       options.graphPath = arg;
     }
@@ -135,7 +141,21 @@ export async function runEvery(options: CliOptions): Promise<number> {
   return code;
 }
 
+/** Write the graph and the engine somewhere someone else can run them. */
+export async function makeBundle(options: CliOptions): Promise<number> {
+  const graph = parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')));
+  const written = await writeBundle(graph, options.bundle!);
+  process.stderr.write(
+    `Wrote ${written.length} files to ${options.bundle}
+`
+    + `Run it there with:  ./run.sh    (run.cmd on Windows)
+`,
+  );
+  return 0;
+}
+
 export async function main(argv: string[]): Promise<number> {
   const options = parseArgs(argv);
+  if (options.bundle) return makeBundle(options);
   return options.every ? runEvery(options) : runOnce(options);
 }
