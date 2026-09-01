@@ -9,7 +9,8 @@
 // What a recipient needs installed: Node, and Python only if a code node in
 // this graph is written in Python. That is the whole list.
 
-import { copyFile, mkdir, readdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Graph } from './graph.ts';
@@ -65,6 +66,23 @@ async function engineFiles(dir = ENGINE_ROOT): Promise<string[]> {
 }
 
 /**
+ * The built page a deployed tool serves, and only the files it references.
+ *
+ * Parsed out of `runtime.html` rather than listed: the editor's own chunks live
+ * in the same folder, and a bundle that copied everything would ship the graph
+ * editor to someone who was handed a finished tool.
+ */
+async function pageFiles(pageDir: string): Promise<string[]> {
+  const html = join(pageDir, 'runtime.html');
+  if (!existsSync(html)) return [];
+  const source = await readFile(html, 'utf8');
+  const referenced = [...source.matchAll(/(?:src|href)="\/?([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((path) => !path.startsWith('http'));
+  return ['runtime.html', ...new Set(referenced)].filter((path) => existsSync(join(pageDir, path)));
+}
+
+/**
  * Write a runnable copy of *graph* into *target*.
  *
  * Returns the paths written, so a caller can zip exactly this and a test can
@@ -73,7 +91,7 @@ async function engineFiles(dir = ENGINE_ROOT): Promise<string[]> {
 export async function writeBundle(
   graph: Graph,
   target: string,
-  options: { name?: string } = {},
+  options: { name?: string; pageDir?: string } = {},
 ): Promise<string[]> {
   const needs = bundleNeeds(graph);
   const name = options.name || graph.metadata.name || 'graph';
@@ -96,17 +114,33 @@ export async function writeBundle(
     written.push(relativePath);
   }
 
-  await put('run.cmd', ['@echo off', 'node engine\\main.ts graph.json %*', ''].join('\r\n'));
-  await put('run.sh', ['#!/bin/sh', 'exec node engine/main.ts graph.json "$@"', ''].join('\n'));
+  // The page, if this graph has one and a build is at hand. A bundle without
+  // it still runs -- on the terminal, asking for what the blocks would have
+  // asked for -- which is why a missing build is not an error here.
+  let servesPage = false;
+  if (needs.interface && options.pageDir) {
+    for (const file of await pageFiles(options.pageDir)) {
+      const relativePath = join('page', file).replace(/\\/g, '/');
+      const path = resolve(target, relativePath);
+      await mkdir(dirname(path), { recursive: true });
+      await copyFile(join(options.pageDir, file), path);
+      written.push(relativePath);
+      servesPage = true;
+    }
+  }
+
+  const command = servesPage ? 'engine/main.ts graph.json --serve' : 'engine/main.ts graph.json';
+  await put('run.cmd', ['@echo off', `node ${command.replace(/\//g, '\\')} %*`, ''].join('\r\n'));
+  await put('run.sh', ['#!/bin/sh', `exec node ${command} "$@"`, ''].join('\n'));
   if (needs.requirements.length) {
     await put('requirements.txt', `${needs.requirements.join('\n')}\n`);
   }
-  await put('README.md', readme(name, needs));
+  await put('README.md', readme(name, needs, servesPage));
 
   return written;
 }
 
-function readme(name: string, needs: BundleNeeds): string {
+function readme(name: string, needs: BundleNeeds, servesPage = false): string {
   const lines = [
     `# ${name}`,
     '',
@@ -118,11 +152,21 @@ function readme(name: string, needs: BundleNeeds): string {
     '',
     '```',
     './run.sh          # or run.cmd on Windows',
-    './run.sh --every 5m   # again, after each run finishes',
     '```',
     '',
-    'The result is printed as JSON on stdout; questions and progress go to',
-    'stderr, so `./run.sh | jq` works.',
+    ...(servesPage
+      ? [
+        'That opens the tool in your browser: fill in the fields, press Run.',
+        '',
+        'It listens on localhost only, so nothing on your network can reach it.',
+        'The page it serves is the page this graph was designed against, copied',
+        'rather than rebuilt.',
+      ]
+      : [
+        'The result is printed as JSON on stdout; questions and progress go to',
+        'stderr, so `./run.sh | jq` works. `--every 5m` runs it again after each',
+        'run finishes.',
+      ]),
     '',
     '## What you need',
     '',

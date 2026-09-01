@@ -4,6 +4,7 @@
 //     node src/main.ts graph.json --inputs key=value  answering what it asks
 //     node src/main.ts graph.json --every 5m           again, after each run
 //     node src/main.ts graph.json --bundle ./out       hand it to someone else
+//     node src/main.ts graph.json --serve             open its page in a browser
 //
 // The same entry point a bundle uses, so what someone receives is the thing
 // that was tested rather than a second launcher written for them. It is also
@@ -22,6 +23,10 @@ import { registry } from './registry.ts';
 import { nodeRuntime } from './host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from './runtimeValues.ts';
 import { writeBundle } from './bundle.ts';
+import { serve } from './host/serve.ts';
+import { dirname, join, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 
 export interface CliOptions {
   graphPath: string;
@@ -32,6 +37,9 @@ export interface CliOptions {
   limit?: number;
   /** Write a runnable copy here instead of running it. */
   bundle?: string;
+  /** Serve this graph's page instead of running it once. */
+  serve?: boolean;
+  port?: number;
 }
 
 /**
@@ -63,6 +71,10 @@ export function parseArgs(argv: string[]): CliOptions {
       options.limit = Number(argv[++i]);
     } else if (arg === '--bundle') {
       options.bundle = argv[++i] ?? 'bundle';
+    } else if (arg === '--serve') {
+      options.serve = true;
+    } else if (arg === '--port') {
+      options.port = Number(argv[++i]);
     } else if (!options.graphPath) {
       options.graphPath = arg;
     }
@@ -154,8 +166,41 @@ export async function makeBundle(options: CliOptions): Promise<number> {
   return 0;
 }
 
+/**
+ * Serve the page and wait.
+ *
+ * The page directory is `page/` beside the graph — where a bundle puts it —
+ * and its absence is not an error: a graph with no interface, or a bundle
+ * written without a build at hand, still serves its few endpoints, which is
+ * enough for anything driving it over HTTP.
+ */
+export async function runServer(options: CliOptions): Promise<number> {
+  const pageDir = resolve(dirname(resolve(options.graphPath)), 'page');
+  const { url } = await serve({
+    graphPath: options.graphPath,
+    pageDir: existsSync(join(pageDir, 'runtime.html')) ? pageDir : undefined,
+    port: options.port ?? 8000,
+  });
+  process.stderr.write(`Serving on ${url}\n`);
+  await open(url);
+  // Nothing to await: the server holds the process open until it is stopped.
+  return new Promise(() => {});
+}
+
+/** Show the tool, if this machine has something to show it in. */
+async function open(url: string): Promise<void> {
+  const command = process.platform === 'win32' ? 'cmd' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  try {
+    spawn(command, args, { detached: true, stdio: 'ignore' }).unref();
+  } catch {
+    // A headless machine is a fine place to serve from; the URL is printed.
+  }
+}
+
 export async function main(argv: string[]): Promise<number> {
   const options = parseArgs(argv);
   if (options.bundle) return makeBundle(options);
+  if (options.serve) return runServer(options);
   return options.every ? runEvery(options) : runOnce(options);
 }

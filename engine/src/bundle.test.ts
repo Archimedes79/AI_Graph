@@ -68,6 +68,26 @@ describe('a bundle', () => {
     }
   }, 120_000);
 
+  it('carries the page, and only what the page references', async () => {
+    // The editor's own chunks sit in the same build folder. A bundle that
+    // copied the folder would hand the graph editor to someone who was handed
+    // a finished tool, so the file list comes out of runtime.html itself.
+    const graph = parseGraph(JSON.parse(
+      await readFile(resolve(REPO, 'examples/plotter_interactive.json'), 'utf8'),
+    ));
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-page-bundle-'));
+    try {
+      const written = await writeBundle(graph, dir, { pageDir: resolve(REPO, 'frontend/dist') });
+      const page = written.filter((p) => p.startsWith('page/'));
+      expect(page).toContain('page/runtime.html');
+      expect(page.some((p) => p.endsWith('.js'))).toBe(true);
+      // run.sh serves, because there is something to serve.
+      expect(await readFile(join(dir, 'run.sh'), 'utf8')).toContain('--serve');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
   it('says what has to be installed, and no more than that', async () => {
     const plotter = parseGraph(JSON.parse(
       await readFile(resolve(REPO, 'examples/plotter_interactive.json'), 'utf8'),
