@@ -26,6 +26,7 @@
 // bundle: the runtime never imports the subclass.
 
 import type { GraphNode, Port, RawConfig, WidgetKind, NodeType } from './graph.js';
+import type { RuntimeRequirement } from './runtimeValues.js';
 
 // ---------------------------------------------------------------------------
 // The world an element is allowed to touch
@@ -194,6 +195,20 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    * is why the executor asks instead of branching on the node type.
    */
   settleMemory(_node: GraphNode, _portId: string, _value: unknown): void {}
+
+  /**
+   * What this node needs a person to supply before the graph can run.
+   *
+   * Asked of the element rather than looked up by node type, so a new element
+   * that prompts says so in its own file — and the editor's dialog, a
+   * terminal's prompts and a bundle's `--inputs` all read the same list.
+   */
+  runtimeRequirements(_node: GraphNode): RuntimeRequirement[] {
+    return [];
+  }
+
+  /** Put one supplied value where this element keeps it. */
+  applyRuntimeValue(_node: GraphNode, _widgetId: string | null, _value: string): void {}
 }
 
 // ---------------------------------------------------------------------------

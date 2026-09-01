@@ -1,5 +1,6 @@
 import { NodeElement, type AuthoredFile, type Runtime } from '../element.js';
 import type { GraphNode } from '../graph.js';
+import { batchItems, mergeBatchOutputs, reconcileOutputs } from '../batching.js';
 
 /** What a code node stores. Its own fields, and no one else's. */
 export interface CodeConfig {
@@ -67,7 +68,10 @@ export class CodeElement extends NodeElement<CodeConfig> {
       : inputs;
 
     if (settings.perItem) return runPerItem(node, resolved, runtime, settings);
-    return runtime.code.run(settings.code, settings.language, resolved, settings.requirements);
+    return reconcileOutputs(
+      node,
+      await runtime.code.run(settings.code, settings.language, resolved, settings.requirements),
+    );
   }
 }
 
@@ -101,7 +105,7 @@ export async function readFileInputs(
 }
 
 /**
- * Run the body once per item of the longest list input, bounded.
+ * Run the body once per item, bounded.
  *
  * A failing item contributes null on every output port, keeping the results
  * index-aligned with their inputs, and its message is collected rather than
@@ -113,19 +117,8 @@ async function runPerItem(
   runtime: Runtime,
   settings: CodeConfig,
 ): Promise<Record<string, unknown>> {
-  const lists = Object.entries(inputs).filter(([, v]) => Array.isArray(v)) as [string, unknown[]][];
-  if (!lists.length) {
-    return runtime.code.run(settings.code, settings.language, inputs, settings.requirements);
-  }
-
-  const total = Math.max(...lists.map(([, v]) => v.length));
-  const items = Array.from({ length: total }, (_, index) => {
-    const item: Record<string, unknown> = { ...inputs };
-    for (const [key, list] of lists) item[key] = list[index];
-    return item;
-  });
-
-  const produced: Record<string, unknown>[] = new Array(total);
+  const items = batchItems(node, inputs);
+  const produced: Record<string, unknown>[] = new Array(items.length);
   let done = 0;
   let next = 0;
 
@@ -134,20 +127,23 @@ async function runPerItem(
       const index = next++;
       if (index >= items.length) return;
       try {
-        produced[index] = await runtime.code.run(
-          settings.code, settings.language, items[index], settings.requirements,
+        produced[index] = reconcileOutputs(
+          node,
+          await runtime.code.run(settings.code, settings.language, items[index], settings.requirements),
         );
-      } catch {
+      } catch (error) {
         produced[index] = Object.fromEntries(node.outputs.map((p) => [p.id, null]));
+        runtime.report?.({
+          type: 'activity',
+          node_id: node.id,
+          message: `item ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        });
       }
-      runtime.report?.({ type: 'batch', node_id: node.id, done: ++done, total });
+      runtime.report?.({ type: 'batch', node_id: node.id, done: ++done, total: items.length });
     }
   };
 
-  const workers = Math.max(1, Math.min(settings.batchConcurrency, total));
+  const workers = Math.max(1, Math.min(settings.batchConcurrency, items.length));
   await Promise.all(Array.from({ length: workers }, worker));
-
-  const merged: Record<string, unknown> = {};
-  for (const port of node.outputs) merged[port.id] = produced.map((o) => o?.[port.id] ?? null);
-  return merged;
+  return mergeBatchOutputs(node, produced);
 }

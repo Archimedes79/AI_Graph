@@ -1,6 +1,6 @@
 import { NodeElement, type Runtime, type Widget, type WidgetElement } from '../element.js';
 import type { GraphNode, Port, RawConfig } from '../graph.js';
-import { WIDGET_ELEMENTS } from './widgets.js';
+import { InputPickerElement, WIDGET_ELEMENTS } from './widgets.js';
 
 const BY_KIND = new Map(WIDGET_ELEMENTS.map((e) => [e.widgetKind, e as WidgetElement<unknown>]));
 
@@ -94,6 +94,33 @@ export class GuiElement extends NodeElement<GuiConfig> {
       Object.assign(produced, await element.execute(widget, inputs, runtime));
     }
     return produced;
+  }
+
+  /** A picker with nothing chosen is a question, and its block is who to ask. */
+  override runtimeRequirements(node: GraphNode) {
+    const asked = [];
+    for (const widget of this.config(node).widgets) {
+      const element = BY_KIND.get(widget.kind);
+      if (!(element instanceof InputPickerElement)) continue;
+      const settings = element.config(widget);
+      if (settings.path) continue;
+      asked.push({
+        key: `${node.id}::${widget.id}`,
+        label: widget.label || widget.id,
+        kind: (settings.directory ? 'directory' : 'file') as 'directory' | 'file',
+        direction: 'input' as const,
+        current: '',
+      });
+    }
+    return asked;
+  }
+
+  override applyRuntimeValue(node: GraphNode, widgetId: string | null, value: string): void {
+    const widgets = node.config.gui_widgets;
+    if (!widgetId || !Array.isArray(widgets)) return;
+    for (const raw of widgets) {
+      if ((raw as RawConfig)?.id === widgetId) (raw as RawConfig).value = value;
+    }
   }
 
   /** A block that closes a loop keeps the fresh value, ready for the next run. */

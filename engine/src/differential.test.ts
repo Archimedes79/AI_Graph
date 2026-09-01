@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { parseGraph } from './graph.js';
 import { executeGraph } from './executor.js';
 import { registry } from './registry.js';
+import { applyRuntimeValues, runtimeRequirements, withDefaults } from './runtimeValues.js';
 import { nodeRuntime } from './host/node.js';
 
 /**
@@ -29,11 +30,12 @@ const REPO = resolve(__dirname, '../..');
 // prints an advert instead of running the body.
 process.env.AI_GRAPH_PYTHON ??= resolve(REPO, '.venv/Scripts/python.exe');
 
-function runPython(graphPath: string): Promise<Record<string, unknown>> {
+function runPython(graphPath: string, values: Record<string, string> = {}): Promise<Record<string, unknown>> {
+  const inputs = Object.entries(values).flatMap(([key, value]) => ['--inputs', `${key}=${value}`]);
   return new Promise((fulfil, fail) => {
     const child = spawn(
       resolve(REPO, '.venv/Scripts/python.exe'),
-      [resolve(REPO, 'graph-runner/run.py'), graphPath],
+      [resolve(REPO, 'graph-runner/run.py'), graphPath, ...inputs],
       // No stdin: a graph that prompts should fall back to its stored default
       // rather than wait for a person who is not there.
       { cwd: REPO, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
@@ -54,8 +56,11 @@ function runPython(graphPath: string): Promise<Record<string, unknown>> {
   });
 }
 
-async function runTypeScript(graphPath: string) {
+async function runTypeScript(graphPath: string, values: Record<string, string> = {}) {
   const graph = parseGraph(JSON.parse(await readFile(graphPath, 'utf8')));
+  // The same answers the Python side is given, through the same two steps: ask
+  // the elements what is missing, then let each store what it was told.
+  applyRuntimeValues(graph, withDefaults(runtimeRequirements(graph, registry), values), registry);
   return executeGraph(graph, { runtime: nodeRuntime(), registry });
 }
 
@@ -66,20 +71,28 @@ function outputsByNode(result: any): Record<string, unknown> {
   return byNode;
 }
 
-// The examples both engines can run today.
-//
-// Left out on purpose, each for a reason worth writing down: the two AI ones
-// need a provider wired into the TypeScript side, and bla_counter asks for a
-// folder at run time, which needs the runtime-values pass the engine does not
-// have yet. Both are next, and this list is where they will show up.
-const EXAMPLES = ['hello_world.json', 'plotter_interactive.json'];
+// The examples both engines can run today, with the answers a person would
+// give. The two AI ones are missing on purpose: they need a model provider on
+// the TypeScript side, and that is the next piece.
+// docs/ rather than examples/kurzgeschichten: the counter is set to read
+// .md files and the stories are .txt, so pointing it at them fans out over
+// nothing and the per-item batching -- the part most likely to differ -- would
+// never run at all.
+const MARKDOWN = resolve(REPO, 'docs');
+const EXAMPLES: [string, Record<string, string>][] = [
+  ['hello_world.json', {}],
+  ['bla_counter.json', { folder: MARKDOWN }],
+  ['plotter_interactive.json', {}],
+];
 
 describe('the two engines agree', () => {
   const graphPath = resolve(REPO, 'examples/plotter_interactive.json');
 
-  it.each(EXAMPLES)('produce the same outputs for %s', async (name) => {
+  it.each(EXAMPLES)('produce the same outputs for %s', async (name, values) => {
     const path = resolve(REPO, 'examples', name);
-    const [python, typescript] = await Promise.all([runPython(path), runTypeScript(path)]);
+    const [python, typescript] = await Promise.all([
+      runPython(path, values), runTypeScript(path, values),
+    ]);
     expect(typescript.status).toBe((python as any).status);
     expect(outputsByNode(typescript)).toEqual(outputsByNode(python));
   }, 180_000);
@@ -91,6 +104,17 @@ describe('the two engines agree', () => {
     expect(typescript.status).toBe('success');
     expect(outputsByNode(typescript)).toEqual(outputsByNode(python));
   }, 120_000);
+
+  it('really fans a batch out, rather than agreeing about nothing', async () => {
+    // Two engines can agree because both did nothing. The counter is per-item
+    // over a folder, so this checks the fan-out actually happened -- otherwise
+    // the batching contract, which is where they differed first, goes untested.
+    const path = resolve(REPO, 'examples/bla_counter.json');
+    const result = await runTypeScript(path, { folder: resolve(REPO, 'docs') });
+    const perFile = result.node_results.find((n) => n.node_id === 'count_per_file');
+    expect(Array.isArray(perFile?.outputs.output)).toBe(true);
+    expect((perFile?.outputs.output as unknown[]).length).toBeGreaterThan(1);
+  }, 180_000);
 
   it('agrees about the loop the interface closes', async () => {
     // The chart feeds back into the panel that shows it. Both engines must
