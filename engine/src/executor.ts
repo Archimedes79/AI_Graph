@@ -1,0 +1,283 @@
+// Running a graph: initialise, wire, order, execute.
+//
+// The whole engine is four ideas.
+//
+// **Order.** Kahn's algorithm over the edges gives levels; everything in a
+// level can run at once because nothing in it feeds anything else in it.
+//
+// **Memory edges.** A graph with a loop — a chart feeding back into the panel
+// that shows it — is not a mistake, it is how an interface works. The minimal
+// set of edges into memory-holding nodes is left out of the ordering, so what
+// remains is acyclic; those edges are settled *after* the round, for the next
+// one. A loop through something that does not remember is still an error.
+//
+// **Collection.** A node's inputs are whatever its upstream neighbours put on
+// the wires. A port fed by several edges collects a list; a port whose single
+// source failed gets nothing rather than a null, so a failure upstream does not
+// look like a successfully computed nothing.
+//
+// **Batching.** A node marked per-item runs once per element of its list input,
+// bounded, and a failing item costs that item rather than the batch.
+//
+// Everything else — what a node *does* — belongs to its element.
+
+import type { Graph, GraphEdge, GraphNode, ExecutionResult, NodeResult, NodeStatus } from './graph.js';
+import type { NodeElement, Runtime } from './element.js';
+
+export interface Registry {
+  node(type: string): NodeElement<unknown> | undefined;
+}
+
+/** Ids of the fewest edges that must be ignored to make the graph acyclic. */
+export function memoryFeedbackEdges(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  registry: Registry,
+): Set<string> {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const feedback = new Set<string>();
+
+  const remembers = (nodeId: string): boolean => {
+    const node = byId.get(nodeId);
+    return node ? registry.node(node.node_type)?.isMemory === true : false;
+  };
+
+  for (;;) {
+    const active = edges.filter(
+      (e) => !feedback.has(e.id) && byId.has(e.source_node_id) && byId.has(e.target_node_id),
+    );
+    const inDegree = new Map([...byId.keys()].map((id) => [id, 0]));
+    const successors = new Map<string, GraphEdge[]>();
+    for (const e of active) {
+      inDegree.set(e.target_node_id, (inDegree.get(e.target_node_id) ?? 0) + 1);
+      successors.set(e.source_node_id, [...(successors.get(e.source_node_id) ?? []), e]);
+    }
+
+    const queue = [...inDegree].filter(([, d]) => d === 0).map(([id]) => id);
+    const visited = new Set(queue);
+    while (queue.length) {
+      const id = queue.shift()!;
+      for (const e of successors.get(id) ?? []) {
+        const left = (inDegree.get(e.target_node_id) ?? 0) - 1;
+        inDegree.set(e.target_node_id, left);
+        if (left === 0 && !visited.has(e.target_node_id)) {
+          visited.add(e.target_node_id);
+          queue.push(e.target_node_id);
+        }
+      }
+    }
+
+    if (visited.size === byId.size) return feedback;
+
+    // Cut one more edge into a node that remembers. If there is none, the cycle
+    // is a real one and `topologicalLevels` reports it as such.
+    const candidate = active.find((e) => !visited.has(e.target_node_id) && remembers(e.target_node_id));
+    if (!candidate) return feedback;
+    feedback.add(candidate.id);
+  }
+}
+
+/** Execution stages: everything in a stage waits only for earlier stages. */
+export function topologicalLevels(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  feedback: Set<string>,
+): string[][] {
+  const ids = new Set(nodes.map((n) => n.id));
+  const inDegree = new Map([...ids].map((id) => [id, 0]));
+  const successors = new Map<string, string[]>();
+
+  for (const e of edges) {
+    if (feedback.has(e.id)) continue;
+    if (!ids.has(e.source_node_id) || !ids.has(e.target_node_id)) continue;
+    inDegree.set(e.target_node_id, (inDegree.get(e.target_node_id) ?? 0) + 1);
+    successors.set(e.source_node_id, [...(successors.get(e.source_node_id) ?? []), e.target_node_id]);
+  }
+
+  const levels: string[][] = [];
+  let current = nodes.filter((n) => inDegree.get(n.id) === 0).map((n) => n.id);
+  let seen = 0;
+
+  while (current.length) {
+    levels.push(current);
+    seen += current.length;
+    const next = new Set<string>();
+    for (const id of current) {
+      for (const successor of successors.get(id) ?? []) {
+        const left = (inDegree.get(successor) ?? 0) - 1;
+        inDegree.set(successor, left);
+        if (left === 0) next.add(successor);
+      }
+    }
+    // Keep the graph's own node order inside a level, so a run is reproducible.
+    current = nodes.filter((n) => next.has(n.id)).map((n) => n.id);
+  }
+
+  if (seen !== ids.size) throw new Error('Graph contains a cycle; execution is not possible.');
+  return levels;
+}
+
+/**
+ * Gather what the wires deliver to *nodeId*.
+ *
+ * A port fed by more than one edge always collects a list, even when some
+ * sources failed — those contribute nothing rather than a null placeholder, so
+ * surviving values are not diluted. A port fed by one edge whose source failed
+ * yields no entry at all, which is different from a source that succeeded with
+ * a null.
+ */
+export function collectInputs(
+  nodeId: string,
+  edges: GraphEdge[],
+  outputs: Map<string, Record<string, unknown>>,
+  feedback: Set<string>,
+): Record<string, unknown> {
+  const byPort = new Map<string, GraphEdge[]>();
+  for (const e of edges) {
+    if (e.target_node_id !== nodeId || feedback.has(e.id)) continue;
+    byPort.set(e.target_port_id, [...(byPort.get(e.target_port_id) ?? []), e]);
+  }
+
+  const collected: Record<string, unknown> = {};
+  for (const [port, incoming] of byPort) {
+    const values: unknown[] = [];
+    for (const edge of incoming) {
+      const source = outputs.get(edge.source_node_id);
+      if (source === undefined) continue;
+      values.push(source[edge.source_port_id]);
+    }
+    if (incoming.length > 1) collected[port] = values;
+    else if (values.length) collected[port] = values[0];
+  }
+  return collected;
+}
+
+export interface RunOptions {
+  /** Wired file paths are read into text for elements that asked. */
+  runtime: Runtime;
+  registry: Registry;
+}
+
+/**
+ * Run the graph once.
+ *
+ * A node that throws is recorded as failed and its dependents are skipped
+ * rather than the run being abandoned: the report should say what happened
+ * everywhere, not only where it stopped first.
+ */
+export async function executeGraph(graph: Graph, options: RunOptions): Promise<ExecutionResult> {
+  const { runtime, registry } = options;
+  const { nodes, edges } = graph;
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+
+  const feedback = memoryFeedbackEdges(nodes, edges, registry);
+  const levels = topologicalLevels(nodes, edges, feedback);
+
+  const outputs = new Map<string, Record<string, unknown>>();
+  const results: NodeResult[] = [];
+  const failed = new Set<string>();
+
+  const dependsOnFailure = (nodeId: string): boolean =>
+    edges.some((e) => e.target_node_id === nodeId && !feedback.has(e.id) && failed.has(e.source_node_id));
+
+  for (const level of levels) {
+    for (const nodeId of level) {
+      const node = byId.get(nodeId)!;
+      const element = registry.node(node.node_type);
+
+      if (!element) {
+        failed.add(nodeId);
+        results.push({
+          node_id: nodeId, status: 'error', inputs: {}, outputs: {},
+          error: `Unknown node type: ${node.node_type}`,
+        });
+        continue;
+      }
+
+      if (dependsOnFailure(nodeId)) {
+        failed.add(nodeId);
+        results.push({ node_id: nodeId, status: 'skipped', inputs: {}, outputs: {}, error: null });
+        continue;
+      }
+
+      const inputs = collectInputs(nodeId, edges, outputs, feedback);
+      runtime.report?.({ type: 'node_start', node_id: nodeId });
+
+      try {
+        const produced = await element.execute(node, inputs, runtime);
+        outputs.set(nodeId, produced);
+        results.push({ node_id: nodeId, status: 'success', inputs, outputs: produced, error: null });
+        runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'success' });
+      } catch (error) {
+        failed.add(nodeId);
+        const message = error instanceof Error ? error.message : String(error);
+        results.push({ node_id: nodeId, status: 'error', inputs, outputs: {}, error: message });
+        runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'error' });
+      }
+    }
+  }
+
+  settleMemoryFeedback(graph, feedback, outputs, results, registry);
+
+  const status: ExecutionResult['status'] = failed.size === 0
+    ? 'success'
+    : failed.size === nodes.length ? 'error' : 'partial';
+
+  return {
+    status,
+    node_results: results,
+    outputs: finalOutputs(nodes, outputs, registry),
+    error: failed.size ? [...failed].map((id) => `${id} failed`).join('; ') : null,
+  };
+}
+
+/**
+ * Hand each feedback edge's fresh value to the node that remembers it, for the
+ * next round — and into this round's own result, so a page shows the value it
+ * just produced instead of the one from last time.
+ */
+function settleMemoryFeedback(
+  graph: Graph,
+  feedback: Set<string>,
+  outputs: Map<string, Record<string, unknown>>,
+  results: NodeResult[],
+  registry: Registry,
+): void {
+  if (!feedback.size) return;
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+
+  for (const edge of graph.edges) {
+    if (!feedback.has(edge.id)) continue;
+    const source = outputs.get(edge.source_node_id);
+    if (!source || !(edge.source_port_id in source)) continue;
+
+    const target = byId.get(edge.target_node_id);
+    const element = target && registry.node(target.node_type);
+    if (!target || !element) continue;
+
+    const value = source[edge.source_port_id];
+    element.settleMemory(target, edge.target_port_id, value);
+
+    const result = results.find((r) => r.node_id === target.id);
+    if (result) result.inputs = { ...result.inputs, [edge.target_port_id]: value };
+  }
+}
+
+/** What the run produced, keyed the way the graph's output nodes asked. */
+function finalOutputs(
+  nodes: GraphNode[],
+  outputs: Map<string, Record<string, unknown>>,
+  registry: Registry,
+): Record<string, unknown> {
+  const final: Record<string, unknown> = {};
+  for (const node of nodes) {
+    if (registry.node(node.node_type)?.nodeType !== 'output') continue;
+    const produced = outputs.get(node.id);
+    if (!produced) continue;
+    const label = String(node.config.output_label ?? '') || node.id;
+    final[label] = produced;
+  }
+  return final;
+}
+
+export type { NodeStatus };

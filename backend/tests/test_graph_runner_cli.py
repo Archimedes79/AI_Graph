@@ -23,7 +23,7 @@ async def test_runner_uses_default_values_when_stdin_is_unavailable(capsys, monk
     runner = _load_runner_module()
     graph_path = Path(__file__).resolve().parents[2] / "examples" / "hello_world.json"
 
-    def raise_eof(prompt: str) -> str:
+    def raise_eof(prompt: str = "") -> str:
         raise EOFError(prompt)
 
     monkeypatch.setattr(builtins, "input", raise_eof)
@@ -34,6 +34,28 @@ async def test_runner_uses_default_values_when_stdin_is_unavailable(capsys, monk
     assert '"status": "success"' in captured.out
     assert '"Hello Result"' in captured.out
     assert '"Hello, World!"' in captured.out
+
+
+@pytest.mark.asyncio
+async def test_the_prompt_never_lands_in_the_machine_readable_output(capsys, monkeypatch):
+    """stdout is the result; a question to a person belongs on stderr.
+
+    `input(prompt)` writes its prompt to stdout, so anything reading this
+    command's output got `Text for 'Greeting': {` and could not parse it. Found
+    by running the same graph through the Python and the TypeScript engine and
+    diffing what each printed -- the first defect the port turned up, in the
+    older half.
+    """
+    runner = _load_runner_module()
+    graph_path = Path(__file__).resolve().parents[2] / "examples" / "hello_world.json"
+
+    monkeypatch.setattr(builtins, "input", lambda prompt="": "typed answer")
+
+    await runner.run(str(graph_path), {})
+
+    captured = capsys.readouterr()
+    json.loads(captured.out)  # the whole of stdout is the result, or this raises
+    assert "Text for" in captured.err
 
 
 @pytest.mark.asyncio
@@ -71,7 +93,7 @@ async def test_runner_resolves_widget_scoped_gui_requirements_independently(tmp_
     dir_value = str(tmp_path)
 
     answers = iter([file_value, dir_value])
-    monkeypatch.setattr(builtins, "input", lambda prompt: next(answers))
+    monkeypatch.setattr(builtins, "input", lambda prompt="": next(answers))
 
     captured_graph: dict = {}
     original_execute_graph = runner.execute_graph
@@ -130,7 +152,7 @@ async def test_inputs_can_target_a_widget_that_already_holds_a_value(tmp_path, c
                    "target_node_id": "out", "target_port_id": "value"}],
     }), encoding="utf-8")
 
-    monkeypatch.setattr(builtins, "input", lambda prompt: (_ for _ in ()).throw(EOFError(prompt)))
+    monkeypatch.setattr(builtins, "input", lambda prompt="": (_ for _ in ()).throw(EOFError(prompt)))
 
     await runner.run(str(graph_path), {"panel::picker": str(data)})
 

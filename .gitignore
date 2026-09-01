@@ -58,3 +58,6 @@ ai-settings.json
 
 # Local editor/agent scratch, not part of the project.
 .claude/
+
+# The engine's installed packages.
+engine/node_modules/

@@ -43,6 +43,10 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      - name: Install engine dependencies
+        run: npm install
+        working-directory: engine
+
       # First, like checkpoint.py: a stale graph.generated.ts makes the
       # frontend fail in a way that looks unrelated to the real cause.
       - name: Generated types are current
@@ -63,3 +67,16 @@ jobs:
       - name: Frontend tests
         run: npm run test
         working-directory: frontend
+
+      # The engine's suite runs the example graphs through both engines and
+      # diffs them, so it needs Python and Node together — which is why it is a
+      # step of the shared gate rather than of either half.
+      - name: Engine types
+        run: npm run typecheck
+        working-directory: engine
+
+      - name: Engine tests
+        run: npm run test
+        working-directory: engine
+        env:
+          AI_GRAPH_PYTHON: python

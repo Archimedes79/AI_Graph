@@ -125,7 +125,13 @@ async def run(graph_path: str, extra_inputs: dict, exit_on_error: bool = True):
         default = req.current_value
         suffix = f" [{default}]" if default else ""
         try:
-            answer = input(f"{prompt_label}{suffix}: ").strip()
+            # The prompt goes to stderr, not to stdout: this command's stdout is
+            # the run's JSON result, and `input(prompt)` writes its prompt there
+            # -- so anything reading the output got "Text for 'Greeting': {" and
+            # could not parse it. Found by running the same graph through both
+            # engines and diffing.
+            print(f"{prompt_label}{suffix}: ", end="", file=sys.stderr, flush=True)
+            answer = input().strip()
         except EOFError:
             if default:
                 answer = default

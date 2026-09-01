@@ -1,0 +1,16 @@
+{
+  "name": "ai-graph-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The graph engine: reads a graph, runs it, and knows nothing about a browser.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "typescript": "^5.2.2",
+    "vitest": "^1.6.1"
+  }
+}
