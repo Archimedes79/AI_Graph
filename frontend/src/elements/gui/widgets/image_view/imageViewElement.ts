@@ -1,12 +1,11 @@
 import type { GuiWidgetElementDefinition } from '../../../types';
 import ImageViewEditor from './ImageViewEditor';
 import ImageViewWidget from '../../../../components/gui/widgets/ImageViewWidget';
-import { codeExtension } from '../../../shared/authoredFileName';
 
 export const imageViewElement: GuiWidgetElementDefinition = {
   widgetKind: 'image_view',
   // Display-only, like plot_window: takes something to show, emits nothing.
-  authoredFile: (widget) => ({ extension: codeExtension(widget), what: 'this transform' }),
+  authoredFile: (widget) => ({ extension: '.js', what: 'this transform' }),
   // Same snippet contract as plot_window, different destination: a path. This
   // widget had the code field and no button, purely because generation used to
   // be a switch in a shell rather than a declaration here.
@@ -18,8 +17,8 @@ export const imageViewElement: GuiWidgetElementDefinition = {
     promptLabel: 'Prompt',
     promptPlaceholder: "Describe how to get an image path out of the incoming value, e.g. take the 'cover' field of each record.",
     bodyLabel: 'Optional transform — run(inputs) receives {"value"} and returns {"value"}',
+    mono: true,
     bodyPlaceholder: 'Leave empty to display the incoming path as-is.',
-    language: true,
     bodyHeight: 90,
   },
   ConfigEditor: ImageViewEditor,

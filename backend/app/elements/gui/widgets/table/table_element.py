@@ -11,7 +11,7 @@ class TableElement(DisplayWidget):
     and an optional snippet that reshapes whatever arrives into rows."""
 
     widget_kind = GuiWidgetKind.TABLE
-    config_fields = ("code", "code_prompt", "language")
+    config_fields = ("code", "code_prompt")
 
     def generation(self) -> Generation:
         return Generation(

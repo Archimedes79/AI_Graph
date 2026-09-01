@@ -88,7 +88,6 @@ export const generate = (body: {
   description: string;
   context?: string;
   context_file?: string;
-  language?: string;
   inputs?: string[];
   outputs?: string[];
   /** Real port values from the last run; enables the verify-and-repair pass. */
@@ -226,24 +225,3 @@ export const getRunSnapshot = (runId: string): Promise<RunSnapshot> =>
 export const cancelRun = (runId: string): Promise<{ cancelled: boolean }> =>
   api.post(`/execute/runs/${runId}/cancel`).then((r) => r.data);
 
-// The environment code nodes run in. Installing is an explicit action, not a
-// side effect of running a graph -- see backend/app/services/code_env.py.
-export interface CodeEnvStatus {
-  env_dir: string;
-  env_exists: boolean;
-  base_python: string;
-  /** A stdlib-only interpreter shipped inside this build, if it carries one. */
-  embedded_python: string;
-  /** Whether Python code nodes can run at all. */
-  has_interpreter: boolean;
-  /** Whether packages can be added -- false when only the shipped one is there. */
-  can_install: boolean;
-}
-
-export const getCodeEnv = (): Promise<CodeEnvStatus> =>
-  api.get('/ai/code-env').then((r) => r.data);
-
-export const installCodeRequirements = (
-  requirements: string[],
-): Promise<CodeEnvStatus & { installed: string[]; missing: string[]; log?: string }> =>
-  api.post('/ai/code-env/install', { requirements }).then((r) => r.data);

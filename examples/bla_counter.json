@@ -94,11 +94,10 @@
         }
       ],
       "config": {
-        "language": "python",
         "read_file_inputs": true,
         "batch_mode": "per_item",
         "code_prompt": "Count how often the word 'bla' appears in the file's text.",
-        "code": "def run(inputs):\n    text = str(inputs.get('file') or '')\n    return {'output': {'count': text.lower().split().count('bla')}}\n"
+        "code": "/**\n * @typedef {Object} Inputs\n * @property {string} file  # from \"Kurzgeschichten\"\n */\n\n/** @param {Inputs} inputs */\nfunction run(inputs) {\n  const text = String(inputs.file ?? '');\n  const words = text.toLowerCase().split(/\\s+/);\n  return { output: { count: words.filter((word) => word === 'bla').length } };\n}\n"
       }
     },
     {
@@ -142,10 +141,9 @@
         }
       ],
       "config": {
-        "language": "python",
         "batch_mode": "whole_list",
         "code_prompt": "Sum the per-file counts and write a one-line summary.",
-        "code": "def run(inputs):\n    items = inputs.get('counts') or []\n    if not isinstance(items, list):\n        items = [items]\n    counts = [int((item or {}).get('count', 0)) for item in items]\n    total = sum(counts)\n    return {\n        'bla_count': total,\n        'summary': f\"Found 'bla' {total} time(s) across {len(counts)} file(s).\",\n    }\n"
+        "code": "/**\n * @typedef {Object} Inputs\n * @property {Array<{count: number}>} counts  # from \"Count per File\"\n */\n\n/** @param {Inputs} inputs */\nfunction run(inputs) {\n  const items = Array.isArray(inputs.counts) ? inputs.counts : [inputs.counts ?? {}];\n  const counts = items.map((item) => Number(item?.count ?? 0));\n  const total = counts.reduce((sum, count) => sum + count, 0);\n  return {\n    bla_count: total,\n    summary: `Found 'bla' ${total} time(s) across ${counts.length} file(s).`,\n  };\n}\n"
       }
     },
     {

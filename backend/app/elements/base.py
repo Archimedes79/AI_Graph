@@ -64,13 +64,13 @@ class AuthoredFile:
     graph is one mechanism (`services/node_files.py`) parameterised per element,
     rather than a branch per node type in the router:
 
-        code  -> config.code            from config.code_prompt      .py/.js
+        code  -> config.code            from config.code_prompt      .js
         ai    -> config.system_prompt   from node.description        .md
         data  -> config.data_format_prompt  from config.data_prompt  .md
 
     `extension` is what makes the file useful in another editor, so it follows
-    the content: real code gets .py/.js and a language server with it; prose
-    gets .md, because prose in a .py is a syntax error. A field that becomes a
+    the content: real code gets .js and a language server with it; prose gets
+    .md, because prose in a .js is a syntax error. A field that becomes a
     schema declaration rather than prose is one character of change here.
     """
 
@@ -80,16 +80,6 @@ class AuthoredFile:
     # Where the prompt lives: config (the default) or the node itself, as the
     # ai node's description does.
     prompt_on_node: bool = False
-
-
-def code_extension(holder: Any) -> str:
-    """`.js` or `.py`, from whatever object carries a `language` field.
-
-    Four elements had written this same line out; the fifth (image_view) is the
-    kind of place where a copy quietly disagrees.
-    """
-    language = str(getattr(holder, "language", "python") or "python").lower()
-    return ".js" if language.startswith(("js", "javascript", "node")) else ".py"
 
 
 @dataclass(frozen=True)
@@ -296,7 +286,6 @@ class DirectorySource:
     select_all: bool
     selector_code: str
     selector_prompt: str
-    language: str
 
 
 async def list_selected_files(element: "GuiWidgetElement | NodeElement",
@@ -323,7 +312,6 @@ async def list_selected_files(element: "GuiWidgetElement | NodeElement",
 
         code, _ = await ai_service.generate_code(
             description=source.selector_prompt,
-            language=source.language,
             context=SELECTOR_GENERATION.contract,
             inputs=["files"], outputs=["files"],
         )
@@ -378,4 +366,4 @@ class DisplayWidget(GuiWidgetElement):
     def authored_file(self, widget: GuiWidget) -> AuthoredFile:
         """The optional transform that reshapes the incoming value."""
         return AuthoredFile(body_field="code", prompt_field="code_prompt",
-                            extension=code_extension(widget))
+                            extension='.js')

@@ -9,7 +9,6 @@ export interface InputConfig {
   extensions: string;
   selectAll: boolean;
   selectorCode: string;
-  language: string;
   promptAtRuntime: boolean;
 }
 
@@ -35,7 +34,6 @@ export class InputElement extends NodeElement<InputConfig> {
       extensions: String(c.extensions ?? ''),
       selectAll: c.select_all_files !== false,
       selectorCode: String(c.selector_code ?? ''),
-      language: String(c.language ?? 'javascript'),
       promptAtRuntime: c.prompt_at_runtime === true,
     };
   }
@@ -71,7 +69,7 @@ export class InputElement extends NodeElement<InputConfig> {
     return {
       bodyField: 'selector_code',
       nameField: 'code_file',
-      extension: this.config(node).language.startsWith('py') ? '.py' : '.js',
+      extension: '.js',
       what: 'this file selector',
     };
   }

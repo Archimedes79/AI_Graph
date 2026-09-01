@@ -1,13 +1,4 @@
 /**
- * `.js` or `.py`, from whatever carries a `language` field -- a node's config
- * or a widget. Four element definitions had written this line out; the copies
- * disagreed with nothing yet, which is the moment to stop making them.
- */
-export function codeExtension(holder: { language?: string }): string {
-  return (holder.language ?? 'python').toLowerCase().startsWith('java') ? '.js' : '.py';
-}
-
-/**
  * The file name a node's authored text would get.
  *
  * Only a first suggestion: the backend derives the real name on save (see

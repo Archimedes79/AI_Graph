@@ -36,7 +36,7 @@ function recording(): { runtime: Runtime; asked: AiRequest[] } {
     asked,
     runtime: {
       files: nodeFiles,
-      code: { run: async (_b, _l, inputs) => inputs },
+      code: { run: async (_body, inputs) => inputs },
       ai: { complete: async (request) => { asked.push(request); return 'answered'; } },
     },
   };

@@ -24,7 +24,7 @@ from app.models.graph import (
     GenerateRequest,
     GenerateResponse,
 )
-from app.services import ai_service, ai_settings, code_env, code_refine, file_service
+from app.services import ai_service, ai_settings, code_refine, file_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -229,34 +229,6 @@ async def write_ai_settings(body: Dict[str, Any]):
             "endpoints": {n: str(endpoints.get(k) or "") for n, k in _ENDPOINT_KEYS.items()}}
 
 
-@router.get("/code-env")
-async def code_env_status():
-    """Where code nodes run, and whether that environment exists yet."""
-    return code_env.describe()
-
-
-@router.post("/code-env/install")
-async def code_env_install(body: Dict[str, Any]):
-    """
-    Install the packages a code node declares. Explicit rather than automatic:
-    it needs the network and can take minutes, which a Run button should not do
-    behind the user's back.
-    """
-    requirements = code_env.normalise(body.get("requirements") or [])
-    if not requirements:
-        return {"installed": [], "missing": [], **code_env.describe()}
-    try:
-        installed, log = await asyncio.to_thread(code_env.install, requirements)
-    except RuntimeError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    return {
-        "installed": installed,
-        "missing": code_env.missing(requirements),
-        "log": log[-4000:],
-        **code_env.describe(),
-    }
-
-
 # ---------------------------------------------------------------------------
 # One generation endpoint, for every element.
 #
@@ -301,7 +273,6 @@ async def _code_generator(req: GenerateRequest, spec, context: str, model: str, 
     fixed_ports = spec is not None and spec.inputs is not None
     code, explanation, report = await code_refine.generate_verified_code(
         description=req.description,
-        language=req.language,
         context=context,
         inputs=list(spec.inputs) if fixed_ports else req.inputs,
         outputs=list(spec.outputs) if fixed_ports and spec.outputs else req.outputs,

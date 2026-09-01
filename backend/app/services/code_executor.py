@@ -1,7 +1,13 @@
 """
 Code execution engine.
-Runs Python or JavaScript code in a subprocess with a timeout.
-The code module must expose a `run(inputs: dict) -> dict` function.
+
+Runs an authored JavaScript body in a subprocess with a timeout. The body must
+expose `run(inputs)` returning a plain object.
+
+A subprocess rather than an evaluator in-process: a body that loops forever,
+exits, or prints costs a process rather than the request. The environment it
+gets is an allowlist, so nothing from the backend's own environment -- least of
+all an API key -- is visible to code a model wrote.
 """
 
 from __future__ import annotations
@@ -13,9 +19,7 @@ import os
 import subprocess
 import tempfile
 import textwrap
-from typing import Any, Dict, List, Optional
-
-from app.services import code_env
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -93,71 +97,27 @@ async def _run_in_subprocess(cmd: list[str], inputs: Dict[str, Any], label: str)
         os.unlink(cmd[-1])
 
 
-async def execute_python(
-    code: str, inputs: Dict[str, Any], requirements: Optional[List[str]] = None,
-) -> Dict[str, Any]:
-    """
-    Execute Python code with the given inputs.
-    The code must define a `run(inputs)` function that returns a dict.
-
-    *requirements* are the packages the node declared. They are checked before
-    the snippet runs, so a missing one is a sentence naming it rather than an
-    ImportError traceback out of a subprocess -- and nothing is installed here:
-    see code_env for why that is an explicit action.
-    """
-    absent = code_env.missing(requirements or [])
-    if absent:
-        # Pointing at Install would be a dead end when this build is running on
-        # the interpreter it ships: that one has no pip, so the honest next step
-        # is installing a real Python rather than pressing a button that cannot work.
-        remedy = (
-            code_env.EMBEDDED_ONLY_MESSAGE
-            if not code_env.describe()["can_install"]
-            else "Use Install in the node's editor, or run "
-                 "`python main.py --install-requirements` for a deployed bundle."
-        )
-        raise RuntimeError(
-            "This code node needs " + ", ".join(absent) + ", which "
-            + ("is" if len(absent) == 1 else "are")
-            + " not installed in the code-node environment "
-            + f"({code_env.env_dir()}). {remedy}"
-        )
-    wrapper = textwrap.dedent(
-        f"""
-import json, sys
-
-{code}
-
-_inputs = json.loads(sys.argv[1])
-_outputs = run(_inputs)
-print(json.dumps(_outputs))
-"""
-    )
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False, encoding="utf-8"
-    ) as f:
-        f.write(wrapper)
-        tmp_path = f.name
-
-    return await _run_in_subprocess([code_env.interpreter(), tmp_path], inputs, "Code")
-
-
 async def execute_javascript(code: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute JavaScript code with the given inputs via Node.js.
-    The code must define a `run(inputs)` function that returns a plain object.
+    The code must define a `run(inputs)` function returning a plain object.
+
+    The call is awaited, which matters more than it looks: a model writes
+    `async function run` as soon as the description mentions a file or a timer,
+    and an un-awaited promise serialises to `{}`. Awaiting a plain value is that
+    value, so an ordinary body sees no difference.
     """
     wrapper = textwrap.dedent(
         f"""
 {code}
 
 const _inputs = JSON.parse(process.argv[2]);
-const _outputs = run(_inputs);
+const _outputs = await run(_inputs);
 console.log(JSON.stringify(_outputs));
 """
     )
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".js", delete=False, encoding="utf-8"
+        mode="w", suffix=".mjs", delete=False, encoding="utf-8"
     ) as f:
         f.write(wrapper)
         tmp_path = f.name
@@ -165,14 +125,6 @@ console.log(JSON.stringify(_outputs));
     return await _run_in_subprocess(["node", tmp_path], inputs, "JavaScript")
 
 
-async def execute_code(
-    code: str, language: str, inputs: Dict[str, Any],
-    requirements: Optional[List[str]] = None,
-) -> Dict[str, Any]:
-    """Dispatch to the correct language executor."""
-    lang = language.lower()
-    if lang in ("python", "py"):
-        return await execute_python(code, inputs, requirements)
-    if lang in ("javascript", "js", "node"):
-        return await execute_javascript(code, inputs)
-    raise ValueError(f"Unsupported code language: {language}")
+async def execute_code(code: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    """Run an authored body. Kept as the name every caller already uses."""
+    return await execute_javascript(code, inputs)

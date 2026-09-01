@@ -43,12 +43,7 @@ export interface FileService {
 
 /** Running an authored body: `run(inputs) -> outputs`, both plain JSON. */
 export interface CodeRunner {
-  run(
-    body: string,
-    language: string,
-    inputs: Record<string, unknown>,
-    requirements?: string[],
-  ): Promise<Record<string, unknown>>;
+  run(body: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 }
 
 /** One completion from a model. */
@@ -97,8 +92,6 @@ export interface AuthoredFile {
 
 /** What a deploy bundle must carry for this element to run elsewhere. */
 export interface DeployNeeds {
-  /** Python/npm packages the element's own body declared. */
-  requirements: string[];
   /** The bundle needs the interface: a page, not just a CLI. */
   needsInterface: boolean;
 }
@@ -131,7 +124,7 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
   readonly snippetFailure: SnippetFailure = 'fatal';
 
   deployNeeds(_subject: S): DeployNeeds {
-    return { requirements: [], needsInterface: false };
+    return { needsInterface: false };
   }
 
   /**
@@ -153,13 +146,8 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
     const body = override ?? (spec ? String(subject.config[spec.bodyField] ?? '') : '');
     if (!body.trim()) return inputs;
 
-    // JavaScript unless the body says otherwise: it is the one language
-    // that needs nothing installed, so a bundle of JavaScript bodies asks
-    // its recipient for Node and nothing else.
-    const language = String(subject.config.language ?? 'javascript');
-    const requirements = (subject.config.requirements as string[] | undefined) ?? [];
     try {
-      return await runtime.code.run(body, language, inputs, requirements);
+      return await runtime.code.run(body, inputs);
     } catch (error) {
       if (this.snippetFailure !== 'cosmetic') throw error;
       const reason = error instanceof Error ? error.message : String(error);

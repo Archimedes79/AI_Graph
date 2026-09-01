@@ -1,7 +1,6 @@
 import type { NodeElementDefinition } from '../types';
 import CodeEditor from './CodeEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
-import { codeExtension } from '../shared/authoredFileName';
 import { outputFormatContext } from '../shared/generationContext';
 
 /**
@@ -11,7 +10,7 @@ import { outputFormatContext } from '../shared/generationContext';
 export const codeElement: NodeElementDefinition = {
   nodeType: 'code',
   ownsDescription: true,
-  authoredFile: (node) => ({ extension: codeExtension(node.config), what: 'this code' }),
+  authoredFile: (node) => ({ extension: '.js', what: 'this code' }),
   generation: {
     promptField: 'code_prompt',
     targetField: 'code',
@@ -20,8 +19,8 @@ export const codeElement: NodeElementDefinition = {
     promptLabel: 'Prompt text',
     promptPlaceholder: 'Describe what the generated code should do.',
     bodyLabel: 'Code window (editable)',
+    mono: true,
     bodyPlaceholder: 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}',
-    language: true,
     bodyHeight: 220,
     // What the user chose in THIS node's config, which the graph around it
     // cannot imply: how batches arrive at `run`, and what shape must come back.

@@ -48,65 +48,33 @@ export const nodeFiles: FileService = {
 /**
  * Running an authored body.
  *
- * JavaScript and Python take the same contract — `run(inputs)` returning an
- * object — and differ only in the four lines of wrapper that hand the arguments
- * over and print the result. A body sees plain JSON and nothing of this engine,
- * which is what lets the identical body run under the Python engine too.
+ * A separate process, not `eval`: a body that loops forever, exits, or writes
+ * to stdout costs a subprocess rather than the run. It sees plain JSON on argv
+ * and nothing of this engine, so nothing about how the graph executes leaks
+ * into what someone writes.
+ *
+ * The interpreter is the one already running this engine. That is the whole
+ * reason bodies are JavaScript: a recipient who can run the engine can run
+ * every body in it, with no interpreter to find and no packages to install.
  */
 export const nodeCode: CodeRunner = {
-  async run(body, language, inputs, _requirements) {
-    const lang = language.toLowerCase();
-    const python = lang.startsWith('py');
+  async run(body, inputs) {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-'));
-    const file = join(dir, python ? 'body.py' : 'body.mjs');
+    const file = join(dir, 'body.mjs');
 
-    const wrapper = python
-      ? `${body}\n\nimport json, sys\nprint(json.dumps(run(json.loads(sys.argv[1]))))\n`
-      : `${body}\n\nconst __out = await run(JSON.parse(process.argv[2]));\nconsole.log(JSON.stringify(__out));\n`;
+    const wrapper = `${body}\n\nconst __out = await run(JSON.parse(process.argv[2]));\nconsole.log(JSON.stringify(__out));\n`;
 
     try {
       await writeFile(file, wrapper, 'utf8');
-      const command = python ? await pythonCommand() : process.execPath;
-      const stdout = await capture(command, [file, JSON.stringify(inputs)]);
+      const stdout = await capture(process.execPath, [file, JSON.stringify(inputs)]);
       const trimmed = stdout.trim();
-      if (!trimmed) throw new Error('the body printed nothing; does it return a dict?');
+      if (!trimmed) throw new Error('the body printed nothing; does it return an object?');
       return JSON.parse(trimmed.split('\n').pop() as string) as Record<string, unknown>;
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   },
 };
-
-/**
- * Which interpreter runs a Python body.
- *
- * Probed once and remembered, because "python" is not a fact: on this machine
- * it is a Microsoft Store stub that prints an advert and exits, on a Mac it is
- * often absent while python3 is not, and inside a project it is usually a venv
- * nobody put on PATH. `AI_GRAPH_PYTHON` wins when it is set, which is how a
- * caller points at the interpreter its packages are installed in.
- */
-let pythonPath: string | null = null;
-
-async function pythonCommand(): Promise<string> {
-  if (pythonPath) return pythonPath;
-  const candidates = [process.env.AI_GRAPH_PYTHON, 'python3', 'python', 'py'].filter(Boolean) as string[];
-  for (const candidate of candidates) {
-    try {
-      const banner = await capture(candidate, ['-c', 'print("ok")']);
-      if (banner.trim() === 'ok') {
-        pythonPath = candidate;
-        return candidate;
-      }
-    } catch {
-      // Try the next one: a missing interpreter is not an error until they all are.
-    }
-  }
-  throw new Error(
-    'No Python interpreter found for this code node. Set AI_GRAPH_PYTHON to one, '
-    + 'or write the body in JavaScript, which needs nothing installed.',
-  );
-}
 
 function capture(command: string, args: string[]): Promise<string> {
   return new Promise((fulfil, fail) => {
@@ -128,9 +96,8 @@ function capture(command: string, args: string[]): Promise<string> {
 /**
  * The engine wired to this machine.
  *
- * The model provider is configured from the environment, the same variable
- * names the Python engine reads, so one machine's configuration serves both
- * while they coexist.
+ * The model provider is configured from the environment and the settings
+ * file, so a double-clicked build is configurable without a terminal.
  */
 export function nodeRuntime(overrides: Partial<Runtime> = {}): Runtime {
   return {

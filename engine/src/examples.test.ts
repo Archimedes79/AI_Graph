@@ -26,7 +26,6 @@ import { applyRuntimeValues, runtimeRequirements, withDefaults } from './runtime
  */
 
 const REPO = resolve(__dirname, '..', '..');
-process.env.AI_GRAPH_PYTHON ??= resolve(REPO, '.venv/Scripts/python.exe');
 
 /** An endpoint that answers with a summary of what it was sent. */
 function startModel(): Promise<{ url: string; server: Server; asked: string[] }> {

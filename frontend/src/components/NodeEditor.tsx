@@ -110,7 +110,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       subject: node,
       fields,
       ports: { inputs: node.inputs.map((p) => p.id), outputs: node.outputs.map((p) => p.id) },
-      language: node.config.language,
       exampleFile: node.config.example_file,
       graphContext: surroundingContext(),
       // The same values `lastRunContext` renders as prose, raw: the backend runs

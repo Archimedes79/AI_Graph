@@ -93,7 +93,7 @@ def _describe_inputs(sample: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-async def _probe(code: str, language: str, sample: Dict[str, Any], outputs: List[str]):
+async def _probe(code: str, sample: Dict[str, Any], outputs: List[str]):
     """
     Run *code* once on *sample*.
 
@@ -103,7 +103,7 @@ async def _probe(code: str, language: str, sample: Dict[str, Any], outputs: List
     """
     try:
         result = await asyncio.wait_for(
-            code_executor.execute_code(code, language, dict(sample)),
+            code_executor.execute_code(code, dict(sample)),
             timeout=PROBE_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
@@ -144,7 +144,6 @@ def _repair_prompt(code: str, sample: Dict[str, Any], error: str, missing: List[
 async def generate_verified_code(
     *,
     description: str,
-    language: str,
     context: str,
     inputs: List[str],
     outputs: List[str],
@@ -161,7 +160,7 @@ async def generate_verified_code(
     repair never leaves the user with something worse than the first attempt.
     """
     code, explanation = await ai_service.generate_code(
-        description=description, language=language, context=context,
+        description=description, context=context,
         inputs=inputs, outputs=outputs, model=model, provider=provider,
         # The same sample that verifies the result also types the skeleton
         # the model is asked to complete -- pass 1 gets to see the shapes
@@ -176,7 +175,7 @@ async def generate_verified_code(
         return code, explanation, report
 
     report.attempts = 1
-    result, error = await _probe(code, language, sample_inputs, outputs)
+    result, error = await _probe(code, sample_inputs, outputs)
     missing = [] if result is None else [port for port in outputs if port not in result]
 
     if result is not None and not missing:
@@ -195,7 +194,7 @@ async def generate_verified_code(
     ]))
     try:
         repaired, repaired_explanation = await ai_service.generate_code(
-            description=description, language=language, context=repair_context,
+            description=description, context=repair_context,
             inputs=inputs, outputs=outputs, model=model, provider=provider,
             sample_inputs=sample_inputs, sources=sources,
         )
@@ -209,7 +208,7 @@ async def generate_verified_code(
         return code, explanation, report
 
     report.attempts = 2
-    repaired_result, repaired_error = await _probe(repaired, language, sample_inputs, outputs)
+    repaired_result, repaired_error = await _probe(repaired, sample_inputs, outputs)
     repaired_missing = [] if repaired_result is None else [p for p in outputs if p not in repaired_result]
 
     if repaired_result is not None and not repaired_missing:

@@ -3,7 +3,6 @@ import type { GraphNode } from '../../types/graph';
 import AuthoredBodyEditor from '../shared/AuthoredBodyEditor';
 import BatchAndFileInputOptions from '../shared/BatchAndFileInputOptions';
 import type { ElementGeneration, FieldAccess } from '../shared/generation';
-import CodeRequirements from './CodeRequirements';
 
 interface CodeEditorProps {
   node: GraphNode;
@@ -31,12 +30,6 @@ export default function CodeEditor({
         generating={generating}
         message={message}
         onGenerate={onGenerate}
-      />
-
-      <CodeRequirements
-        requirements={node.config.requirements ?? []}
-        onChange={(requirements) => setConfig('requirements', requirements)}
-        language={node.config.language || 'javascript'}
       />
 
       <BatchAndFileInputOptions node={node} setConfig={setConfig} subject="code" />

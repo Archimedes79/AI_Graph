@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from app.elements.base import (AuthoredFile, DirectorySource, Generation, NodeElement,
-                               SELECTOR_GENERATION, code_extension, list_selected_files)
+                               SELECTOR_GENERATION, list_selected_files)
 from app.models.graph import GraphNode, NodeType
 from app.services import file_service
 
@@ -21,7 +21,7 @@ class InputElement(NodeElement):
         # Directory mode. Same names the input_picker widget uses, because it is
         # the same contract at two levels (see SELECTOR_GENERATION).
         "recursive", "extensions", "select_all_files",
-        "selector_prompt", "selector_code", "language",
+        "selector_prompt", "selector_code",
     )
 
     def generation(self) -> Generation:
@@ -38,4 +38,4 @@ class InputElement(NodeElement):
         if _effective_mode(node) != "directory":
             return None
         return AuthoredFile(body_field="selector_code", prompt_field="selector_prompt",
-                            extension=code_extension(node.config))
+                            extension='.js')

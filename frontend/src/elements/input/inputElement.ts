@@ -3,7 +3,6 @@ import type { NodeElementDefinition } from '../types';
 import InputEditor from './InputEditor';
 import { baseNodeConfig } from '../shared/baseNodeConfig';
 import { derivedNodePorts } from '../../utils/guiWidgets';
-import { codeExtension } from '../shared/authoredFileName';
 import type { Port } from '../../types/graph';
 
 
@@ -14,7 +13,7 @@ export const inputElement: NodeElementDefinition = {
   // same one an input_picker widget gets, because it is the same behaviour one
   // level up. A text or single-file input authors nothing.
   authoredFile: (node) => (node.config.input_mode === 'directory'
-    ? { extension: codeExtension(node.config), what: 'this file selector' }
+    ? { extension: '.js', what: 'this file selector' }
     : undefined),
   generation: {
     promptField: 'selector_prompt',
@@ -24,8 +23,8 @@ export const inputElement: NodeElementDefinition = {
     success: '✅ Selector generated!',
     promptLabel: 'Prompt text',
     promptPlaceholder: 'Select Markdown files that contain API documentation',
+    mono: true,
     bodyLabel: 'Code window (editable) — run(inputs) receives {"files"} and must return {"files"}',
-    language: true,
     bodyHeight: 140,
   },
   describeOutput: (node) => {

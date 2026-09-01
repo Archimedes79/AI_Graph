@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from app.elements.base import AuthoredFile, Generation, NodeElement, code_extension
+from app.elements.base import AuthoredFile, Generation, NodeElement
 from app.models.graph import GraphNode, NodeType
 
 
@@ -16,7 +16,7 @@ from app.models.graph import GraphNode, NodeType
 class CodeElement(NodeElement):
     node_type = NodeType.CODE
     config_fields = (
-        "code", "code_prompt", "language", "requirements",
+        "code", "code_prompt",
         # Read by the executor rather than by `execute` here, but they are
         # settings of this node type and appear in its editor.
         "output_format", "output_format_prompt",
@@ -26,7 +26,7 @@ class CodeElement(NodeElement):
     def authored_file(self, node: GraphNode) -> AuthoredFile:
         """The code itself, in a real .py/.js so an editor can help with it."""
         return AuthoredFile(body_field="code", prompt_field="code_prompt",
-                            extension=code_extension(node.config))
+                            extension='.js')
 
     def generation(self) -> Generation:
         """Generated against the node's own ports -- `inputs`/`outputs` are left

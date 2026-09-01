@@ -113,29 +113,29 @@ def test_everything_round_trips_through_the_same_code(make, body, prompt_text):
 # --- names ------------------------------------------------------------------
 
 def test_the_file_is_named_after_the_element():
-    assert node_files.default_file_name("Analyse", ".py") == "Analyse.py"
+    assert node_files.default_file_name("Analyse", ".js") == "Analyse.js"
     assert node_files.default_file_name("Analyse", ".md") == "Analyse.md"
 
 
 def test_a_label_a_filesystem_would_reject_still_yields_a_name():
-    assert node_files.default_file_name("Werte / 2024: roh?", ".py") == "Werte_2024_roh.py"
-    assert node_files.default_file_name("***", ".py") == "node.py"
+    assert node_files.default_file_name("Werte / 2024: roh?", ".js") == "Werte_2024_roh.js"
+    assert node_files.default_file_name("***", ".js") == "node.js"
 
 
 def test_two_elements_with_the_same_label_do_not_collide():
-    assert node_files.default_file_name("Analyse", ".py", {"Analyse.py"}) == "Analyse_2.py"
+    assert node_files.default_file_name("Analyse", ".js", {"Analyse.js"}) == "Analyse_2.js"
 
 
 # --- the header per file kind ----------------------------------------------
 
-def test_a_python_file_fences_the_header_in_comments():
+def test_a_code_file_fences_the_header_in_comments():
     _, item = _node("code", code="def run(inputs):\n    return {}", code_prompt="Zaehle die Woerter.")
-    text = node_files.render(item, "Analyse.py")
+    text = node_files.render(item, "Analyse.js")
 
-    assert text.startswith("# --- ai-graph ---")
-    assert "# node:    Analyse" in text
-    assert "#   Zaehle die Woerter." in text
-    assert "# inputs:  text" in text
+    assert text.startswith("// --- ai-graph ---")
+    assert "// node:    Analyse" in text
+    assert "//   Zaehle die Woerter." in text
+    assert "// inputs:  text" in text
     assert text.rstrip().endswith("return {}")
 
 
@@ -158,9 +158,9 @@ def test_a_markdown_file_uses_front_matter_because_hash_is_a_heading():
 
 def test_a_widget_header_states_the_ports_the_graph_wires_to():
     _, item = _widget("plot_window")
-    text = node_files.render(item, "Verlauf.py")
-    assert "# inputs:  w1_in" in text
-    assert "# outputs: w1_out" in text
+    text = node_files.render(item, "Verlauf.js")
+    assert "// inputs:  w1_in" in text
+    assert "// outputs: w1_out" in text
 
 
 # --- what is allowed back ---------------------------------------------------
@@ -168,15 +168,15 @@ def test_a_widget_header_states_the_ports_the_graph_wires_to():
 def test_authored_fields_flow_back():
     _, item = _node("code", code="alt", code_prompt="alt")
     header, body = node_files.parse(
-        "# --- ai-graph ---------\n"
-        "# node:    Neuer Name\n"
-        "# id:      code-1\n"
-        "# prompt: |\n"
-        "#   Ein neuer Prompt\n"
-        "# context-file: neu.csv\n"
-        "# ------------------------\n"
+        "// --- ai-graph ---------\n"
+        "// node:    Neuer Name\n"
+        "// id:      code-1\n"
+        "// prompt: |\n"
+        "//   Ein neuer Prompt\n"
+        "// context-file: neu.csv\n"
+        "// ------------------------\n"
         "\ndef run(inputs):\n    return 1\n",
-        "Analyse.py",
+        "Analyse.js",
     )
     node_files.apply(item, header, body)
 
@@ -192,7 +192,7 @@ def test_ports_in_the_header_are_read_only():
         "# --- ai-graph ---------\n# node: Analyse\n# id: code-1\n"
         "# inputs:  etwas_ganz_anderes\n# outputs: auch_anders\n# ---------------\n"
         "\ndef run(inputs):\n    return 1\n",
-        "Analyse.py",
+        "Analyse.js",
     )
     node_files.apply(item, header, body)
 
@@ -204,7 +204,7 @@ def test_the_id_is_never_applied():
     node, item = _node("code")
     header, body = node_files.parse(
         "# --- ai-graph ---\n# node: Analyse\n# id: eine-andere-id\n# ---------------\n\ndef run(i):\n    return 1\n",
-        "Analyse.py",
+        "Analyse.js",
     )
     node_files.apply(item, header, body)
     assert node.id == "code-1"
@@ -212,7 +212,7 @@ def test_the_id_is_never_applied():
 
 def test_a_hand_written_file_without_a_header_is_all_body():
     """Being lenient is what lets a person write one of these from scratch."""
-    header, body = node_files.parse("def run(inputs):\n    return 1\n", "Analyse.py")
+    header, body = node_files.parse("def run(inputs):\n    return 1\n", "Analyse.js")
     assert header == {}
     assert body == "def run(inputs):\n    return 1"
 
@@ -230,14 +230,14 @@ def test_an_empty_code_file_is_written_as_its_skeleton():
         config=NodeConfig(code=""),
     )
     spec = NODE_ELEMENTS[NodeType.CODE].authored_file(node)
-    rendered = node_files.render(node_files.for_node(node, spec), "Analyse.py")
+    rendered = node_files.render(node_files.for_node(node, spec), "Analyse.js")
 
-    assert "def run(inputs: Inputs) -> dict:" in rendered
-    assert '"summary": ...' in rendered
+    assert "function run(inputs) {" in rendered
+    assert '"summary": null' in rendered
     # Still parseable as a header plus a body, and the body is the stub.
-    header, body = node_files.parse(rendered, "Analyse.py")
+    header, body = node_files.parse(rendered, "Analyse.js")
     assert header["node"] == "Analyse"
-    assert "def run" in body
+    assert "function run" in body
 
 
 def test_a_written_body_is_never_replaced_by_the_skeleton():
@@ -248,7 +248,7 @@ def test_a_written_body_is_never_replaced_by_the_skeleton():
         config=NodeConfig(code="def run(inputs):\n    return {'summary': 'x'}\n"),
     )
     spec = NODE_ELEMENTS[NodeType.CODE].authored_file(node)
-    rendered = node_files.render(node_files.for_node(node, spec), "Analyse.py")
+    rendered = node_files.render(node_files.for_node(node, spec), "Analyse.js")
     assert "TypedDict" not in rendered
     assert "'summary': 'x'" in rendered
 

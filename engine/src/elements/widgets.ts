@@ -73,7 +73,6 @@ export interface PickerConfig {
   extensions: string;
   selectAll: boolean;
   selectorCode: string;
-  language: string;
 }
 
 /**
@@ -95,7 +94,6 @@ export class InputPickerElement extends WidgetElement<PickerConfig> {
       extensions: String(c.extensions ?? ''),
       selectAll: c.select_all_files !== false,
       selectorCode: String(c.selector_code ?? ''),
-      language: String(c.language ?? 'javascript'),
     };
   }
 
@@ -104,7 +102,7 @@ export class InputPickerElement extends WidgetElement<PickerConfig> {
     return {
       bodyField: 'selector_code',
       nameField: 'code_file',
-      extension: this.config(widget).language.startsWith('py') ? '.py' : '.js',
+      extension: '.js',
       what: 'this file selector',
     };
   }
@@ -191,7 +189,6 @@ export class TextIoElement extends WidgetElement<TextIoConfig> {
 
 export interface TransformConfig {
   code: string;
-  language: string;
 }
 
 /**
@@ -206,12 +203,11 @@ abstract class TransformingDisplay extends DisplayWidget<TransformConfig> {
   config(widget: Widget): TransformConfig {
     return {
       code: String(widget.config.code ?? ''),
-      language: String(widget.config.language ?? 'javascript'),
     };
   }
 
   override authoredFile(): AuthoredFile {
-    return { bodyField: 'code', nameField: 'code_file', extension: '.py', what: 'this transform' };
+    return { bodyField: 'code', nameField: 'code_file', extension: '.js', what: 'this transform' };
   }
 }
 

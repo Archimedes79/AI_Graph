@@ -1,12 +1,11 @@
 import type { GuiWidgetElementDefinition } from '../../../types';
 import TableEditor from './TableEditor';
 import TableWidget from '../../../../components/gui/widgets/TableWidget';
-import { codeExtension } from '../../../shared/authoredFileName';
 
 /** Display-only, like plot_window: takes rows to show, emits nothing. */
 export const tableElement: GuiWidgetElementDefinition = {
   widgetKind: 'table',
-  authoredFile: (widget) => ({ extension: codeExtension(widget), what: 'this transform' }),
+  authoredFile: (widget) => ({ extension: '.js', what: 'this transform' }),
   generation: {
     promptField: 'code_prompt',
     targetField: 'code',
@@ -15,8 +14,8 @@ export const tableElement: GuiWidgetElementDefinition = {
     promptLabel: 'Prompt',
     promptPlaceholder: 'Describe the rows you want, e.g. one row per file with name, size and date.',
     bodyLabel: 'Optional transform — run(inputs) receives {"value"} and returns {"value"}',
+    mono: true,
     bodyPlaceholder: 'Leave empty to show the incoming rows as-is.',
-    language: true,
     bodyHeight: 90,
   },
   ConfigEditor: TableEditor,

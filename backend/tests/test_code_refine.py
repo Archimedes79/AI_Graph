@@ -17,9 +17,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.services import ai_service, code_refine  # noqa: E402
 
-GOOD = "def run(inputs):\n    return {'total': sum(int(i['count']) for i in inputs['items'])}\n"
-WRONG_KEY = "def run(inputs):\n    return {'sum': sum(int(i['count']) for i in inputs['items'])}\n"
-CRASHES = "def run(inputs):\n    return {'total': inputs['items'].upper()}\n"
+GOOD = "function run(inputs) {\n  return { total: inputs.items.reduce((s, i) => s + Number(i.count), 0) };\n}\n"
+WRONG_KEY = "function run(inputs) {\n  return { sum: inputs.items.reduce((s, i) => s + Number(i.count), 0) };\n}\n"
+CRASHES = "function run(inputs) {\n  return { total: inputs.items.toUpperCase() };\n}\n"
 
 SAMPLE = {"items": [{"count": 2}, {"count": 3}]}
 OUTPUTS = ["total"]
@@ -34,7 +34,7 @@ def _scripted(monkeypatch, *codes: str):
     # what comes back, and pinning the caller's argument list made it fail
     # whenever generate_code learned a new optional argument -- a failure about
     # the test, not about the two-pass behaviour it covers.
-    async def fake_generate_code(description, language="python", context="", inputs=None,
+    async def fake_generate_code(description, context="", inputs=None,
                                  outputs=None, model="", provider="default", **_):
         contexts.append(context)
         return remaining.pop(0), "explanation"
@@ -45,7 +45,7 @@ def _scripted(monkeypatch, *codes: str):
 
 async def _generate(**overrides):
     kwargs = dict(
-        description="sum the counts", language="python", context="base context",
+        description="sum the counts", context="base context",
         inputs=["items"], outputs=OUTPUTS, model="m", provider="default",
     )
     kwargs.update(overrides)
@@ -91,7 +91,7 @@ async def test_a_wrong_result_key_is_repaired(monkeypatch):
 
     repair_context = contexts[1]
     assert "'total'" in repair_context, "the second pass must be told which key is missing"
-    assert "'sum'" in repair_context, "and must see its own previous attempt"
+    assert "sum:" in repair_context, "and must see its own previous attempt"
 
 
 async def test_a_crash_hands_the_traceback_to_the_second_pass(monkeypatch):
@@ -103,7 +103,7 @@ async def test_a_crash_hands_the_traceback_to_the_second_pass(monkeypatch):
     assert report.status == "repaired"
 
     repair_context = contexts[1]
-    assert "AttributeError" in repair_context
+    assert "toUpperCase is not a function" in repair_context
     assert '"items"' in repair_context and "list[2]" in repair_context, (
         "the second pass must see the shape of the real input, not just the error"
     )
@@ -126,7 +126,7 @@ async def test_a_failing_repair_pass_falls_back_to_the_first_attempt(monkeypatch
     the user the code that was already generated."""
     calls = {"n": 0}
 
-    async def flaky(description, language="python", context="", inputs=None,
+    async def flaky(description, context="", inputs=None,
                     outputs=None, model="", provider="default", **_):
         calls["n"] += 1
         if calls["n"] == 1:

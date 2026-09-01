@@ -705,7 +705,6 @@ async def complete(
 
 async def generate_code(
     description: str,
-    language: str = "python",
     context: str = "",
     inputs: list[str] | None = None,
     outputs: list[str] | None = None,
@@ -734,7 +733,7 @@ async def generate_code(
         "downstream nodes look up values by these exact keys."
     )
     prompt_parts = [
-        f"Write a {language} function that does the following:",
+        "Write a JavaScript function that does the following:",
         description,
     ]
     if context:
@@ -746,7 +745,7 @@ async def generate_code(
         # run when the caller supplied a sample.
         prompt_parts.append(
             "\nComplete this function. Keep the signature and the returned keys exactly as they are:\n\n"
-            + skeleton.render(language, inputs, outputs, sample=sample_inputs, sources=sources)
+            + skeleton.render(inputs, outputs, sample=sample_inputs, sources=sources)
         )
     if outputs:
         prompt_parts.append(
@@ -755,13 +754,15 @@ async def generate_code(
             "abbreviate, reorder, or invent additional keys, and include every one of them."
         )
     prompt_parts.append(
-        f"\nUse only the {language} standard library unless the description requires otherwise."
+        "\nUse only what Node has built in. There is no package manager and no "
+        "`npm install`: `require` and `import` of anything outside Node's own "
+        "standard library will fail at run time."
     )
     raw = await complete("\n".join(prompt_parts), system, model, 0.2, provider)
 
     # Extract code block
     code = _extract_code_block(raw)
-    explanation = raw.replace(f"```{language}", "").replace("```", "").strip()
+    explanation = raw.replace("```javascript", "").replace("```js", "").replace("```", "").strip()
     if code:
         explanation = raw[raw.rfind("```") + 3 :].strip()
     return code or raw, explanation

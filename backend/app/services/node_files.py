@@ -233,12 +233,8 @@ def render(item: Authored, file_name: str) -> str:
     style = style_for(file_name)
     body = item.body.rstrip("\n")
     if not body.strip():
-        extension = Path(file_name).suffix.lower()
-        if extension in (".py", ".js"):
-            body = skeleton.render(
-                "javascript" if extension == ".js" else "python",
-                item.inputs, item.outputs,
-            ).rstrip("\n")
+        if Path(file_name).suffix.lower() == ".js":
+            body = skeleton.render(item.inputs, item.outputs).rstrip("\n")
     return "\n".join(_header_lines(item, style)) + "\n\n" + body + "\n"
 
 

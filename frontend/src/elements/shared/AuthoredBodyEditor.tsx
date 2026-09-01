@@ -39,7 +39,7 @@ export default function AuthoredBodyEditor({
   generating, message, onGenerate, onSurface, children, bodyHidden,
 }: Props) {
   const field = onSurface ? FIELD_ON_SURFACE : FIELD;
-  const mono = generation.mono ?? generation.language;
+  const mono = generation.mono;
 
   return (
     <>
@@ -71,18 +71,6 @@ export default function AuthoredBodyEditor({
               {generation.bodyLabel ?? 'Result'}
             </label>
             <div className="flex items-center gap-2">
-              {generation.language && (
-                <select
-                  className="rounded px-2 py-1 text-xs"
-                  style={field}
-                  aria-label="Language"
-                  value={fields.get('language') || 'javascript'}
-                  onChange={(e) => fields.set('language', e.target.value)}
-                >
-                  <option value="python">Python</option>
-                  <option value="javascript">JavaScript</option>
-                </select>
-              )}
               <button
                 onClick={onGenerate}
                 disabled={generating}

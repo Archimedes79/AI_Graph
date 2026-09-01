@@ -4,8 +4,15 @@
     "version": "1.0.0",
     "description": "Summarize every story in a folder on its own, then summarize the summaries. The two AI nodes differ only in batch_mode: per_item runs once per file, whole_list runs once over all of them. Paths are relative to the working directory, so run this from the repository root.",
     "author": "",
-    "tags": ["example", "ai", "batch"],
-    "ai_defaults": { "provider": "default", "model": "" }
+    "tags": [
+      "example",
+      "ai",
+      "batch"
+    ],
+    "ai_defaults": {
+      "provider": "default",
+      "model": ""
+    }
   },
   "nodes": [
     {
@@ -13,13 +20,40 @@
       "node_type": "input",
       "label": "Kurzgeschichten",
       "description": "Lists the .txt files; it does not read them — the AI node below does that itself.",
-      "position": { "x": 80, "y": 180 },
+      "position": {
+        "x": 80,
+        "y": 180
+      },
       "inputs": [
-        { "id": "path", "name": "Path", "kind": "input", "data_type": "file_path", "multi": false, "required": false, "description": "Override the configured path" }
+        {
+          "id": "path",
+          "name": "Path",
+          "kind": "input",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": "Override the configured path"
+        }
       ],
       "outputs": [
-        { "id": "files", "name": "Files", "kind": "output", "data_type": "file_path", "multi": true, "required": false, "description": "Rooted file paths" },
-        { "id": "count", "name": "Count", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+        {
+          "id": "files",
+          "name": "Files",
+          "kind": "output",
+          "data_type": "file_path",
+          "multi": true,
+          "required": false,
+          "description": "Rooted file paths"
+        },
+        {
+          "id": "count",
+          "name": "Count",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "config": {
         "value": "examples/kurzgeschichten",
@@ -35,12 +69,31 @@
       "node_type": "ai",
       "label": "Je Geschichte",
       "description": "Fasse eine einzelne Kurzgeschichte zusammen.",
-      "position": { "x": 430, "y": 100 },
+      "position": {
+        "x": 430,
+        "y": 100
+      },
       "inputs": [
-        { "id": "text", "name": "Text", "kind": "input", "data_type": "file_path", "multi": true, "required": false, "description": "One story per batch item" }
+        {
+          "id": "text",
+          "name": "Text",
+          "kind": "input",
+          "data_type": "file_path",
+          "multi": true,
+          "required": false,
+          "description": "One story per batch item"
+        }
       ],
       "outputs": [
-        { "id": "output", "name": "Output batch", "kind": "output", "data_type": "text", "multi": true, "required": false, "description": "One summary per story" }
+        {
+          "id": "output",
+          "name": "Output batch",
+          "kind": "output",
+          "data_type": "text",
+          "multi": true,
+          "required": false,
+          "description": "One summary per story"
+        }
       ],
       "config": {
         "system_prompt": "Du fasst literarische Kurzgeschichten zusammen.\n\nGib genau zwei Sätze zurück: im ersten, worum es geht, im zweiten, worauf die Geschichte hinausläuft. Nenne den Titel nicht noch einmal und werte nicht. Antworte auf Deutsch und gib nichts außer den zwei Sätzen aus.",
@@ -54,12 +107,31 @@
       "node_type": "ai",
       "label": "Gesamtbild",
       "description": "Fasse die Einzelzusammenfassungen zu einem Gesamtbild zusammen.",
-      "position": { "x": 800, "y": 100 },
+      "position": {
+        "x": 800,
+        "y": 100
+      },
       "inputs": [
-        { "id": "summaries", "name": "Summaries", "kind": "input", "data_type": "text", "multi": true, "required": false, "description": "Every per-story summary at once" }
+        {
+          "id": "summaries",
+          "name": "Summaries",
+          "kind": "input",
+          "data_type": "text",
+          "multi": true,
+          "required": false,
+          "description": "Every per-story summary at once"
+        }
       ],
       "outputs": [
-        { "id": "output", "name": "Output", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+        {
+          "id": "output",
+          "name": "Output",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "config": {
         "system_prompt": "Du bekommst mehrere Zusammenfassungen einzelner Kurzgeschichten desselben Bandes.\n\nSchreibe einen Absatz von höchstens fünf Sätzen darüber, was die Geschichten verbindet: gemeinsame Motive, wiederkehrende Figurentypen, die Haltung des Erzählens. Fasse nicht noch einmal die einzelnen Handlungen nach. Antworte auf Deutsch.",
@@ -72,19 +144,65 @@
       "node_type": "output",
       "label": "Ergebnis",
       "description": "",
-      "position": { "x": 1160, "y": 180 },
+      "position": {
+        "x": 1160,
+        "y": 180
+      },
       "inputs": [
-        { "id": "einzeln", "name": "Einzeln", "kind": "input", "data_type": "text", "multi": true, "required": false, "description": "" },
-        { "id": "gesamt", "name": "Gesamt", "kind": "input", "data_type": "text", "multi": false, "required": false, "description": "" }
+        {
+          "id": "einzeln",
+          "name": "Einzeln",
+          "kind": "input",
+          "data_type": "text",
+          "multi": true,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "gesamt",
+          "name": "Gesamt",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "outputs": [],
-      "config": { "output_label": "Zusammenfassung", "write_mode": "window" }
+      "config": {
+        "output_label": "Zusammenfassung",
+        "write_mode": "window"
+      }
     }
   ],
   "edges": [
-    { "id": "e1", "source_node_id": "stories", "source_port_id": "files", "target_node_id": "per_story", "target_port_id": "text" },
-    { "id": "e2", "source_node_id": "per_story", "source_port_id": "output", "target_node_id": "overall", "target_port_id": "summaries" },
-    { "id": "e3", "source_node_id": "per_story", "source_port_id": "output", "target_node_id": "result", "target_port_id": "einzeln" },
-    { "id": "e4", "source_node_id": "overall", "source_port_id": "output", "target_node_id": "result", "target_port_id": "gesamt" }
+    {
+      "id": "e1",
+      "source_node_id": "stories",
+      "source_port_id": "files",
+      "target_node_id": "per_story",
+      "target_port_id": "text"
+    },
+    {
+      "id": "e2",
+      "source_node_id": "per_story",
+      "source_port_id": "output",
+      "target_node_id": "overall",
+      "target_port_id": "summaries"
+    },
+    {
+      "id": "e3",
+      "source_node_id": "per_story",
+      "source_port_id": "output",
+      "target_node_id": "result",
+      "target_port_id": "einzeln"
+    },
+    {
+      "id": "e4",
+      "source_node_id": "overall",
+      "source_port_id": "output",
+      "target_node_id": "result",
+      "target_port_id": "gesamt"
+    }
   ]
 }

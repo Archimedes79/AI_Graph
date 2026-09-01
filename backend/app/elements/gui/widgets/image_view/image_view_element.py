@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class ImageViewElement(DisplayWidget):
     widget_kind = GuiWidgetKind.IMAGE_VIEW
-    config_fields = ("code", "code_prompt", "language")
+    config_fields = ("code", "code_prompt")
 
     def generation(self) -> Generation:
         """Same snippet contract as plot_window, different destination: a path.

@@ -21,7 +21,7 @@ const nowhere: Runtime = {
     read: async () => '', write: async () => {}, list: async () => [],
     resolve: (p) => p, exists: async () => true,
   },
-  code: { run: async (_b, _l, inputs) => inputs },
+  code: { run: async (_body, inputs) => inputs },
   ai: { complete: async () => '' },
 };
 

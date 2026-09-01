@@ -15,7 +15,6 @@ import { bundleNeeds, writeBundle } from './bundle.ts';
  */
 
 const REPO = resolve(__dirname, '..', '..');
-const PYTHON = resolve(REPO, '.venv/Scripts/python.exe');
 
 function run(dir: string, args: string[] = []): Promise<{ code: number; out: string; err: string }> {
   return new Promise((fulfil, fail) => {
@@ -23,7 +22,6 @@ function run(dir: string, args: string[] = []): Promise<{ code: number; out: str
       cwd: dir,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, AI_GRAPH_PYTHON: PYTHON },
     });
     let out = ''; let err = '';
     child.stdout.on('data', (c) => { out += c; });
@@ -96,11 +94,10 @@ describe('a bundle', () => {
       await readFile(resolve(REPO, 'examples/hello_world.json'), 'utf8'),
     ));
 
-    // The plotter's code node is Python, so a recipient needs an interpreter.
-    expect(bundleNeeds(plotter).python).toBe(true);
+    // The plotter has a page, so a bundle without one would be half of it.
     expect(bundleNeeds(plotter).interface).toBe(true);
-    // Hello world is two nodes and no code: Node and nothing else.
-    expect(bundleNeeds(hello)).toEqual({ requirements: [], python: false, interface: false, ai: false });
+    // Hello world is two nodes, no page and no model: Node and nothing else.
+    expect(bundleNeeds(hello)).toEqual({ interface: false, ai: false });
   });
 
   it('writes a README that names the model settings only when one is asked', async () => {
@@ -108,7 +105,9 @@ describe('a bundle', () => {
     try {
       const readme = await readFile(join(dir, 'README.md'), 'utf8');
       expect(readme).toContain('Node 22 or newer');
-      expect(readme).toContain('AI_GRAPH_PYTHON');
+      // The one thing a recipient has to be told, and now the only one: the
+      // interpreter that runs the engine runs every body in the graph too.
+      expect(readme).toContain('Nothing else');
       // The plotter asks no model, so a page of provider settings would be
       // instructions for something that never happens.
       expect(readme).not.toContain('AI_GRAPH_AI_PROVIDER');

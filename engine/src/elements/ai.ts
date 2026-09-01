@@ -52,7 +52,7 @@ export class AiElement extends NodeElement<AiConfig> {
   }
 
   override deployNeeds() {
-    return { requirements: [], needsInterface: false };
+    return { needsInterface: false };
   }
 
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {

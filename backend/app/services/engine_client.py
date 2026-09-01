@@ -20,11 +20,9 @@ from __future__ import annotations
 
 import atexit
 import logging
-import os
 import shutil
 import socket
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -82,7 +80,6 @@ def start() -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        env={**os.environ, "AI_GRAPH_PYTHON": sys.executable},
     )
     _base_url = f"http://127.0.0.1:{port}"
 

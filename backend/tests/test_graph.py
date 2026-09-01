@@ -305,25 +305,25 @@ def test_graph_validation_allows_fan_in_into_merge():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_python_executor_basic():
+async def test_code_executor_basic():
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.services.code_executor import execute_python
+    from app.services.code_executor import execute_code
 
-    code = "def run(inputs):\n    return {'doubled': inputs['x'] * 2}\n"
-    result = await execute_python(code, {"x": 5})
+    code = "function run(inputs) { return { doubled: inputs.x * 2 }; }\n"
+    result = await execute_code(code, {"x": 5})
     assert result["doubled"] == 10
 
 
 @pytest.mark.asyncio
-async def test_python_executor_error():
+async def test_code_executor_error():
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from app.services.code_executor import execute_python
+    from app.services.code_executor import execute_code
 
-    code = "def run(inputs):\n    raise ValueError('oops')\n"
+    code = "function run(inputs) { throw new Error('oops'); }\n"
     with pytest.raises(RuntimeError):
-        await execute_python(code, {})
+        await execute_code(code, {})
 
 
 # ---------------------------------------------------------------------------

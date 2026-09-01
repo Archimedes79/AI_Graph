@@ -61,9 +61,7 @@ export interface ElementGeneration<S = any> {
   bodyPlaceholder?: string;
   /** Wording for the 📎 attachment, when "Example input" is not specific enough. */
   exampleLabel?: string;
-  /** Offer a Python/JavaScript picker -- true wherever the body is real code. */
-  language?: boolean;
-  /** Render the body in a monospace box. Defaults to `language`. */
+  /** Render the body in a monospace box: true wherever the body is real code. */
   mono?: boolean;
   /** How tall the body box starts out; a system prompt needs less than a module. */
   bodyHeight?: number;
@@ -128,7 +126,6 @@ export interface GenerationRequest<S> {
   fields: FieldAccess;
   /** The element's real ports, for a snippet that is wired as the node is. */
   ports?: { inputs: string[]; outputs: string[] };
-  language?: string;
   /** The one example-input path this element carries. */
   exampleFile?: string;
   /** Neighbours' declared formats and the last run's values, from the shell. */
@@ -165,7 +162,6 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
       description: prompt,
       context,
       context_file: request.exampleFile || undefined,
-      language: request.language,
       inputs: request.ports?.inputs,
       outputs: request.ports?.outputs,
       sample_inputs: request.sampleInputs,

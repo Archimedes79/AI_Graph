@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.elements.base import (AuthoredFile, DirectorySource, Generation, GuiWidgetElement,
-                               SELECTOR_GENERATION, code_extension, list_selected_files,
+                               SELECTOR_GENERATION, list_selected_files,
                                widget_input_or_value)
 from app.models.graph import DataType, GuiWidget, GuiWidgetKind, Port, PortKind
 from app.services import file_service
@@ -39,7 +39,7 @@ class InputPickerElement(GuiWidgetElement):
     def authored_file(self, widget: GuiWidget) -> AuthoredFile:
         """The directory-mode file selector: run(inputs: {files}) -> {files}."""
         return AuthoredFile(body_field="selector_code", prompt_field="selector_prompt",
-                            extension=code_extension(widget))
+                            extension='.js')
 
     def generation(self) -> Generation:
         """The shared selector contract -- literally the same object

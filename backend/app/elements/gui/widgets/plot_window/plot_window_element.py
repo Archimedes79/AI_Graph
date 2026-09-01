@@ -11,7 +11,7 @@ class PlotWindowElement(DisplayWidget):
     is left is the one thing that makes this a chart rather than a picture."""
 
     widget_kind = GuiWidgetKind.PLOT_WINDOW
-    config_fields = ("code", "code_prompt", "language")
+    config_fields = ("code", "code_prompt")
 
     def generation(self) -> Generation:
         """The transform reshapes data; it must not draw anything.

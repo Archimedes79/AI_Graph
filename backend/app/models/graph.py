@@ -7,6 +7,7 @@ connected by Edges.  Each Node declares typed Ports (inputs / outputs).
 
 from __future__ import annotations
 
+import json
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -130,9 +131,6 @@ class GuiWidget(BaseModel):
     # {"value": <plot-ready data>} -- a list of numbers, or a list of {x,y}/{label,value}
     # objects. Empty string means the raw incoming value passes through unchanged.
     code: str = ""
-    # JavaScript by default: the only language a recipient needs nothing
-    # installed for. A body that wants Python says so.
-    language: Literal["python", "javascript"] = "javascript"
     # The prompt that generated `code`. Named exactly like NodeConfig.code_prompt
     # because it is the same thing one level down: a widget's authored triple is
     # code_prompt / code / code_file, identical to a code node's. It was
@@ -213,7 +211,6 @@ class NodeConfig(BaseModel):
     # these fields load unchanged -- pydantic's default extra="ignore".
 
     # code node
-    language: str = "javascript"         # javascript | python
     code: str = ""                       # generated / user-written code
     code_prompt: str = ""                # stored AI prompt used to generate the code
     # code node -- the file beside the graph that holds this node's code, e.g.
@@ -222,12 +219,6 @@ class NodeConfig(BaseModel):
     # a graph plus one text file per authored node rather than one JSON blob with
     # code escaped inside it. Empty keeps the code in the graph, as before.
     code_file: str = ""
-    # code node (python) -- pip requirements this snippet needs, e.g. ["pandas>=2.0"].
-    # A code node is the universal escape hatch, but only reaches as far as what it
-    # can import; declaring that here is what lets a deploy bundle's requirements.txt
-    # know about it and what turns a missing package into a sentence instead of a
-    # traceback. Installed into one shared environment -- see services/code_env.py.
-    requirements: List[str] = Field(default_factory=list)
 
     # data node -- a persisted value plus its design-time format contract.
     # The value is updated after a cycle-closing feedback edge settles, making
@@ -416,7 +407,7 @@ def _migrate_legacy_widgets(node: dict) -> dict:
     return migrated
 
 
-# Fields renamed into the shared element vocabulary (see ELEMENT_CONTRACT.md).
+# Fields renamed into the shared element vocabulary (see AGENTS.md).
 # Same one-time-rewrite mechanism as the legacy node types above, and for the
 # same reason: the old names are not fields any more, so pydantic's
 # extra="ignore" would silently drop the value unless it is moved first.
@@ -576,64 +567,40 @@ def _migrate_legacy_node(node: Any) -> Any:
 
 def _generate_merge_code(mode: str, separator: str) -> str:
     """Literal `run(inputs)` source equivalent to the deleted MergeElement.execute() for *mode*."""
+    flatten = (
+        "function run(inputs) {\n"
+        "  const flat = [];\n"
+        "  for (const value of Object.values(inputs)) {\n"
+        "    if (Array.isArray(value)) flat.push(...value.filter((v) => v !== null && v !== undefined));\n"
+        "    else if (value !== null && value !== undefined) flat.push(value);\n"
+        "  }\n"
+    )
     if mode == "sum":
-        return (
-            "def run(inputs):\n"
-            "    flat = []\n"
-            "    for val in inputs.values():\n"
-            "        if isinstance(val, list):\n"
-            "            flat.extend(v for v in val if v is not None)\n"
-            "        elif val is not None:\n"
-            "            flat.append(val)\n"
-            "    total = sum(float(v) for v in flat)\n"
-            "    return {'output': int(total) if total.is_integer() else total}\n"
+        return flatten + (
+            "  const total = flat.reduce((sum, v) => sum + Number(v), 0);\n"
+            "  return { output: total };\n"
+            "}\n"
         )
     if mode == "count":
-        return (
-            "def run(inputs):\n"
-            "    flat = []\n"
-            "    for val in inputs.values():\n"
-            "        if isinstance(val, list):\n"
-            "            flat.extend(v for v in val if v is not None)\n"
-            "        elif val is not None:\n"
-            "            flat.append(val)\n"
-            "    return {'output': len(flat)}\n"
-        )
+        return flatten + "  return { output: flat.length };\n}\n"
     if mode == "json_list":
-        return (
-            "import json\n"
-            "\n"
-            "\n"
-            "def run(inputs):\n"
-            "    flat = []\n"
-            "    for val in inputs.values():\n"
-            "        if isinstance(val, list):\n"
-            "            flat.extend(v for v in val if v is not None)\n"
-            "        elif val is not None:\n"
-            "            flat.append(val)\n"
-            "    return {'output': json.dumps(flat)}\n"
-        )
+        return flatten + "  return { output: JSON.stringify(flat) };\n}\n"
     # concat -- also the fallback for an unrecognized legacy mode, matching the
     # deleted MergeElement's own fallback-to-concat behavior.
-    return (
-        "def run(inputs):\n"
-        "    parts = []\n"
-        "    for val in inputs.values():\n"
-        "        if isinstance(val, list):\n"
-        "            parts.extend(str(v) for v in val)\n"
-        "        elif val is not None:\n"
-        "            parts.append(str(val))\n"
-        f"    return {{'output': {separator!r}.join(parts)}}\n"
+    return flatten + (
+        f"  return {{ output: flat.map(String).join({json.dumps(separator)}) }};\n"
+        "}\n"
     )
 
 
 def _generate_split_code(separator: str) -> str:
     """Literal `run(inputs)` source equivalent to the deleted SplitElement.execute()."""
     return (
-        "def run(inputs):\n"
-        "    source = next(iter(inputs.values()), '')\n"
-        f"    parts = str(source).split({separator!r}) if source else []\n"
-        "    return {'items': parts, 'count': len(parts)}\n"
+        "function run(inputs) {\n"
+        "  const source = Object.values(inputs)[0] ?? '';\n"
+        f"  const parts = source ? String(source).split({json.dumps(separator)}) : [];\n"
+        "  return { items: parts, count: parts.length };\n"
+        "}\n"
     )
 
 
@@ -655,7 +622,6 @@ def _migrate_legacy_merge_split_node(node: Any) -> Any:
     else:
         config.pop("merge_mode", None)
         config["code"] = _generate_split_code(separator)
-    config["language"] = "python"
     config["batch_mode"] = "whole_list"
     migrated = dict(node)
     migrated["node_type"] = "code"
@@ -835,7 +801,6 @@ class GenerateRequest(BaseModel):
     description: str
     context: str = ""
     context_file: str = ""            # optional path; content is appended to context server-side
-    language: str = "python"
     inputs: List[str] = Field(default_factory=list)
     outputs: List[str] = Field(default_factory=list)
     # Real values from the last run, for the verify-and-repair pass. Ignored for

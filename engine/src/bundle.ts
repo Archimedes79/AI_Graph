@@ -6,8 +6,9 @@
 // implementation that is right on the day it is written and drifts from that
 // afternoon on — the reason the older bundles vendor their engine too.
 //
-// What a recipient needs installed: Node, and Python only if a code node in
-// this graph is written in Python. That is the whole list.
+// What a recipient needs installed: Node. That is the whole list -- every
+// authored body is JavaScript, so the interpreter that runs the engine runs
+// them too.
 
 import { copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -18,12 +19,15 @@ import { registry } from './registry.ts';
 
 const ENGINE_ROOT = dirname(fileURLToPath(import.meta.url));
 
-/** What this particular graph needs to run somewhere else. */
+/**
+ * What this particular graph needs to run somewhere else.
+ *
+ * Two things, and both are about the recipient rather than the graph. There
+ * used to be a third and a fourth -- an interpreter, and the packages its code
+ * nodes imported -- which is the list a bundle no longer has to carry now that
+ * every body is JavaScript.
+ */
 export interface BundleNeeds {
-  /** Python packages its code nodes declared. */
-  requirements: string[];
-  /** Any Python at all: false means Node is the only thing to install. */
-  python: boolean;
   /** The graph has an interface, so a bundle without a page is only half of it. */
   interface: boolean;
   /** It asks a model, so the recipient needs a provider configured. */
@@ -31,24 +35,16 @@ export interface BundleNeeds {
 }
 
 export function bundleNeeds(graph: Graph): BundleNeeds {
-  const needs: BundleNeeds = { requirements: [], python: false, interface: false, ai: false };
+  const needs: BundleNeeds = { interface: false, ai: false };
 
   for (const node of graph.nodes) {
     const element = registry.node(node.node_type);
     if (!element) continue;
 
-    const declared = element.deployNeeds(node);
-    needs.requirements.push(...declared.requirements);
-    if (declared.needsInterface) needs.interface = true;
+    if (element.deployNeeds(node).needsInterface) needs.interface = true;
     if (node.node_type === 'ai') needs.ai = true;
-    // A body's language is what decides whether Python is needed at all, and
-    // it is the one thing a recipient cannot work around.
-    if (node.node_type === 'code' && !String(node.config.language ?? 'python').startsWith('js')) {
-      needs.python = true;
-    }
   }
 
-  needs.requirements = [...new Set(needs.requirements)].sort();
   return needs;
 }
 
@@ -132,9 +128,6 @@ export async function writeBundle(
   const command = servesPage ? 'engine/main.ts graph.json --serve' : 'engine/main.ts graph.json';
   await put('run.cmd', ['@echo off', `node ${command.replace(/\//g, '\\')} %*`, ''].join('\r\n'));
   await put('run.sh', ['#!/bin/sh', `exec node ${command} "$@"`, ''].join('\n'));
-  if (needs.requirements.length) {
-    await put('requirements.txt', `${needs.requirements.join('\n')}\n`);
-  }
   await put('README.md', readme(name, needs, servesPage));
 
   return written;
@@ -171,22 +164,9 @@ function readme(name: string, needs: BundleNeeds, servesPage = false): string {
     '## What you need',
     '',
     '- **Node 22 or newer.** Nothing to install and nothing to build.',
+    '- Nothing else. Every code node in this graph is JavaScript, so the',
+    '  interpreter that runs the engine runs them too.',
   ];
-
-  if (needs.python) {
-    lines.push(
-      '- **Python**, because a code node in this graph is written in it. Point',
-      '  `AI_GRAPH_PYTHON` at an interpreter if `python3` is not on your PATH.',
-    );
-    if (needs.requirements.length) {
-      lines.push(
-        `- Those code nodes import: ${needs.requirements.join(', ')}.`,
-        '  `pip install -r requirements.txt` into whichever interpreter you point at.',
-      );
-    }
-  } else {
-    lines.push('- Nothing else. No Python, no packages.');
-  }
 
   if (needs.ai) {
     lines.push(

@@ -70,7 +70,7 @@ export class GuiElement extends NodeElement<GuiConfig> {
 
   override deployNeeds() {
     // A gui node *is* the interface, so a bundle holding one needs the page.
-    return { requirements: [], needsInterface: true };
+    return { needsInterface: true };
   }
 
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {

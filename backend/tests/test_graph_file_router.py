@@ -81,7 +81,7 @@ def test_save_graph_file_updates_updated_at(tmp_path):
 
 # --- code in files beside the graph -----------------------------------------
 
-def _graph_with_code_file(label="Analyse", code="def run(inputs):\n    return {'n': 1}"):
+def _graph_with_code_file(label="Analyse", code="function run(inputs) { return { n: 1 }; }"):
     return {
         "metadata": {"name": "Projekt"},
         "nodes": [{
@@ -89,7 +89,7 @@ def _graph_with_code_file(label="Analyse", code="def run(inputs):\n    return {'
             "position": {"x": 0, "y": 0},
             "inputs": [], "outputs": [{"id": "n", "name": "N", "kind": "output",
                                        "data_type": "any", "multi": False, "required": False}],
-            "config": {"language": "python", "code": code, "code_file": "placeholder.py",
+            "config": {"code": code, "code_file": "placeholder.js",
                        "code_prompt": "Zähle etwas"},
         }],
         "edges": [],
@@ -101,12 +101,12 @@ def test_saving_writes_the_node_file_next_to_the_graph(tmp_path):
     response = client.post("/api/graphs/file/save", json={"path": str(target), "graph": _graph_with_code_file()})
     assert response.status_code == 200
 
-    node_file = tmp_path / "projekt.nodes" / "Analyse.py"
+    node_file = tmp_path / "projekt.nodes" / "Analyse.js"
     assert node_file.is_file(), "the node's code should live beside the graph"
     text = node_file.read_text(encoding="utf-8")
-    assert "# node:    Analyse" in text
+    assert "// node:    Analyse" in text
     assert "Zähle etwas" in text
-    assert "return {'n': 1}" in text
+    assert "return { n: 1 }" in text
 
 
 def test_the_json_does_not_repeat_the_code(tmp_path):
@@ -116,7 +116,7 @@ def test_the_json_does_not_repeat_the_code(tmp_path):
 
     stored = json.loads(target.read_text(encoding="utf-8"))
     assert stored["nodes"][0]["config"]["code"] == ""
-    assert stored["nodes"][0]["config"]["code_file"] == "Analyse.py"
+    assert stored["nodes"][0]["config"]["code_file"] == "Analyse.js"
 
 
 def test_loading_fills_the_code_back_in_from_the_file(tmp_path):
@@ -124,39 +124,39 @@ def test_loading_fills_the_code_back_in_from_the_file(tmp_path):
     client.post("/api/graphs/file/save", json={"path": str(target), "graph": _graph_with_code_file()})
 
     # Edit the file the way an external editor would.
-    node_file = tmp_path / "projekt.nodes" / "Analyse.py"
+    node_file = tmp_path / "projekt.nodes" / "Analyse.js"
     node_file.write_text(
-        node_file.read_text(encoding="utf-8").replace("return {'n': 1}", "return {'n': 42}"),
+        node_file.read_text(encoding="utf-8").replace("return { n: 1 }", "return { n: 42 }"),
         encoding="utf-8",
     )
 
     loaded = client.post("/api/graphs/file/load", json={"path": str(target)}).json()["graph"]
-    assert "return {'n': 42}" in loaded["nodes"][0]["config"]["code"]
+    assert "return { n: 42 }" in loaded["nodes"][0]["config"]["code"]
 
 
 def test_renaming_the_node_renames_its_file(tmp_path):
     target = tmp_path / "projekt.json"
     client.post("/api/graphs/file/save", json={"path": str(target), "graph": _graph_with_code_file()})
-    assert (tmp_path / "projekt.nodes" / "Analyse.py").is_file()
+    assert (tmp_path / "projekt.nodes" / "Analyse.js").is_file()
 
     renamed = _graph_with_code_file(label="Auswertung")
-    renamed["nodes"][0]["config"]["code_file"] = "Analyse.py"
+    renamed["nodes"][0]["config"]["code_file"] = "Analyse.js"
     saved = client.post("/api/graphs/file/save", json={"path": str(target), "graph": renamed}).json()
 
-    assert (tmp_path / "projekt.nodes" / "Auswertung.py").is_file()
-    assert not (tmp_path / "projekt.nodes" / "Analyse.py").exists()
-    assert saved["graph"]["nodes"][0]["config"]["code_file"] == "Auswertung.py"
+    assert (tmp_path / "projekt.nodes" / "Auswertung.js").is_file()
+    assert not (tmp_path / "projekt.nodes" / "Analyse.js").exists()
+    assert saved["graph"]["nodes"][0]["config"]["code_file"] == "Auswertung.js"
 
 
 def test_a_missing_node_file_does_not_blank_the_node(tmp_path):
     """A graph copied without its sibling folder must still open."""
     target = tmp_path / "projekt.json"
     graph = _graph_with_code_file()
-    graph["nodes"][0]["config"]["code_file"] = "Nicht_da.py"
+    graph["nodes"][0]["config"]["code_file"] = "Nicht_da.js"
     target.write_text(json.dumps(graph), encoding="utf-8")
 
     loaded = client.post("/api/graphs/file/load", json={"path": str(target)}).json()["graph"]
-    assert "return {'n': 1}" in loaded["nodes"][0]["config"]["code"]
+    assert "return { n: 1 }" in loaded["nodes"][0]["config"]["code"]
 
 
 def test_a_node_without_a_file_keeps_its_code_in_the_graph(tmp_path):
@@ -167,7 +167,7 @@ def test_a_node_without_a_file_keeps_its_code_in_the_graph(tmp_path):
     client.post("/api/graphs/file/save", json={"path": str(target), "graph": graph})
 
     stored = json.loads(target.read_text(encoding="utf-8"))
-    assert "return {'n': 1}" in stored["nodes"][0]["config"]["code"]
+    assert "return { n: 1 }" in stored["nodes"][0]["config"]["code"]
     assert not (tmp_path / "projekt.nodes").exists()
 
 
@@ -179,7 +179,7 @@ def _saved_project(tmp_path, label="Analyse"):
     target = tmp_path / "projekt.json"
     client.post("/api/graphs/file/save", json={"path": str(target), "graph": _graph_with_code_file(label)})
     client.post("/api/graphs/file/load", json={"path": str(target)})
-    return target, tmp_path / "projekt.nodes" / f"{label}.py"
+    return target, tmp_path / "projekt.nodes" / f"{label}.js"
 
 
 def test_saving_over_an_outside_edit_is_refused(tmp_path):
@@ -190,7 +190,7 @@ def test_saving_over_an_outside_edit_is_refused(tmp_path):
 
     target, node_file = _saved_project(tmp_path)
     time.sleep(0.01)
-    node_file.write_text(node_file.read_text(encoding="utf-8") + "\n# von aussen\n", encoding="utf-8")
+    node_file.write_text(node_file.read_text(encoding="utf-8") + "\n// von aussen\n", encoding="utf-8")
     os.utime(node_file, (time.time() + 2, time.time() + 2))
 
     response = client.post("/api/graphs/file/save",
@@ -198,18 +198,18 @@ def test_saving_over_an_outside_edit_is_refused(tmp_path):
 
     assert response.status_code == 409
     assert "changed outside the editor" in response.json()["detail"]
-    assert "# von aussen" in node_file.read_text(encoding="utf-8"), "the outside edit must survive"
+    assert "// von aussen" in node_file.read_text(encoding="utf-8"), "the outside edit must survive"
 
 
 def test_reloading_takes_the_outside_changes(tmp_path):
     target, node_file = _saved_project(tmp_path)
     node_file.write_text(
-        node_file.read_text(encoding="utf-8").replace("return {'n': 1}", "return {'n': 99}"),
+        node_file.read_text(encoding="utf-8").replace("return { n: 1 }", "return { n: 99 }"),
         encoding="utf-8",
     )
 
     reloaded = client.post("/api/graphs/file/reload-nodes", json={"path": str(target)}).json()["graph"]
-    assert "return {'n': 99}" in reloaded["nodes"][0]["config"]["code"]
+    assert "return { n: 99 }" in reloaded["nodes"][0]["config"]["code"]
 
 
 def test_after_reloading_saving_works_again(tmp_path):
@@ -219,7 +219,7 @@ def test_after_reloading_saving_works_again(tmp_path):
 
     target, node_file = _saved_project(tmp_path)
     time.sleep(0.01)
-    node_file.write_text(node_file.read_text(encoding="utf-8") + "\n# von aussen\n", encoding="utf-8")
+    node_file.write_text(node_file.read_text(encoding="utf-8") + "\n// von aussen\n", encoding="utf-8")
     os.utime(node_file, (time.time() + 2, time.time() + 2))
 
     assert client.post("/api/graphs/file/save",
