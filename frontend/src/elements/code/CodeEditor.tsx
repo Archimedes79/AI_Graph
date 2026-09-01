@@ -36,7 +36,7 @@ export default function CodeEditor({
       <CodeRequirements
         requirements={node.config.requirements ?? []}
         onChange={(requirements) => setConfig('requirements', requirements)}
-        language={node.config.language || 'python'}
+        language={node.config.language || 'javascript'}
       />
 
       <BatchAndFileInputOptions node={node} setConfig={setConfig} subject="code" />

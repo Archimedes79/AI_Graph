@@ -153,7 +153,10 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
     const body = override ?? (spec ? String(subject.config[spec.bodyField] ?? '') : '');
     if (!body.trim()) return inputs;
 
-    const language = String(subject.config.language ?? 'python');
+    // JavaScript unless the body says otherwise: it is the one language
+    // that needs nothing installed, so a bundle of JavaScript bodies asks
+    // its recipient for Node and nothing else.
+    const language = String(subject.config.language ?? 'javascript');
     const requirements = (subject.config.requirements as string[] | undefined) ?? [];
     try {
       return await runtime.code.run(body, language, inputs, requirements);

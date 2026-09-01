@@ -11,7 +11,8 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import type { CodeRunner, FileService, Runtime } from '../element.ts';
-import { aiService, settingsFromEnv } from '../ai/providers.ts';
+import { aiService } from '../ai/providers.ts';
+import { configuredSettings } from '../ai/settings.ts';
 
 export const nodeFiles: FileService = {
   resolve: (path: string) => resolve(path),
@@ -135,7 +136,7 @@ export function nodeRuntime(overrides: Partial<Runtime> = {}): Runtime {
   return {
     files: nodeFiles,
     code: nodeCode,
-    ai: aiService(settingsFromEnv(process.env)),
+    ai: aiService(configuredSettings()),
     ...overrides,
   };
 }

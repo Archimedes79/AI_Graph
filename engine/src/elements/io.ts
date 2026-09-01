@@ -35,7 +35,7 @@ export class InputElement extends NodeElement<InputConfig> {
       extensions: String(c.extensions ?? ''),
       selectAll: c.select_all_files !== false,
       selectorCode: String(c.selector_code ?? ''),
-      language: String(c.language ?? 'python'),
+      language: String(c.language ?? 'javascript'),
       promptAtRuntime: c.prompt_at_runtime === true,
     };
   }

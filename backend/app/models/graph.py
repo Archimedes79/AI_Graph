@@ -130,7 +130,9 @@ class GuiWidget(BaseModel):
     # {"value": <plot-ready data>} -- a list of numbers, or a list of {x,y}/{label,value}
     # objects. Empty string means the raw incoming value passes through unchanged.
     code: str = ""
-    language: Literal["python", "javascript"] = "python"
+    # JavaScript by default: the only language a recipient needs nothing
+    # installed for. A body that wants Python says so.
+    language: Literal["python", "javascript"] = "javascript"
     # The prompt that generated `code`. Named exactly like NodeConfig.code_prompt
     # because it is the same thing one level down: a widget's authored triple is
     # code_prompt / code / code_file, identical to a code node's. It was
@@ -211,7 +213,7 @@ class NodeConfig(BaseModel):
     # these fields load unchanged -- pydantic's default extra="ignore".
 
     # code node
-    language: str = "python"             # python | javascript
+    language: str = "javascript"         # javascript | python
     code: str = ""                       # generated / user-written code
     code_prompt: str = ""                # stored AI prompt used to generate the code
     # code node -- the file beside the graph that holds this node's code, e.g.
@@ -703,7 +705,7 @@ class GraphMetadata(BaseModel):
     # a whole, so it belongs here rather than on any one node -- and a closed
     # set rather than a colour, so a deployed tool can look like itself without
     # anyone being able to make it look wrong.
-    gui_scheme: Literal["night", "paper", "graphite"] = "night"
+    gui_scheme: Literal["night", "paper", "office", "graphite", "anthracite"] = "night"
 
     @field_validator("gui_scheme", mode="before")
     @classmethod
@@ -718,7 +720,8 @@ class GraphMetadata(BaseModel):
         """
         renamed = {"indigo": "night", "slate": "graphite", "teal": "graphite"}
         value = renamed.get(value, value)  # type: ignore[arg-type]
-        return value if value in ("night", "paper", "graphite") else "night"
+        known = ("night", "paper", "office", "graphite", "anthracite")
+        return value if value in known else "night"
 
 
 class Graph(BaseModel):

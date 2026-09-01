@@ -75,7 +75,7 @@ export default function AuthoredBodyEditor({
                   className="rounded px-2 py-1 text-xs"
                   style={field}
                   aria-label="Language"
-                  value={fields.get('language') || 'python'}
+                  value={fields.get('language') || 'javascript'}
                   onChange={(e) => fields.set('language', e.target.value)}
                 >
                   <option value="python">Python</option>

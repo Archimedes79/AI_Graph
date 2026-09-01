@@ -11,14 +11,19 @@
 // reaches everything at once while nothing has to be told about schemes: a
 // component asks for SURFACE exactly as it always did.
 //
-// Three, deliberately. Enough that the tool can look like the person using it,
-// few enough that none of them is bad -- a colour picker is how interfaces get
-// ugly, and each of these was balanced as a whole.
+// Five: two dark, two light, one in between. Enough that the tool can look
+// like the person using it, few enough that none of them is bad -- a colour
+// picker is how interfaces get ugly, and each of these was balanced as a whole
+// rather than picked as a hue. An accent that reads on white would vanish on
+// Nacht, which is why a scheme is a palette and not a colour.
+//
+// A red one was tried and dropped: red reads as an error on a page that also
+// reports errors.
 //
 // Stored on `metadata.gui_scheme`: presentation of the graph as a whole, so it
 // travels with the file and a deployed tool looks like what was designed.
 
-export type SchemeId = 'night' | 'paper' | 'graphite';
+export type SchemeId = 'night' | 'paper' | 'office' | 'graphite' | 'anthracite';
 
 export interface Scheme {
   id: SchemeId;
@@ -92,6 +97,34 @@ export const SCHEMES: Scheme[] = [
     accent: '#c05f38', accentText: '#8f4526', accentFill: 'rgba(192,95,56,0.10)', onAccent: '#ffffff',
     success: '#2f7d32', danger: '#b3261e', dangerText: '#8c1d18',
     nodes: { input: '#dde7f2', ai: '#e6dcf0', code: '#dcecdf', data: '#d8eaea', output: '#f3e3cb', gui: '#eedbe6' },
+  },
+  {
+    id: 'office',
+    label: 'Büro — weiß mit hellem Grau',
+    light: true,
+    // White paper with grey boxes on it, which is what a document looks like
+    // in every office program. The blue is the one people already read as
+    // "this is the control", so nothing has to be learned.
+    sunken: '#f4f5f7', surface: '#ffffff', line: '#d8dbe0',
+    raise: 'rgba(16,24,40,0.03)', hover: 'rgba(16,24,40,0.06)',
+    scrim: 'rgba(16,24,40,0.45)', header: 'rgba(16,24,40,0.05)',
+    text: '#1a1d23', muted: '#5a6270', dim: '#7c8595', dimmer: '#a3abb8',
+    accent: '#2563eb', accentText: '#1d4ed8', accentFill: 'rgba(37,99,235,0.08)', onAccent: '#ffffff',
+    success: '#15803d', danger: '#b42318', dangerText: '#912018',
+    nodes: { input: '#e4edfa', ai: '#ece4f7', code: '#e2f0e6', data: '#dfeeee', output: '#f7ead2', gui: '#f4dfec' },
+  },
+  {
+    id: 'anthracite',
+    label: 'Anthrazit — fast schwarz',
+    // Darker than Graphit and colder: for a room with the lights off, or a
+    // second window beside one that is already dark.
+    sunken: '#0a0a0b', surface: '#141416', line: '#28282c',
+    raise: 'rgba(255,255,255,0.035)', hover: 'rgba(255,255,255,0.07)',
+    scrim: 'rgba(0,0,0,0.78)', header: 'rgba(0,0,0,0.40)',
+    text: '#ededf0', muted: '#9a9aa2', dim: '#71717a', dimmer: '#4f4f57',
+    accent: '#8b93ff', accentText: '#b4b9ff', accentFill: 'rgba(139,147,255,0.12)', onAccent: '#111119',
+    success: '#4ade80', danger: '#fb7185', dangerText: '#fda4af',
+    nodes: { input: '#1a2230', ai: '#241f30', code: '#1a2a20', data: '#182a2b', output: '#2c2416', gui: '#2c1e28' },
   },
   {
     id: 'graphite',

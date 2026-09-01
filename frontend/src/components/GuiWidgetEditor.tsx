@@ -75,7 +75,7 @@ Wähle einen Block auf der Seite aus.
         // section the user would have to know to open.
         setExpanded(true);
       }),
-      language: widget.language || 'python',
+      language: widget.language || 'javascript',
       exampleFile: (widget.example_file ?? '').trim(),
     }), widget.id);
   };

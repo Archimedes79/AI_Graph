@@ -95,7 +95,7 @@ export class InputPickerElement extends WidgetElement<PickerConfig> {
       extensions: String(c.extensions ?? ''),
       selectAll: c.select_all_files !== false,
       selectorCode: String(c.selector_code ?? ''),
-      language: String(c.language ?? 'python'),
+      language: String(c.language ?? 'javascript'),
     };
   }
 
@@ -206,7 +206,7 @@ abstract class TransformingDisplay extends DisplayWidget<TransformConfig> {
   config(widget: Widget): TransformConfig {
     return {
       code: String(widget.config.code ?? ''),
-      language: String(widget.config.language ?? 'python'),
+      language: String(widget.config.language ?? 'javascript'),
     };
   }
 

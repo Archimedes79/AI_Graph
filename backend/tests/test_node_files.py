@@ -53,7 +53,10 @@ def _widget(kind="plot_window", label="Verlauf", **fields):
 # --- the symmetry, across both levels ---------------------------------------
 
 @pytest.mark.parametrize("node_type,body_field,extension", [
-    ("code", "code", ".py"),
+    # .js, because a new code node starts in JavaScript: it is the one language
+    # a recipient needs nothing installed for. A node switched to Python gets
+    # .py, which is what `code_extension` reads off the node.
+    ("code", "code", ".js"),
     ("ai", "system_prompt", ".md"),
     ("data", "data_format_prompt", ".md"),
 ])

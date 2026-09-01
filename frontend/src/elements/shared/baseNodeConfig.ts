@@ -23,7 +23,7 @@ export function baseNodeConfig(): NodeConfig {
     ai_model: '',
     system_prompt: '',
     temperature: 0.7,
-    language: 'python',
+    language: 'javascript',
     code: '',
     code_prompt: '',
     code_file: '',

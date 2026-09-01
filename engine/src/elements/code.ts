@@ -24,7 +24,7 @@ export class CodeElement extends NodeElement<CodeConfig> {
     const c = node.config;
     return {
       code: String(c.code ?? ''),
-      language: String(c.language ?? 'python'),
+      language: String(c.language ?? 'javascript'),
       requirements: Array.isArray(c.requirements) ? c.requirements.map(String) : [],
       codeFile: String(c.code_file ?? ''),
     };

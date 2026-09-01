@@ -1,0 +1,16 @@
+{
+  "_": "Copy this to ai-settings.json and put your key in it. That file is gitignored; this one is the shape, with no key in it.",
+
+  "ai": {
+    "provider": "google",
+    "model": "gemini-2.5-flash"
+  },
+
+  "api_keys": {
+    "google": "PUT-YOUR-AI-STUDIO-KEY-HERE"
+  },
+
+  "_providers": "google | openai | anthropic | ollama | lmstudio | openai_compatible | github_copilot",
+  "_keys": "google -> aistudio.google.com/apikey (free tier) | openai -> OPENAI_API_KEY | anthropic -> ANTHROPIC_API_KEY",
+  "_endpoints": "Only for self-hosted: {\"endpoints\": {\"openai_compatible\": \"http://localhost:1234/v1\"}}"
+}
