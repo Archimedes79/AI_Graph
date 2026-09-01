@@ -8,8 +8,8 @@
 import {
   DisplayWidget, StaticWidget, WidgetElement,
   type AuthoredFile, type Runtime, type Widget,
-} from '../element.js';
-import type { Port } from '../graph.js';
+} from '../element.ts';
+import type { Port } from '../graph.ts';
 
 function port(id: string, name: string, kind: 'input' | 'output', dataType: Port['data_type'], multi = false): Port {
   return { id, name, kind, data_type: dataType, multi, required: false, description: '' };

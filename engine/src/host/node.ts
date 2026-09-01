@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
-import type { AiRequest, AiService, CodeRunner, FileService, Runtime } from '../element.js';
+import type { AiRequest, AiService, CodeRunner, FileService, Runtime } from '../element.ts';
 
 export const nodeFiles: FileService = {
   resolve: (path: string) => resolve(path),

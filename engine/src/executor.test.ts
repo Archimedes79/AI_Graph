@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { Graph, GraphEdge, GraphNode } from './graph.js';
-import { collectInputs, executeGraph, memoryFeedbackEdges, topologicalLevels } from './executor.js';
-import { NodeElement, type Runtime } from './element.js';
-import { registry } from './registry.js';
+import type { Graph, GraphEdge, GraphNode } from './graph.ts';
+import { collectInputs, executeGraph, memoryFeedbackEdges, topologicalLevels } from './executor.ts';
+import { NodeElement, type Runtime } from './element.ts';
+import { registry } from './registry.ts';
 
 function node(id: string, type = 'code', config: Record<string, unknown> = {}): GraphNode {
   return {

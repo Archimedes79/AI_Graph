@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
-import { parseGraph } from './graph.js';
-import { executeGraph } from './executor.js';
-import { registry } from './registry.js';
-import { applyRuntimeValues, runtimeRequirements, withDefaults } from './runtimeValues.js';
-import { nodeRuntime } from './host/node.js';
+import { parseGraph } from './graph.ts';
+import { executeGraph } from './executor.ts';
+import { registry } from './registry.ts';
+import { applyRuntimeValues, runtimeRequirements, withDefaults } from './runtimeValues.ts';
+import { nodeRuntime } from './host/node.ts';
 
 /**
  * The same graph through both engines, compared.

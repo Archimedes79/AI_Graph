@@ -1,5 +1,5 @@
-import { NodeElement, type Runtime } from '../element.js';
-import type { GraphNode } from '../graph.js';
+import { NodeElement, type Runtime } from '../element.ts';
+import type { GraphNode } from '../graph.ts';
 
 export interface DataConfig {
   /** What it holds between runs. */

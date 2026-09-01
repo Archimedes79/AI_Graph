@@ -25,8 +25,8 @@
 // runtime and never the other way, which is what keeps the editor out of a
 // bundle: the runtime never imports the subclass.
 
-import type { GraphNode, Port, RawConfig, WidgetKind, NodeType } from './graph.js';
-import type { RuntimeRequirement } from './runtimeValues.js';
+import type { GraphNode, Port, RawConfig, WidgetKind, NodeType } from './graph.ts';
+import type { RuntimeRequirement } from './runtimeValues.ts';
 
 // ---------------------------------------------------------------------------
 // The world an element is allowed to touch

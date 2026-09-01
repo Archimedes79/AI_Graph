@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.js';
-import type { GraphNode, Port } from './graph.js';
+import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
+import type { GraphNode, Port } from './graph.ts';
 
 function port(id: string, kind: 'input' | 'output', multi: boolean): Port {
   return { id, name: id, kind, data_type: 'any', multi, required: false, description: '' };

@@ -1,6 +1,6 @@
-import { NodeElement, type Runtime, type Widget, type WidgetElement } from '../element.js';
-import type { GraphNode, Port, RawConfig } from '../graph.js';
-import { InputPickerElement, WIDGET_ELEMENTS } from './widgets.js';
+import { NodeElement, type Runtime, type Widget, type WidgetElement } from '../element.ts';
+import type { GraphNode, Port, RawConfig } from '../graph.ts';
+import { InputPickerElement, WIDGET_ELEMENTS } from './widgets.ts';
 
 const BY_KIND = new Map(WIDGET_ELEMENTS.map((e) => [e.widgetKind, e as WidgetElement<unknown>]));
 

@@ -8,8 +8,8 @@
 // The engine asks the elements rather than looking for node types itself; a new
 // element that wants to prompt says so in its own file and nothing here changes.
 
-import type { Graph, GraphNode } from './graph.js';
-import type { NodeElement } from './element.js';
+import type { Graph, GraphNode } from './graph.ts';
+import type { NodeElement } from './element.ts';
 
 export interface RuntimeRequirement {
   /** `nodeId`, or `nodeId::widgetId` for a block inside a page. */

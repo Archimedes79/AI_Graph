@@ -21,8 +21,8 @@
 //
 // Everything else — what a node *does* — belongs to its element.
 
-import type { Graph, GraphEdge, GraphNode, ExecutionResult, NodeResult, NodeStatus } from './graph.js';
-import type { NodeElement, Runtime } from './element.js';
+import type { Graph, GraphEdge, GraphNode, ExecutionResult, NodeResult, NodeStatus } from './graph.ts';
+import type { NodeElement, Runtime } from './element.ts';
 
 export interface Registry {
   node(type: string): NodeElement<unknown> | undefined;

@@ -1,6 +1,6 @@
-import { NodeElement, type AuthoredFile, type Runtime } from '../element.js';
-import type { GraphNode } from '../graph.js';
-import { batchItems, mergeBatchOutputs, reconcileOutputs } from '../batching.js';
+import { NodeElement, type AuthoredFile, type Runtime } from '../element.ts';
+import type { GraphNode } from '../graph.ts';
+import { batchItems, mergeBatchOutputs, reconcileOutputs } from '../batching.ts';
 
 /** What a code node stores. Its own fields, and no one else's. */
 export interface CodeConfig {

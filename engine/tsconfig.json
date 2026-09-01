@@ -14,7 +14,8 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
-    "exactOptionalPropertyTypes": false
+    "exactOptionalPropertyTypes": false,
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src"

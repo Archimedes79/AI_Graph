@@ -15,7 +15,7 @@
 // **A batch of one is not a fan-out.** Its scalar outputs stay scalar, so
 // per-item and whole-list agree wherever there was nothing to fan out.
 
-import type { GraphNode } from './graph.js';
+import type { GraphNode } from './graph.ts';
 
 /** One set of inputs per item, broadcasting whatever is not being fanned out. */
 export function batchItems(

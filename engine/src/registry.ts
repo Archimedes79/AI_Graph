@@ -4,14 +4,14 @@
 // registry of subclasses that add the config panels — this one is what a bundle
 // imports, and it is the reason a bundle contains no editor.
 
-import type { NodeElement, WidgetElement } from './element.js';
-import type { NodeType, WidgetKind } from './graph.js';
-import { AiElement } from './elements/ai.js';
-import { CodeElement } from './elements/code.js';
-import { DataElement } from './elements/data.js';
-import { GuiElement } from './elements/gui.js';
-import { InputElement, OutputElement } from './elements/io.js';
-import { WIDGET_ELEMENTS } from './elements/widgets.js';
+import type { NodeElement, WidgetElement } from './element.ts';
+import type { NodeType, WidgetKind } from './graph.ts';
+import { AiElement } from './elements/ai.ts';
+import { CodeElement } from './elements/code.ts';
+import { DataElement } from './elements/data.ts';
+import { GuiElement } from './elements/gui.ts';
+import { InputElement, OutputElement } from './elements/io.ts';
+import { WIDGET_ELEMENTS } from './elements/widgets.ts';
 
 export const NODE_ELEMENTS: NodeElement<unknown>[] = [
   new InputElement(),
