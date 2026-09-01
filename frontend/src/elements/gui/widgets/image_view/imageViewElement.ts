@@ -6,14 +6,6 @@ import { codeExtension } from '../../../shared/authoredFileName';
 export const imageViewElement: GuiWidgetElementDefinition = {
   widgetKind: 'image_view',
   // Display-only, like plot_window: takes something to show, emits nothing.
-  ports: (widget) => {
-    const inId = `${widget.id}_in`;
-    const label = widget.label || widget.id;
-    return {
-      inputs: [{ id: inId, name: label, kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-      outputs: [],
-    };
-  },
   authoredFile: (widget) => ({ extension: codeExtension(widget), what: 'this transform' }),
   // Same snippet contract as plot_window, different destination: a path. This
   // widget had the code field and no button, purely because generation used to

@@ -1,13 +1,23 @@
-// Pure helpers for GUI-node widget <-> port sync. Mirrors
-// backend/app/models/graph.py: gui_widget_ports / sync_gui_node_ports 1:1.
+// Keeping a gui node's ports in step with its blocks.
+//
+// The ports come from the **engine's** widget elements, not from a copy here.
+// They are what the graph's edges attach to, so two answers to "which ports
+// does this block have" is the one disagreement that silently deletes wires:
+// the editor drawing a port the engine will not produce, or the engine
+// producing one the editor never drew.
 import type { GraphNode, GuiWidget, GuiWidgetKind, Port } from '../types/graph';
-import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
+import { registry as engineRegistry } from '@engine/registry.ts';
+import { parseWidget } from '@engine/elements/gui.ts';
 import { DEFAULT_WIDGET_SPAN } from '../components/gui/layout';
 import type { Tone } from '../components/gui/tone';
 
 /** Return the (inputs, outputs) a single GUI widget contributes to its node. */
 export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Port[] } {
-  return GUI_WIDGET_ELEMENTS[widget.kind].ports(widget);
+  const element = engineRegistry.widget(widget.kind);
+  if (!element) return { inputs: [], outputs: [] };
+  // `parseWidget` is what turns a stored block into the shape an element reads:
+  // its structural fields, and everything else as settings the element owns.
+  return element.ports(parseWidget(widget)) as { inputs: Port[]; outputs: Port[] };
 }
 
 /**

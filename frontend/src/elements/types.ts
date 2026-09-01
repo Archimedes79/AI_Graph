@@ -119,7 +119,10 @@ export interface NodeElementDefinition extends ElementDefinitionBase<GraphNode> 
  */
 export interface GuiWidgetElementDefinition extends ElementDefinitionBase<GuiWidget> {
   widgetKind: GuiWidgetKind;
-  ports: (widget: GuiWidget) => { inputs: Port[]; outputs: Port[] };
+  // No `ports` here. Which ports a block contributes is the engine's answer
+  // (engine/src/elements/), asked through `guiWidgetPorts` — the editor kept
+  // its own copy until the two disagreed about whether a text box accepts
+  // anything or only text, and ports are what the graph's edges attach to.
   RuntimeWidget: React.ComponentType<GuiWidgetRuntimeProps>;
   // Optional: widget's stored value is a one-shot "message" that should be
   // cleared once a run has consumed it (e.g. a chat-style text_io widget),

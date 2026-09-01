@@ -315,7 +315,10 @@ export abstract class DisplayWidget<C = unknown> extends WidgetElement<C> {
         name: widget.label || widget.id,
         kind: 'input',
         data_type: 'any',
-        multi: false,
+        // Multi: several sources can feed one display, and the executor then
+        // collects them as a list. A single-valued port would take the last
+        // edge and drop the rest without saying so.
+        multi: true,
         required: false,
         description: '',
       }],

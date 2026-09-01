@@ -8,14 +8,6 @@ export const plotWindowElement: GuiWidgetElementDefinition = {
   widgetKind: 'plot_window',
   // Display-only, like an `output` node with write_mode="window": accepts data to
   // plot, no downstream port.
-  ports: (widget) => {
-    const inId = `${widget.id}_in`;
-    const label = widget.label || widget.id;
-    return {
-      inputs: [{ id: inId, name: label, kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-      outputs: [],
-    };
-  },
   authoredFile: (widget) => ({ extension: codeExtension(widget), what: 'this transform' }),
   generation: {
     promptField: 'code_prompt',

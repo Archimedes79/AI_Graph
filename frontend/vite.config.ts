@@ -24,6 +24,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // The engine lives beside the frontend, not inside it: it must run under
+      // Node and Deno with no build step, so it cannot live in a React app's
+      // source tree. The editor imports it for the things that must not be
+      // said twice -- which ports a block contributes, above all, since those
+      // are what the graph's edges attach to.
+      '@engine': path.resolve(__dirname, '../engine/src'),
     },
   },
   server: {
@@ -31,6 +37,9 @@ export default defineConfig({
     // default `localhost` resolves to ::1 and binds IPv6 ONLY -- which leaves
     // http://127.0.0.1:3000 dead while http://localhost:3000 works, and that is
     // a miserable thing to debug.
+    // The engine is outside the project root, so the dev server has to be
+    // told it may read it.
+    fs: { allow: [path.resolve(__dirname, '..')] },
     host: '127.0.0.1',
     port: 3000,
     proxy: {

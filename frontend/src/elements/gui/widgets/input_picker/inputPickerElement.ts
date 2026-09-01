@@ -5,15 +5,6 @@ import { codeExtension } from '../../../shared/authoredFileName';
 
 export const inputPickerElement: GuiWidgetElementDefinition = {
   widgetKind: 'input_picker',
-  ports: (widget) => {
-    const outId = `${widget.id}_out`;
-    const label = widget.label || widget.id;
-    const isDir = widget.mode === 'directory';
-    return {
-      inputs: [],
-      outputs: [{ id: outId, name: label, kind: 'output', data_type: 'file_path', multi: isDir, required: false, description: '' }],
-    };
-  },
   authoredFile: (widget) => ({ extension: codeExtension(widget), what: 'this file selector' }),
   // The same declaration the input node carries, because it is the same
   // behaviour one level down -- the backend returns literally the same object.

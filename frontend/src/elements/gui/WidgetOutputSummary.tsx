@@ -1,6 +1,6 @@
 import React from 'react';
 import type { GraphNode } from '../../types/graph';
-import { GUI_WIDGET_ELEMENTS } from '../registry';
+import { guiWidgetPorts } from '../../utils/guiWidgets';
 import { ACCENT_TEXT, DIM, MUTED, SUNKEN, TEXT, WELL } from '../../ui/theme';
 
 interface Props {
@@ -43,7 +43,7 @@ export default function WidgetOutputSummary({ node }: Props) {
         value shown below is what its port will emit on the next run.
       </p>
       {widgets.map((widget) => {
-        const { outputs } = GUI_WIDGET_ELEMENTS[widget.kind].ports(widget);
+        const { outputs } = guiWidgetPorts(widget);
         return (
           <div
             key={widget.id}

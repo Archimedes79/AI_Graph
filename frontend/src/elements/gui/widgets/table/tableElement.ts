@@ -6,14 +6,6 @@ import { codeExtension } from '../../../shared/authoredFileName';
 /** Display-only, like plot_window: takes rows to show, emits nothing. */
 export const tableElement: GuiWidgetElementDefinition = {
   widgetKind: 'table',
-  ports: (widget) => {
-    const inId = `${widget.id}_in`;
-    const label = widget.label || widget.id;
-    return {
-      inputs: [{ id: inId, name: label, kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-      outputs: [],
-    };
-  },
   authoredFile: (widget) => ({ extension: codeExtension(widget), what: 'this transform' }),
   generation: {
     promptField: 'code_prompt',

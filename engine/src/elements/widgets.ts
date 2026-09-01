@@ -160,7 +160,10 @@ export class TextIoElement extends WidgetElement<TextIoConfig> {
   ports(widget: Widget) {
     const { role } = this.config(widget);
     const name = widget.label || widget.id;
-    const inPort = port(`${widget.id}_in`, name, 'input', 'text');
+    // The input takes anything: a chart's data wired into a box to read it
+    // is an ordinary thing to want, and typing this `text` would refuse it.
+    // The output is text, because that is what a box of text holds.
+    const inPort = port(`${widget.id}_in`, name, 'input', 'any');
     const outPort = port(`${widget.id}_out`, name, 'output', 'text');
     if (role === 'input') return { inputs: [], outputs: [outPort] };
     if (role === 'output') return { inputs: [inPort], outputs: [] };

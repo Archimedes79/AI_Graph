@@ -599,6 +599,15 @@ on `NodeElement` / `WidgetElement`, with:
   carried out by the executor. Fanning out and reading wired files lived inside
   elements once, and the copies disagreed.
 
+**The editor asks the engine which ports a block has.** `guiWidgetPorts` in
+`frontend/src/utils/guiWidgets.ts` calls the engine's widget elements through
+the `@engine` alias; the editor's own copies are gone. Ports are what edges
+attach to, so two answers is the one disagreement that silently deletes wires —
+and the copies had already drifted: the editor said a text box accepts anything,
+the engine said only text. Adding a port to a block therefore means editing one
+file, in `engine/src/elements/`, and `engine/src/elements/ports.test.ts` spells
+out what each kind contributes.
+
 **Services arrive as a `Runtime`** (`files`, `code`, `ai`), never as an import.
 `engine/src/host/node.ts` is the only file that knows an operating system
 exists, which is what lets the same engine run in a browser tab later and in a

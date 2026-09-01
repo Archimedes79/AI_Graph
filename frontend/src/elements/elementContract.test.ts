@@ -12,6 +12,7 @@
  * compiles and executes a graph.
  */
 import { describe, it, expect } from 'vitest';
+import { guiWidgetPorts } from '../utils/guiWidgets';
 import { NODE_ELEMENTS, GUI_WIDGET_ELEMENTS } from './registry';
 import { createGuiWidget } from '../utils/guiWidgets';
 import type { GraphNode, GuiWidget } from '../types/graph';
@@ -119,9 +120,12 @@ describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (wi
     expect(remaining[0].id).toBe('w2');
   });
 
-  it('ports() returns input/output arrays without throwing', () => {
+  it('contributes ports through the engine, which is the only place they exist', () => {
+    // Not `element.ports`: the editor kept its own copy of that until the two
+    // disagreed about whether a text box accepts anything or only text. The
+    // shapes themselves are asserted in engine/src/elements/ports.test.ts.
     const widget = makeWidget(widgetKind as GuiWidget['kind']);
-    const { inputs, outputs } = element.ports(widget);
+    const { inputs, outputs } = guiWidgetPorts(widget);
     expect(Array.isArray(inputs)).toBe(true);
     expect(Array.isArray(outputs)).toBe(true);
   });
