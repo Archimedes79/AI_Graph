@@ -175,14 +175,21 @@ export async function makeBundle(options: CliOptions): Promise<number> {
  * enough for anything driving it over HTTP.
  */
 export async function runServer(options: CliOptions): Promise<number> {
+  // No graph file is a legitimate way to run this. The editor starts it beside
+  // itself purely to execute, and posts the graph being edited with every
+  // request; a bundle is the other case, and there the graph is right here.
+  const hasGraph = existsSync(resolve(options.graphPath));
   const pageDir = resolve(dirname(resolve(options.graphPath)), 'page');
+
   const { url } = await serve({
-    graphPath: options.graphPath,
+    ...(hasGraph ? { graphPath: options.graphPath } : {}),
     pageDir: existsSync(join(pageDir, 'runtime.html')) ? pageDir : undefined,
     port: options.port ?? 8000,
   });
   process.stderr.write(`Serving on ${url}\n`);
-  await open(url);
+  // Opening a browser is for a tool someone was handed, not for a helper the
+  // editor started.
+  if (hasGraph) await open(url);
   // Nothing to await: the server holds the process open until it is stopped.
   return new Promise(() => {});
 }

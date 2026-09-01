@@ -58,7 +58,14 @@ const MIME: Record<string, string> = {
 };
 
 export interface ServeOptions {
-  graphPath: string;
+  /**
+   * The graph this server ships, for a deployed tool.
+   *
+   * Optional, because the editor starts this alongside itself purely to run
+   * graphs: it posts the one being edited with every request, so there is
+   * nothing stored to serve. Only `/api/runtime/graph` needs it.
+   */
+  graphPath?: string;
   /** Where the built page lives, if this bundle carries one. */
   pageDir?: string;
   port?: number;
@@ -79,7 +86,9 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
   const allowBrowse = (options.allowBrowse ?? true) && loopback;
   const runs = new Map<string, Run>();
 
-  const original = parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')));
+  const original = options.graphPath
+    ? parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')))
+    : null;
 
   const server = createServer((request, response) => {
     handle(request, response).catch((error: unknown) => {
@@ -91,7 +100,10 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     const url = new URL(request.url ?? '/', `http://${host}`);
     const path = url.pathname;
 
-    if (path === '/api/runtime/graph') return send(response, 200, original);
+    if (path === '/api/runtime/graph') {
+      if (!original) return send(response, 404, { detail: 'This server ships no graph; post the one to run.' });
+      return send(response, 200, original);
+    }
 
     if (path === '/api/execute/requirements' && request.method === 'POST') {
       const graph = parseGraph(await body(request));
