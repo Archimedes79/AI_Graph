@@ -60,7 +60,6 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
         <Modal
           title="📥 Before running…"
           onClose={onCancel}
-          scrollBody
           // Typed paths; a backdrop click must not discard them. Escape is the
           // deliberate way out and matches Cancel.
           dismissOnBackdrop={false}

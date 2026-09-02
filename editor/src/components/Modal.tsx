@@ -18,7 +18,13 @@ interface ModalProps {
   dismissOnEscape?: boolean;
   /** Raise above another modal (the connector editor opens over the node editor). */
   zIndex?: number;
-  /** Let the body scroll and cap the modal's height — for tall editors. */
+  /**
+   * Cap the modal at 90vh and scroll its body. On by default: a dialog taller
+   * than the window hides its own footer, so Save and Done cannot be reached
+   * and the ✕ has gone off the top — which is what the settings dialog did,
+   * at 1109 pixels in a 720 pixel window. Turn it off only for something that
+   * must be allowed to grow past the viewport.
+   */
   scrollBody?: boolean;
   /** Fixed row between header and body, e.g. a tab bar that must not scroll. */
   subHeader?: React.ReactNode;
@@ -45,7 +51,7 @@ export default function Modal({
   dismissOnBackdrop = true,
   dismissOnEscape = true,
   zIndex = 50,
-  scrollBody = false,
+  scrollBody = true,
   subHeader,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
