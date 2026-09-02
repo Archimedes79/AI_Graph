@@ -24,4 +24,4 @@ if not exist editor\dist\index.html (
   call npm run build || exit /b 1
 )
 
-call npm start %*
+call npm start -- %*
