@@ -1,4 +1,4 @@
-import { NodeElement, type Runtime } from '../../element.ts';
+import { GraphNodeElement, type Runtime } from '../../element.ts';
 import { Logic, logicFrom } from '../../logic.ts';
 import type { GraphNode } from '../../graph.ts';
 import type { LogicFields } from '../../logic.ts';
@@ -21,7 +21,7 @@ export interface DataConfig {
  * afterwards, so the next round starts from it. A counter is a data node with
  * a code node adding one.
  */
-export class DataElement extends NodeElement<DataConfig> {
+export class DataElement extends GraphNodeElement<DataConfig> {
   readonly nodeType = 'data' as const;
   override readonly isMemory = true;
 

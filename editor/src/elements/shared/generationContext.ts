@@ -27,7 +27,7 @@ const SAMPLE_BUDGET = 1200;
  * What a node emits, in one line.
  *
  * This was a `switch (node.node_type)` -- the last one in shared editor code.
- * Each element answers for itself now (`NodeElementDefinition.describeOutput`),
+ * Each element answers for itself now (`GraphNodeElementDefinition.describeOutput`),
  * so a new node type describes its output in its own file and nothing here
  * changes.
  */

@@ -4,7 +4,7 @@
 // registry of subclasses that add the config panels — this one is what a bundle
 // imports, and it is the reason a bundle contains no editor.
 
-import type { NodeElement, WidgetElement } from './element.ts';
+import type { GraphNodeElement, WidgetElement } from './element.ts';
 import type { NodeType, WidgetKind } from './graph.ts';
 import { AiElement } from './elements/ai/element.ts';
 import { CodeElement } from './elements/code/element.ts';
@@ -14,16 +14,16 @@ import { InputElement } from './elements/input/element.ts';
 import { OutputElement } from './elements/output/element.ts';
 import { WIDGET_ELEMENTS } from './elements/gui/children/index.ts';
 
-export const NODE_ELEMENTS: NodeElement<unknown>[] = [
+export const NODE_ELEMENTS: GraphNodeElement<unknown>[] = [
   new InputElement(),
   new AiElement(),
   new CodeElement(),
   new DataElement(),
   new OutputElement(),
   new GuiElement(),
-] as NodeElement<unknown>[];
+] as GraphNodeElement<unknown>[];
 
-const NODES_BY_TYPE = new Map<string, NodeElement<unknown>>(
+const NODES_BY_TYPE = new Map<string, GraphNodeElement<unknown>>(
   NODE_ELEMENTS.map((element) => [element.nodeType, element]),
 );
 
@@ -33,7 +33,7 @@ const WIDGETS_BY_KIND = new Map<string, WidgetElement<unknown>>(
 
 /** The registry the executor asks. An unknown type is a missing element, not a crash. */
 export const registry = {
-  node(type: NodeType | string): NodeElement<unknown> | undefined {
+  node(type: NodeType | string): GraphNodeElement<unknown> | undefined {
     return NODES_BY_TYPE.get(type);
   },
   widget(kind: WidgetKind | string): WidgetElement<unknown> | undefined {

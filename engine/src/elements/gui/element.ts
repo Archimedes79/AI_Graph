@@ -1,4 +1,4 @@
-import { NodeElement, type Runtime, type Widget, type WidgetElement, type WidgetPresentation } from '../../element.ts';
+import { GraphNodeElement, type Runtime, type Widget, type WidgetElement, type WidgetPresentation } from '../../element.ts';
 import type { GraphNode, Port, RawConfig } from '../../graph.ts';
 import { InputPickerElement, WIDGET_ELEMENTS } from './children/index.ts';
 
@@ -50,7 +50,7 @@ export interface GuiConfig {
  * a gui node, they wire the block inside it — which is what keeps the page and
  * the graph from ever disagreeing about what exists.
  */
-export class GuiElement extends NodeElement<GuiConfig> {
+export class GuiElement extends GraphNodeElement<GuiConfig> {
   readonly nodeType = 'gui' as const;
   override readonly isMemory = true;
   override readonly hasInterface = true;

@@ -1,4 +1,4 @@
-import { NodeElement, type Runtime } from '../../element.ts';
+import { GraphNodeElement, type Runtime } from '../../element.ts';
 import { Logic, logicFrom } from '../../logic.ts';
 import type { GraphNode } from '../../graph.ts';
 import { imageDataUrl, imageMediaType } from '../../images.ts';
@@ -36,7 +36,7 @@ export interface AiConfig {
  * a code node does, in the executor, because "run this once per element" is a
  * property of the graph rather than of asking a model.
  */
-export class AiElement extends NodeElement<AiConfig> {
+export class AiElement extends GraphNodeElement<AiConfig> {
   readonly nodeType = 'ai' as const;
 
   config(node: GraphNode): AiConfig {

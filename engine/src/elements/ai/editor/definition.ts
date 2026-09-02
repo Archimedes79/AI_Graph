@@ -1,11 +1,11 @@
-import type { NodeElementDefinition } from '@/elements/types';
+import type { GraphNodeElementDefinition } from '@/elements/types';
 import AIEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { outputFormatContext } from '@/elements/shared/generationContext';
 import { AiElement } from '../element.ts';
 import { fromEngine } from '@/elements/shared/generation';
 
-export const aiElement: NodeElementDefinition = {
+export const aiElement: GraphNodeElementDefinition = {
   nodeType: 'ai',
   // The description IS this element's generation prompt, drawn by its own
   // editor -- a second Description field above it showed the same box twice.

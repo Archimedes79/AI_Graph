@@ -33,7 +33,7 @@ export interface ElementDefinitionBase<S> {
    */
   ConfigEditor?: React.ComponentType<any>;
   /**
-   * The ✨ Generate button this element offers, mirroring the backend's
+   * The ✨ Generate button this element offers, mirroring the engine's
    * `Element.generation()`. Omitted for an element that generates nothing
    * (output, text_io), which is what decides whether a button is drawn at all --
    * so the offer follows the element rather than a switch in a shell.
@@ -41,7 +41,7 @@ export interface ElementDefinitionBase<S> {
   generation?: ElementGeneration<S>;
 }
 
-export interface NodeElementDefinition extends ElementDefinitionBase<GraphNode> {
+export interface GraphNodeElementDefinition extends ElementDefinitionBase<GraphNode> {
   nodeType: NodeType;
   create: (id: string) => GraphNode;
   /**
@@ -69,7 +69,7 @@ export interface NodeElementDefinition extends ElementDefinitionBase<GraphNode> 
    * cycle -- the executor excludes such an edge from topological ordering and
    * settles the fresh value afterwards for the *next* round.
    *
-   * Must agree with the backend's `NodeElement.is_memory`: memory meaning two
+   * Must agree with the engine's `GraphNodeElement.isMemory`: memory meaning two
    * different things depending on which half is asked would be worse than the
    * hard-coded list this replaced.
    */
@@ -103,7 +103,7 @@ export interface NodeElementDefinition extends ElementDefinitionBase<GraphNode> 
 
 /**
  * Everything one GuiWidgetKind needs to behave as a `gui` node's sub-element,
- * mirroring NodeElementDefinition one level down: `ports` is what the owning
+ * mirroring GraphNodeElementDefinition one level down: `ports` is what the owning
  * gui node's inputs/outputs are synchronized from (`syncGuiNodePorts` /
  * backend `sync_gui_node_ports`), `ConfigEditor` is the widget's row in
  * GuiWidgetEditor.tsx, `RuntimeWidget` is what actually draws in the floating

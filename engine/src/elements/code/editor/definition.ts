@@ -1,4 +1,4 @@
-import type { NodeElementDefinition } from '@/elements/types';
+import type { GraphNodeElementDefinition } from '@/elements/types';
 import CodeEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { outputFormatContext } from '@/elements/shared/generationContext';
@@ -7,9 +7,9 @@ import { fromEngine } from '@/elements/shared/generation';
 
 /**
  * Reference implementation of the element contract -- every other
- * NodeElementDefinition should look structurally identical to this one.
+ * GraphNodeElementDefinition should look structurally identical to this one.
  */
-export const codeElement: NodeElementDefinition = {
+export const codeElement: GraphNodeElementDefinition = {
   nodeType: 'code',
   ownsDescription: true,
   generation: {

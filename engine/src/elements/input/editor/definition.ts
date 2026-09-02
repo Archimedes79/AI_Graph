@@ -1,5 +1,5 @@
 import type { GraphNode } from '@/types/graph';
-import type { NodeElementDefinition } from '@/elements/types';
+import type { GraphNodeElementDefinition } from '@/elements/types';
 import InputEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { derivedNodePorts } from '@/utils/guiWidgets';
@@ -8,7 +8,7 @@ import { InputElement } from '../element.ts';
 import { fromEngine } from '@/elements/shared/generation';
 
 
-export const inputElement: NodeElementDefinition = {
+export const inputElement: GraphNodeElementDefinition = {
   nodeType: 'input',
   ConfigEditor: InputEditor,
   generation: {

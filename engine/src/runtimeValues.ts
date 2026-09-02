@@ -9,7 +9,7 @@
 // element that wants to prompt says so in its own file and nothing here changes.
 
 import type { Graph, GraphNode } from './graph.ts';
-import type { NodeElement } from './element.ts';
+import type { GraphNodeElement } from './element.ts';
 
 export interface RuntimeRequirement {
   /** `nodeId`, or `nodeId::widgetId` for a block inside a page. */
@@ -23,7 +23,7 @@ export interface RuntimeRequirement {
 }
 
 export interface Registry {
-  node(type: string): NodeElement<unknown> | undefined;
+  node(type: string): GraphNodeElement<unknown> | undefined;
 }
 
 export function runtimeRequirements(graph: Graph, registry: Registry): RuntimeRequirement[] {

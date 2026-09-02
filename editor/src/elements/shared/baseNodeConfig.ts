@@ -2,7 +2,7 @@ import type { NodeConfig } from '../../types/graph';
 
 /**
  * The one `NodeConfig` shape every node type starts from -- every
- * NodeElementDefinition.create() spreads and overrides this rather than
+ * GraphNodeElementDefinition.create() spreads and overrides this rather than
  * repeating the full field list. Verbatim extraction of the object literal
  * every case in the old `utils/nodeDefaults.ts` switch used to build inline.
  */

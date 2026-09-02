@@ -1,4 +1,4 @@
-import { NodeElement, type Runtime } from '../../element.ts';
+import { GraphNodeElement, type Runtime } from '../../element.ts';
 import { type GraphNode } from '../../graph.ts';
 import { logicFrom, Logic } from '../../logic.ts';
 import { selectFiles } from '../files.ts';
@@ -26,7 +26,7 @@ export interface InputConfig {
  * emits the ports its node says it has, which is the thing a second engine gets
  * wrong first if it invents names of its own.
  */
-export class InputElement extends NodeElement<InputConfig> {
+export class InputElement extends GraphNodeElement<InputConfig> {
   readonly nodeType = 'input' as const;
 
   config(node: GraphNode): InputConfig {

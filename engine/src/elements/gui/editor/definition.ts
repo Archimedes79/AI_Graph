@@ -1,8 +1,8 @@
-import type { NodeElementDefinition } from '@/elements/types';
+import type { GraphNodeElementDefinition } from '@/elements/types';
 import GuiEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 
-export const guiElement: NodeElementDefinition = {
+export const guiElement: GraphNodeElementDefinition = {
   nodeType: 'gui',
   // Its widgets keep their values between runs, so an edge into one closes a
   // cycle the same way a data node does.

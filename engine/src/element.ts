@@ -166,7 +166,7 @@ ${reason}` };
 // Nodes
 // ---------------------------------------------------------------------------
 
-export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
+export abstract class GraphNodeElement<C = unknown> extends Element<GraphNode, C> {
   abstract readonly nodeType: NodeType;
 
   /**

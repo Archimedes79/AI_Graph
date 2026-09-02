@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Graph, GraphEdge, GraphNode } from './graph.ts';
 import { collectInputs, executeGraph, memoryFeedbackEdges, topologicalLevels } from './executor.ts';
-import { NodeElement, type Runtime } from './element.ts';
+import { GraphNodeElement, type Runtime } from './element.ts';
 import { registry } from './registry.ts';
 
 function node(id: string, type = 'code', config: Record<string, unknown> = {}): GraphNode {
@@ -99,7 +99,7 @@ describe('executeGraph', () => {
   });
 
   it('skips what depended on a failure instead of abandoning the run', async () => {
-    class Boom extends NodeElement {
+    class Boom extends GraphNodeElement {
       readonly nodeType = 'code' as const;
       config() { return {}; }
       async execute(): Promise<Record<string, unknown>> { throw new Error('no'); }

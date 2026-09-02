@@ -1,8 +1,8 @@
-import type { NodeElementDefinition } from '@/elements/types';
+import type { GraphNodeElementDefinition } from '@/elements/types';
 import OutputEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 
-export const outputElement: NodeElementDefinition = {
+export const outputElement: GraphNodeElementDefinition = {
   nodeType: 'output',
   showsResultWindow: (node) => node.config.write_mode === 'window',
   ConfigEditor: OutputEditor,

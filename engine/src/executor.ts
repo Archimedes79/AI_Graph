@@ -22,12 +22,12 @@
 // Everything else — what a node *does* — belongs to its element.
 
 import type { Graph, GraphEdge, GraphNode, ExecutionResult, NodeResult, NodeStatus } from './graph.ts';
-import type { NodeElement, Runtime } from './element.ts';
+import type { GraphNodeElement, Runtime } from './element.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
 import { readFileInputs } from './fileInputs.ts';
 
 export interface Registry {
-  node(type: string): NodeElement<unknown> | undefined;
+  node(type: string): GraphNodeElement<unknown> | undefined;
 }
 
 /** Ids of the fewest edges that must be ignored to make the graph acyclic. */
@@ -283,7 +283,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
  * ending the batch: one bad row out of two thousand should cost one row.
  */
 async function runNode(
-  element: NodeElement<unknown>,
+  element: GraphNodeElement<unknown>,
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,

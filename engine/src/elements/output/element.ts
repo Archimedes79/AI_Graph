@@ -1,4 +1,4 @@
-import { NodeElement, type Runtime } from '../../element.ts';
+import { GraphNodeElement, type Runtime } from '../../element.ts';
 import { type GraphNode } from '../../graph.ts';
 
 export interface OutputConfig {
@@ -19,7 +19,7 @@ export interface OutputConfig {
  * opened a window was a second place where results appeared, with its own
  * layout and no relation to the interface being designed next door.
  */
-export class OutputElement extends NodeElement<OutputConfig> {
+export class OutputElement extends GraphNodeElement<OutputConfig> {
   readonly nodeType = 'output' as const;
 
   config(node: GraphNode): OutputConfig {

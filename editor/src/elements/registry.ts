@@ -1,5 +1,5 @@
 import type { GuiWidgetKind, NodeType } from '../types/graph';
-import type { GuiWidgetElementDefinition, NodeElementDefinition } from './types';
+import type { GuiWidgetElementDefinition, GraphNodeElementDefinition } from './types';
 
 import { inputElement } from '@engine/elements/input/editor/definition';
 import { aiElement } from '@engine/elements/ai/editor/definition';
@@ -21,7 +21,7 @@ import { sliderElement } from '@engine/elements/gui/children/slider/editor/defin
 import { buttonElement } from '@engine/elements/gui/children/button/editor/definition';
 
 /** Dispatch table every NodeType resolves through. */
-export const NODE_ELEMENTS: Record<NodeType, NodeElementDefinition> = {
+export const NODE_ELEMENTS: Record<NodeType, GraphNodeElementDefinition> = {
   input:            inputElement,
   ai:               aiElement,
   code:             codeElement,

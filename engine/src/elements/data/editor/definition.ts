@@ -1,5 +1,5 @@
 import type { GraphNode } from '@/types/graph';
-import type { NodeElementDefinition } from '@/elements/types';
+import type { GraphNodeElementDefinition } from '@/elements/types';
 import DataEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { DataElement } from '../element.ts';
@@ -55,7 +55,7 @@ export function connectedOutputDataNodes(
   return targets;
 }
 
-export const dataElement: NodeElementDefinition = {
+export const dataElement: GraphNodeElementDefinition = {
   nodeType: 'data',
   // A data node IS the graph's register: it holds its value between runs, which
   // is what lets a feedback edge into it close a cycle.

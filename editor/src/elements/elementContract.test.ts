@@ -1,7 +1,7 @@
 /**
  * Consolidated element-contract test.
  *
- * Walks every registered NodeElementDefinition (`registry.ts::NODE_ELEMENTS`)
+ * Walks every registered GraphNodeElementDefinition (`registry.ts::NODE_ELEMENTS`)
  * and GuiWidgetElementDefinition (`registry.ts::GUI_WIDGET_ELEMENTS`) and
  * asserts the handful of universal properties every element must satisfy.
  * This REPLACES ad-hoc per-element unit tests: when adding a new NodeType/GuiWidgetKind, extend

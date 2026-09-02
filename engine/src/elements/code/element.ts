@@ -1,4 +1,4 @@
-import { NodeElement, type Runtime } from '../../element.ts';
+import { GraphNodeElement, type Runtime } from '../../element.ts';
 import { Logic, logicFrom } from '../../logic.ts';
 import type { GraphNode } from '../../graph.ts';
 import type { LogicFields } from '../../logic.ts';
@@ -21,7 +21,7 @@ export interface CodeConfig {
  * already has once they have the engine, so a bundle asks for Node and nothing
  * else — no interpreter to find, no packages to install, no second sandbox.
  */
-export class CodeElement extends NodeElement<CodeConfig> {
+export class CodeElement extends GraphNodeElement<CodeConfig> {
   readonly nodeType = 'code' as const;
 
   config(node: GraphNode): CodeConfig {
