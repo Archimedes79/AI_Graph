@@ -1,11 +1,14 @@
 import axios from 'axios';
 import type { Graph, ExecutionResult, RuntimeRequirement } from '../types/graph';
 
-// Must stay above backend AI_COMPLETE_TIMEOUT (ai_service.py) so the client
-// never times out before a slow local model (up to ~10 min) responds.
+// No clock. A local model asked to design a whole graph takes as long as it
+// takes, and a browser that gives up first turns a slow answer into no answer
+// at all -- with the request still running on the other side. The engine does
+// not put a clock on the model either; AI_GRAPH_TIMEOUT_MS puts one back on
+// both sides for anyone who wants it.
 const api = axios.create({
   baseURL: '/api',
-  timeout: 660_000,
+  timeout: 0,
 });
 
 // File-based Load/Save (New/Load/Save/Save As), reading and writing an absolute
@@ -110,6 +113,7 @@ export const generateGraph = (body: {
   context?: string;
   ai_model?: string;
   ai_provider?: string;
+  progress_id?: string;
 }): Promise<{ graph: Graph; explanation?: string }> =>
   api.post('/ai/generate-graph', body).then((r) => r.data);
 

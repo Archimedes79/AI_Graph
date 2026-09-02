@@ -4,6 +4,7 @@ import { generate } from '../../utils/api';
 import { genAI } from '../../store/settingsStore';
 import { useGenerate } from './useGenerate';
 import GenerationTranscript, { GenerationReport } from './GenerationTranscript';
+import LiveGeneration from './LiveGeneration';
 import { describeDataFormat } from '@engine/elements/data/editor/definition';
 import { ACCENT_FILL, ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
 
@@ -116,13 +117,20 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
               {generating ? '…' : '✨ Generate Output Format'}
             </button>
           </div>
-          <textarea
-            className="w-full rounded-lg px-2 py-1.5 text-sm font-mono resize-none"
-            style={{ ...FIELD, minHeight: 80 }}
-            value={node.config.output_format_prompt ?? ''}
-            onChange={(e) => setConfig('output_format_prompt', e.target.value)}
-            placeholder="e.g. A JSON array of objects with {title: string, score: number}"
-          />
+          {/* While it writes, the box shows the writing: the same view the code
+              window gets, for the same reason -- a declaration you cannot see
+              being made is one you cannot judge. */}
+          {generating ? (
+            <LiveGeneration calls={runGenerate.liveTranscript()} minHeight={80} />
+          ) : (
+            <textarea
+              className="w-full rounded-lg px-2 py-1.5 text-sm font-mono resize-none"
+              style={{ ...FIELD, minHeight: 80 }}
+              value={node.config.output_format_prompt ?? ''}
+              onChange={(e) => setConfig('output_format_prompt', e.target.value)}
+              placeholder="e.g. A JSON array of objects with {title: string, score: number}"
+            />
+          )}
           <p className="text-xs mt-1" style={{ color: DIMMER }}>
             Describe the format above (or fill in the node description) and click ✨ Generate, or write it here directly — whatever is in this box is what's used.
           </p>

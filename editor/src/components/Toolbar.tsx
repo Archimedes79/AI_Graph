@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import ToolbarButton, { ToolbarSeparator } from './ToolbarButton';
 import { useGraphStore } from '../store/graphStore';
-import { downloadBundle, getRuntimeRequirements, generateGraph } from '../utils/api';
+import { downloadBundle, getRuntimeRequirements, generateGraph, getGenerationProgress, type AICall } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import type { Graph, RuntimeRequirement } from '../types/graph';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
@@ -12,6 +12,7 @@ import { genAI } from '../store/settingsStore';
 import GraphWindows from './GraphWindows';
 import { useGraphSweep } from '../services/useGraphSweep';
 import Modal from './Modal';
+import LiveGeneration from '../elements/shared/LiveGeneration';
 import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
 /**
@@ -89,6 +90,9 @@ export default function Toolbar({
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiResult, setAiResult] = useState<{ graph: Graph; explanation?: string } | null>(null);
+  // What the one long call has sent so far, so designing a graph is not five
+  // minutes of a spinning button with nothing behind it.
+  const [aiCalls, setAiCalls] = useState<AICall[]>([]);
 
   const handleRun = async () => {
     const graph = exportGraph();
@@ -200,12 +204,21 @@ export default function Toolbar({
     setAiGenerating(true);
     setAiError('');
     setAiResult(null);
+    setAiCalls([]);
+    const progressId = `graph-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const watching = window.setInterval(async () => {
+      try {
+        const { calls } = await getGenerationProgress(progressId);
+        if (calls.length) setAiCalls(calls);
+      } catch { /* a poll that fails changes nothing */ }
+    }, 500);
     try {
-      const result = await generateGraph({ description: aiDescription, ...genAI() });
+      const result = await generateGraph({ description: aiDescription, progress_id: progressId, ...genAI() });
       setAiResult(result);
     } catch (e: any) {
       setAiError(errorText(e, 'Failed to generate graph.'));
     } finally {
+      window.clearInterval(watching);
       setAiGenerating(false);
     }
   };
@@ -495,6 +508,11 @@ export default function Toolbar({
               disabled={aiGenerating}
             />
 
+            {aiGenerating && (
+              <div className="mt-3">
+                <LiveGeneration calls={aiCalls} minHeight={140} />
+              </div>
+            )}
             {aiError && (
               <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: DANGER_TEXT }}>
                 ❌ {aiError}

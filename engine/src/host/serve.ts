@@ -222,14 +222,25 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     }
 
     if (options.editor && path === '/api/ai/generate-graph' && request.method === 'POST') {
-      const asked = await body(request) as { description?: string; context?: string; ai_provider?: string; ai_model?: string };
+      const asked = await body(request) as {
+        description?: string; context?: string; ai_provider?: string; ai_model?: string; progress_id?: string;
+      };
       const target = await editor!.settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? '');
+      // Watchable for the same reason one element's generation is: designing a
+      // whole graph is one long call, and until it lands there is nothing to
+      // see but a spinning button.
+      const calls: GenerateModule.AICall[] = [];
+      if (asked.progress_id) generating.set(asked.progress_id, calls);
       try {
-        const { graph, explanation } = await editor!.generate.generateGraph(asked.description ?? '', asked.context ?? '', { ai: nodeRuntime().ai, target });
+        const { graph, explanation } = await editor!.generate.generateGraph(
+          asked.description ?? '', asked.context ?? '', { ai: nodeRuntime().ai, target, calls },
+        );
         return send(response, 200, { graph: parseGraph(graph), explanation });
       } catch (error) {
-        const calls = error instanceof editor!.generate.GenerationFailed ? error.calls : [];
-        return send(response, 500, { detail: message(error), calls });
+        const failed = error instanceof editor!.generate.GenerationFailed ? error.calls : calls;
+        return send(response, 500, { detail: message(error), calls: failed });
+      } finally {
+        if (asked.progress_id) generating.delete(asked.progress_id);
       }
     }
 

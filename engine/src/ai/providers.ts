@@ -23,6 +23,15 @@ export interface ProviderSettings {
   /** Seconds before the first retry; doubled each time after. */
   retryDelay: number;
   maxTokens: number;
+  /**
+   * How long to wait for an answer. 0 means no clock at all.
+   *
+   * Five minutes used to be the default, and a local model asked to design a
+   * whole graph is simply slower than that -- the request was aborted while it
+   * was still writing, which reads as "nothing happens". Waiting is the right
+   * default for a machine you are running yourself; set AI_GRAPH_TIMEOUT_MS to
+   * put a clock back on it.
+   */
   timeoutMs: number;
 }
 
@@ -42,7 +51,7 @@ export const DEFAULT_SETTINGS: ProviderSettings = {
   attempts: 3,
   retryDelay: 1,
   maxTokens: 4096,
-  timeoutMs: 300_000,
+  timeoutMs: 0,
 };
 
 /** A provider that speaks the OpenAI chat-completions API. */
@@ -135,7 +144,9 @@ async function post(
   timeoutMs: number,
 ): Promise<Record<string, unknown>> {
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  // No timer at all when there is no timeout: an AbortController that is never
+  // fired lets a slow model finish, and a socket that dies still ends the call.
+  const timer = timeoutMs > 0 ? setTimeout(() => abort.abort(), timeoutMs) : undefined;
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -151,7 +162,7 @@ async function post(
     }
     return JSON.parse(text) as Record<string, unknown>;
   } finally {
-    clearTimeout(timer);
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 
@@ -319,9 +330,14 @@ export function settingsFromEnv(env: Record<string, string | undefined>): Partia
     if (env[name]) apiKeys[key] = env[name]!;
   }
 
+  // A number, including 0 for "wait as long as it takes" -- so the knob can put
+  // a clock back on as well as take one off.
+  const timeout = Number(env.AI_GRAPH_TIMEOUT_MS);
+
   return {
     ...(env.AI_GRAPH_AI_PROVIDER ? { provider: env.AI_GRAPH_AI_PROVIDER } : {}),
     ...(env.AI_GRAPH_AI_MODEL ? { model: env.AI_GRAPH_AI_MODEL } : {}),
+    ...(Number.isFinite(timeout) && timeout >= 0 && env.AI_GRAPH_TIMEOUT_MS ? { timeoutMs: timeout } : {}),
     endpoints,
     apiKeys,
   };
