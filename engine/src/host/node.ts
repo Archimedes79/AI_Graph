@@ -80,7 +80,16 @@ export const nodeCode: CodeRunner = {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-'));
     const file = join(dir, 'body.mjs');
 
-    const wrapper = `${body}\n\nconst __out = await run(JSON.parse(process.argv[2]));\nconsole.log(JSON.stringify(__out));\n`;
+    // A body runs as an ES module, where `require` does not exist. A body that
+    // used it failed with ERR_AMBIGUOUS_MODULE_SYNTAX -- a message about module
+    // formats, raised because the wrapper's top-level await left Node unsure
+    // which format was meant, for someone who had only asked for a file to be
+    // read. Both styles are ordinary JavaScript and both come out of a model,
+    // so both work: the bridge below defines `require`, and `import` needs
+    // nothing.
+    const wrapper = "import { createRequire } from 'node:module';\n"
+      + 'const require = createRequire(import.meta.url);\n\n'
+      + `${body}\n\nconst __out = await run(JSON.parse(process.argv[2]));\nconsole.log(JSON.stringify(__out));\n`;
 
     try {
       await writeFile(file, wrapper, 'utf8');

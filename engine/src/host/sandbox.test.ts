@@ -40,3 +40,28 @@ describe('a code body', () => {
     await expect(nodeCode.run(body, {})).rejects.toThrow(/ERR_ACCESS_DENIED|not allowed|ERR_REQUIRE|Error/);
   });
 });
+
+describe('how a body may be written', () => {
+  /**
+   * Both styles come out of a model, and both are ordinary JavaScript. A body
+   * using `require` used to fail with ERR_AMBIGUOUS_MODULE_SYNTAX -- a message
+   * about module formats, for someone who only asked for a file to be read.
+   */
+  it('may use require', async () => {
+    const body = `
+      export function run() {
+        const { tmpdir } = require('node:os');
+        return { value: typeof tmpdir() };
+      }
+    `;
+    expect(await nodeCode.run(body, {})).toEqual({ value: 'string' });
+  });
+
+  it('may use import', async () => {
+    const body = `
+      import { tmpdir } from 'node:os';
+      export function run() { return { value: typeof tmpdir() }; }
+    `;
+    expect(await nodeCode.run(body, {})).toEqual({ value: 'string' });
+  });
+});
