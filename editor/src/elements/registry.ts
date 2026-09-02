@@ -16,6 +16,9 @@ import { tableElement } from '@engine/elements/gui/children/table/editor/definit
 import { textElement } from '@engine/elements/gui/children/text/editor/definition';
 import { dividerElement } from '@engine/elements/gui/children/divider/editor/definition';
 import { spacerElement } from '@engine/elements/gui/children/spacer/editor/definition';
+import { selectElement } from '@engine/elements/gui/children/select/editor/definition';
+import { sliderElement } from '@engine/elements/gui/children/slider/editor/definition';
+import { buttonElement } from '@engine/elements/gui/children/button/editor/definition';
 
 /** Dispatch table every NodeType resolves through. */
 export const NODE_ELEMENTS: Record<NodeType, NodeElementDefinition> = {
@@ -38,4 +41,7 @@ export const GUI_WIDGET_ELEMENTS: Record<GuiWidgetKind, GuiWidgetElementDefiniti
   text:            textElement,
   divider:         dividerElement,
   spacer:          spacerElement,
+  select:          selectElement,
+  slider:          sliderElement,
+  button:          buttonElement,
 };

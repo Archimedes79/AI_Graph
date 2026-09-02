@@ -16,7 +16,8 @@ export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui';
 
 export type WidgetKind =
   | 'input_picker' | 'text_io' | 'plot_window' | 'image_view'
-  | 'table' | 'text' | 'divider' | 'spacer';
+  | 'table' | 'text' | 'divider' | 'spacer'
+  | 'select' | 'slider' | 'button';
 
 export type PortKind = 'input' | 'output';
 

@@ -86,6 +86,10 @@ export function createGuiWidget(kind: GuiWidgetKind, label = '', mode?: string):
     code_prompt: '',
     code_file: '',
     example_file: '',
+    options: kind === 'select' ? 'Option A\nOption B' : '',
+    min: kind === 'slider' ? 0 : undefined,
+    max: kind === 'slider' ? 100 : undefined,
+    step: kind === 'slider' ? 1 : undefined,
   };
 }
 
@@ -98,6 +102,9 @@ export const GUI_WIDGET_KIND_LABELS: Record<GuiWidgetKind, string> = {
   table: 'Tabelle',
   plot_window: 'Diagramm',
   image_view: 'Bild',
+  select: 'Auswahl (Dropdown)',
+  slider: 'Schieberegler',
+  button: 'Knopf',
 };
 
 /**
@@ -114,6 +121,9 @@ export const GUI_WIDGET_KIND_LABELS: Record<GuiWidgetKind, string> = {
 function defaultToneFor(kind: GuiWidgetKind, mode?: string): Tone {
   if (kind === 'input_picker') return 'sunken';
   if (kind === 'text_io' && mode !== 'output') return 'sunken';
+  if (kind === 'select' || kind === 'slider') return 'sunken';
+  // A button is its own label -- a caption above it would just repeat the
+  // text on its face -- so it stays plain, the same reason a heading does.
   return 'plain';
 }
 
@@ -138,5 +148,8 @@ function defaultSpanFor(kind: GuiWidgetKind, mode?: string): { w: number; h: num
     return { w: 16, h: 3 };
   }
   if (kind === 'input_picker') return { w: 6, h: 2 };
+  if (kind === 'select') return { w: 6, h: 2 };
+  if (kind === 'slider') return { w: 8, h: 2 };
+  if (kind === 'button') return { w: 5, h: 2 };
   return DEFAULT_WIDGET_SPAN;
 }

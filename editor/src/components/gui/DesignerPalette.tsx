@@ -42,6 +42,9 @@ const GROUPS: { label: string; entries: PaletteEntry[] }[] = [
       { kind: 'input_picker', label: 'Datei-/Ordnerauswahl', icon: '📂' },
       { kind: 'text_io', mode: 'input', label: 'Texteingabe', icon: '⌨️' },
       { kind: 'text_io', mode: 'both', label: 'Chat (ein & aus)', icon: '💬' },
+      { kind: 'select', label: 'Auswahl (Dropdown)', icon: '▾' },
+      { kind: 'slider', label: 'Schieberegler', icon: '🎚️' },
+      { kind: 'button', label: 'Knopf', icon: '🔘' },
     ],
   },
   {

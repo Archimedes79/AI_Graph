@@ -29,7 +29,7 @@ function makeWidget(kind: GuiWidget['kind']): GuiWidget {
 }
 
 /** The blocks that carry no settings at all -- page furniture, not fields. */
-const STATIC_KINDS_WITHOUT_SETTINGS = ['divider', 'spacer'];
+const STATIC_KINDS_WITHOUT_SETTINGS = ['divider', 'spacer', 'button'];
 
 describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, element) => {
   it('create() produces a valid GraphNode shape', () => {

@@ -16,6 +16,9 @@ import { TextIoElement } from './text_io/element.ts';
 import { PlotWindowElement } from './plot_window/element.ts';
 import { ImageViewElement } from './image_view/element.ts';
 import { TableElement } from './table/element.ts';
+import { SelectElement } from './select/element.ts';
+import { SliderElement } from './slider/element.ts';
+import { ButtonElement } from './button/element.ts';
 
 export { InputPickerElement };
 
@@ -28,4 +31,7 @@ export const WIDGET_ELEMENTS = [
   new PlotWindowElement(),
   new ImageViewElement(),
   new TableElement(),
+  new SelectElement(),
+  new SliderElement(),
+  new ButtonElement(),
 ];
