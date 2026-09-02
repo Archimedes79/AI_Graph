@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import ToolbarButton, { ToolbarSeparator } from './ToolbarButton';
 import { useGraphStore } from '../store/graphStore';
-import { downloadBundle, getDockerCompose, getRuntimeRequirements, generateGraph } from '../utils/api';
+import { downloadBundle, getRuntimeRequirements, generateGraph } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import type { Graph, RuntimeRequirement } from '../types/graph';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
@@ -177,16 +177,6 @@ export default function Toolbar({
   const handleDownloadBundle = () =>
     runDeployAction('Bundle download', async () => {
       await downloadBundle(exportGraph());
-    });
-
-  const handleDockerCompose = () =>
-    runDeployAction('Compose preview', async () => {
-      const content = await getDockerCompose(exportGraph());
-      setDeployLabel('docker-compose.yml');
-      setDeployContent(content);
-      // Deliberately no setShowDeploy(true): the preview renders off
-      // deployContent, and re-opening the dropdown here left it hanging behind
-      // the modal after the caller had just closed it.
     });
 
   const handleOpenAiGraph = () => {
@@ -427,13 +417,6 @@ export default function Toolbar({
             onClick={handleDownloadBundle}
           >
             📦 Download Bundle (zip)
-          </button>
-          <button
-            className="w-full text-left px-4 py-3 text-sm hover-raise transition-colors"
-            style={{ color: TEXT }}
-            onClick={handleDockerCompose}
-          >
-            🐳 View Docker Compose
           </button>
           <button
             className="w-full text-left px-4 py-3 text-sm hover-raise transition-colors border-t"

@@ -147,12 +147,11 @@ export const browseDirectory = (
 
 // Example-input attachments (stored project-side, referenced by an element's
 // `example_file`). Keeps the config a plain server path, like any other file field.
-export const uploadAttachment = (file: File): Promise<{ path: string; name: string }> => {
-  const form = new FormData();
-  form.append('file', file);
-  return api.post('/files/attachments', form, { headers: { 'Content-Type': 'multipart/form-data' } })
-    .then((r) => r.data);
-};
+export const uploadAttachment = (file: File): Promise<{ path: string; name: string }> =>
+  api.post('/files/attachments', file, {
+    params: { name: file.name },
+    headers: { 'Content-Type': 'application/octet-stream' },
+  }).then((r) => r.data);
 
 export const deleteAttachment = (path: string): Promise<void> =>
   api.delete('/files/attachments', { params: { path } }).then(() => undefined);
@@ -167,9 +166,6 @@ export const downloadBundle = async (graph: Graph) => {
   a.click();
   URL.revokeObjectURL(url);
 };
-
-export const getDockerCompose = (graph: Graph) =>
-  api.post('/deploy/docker-compose', graph).then((r) => r.data);
 
 // Files
 export const detectFileFormat = (path: string): Promise<{ format: string }> =>

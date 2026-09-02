@@ -22,6 +22,6 @@
   ],
   "//": "An element's `editor/` folder is the browser's half of it: React, and imports that only the editor app can resolve. It lives beside the element it belongs to and is compiled by the editor, never here.",
   "exclude": [
-    "src/**/editor/**"
+    "src/elements/**/editor/**"
   ]
 }

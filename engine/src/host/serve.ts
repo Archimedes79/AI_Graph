@@ -18,6 +18,7 @@ import { parseGraph, type ExecutionResult, type Graph } from '../graph.ts';
 import { executeGraph } from '../executor.ts';
 import { registry } from '../registry.ts';
 import { authoredIn, generations } from '../describe.ts';
+import * as editorFiles from './editor/files.ts';
 import { applyRuntimeValues, runtimeRequirements } from '../runtimeValues.ts';
 import { nodeFiles, nodeRuntime } from './node.ts';
 
@@ -92,7 +93,7 @@ export interface ServeOptions {
 }
 
 /** In editor mode, the routes the engine answers itself; the rest is forwarded. */
-const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements)\//;
+const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements|files)\//;
 
 export async function serve(options: ServeOptions): Promise<{ server: Server; url: string }> {
   const host = options.host ?? '127.0.0.1';
@@ -168,7 +169,42 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     if (path === '/api/files/browse' && request.method === 'POST') {
       if (!allowBrowse) return send(response, 403, { detail: 'Browsing is disabled.' });
       const asked = await body(request) as { path?: string; extensions?: string };
-      return send(response, 200, await browse(asked.path ?? '.', asked.extensions ?? ''));
+      if (!options.editor) return send(response, 200, await browse(asked.path ?? '.', asked.extensions ?? ''));
+      // The editor walks into directories and jumps between drives; a deployed
+      // page only picks a file, and lists nothing it would not need to.
+      try {
+        const filter = editorFiles.extensionFilter(asked.extensions ?? '');
+        return send(response, 200, await editorFiles.browse(asked.path ?? '', filter));
+      } catch (error) {
+        return send(response, error instanceof editorFiles.NotFound ? 404 : 400, { detail: message(error) });
+      }
+    }
+
+    if (options.editor && path === '/api/files/detect-format' && request.method === 'POST') {
+      const asked = await body(request) as { path?: string };
+      if (!asked.path) return send(response, 400, { detail: "Missing required field 'path'" });
+      try {
+        return send(response, 200, { format: await editorFiles.detectFormat(asked.path) });
+      } catch (error) {
+        return send(response, 404, { detail: message(error) });
+      }
+    }
+
+    if (options.editor && path === '/api/files/attachments' && request.method === 'POST') {
+      // The file itself is the body; its name rides on the query. No multipart
+      // to parse, and nothing about the upload a client could get wrong.
+      const name = url.searchParams.get('name') ?? 'attachment';
+      const saved = await editorFiles.saveAttachment(name, await rawBody(request));
+      return send(response, 200, { path: saved, name });
+    }
+
+    if (options.editor && path === '/api/files/attachments' && request.method === 'DELETE') {
+      try {
+        await editorFiles.deleteAttachment(url.searchParams.get('path') ?? '');
+        return send(response, 200, { ok: true });
+      } catch (error) {
+        return send(response, 400, { detail: message(error) });
+      }
     }
 
     if (path === '/api/runtime/ai-settings') {
@@ -304,6 +340,20 @@ function forward(request: IncomingMessage, response: ServerResponse, api: string
     });
     request.pipe(upstream);
   });
+}
+
+/** The request body as it came: an upload is bytes, not JSON. */
+function rawBody(request: IncomingMessage): Promise<Buffer> {
+  return new Promise((done, fail) => {
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk: Buffer) => chunks.push(chunk));
+    request.on('end', () => done(Buffer.concat(chunks)));
+    request.on('error', fail);
+  });
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function snapshot(record: Run): unknown {

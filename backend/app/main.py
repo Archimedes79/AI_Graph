@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import ai, deploy, execute, files, graph
+from app.routers import ai, deploy, graph
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -44,10 +44,8 @@ app.add_middleware(
 )
 
 app.include_router(graph.router)
-app.include_router(execute.router)
 app.include_router(ai.router)
 app.include_router(deploy.router)
-app.include_router(files.router)
 
 
 @app.get("/health")
