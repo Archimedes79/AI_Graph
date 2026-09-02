@@ -27,6 +27,7 @@ import subprocess
 import sys
 import textwrap
 import threading
+import time
 import urllib.error
 import urllib.request
 import webbrowser
@@ -39,8 +40,25 @@ FRONTEND_DIR = REPO_ROOT / "frontend"
 
 _PACKAGE_EXCLUDE_DIRS = {"__pycache__", ".venv", "node_modules", "tests"}
 
-BACKEND_PORT = 8000
+# The engine is the front door: the browser talks to it on 8000, and it forwards
+# what it does not own yet to the Python server behind it on 8001. Every route
+# brought across is one fewer forwarded, until the second port is not needed.
+FRONT_DOOR_PORT = 8000
+BACKEND_PORT = 8001
 FRONTEND_PORT = 3000
+ENGINE_MAIN = REPO_ROOT / "engine" / "src" / "main.ts"
+
+
+def _front_door_cmd() -> list:
+    return ["node", str(ENGINE_MAIN), "--editor", str(FRONTEND_DIR / "dist"),
+            "--api", f"http://127.0.0.1:{BACKEND_PORT}", "--port", str(FRONT_DOOR_PORT)]
+
+
+def _backend_env() -> dict:
+    # The engine started beside us and listens on the front-door port; say so,
+    # or the server would spawn a second engine of its own.
+    return {**os.environ, "AI_GRAPH_ENGINE_URL": f"http://127.0.0.1:{FRONT_DOOR_PORT}",
+            "AI_GRAPH_NO_BROWSER": "1"}
 FRONTEND_FALLBACK_PORT = 3002
 
 
@@ -116,11 +134,18 @@ def run_dev() -> int:
         # every time depending on whatever else is running on the machine.
         frontend_cmd += ["--", "--port", str(FRONTEND_FALLBACK_PORT), "--strictPort"]
 
+    engine_cmd = _front_door_cmd()
+    print(f"[start] engine:   {' '.join(engine_cmd)} (cwd={REPO_ROOT})")
     print(f"[start] backend:  {' '.join(backend_cmd)} (cwd={REPO_ROOT})")
     print(f"[start] frontend: {' '.join(frontend_cmd)} (cwd={FRONTEND_DIR})")
 
+    engine = subprocess.Popen(
+        engine_cmd, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        env={**os.environ, "AI_GRAPH_NO_BROWSER": "1"}, shell=(sys.platform == "win32"),
+    )
     backend = subprocess.Popen(
         backend_cmd, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        env=_backend_env(),
     )
     frontend = subprocess.Popen(
         frontend_cmd, cwd=FRONTEND_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -137,6 +162,7 @@ def run_dev() -> int:
             print(f"[start] AI-Graph editor -> {match.group(1)}   (Ctrl+C to stop)")
 
     threads = [
+        threading.Thread(target=_stream_output, args=(engine, "engine"), daemon=True),
         threading.Thread(target=_stream_output, args=(backend, "backend"), daemon=True),
         threading.Thread(target=_stream_output, args=(frontend, "frontend", _announce_frontend_url), daemon=True),
     ]
@@ -144,16 +170,16 @@ def run_dev() -> int:
         t.start()
 
     try:
-        while backend.poll() is None and frontend.poll() is None:
+        while engine.poll() is None and backend.poll() is None and frontend.poll() is None:
             for t in threads:
                 t.join(timeout=0.5)
     except KeyboardInterrupt:
-        print("\n[start] Stopping backend and frontend...")
+        print("\n[start] Stopping engine, backend and frontend...")
     finally:
-        for process in (backend, frontend):
+        for process in (engine, backend, frontend):
             if process.poll() is None:
                 process.terminate()
-        for process in (backend, frontend):
+        for process in (engine, backend, frontend):
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
@@ -197,21 +223,31 @@ def run_prod() -> int:
     python = _venv_python()
     # Same reason as dev mode: the working directory is the project, so a
     # relative path a person types lands where they are working.
-    backend_cmd = [python, "-m", "uvicorn", "app.main:app", "--app-dir", str(BACKEND_DIR), "--port", "8000"]
+    backend_cmd = [python, "-m", "uvicorn", "app.main:app", "--app-dir", str(BACKEND_DIR),
+                   "--port", str(BACKEND_PORT)]
+    engine_cmd = _front_door_cmd()
+    print(f"[start] engine:  {' '.join(engine_cmd)} (cwd={REPO_ROOT})")
     print(f"[start] backend: {' '.join(backend_cmd)} (cwd={REPO_ROOT})")
-    print("[start] Serving built frontend from frontend/dist on the same port.")
+    print(f"[start] AI-Graph editor -> http://127.0.0.1:{FRONT_DOOR_PORT}   (Ctrl+C to stop)")
 
-    process = subprocess.Popen(backend_cmd, cwd=REPO_ROOT)
+    backend = subprocess.Popen(backend_cmd, cwd=REPO_ROOT, env=_backend_env())
+    process = subprocess.Popen(engine_cmd, cwd=REPO_ROOT, shell=(sys.platform == "win32"))
     try:
-        return process.wait()
+        while process.poll() is None and backend.poll() is None:
+            time.sleep(0.5)
+        return process.returncode or backend.returncode or 0
     except KeyboardInterrupt:
-        print("\n[start] Stopping backend...")
-        process.terminate()
-        try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            process.kill()
+        print("\n[start] Stopping engine and backend...")
         return 0
+    finally:
+        for child in (process, backend):
+            if child.poll() is None:
+                child.terminate()
+        for child in (process, backend):
+            try:
+                child.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                child.kill()
 
 
 def _add_tree(zf: zipfile.ZipFile, src: Path, arc_prefix: str) -> None:

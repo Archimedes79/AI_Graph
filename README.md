@@ -53,9 +53,9 @@ Nothing leaves the machine unless the graph itself sends it there.
 
 - `start.py`, the built executable and a deployed bundle bind to `127.0.0.1` —
   reachable from the machine itself, not from the network.
-- The file browser is tied to that bind: started with `--host 0.0.0.0`, a deployed tool
-  switches its browse endpoint off rather than exposing the host's filesystem listing
-  (`graph-runner/serve.py`).
+- A deployed tool listens on loopback and offers no way to change that, so its file
+  browser can only ever be driven by the person at the keyboard — never by the network
+  (`engine/src/host/serve.ts`).
 - No analytics or phone-home calls exist in the code; the only outbound connections are
   the ones your graph is configured to make.
 - API keys are write-only, and the code-generation AI belongs to your browser rather
@@ -110,7 +110,7 @@ A path inside a graph resolves against the working directory, so run the ones th
 files from the repository root:
 
 ```bash
-python graph-runner/run.py examples/plotter_interactive.json
+node engine/src/main.ts examples/universal_plotter.json
 ```
 
 ## Quick start
@@ -151,6 +151,7 @@ node engine/src/main.ts my.json --bundle ./out             # to hand to someone
 | [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, GUI nodes and widgets |
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the two AI settings, where the API key goes |
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, Docker, the Graph Runner CLI |
+| [TODO.md](TODO.md) | The open items, and the decisions still waiting |
 
 ## Project structure
 
@@ -160,7 +161,7 @@ AI-Graph/
 ├── frontend/         # React + TypeScript + ReactFlow editor (src/elements, src/components, src/store)
 ├── engine/           # The TypeScript engine: runs a graph, ships as a bundle, no build step
 ├── start.cmd/.sh     # Start the editor; finds an interpreter instead of assuming one
-├── graph-runner/     # run.py (CLI) / serve.py (GUI runtime) / build_exe.py — vendored into every deploy bundle
+├── packaging/        # build_exe.py / python_embed.py — turning the editor into one executable
 ├── docs/             # The documents linked above
 ├── examples/         # Example graph JSON files
 ├── checkpoint.py     # Verify + package the editor in one command

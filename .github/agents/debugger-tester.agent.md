@@ -1,5 +1,5 @@
 ---
-description: "Debugs failures, writes/runs tests (pytest, vitest/jest), investigates stack traces, and validates fixes for the AI-Graph backend, graph-runner, or frontend."
+description: "Debugs failures, writes/runs tests (pytest, vitest/jest), investigates stack traces, and validates fixes for the AI-Graph engine, server, or editor."
 name: "Debugger-Tester"
 tools: [read, edit, search, execute, testFailure, agent]
 agents: [Cheap-Debugger]

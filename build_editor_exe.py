@@ -47,7 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 BACKEND_DIR = REPO_ROOT / "backend"
 FRONTEND_DIR = REPO_ROOT / "frontend"
 FRONTEND_DIST = FRONTEND_DIR / "dist"
-RUNNER_DIR = REPO_ROOT / "graph-runner"
+RUNNER_DIR = REPO_ROOT / "packaging"
 
 # The same module a deploy bundle's own build_exe.py uses, from the same file:
 # an editor executable and a tool built out of one ship their interpreter the

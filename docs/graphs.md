@@ -79,13 +79,9 @@ file.
 If a file changed outside while the editor was open, saving refuses rather than
 overwriting it, and the toolbar's ↻ takes the outside changes instead.
 
-**Packages.** Only the standard library is available until a node says otherwise. List what
-it needs in the node editor (`pandas>=2.0`, one per line) and press **Install**. They go
-into one environment — `~/.ai-graph/code-env`, or `AI_GRAPH_CODE_ENV` — shared by the
-editor, a built executable and a deploy bundle, so a graph that runs in one runs in the
-others. What you declare is written into a bundle's `requirements.txt`; installing it
-there is `python main.py --install-requirements`. Nothing is installed as a side effect of
-running a graph: a missing package is reported by name before the node runs.
+**Packages.** A code node runs against the standard library of its language and nothing
+else. There is no install step and nothing is fetched while a graph runs, which is what
+keeps a bundle runnable on a machine that was handed nothing but the bundle.
 
 ---
 

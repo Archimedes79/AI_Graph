@@ -40,6 +40,9 @@ export interface CliOptions {
   bundle?: string;
   /** Serve this graph's page instead of running it once. */
   serve?: boolean;
+  /** Serve the built editor from this folder, forwarding unowned routes to `api`. */
+  editor?: string;
+  api?: string;
   port?: number;
 }
 
@@ -76,6 +79,10 @@ export function parseArgs(argv: string[]): CliOptions {
       options.serve = true;
     } else if (arg === '--port') {
       options.port = Number(argv[++i]);
+    } else if (arg === '--editor') {
+      options.editor = argv[++i] ?? 'frontend/dist';
+    } else if (arg === '--api') {
+      options.api = argv[++i] ?? '';
     } else if (!options.graphPath) {
       options.graphPath = arg;
     }
@@ -193,11 +200,14 @@ export async function runServer(options: CliOptions): Promise<number> {
     ...(hasGraph ? { graphPath: options.graphPath } : {}),
     pageDir: existsSync(join(pageDir, 'runtime.html')) ? pageDir : undefined,
     port: options.port ?? 8000,
+    ...(options.editor
+      ? { editor: { dist: resolve(options.editor), api: options.api || 'http://127.0.0.1:8001' } }
+      : {}),
   });
   process.stderr.write(`Serving on ${url}\n`);
-  // Opening a browser is for a tool someone was handed, not for a helper the
-  // editor started.
-  if (hasGraph) await open(url);
+  // Opening a browser is for something a person starts -- a tool they were
+  // handed, or the editor -- not for a helper another process started.
+  if (hasGraph || options.editor) await open(url);
   // Nothing to await: the server holds the process open until it is stopped.
   return new Promise(() => {});
 }
@@ -216,6 +226,6 @@ async function open(url: string): Promise<void> {
 export async function main(argv: string[]): Promise<number> {
   const options = parseArgs(argv);
   if (options.bundle) return makeBundle(options);
-  if (options.serve) return runServer(options);
+  if (options.serve || options.editor) return runServer(options);
   return options.every ? runEvery(options) : runOnce(options);
 }

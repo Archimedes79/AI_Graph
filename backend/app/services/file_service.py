@@ -96,7 +96,7 @@ def browse_directory(path: str = "", extensions: Optional[List[str]] = None) -> 
     `<input type="file">` only ever reveals a file's name -- so a picker has to
     browse the machine the graph will actually run on, not the one the UI is
     displayed on. Callers decide whether offering it is appropriate (see
-    graph-runner/serve.py, which only exposes it on a loopback bind).
+    engine/src/host/serve.ts, which only exposes it on a loopback bind).
 
     An empty *path* starts at the user's home directory. Entries that cannot be
     read are skipped rather than failing the whole listing, since one
