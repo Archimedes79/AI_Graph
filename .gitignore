@@ -41,12 +41,9 @@ Thumbs.db
 .dockerignore
 
 # Data
+# Attachments and other things a running editor keeps beside the project.
 data/
-!backend/app/elements/data/
-!backend/app/elements/data/**
-backend/app/elements/data/__pycache__/
-!frontend/src/elements/data/
-!frontend/src/elements/data/**
+!engine/src/elements/data/
 *.log
 
 # Packaged editor deploy artifact (built by start.py --mode package)

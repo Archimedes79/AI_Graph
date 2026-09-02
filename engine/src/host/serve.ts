@@ -21,6 +21,12 @@ import { registry } from '../registry.ts';
 import { authoredIn, generations } from '../describe.ts';
 import type { SettingsPatch } from './editor/settings.ts';
 import type * as ProjectModule from './editor/project.ts';
+import type * as GenerateModule from './editor/generate.ts';
+import { writeBundle } from '../bundle.ts';
+import { mkdtemp, rm, readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { applyRuntimeValues, runtimeRequirements } from '../runtimeValues.ts';
 import { nodeFiles, nodeRuntime } from './node.ts';
 
@@ -95,7 +101,7 @@ export interface ServeOptions {
 }
 
 /** In editor mode, the routes the engine answers itself; the rest is forwarded. */
-const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements|files|graphs)\/|^\/api\/ai\/(settings|providers)$/;
+const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements|files|graphs|deploy)\/|^\/api\/ai\/(settings|providers|generate|generate-graph)$/;
 
 export async function serve(options: ServeOptions): Promise<{ server: Server; url: string }> {
   const host = options.host ?? '127.0.0.1';
@@ -112,6 +118,8 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       files: await import('./editor/files.ts'),
       settings: await import('./editor/settings.ts'),
       project: await import('./editor/project.ts'),
+      generate: await import('./editor/generate.ts'),
+      zip: await import('./editor/zip.ts'),
     }
     : null;
 
@@ -197,6 +205,48 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     const projectRoute = /^\/api\/graphs\/file\/(load|save|reload-nodes)$/.exec(path);
     if (options.editor && projectRoute && request.method === 'POST') {
       return projectRequest(response, editor!.project, projectRoute[1], await body(request) as { path?: string; graph?: unknown });
+    }
+
+    if (options.editor && path === '/api/ai/generate' && request.method === 'POST') {
+      return generateRequest(response, editor!.generate, editor!.settings, await body(request) as GenerateModule.GenerateRequest & { ai_provider?: string; ai_model?: string });
+    }
+
+    if (options.editor && path === '/api/ai/generate-graph' && request.method === 'POST') {
+      const asked = await body(request) as { description?: string; context?: string; ai_provider?: string; ai_model?: string };
+      const target = await editor!.settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? '');
+      try {
+        const { graph, explanation } = await editor!.generate.generateGraph(asked.description ?? '', asked.context ?? '', { ai: nodeRuntime().ai, target });
+        return send(response, 200, { graph: parseGraph(graph), explanation });
+      } catch (error) {
+        const calls = error instanceof editor!.generate.GenerationFailed ? error.calls : [];
+        return send(response, 500, { detail: message(error), calls });
+      }
+    }
+
+    if (options.editor && path === '/api/deploy/bundle' && request.method === 'POST') {
+      const graph = parseGraph(await body(request));
+      const work = await mkdtemp(join(tmpdir(), 'ai-graph-bundle-'));
+      try {
+        // The built page, when this checkout has one -- looked up the way the
+        // CLI looks it up, so a bundle from the editor is the bundle from `--bundle`.
+        const built = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', 'frontend', 'dist');
+        const pageDir = existsSync(join(built, 'runtime.html')) ? built : undefined;
+        await writeBundle(graph, work, { pageDir });
+        const entries = [];
+        for (const file of await allFiles(work)) {
+          entries.push({ path: file.slice(work.length + 1), content: await readFile(file) });
+        }
+        const name = (graph.metadata.name || 'graph').replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '') || 'graph';
+        response.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="${name}_bundle.zip"`,
+        });
+        return void response.end(editor!.zip.zip(entries));
+      } catch (error) {
+        return send(response, 500, { detail: `The engine could not write the bundle: ${message(error)}` });
+      } finally {
+        await rm(work, { recursive: true, force: true });
+      }
     }
 
     if (options.editor && path === '/api/ai/settings' && request.method === 'GET') {
@@ -401,6 +451,48 @@ async function projectRequest(
     if (error instanceof project.FileChanged) return send(response, 409, { detail: error.message });
     return send(response, 400, { detail: `Could not ${action} graph file: ${message(error)}` });
   }
+}
+
+/**
+ * One element's body, written by the model the editor named.
+ *
+ * The element's declaration comes from the registry, the model from the
+ * settings layer, the sandbox from this machine -- the same three the graph
+ * runs with, which is what keeps a generated body runnable by the run.
+ */
+async function generateRequest(
+  response: ServerResponse,
+  gen: typeof GenerateModule,
+  settings: { generationTarget: (provider: string, model: string) => Promise<{ provider: string; model: string }> },
+  asked: GenerateModule.GenerateRequest & { ai_provider?: string; ai_model?: string },
+): Promise<void> {
+  const target = await settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? '');
+  const runtime = nodeRuntime();
+  try {
+    const reply = await gen.generate(asked, {
+      ai: runtime.ai,
+      code: runtime.code,
+      generationFor: (name) => registry.node(name)?.generation() ?? registry.widget(name)?.generation(),
+      target,
+    });
+    return send(response, 200, reply);
+  } catch (error) {
+    if (error instanceof gen.GenerationRefused) return send(response, 400, { detail: error.message });
+    // The failing generation is the one whose transcript is worth reading, so
+    // it travels with the error in the same shape a success has.
+    const calls = error instanceof gen.GenerationFailed ? error.calls : [];
+    return send(response, 500, { detail: message(error), calls });
+  }
+}
+
+async function allFiles(dir: string): Promise<string[]> {
+  const found: string[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...await allFiles(full));
+    else found.push(full);
+  }
+  return found.sort();
 }
 
 /** `~/x` as the person meant it: their home, not a folder called `~`. */
