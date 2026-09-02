@@ -12,8 +12,8 @@ import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
 import { nodeLogic } from '../elements/shared/logic';
 import GenerationTranscript, { GenerationReport } from '../elements/shared/GenerationTranscript';
-import WidgetOutputSummary from '../elements/gui/WidgetOutputSummary';
-import { connectedOutputDataNodes } from '../elements/data/dataElement';
+import WidgetOutputSummary from '@engine/elements/gui/editor/WidgetOutputSummary';
+import { connectedOutputDataNodes } from '@engine/elements/data/editor/definition';
 import { ACCENT, ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT } from '../ui/theme';
 
 interface NodeEditorProps {
@@ -117,6 +117,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // the generated function against them and repairs it once if it fails.
       sampleInputs: lastRunInputs(node.id, executionResult),
       inputSources: inputSources(node.id, graphNodes, graphEdges),
+      recordMeasuredOutput: true,
     }));
   };
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2,
+  ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2, Wand2,
 } from 'lucide-react';
 import ToolbarButton, { ToolbarSeparator } from './ToolbarButton';
 import { useGraphStore } from '../store/graphStore';
@@ -10,6 +10,7 @@ import type { Graph, RuntimeRequirement } from '../types/graph';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { genAI } from '../store/settingsStore';
 import GraphWindows from './GraphWindows';
+import { useGraphSweep } from '../services/useGraphSweep';
 import Modal from './Modal';
 import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
@@ -52,6 +53,7 @@ export default function Toolbar({
   currentFilePath, saveStatus, onShowInterface,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
+  const sweep = useGraphSweep();
   // Subscribed to so the toolbar re-renders when the graph changes and the
   // "✅ Saved" line below can stop claiming something that is no longer true.
   const rfNodes = useGraphStore((s) => s.rfNodes);
@@ -300,6 +302,22 @@ export default function Toolbar({
 
         <ToolbarButton icon={ClipboardCopy} title="Copy or paste the graph as JSON" onClick={onInjectJson} />
         <ToolbarButton icon={Sparkles} label="AI Graph" title="Describe a graph and let the AI build it" onClick={handleOpenAiGraph} />
+        {/* Front to back through the graph: each node is generated against what
+            the node before it turned out to return, so only the first one is
+            written against a description rather than against data. */}
+        <ToolbarButton
+          icon={Wand2}
+          label={sweep.busy ? 'Stop' : 'Generate'}
+          title={sweep.busy
+            ? 'Stop after the node in flight'
+            : 'Write every empty node, in the order the graph runs'}
+          onClick={sweep.busy ? sweep.stop : sweep.run}
+        />
+        {sweep.message && (
+          <span className="text-xs truncate max-w-md" style={{ color: MUTED }} title={sweep.message}>
+            {sweep.message}
+          </span>
+        )}
 
         <ToolbarSeparator />
 
