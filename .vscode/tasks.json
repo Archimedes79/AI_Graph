@@ -1,0 +1,44 @@
+{
+  // The same commands package.json holds, so a task and a terminal never
+  // disagree about how this project starts.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "start the editor",
+      "type": "npm",
+      "script": "start",
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      // Engine on :8000 and Vite on :3000, so an edit to the editor shows on
+      // save. The page to open is the Vite one.
+      "label": "develop the editor",
+      "type": "npm",
+      "script": "dev",
+      "problemMatcher": [],
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "build the editor page",
+      "type": "npm",
+      "script": "build",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "test",
+      "type": "npm",
+      "script": "test",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "typecheck",
+      "type": "npm",
+      "script": "typecheck",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$tsc"]
+    }
+  ]
+}

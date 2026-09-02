@@ -28,6 +28,16 @@ npm start         # http://127.0.0.1:8000, opened in your browser
 `npm start` is one process: the engine, serving the built page and answering the
 editor's requests. It listens on loopback only.
 
+## In VS Code
+
+F5 starts the editor with the debugger attached, so a breakpoint in an element's
+`execute()` is hit while a graph runs. Four configurations: the editor on :8000, the
+same with the page rebuilt first, one graph run without a browser anywhere, and the
+test file the cursor is in.
+
+The tasks under Terminal -> Run Task are the npm scripts, so a task and a terminal
+never disagree about how this project starts.
+
 ## Working on the editor
 
 ```bash

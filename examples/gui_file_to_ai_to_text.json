@@ -160,7 +160,7 @@
       "label": "Summarize File",
       "description": "Summarizes the content of the chosen file",
       "position": {
-        "x": 560,
+        "x": 900,
         "y": 200
       },
       "inputs": [

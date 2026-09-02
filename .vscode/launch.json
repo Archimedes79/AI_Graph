@@ -1,0 +1,50 @@
+{
+  // Node 24 runs the engine's TypeScript directly, so a debug session needs no
+  // build step and no loader -- the program below is the source that runs.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "AI-Graph: editor on :8000",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/engine/src/main.ts",
+      "args": ["--editor", "editor/dist", "--port", "8000"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "AI-Graph: editor, page rebuilt first",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/engine/src/main.ts",
+      "args": ["--editor", "editor/dist", "--port", "8000"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build the editor page",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // Breakpoints in an element's execute() are hit here without a browser
+      // anywhere in the picture.
+      "name": "AI-Graph: run one graph",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/engine/src/main.ts",
+      "args": ["examples/bla_counter.json"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "AI-Graph: the test the cursor is in",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["run", "${relativeFile}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}
