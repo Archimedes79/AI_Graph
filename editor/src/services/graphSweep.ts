@@ -48,7 +48,8 @@ export interface SweepStep {
  */
 export interface SweepUnit<T = unknown> {
   guard?: () => string | undefined;
-  run: () => Promise<T>;
+  /** Takes the id a watcher would poll; a sweep passes none and nobody watches. */
+  run: (progressId?: string) => Promise<T>;
   apply: (result: T) => void;
 }
 

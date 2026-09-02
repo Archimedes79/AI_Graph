@@ -104,6 +104,15 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
   const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
   const allowBrowse = (options.allowBrowse ?? true) && loopback;
   const runs = new Map<string, Run>();
+  /**
+   * Transcripts of generations still in flight, by the id the editor sent.
+   *
+   * A generation is several model calls over a minute or more and shows
+   * nothing until it returns. The array here is the one `generate` is writing
+   * into, so a poll sees the prompt, the context and each step as they happen.
+   * Dropped when the generation ends -- the reply carries the final transcript.
+   */
+  const generating = new Map<string, GenerateModule.AICall[]>();
 
   // The editor's own routes are loaded only when this is the editor. A bundle
   // vendors this file without the `editor/` folder beside it, and a static
@@ -200,7 +209,16 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     }
 
     if (options.editor && path === '/api/ai/generate' && request.method === 'POST') {
-      return generateRequest(response, editor!.generate, editor!.settings, await body(request) as GenerateModule.GenerateRequest & { ai_provider?: string; ai_model?: string });
+      const asked = await body(request) as GenerateModule.GenerateRequest
+        & { ai_provider?: string; ai_model?: string; progress_id?: string };
+      return generateRequest(response, editor!.generate, editor!.settings, asked, generating);
+    }
+
+    // What the generation with this id has sent and received so far. Empty
+    // until the first call goes out, and gone once the generation returns.
+    if (options.editor && path === '/api/ai/generate/progress' && request.method === 'GET') {
+      const id = url.searchParams.get('id') ?? '';
+      return send(response, 200, { calls: generating.get(id) ?? [], done: !generating.has(id) });
     }
 
     if (options.editor && path === '/api/ai/generate-graph' && request.method === 'POST') {
@@ -430,24 +448,33 @@ async function generateRequest(
   response: ServerResponse,
   gen: typeof GenerateModule,
   settings: { generationTarget: (provider: string, model: string) => Promise<{ provider: string; model: string }> },
-  asked: GenerateModule.GenerateRequest & { ai_provider?: string; ai_model?: string },
+  asked: GenerateModule.GenerateRequest & { ai_provider?: string; ai_model?: string; progress_id?: string },
+  watching?: Map<string, GenerateModule.AICall[]>,
 ): Promise<void> {
   const target = await settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? '');
   const runtime = nodeRuntime();
+  // Registered before the first call, so a poll that arrives early sees an
+  // empty transcript rather than a 'not found' it would have to interpret.
+  const calls: GenerateModule.AICall[] = [];
+  const id = asked.progress_id;
+  if (id && watching) watching.set(id, calls);
   try {
     const reply = await gen.generate(asked, {
       ai: runtime.ai,
       code: runtime.code,
       generationFor: (name) => registry.node(name)?.generation() ?? registry.widget(name)?.generation(),
       target,
+      calls,
     });
     return send(response, 200, reply);
   } catch (error) {
     if (error instanceof gen.GenerationRefused) return send(response, 400, { detail: error.message });
     // The failing generation is the one whose transcript is worth reading, so
     // it travels with the error in the same shape a success has.
-    const calls = error instanceof gen.GenerationFailed ? error.calls : [];
-    return send(response, 500, { detail: message(error), calls });
+    const failed = error instanceof gen.GenerationFailed ? error.calls : calls;
+    return send(response, 500, { detail: message(error), calls: failed });
+  } finally {
+    if (id && watching) watching.delete(id);
   }
 }
 

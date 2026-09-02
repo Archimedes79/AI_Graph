@@ -358,6 +358,15 @@ export interface GenerateDeps {
   /** The element's declaration, or undefined for a name that generates nothing. */
   generationFor: (element: string) => Generation | undefined;
   target: Target;
+  /**
+   * Where to write the transcript, if somebody is watching it.
+   *
+   * A generation is several calls -- write, probe, repair -- over a minute or
+   * more, and until it returns there is nothing to see. Handing the array in
+   * lets a caller read it while it fills, which is what the editor polls to
+   * show the prompt, the context and each step as they happen.
+   */
+  calls?: AICall[];
 }
 
 /**
@@ -370,7 +379,7 @@ export interface GenerateDeps {
  * node's sample, which is keyed by ports it does not have.
  */
 export async function generate(request: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
-  const calls: AICall[] = [];
+  const calls: AICall[] = deps.calls ?? [];
   const ai = recording(deps.ai, calls);
   const spec = request.element ? deps.generationFor(request.element) : undefined;
   if (request.element && !spec) throw new GenerationRefused(`'${request.element}' is not an element that generates anything`);

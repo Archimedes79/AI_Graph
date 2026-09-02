@@ -216,7 +216,7 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
     pending: 'Generating…',
     success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!'),
     failure: 'Generation failed',
-    run: () => generate({
+    run: (progressId?: string) => generate({
       element: request.element,
       description: prompt,
       context,
@@ -226,6 +226,8 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
       sample_inputs: request.sampleInputs,
       input_sources: request.inputSources,
       ...genAI(),
+      // Only a single ✨ button passes one; a sweep runs unattended.
+      ...(progressId ? { progress_id: progressId } : {}),
     }),
     apply: (result) => {
       fields.set(spec.targetField, result.result);

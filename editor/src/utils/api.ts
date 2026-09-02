@@ -97,7 +97,13 @@ export const generate = (body: {
   input_sources?: Record<string, string>;
   ai_model?: string;
   ai_provider?: string;
+  /** Lets the editor watch this generation's transcript while it runs. */
+  progress_id?: string;
 }): Promise<GenerationResult> => api.post('/ai/generate', body).then((r) => r.data);
+
+/** What the generation with this id has sent and received so far. */
+export const getGenerationProgress = (id: string): Promise<{ calls: AICall[]; done: boolean }> =>
+  api.get('/ai/generate/progress', { params: { id } }).then((r) => r.data);
 
 export const generateGraph = (body: {
   description: string;

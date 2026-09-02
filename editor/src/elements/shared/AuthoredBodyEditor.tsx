@@ -1,6 +1,7 @@
 import React from 'react';
 import ContextFileAttachment from './ContextFileAttachment';
-import GenerationTranscript from './GenerationTranscript';
+import GenerationTranscript, { useLiveGeneration } from './GenerationTranscript';
+import LiveGeneration from './LiveGeneration';
 import type { ElementGeneration, FieldAccess } from './generation';
 import { ACCENT_FILL, ACCENT_TEXT, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
 
@@ -38,6 +39,10 @@ export default function AuthoredBodyEditor({
   generation, fields, exampleFile, onExampleFileChange,
   generating, message, onGenerate, onSurface, children, bodyHidden,
 }: Props) {
+  // From context, not a prop: the path here runs through eight element editors
+  // that would do nothing with it but pass it on -- the same reason the
+  // transcript is a context.
+  const liveCalls = useLiveGeneration();
   const field = onSurface ? FIELD_ON_SURFACE : FIELD;
   const mono = generation.mono;
 
@@ -81,14 +86,18 @@ export default function AuthoredBodyEditor({
               </button>
             </div>
           </div>
-          <textarea
-            className={`w-full rounded-lg px-3 py-2 text-sm resize-none${mono ? ' font-mono' : ''}`}
-            style={{ ...field, minHeight: generation.bodyHeight ?? 160 }}
-            value={fields.get(generation.targetField)}
-            onChange={(e) => fields.set(generation.targetField, e.target.value)}
-            placeholder={generation.bodyPlaceholder}
-            spellCheck={!mono}
-          />
+          {generating ? (
+            <LiveGeneration calls={liveCalls} minHeight={generation.bodyHeight ?? 160} />
+          ) : (
+            <textarea
+              className={`w-full rounded-lg px-3 py-2 text-sm resize-none${mono ? ' font-mono' : ''}`}
+              style={{ ...field, minHeight: generation.bodyHeight ?? 160 }}
+              value={fields.get(generation.targetField)}
+              onChange={(e) => fields.set(generation.targetField, e.target.value)}
+              placeholder={generation.bodyPlaceholder}
+              spellCheck={!mono}
+            />
+          )}
           {message && (
             <div className="text-xs mt-2 px-2 py-1.5 rounded" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>
               {message}

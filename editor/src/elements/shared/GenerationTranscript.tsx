@@ -4,6 +4,13 @@ import { ACCENT_TEXT, DIMMER, LINE, MUTED, SUNKEN, TEXT } from '../../ui/theme';
 
 const NOTHING: AICall[] = [];
 const Transcript = createContext<AICall[]>(NOTHING);
+/** The same, for a generation still running. Empty whenever none is. */
+const Live = createContext<AICall[]>(NOTHING);
+
+/** What the generation running right now has sent so far. */
+export function useLiveGeneration(): AICall[] {
+  return useContext(Live);
+}
 
 /**
  * Hand the transcript of one ✨ button to whatever draws that button's result.
@@ -15,9 +22,13 @@ const Transcript = createContext<AICall[]>(NOTHING);
  * see AuthoredBodyEditor.
  */
 export function GenerationReport(
-  { calls, children }: { calls: AICall[]; children: React.ReactNode },
+  { calls, live = NOTHING, children }: { calls: AICall[]; live?: AICall[]; children: React.ReactNode },
 ) {
-  return <Transcript.Provider value={calls}>{children}</Transcript.Provider>;
+  return (
+    <Transcript.Provider value={calls}>
+      <Live.Provider value={live}>{children}</Live.Provider>
+    </Transcript.Provider>
+  );
 }
 
 /**

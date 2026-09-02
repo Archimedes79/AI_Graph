@@ -238,7 +238,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
             </div>
           )}
 
-          <GenerationReport calls={generate.transcript()}>
+          <GenerationReport calls={generate.transcript()} live={generate.liveTranscript()}>
           <div className="space-y-4">
               {ConfigEditor && <ConfigEditor
                 node={node}

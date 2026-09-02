@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { errorText } from '../../utils/errorText';
-import type { AICall } from '../../utils/api';
+import { getGenerationProgress, type AICall } from '../../utils/api';
 
 export interface GenerateOptions<T> {
   /**
@@ -8,8 +8,11 @@ export interface GenerateOptions<T> {
    * or nothing to proceed.
    */
   guard?: () => string | undefined;
-  /** The API call. */
-  run: () => Promise<T>;
+  /**
+   * The API call. It is handed an id it can pass on as `progress_id`, which is
+   * what lets the transcript be read while it is still being written.
+   */
+  run: (progressId?: string) => Promise<T>;
   /** Write the result into the node/widget config. */
   apply: (result: T) => void;
   pending?: string;
@@ -41,6 +44,9 @@ export function useGenerate() {
   const [messages, setMessages] = useState<Record<string, string>>({});
   // What the last generation actually sent and got back, per button.
   const [transcripts, setTranscripts] = useState<Record<string, AICall[]>>({});
+  // The same thing while it is still happening, so the wait is not a blank box.
+  const [live, setLive] = useState<Record<string, AICall[]>>({});
+  const polling = useRef<Record<string, number>>({});
 
   const setMessage = useCallback((text: string, key = '') => {
     setMessages((prev) => ({ ...prev, [key]: text }));
@@ -54,8 +60,30 @@ export function useGenerate() {
     }
     setActiveKey(key);
     setMessage(options.pending ?? 'Generating…', key);
+
+    // A generation is several model calls over a minute or more. Asking every
+    // half second for what has gone out so far turns that wait into something
+    // a person can read and judge -- the prompt, the context, each step -- so
+    // a wrong answer can be understood rather than only re-rolled.
+    const progressId = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setLive((prev) => ({ ...prev, [key]: [] }));
+    polling.current[key] = window.setInterval(async () => {
+      try {
+        const { calls } = await getGenerationProgress(progressId);
+        if (calls.length) setLive((prev) => ({ ...prev, [key]: calls }));
+      } catch {
+        // A poll that fails changes nothing: the generation is what matters.
+      }
+    }, 500);
+
+    const stopPolling = () => {
+      window.clearInterval(polling.current[key]);
+      delete polling.current[key];
+      setLive((prev) => ({ ...prev, [key]: [] }));
+    };
+
     try {
-      const result = await options.run();
+      const result = await options.run(progressId);
       // Kept whether or not it worked out: a transcript is opened when
       // something went wrong, so the failing case is the one that needs it.
       const calls = (result as { calls?: AICall[] })?.calls;
@@ -67,6 +95,7 @@ export function useGenerate() {
       if (calls) setTranscripts((prev) => ({ ...prev, [key]: calls }));
       setMessage(`❌ ${errorText(error, options.failure ?? 'Generation failed')}`, key);
     } finally {
+      stopPolling();
       setActiveKey(null);
     }
   }, [setMessage]);
@@ -79,6 +108,8 @@ export function useGenerate() {
     message: (key = '') => messages[key] ?? '',
     /** Every model call the last generation on this button made. */
     transcript: (key = '') => transcripts[key] ?? [],
+    /** The calls of a generation still running on this button, as they arrive. */
+    liveTranscript: (key = '') => live[key] ?? [],
     setMessage,
     run,
   };

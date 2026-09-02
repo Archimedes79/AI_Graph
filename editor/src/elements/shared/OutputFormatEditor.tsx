@@ -129,7 +129,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
           {genMessage && (
             <div className="text-xs mt-1" style={{ color: MUTED }}>{genMessage}</div>
           )}
-          <GenerationReport calls={runGenerate.transcript()}>
+          <GenerationReport calls={runGenerate.transcript()} live={runGenerate.liveTranscript()}>
             <GenerationTranscript />
           </GenerationReport>
         </div>
