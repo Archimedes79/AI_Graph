@@ -57,3 +57,6 @@ ai-settings.json
 engine/node_modules/
 
 # A graph saved by a test run, not part of the project.
+
+# The downloadable package, built by scripts/package.mjs.
+ai-graph*.zip

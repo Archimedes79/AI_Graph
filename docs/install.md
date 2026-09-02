@@ -41,6 +41,21 @@ engine. Ctrl+C stops both.
 If :3000 is already taken, an earlier `npm run dev` is still running — stop that one
 first.
 
+## The download, without a checkout
+
+Every `vX.Y.Z` tag publishes a zip on the repository's releases page: the engine's
+source, the editor's built page and the examples. The engine has no runtime
+dependencies and Node runs its TypeScript unbuilt, so there is nothing to install and
+nothing to build:
+
+```bash
+unzip ai-graph-v0.1.0.zip && cd ai-graph-v0.1.0
+./run.sh          # run.cmd on Windows
+```
+
+Node 24 or newer is the whole requirement. `npm run package` builds the same zip from
+a checkout.
+
 ## In a container
 
 ```bash
