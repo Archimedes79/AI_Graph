@@ -23,6 +23,6 @@ describe('a button', () => {
     const element = new ButtonElement();
     const w = widget({ value: 2 });
     expect(element.ports(w)).toEqual({ inputs: [], outputs: [expect.objectContaining({ id: 'w_out', data_type: 'number' })] });
-    expect(await element.execute(w, {})).toEqual({ w_out: 2 });
+    expect(await element.execute(w)).toEqual({ w_out: 2 });
   });
 });

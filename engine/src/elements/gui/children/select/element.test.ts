@@ -31,6 +31,6 @@ describe('a dropdown', () => {
     const element = new SelectElement();
     const w = widget({ options: 'A\nB', value: 'B' });
     expect(element.ports(w)).toEqual({ inputs: [], outputs: [expect.objectContaining({ id: 'w_out', data_type: 'text' })] });
-    expect(await element.execute(w, {})).toEqual({ w_out: 'B' });
+    expect(await element.execute(w)).toEqual({ w_out: 'B' });
   });
 });

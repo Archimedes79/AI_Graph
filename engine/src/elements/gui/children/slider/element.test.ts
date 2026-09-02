@@ -27,6 +27,6 @@ describe('a slider', () => {
     const element = new SliderElement();
     const w = widget({ value: 42, min: 0, max: 100 });
     expect(element.ports(w).outputs[0]).toMatchObject({ id: 'w_out', data_type: 'number' });
-    expect(await element.execute(w, {})).toEqual({ w_out: 42 });
+    expect(await element.execute(w)).toEqual({ w_out: 42 });
   });
 });
