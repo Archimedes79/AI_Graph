@@ -30,32 +30,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
-@router.get("/providers")
-async def provider_status():
-    """
-    Which AI providers are actually usable right now: probes the local ones
-    (ollama, LM Studio) for reachability and served models -- so the editor
-    can offer a model dropdown instead of a blind free-text field -- and
-    reports what the current run/generation targets resolve to.
-    """
-    import asyncio
-
-    async def probe(provider: str):
-        return provider, await asyncio.to_thread(ai_settings.probe_local_models, provider, 1.5, True)
-
-    results = dict(await asyncio.gather(*(probe(p) for p in ai_settings.LOCAL_PROVIDERS)))
-    runtime_provider, runtime_model = ai_settings.resolve_target("default", "")
-    gen_provider, gen_model = ai_settings.resolve_gen_target("", "")
-    return {
-        "local": {
-            provider: {"reachable": models is not None, "models": models or []}
-            for provider, models in results.items()
-        },
-        "runtime_target": {"provider": runtime_provider, "model": runtime_model},
-        "gen_target": {"provider": gen_provider, "model": gen_model},
-    }
-
-
 def _gen_target(req) -> tuple[str, str]:
     """
     Which AI writes this code/prompt. The editor sends its one configured
@@ -128,105 +102,6 @@ async def _generated(name: str, coro):
     except Exception as exc:
         logger.exception("%s failed", name)
         raise HTTPException(500, str(exc)) from exc
-
-
-# Which settings key holds the endpoint / credential for each provider. Same
-# mapping the deployed runtime uses (engine/src/host/serve.ts) -- the editor was
-# the only surface that could pick a hosted provider without being able to
-# supply the key it needs.
-_ENDPOINT_KEYS = {
-    "ollama": "ollama_base_url",
-    "lmstudio": "lmstudio_base_url",
-    "openai_compatible": "openai_compatible_base_url",
-    "google": "google_base_url",
-    "github_copilot": "github_models_base_url",
-}
-_CREDENTIAL_KEYS = {
-    "openai": "openai",
-    "anthropic": "anthropic",
-    "openai_compatible": "openai_compatible",
-    "google": "google",
-    "github_copilot": "github",
-}
-# Env var that satisfies a provider's credential without the settings file, so
-# the UI can say "already configured" instead of demanding a key twice.
-_CREDENTIAL_ENV = {
-    "openai": "OPENAI_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "openai_compatible": "OPENAI_COMPATIBLE_API_KEY",
-    "google": "GOOGLE_API_KEY",
-    "github_copilot": "GITHUB_TOKEN",
-}
-
-
-def _credentials_state() -> dict:
-    """Per provider: whether a key is available, and where it came from -- never
-    the key itself. The editor only needs to know that it is set."""
-    stored = ai_settings.settings().get("api_keys") or {}
-    state = {}
-    for provider, key in _CREDENTIAL_KEYS.items():
-        from_env = bool(os.getenv(_CREDENTIAL_ENV[provider], "").strip())
-        from_file = bool(str(stored.get(key) or "").strip())
-        state[provider] = {
-            "configured": from_env or from_file,
-            "source": "environment" if from_env else "settings file" if from_file else "",
-        }
-    return state
-
-
-@router.get("/settings")
-async def read_ai_settings():
-    """Endpoints and credential *status* for the editor's Settings dialog.
-
-    API keys are deliberately never returned -- the dialog shows whether one is
-    set and lets you replace it, which is all it needs to do.
-    """
-    endpoints = ai_settings.settings().get("endpoints") or {}
-    return {
-        "settings_file": str(ai_settings.settings_path()),
-        "settings_file_exists": ai_settings.settings_path().is_file(),
-        "endpoint_keys": _ENDPOINT_KEYS,
-        "endpoints": {name: str(endpoints.get(key) or "") for name, key in _ENDPOINT_KEYS.items()},
-        "credentials": _credentials_state(),
-    }
-
-
-@router.post("/settings")
-async def write_ai_settings(body: Dict[str, Any]):
-    """Merge endpoints/API keys into the settings file.
-
-    Merging rather than replacing, and treating an empty string as "leave alone",
-    means saving one provider's key never clears another's -- and that a dialog
-    which cannot read keys back can still save without wiping them.
-    """
-    current = dict(ai_settings.settings())
-    endpoints = dict(current.get("endpoints") or {})
-    keys = dict(current.get("api_keys") or {})
-
-    for provider, value in (body.get("endpoints") or {}).items():
-        settings_key = _ENDPOINT_KEYS.get(provider)
-        if settings_key:
-            endpoints[settings_key] = str(value or "").strip()
-    for provider, value in (body.get("api_keys") or {}).items():
-        settings_key = _CREDENTIAL_KEYS.get(provider)
-        text = str(value or "").strip()
-        if settings_key and text:
-            keys[settings_key] = text
-
-    # An explicit clear is separate from "left blank", which means unchanged.
-    for provider in body.get("clear_keys") or []:
-        settings_key = _CREDENTIAL_KEYS.get(provider)
-        if settings_key:
-            keys.pop(settings_key, None)
-
-    current["endpoints"] = endpoints
-    current["api_keys"] = keys
-    try:
-        path = ai_settings.save(current)
-    except OSError as exc:
-        raise HTTPException(500, f"Could not write {ai_settings.settings_path()}: {exc}") from exc
-    return {"settings_file": str(path), "credentials": _credentials_state(),
-            "endpoints": {n: str(endpoints.get(k) or "") for n, k in _ENDPOINT_KEYS.items()}}
 
 
 # ---------------------------------------------------------------------------

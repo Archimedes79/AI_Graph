@@ -139,3 +139,41 @@ describe('executeGraph', () => {
     expect(store.config.data_value).toBe('fresh');
   });
 });
+
+describe('the AI default a graph carries', () => {
+  /** A runtime that remembers what it was asked to call. */
+  function listening() {
+    const calls: { provider?: string; model?: string }[] = [];
+    const runtime: Runtime = {
+      ...nowhere,
+      ai: { complete: async (request) => { calls.push({ provider: request.provider, model: request.model }); return 'ok'; } },
+    };
+    return { runtime, calls };
+  }
+
+  function graphWith(defaults: { provider: string; model: string }, nodeConfig: Record<string, unknown>): Graph {
+    return {
+      metadata: { name: 'g', version: '1', ai_defaults: defaults } as Graph['metadata'],
+      nodes: [node('a', 'ai', { system_prompt: 'be brief', ...nodeConfig })],
+      edges: [],
+    };
+  }
+
+  it('is what a node left on "default" calls', async () => {
+    const { runtime, calls } = listening();
+    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'default' }), { runtime, registry });
+    expect(calls).toEqual([{ provider: 'lmstudio', model: 'qwen' }]);
+  });
+
+  it('never overrides a node that named its own', async () => {
+    const { runtime, calls } = listening();
+    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'openai', ai_model: 'gpt-4o-mini' }), { runtime, registry });
+    expect(calls).toEqual([{ provider: 'openai', model: 'gpt-4o-mini' }]);
+  });
+
+  it('changes nothing when the graph names nothing', async () => {
+    const { runtime, calls } = listening();
+    await executeGraph(graphWith({ provider: 'default', model: '' }, { ai_provider: 'default' }), { runtime, registry });
+    expect(calls).toEqual([{ provider: 'default', model: '' }]);
+  });
+});

@@ -79,6 +79,33 @@ export function memoryFeedbackEdges(
   }
 }
 
+/**
+ * The graph's own runtime AI default, applied to every node that names none.
+ *
+ * `metadata.ai_defaults` is what "configure the AI once for this graph" saves,
+ * and the editor promises that an AI node left on "use the graph's default"
+ * follows it. It sits below anything the machine configured -- a settings file
+ * or an environment variable still wins, which is how one graph is moved to a
+ * different provider without editing it -- and above the provider layer's own
+ * fallback. A graph that names nothing changes nothing.
+ */
+function withGraphDefaults(runtime: Runtime, graph: Graph): Runtime {
+  const wanted = graph.metadata?.ai_defaults;
+  const provider = wanted?.provider && wanted.provider !== 'default' ? wanted.provider : '';
+  const model = wanted?.model ?? '';
+  if (!provider && !model) return runtime;
+  return {
+    ...runtime,
+    ai: {
+      complete: (request) => runtime.ai.complete({
+        ...request,
+        provider: request.provider && request.provider !== 'default' ? request.provider : (provider || request.provider),
+        model: request.model || model,
+      }),
+    },
+  };
+}
+
 /** Execution stages: everything in a stage waits only for earlier stages. */
 export function topologicalLevels(
   nodes: GraphNode[],
@@ -168,7 +195,8 @@ export interface RunOptions {
  * everywhere, not only where it stopped first.
  */
 export async function executeGraph(graph: Graph, options: RunOptions): Promise<ExecutionResult> {
-  const { runtime, registry } = options;
+  const { registry } = options;
+  const runtime = withGraphDefaults(options.runtime, graph);
   const { nodes, edges } = graph;
   const byId = new Map(nodes.map((n) => [n.id, n]));
 

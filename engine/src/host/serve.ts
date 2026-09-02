@@ -18,7 +18,7 @@ import { parseGraph, type ExecutionResult, type Graph } from '../graph.ts';
 import { executeGraph } from '../executor.ts';
 import { registry } from '../registry.ts';
 import { authoredIn, generations } from '../describe.ts';
-import * as editorFiles from './editor/files.ts';
+import type { SettingsPatch } from './editor/settings.ts';
 import { applyRuntimeValues, runtimeRequirements } from '../runtimeValues.ts';
 import { nodeFiles, nodeRuntime } from './node.ts';
 
@@ -93,13 +93,21 @@ export interface ServeOptions {
 }
 
 /** In editor mode, the routes the engine answers itself; the rest is forwarded. */
-const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements|files)\//;
+const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements|files)\/|^\/api\/ai\/(settings|providers)$/;
 
 export async function serve(options: ServeOptions): Promise<{ server: Server; url: string }> {
   const host = options.host ?? '127.0.0.1';
   const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
   const allowBrowse = (options.allowBrowse ?? true) && loopback;
   const runs = new Map<string, Run>();
+
+  // The editor's own routes are loaded only when this is the editor. A bundle
+  // vendors this file without the `editor/` folder beside it, and a static
+  // import would make every deployed tool fail to start for want of code it
+  // must not carry.
+  const editor = options.editor
+    ? { files: await import('./editor/files.ts'), settings: await import('./editor/settings.ts') }
+    : null;
 
   const original = options.graphPath
     ? parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')))
@@ -173,18 +181,34 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       // The editor walks into directories and jumps between drives; a deployed
       // page only picks a file, and lists nothing it would not need to.
       try {
-        const filter = editorFiles.extensionFilter(asked.extensions ?? '');
-        return send(response, 200, await editorFiles.browse(asked.path ?? '', filter));
+        const filter = editor!.files.extensionFilter(asked.extensions ?? '');
+        return send(response, 200, await editor!.files.browse(asked.path ?? '', filter));
       } catch (error) {
-        return send(response, error instanceof editorFiles.NotFound ? 404 : 400, { detail: message(error) });
+        return send(response, error instanceof editor!.files.NotFound ? 404 : 400, { detail: message(error) });
       }
+    }
+
+    if (options.editor && path === '/api/ai/settings' && request.method === 'GET') {
+      return send(response, 200, editor!.settings.status());
+    }
+
+    if (options.editor && path === '/api/ai/settings' && request.method === 'POST') {
+      try {
+        return send(response, 200, await editor!.settings.save(await body(request) as SettingsPatch));
+      } catch (error) {
+        return send(response, 500, { detail: `Could not write ${editor!.settings.settingsPath()}: ${message(error)}` });
+      }
+    }
+
+    if (options.editor && path === '/api/ai/providers') {
+      return send(response, 200, await editor!.settings.providerStatus());
     }
 
     if (options.editor && path === '/api/files/detect-format' && request.method === 'POST') {
       const asked = await body(request) as { path?: string };
       if (!asked.path) return send(response, 400, { detail: "Missing required field 'path'" });
       try {
-        return send(response, 200, { format: await editorFiles.detectFormat(asked.path) });
+        return send(response, 200, { format: await editor!.files.detectFormat(asked.path) });
       } catch (error) {
         return send(response, 404, { detail: message(error) });
       }
@@ -194,13 +218,13 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       // The file itself is the body; its name rides on the query. No multipart
       // to parse, and nothing about the upload a client could get wrong.
       const name = url.searchParams.get('name') ?? 'attachment';
-      const saved = await editorFiles.saveAttachment(name, await rawBody(request));
+      const saved = await editor!.files.saveAttachment(name, await rawBody(request));
       return send(response, 200, { path: saved, name });
     }
 
     if (options.editor && path === '/api/files/attachments' && request.method === 'DELETE') {
       try {
-        await editorFiles.deleteAttachment(url.searchParams.get('path') ?? '');
+        await editor!.files.deleteAttachment(url.searchParams.get('path') ?? '');
         return send(response, 200, { ok: true });
       } catch (error) {
         return send(response, 400, { detail: message(error) });

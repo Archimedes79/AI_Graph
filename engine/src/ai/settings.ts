@@ -46,32 +46,61 @@ export function candidatePaths(
   ])];
 }
 
-interface SettingsFile {
-  ai?: { provider?: string; model?: string };
+export interface SettingsFile {
+  ai?: { provider?: string; model?: string; force?: boolean };
+  codegen?: { provider?: string; model?: string };
   api_keys?: Record<string, string>;
+  /** Keyed by provider name: `endpoints.lmstudio`. */
   endpoints?: Record<string, string>;
 }
 
-/** The file's contents, or nothing. A malformed file is ignored, not fatal. */
+// The file once named endpoints by variable (`lmstudio_base_url`); the engine
+// names them by provider. A file written the old way is read as if written the
+// new way, and the next save writes it the new way.
+const OLD_ENDPOINT_KEYS: Record<string, string> = {
+  ollama_base_url: 'ollama',
+  lmstudio_base_url: 'lmstudio',
+  openai_compatible_base_url: 'openai_compatible',
+  google_base_url: 'google',
+  github_models_base_url: 'github_copilot',
+};
+
+/**
+ * One settings file, parsed. Missing is empty; malformed is empty too, because
+ * a file someone is halfway through editing should not stop a run that does
+ * not need a model at all.
+ */
+export function readSettingsFile(path: string): SettingsFile {
+  if (!existsSync(path)) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as SettingsFile;
+    const endpoints: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed.endpoints ?? {})) {
+      if (value) endpoints[OLD_ENDPOINT_KEYS[key] ?? key] = String(value);
+    }
+    return { ...parsed, endpoints };
+  } catch {
+    return {};
+  }
+}
+
+/** The first settings file that exists, as provider settings, or nothing. */
 export function fromFile(
   cwd = process.cwd(),
   env: Record<string, string | undefined> = process.env,
 ): Partial<ProviderSettings> {
   for (const path of candidatePaths(cwd, env)) {
     if (!existsSync(path)) continue;
-    try {
-      const parsed = JSON.parse(readFileSync(path, 'utf8')) as SettingsFile;
-      return {
-        ...(parsed.ai?.provider ? { provider: parsed.ai.provider } : {}),
-        ...(parsed.ai?.model ? { model: parsed.ai.model } : {}),
-        apiKeys: parsed.api_keys ?? {},
-        endpoints: parsed.endpoints ?? {},
-      };
-    } catch {
-      // A settings file someone is halfway through editing should not stop a
-      // run that does not need a model at all.
-      return {};
-    }
+    const parsed = readSettingsFile(path);
+    // Malformed reads as empty, and empty means "nothing configured here" --
+    // not "keys and endpoints, both blank", which would look configured.
+    if (Object.keys(parsed).length === 0) return {};
+    return {
+      ...(parsed.ai?.provider ? { provider: parsed.ai.provider } : {}),
+      ...(parsed.ai?.model ? { model: parsed.ai.model } : {}),
+      apiKeys: parsed.api_keys ?? {},
+      endpoints: parsed.endpoints ?? {},
+    };
   }
   return {};
 }
