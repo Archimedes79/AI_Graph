@@ -138,7 +138,17 @@ export async function save(patch: SettingsPatch, cwd = process.cwd(), env: Env =
 // Which model a request lands at
 // ---------------------------------------------------------------------------
 
-const probed = new Map<string, string[] | null>();
+/**
+ * Cached per provider, but only for a few seconds.
+ *
+ * It used to be cached for the life of the process, so swapping the loaded
+ * model in LM Studio was invisible until something asked with `refresh` --
+ * which only the status route does. A local probe is one request to a machine
+ * you are already talking to, so the cache is here to keep a burst of
+ * generate calls from making a burst of probes, nothing more.
+ */
+const probed = new Map<string, { models: string[] | null; at: number }>();
+const PROBE_TTL_MS = 5_000;
 
 /**
  * The models a local provider serves right now, or null when it is not there.
@@ -154,7 +164,8 @@ export async function probeLocal(
   { refresh = false, timeoutMs = 1500, cwd = process.cwd(), env = process.env as Env } = {},
 ): Promise<string[] | null> {
   if (!(LOCAL_PROVIDERS as readonly string[]).includes(provider)) return null;
-  if (!refresh && probed.has(provider)) return probed.get(provider)!;
+  const cached = probed.get(provider);
+  if (!refresh && cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.models;
 
   const base = (fromFile(cwd, env).endpoints?.[provider] ?? settingsFromEnv(env).endpoints?.[provider]
     ?? DEFAULT_SETTINGS.endpoints[provider]).replace(/\/+$/, '');
@@ -169,7 +180,7 @@ export async function probeLocal(
   } catch {
     // Not reachable is a normal answer here, not an error.
   }
-  probed.set(provider, models);
+  probed.set(provider, { models, at: Date.now() });
   return models;
 }
 
@@ -216,8 +227,16 @@ export async function generationTarget(
     || env.AI_GRAPH_GEN_PROVIDER || codegen.provider || '';
   const chosenModel = model || env.AI_GRAPH_GEN_MODEL || codegen.model || '';
   if (chosenProvider && chosenModel) return { provider: chosenProvider, model: chosenModel };
+
+  // A provider named without a model takes *its own* default. It used to take
+  // the runtime target's model, which is whichever local provider happens to be
+  // running -- so choosing Google in the editor and leaving the model blank
+  // sent Google an LM Studio model name, and Google replied
+  // `404: models/prism-ml/bonsai-27b is not found`.
+  if (chosenProvider) return { provider: chosenProvider, model: await defaultModelFor(chosenProvider, { cwd, env }) };
+
   const fallback = await runtimeTarget(cwd, env);
-  return { provider: chosenProvider || fallback.provider, model: chosenModel || fallback.model };
+  return { provider: fallback.provider, model: chosenModel || fallback.model };
 }
 
 export interface ProviderStatus {

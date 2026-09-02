@@ -96,3 +96,33 @@ describe('which AI writes the code', () => {
     expect(await generationTarget('default', '', '/nowhere', env)).toEqual({ provider: 'openai', model: 'gpt-4o-mini' });
   });
 });
+
+describe('a provider named without a model', () => {
+  /**
+   * The bug this pins down: choosing Google in the editor and leaving the model
+   * blank used to fall back to the *runtime* target for the model -- and that
+   * one is whichever local provider happens to be running. Google was then sent
+   * an LM Studio model name and answered
+   *
+   *   404: models/prism-ml/bonsai-27b is not found for API version v1main
+   *
+   * A model belongs to the provider it was chosen for, never to another.
+   */
+  it('gets that provider default model, not another provider whatever', async () => {
+    const { env } = await own({ ai: { provider: 'lmstudio', model: 'prism-ml/bonsai-27b' } });
+    expect(await generationTarget('google', '', '/nowhere', env))
+      .toEqual({ provider: 'google', model: 'gemini-flash-lite-latest' });
+  });
+
+  it('does the same for every hosted provider', async () => {
+    const { env } = await own({ ai: { provider: 'lmstudio', model: 'prism-ml/bonsai-27b' } });
+    expect((await generationTarget('anthropic', '', '/nowhere', env)).model).toBe('claude-opus-5');
+    expect((await generationTarget('openai', '', '/nowhere', env)).model).toBe('gpt-4o-mini');
+  });
+
+  it('still lets a model alone name the target, keeping the configured provider', async () => {
+    const { env } = await own({ ai: { provider: 'openai', model: 'gpt-4o-mini' } });
+    expect(await generationTarget('', 'gpt-5', '/nowhere', env))
+      .toEqual({ provider: 'openai', model: 'gpt-5' });
+  });
+});
