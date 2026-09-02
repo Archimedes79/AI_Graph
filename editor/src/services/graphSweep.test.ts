@@ -163,3 +163,31 @@ describe('what the next node is generated against', () => {
     expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'text')], new Map())).toBeUndefined();
   });
 });
+
+describe('a GUI file picker as a source', () => {
+  function guiWithPicker(value: string): GraphNode {
+    const source = node('g', 'gui');
+    source.config.gui_widgets = [
+      { id: 'w1', kind: 'input_picker', label: 'Pick', value, mode: 'file' } as never,
+    ];
+    return source;
+  }
+
+  it('is flagged like an unfed file input, when it has no default path', () => {
+    expect(missingExamples([guiWithPicker('')], []).map((n) => n.id)).toEqual(['g']);
+  });
+
+  it('is left alone once a default path is set', () => {
+    expect(missingExamples([guiWithPicker('/data/sample.csv')], [])).toEqual([]);
+  });
+
+  it('is flagged even when another block in the same node is wired', () => {
+    const source = guiWithPicker('');
+    const fed = node('b');
+    const edges = [{
+      id: 'e', source_node_id: 'a', source_port_id: 'out',
+      target_node_id: 'g', target_port_id: 'other_in',
+    } as GraphEdge];
+    expect(missingExamples([source, fed], edges).map((n) => n.id)).toEqual(['g']);
+  });
+});

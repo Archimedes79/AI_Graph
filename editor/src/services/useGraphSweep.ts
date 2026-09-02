@@ -45,7 +45,7 @@ export function useGraphSweep(): SweepState {
 
     const missing = missingExamples(nodesOf(), dslEdges());
     if (missing.length) {
-      setMessage(`❌ ${missing.map((n) => n.label || n.id).join(', ')}: attach an example file, or say what `
+      setMessage(`❌ ${missing.map((n) => n.label || n.id).join(', ')}: attach a default file, or say what `
         + 'the files contain. Without either, the first node is written against nothing and every node '
         + 'after it inherits the guess.');
       return;

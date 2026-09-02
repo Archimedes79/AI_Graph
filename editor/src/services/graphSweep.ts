@@ -147,12 +147,24 @@ export async function* sweep<T>(
 export function missingExamples(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
   const fed = new Set(edges.map((edge) => edge.target_node_id));
   return nodes.filter((node) => {
-    if (fed.has(node.id)) return false;
-    if (node.node_type !== 'input') return false;
-    const mode = String(node.config.input_mode ?? 'text');
-    if (mode === 'text') return false;                 // its value IS the example
-    return !String(node.config.example_file ?? '').trim()
-      && !String(node.config.output_format_prompt ?? '').trim();
+    if (node.node_type === 'input') {
+      if (fed.has(node.id)) return false;               // its path port is overridden from upstream
+      const mode = String(node.config.input_mode ?? 'text');
+      if (mode === 'text') return false;                // its value IS the example
+      return !String(node.config.example_file ?? '').trim()
+        && !String(node.config.output_format_prompt ?? '').trim();
+    }
+    if (node.node_type === 'gui') {
+      // A file-picker block is a source exactly like an input node in file or
+      // directory mode -- it has no input port at all, so nothing upstream can
+      // ever feed it, and nothing describes what it will hold until a person
+      // attaches a default path. Checked per widget, not gated on whether the
+      // *node* is fed: a gui node with an unfilled picker beside a fed text box
+      // is still a guess at the picker.
+      const widgets = Array.isArray(node.config.gui_widgets) ? node.config.gui_widgets : [];
+      return widgets.some((widget) => widget.kind === 'input_picker' && !String(widget.value ?? '').trim());
+    }
+    return false;
   });
 }
 
