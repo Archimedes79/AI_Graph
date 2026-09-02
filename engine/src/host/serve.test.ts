@@ -161,10 +161,10 @@ describe('the engine as the front door of the editor', () => {
 
   it('forwards a route it does not own yet, body and all', async () => {
     const url = await editor();
-    const reply = await asJson(await fetch(`${url}/api/graphs/file/load`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"path":"x"}',
+    const reply = await asJson(await fetch(`${url}/api/ai/generate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"element":"code"}',
     }));
-    expect(reply).toEqual({ path: '/api/graphs/file/load', method: 'POST', body: '{"path":"x"}' });
+    expect(reply).toEqual({ path: '/api/ai/generate', method: 'POST', body: '{"element":"code"}' });
   });
 
   it('answers what it owns itself, without asking anyone', async () => {

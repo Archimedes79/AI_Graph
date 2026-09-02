@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import ai, deploy, graph
+from app.routers import ai, deploy
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -43,7 +43,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(graph.router)
 app.include_router(ai.router)
 app.include_router(deploy.router)
 

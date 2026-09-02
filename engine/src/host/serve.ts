@@ -14,11 +14,13 @@
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import { homedir } from 'node:os';
 import { parseGraph, type ExecutionResult, type Graph } from '../graph.ts';
 import { executeGraph } from '../executor.ts';
 import { registry } from '../registry.ts';
 import { authoredIn, generations } from '../describe.ts';
 import type { SettingsPatch } from './editor/settings.ts';
+import type * as ProjectModule from './editor/project.ts';
 import { applyRuntimeValues, runtimeRequirements } from '../runtimeValues.ts';
 import { nodeFiles, nodeRuntime } from './node.ts';
 
@@ -93,7 +95,7 @@ export interface ServeOptions {
 }
 
 /** In editor mode, the routes the engine answers itself; the rest is forwarded. */
-const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements|files)\/|^\/api\/ai\/(settings|providers)$/;
+const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements|files|graphs)\/|^\/api\/ai\/(settings|providers)$/;
 
 export async function serve(options: ServeOptions): Promise<{ server: Server; url: string }> {
   const host = options.host ?? '127.0.0.1';
@@ -106,7 +108,11 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
   // import would make every deployed tool fail to start for want of code it
   // must not carry.
   const editor = options.editor
-    ? { files: await import('./editor/files.ts'), settings: await import('./editor/settings.ts') }
+    ? {
+      files: await import('./editor/files.ts'),
+      settings: await import('./editor/settings.ts'),
+      project: await import('./editor/project.ts'),
+    }
     : null;
 
   const original = options.graphPath
@@ -186,6 +192,11 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       } catch (error) {
         return send(response, error instanceof editor!.files.NotFound ? 404 : 400, { detail: message(error) });
       }
+    }
+
+    const projectRoute = /^\/api\/graphs\/file\/(load|save|reload-nodes)$/.exec(path);
+    if (options.editor && projectRoute && request.method === 'POST') {
+      return projectRequest(response, editor!.project, projectRoute[1], await body(request) as { path?: string; graph?: unknown });
     }
 
     if (options.editor && path === '/api/ai/settings' && request.method === 'GET') {
@@ -364,6 +375,39 @@ function forward(request: IncomingMessage, response: ServerResponse, api: string
     });
     request.pipe(upstream);
   });
+}
+
+/**
+ * The editor's Open, Save and Reload, with the project layer's refusals turned
+ * into the status codes the editor reads: a file that is not there, a file
+ * that is not a graph, and a node file changed outside since it was opened.
+ */
+async function projectRequest(
+  response: ServerResponse,
+  project: typeof ProjectModule,
+  action: string,
+  asked: { path?: string; graph?: unknown },
+): Promise<void> {
+  const path = resolve(expandHome(String(asked.path ?? '')));
+  if (!asked.path) return send(response, 400, { detail: "Missing required field 'path'" });
+  try {
+    const graph = action === 'save'
+      ? await project.save(path, project.asGraph(asked.graph))
+      : await project.load(path);
+    return send(response, 200, { path, graph });
+  } catch (error) {
+    if (error instanceof project.NotFound) return send(response, 404, { detail: error.message });
+    if (error instanceof project.NotAGraph) return send(response, 400, { detail: error.message });
+    if (error instanceof project.FileChanged) return send(response, 409, { detail: error.message });
+    return send(response, 400, { detail: `Could not ${action} graph file: ${message(error)}` });
+  }
+}
+
+/** `~/x` as the person meant it: their home, not a folder called `~`. */
+function expandHome(path: string): string {
+  if (path === '~') return homedir();
+  if (path.startsWith('~/') || path.startsWith(`~${String.fromCharCode(92)}`)) return join(homedir(), path.slice(2));
+  return path;
 }
 
 /** The request body as it came: an upload is bytes, not JSON. */
