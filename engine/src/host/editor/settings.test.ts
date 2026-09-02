@@ -42,11 +42,6 @@ describe('what the dialog sees', () => {
     expect(seen.credentials.anthropic).toEqual({ configured: true, source: 'environment' });
   });
 
-  it('reads a file written with the old endpoint names as if written with the new', async () => {
-    const { env } = await own({ endpoints: { lmstudio_base_url: 'http://old:1234/v1' } });
-    expect(status('/nowhere', env).endpoints.lmstudio).toBe('http://old:1234/v1');
-  });
-
   it('names the file it would create when none exists yet', async () => {
     const { file, env } = await own();
     expect(settingsPath('/nowhere', env)).toBe(file);
@@ -67,12 +62,11 @@ describe('what a save may change', () => {
     expect(readSettingsFile(file).api_keys).toEqual({ openai: 'keep-me' });
   });
 
-  it('writes endpoints under the provider name, migrating an old file on the way', async () => {
-    const { file, env } = await own({ endpoints: { ollama_base_url: 'http://old:11434' } });
+  it('writes endpoints under the provider name', async () => {
+    const { file, env } = await own({ endpoints: { ollama: 'http://old:11434' } });
     await save({ endpoints: { lmstudio: 'http://box:1234/v1' } }, '/nowhere', env);
     const raw = JSON.parse(await readFile(file, 'utf8'));
     expect(raw.endpoints).toEqual({ ollama: 'http://old:11434', lmstudio: 'http://box:1234/v1' });
-    expect(raw.endpoints.ollama_base_url).toBeUndefined();
   });
 
   it('creates the file, and its folder, on first save', async () => {

@@ -318,7 +318,7 @@ export function forgetAll(): void {
 // The three things the editor does with a project
 // ---------------------------------------------------------------------------
 
-/** Read the graph file, migrated, or say precisely why not. */
+/** Read the graph file, or say precisely why not. */
 async function readGraph(graphPath: string): Promise<Graph> {
   if (!existsSync(graphPath)) throw new NotFound(`File not found: ${graphPath}`);
   let raw: unknown;

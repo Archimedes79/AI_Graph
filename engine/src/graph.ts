@@ -11,7 +11,6 @@
 // Here the element owns its config type (see `element.ts`). This file knows a
 // config is an object; only the element knows what is in it.
 
-import { migrateGraph } from './migrate.ts';
 
 export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui';
 
@@ -123,9 +122,7 @@ const DEFAULT_METADATA: GraphMetadata = {
  */
 export function parseGraph(raw: unknown): Graph {
   if (!raw || typeof raw !== 'object') throw new Error('Not a graph: expected an object.');
-  // Brought to the current DSL first, so a file written by an earlier AI-Graph
-  // opens everywhere a graph is parsed -- not only in the editor.
-  const source = migrateGraph(raw) as Record<string, unknown>;
+  const source = raw as Record<string, unknown>;
   const nodes = Array.isArray(source.nodes) ? source.nodes : [];
   const edges = Array.isArray(source.edges) ? source.edges : [];
 

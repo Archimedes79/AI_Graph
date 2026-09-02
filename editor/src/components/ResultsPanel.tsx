@@ -45,12 +45,12 @@ export default function ResultsPanel() {
       </div>
 
       {/* Final outputs */}
-      {Object.keys(result.final_outputs).length > 0 && (
+      {Object.keys(result.outputs).length > 0 && (
         <div className="px-4 py-3 border-b" style={{ borderColor: LINE }}>
           <h3 className="text-xs font-medium mb-2" style={{ color: MUTED }}>
             Final Outputs
           </h3>
-          {Object.entries(result.final_outputs).map(([key, val]) => (
+          {Object.entries(result.outputs).map(([key, val]) => (
             <div key={key} className="mb-2">
               <span className="text-xs font-semibold" style={{ color: ACCENT_TEXT }}>{key}</span>
               <pre

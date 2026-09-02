@@ -54,17 +54,6 @@ export interface SettingsFile {
   endpoints?: Record<string, string>;
 }
 
-// The file once named endpoints by variable (`lmstudio_base_url`); the engine
-// names them by provider. A file written the old way is read as if written the
-// new way, and the next save writes it the new way.
-const OLD_ENDPOINT_KEYS: Record<string, string> = {
-  ollama_base_url: 'ollama',
-  lmstudio_base_url: 'lmstudio',
-  openai_compatible_base_url: 'openai_compatible',
-  google_base_url: 'google',
-  github_models_base_url: 'github_copilot',
-};
-
 /**
  * One settings file, parsed. Missing is empty; malformed is empty too, because
  * a file someone is halfway through editing should not stop a run that does
@@ -73,12 +62,7 @@ const OLD_ENDPOINT_KEYS: Record<string, string> = {
 export function readSettingsFile(path: string): SettingsFile {
   if (!existsSync(path)) return {};
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as SettingsFile;
-    const endpoints: Record<string, string> = {};
-    for (const [key, value] of Object.entries(parsed.endpoints ?? {})) {
-      if (value) endpoints[OLD_ENDPOINT_KEYS[key] ?? key] = String(value);
-    }
-    return { ...parsed, endpoints };
+    return JSON.parse(readFileSync(path, 'utf8')) as SettingsFile;
   } catch {
     return {};
   }

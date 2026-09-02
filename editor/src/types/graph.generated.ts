@@ -209,7 +209,7 @@ export interface NodePosition {
 export interface ExecutionResult {
   duration_ms?: number | null;
   error?: string | null;
-  final_outputs: {
+  outputs: {
     [k: string]: unknown;
   };
   graph_id?: string | null;

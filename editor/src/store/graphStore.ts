@@ -9,7 +9,6 @@ import { errorText } from '../utils/errorText';
 import { ACCENT } from '../ui/theme';
 import { delivered } from '../utils/executionStatus';
 import { NODE_ELEMENTS } from '../elements/registry';
-import { migrateNode } from '@engine/migrate.ts';
 
 type RFNode = Node<RFNodeData>;
 
@@ -215,10 +214,6 @@ function memoryFeedbackEdgeIds(nodes: GraphNode[], edges: GraphEdge[]): Set<stri
 }
 
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
-  // Raw JSON from a dropped or pasted file never passed through the engine's
-  // parseGraph, so it is brought to the current DSL here -- by the engine's
-  // own migration, not a copy of it.
-  rawNode = migrateNode(rawNode) as Partial<GraphNode>;
   const nodeType = rawNode.node_type ?? 'input';
   const nodeId = rawNode.id ?? newId(nodeType);
   const defaults = nodeTypeDefaults(nodeType, nodeId);
@@ -690,7 +685,7 @@ export const useGraphStore = create<GraphStore>()(
         const result: ExecutionResult = snapshot.result ?? {
           status: snapshot.cancelled ? 'cancelled' : 'error',
           node_results: [],
-          final_outputs: {},
+          outputs: {},
           error: snapshot.error ?? 'The run ended without a result.',
         };
         // setExecutionResult also settles memory-feedback values back into the
@@ -702,7 +697,7 @@ export const useGraphStore = create<GraphStore>()(
         setExecutionResult({
           status: 'error',
           node_results: [],
-          final_outputs: {},
+          outputs: {},
           error: errorText(error, 'Execution failed'),
         });
       } finally {

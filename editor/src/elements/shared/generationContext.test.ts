@@ -74,7 +74,7 @@ describe('lastRunContext', () => {
   const resultWith = (inputs: Record<string, unknown>): ExecutionResult => ({
     status: 'success',
     node_results: [{ node_id: 'worker', status: 'success', inputs, outputs: {} }],
-    final_outputs: {},
+    outputs: {},
   } as ExecutionResult);
 
   it('reports the values a node actually received', () => {
