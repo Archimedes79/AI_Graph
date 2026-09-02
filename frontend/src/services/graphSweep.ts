@@ -155,3 +155,35 @@ export function missingExamples(nodes: GraphNode[], edges: GraphEdge[]): GraphNo
       && !String(node.config.output_format_prompt ?? '').trim();
   });
 }
+
+/** An edge as ReactFlow holds it: which port feeds which. */
+export interface WiredEdge { source: string; sourceHandle?: string | null; target: string; targetHandle?: string | null }
+
+/**
+ * What *nodeId* would receive, assembled from what its predecessors returned
+ * when they were generated.
+ *
+ * This is the sweep's whole advantage over pressing the buttons one by one:
+ * the verify pass runs generated code against real values, and from the second
+ * node on there are real values to be had -- the ones the node before it just
+ * produced in its own verify pass -- without a run having happened. A port fed
+ * by several edges gets a list, as it would in a run; a port whose source
+ * produced nothing yet is left out, so a partial sample is still a sample.
+ */
+export function sampleFromPredecessors(
+  nodeId: string,
+  edges: WiredEdge[],
+  produced: Map<string, Record<string, unknown>>,
+): Record<string, unknown> | undefined {
+  const sample: Record<string, unknown[]> = {};
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue;
+    const outputs = produced.get(edge.source);
+    const port = edge.sourceHandle ?? 'output';
+    if (!outputs || !(port in outputs)) continue;
+    (sample[edge.targetHandle ?? 'input'] ??= []).push(outputs[port]);
+  }
+  const entries = Object.entries(sample);
+  if (!entries.length) return undefined;
+  return Object.fromEntries(entries.map(([port, values]) => [port, values.length === 1 ? values[0] : values]));
+}

@@ -14,7 +14,7 @@ import { buildGeneration, nodeFields } from '../elements/shared/generation';
 import {
   connectedFormatContext, inputSources, lastRunContext, lastRunInputs,
 } from '../elements/shared/generationContext';
-import { missingExamples, sweep, type SweepUnit } from './graphSweep';
+import { missingExamples, sampleFromPredecessors, sweep, type SweepUnit } from './graphSweep';
 
 export interface SweepState {
   run: () => Promise<void>;
@@ -51,6 +51,10 @@ export function useGraphSweep(): SweepState {
       return;
     }
 
+    // What each generated node returned in its verify pass, so the node after
+    // it is generated against real values even when the graph has never run.
+    const produced = new Map<string, Record<string, unknown>>();
+
     const unitFor = (node: GraphNode): SweepUnit<GenerationResult> | undefined => {
       const element = NODE_ELEMENTS[node.node_type];
       const spec = element?.generation;
@@ -76,7 +80,7 @@ export function useGraphSweep(): SweepState {
         (value) => useGraphStore.getState().updateNode(current.id, { description: value }),
       );
 
-      return buildGeneration({
+      const unit = buildGeneration({
         element: node.node_type,
         generation: spec,
         subject: current,
@@ -90,12 +94,20 @@ export function useGraphSweep(): SweepState {
           connectedFormatContext(current.id, nodesOf(), rfEdges()),
           lastRunContext(current.id, live().executionResult),
         ].filter(Boolean).join('\n\n'),
-        sampleInputs: lastRunInputs(current.id, live().executionResult),
+        sampleInputs: lastRunInputs(current.id, live().executionResult)
+          ?? sampleFromPredecessors(current.id, rfEdges(), produced),
         inputSources: inputSources(current.id, nodesOf(), rfEdges()),
         // What it turns out to return is written down as this node's contract,
         // which is what the next node is then generated against.
         recordMeasuredOutput: true,
       });
+      return {
+        ...unit,
+        apply: (result) => {
+          unit.apply(result);
+          if (result.probe?.outputs) produced.set(current.id, result.probe.outputs);
+        },
+      };
     };
 
     stopping.current = false;

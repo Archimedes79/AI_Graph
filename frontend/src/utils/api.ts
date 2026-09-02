@@ -39,6 +39,8 @@ export interface CodeProbeReport {
   error: string;
   missing_outputs: string[];
   output_preview: string;
+  /** What the code actually returned, whole: the next node's sample, not a peek at it. */
+  outputs?: Record<string, unknown>;
 }
 
 /**

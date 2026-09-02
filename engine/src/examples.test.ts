@@ -84,7 +84,8 @@ describe('the examples run', () => {
   }, 60_000);
 
   it('plotter: a picked file becomes chart points, and the loop closes', async () => {
-    const result = await run('plotter_interactive.json');
+    // The picker's stored default is repo-relative; a test does not run from the repo root.
+    const result = await run('plotter_interactive.json', { 'panel::picker': resolve(REPO, 'examples', 'bev_data.csv') });
     expect(result.status).toBe('success');
 
     // The code node was handed the file's *content*, not its path, and turned

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { generationOrder, missingExamples, sweep, type SweepStep, type SweepUnit } from './graphSweep';
+import { generationOrder, missingExamples, sampleFromPredecessors, sweep, type SweepStep, type SweepUnit } from './graphSweep';
 import { NODE_ELEMENTS } from '../elements/registry';
 import type { GraphEdge, GraphNode } from '../types/graph';
 
@@ -141,5 +141,25 @@ describe('what a sweep would have to guess at', () => {
     const fed = node('b');
     expect(missingExamples([source, fed], [edge('src', 'b')]).map((n) => n.id)).toEqual(['src']);
     expect(missingExamples([fed], [edge('src', 'b')])).toEqual([]);
+  });
+});
+
+describe('what the next node is generated against', () => {
+  const wire = (source: string, sourceHandle: string, target: string, targetHandle: string) => ({ source, sourceHandle, target, targetHandle });
+
+  it('is what the node before it returned, port by port', () => {
+    const produced = new Map([['a', { out: 'text from a', count: 3 }]]);
+    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'text'), wire('a', 'count', 'b', 'n')], produced))
+      .toEqual({ text: 'text from a', n: 3 });
+  });
+
+  it('collects several sources into a list, as a run would', () => {
+    const produced = new Map([['a', { out: 1 }], ['c', { out: 2 }]]);
+    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'items'), wire('c', 'out', 'b', 'items')], produced))
+      .toEqual({ items: [1, 2] });
+  });
+
+  it('is nothing at all when no predecessor has produced anything yet', () => {
+    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'text')], new Map())).toBeUndefined();
   });
 });

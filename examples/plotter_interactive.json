@@ -124,7 +124,7 @@
             "id": "picker",
             "kind": "input_picker",
             "label": "CSV",
-            "value": "D:\\Daten\\Dropbox\\Dokumente\\AI_Graph\\examples\\bev_data.csv",
+            "value": "examples/bev_data.csv",
             "extensions": "",
             "mode": "file",
             "recursive": false,

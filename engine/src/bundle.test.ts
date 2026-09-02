@@ -42,7 +42,8 @@ describe('a bundle', () => {
   it('runs the graph from somewhere else entirely', async () => {
     const dir = await bundleOf('plotter_interactive.json');
     try {
-      const { code, out } = await run(dir);
+      // The bundle runs from its own folder, where `examples/bev_data.csv` is not.
+      const { code, out } = await run(dir, ['--inputs', `panel::picker=${resolve(REPO, 'examples', 'bev_data.csv')}`]);
       expect(code).toBe(0);
       const result = JSON.parse(out);
       expect(result.status).toBe('success');

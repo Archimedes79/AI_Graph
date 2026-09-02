@@ -32,10 +32,11 @@ jobs:
       - name: Types
         run: npm run typecheck
 
-      - name: Tests
-        run: npm test
-
-      # The page a deployed tool carries is this build, copied; a bundle made
-      # from a checkout that cannot build has no page to carry.
+      # Before the tests: the bundle test asserts that a bundle carries the
+      # built page, so the page has to exist by then -- and a checkout that
+      # cannot build has no page to carry.
       - name: Build the editor
         run: npm run build
+
+      - name: Tests
+        run: npm test
