@@ -5,6 +5,7 @@
 //     node src/main.ts graph.json --every 5m           again, after each run
 //     node src/main.ts graph.json --bundle ./out       hand it to someone else
 //     node src/main.ts graph.json --serve             open its page in a browser
+//     node src/main.ts --editor frontend/dist          the editor itself, on :8000
 //
 // The same entry point a bundle uses, so what someone receives is the thing
 // that was tested rather than a second launcher written for them. It is also
@@ -40,9 +41,10 @@ export interface CliOptions {
   bundle?: string;
   /** Serve this graph's page instead of running it once. */
   serve?: boolean;
-  /** Serve the built editor from this folder, forwarding unowned routes to `api`. */
+  /** Serve the built editor from this folder. */
   editor?: string;
-  api?: string;
+  /** Bind address. Loopback unless said otherwise; see `serve` for what that switches off. */
+  host?: string;
   port?: number;
 }
 
@@ -81,8 +83,8 @@ export function parseArgs(argv: string[]): CliOptions {
       options.port = Number(argv[++i]);
     } else if (arg === '--editor') {
       options.editor = argv[++i] ?? 'frontend/dist';
-    } else if (arg === '--api') {
-      options.api = argv[++i] ?? '';
+    } else if (arg === '--host') {
+      options.host = argv[++i] ?? '';
     } else if (!options.graphPath) {
       options.graphPath = arg;
     }
@@ -200,9 +202,8 @@ export async function runServer(options: CliOptions): Promise<number> {
     ...(hasGraph ? { graphPath: options.graphPath } : {}),
     pageDir: existsSync(join(pageDir, 'runtime.html')) ? pageDir : undefined,
     port: options.port ?? 8000,
-    ...(options.editor
-      ? { editor: { dist: resolve(options.editor), api: options.api || 'http://127.0.0.1:8001' } }
-      : {}),
+    ...(options.editor ? { editor: { dist: resolve(options.editor) } } : {}),
+    ...(options.host ? { host: options.host } : {}),
   });
   process.stderr.write(`Serving on ${url}\n`);
   // Opening a browser is for something a person starts -- a tool they were
@@ -214,6 +215,9 @@ export async function runServer(options: CliOptions): Promise<number> {
 
 /** Show the tool, if this machine has something to show it in. */
 async function open(url: string): Promise<void> {
+  // For CI, a container, and a helper another process started: nothing to
+  // open a browser in, and the attempt is only noise.
+  if (process.env.AI_GRAPH_NO_BROWSER) return;
   const command = process.platform === 'win32' ? 'cmd' : process.platform === 'darwin' ? 'open' : 'xdg-open';
   const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
   try {

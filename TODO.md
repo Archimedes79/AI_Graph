@@ -6,61 +6,62 @@ commit that closes it.
 ## Decisions waiting on you
 
 - **`NodeConfig` is one flat type holding every element's fields** (`frontend/src/types/graph.generated.ts`,
-  generated from `backend/app/models/graph.py`). Adding a field to one element edits a
-  type every element imports. The engine already avoids this (`RawConfig` + each element
-  reads what it knows); the editor does not. To discuss.
+  once generated from a Python model, now hand-kept). Adding a field to one element edits
+  a type every element imports. The engine avoids this (`RawConfig` + each element reads
+  what it knows); the editor does not. To discuss.
 - **The `Element` base class is a wide interface** (`logic`, `generation`, `ports`,
   `execute`, `isMemory`, `hasInterface`, `deployNeeds`). What has worked is handing out
   small objects (`Logic`, `Generation`) rather than adding hooks. To discuss.
-- **Saving a graph starts Node.** Load/save ask the engine for element knowledge. On a
-  machine without Node a save now fails where it used to succeed. Keep, or have the
-  editor send the specs along?
+- **A single-file executable is gone with PyInstaller.** The editor is `npm start` on a
+  machine with Node. If a double-clickable file matters, the candidates are Node's
+  single-executable applications or a small installer that brings Node; neither is
+  started.
 - The sweep never rewrites a body that has one. Should there be a "rewrite all"?
 
 ## A · One tool, one tree
 
-- [x] Root npm workspace; one `package-lock.json`; CI installs once at the root.
-- [x] One element tree: each element's editor half lives in `engine/src/elements/<kind>/editor/`
-      (`definition.ts`, `Editor.tsx`), compiled by the editor only; the engine's tsconfig
-      and the bundle walk both skip `editor/`.
-- [x] The engine is the front door: `node engine/src/main.ts --editor frontend/dist --api …`
-      serves the editor on :8000 and forwards the routes it does not own yet to the Python
-      server on :8001 (`start.py` dev and prod). Owned natively: `/api/execute/*`, `/api/elements/*`.
-- [ ] Bring the remaining routes across, one at a time, deleting the Python side of each:
-      `/api/files/*` (browse/upload — the engine's browse lists files only; the editor's
-      dialog needs directories), `/api/runtime/ai-settings` (read **and write**),
-      `/api/graphs/file/*` (+ `node_files.py`, 371 lines), `/api/deploy/*`,
-      `/api/ai/*` (+ `ai_service.py` 973, `code_refine.py` 230, `skeleton.py` 138).
-- [ ] Then delete `backend/`, `start.py`'s second process, and the Python half of
-      `build_editor_exe.py` / `run_prod_frozen` (the exe still runs uvicorn in-process;
-      it is not flipped yet). `docker-compose.yml` and `backend/Dockerfile` likewise.
-- [ ] Then the names: `frontend/` → `editor/`, and `engine/src/elements/` may lift to
-      `elements/` at the root once nothing else is beside it.
-- [ ] The DSL's source of truth: types from `engine/src/graph.ts` instead of
-      `graph.py` + `export_graph_schema.py` + `genTypes.mjs`.
+- [x] Root npm workspace; one lockfile; CI installs once at the root.
+- [x] One element tree: `engine/src/elements/<kind>/` holds `element.ts` and `editor/`.
+- [x] One runtime. The Python server is deleted; the engine serves the editor
+      (`node engine/src/main.ts --editor frontend/dist`) and answers every route the
+      editor calls: files, settings, project files, generation, bundles. `npm start`,
+      `npm run dev`, `docker compose up`.
+- [x] Old graphs open everywhere: the one-time migrations run inside `parseGraph`.
+- [ ] The names: `frontend/` → `editor/`; `engine/src/elements/` may lift to `elements/`
+      at the root. Rename once the tree has settled — every path in docs and imports moves.
+- [ ] `frontend/src/store/graphStore.ts` still carries its own copy of the alias
+      migrations (`migrateLegacyNode`); the engine's `migrate.ts` does the same on load.
+      Delete the editor's copy.
 - [ ] `frontend/src/elements/shared/` and `registry.ts` are editor infrastructure, not
-      elements; they stay in the editor and should be named as such.
+      elements; name them as such.
+- [ ] `ai-settings.example.json` still shows `*_base_url` endpoint keys; the file is
+      keyed by provider name now (old files are read either way).
 
 ## B · Code generation
 
 - [x] Sweep: ✨ Generate in the toolbar writes every empty node in execution order,
       stops at a failure, refuses a graph the engine cannot run.
-- [x] What generated code actually returned is written as the node's output contract, in
-      the one generation path both buttons use.
+- [x] What generated code returned is written as the node's output contract, in the one
+      generation path both buttons use.
+- [x] The probe hands back the real outputs (`probe.outputs`), not only a preview.
 - [x] A file/directory input shows an example-file attachment and a "what these files
       contain" contract; the sweep's preflight accepts either.
-- [ ] Hand real values forward, not only the preview: `ProbeReport` returns a truncated
-      text; the next node's `sample_inputs` want the actual outputs.
+- [ ] Use `probe.outputs` as the *next* node's `sample_inputs` in the sweep, so from the
+      second node on the verify pass runs against real data without a prior run.
 - [ ] Measured contract as structure (keys + types) rather than prose.
-- [ ] The frame as a code prefix the model completes, not as prose (`skeleton.py` renders
-      it already; move it to the engine, hand it to the model as the start of the body).
-- [ ] Sweep into the engine (`engine/src/generate.ts`) once generation lives there.
-- [ ] Python-isms left in prompts (`ai_service.py`, `code_refine.py`): default language is JS.
+- [ ] The frame as a code prefix the model completes, not as prose in the prompt.
+- [ ] Sweep orchestration into the engine (`engine/src/host/editor/sweep.ts`), now that
+      generation lives there; the toolbar then makes one call.
+- [ ] A memory element (data, gui) as the next node: its contract is its own format, not
+      the predecessor's output — confirm the sweep reads `data_format_prompt` there.
 
 ## C · Debts
 
 - [ ] `ElementGeneration` (editor) duplicates `Generation` (engine): guard/success/
       promptField/targetField — held equal by a test, should be read from the engine.
 - [ ] `AuthoredFileOption.tsx` is named after a concept that no longer exists.
-- [ ] `test/models` (untracked), old bundles in `dist/`.
+- [ ] `/api/ai/complete` (raw completion) was Python-only and unused by the editor; it is
+      gone. Anything outside the editor that called it needs `engine/src/ai/providers.ts`.
+- [ ] `test/models` (untracked), old bundles in `dist/`, a root `.venv` and
+      `backend/.venv` left on disk: local leftovers, ignored by git, safe to delete.
 - [ ] `LICENSING-PROPOSAL.md` was an open decision; the file is gone, the question may not be.

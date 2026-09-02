@@ -17,12 +17,11 @@ cloud bill.
   ✨ Generate writes the system prompt or the Python. No prompt engineering, no vector
   store, no framework, no glue code.
 - **You ship a tool, not a prototype.** 🚀 Deploy packages the graph with the real
-  execution engine; one PyInstaller run makes it an executable that needs no Python on
-  the target machine — `--embed-python` puts an interpreter inside it, so even the
-  code nodes run there. A graph with `gui` nodes deploys *with its interface*.
+  execution engine; the recipient needs Node and nothing else, and the code nodes run
+  there too. A graph with `gui` nodes deploys *with its interface*.
 - **Nothing is hidden.** Typed ports say what flows between nodes, generated code stays
   visible and editable, graphs are plain JSON, and a node's body can live in its own
-  `.py`/`.md` file beside the graph — so `git diff` reads like text.
+  `.js`/`.md` file beside the graph — so `git diff` reads like text.
 
 **The cheap option is the private one.** Running locally costs nothing *and* removes the
 compliance question; the two are not a trade-off.
@@ -51,10 +50,10 @@ compliance question; the two are not a trade-off.
 
 Nothing leaves the machine unless the graph itself sends it there.
 
-- `start.py`, the built executable and a deployed bundle bind to `127.0.0.1` —
-  reachable from the machine itself, not from the network.
-- A deployed tool listens on loopback and offers no way to change that, so its file
-  browser can only ever be driven by the person at the keyboard — never by the network
+- The editor and a deployed bundle bind to `127.0.0.1` — reachable from the machine
+  itself, not from the network — unless started with `--host` for a container.
+- The file browser is tied to that bind: on anything but loopback it switches itself
+  off rather than hand the machine's filesystem listing to the network
   (`engine/src/host/serve.ts`).
 - No analytics or phone-home calls exist in the code; the only outbound connections are
   the ones your graph is configured to make.
@@ -118,24 +117,16 @@ node engine/src/main.ts examples/universal_plotter.json
 ```bash
 git clone https://github.com/Archimedes79/AI_Graph.git
 cd AI_Graph
-docker compose up --build
+npm ci
+npm run build
+npm start
 ```
 
-The editor is then at <http://localhost:3000>. Without Docker:
+Node 24 or newer, nothing else. The editor opens at <http://127.0.0.1:8000>. `npm run
+dev` is the same with live reload; `docker compose up --build` the same in a container
+beside Ollama. Details in [docs/install.md](docs/install.md).
 
-```bash
-start.cmd          # Windows — type the extension; plain `start` is a cmd built-in
-./start.sh         # everywhere else
-```
-
-Both find an interpreter rather than assuming one: `python start.py` is wrong on
-any Windows machine that never installed Python from python.org, where `python`
-is a Microsoft Store stub that prints an advertisement and exits.
-
-`python build_editor_exe.py` builds an executable you can double-click. All four
-ways, with their trade-offs, are in [docs/install.md](docs/install.md).
-
-**Running a graph needs no editor and no Python at all:**
+**Running a graph needs no editor at all:**
 
 ```bash
 node engine/src/main.ts examples/hello_world.json          # once
@@ -147,7 +138,7 @@ node engine/src/main.ts my.json --bundle ./out             # to hand to someone
 
 | Document | What is in it |
 |---|---|
-| [docs/install.md](docs/install.md) | Docker, dev mode, `start.py`, the standalone executable, tests and CI |
+| [docs/install.md](docs/install.md) | Running the editor, working on it, containers, tests and CI |
 | [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, GUI nodes and widgets |
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the two AI settings, where the API key goes |
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, Docker, the Graph Runner CLI |
@@ -157,15 +148,13 @@ node engine/src/main.ts my.json --bundle ./out             # to hand to someone
 
 ```
 AI-Graph/
-├── backend/          # FastAPI backend (app/models, app/routers, app/elements, app/services)
-├── frontend/         # React + TypeScript + ReactFlow editor (src/elements, src/components, src/store)
-├── engine/           # The TypeScript engine: runs a graph, ships as a bundle, no build step
-├── start.cmd/.sh     # Start the editor; finds an interpreter instead of assuming one
-├── packaging/        # build_exe.py / python_embed.py — turning the editor into one executable
-├── docs/             # The documents linked above
-├── examples/         # Example graph JSON files
-├── checkpoint.py     # Verify + package the editor in one command
-└── docker-compose.yml
+├── engine/                 # Elements, executor, hosts: runs a graph, serves the editor, ships as a bundle
+│   └── src/elements/<kind>/  element.ts (the engine's half) · editor/ (the editor's half)
+├── frontend/               # The editor's page: React + ReactFlow, built on the engine
+├── examples/               # Example graph JSON files
+├── docs/                   # The documents linked above
+├── scripts/dev.mjs         # npm run dev: engine and Vite in one terminal
+└── Dockerfile              # docker compose up: the editor beside Ollama
 ```
 
 ---
@@ -183,7 +172,7 @@ AI-Graph is **source-available, not open source**: [PolyForm Noncommercial
 **What you build with AI-Graph is yours.** Your graph, and the code generated
 into it, belong to you. A deploy bundle contains nothing but that plus the
 runtime engine — no part of the editor (the canvas, the generator, the deploy
-tool itself) ever travels in one, and `backend/tests/test_deploy_boundary.py`
+tool itself) ever travels in one, and `engine/src/bundle.test.ts`
 fails if one starts to. Every bundle carries a copy of the licence, because
 whoever receives the software has to receive the terms with it.
 

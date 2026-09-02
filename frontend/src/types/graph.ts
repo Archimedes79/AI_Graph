@@ -1,8 +1,9 @@
-// Graph DSL types – re-exported from the generated types.
-// `graph.generated.ts` is produced from
-// `backend/app/models/graph.py` via `npm run gen:types`; do not hand-edit it.
-// Only genuinely frontend-only types (no backend model, e.g. ReactFlow node
-// data) belong in this file.
+// Graph DSL types as the editor sees them.
+//
+// `graph.generated.ts` was once derived from a Python model; the engine's
+// `graph.ts` is the DSL's home now, and this file is the editor's typed view of
+// it (every element's config field in one type -- an open question, see
+// TODO.md). Only genuinely editor-only types (ReactFlow node data) belong here.
 export * from './graph.generated';
 
 import type { ExecutionStatus, GraphNode } from './graph.generated';

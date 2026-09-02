@@ -94,4 +94,5 @@ contains and why it can never drift from the editor.
 
 ## Deploying the editor itself
 
-See [Option 3 – `start.py` launcher](install.md#option-3--startpy-launcher): `python start.py --mode package` builds a zip of the editor app (server + built frontend) to run on another server.
+The editor is the engine serving its built page: `npm ci && npm run build && npm start`
+on the target machine, or `docker compose up --build`. See [install.md](install.md).

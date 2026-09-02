@@ -11,7 +11,7 @@
 // it is written out here rather than assembled from a router someone might
 // extend later without noticing where it ends up.
 
-import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
@@ -89,19 +89,15 @@ export interface ServeOptions {
   allowBrowse?: boolean;
   host?: string;
   /**
-   * Serve the editor instead of a deployed page.
+   * Serve the editor instead of a deployed page: `dist` is the built editor.
    *
-   * `dist` is the built editor. `api` is where the routes this process does not
-   * own yet are forwarded — the editor's Python server, for as long as it
-   * exists. This makes the engine the front door: the browser talks to one
-   * process, and every route brought across is one line fewer forwarded, until
-   * nothing is.
+   * The same server either way. A deployed tool gets the page and the few
+   * routes it needs; the editor gets those plus its own -- files, settings, a
+   * project on disk, generation, a bundle -- loaded only when this is the
+   * editor, so none of it is ever vendored into a bundle.
    */
-  editor?: { dist: string; api: string };
+  editor?: { dist: string };
 }
-
-/** In editor mode, the routes the engine answers itself; the rest is forwarded. */
-const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements|files|graphs|deploy)\/|^\/api\/ai\/(settings|providers|generate|generate-graph)$/;
 
 export async function serve(options: ServeOptions): Promise<{ server: Server; url: string }> {
   const host = options.host ?? '127.0.0.1';
@@ -136,10 +132,6 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const url = new URL(request.url ?? '/', `http://${host}`);
     const path = url.pathname;
-
-    if (options.editor && path.startsWith('/api/') && !OWNED_IN_EDITOR_MODE.test(path)) {
-      return forward(request, response, options.editor.api);
-    }
 
     if (path === '/api/runtime/graph') {
       if (!original) return send(response, 404, { detail: 'This server ships no graph; post the one to run.' });
@@ -399,32 +391,6 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
   await new Promise<void>((listening) => server.listen(options.port ?? 0, host, listening));
   const port = (server.address() as { port: number }).port;
   return { server, url: `http://${host}:${port}` };
-}
-
-/**
- * Hand a request to the server that still owns the route, and its answer back.
- *
- * Streamed both ways rather than buffered: an upload is a body, and a body is
- * not something to read into memory just to write it out again.
- */
-function forward(request: IncomingMessage, response: ServerResponse, api: string): Promise<void> {
-  return new Promise((done) => {
-    const target = new URL(request.url ?? '/', api);
-    const upstream = httpRequest(
-      target,
-      { method: request.method, headers: { ...request.headers, host: target.host } },
-      (reply) => {
-        response.writeHead(reply.statusCode ?? 502, reply.headers);
-        reply.pipe(response);
-        reply.on('end', done);
-      },
-    );
-    upstream.on('error', (error) => {
-      send(response, 502, { detail: `The editor's server is not answering: ${error.message}` });
-      done();
-    });
-    request.pipe(upstream);
-  });
 }
 
 /**

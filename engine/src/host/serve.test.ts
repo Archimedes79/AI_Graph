@@ -3,7 +3,6 @@ import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Server } from 'node:http';
-import { createServer } from 'node:http';
 import { serve } from './serve.ts';
 
 /**
@@ -130,25 +129,10 @@ describe('the page it serves', () => {
 });
 
 describe('the engine as the front door of the editor', () => {
-  /** A stand-in for the Python server: answers anything with what it was asked. */
-  async function upstream(): Promise<string> {
-    const server = createServer((request, response) => {
-      let body = '';
-      request.on('data', (chunk) => { body += chunk; });
-      request.on('end', () => {
-        response.writeHead(200, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ path: request.url, method: request.method, body }));
-      });
-    });
-    started.push(server);
-    await new Promise<void>((listening) => server.listen(0, '127.0.0.1', listening));
-    return `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  }
-
-  async function editor(api?: string) {
+  async function editor() {
     const dist = await mkdtemp(join(tmpdir(), 'editor-dist-'));
     await writeFile(join(dist, 'index.html'), '<!doctype html><title>the editor</title>');
-    const { server, url } = await serve({ port: 0, editor: { dist, api: api ?? await upstream() } });
+    const { server, url } = await serve({ port: 0, editor: { dist } });
     started.push(server);
     return url;
   }
@@ -159,25 +143,32 @@ describe('the engine as the front door of the editor', () => {
     expect(await (await fetch(`${url}/some/route`)).text()).toContain('the editor');
   });
 
-  it('forwards a route it does not own yet, body and all', async () => {
+  it('answers the routes the editor calls itself', async () => {
     const url = await editor();
-    const reply = await asJson(await fetch(`${url}/api/legacy/route`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"element":"code"}',
-    }));
-    expect(reply).toEqual({ path: '/api/legacy/route', method: 'POST', body: '{"element":"code"}' });
-  });
-
-  it('answers what it owns itself, without asking anyone', async () => {
-    const url = await editor('http://127.0.0.1:1');   // nobody there: owned routes must not care
     const graph = JSON.parse(await readFile(resolve(REPO, 'examples', 'hello_world.json'), 'utf8'));
     const requirements = await (await fetch(`${url}/api/execute/requirements`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
     })).json();
     expect(Array.isArray(requirements)).toBe(true);
+    const settings = await asJson(await fetch(`${url}/api/ai/settings`));
+    expect(settings.credentials).toBeTruthy();
+    const authored = await (await fetch(`${url}/api/elements/authored`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
+    })).json();
+    expect(Array.isArray(authored)).toBe(true);
   });
 
-  it('says so, rather than hanging, when the other server is gone', async () => {
-    const url = await editor('http://127.0.0.1:1');
-    expect((await fetch(`${url}/api/anything`)).status).toBe(502);
+  it('still refuses what nothing serves, rather than guessing', async () => {
+    const url = await editor();
+    expect((await fetch(`${url}/api/nothing/here`)).status).toBe(404);
+  });
+
+  it('says how to get a page when there is none built yet', async () => {
+    const dist = await mkdtemp(join(tmpdir(), 'editor-empty-'));
+    const { server, url } = await serve({ port: 0, editor: { dist } });
+    started.push(server);
+    const reply = await fetch(`${url}/`);
+    expect(reply.status).toBe(404);
+    expect((await asJson(reply)).detail).toContain('npm run build');
   });
 });

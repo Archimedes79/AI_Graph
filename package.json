@@ -1,12 +1,15 @@
 {
   "name": "ai-graph",
   "private": true,
-  "description": "One workspace, so an element's editor half can live beside its engine half and still find React.",
+  "description": "One workspace: the engine, and the editor that is built on it.",
   "workspaces": [
     "engine",
     "frontend"
   ],
   "scripts": {
+    "start": "node engine/src/main.ts --editor frontend/dist",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build --workspace frontend",
     "test": "npm test --workspaces",
     "typecheck": "npm run typecheck --workspaces"
   }

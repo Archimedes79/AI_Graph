@@ -9,9 +9,7 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "gen:types": "node scripts/genTypes.mjs",
-    "gen:types:check": "node scripts/checkTypesUpToDate.mjs"
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
