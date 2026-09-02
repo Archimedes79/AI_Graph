@@ -19,6 +19,8 @@ export interface AiConfig {
   /** What the model is told to produce. A generation input, not a runtime check. */
   outputFormat: string;
   outputFormatPrompt: string;
+  /** Return a failed call as an `error` port instead of failing the node. */
+  catchErrors: boolean;
 }
 
 /**
@@ -47,6 +49,7 @@ export class AiElement extends NodeElement<AiConfig> {
       sendImages: c.send_images === true,
       outputFormat: String(c.output_format ?? 'text'),
       outputFormatPrompt: String(c.output_format_prompt ?? ''),
+      catchErrors: c.catch_errors === true,
     };
   }
 
@@ -110,16 +113,25 @@ export class AiElement extends NodeElement<AiConfig> {
     }
 
     const instruction = formatInstruction(settings);
-    return {
-      output: await runtime.ai.complete({
-        prompt: parts.join('\n\n'),
-        system: instruction ? `${settings.systemPrompt}\n\n${instruction}` : settings.systemPrompt,
-        provider: settings.provider,
-        model: settings.model,
-        temperature: settings.temperature,
-        ...(images.length ? { images } : {}),
-      }),
+    const request = {
+      prompt: parts.join('\n\n'),
+      system: instruction ? `${settings.systemPrompt}\n\n${instruction}` : settings.systemPrompt,
+      provider: settings.provider,
+      model: settings.model,
+      temperature: settings.temperature,
+      ...(images.length ? { images } : {}),
     };
+
+    // Off by default: a call that fails still fails the node, as it always
+    // did. On, a failure becomes data instead -- an `error` port a person adds
+    // by hand, the same way any other output port on this node is named,
+    // wired to whatever should happen when the model could not be reached.
+    if (!settings.catchErrors) return { output: await runtime.ai.complete(request) };
+    try {
+      return { output: await runtime.ai.complete(request), error: '' };
+    } catch (error) {
+      return { output: '', error: error instanceof Error ? error.message : String(error) };
+    }
   }
 }
 

@@ -108,3 +108,29 @@ describe('what an AI node sends', () => {
     expect(asked[0].images).toBeUndefined();
   });
 });
+
+describe('a call that fails', () => {
+  const failing: Runtime = {
+    files: nodeFiles,
+    code: { run: async (_body, inputs) => inputs },
+    ai: { complete: async () => { throw new Error('no content'); } },
+  };
+
+  it('still fails the node when catch_errors is off, as it always did', async () => {
+    const element = new AiElement();
+    await expect(element.execute(aiNode(), {}, failing)).rejects.toThrow('no content');
+  });
+
+  it('becomes an error port instead, when catch_errors is on', async () => {
+    const element = new AiElement();
+    const result = await element.execute(aiNode({ catch_errors: true }), {}, failing);
+    expect(result).toEqual({ output: '', error: 'no content' });
+  });
+
+  it('reports an empty error alongside a real answer', async () => {
+    const element = new AiElement();
+    const ok: Runtime = { ...failing, ai: { complete: async () => 'fine' } };
+    const result = await element.execute(aiNode({ catch_errors: true }), {}, ok);
+    expect(result).toEqual({ output: 'fine', error: '' });
+  });
+});

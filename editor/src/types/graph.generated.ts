@@ -12,7 +12,10 @@
  * via the `definition` "GuiWidgetKind".
  */
 export type GuiWidgetKind =
-  'input_picker' | 'text_io' | 'plot_window' | 'image_view' | 'table' | 'text' | 'divider' | 'spacer';
+  'input_picker' | 'text_io' | 'plot_window' | 'image_view' | 'table' | 'text' | 'divider' | 'spacer'
+  | 'select'
+  | 'slider'
+  | 'button';
 /**
  * This interface was referenced by `Graph`'s JSON-Schema
  * via the `definition` "PortKind".
@@ -119,6 +122,7 @@ export interface NodeConfig {
     'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
   batch_concurrency: number;
   batch_mode: 'per_item' | 'whole_list';
+  catch_errors?: boolean;
   code: string;
   code_file: string;
   code_prompt: string;
@@ -180,6 +184,12 @@ export interface GuiWidget {
   border?: boolean;
   /** A background colour of your own; empty lets the tone decide. */
   background?: string;
+  /** `select`: its choices, one per line. */
+  options?: string;
+  /** `slider`: the range and increment it moves in. */
+  min?: number;
+  max?: number;
+  step?: number;
   value?: unknown;
   w?: number;
 }

@@ -13,6 +13,8 @@ export interface InputConfig {
   extensions: string;
   selectAll: boolean;
   promptAtRuntime: boolean;
+  /** Return a failed read or listing as an `error` port instead of failing the node. */
+  catchErrors: boolean;
 }
 
 /**
@@ -37,12 +39,19 @@ export class InputElement extends NodeElement<InputConfig> {
       extensions: String(c.extensions ?? ''),
       selectAll: c.select_all_files !== false,
       promptAtRuntime: c.prompt_at_runtime === true,
+      catchErrors: c.catch_errors === true,
     };
   }
 
   override derivedPorts(node: GraphNode) {
-    const { mode } = this.config(node);
+    const settings = this.config(node);
+    const { mode } = settings;
     const path = port('path', 'Path', 'input', 'file_path', false, 'Override the configured path');
+    // A missing or unreadable file is the one thing here that can fail at run
+    // time; text mode has nothing to read and so nothing to catch.
+    const error = settings.catchErrors && mode !== 'text'
+      ? [port('error', 'Error', 'output', 'text', false, 'Set when the read failed; empty otherwise')]
+      : [];
 
     if (mode === 'text') {
       return { inputs: [], outputs: [port('output', 'Output', 'output', 'text')] };
@@ -53,6 +62,7 @@ export class InputElement extends NodeElement<InputConfig> {
         outputs: [
           port('files', 'Files', 'output', 'file_path', true, 'Rooted file paths'),
           port('count', 'Count', 'output', 'text'),
+          ...error,
         ],
       };
     }
@@ -61,6 +71,7 @@ export class InputElement extends NodeElement<InputConfig> {
       outputs: [
         port('content', 'Content', 'output', 'text'),
         port('path', 'Path', 'output', 'file_path', false, 'Always includes the root'),
+        ...error,
       ],
     };
   }
@@ -100,16 +111,30 @@ export class InputElement extends NodeElement<InputConfig> {
     }
 
     const raw = settings.value || String(inputs.path ?? '');
+    const okay = settings.catchErrors ? { error: '' } : {};
     if (!raw) {
-      return settings.mode === 'file' ? { content: '', path: '' } : { files: [], count: 0 };
+      return { ...(settings.mode === 'file' ? { content: '', path: '' } : { files: [], count: 0 }), ...okay };
     }
 
-    if (settings.mode === 'file') {
-      const path = runtime.files.resolve(raw);
-      return { content: await runtime.files.read(path), path };
+    if (!settings.catchErrors) {
+      if (settings.mode === 'file') {
+        const path = runtime.files.resolve(raw);
+        return { content: await runtime.files.read(path), path };
+      }
+      const files = await selectFiles(this.logic(node), settings, raw, runtime);
+      return { files, count: files.length };
     }
 
-    const files = await selectFiles(this.logic(node), settings, raw, runtime);
-    return { files, count: files.length };
+    try {
+      if (settings.mode === 'file') {
+        const path = runtime.files.resolve(raw);
+        return { content: await runtime.files.read(path), path, error: '' };
+      }
+      const files = await selectFiles(this.logic(node), settings, raw, runtime);
+      return { files, count: files.length, error: '' };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ...(settings.mode === 'file' ? { content: '', path: '' } : { files: [], count: 0 }), error: message };
+    }
   }
 }

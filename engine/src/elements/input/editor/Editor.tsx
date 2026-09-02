@@ -86,6 +86,24 @@ export default function InputEditor({
         </div>
       )}
 
+      {!isText && (
+        <div className="mb-4">
+          <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
+            <input
+              type="checkbox"
+              checked={!!node.config.catch_errors}
+              onChange={(e) => setConfig('catch_errors', e.target.checked)}
+            />
+            Catch a failed read instead of failing the node
+          </label>
+          <p className="text-xs mt-1" style={{ color: DIMMER }}>
+            A missing or unreadable file fails this node, the way it always did. Turned on, it
+            adds an <strong style={{ color: '#a78bfa' }}>error</strong> output port: empty on
+            success, the reason otherwise.
+          </p>
+        </div>
+      )}
+
       <div className="mb-4">
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           {isText ? 'Default Text (shown in the run dialog)' : 'Default Path (shown in the run dialog)'}
