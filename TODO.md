@@ -34,8 +34,6 @@ commit that closes it.
       Delete the editor's copy.
 - [ ] `frontend/src/elements/shared/` and `registry.ts` are editor infrastructure, not
       elements; name them as such.
-- [ ] `ai-settings.example.json` still shows `*_base_url` endpoint keys; the file is
-      keyed by provider name now (old files are read either way).
 
 ## B · Code generation
 
@@ -46,14 +44,14 @@ commit that closes it.
 - [x] The probe hands back the real outputs (`probe.outputs`), not only a preview.
 - [x] A file/directory input shows an example-file attachment and a "what these files
       contain" contract; the sweep's preflight accepts either.
-- [ ] Use `probe.outputs` as the *next* node's `sample_inputs` in the sweep, so from the
-      second node on the verify pass runs against real data without a prior run.
+- [x] The sweep hands what a node returned to the node after it: from the second node
+      on, the verify pass runs against real data without a prior run.
 - [ ] Measured contract as structure (keys + types) rather than prose.
 - [ ] The frame as a code prefix the model completes, not as prose in the prompt.
 - [ ] Sweep orchestration into the engine (`engine/src/host/editor/sweep.ts`), now that
       generation lives there; the toolbar then makes one call.
-- [ ] A memory element (data, gui) as the next node: its contract is its own format, not
-      the predecessor's output — confirm the sweep reads `data_format_prompt` there.
+- [x] A memory element as the next node: `connectedFormatContext` uses a data node's own
+      `data_format_prompt` as the contract, feeding or fed — the sweep inherits that.
 
 ## C · Debts
 
