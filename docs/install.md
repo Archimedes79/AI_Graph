@@ -13,6 +13,14 @@ npm ci
 ## Running the editor
 
 ```bash
+start.cmd         # Windows -- type the extension, or double-click the file
+./start.sh        # everywhere else
+```
+
+Installs on first use, builds the page when it is missing, then serves it on
+<http://127.0.0.1:8000> and opens a browser. The same by hand:
+
+```bash
 npm run build     # the editor's page, once (and after pulling changes to it)
 npm start         # http://127.0.0.1:8000, opened in your browser
 ```

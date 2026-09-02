@@ -117,12 +117,12 @@ node engine/src/main.ts examples/universal_plotter.json
 ```bash
 git clone https://github.com/Archimedes79/AI_Graph.git
 cd AI_Graph
-npm ci
-npm run build
-npm start
+start.cmd          # Windows (double-clicking it works too)
+./start.sh         # everywhere else
 ```
 
-Node 24 or newer, nothing else. The editor opens at <http://127.0.0.1:8000>. `npm run
+That installs on first use, builds the page, and opens the editor. Node 24 or newer,
+nothing else. By hand it is `npm ci`, `npm run build`, `npm start`. The editor opens at <http://127.0.0.1:8000>. `npm run
 dev` is the same with live reload; `docker compose up --build` the same in a container
 beside Ollama. Details in [docs/install.md](docs/install.md).
 
