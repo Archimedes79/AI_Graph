@@ -4,8 +4,13 @@
     "version": "1.0.0",
     "description": "Text input -> Code node -> Output: the smallest data-transformation pipeline.",
     "author": "",
-    "tags": ["example"],
-    "ai_defaults": { "provider": "default", "model": "" }
+    "tags": [
+      "example"
+    ],
+    "ai_defaults": {
+      "provider": "default",
+      "model": ""
+    }
   },
   "nodes": [
     {
@@ -13,30 +18,71 @@
       "node_type": "input",
       "label": "Source Text",
       "description": "",
-      "position": { "x": 80, "y": 140 },
+      "position": {
+        "x": 80,
+        "y": 140
+      },
       "inputs": [],
       "outputs": [
-        { "id": "output", "name": "Output", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+        {
+          "id": "output",
+          "name": "Output",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
-      "config": { "value": "the quick brown fox jumps over the lazy dog", "input_mode": "text", "prompt_at_runtime": true }
+      "config": {
+        "value": "the quick brown fox jumps over the lazy dog",
+        "input_mode": "text",
+        "prompt_at_runtime": true
+      }
     },
     {
       "id": "transform",
       "node_type": "code",
       "label": "Transform",
       "description": "",
-      "position": { "x": 420, "y": 140 },
+      "position": {
+        "x": 420,
+        "y": 140
+      },
       "inputs": [
-        { "id": "text", "name": "Text", "kind": "input", "data_type": "text", "multi": false, "required": false, "description": "" }
+        {
+          "id": "text",
+          "name": "Text",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "outputs": [
-        { "id": "word_count", "name": "Word Count", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" },
-        { "id": "upper", "name": "Upper", "kind": "output", "data_type": "text", "multi": false, "required": false, "description": "" }
+        {
+          "id": "word_count",
+          "name": "Word Count",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "upper",
+          "name": "Upper",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "config": {
-        "language": "python",
         "code_prompt": "Count the words and also return the text in upper case.",
-        "code": "def run(inputs):\n    text = str(inputs.get('text') or '')\n    return {'word_count': len(text.split()), 'upper': text.upper()}\n"
+        "code": "function run(inputs) {\n  const text = String(inputs.text ?? '');\n  return { word_count: text.split(/\\s+/).filter(Boolean).length, upper: text.toUpperCase() };\n}\n"
       }
     },
     {
@@ -44,18 +90,58 @@
       "node_type": "output",
       "label": "Result",
       "description": "",
-      "position": { "x": 760, "y": 140 },
+      "position": {
+        "x": 760,
+        "y": 140
+      },
       "inputs": [
-        { "id": "word_count", "name": "Word Count", "kind": "input", "data_type": "any", "multi": false, "required": false, "description": "" },
-        { "id": "upper", "name": "Upper", "kind": "input", "data_type": "any", "multi": false, "required": false, "description": "" }
+        {
+          "id": "word_count",
+          "name": "Word Count",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "upper",
+          "name": "Upper",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
       ],
       "outputs": [],
-      "config": { "output_label": "Transform Result", "write_mode": "window" }
+      "config": {
+        "output_label": "Transform Result",
+        "write_mode": "window"
+      }
     }
   ],
   "edges": [
-    { "id": "e1", "source_node_id": "source", "source_port_id": "output", "target_node_id": "transform", "target_port_id": "text" },
-    { "id": "e2", "source_node_id": "transform", "source_port_id": "word_count", "target_node_id": "result", "target_port_id": "word_count" },
-    { "id": "e3", "source_node_id": "transform", "source_port_id": "upper", "target_node_id": "result", "target_port_id": "upper" }
+    {
+      "id": "e1",
+      "source_node_id": "source",
+      "source_port_id": "output",
+      "target_node_id": "transform",
+      "target_port_id": "text"
+    },
+    {
+      "id": "e2",
+      "source_node_id": "transform",
+      "source_port_id": "word_count",
+      "target_node_id": "result",
+      "target_port_id": "word_count"
+    },
+    {
+      "id": "e3",
+      "source_node_id": "transform",
+      "source_port_id": "upper",
+      "target_node_id": "result",
+      "target_port_id": "upper"
+    }
   ]
 }

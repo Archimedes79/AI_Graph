@@ -177,3 +177,45 @@ describe('the AI default a graph carries', () => {
     expect(calls).toEqual([{ provider: 'default', model: '' }]);
   });
 });
+
+describe('a batch with failing items', () => {
+  /** A per_item code node fed a list of three, whose runner fails on the word "bad". */
+  function graphOf(items: string[]): Graph {
+    return {
+      metadata: { name: 'g', version: '1', ai_defaults: { provider: 'default', model: '' } } as Graph['metadata'],
+      nodes: [
+        { ...node('a', 'data', { data_value: items, data_format: 'structure' }), outputs: [{ id: 'output', name: 'O', kind: 'output', data_type: 'json', multi: true, required: false, description: '' }] },
+        {
+          ...node('work', 'code', { code: 'function run(i) { return i; }', batch_mode: 'per_item' }),
+          inputs: [{ id: 'items', name: 'Items', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+          outputs: [{ id: 'out', name: 'Out', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
+        },
+      ],
+      edges: [edge('e', 'a', 'output', 'work', 'items')],
+    };
+  }
+  const picky: Runtime = {
+    ...nowhere,
+    code: { run: async (_body, inputs) => { if (String(inputs.items).includes('bad')) throw new Error('boom'); return { out: inputs.items }; } },
+  };
+  const workResult = async (items: string[]) =>
+    (await executeGraph(graphOf(items), { runtime: picky, registry })).node_results.find((r) => r.node_id === 'work')!;
+
+  it('is partial, counted, with the first failure quoted, and the rest intact', async () => {
+    const work = await workResult(['ok', 'bad', 'ok']);
+    expect(work.status).toBe('partial');
+    expect(work.error).toContain('1 of 3 items failed');
+    expect(work.error).toContain('boom');
+    expect(work.outputs.out).toEqual(['ok', null, 'ok']);
+  });
+
+  it('is an error, with the message, when every item fails', async () => {
+    const work = await workResult(['bad', 'bad']);
+    expect(work.status).toBe('error');
+    expect(work.error).toContain('boom');
+  });
+
+  it('is a plain success when nothing fails', async () => {
+    expect((await workResult(['ok', 'ok'])).status).toBe('success');
+  });
+});

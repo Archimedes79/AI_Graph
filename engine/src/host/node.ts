@@ -85,10 +85,14 @@ function capture(command: string, args: string[]): Promise<string> {
     child.stderr.on('data', (chunk) => { err += chunk; });
     child.on('error', (error) => fail(error));
     child.on('close', (code) => {
-      if (code === 0) fulfil(out);
-      // The last line of a traceback is the sentence a person needs; the rest
-      // is where it happened, which matters second.
-      else fail(new Error(err.trim().split('\n').slice(-3).join('\n') || `exited with ${code}`));
+      if (code === 0) return fulfil(out);
+      // The sentence a person needs is the one naming the error. A thrown
+      // error puts it at the bottom of the traceback; a syntax error puts it
+      // near the top, above the stack -- so it is looked for, not assumed.
+      const lines = err.trim().split('\n');
+      const named = lines.findIndex((line) => /^\w*Error\b/.test(line.trim()));
+      const message = named >= 0 ? lines.slice(named, named + 2).join('\n') : lines.slice(-3).join('\n');
+      fail(new Error(message.trim() || `exited with ${code}`));
     });
   });
 }

@@ -206,6 +206,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   const outputs = new Map<string, Record<string, unknown>>();
   const results: NodeResult[] = [];
   const failed = new Set<string>();
+  const partial = new Set<string>();
 
   const dependsOnFailure = (nodeId: string): boolean =>
     edges.some((e) => e.target_node_id === nodeId && !feedback.has(e.id) && failed.has(e.source_node_id));
@@ -240,10 +241,17 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         const given = element.readsFileInputs(node)
           ? await readFileInputs(node, inputs, runtime)
           : inputs;
-        const produced = await runNode(element, node, given, runtime);
+        const { produced, failures } = await runNode(element, node, given, runtime);
         outputs.set(nodeId, produced);
-        results.push({ node_id: nodeId, status: 'success', inputs, outputs: produced, error: null });
-        runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'success' });
+        // Some items failed and the rest went through: the node is partial and
+        // says so, rather than a success whose gaps are nulls nobody explains.
+        const status = failures.length ? 'partial' : 'success';
+        if (failures.length) partial.add(nodeId);
+        results.push({
+          node_id: nodeId, status, inputs, outputs: produced,
+          error: failures.length ? `${failures.length} of ${failures.total} items failed: ${failures[0]}` : null,
+        });
+        runtime.report?.({ type: 'node_done', node_id: nodeId, status });
       } catch (error) {
         failed.add(nodeId);
         const message = error instanceof Error ? error.message : String(error);
@@ -255,7 +263,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
 
   settleMemoryFeedback(graph, feedback, outputs, results, registry);
 
-  const status: ExecutionResult['status'] = failed.size === 0
+  const status: ExecutionResult['status'] = failed.size === 0 && partial.size === 0
     ? 'success'
     : failed.size === nodes.length ? 'error' : 'partial';
 
@@ -279,13 +287,15 @@ async function runNode(
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,
-): Promise<Record<string, unknown>> {
+): Promise<{ produced: Record<string, unknown>; failures: string[] & { total: number } }> {
   if (element.batchMode(node) !== 'per_item') {
-    return reconcileOutputs(node, await element.execute(node, inputs, runtime));
+    const produced = reconcileOutputs(node, await element.execute(node, inputs, runtime));
+    return { produced, failures: Object.assign([] as string[], { total: 1 }) };
   }
 
   const items = batchItems(node, inputs);
   const produced: Record<string, unknown>[] = new Array(items.length);
+  const failures = Object.assign([] as string[], { total: items.length });
   let next = 0;
   let done = 0;
 
@@ -296,12 +306,12 @@ async function runNode(
       try {
         produced[index] = reconcileOutputs(node, await element.execute(node, items[index], runtime));
       } catch (error) {
+        // One bad item must not take the other 499 down with it -- but it is
+        // not nothing either: it is counted, and the first is quoted.
         produced[index] = Object.fromEntries(node.outputs.map((p) => [p.id, null]));
-        runtime.report?.({
-          type: 'activity',
-          node_id: node.id,
-          message: `item ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
-        });
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push(`item ${index + 1}: ${message}`);
+        runtime.report?.({ type: 'activity', node_id: node.id, message: `item ${index + 1}: ${message}` });
       }
       runtime.report?.({ type: 'batch', node_id: node.id, done: ++done, total: items.length });
     }
@@ -309,7 +319,10 @@ async function runNode(
 
   const workers = Math.max(1, Math.min(element.batchConcurrency(node), items.length));
   await Promise.all(Array.from({ length: workers }, worker));
-  return mergeBatchOutputs(node, produced);
+  // Every item failed: that is the node failing, with its own message, not a
+  // success made of nulls.
+  if (items.length && failures.length === items.length) throw new Error(failures[0].replace(/^item 1: /, ''));
+  return { produced: mergeBatchOutputs(node, produced), failures };
 }
 
 /**
