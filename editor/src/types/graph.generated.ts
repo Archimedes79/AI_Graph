@@ -184,6 +184,8 @@ export interface GuiWidget {
   border?: boolean;
   /** A background colour of your own; empty lets the tone decide. */
   background?: string;
+  /** Turn a failure in this block into an error port instead of ending the run. */
+  catch_errors?: boolean;
   /** `select`: its choices, one per line. */
   options?: string;
   /** `slider`: the range and increment it moves in. */

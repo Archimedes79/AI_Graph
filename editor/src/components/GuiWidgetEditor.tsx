@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { GuiWidget } from '../types/graph';
-import { GUI_WIDGET_KIND_LABELS } from '../utils/guiWidgets';
+import { GUI_WIDGET_KIND_LABELS, guiWidgetPorts } from '../utils/guiWidgets';
 import { useGenerate } from '../elements/shared/useGenerate';
 import { buildGeneration, widgetFields } from '../elements/shared/generation';
 import { widgetLogic } from '../elements/shared/logic';
@@ -176,6 +176,27 @@ Wähle einen Block auf der Seite aus.
         ))}
         <span className="text-xs" style={{ color: DIMMER }}>Zellen von {GUI_GRID_COLUMNS}</span>
       </div>
+
+      {/* Only for a block that does something: a rule or a gap cannot fail. */}
+      {guiWidgetPorts(widget).outputs.length > 0 && (
+        <div className="mb-3">
+          <label className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+            <input
+              type="checkbox"
+              checked={widget.catch_errors === true}
+              onChange={(e) => onChange({ catch_errors: e.target.checked })}
+            />
+            Fehler auffangen statt die Seite abzubrechen
+          </label>
+          <p className="text-xs mt-1" style={{ color: DIMMER }}>
+            Aus: ein Fehler in diesem Block bricht den ganzen Lauf ab, samt der Ausgaben aller
+            anderen Blöcke. An: der Block bekommt einen{' '}
+            <strong style={{ color: '#a78bfa' }}>Fehler</strong>-Ausgang mit der Ursache, seine
+            übrigen Ausgänge bleiben leer, und die Seite läuft weiter. Den Ausgang zu verbinden
+            ist freigestellt.
+          </p>
+        </div>
+      )}
 
       {ConfigEditor && (
         <GenerationReport calls={generate.transcript(widget.id)} live={generate.liveTranscript(widget.id)}>

@@ -1,5 +1,6 @@
 import { GraphNodeElement, type Runtime, type Widget, type WidgetElement, type WidgetPresentation } from '../../element.ts';
 import type { GraphNode, Port, RawConfig } from '../../graph.ts';
+import { port } from '../port.ts';
 import { InputPickerElement, WIDGET_ELEMENTS } from './children/index.ts';
 
 const BY_KIND = new Map(WIDGET_ELEMENTS.map((e) => [e.widgetKind, e as WidgetElement<unknown>]));
@@ -38,6 +39,12 @@ export function parseWidget(raw: unknown): Widget {
   };
 }
 
+/** The port a block grows when it is told to catch its own failures. */
+function errorPort(widget: Widget): Port {
+  return port(`${widget.id}_error`, `${widget.label || widget.id} error`, 'output', 'text', false,
+    'Why this block failed. Optional to wire: unwired, the page simply carries on.');
+}
+
 export interface GuiConfig {
   widgets: Widget[];
 }
@@ -70,6 +77,10 @@ export class GuiElement extends GraphNodeElement<GuiConfig> {
       const own = element.ports(widget);
       inputs.push(...own.inputs);
       outputs.push(...own.outputs);
+      // A block told to catch its failures grows the port to put one on --
+      // here, once, rather than in each of eleven block kinds. Named after the
+      // block for the same reason its other ports are: a page has many.
+      if (element.catchesErrors(widget)) outputs.push(errorPort(widget));
     }
     return { inputs, outputs };
   }
@@ -87,17 +98,29 @@ export class GuiElement extends GraphNodeElement<GuiConfig> {
       if (!element) throw new Error(`Unknown block kind: ${widget.kind}`);
 
       const own = element.ports(widget);
-      if (!own.outputs.length) {
-        // A display block: reshape what arrived and hand it back on the input
-        // it arrived on, because there is no downstream port to carry it.
-        const inId = `${widget.id}_in`;
-        const transformed = await element.runSnippet(widget, { value: inputs[inId] }, runtime);
-        inputs[inId] = await element.displayValue(widget, transformed.value ?? inputs[inId], runtime);
-        continue;
+      const catches = element.catchesErrors(widget);
+      try {
+        if (!own.outputs.length) {
+          // A display block: reshape what arrived and hand it back on the input
+          // it arrived on, because there is no downstream port to carry it.
+          const inId = `${widget.id}_in`;
+          const transformed = await element.runSnippet(widget, { value: inputs[inId] }, runtime);
+          inputs[inId] = await element.displayValue(widget, transformed.value ?? inputs[inId], runtime);
+          continue;
+        }
+        // Merged, not wrapped: the block names its own ports, the same way a node
+        // does. A composite that invents the key caps every block at one output.
+        Object.assign(produced, await element.execute(widget, inputs, runtime));
+        if (catches) produced[`${widget.id}_error`] = '';
+      } catch (error) {
+        // One block's failure used to cost the whole page: a picker pointed at
+        // a file that had moved took every other block's output with it. Told
+        // to catch, it costs that block, says why on its own port, and the
+        // rest of the page still runs.
+        if (!catches) throw error;
+        for (const port of own.outputs) produced[port.id] = null;
+        produced[`${widget.id}_error`] = error instanceof Error ? error.message : String(error);
       }
-      // Merged, not wrapped: the block names its own ports, the same way a node
-      // does. A composite that invents the key caps every block at one output.
-      Object.assign(produced, await element.execute(widget, inputs, runtime));
     }
     return produced;
   }
