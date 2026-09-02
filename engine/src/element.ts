@@ -264,10 +264,11 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
 // ---------------------------------------------------------------------------
 
 /** A block on the page. Its settings live in `config`, owned by its element. */
-export interface Widget {
-  id: string;
-  kind: WidgetKind;
-  label: string;
+/**
+ * How a block sits on the page. Nothing an element ever reads to decide what
+ * it does: the page draws from these, the engine only carries them.
+ */
+export interface WidgetPresentation {
   w: number;
   h: number;
   tone: string;
@@ -275,6 +276,23 @@ export interface Widget {
   border?: boolean;
   /** A background colour of the person's own. Empty: the tone decides. */
   background?: string;
+}
+
+/**
+ * A block: who it is, how it is drawn, and its element's settings.
+ *
+ * Flat on purpose. The three parts are named so the split is visible in the
+ * type, but they are not nested: nesting would have to be undone by
+ * `parseWidget` on every read anyway, since the stored file is flat, and two
+ * copies of one fact are not a clearer design than one. What separates
+ * presentation from settings is the type, and `PRESENTATION` in
+ * `gui/element.ts` is checked against it.
+ */
+export interface Widget extends WidgetPresentation {
+  id: string;
+  kind: WidgetKind;
+  label: string;
+  /** The element's settings: everything the file holds that is not named above. */
   config: RawConfig;
 }
 

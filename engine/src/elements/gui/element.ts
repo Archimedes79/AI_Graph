@@ -1,16 +1,20 @@
-import { NodeElement, type Runtime, type Widget, type WidgetElement } from '../../element.ts';
+import { NodeElement, type Runtime, type Widget, type WidgetElement, type WidgetPresentation } from '../../element.ts';
 import type { GraphNode, Port, RawConfig } from '../../graph.ts';
 import { InputPickerElement, WIDGET_ELEMENTS } from './children/index.ts';
 
 const BY_KIND = new Map(WIDGET_ELEMENTS.map((e) => [e.widgetKind, e as WidgetElement<unknown>]));
 
-/** The structural fields of a block; everything else belongs to its element. */
-const STRUCTURAL = new Set(['id', 'kind', 'label', 'w', 'h', 'tone', 'border', 'background']);
+/** Who a block is. Typed against `Widget`, so a misspelt name here does not compile. */
+const IDENTITY: (keyof Widget)[] = ['id', 'kind', 'label'];
+/** How it is drawn. Typed against `WidgetPresentation`, for the same reason. */
+const PRESENTATION: (keyof WidgetPresentation)[] = ['w', 'h', 'tone', 'border', 'background'];
+/** Everything else in the stored record is the element's settings. */
+const OWN = new Set<string>([...IDENTITY, ...PRESENTATION]);
 
 /**
  * Read one block out of stored JSON.
  *
- * Its settings are the record itself minus the structural fields, so a file
+ * Its settings are the record itself minus identity and presentation, so a file
  * written before configs were owned reads exactly as one written after: the
  * element picks what it knows and ignores the rest. That is why there is no
  * migration here — the shape did not change, only who is allowed to look.
@@ -19,7 +23,7 @@ export function parseWidget(raw: unknown): Widget {
   const w = (raw ?? {}) as RawConfig;
   const config: RawConfig = {};
   for (const [key, value] of Object.entries(w)) {
-    if (!STRUCTURAL.has(key)) config[key] = value;
+    if (!OWN.has(key)) config[key] = value;
   }
   return {
     id: String(w.id ?? ''),
