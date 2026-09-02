@@ -2,7 +2,7 @@ import React from 'react';
 import { suggestedFileName } from './authoredFileName';
 import { DIMMER, MUTED } from '../../ui/theme';
 
-interface AuthoredFileOptionProps {
+interface KeepInFileOptionProps {
   /** The element's name — the file is named after it. */
   label: string;
   /** Current file name, or '' when the text lives in the graph. */
@@ -25,9 +25,9 @@ interface AuthoredFileOptionProps {
  * are the four props. A second copy of this component for widgets is precisely
  * the duplication the element contract exists to avoid.
  */
-export default function AuthoredFileOption({
+export default function KeepInFileOption({
   label, fileName, extension, what, folderHint, onChange,
-}: AuthoredFileOptionProps) {
+}: KeepInFileOptionProps) {
   return (
     <div>
       <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>

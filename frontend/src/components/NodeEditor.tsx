@@ -9,7 +9,7 @@ import { useGenerate } from '../elements/shared/useGenerate';
 import { buildGeneration, nodeFields } from '../elements/shared/generation';
 import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs } from '../elements/shared/generationContext';
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
-import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
+import KeepInFileOption from '../elements/shared/KeepInFileOption';
 import { nodeLogic } from '../elements/shared/logic';
 import GenerationTranscript, { GenerationReport } from '../elements/shared/GenerationTranscript';
 import WidgetOutputSummary from '@engine/elements/gui/editor/WidgetOutputSummary';
@@ -250,7 +250,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
               {(() => {
                 const logic = nodeLogic(node);
                 return logic ? (
-                  <AuthoredFileOption
+                  <KeepInFileOption
                     label={node.label}
                     fileName={node.config.code_file ?? ''}
                     extension={logic.extension}

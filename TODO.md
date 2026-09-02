@@ -29,9 +29,8 @@ commit that closes it.
 - [x] Old graphs open everywhere: the one-time migrations run inside `parseGraph`.
 - [ ] The names: `frontend/` → `editor/`; `engine/src/elements/` may lift to `elements/`
       at the root. Rename once the tree has settled — every path in docs and imports moves.
-- [ ] `frontend/src/store/graphStore.ts` still carries its own copy of the alias
-      migrations (`migrateLegacyNode`); the engine's `migrate.ts` does the same on load.
-      Delete the editor's copy.
+- [x] A dropped or pasted graph goes through the engine's `migrateNode`; the editor's
+      own copy of the alias migrations is gone.
 - [ ] `frontend/src/elements/shared/` and `registry.ts` are editor infrastructure, not
       elements; name them as such.
 
@@ -46,7 +45,7 @@ commit that closes it.
       contain" contract; the sweep's preflight accepts either.
 - [x] The sweep hands what a node returned to the node after it: from the second node
       on, the verify pass runs against real data without a prior run.
-- [ ] Measured contract as structure (keys + types) rather than prose.
+- [x] The measured contract names each key and its type, then the observed example.
 - [ ] The frame as a code prefix the model completes, not as prose in the prompt.
 - [ ] Sweep orchestration into the engine (`engine/src/host/editor/sweep.ts`), now that
       generation lives there; the toolbar then makes one call.
@@ -57,7 +56,6 @@ commit that closes it.
 
 - [ ] `ElementGeneration` (editor) duplicates `Generation` (engine): guard/success/
       promptField/targetField — held equal by a test, should be read from the engine.
-- [ ] `AuthoredFileOption.tsx` is named after a concept that no longer exists.
 - [ ] `/api/ai/complete` (raw completion) was Python-only and unused by the editor; it is
       gone. Anything outside the editor that called it needs `engine/src/ai/providers.ts`.
 - [ ] `test/models` (untracked), old bundles in `dist/`, a root `.venv` and

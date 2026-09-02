@@ -5,7 +5,7 @@ import { useGenerate } from '../elements/shared/useGenerate';
 import { buildGeneration, widgetFields } from '../elements/shared/generation';
 import { widgetLogic } from '../elements/shared/logic';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
-import AuthoredFileOption from '../elements/shared/AuthoredFileOption';
+import KeepInFileOption from '../elements/shared/KeepInFileOption';
 import { GenerationReport } from '../elements/shared/GenerationTranscript';
 import { GUI_GRID_COLUMNS } from './gui/layout';
 import { TONES, TONE_LABELS, type Tone } from './gui/tone';
@@ -165,7 +165,7 @@ Wähle einen Block auf der Seite aus.
 
       {logic && (
         <div className="mt-3">
-          <AuthoredFileOption
+          <KeepInFileOption
             label={widget.label || widget.id}
             fileName={widget.code_file ?? ''}
             extension={logic.extension}

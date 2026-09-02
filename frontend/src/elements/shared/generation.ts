@@ -118,6 +118,34 @@ function probeMessage(probe: CodeProbeReport | undefined, fallback: string): str
   }
 }
 
+/** The JSON type of a value, the way a contract names it. */
+function shapeOf(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (Array.isArray(value)) return `${value.length ? shapeOf(value[0]) : 'unknown'}[]`;
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as object).slice(0, 8);
+    return `{ ${keys.map((k) => `${k}: ${shapeOf((value as Record<string, unknown>)[k])}`).join(', ')} }`;
+  }
+  return typeof value;
+}
+
+/**
+ * What a generated body returned, as the contract the next node is written to.
+ *
+ * Structure first -- each key and the type of what it held -- because that is
+ * what a generator downstream needs to write against; the example after it is
+ * for the reader. Measured, not promised: the verify pass ran the code.
+ */
+export function measuredContract(probe: CodeProbeReport | undefined): string {
+  const outputs = probe?.outputs;
+  if (outputs && Object.keys(outputs).length) {
+    const shape = Object.entries(outputs).map(([key, value]) => `${key}: ${shapeOf(value)}`).join(', ');
+    return `Returns { ${shape} }. Observed when generated: ${probe!.output_preview}`;
+  }
+  const preview = probe?.output_preview?.trim();
+  return preview ? `Returns, as observed when this was generated: ${preview}` : '';
+}
+
 export interface GenerationRequest<S> {
   /** NodeType or GuiWidgetKind -- the server resolves the rest from it. */
   element: string;
@@ -182,10 +210,11 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
     apply: (result) => {
       fields.set(spec.targetField, result.result);
 
-      const measured = result.probe?.output_preview?.trim();
-      if (!request.recordMeasuredOutput || !measured) return;
+      if (!request.recordMeasuredOutput) return;
       if (fields.get('output_format_prompt').trim()) return;
-      fields.set('output_format_prompt', `Returns, as observed when this was generated: ${measured}`);
+      const contract = measuredContract(result.probe);
+      if (!contract) return;
+      fields.set('output_format_prompt', contract);
       fields.set('output_format', 'custom');
     },
   };

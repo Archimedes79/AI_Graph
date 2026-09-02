@@ -9,6 +9,7 @@ import { errorText } from '../utils/errorText';
 import { ACCENT } from '../ui/theme';
 import { delivered } from '../utils/executionStatus';
 import { NODE_ELEMENTS } from '../elements/registry';
+import { migrateNode } from '@engine/migrate.ts';
 
 type RFNode = Node<RFNodeData>;
 
@@ -160,57 +161,6 @@ function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphM
   };
 }
 
-// One-time client-side migration of retired legacy alias names, mirroring
-// backend/app/models/graph.py's _migrate_legacy_node (the backend handles
-// API loads; this covers raw JSON file/paste imports).
-const LEGACY_INPUT_MODES: Record<string, 'text' | 'file' | 'directory'> = {
-  text_input: 'text',
-  file_input: 'file',
-  directory_input: 'directory',
-};
-const LEGACY_WIDGET_KINDS: Record<string, { kind: GuiWidgetKind; mode: string }> = {
-  file_open: { kind: 'input_picker', mode: 'file' },
-  directory_open: { kind: 'input_picker', mode: 'directory' },
-  text_window: { kind: 'text_io', mode: 'both' },
-  chat_window: { kind: 'text_io', mode: 'both' },
-};
-
-function migrateLegacyNode(rawNode: Partial<GraphNode>): Partial<GraphNode> {
-  const nodeType = rawNode.node_type as string | undefined;
-  let node = rawNode;
-  if (nodeType === 'widget') {
-    // A `widget` node was a `gui` node holding one widget, never a behaviour of
-    // its own; mirrors the backend's own rewrite for raw JSON that bypasses it.
-    node = { ...node, node_type: 'gui' };
-  } else if (nodeType && nodeType in LEGACY_INPUT_MODES) {
-    node = {
-      ...node,
-      node_type: 'input',
-      config: { ...(node.config as GraphNode['config']), input_mode: LEGACY_INPUT_MODES[nodeType], prompt_at_runtime: true },
-    };
-  } else if (nodeType === 'text_output') {
-    node = {
-      ...node,
-      node_type: 'output',
-      config: { ...(node.config as GraphNode['config']), write_mode: 'window' },
-    };
-  }
-  const widgets = node.config?.gui_widgets;
-  if (Array.isArray(widgets) && widgets.some((w) => (w.kind as string) in LEGACY_WIDGET_KINDS)) {
-    node = {
-      ...node,
-      config: {
-        ...(node.config as GraphNode['config']),
-        gui_widgets: widgets.map((w) => {
-          const legacy = LEGACY_WIDGET_KINDS[w.kind as string];
-          return legacy ? { ...w, kind: legacy.kind, mode: w.mode || legacy.mode } : w;
-        }),
-      },
-    };
-  }
-  return node;
-}
-
 // A gui/widget node is a "memory" element: its output reflects its own
 // persisted widget value rather than being freshly recomputed from inputs
 // each round. An edge feeding one of its input ports is therefore excluded
@@ -265,7 +215,10 @@ function memoryFeedbackEdgeIds(nodes: GraphNode[], edges: GraphEdge[]): Set<stri
 }
 
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
-  rawNode = migrateLegacyNode(rawNode);
+  // Raw JSON from a dropped or pasted file never passed through the engine's
+  // parseGraph, so it is brought to the current DSL here -- by the engine's
+  // own migration, not a copy of it.
+  rawNode = migrateNode(rawNode) as Partial<GraphNode>;
   const nodeType = rawNode.node_type ?? 'input';
   const nodeId = rawNode.id ?? newId(nodeType);
   const defaults = nodeTypeDefaults(nodeType, nodeId);
