@@ -94,7 +94,7 @@ class GuiWidgetKind(str, Enum):
 class GuiWidget(BaseModel):
     """
     One element inside a GUI node. Ports are never edited by hand: they are
-    always regenerated from this list (see `sync_gui_node_ports`), so a
+    always regenerated from this list by the editor and the engine, so a
     widget's `id` must stay stable once assigned -- it is the only thing
     that keeps existing edges attached across GUI edits.
     """
@@ -291,43 +291,6 @@ class GraphNode(BaseModel):
     inputs: List[Port] = Field(default_factory=list)
     outputs: List[Port] = Field(default_factory=list)
     config: NodeConfig = Field(default_factory=NodeConfig)
-
-
-def gui_widget_ports(widget: GuiWidget) -> tuple[List[Port], List[Port]]:
-    """
-    Return the (inputs, outputs) a single GUI widget contributes to its node.
-    Delegates to that widget kind's `GuiWidgetElement.ports()` (see
-    `app.elements.base`) so the widget's own class is the single
-    source of truth for its ports -- this module only orchestrates the
-    resulting DSL. Local import: `app.elements.registry` imports this module,
-    so importing it at module level here would be circular.
-    """
-    from app.elements.registry import GUI_WIDGET_ELEMENTS
-
-    element = GUI_WIDGET_ELEMENTS.get(widget.kind)
-    if element is None:
-        raise ValueError(f"Unknown GUI widget kind: {widget.kind}")
-    return element.ports(widget)
-
-
-def sync_gui_node_ports(node: GraphNode) -> None:
-    """
-    Regenerate a GUI/WIDGET node's inputs/outputs strictly from
-    `config.gui_widgets`, in order. No-op for any other node type. Call this
-    after any widget-list edit instead of hand-editing `inputs`/`outputs`
-    directly. A WIDGET node is just a GUI node whose `gui_widgets` happens to
-    hold exactly one widget -- same derivation, same element (see gui_element.py).
-    """
-    if node.node_type != NodeType.GUI:
-        return
-    inputs: List[Port] = []
-    outputs: List[Port] = []
-    for widget in node.config.gui_widgets:
-        widget_inputs, widget_outputs = gui_widget_ports(widget)
-        inputs.extend(widget_inputs)
-        outputs.extend(widget_outputs)
-    node.inputs = inputs
-    node.outputs = outputs
 
 
 # ---------------------------------------------------------------------------

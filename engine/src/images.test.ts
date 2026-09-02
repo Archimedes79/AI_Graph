@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { imageDataUrl, imageMediaType, isInlineUrl, splitDataUrl, MAX_INLINE_IMAGE_BYTES } from './images.ts';
 import { nodeFiles } from './host/node.ts';
 import { registry } from './registry.ts';
-import { parseWidget } from './elements/gui.ts';
+import { parseWidget } from './elements/gui/element.ts';
 import type { Runtime } from './element.ts';
 
 /**

@@ -21,7 +21,6 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.elements.registry import generation_for  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services import ai_service, code_refine  # noqa: E402
 
@@ -184,7 +183,8 @@ def test_the_output_format_belongs_to_no_element(monkeypatch):
 
 def test_an_element_that_authors_nothing_is_refused():
     for element in ("output", "gui", "text_io"):
-        assert generation_for(element) is None
+        # That these three declare no generation is the engine's answer, asserted
+        # in `engine/src/describe.test.ts`; here it is what the route does with it.
         response = client.post("/api/ai/generate", json={"element": element, "description": "x"})
         assert response.status_code == 400, element
     assert client.post("/api/ai/generate", json={

@@ -1,21 +1,21 @@
 import type { GuiWidgetKind, NodeType } from '../types/graph';
 import type { GuiWidgetElementDefinition, NodeElementDefinition } from './types';
 
-import { inputElement } from './input/inputElement';
-import { aiElement } from './ai/aiElement';
-import { codeElement } from './code/codeElement';
-import { dataElement } from './data/dataElement';
-import { outputElement } from './output/outputElement';
-import { guiElement } from './gui/guiElement';
+import { inputElement } from '@engine/elements/input/editor/definition';
+import { aiElement } from '@engine/elements/ai/editor/definition';
+import { codeElement } from '@engine/elements/code/editor/definition';
+import { dataElement } from '@engine/elements/data/editor/definition';
+import { outputElement } from '@engine/elements/output/editor/definition';
+import { guiElement } from '@engine/elements/gui/editor/definition';
 
-import { inputPickerElement } from './gui/widgets/input_picker/inputPickerElement';
-import { textIoElement } from './gui/widgets/text_io/textIoElement';
-import { imageViewElement } from './gui/widgets/image_view/imageViewElement';
-import { plotWindowElement } from './gui/widgets/plot_window/plotWindowElement';
-import { tableElement } from './gui/widgets/table/tableElement';
-import { textElement } from './gui/widgets/text/textElement';
-import { dividerElement } from './gui/widgets/divider/dividerElement';
-import { spacerElement } from './gui/widgets/spacer/spacerElement';
+import { inputPickerElement } from '@engine/elements/gui/children/input_picker/editor/definition';
+import { textIoElement } from '@engine/elements/gui/children/text_io/editor/definition';
+import { imageViewElement } from '@engine/elements/gui/children/image_view/editor/definition';
+import { plotWindowElement } from '@engine/elements/gui/children/plot_window/editor/definition';
+import { tableElement } from '@engine/elements/gui/children/table/editor/definition';
+import { textElement } from '@engine/elements/gui/children/text/editor/definition';
+import { dividerElement } from '@engine/elements/gui/children/divider/editor/definition';
+import { spacerElement } from '@engine/elements/gui/children/spacer/editor/definition';
 
 /** Dispatch table every NodeType resolves through. */
 export const NODE_ELEMENTS: Record<NodeType, NodeElementDefinition> = {

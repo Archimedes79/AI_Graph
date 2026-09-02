@@ -1,12 +1,15 @@
 """
 Authored text as a real file beside the graph.
 
-One mechanism for nodes AND widgets: each element declares what it authors
-(`authored_file`), `node_files.Authored` is the single view of "a thing with a
-name and some text somebody wrote", and every function takes one of those
-without learning which of the two levels it came from. These tests are therefore
-mostly about the shared behaviour, plus one case per element proving its
-declaration is wired up.
+One mechanism for nodes AND widgets: `node_files.Authored` is the single view of
+"a thing with a name and some text somebody wrote", and every function takes one
+of those without learning which of the two levels it came from. These tests are
+therefore about that shared behaviour.
+
+*Which* field an element authors is not decided here and not asserted here: the
+elements live in the engine and answer it through `authoredIn` (asserted in
+`engine/src/authored.test.ts`). The specs below are that answer, written out, so
+these tests need no engine running to exercise the file layer.
 """
 
 from __future__ import annotations
@@ -18,10 +21,33 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.elements.registry import GUI_WIDGET_ELEMENTS, NODE_ELEMENTS  # noqa: E402
 from app.models.graph import (Graph, GraphNode, GuiWidget, GuiWidgetKind, NodeConfig,  # noqa: E402
                               NodeType, Port, PortKind)
 from app.services import node_files  # noqa: E402
+
+
+# What the engine reports for each element, as `AuthoredSpec`.
+NODE_SPECS = {
+    "code": node_files.AuthoredSpec("code", "code_prompt", ".js"),
+    "ai": node_files.AuthoredSpec("system_prompt", "description", ".md", prompt_on_node=True),
+    "data": node_files.AuthoredSpec("data_format_prompt", "data_prompt", ".md"),
+    "input": None,      # a selector, but only while it points at a directory
+    "output": None,
+    "gui": None,        # a composite: its blocks author, it does not
+}
+_SELECTOR = node_files.AuthoredSpec("selector_code", "selector_prompt", ".js")
+_TRANSFORM = node_files.AuthoredSpec("code", "code_prompt", ".js")
+WIDGET_SPECS = {
+    "input_picker": _SELECTOR, "plot_window": _TRANSFORM,
+    "image_view": _TRANSFORM, "table": _TRANSFORM,
+    "text_io": None, "text": None, "divider": None, "spacer": None,
+}
+
+
+def _spec_for(node):
+    if node.node_type == NodeType.INPUT:
+        return _SELECTOR if node.config.input_mode == "directory" else None
+    return NODE_SPECS[node.node_type.value]
 
 
 def _node(node_type="code", label="Analyse", **config):
@@ -40,54 +66,17 @@ def _node(node_type="code", label="Analyse", **config):
         "edges": [],
     })
     node = graph.nodes[0]
-    spec = NODE_ELEMENTS[node.node_type].authored_file(node)
+    spec = _spec_for(node)
     return node, (node_files.for_node(node, spec) if spec else None)
 
 
 def _widget(kind="plot_window", label="Verlauf", **fields):
     widget = GuiWidget(id="w1", kind=kind, label=label, **fields)
-    spec = GUI_WIDGET_ELEMENTS[GuiWidgetKind(kind)].authored_file(widget)
+    spec = WIDGET_SPECS[kind]
     return widget, (node_files.for_widget(widget, spec) if spec else None)
 
 
 # --- the symmetry, across both levels ---------------------------------------
-
-@pytest.mark.parametrize("node_type,body_field,extension", [
-    # .js, because a new code node starts in JavaScript: it is the one language
-    # a recipient needs nothing installed for. A node switched to Python gets
-    # .py, which is what `code_extension` reads off the node.
-    ("code", "code", ".js"),
-    ("ai", "system_prompt", ".md"),
-    ("data", "data_format_prompt", ".md"),
-])
-def test_each_node_element_declares_what_it_authors(node_type, body_field, extension):
-    _, item = _node(node_type)
-    assert item is not None
-    assert item.spec.body_field == body_field
-    assert item.spec.extension == extension
-
-
-@pytest.mark.parametrize("kind,body_field", [
-    ("input_picker", "selector_code"),
-    ("plot_window", "code"),
-    ("image_view", "code"),
-])
-def test_each_widget_element_declares_what_it_authors(kind, body_field):
-    _, item = _widget(kind)
-    assert item is not None
-    assert item.spec.body_field == body_field
-
-
-@pytest.mark.parametrize("node_type", ["input", "output"])
-def test_a_node_with_nothing_authored_has_no_file(node_type):
-    _, item = _node(node_type)
-    assert item is None
-
-
-def test_a_widget_with_nothing_authored_has_no_file():
-    _, item = _widget("text_io")
-    assert item is None
-
 
 @pytest.mark.parametrize("make,body,prompt_text", [
     (lambda: _node("code", code_prompt="Die Absicht."), "def run(i):\n    return {}", "Die Absicht."),
@@ -229,7 +218,7 @@ def test_an_empty_code_file_is_written_as_its_skeleton():
         outputs=[Port(id="summary", name="Summary", kind=PortKind.OUTPUT)],
         config=NodeConfig(code=""),
     )
-    spec = NODE_ELEMENTS[NodeType.CODE].authored_file(node)
+    spec = NODE_SPECS["code"]
     rendered = node_files.render(node_files.for_node(node, spec), "Analyse.js")
 
     assert "function run(inputs) {" in rendered
@@ -247,7 +236,7 @@ def test_a_written_body_is_never_replaced_by_the_skeleton():
         outputs=[Port(id="summary", name="Summary", kind=PortKind.OUTPUT)],
         config=NodeConfig(code="def run(inputs):\n    return {'summary': 'x'}\n"),
     )
-    spec = NODE_ELEMENTS[NodeType.CODE].authored_file(node)
+    spec = NODE_SPECS["code"]
     rendered = node_files.render(node_files.for_node(node, spec), "Analyse.js")
     assert "TypedDict" not in rendered
     assert "'summary': 'x'" in rendered
@@ -259,6 +248,6 @@ def test_a_prose_body_gets_no_skeleton():
         id="n2", node_type=NodeType.AI, label="Ask", description="ask things",
         config=NodeConfig(system_prompt=""),
     )
-    spec = NODE_ELEMENTS[NodeType.AI].authored_file(node)
+    spec = NODE_SPECS["ai"]
     rendered = node_files.render(node_files.for_node(node, spec), "Ask.md")
     assert "def run" not in rendered

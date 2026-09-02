@@ -53,7 +53,15 @@ async function engineFiles(dir = ENGINE_ROOT): Promise<string[]> {
   const found: string[] = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) found.push(...await engineFiles(full));
+    // An element's `editor/` folder is the browser's half of it: the config
+    // panel, its React, and imports only the editor app can resolve. It sits
+    // beside the element so a change to one element stays in one directory --
+    // and it must never reach a recipient, who was handed a tool and not an
+    // editor. `test_deploy_boundary` is the check that says so out loud.
+    if (entry.isDirectory()) {
+      if (entry.name === 'editor') continue;
+      found.push(...await engineFiles(full));
+    }
     // Tests stay behind: a recipient runs the graph, and the differential test
     // would fail on their machine for want of a Python engine to compare with.
     else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) found.push(full);

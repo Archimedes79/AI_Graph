@@ -6,12 +6,13 @@
 
 import type { NodeElement, WidgetElement } from './element.ts';
 import type { NodeType, WidgetKind } from './graph.ts';
-import { AiElement } from './elements/ai.ts';
-import { CodeElement } from './elements/code.ts';
-import { DataElement } from './elements/data.ts';
-import { GuiElement } from './elements/gui.ts';
-import { InputElement, OutputElement } from './elements/io.ts';
-import { WIDGET_ELEMENTS } from './elements/widgets.ts';
+import { AiElement } from './elements/ai/element.ts';
+import { CodeElement } from './elements/code/element.ts';
+import { DataElement } from './elements/data/element.ts';
+import { GuiElement } from './elements/gui/element.ts';
+import { InputElement } from './elements/input/element.ts';
+import { OutputElement } from './elements/output/element.ts';
+import { WIDGET_ELEMENTS } from './elements/gui/children/index.ts';
 
 export const NODE_ELEMENTS: NodeElement<unknown>[] = [
   new InputElement(),

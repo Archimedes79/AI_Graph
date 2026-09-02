@@ -12,7 +12,7 @@
 import type { GraphNode, GuiWidget } from '../../types/graph';
 import type { Logic } from '@engine/logic.ts';
 import { registry as engineRegistry } from '@engine/registry.ts';
-import { parseWidget } from '@engine/elements/gui.ts';
+import { parseWidget } from '@engine/elements/gui/element.ts';
 
 /** What this node authors, or undefined if it authors nothing. */
 export function nodeLogic(node: GraphNode): Logic | undefined {

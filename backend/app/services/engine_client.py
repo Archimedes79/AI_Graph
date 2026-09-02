@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import atexit
 import logging
+import os
 import shutil
 import socket
 import subprocess
@@ -65,6 +66,13 @@ def start() -> str:
     global _process, _base_url
 
     if _process is not None and _process.poll() is None:
+        return _base_url
+
+    # When the engine is the front door it starts this process, not the other
+    # way round, and says where it listens. Nothing to spawn then.
+    given = os.environ.get("AI_GRAPH_ENGINE_URL", "").strip()
+    if given:
+        _base_url = given.rstrip("/")
         return _base_url
 
     if not ENGINE_MAIN.exists():
@@ -118,7 +126,7 @@ def stop() -> None:
 atexit.register(stop)
 
 
-async def post(path: str, payload: Any) -> Dict[str, Any]:
+async def post(path: str, payload: Any) -> Any:
     """POST to the engine, starting it if needed."""
     base = start()
     async with httpx.AsyncClient(timeout=None) as client:

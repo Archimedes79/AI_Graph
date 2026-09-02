@@ -15,7 +15,7 @@ import { guiWidgetPorts } from '../utils/guiWidgets';
 import { NODE_ELEMENTS, GUI_WIDGET_ELEMENTS } from './registry';
 import { createGuiWidget } from '../utils/guiWidgets';
 import type { GraphNode, GuiWidget } from '../types/graph';
-import { connectedDataFormatContext } from './data/dataElement';
+import { connectedDataFormatContext } from '@engine/elements/data/editor/definition';
 import { nodeLogic, widgetLogic } from './shared/logic';
 
 /**
@@ -82,6 +82,19 @@ describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, elem
     expect(spec.promptField in fields).toBe(true);
     expect(spec.targetField in (node.config as unknown as Record<string, unknown>)).toBe(true);
     expect(spec.guard && spec.success).toBeTruthy();
+
+    // The button writes into the field the *engine* says holds the body. Two
+    // answers here means ✨ Generate filling a config key nothing ever runs,
+    // which is the one failure this pair of declarations can produce and
+    // nothing else would notice. Offered and authored are the same question,
+    // so they are asserted to agree even when the answer is "not for this node".
+    const logic = nodeLogic(node);
+    const offered = spec.available?.(node) ?? true;
+    expect(Boolean(logic)).toBe(offered);
+    if (logic) {
+      expect(logic.fields.body).toBe(spec.targetField);
+      expect(logic.fields.prompt).toBe(spec.promptField);
+    }
   });
 
   it('describes what it emits, or is a node with nothing to say', () => {
@@ -157,5 +170,14 @@ describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (wi
     expect(spec.promptField in flat).toBe(true);
     expect(spec.targetField in flat).toBe(true);
     expect(spec.guard && spec.success).toBeTruthy();
+
+    // Same agreement one level down (see the node case above).
+    const logic = widgetLogic(widget);
+    const offered = spec.available?.(widget) ?? true;
+    expect(Boolean(logic)).toBe(offered);
+    if (logic) {
+      expect(logic.fields.body).toBe(spec.targetField);
+      expect(logic.fields.prompt).toBe(spec.promptField);
+    }
   });
 });

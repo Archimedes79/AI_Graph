@@ -11,9 +11,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.elements.registry import GUI_WIDGET_ELEMENTS, NODE_ELEMENTS
 from app.models.graph import Graph
-from app.services import file_service, node_files
+from app.services import engine_client, file_service, node_files
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/graphs", tags=["graphs"])
@@ -40,7 +39,23 @@ class FileChangedError(RuntimeError):
         self.file_name = file_name
 
 
-def _authored_items(graph: Graph, directory) -> "list":
+async def _authored_specs(graph: Graph) -> dict:
+    """
+    Ask the engine which config key holds each element's authored body.
+
+    The elements live there, in one language, so this asks rather than keeps a
+    table of its own -- the copy that used to sit beside them is how one of them
+    came to name a `.py` long after the last Python body was gone. Keyed by
+    `(node id, widget id)`, with an empty widget id for the node itself.
+    """
+    rows = await engine_client.post("/api/elements/authored", graph.model_dump(mode="json"))
+    return {
+        (str(row["node_id"]), str(row["widget_id"])): node_files.AuthoredSpec.from_engine(row)
+        for row in rows
+    }
+
+
+def _authored_items(graph: Graph, directory, specs: dict) -> "list":
     """
     Every file-bearing thing in the graph, as `(folder, Authored)` pairs.
 
@@ -51,20 +66,18 @@ def _authored_items(graph: Graph, directory) -> "list":
     """
     items = []
     for node in graph.nodes:
-        element = NODE_ELEMENTS.get(node.node_type)
-        spec = element.authored_file(node) if element is not None else None
+        spec = specs.get((node.id, ""))
         if spec is not None:
             items.append((directory, node_files.for_node(node, spec)))
 
         for widget in node.config.gui_widgets:
-            widget_element = GUI_WIDGET_ELEMENTS.get(widget.kind)
-            widget_spec = widget_element.authored_file(widget) if widget_element is not None else None
+            widget_spec = specs.get((node.id, widget.id))
             if widget_spec is not None:
                 items.append((directory / node_files.slug(node.label), node_files.for_widget(widget, widget_spec)))
     return items
 
 
-def _read_node_files(graph: Graph, graph_path: str) -> None:
+def _read_node_files(graph: Graph, graph_path: str, specs: dict) -> None:
     """
     Fill each authored field from its file. The file is authoritative for what a
     person writes, so this runs on load and the editor never sees a stale copy.
@@ -74,7 +87,7 @@ def _read_node_files(graph: Graph, graph_path: str) -> None:
     still carries, instead of silently losing it.
     """
     directory = node_files.node_dir(graph_path)
-    for folder, item in _authored_items(graph, directory):
+    for folder, item in _authored_items(graph, directory, specs):
         if not item.file_name:
             continue
         path = folder / item.file_name
@@ -86,7 +99,7 @@ def _read_node_files(graph: Graph, graph_path: str) -> None:
         node_files.remember(path)
 
 
-def _write_node_files(graph: Graph, graph_path: str) -> None:
+def _write_node_files(graph: Graph, graph_path: str, specs: dict) -> None:
     """
     Write one file per element that has opted into having one, named after the
     element: renaming it on the canvas renames its file, which is the whole
@@ -95,7 +108,7 @@ def _write_node_files(graph: Graph, graph_path: str) -> None:
     directory = node_files.node_dir(graph_path)
     taken: dict = {}
 
-    for folder, item in _authored_items(graph, directory):
+    for folder, item in _authored_items(graph, directory, specs):
         current = item.file_name
         if not current:
             continue
@@ -121,7 +134,7 @@ def _write_node_files(graph: Graph, graph_path: str) -> None:
         node_files.remember(new_path)
 
 
-def _without_externalised_body(graph: Graph) -> dict:
+def _without_externalised_body(graph: Graph, specs: dict) -> dict:
     """
     The JSON to write: a node whose text lives in a file does not repeat it here.
 
@@ -135,8 +148,7 @@ def _without_externalised_body(graph: Graph) -> dict:
     for raw in data.get("nodes", []):
         node = by_id[raw["id"]]
         config = raw.get("config") or {}
-        element = NODE_ELEMENTS.get(node.node_type)
-        spec = element.authored_file(node) if element is not None else None
+        spec = specs.get((node.id, ""))
         if spec is not None and (config.get("code_file") or "").strip():
             config[spec.body_field] = ""
 
@@ -144,8 +156,7 @@ def _without_externalised_body(graph: Graph) -> dict:
             widget = next((w for w in node.config.gui_widgets if w.id == raw_widget.get("id")), None)
             if widget is None or not (raw_widget.get("code_file") or "").strip():
                 continue
-            widget_element = GUI_WIDGET_ELEMENTS.get(widget.kind)
-            widget_spec = widget_element.authored_file(widget) if widget_element is not None else None
+            widget_spec = specs.get((node.id, widget.id))
             if widget_spec is not None:
                 raw_widget[widget_spec.body_field] = ""
     return data
@@ -163,7 +174,7 @@ async def load_graph_file(payload: GraphFileLoadRequest):
         graph = Graph.model_validate_json(raw)
     except Exception as exc:
         raise HTTPException(400, f"Invalid graph JSON: {exc}") from exc
-    _read_node_files(graph, resolved)
+    _read_node_files(graph, resolved, await _authored_specs(graph))
     return {"path": resolved, "graph": graph.model_dump()}
 
 
@@ -173,15 +184,16 @@ async def save_graph_file(payload: GraphFileSaveRequest):
     As"), so subsequent saves round-trip to the same file a graph was loaded from."""
     resolved = file_service.resolve_path(payload.path)
     payload.graph.metadata.updated_at = _now()
+    specs = await _authored_specs(payload.graph)
     try:
-        _write_node_files(payload.graph, resolved)
+        _write_node_files(payload.graph, resolved, specs)
     except FileChangedError as exc:
         raise HTTPException(409, (
             f"{exc.file_name} was changed outside the editor since it was opened. "
             "Reload the node files to take those changes, or save to a different path."
         )) from exc
     try:
-        file_service.write_file(resolved, json.dumps(_without_externalised_body(payload.graph), indent=2, default=str))
+        file_service.write_file(resolved, json.dumps(_without_externalised_body(payload.graph, specs), indent=2, default=str))
     except OSError as exc:
         raise HTTPException(400, f"Could not write graph file: {exc}") from exc
     return {"path": resolved, "graph": payload.graph.model_dump()}
@@ -201,5 +213,5 @@ async def reload_node_files(payload: GraphFileLoadRequest):
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
     graph = Graph.model_validate_json(raw)
-    _read_node_files(graph, resolved)
+    _read_node_files(graph, resolved, await _authored_specs(graph))
     return {"path": resolved, "graph": graph.model_dump()}

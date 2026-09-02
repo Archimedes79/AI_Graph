@@ -22,6 +22,12 @@ export default defineConfig({
     },
   },
   resolve: {
+    // An element's editor half lives beside its engine half, under ../engine,
+    // and imports React from there. Node's lookup walks *up* from the file and
+    // would never reach this package's node_modules, so React is resolved from
+    // here for every file, wherever it lives. (tsconfig `paths` says the same
+    // thing to the type checker.)
+    dedupe: ['react', 'react-dom'],
     alias: {
       '@': path.resolve(__dirname, './src'),
       // The engine lives beside the frontend, not inside it: it must run under

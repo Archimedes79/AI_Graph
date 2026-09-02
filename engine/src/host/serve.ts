@@ -11,12 +11,13 @@
 // it is written out here rather than assembled from a router someone might
 // extend later without noticing where it ends up.
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { parseGraph, type ExecutionResult, type Graph } from '../graph.ts';
 import { executeGraph } from '../executor.ts';
 import { registry } from '../registry.ts';
+import { authoredIn, generations } from '../describe.ts';
 import { applyRuntimeValues, runtimeRequirements } from '../runtimeValues.ts';
 import { nodeFiles, nodeRuntime } from './node.ts';
 
@@ -78,7 +79,20 @@ export interface ServeOptions {
    */
   allowBrowse?: boolean;
   host?: string;
+  /**
+   * Serve the editor instead of a deployed page.
+   *
+   * `dist` is the built editor. `api` is where the routes this process does not
+   * own yet are forwarded — the editor's Python server, for as long as it
+   * exists. This makes the engine the front door: the browser talks to one
+   * process, and every route brought across is one line fewer forwarded, until
+   * nothing is.
+   */
+  editor?: { dist: string; api: string };
 }
+
+/** In editor mode, the routes the engine answers itself; the rest is forwarded. */
+const OWNED_IN_EDITOR_MODE = /^\/api\/(execute|elements)\//;
 
 export async function serve(options: ServeOptions): Promise<{ server: Server; url: string }> {
   const host = options.host ?? '127.0.0.1';
@@ -100,6 +114,10 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     const url = new URL(request.url ?? '/', `http://${host}`);
     const path = url.pathname;
 
+    if (options.editor && path.startsWith('/api/') && !OWNED_IN_EDITOR_MODE.test(path)) {
+      return forward(request, response, options.editor.api);
+    }
+
     if (path === '/api/runtime/graph') {
       if (!original) return send(response, 404, { detail: 'This server ships no graph; post the one to run.' });
       return send(response, 200, original);
@@ -108,6 +126,19 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     if (path === '/api/execute/requirements' && request.method === 'POST') {
       const graph = parseGraph(await body(request));
       return send(response, 200, runtimeRequirements(graph, registry).map(asRequirement));
+    }
+
+    // Where this graph's authored bodies live. Describing a graph the caller
+    // already holds is neither code generation nor graph editing, so it sits
+    // inside the boundary above: the editor asks the elements instead of
+    // keeping a second opinion about which config key holds a node's code.
+    if (path === '/api/elements/generation') {
+      return send(response, 200, generations());
+    }
+
+    if (path === '/api/elements/authored' && request.method === 'POST') {
+      const graph = parseGraph(await body(request));
+      return send(response, 200, authoredIn(graph));
     }
 
     if (path === '/api/execute/' && request.method === 'POST') {
@@ -155,7 +186,8 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
 
     if (path.startsWith('/api/')) return send(response, 404, { detail: 'Not part of a deployed tool.' });
 
-    return options.pageDir ? page(response, path, options.pageDir) : send(response, 404, { detail: 'No page.' });
+    if (options.editor) return page(response, path, options.editor.dist, 'index.html');
+    return options.pageDir ? page(response, path, options.pageDir, 'runtime.html') : send(response, 404, { detail: 'No page.' });
   }
 
   async function run(graph: Graph): Promise<ExecutionResult> {
@@ -219,10 +251,10 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     return { path: target, entries: files.map((file) => ({ path: file, is_dir: false })) };
   }
 
-  async function page(response: ServerResponse, path: string, dir: string): Promise<void> {
+  async function page(response: ServerResponse, path: string, dir: string, entry: string): Promise<void> {
     // Anything that is not a file is the page itself: the runtime is a single
     // page, so a deep link is still that page rather than a 404.
-    const wanted = path === '/' ? '/runtime.html' : path;
+    const wanted = path === '/' ? `/${entry}` : path;
     const full = join(dir, normalize(wanted).replace(/^([/\\])+/, ''));
     if (!full.startsWith(resolve(dir) + sep) && full !== resolve(dir)) {
       return send(response, 403, { detail: 'Outside the page.' });
@@ -233,15 +265,45 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       response.writeHead(200, { 'Content-Type': MIME[extname(full)] ?? 'application/octet-stream' });
       response.end(await readFile(full));
     } catch {
-      const html = join(dir, 'runtime.html');
-      response.writeHead(200, { 'Content-Type': MIME['.html'] });
-      response.end(await readFile(html));
+      try {
+        const html = await readFile(join(dir, entry));
+        response.writeHead(200, { 'Content-Type': MIME['.html'] });
+        response.end(html);
+      } catch {
+        send(response, 404, { detail: `No ${entry} in ${dir}. Build the editor first: cd frontend && npm run build` });
+      }
     }
   }
 
   await new Promise<void>((listening) => server.listen(options.port ?? 0, host, listening));
   const port = (server.address() as { port: number }).port;
   return { server, url: `http://${host}:${port}` };
+}
+
+/**
+ * Hand a request to the server that still owns the route, and its answer back.
+ *
+ * Streamed both ways rather than buffered: an upload is a body, and a body is
+ * not something to read into memory just to write it out again.
+ */
+function forward(request: IncomingMessage, response: ServerResponse, api: string): Promise<void> {
+  return new Promise((done) => {
+    const target = new URL(request.url ?? '/', api);
+    const upstream = httpRequest(
+      target,
+      { method: request.method, headers: { ...request.headers, host: target.host } },
+      (reply) => {
+        response.writeHead(reply.statusCode ?? 502, reply.headers);
+        reply.pipe(response);
+        reply.on('end', done);
+      },
+    );
+    upstream.on('error', (error) => {
+      send(response, 502, { detail: `The editor's server is not answering: ${error.message}` });
+      done();
+    });
+    request.pipe(upstream);
+  });
 }
 
 function snapshot(record: Run): unknown {

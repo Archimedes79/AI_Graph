@@ -4,7 +4,7 @@ import { generate } from '../../utils/api';
 import { genAI } from '../../store/settingsStore';
 import { useGenerate } from './useGenerate';
 import GenerationTranscript, { GenerationReport } from './GenerationTranscript';
-import { describeDataFormat } from '../data/dataElement';
+import { describeDataFormat } from '@engine/elements/data/editor/definition';
 import { ACCENT_FILL, ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
 
 interface Props {

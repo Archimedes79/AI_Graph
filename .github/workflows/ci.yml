@@ -39,13 +39,10 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt pytest pytest-asyncio
 
-      - name: Install frontend dependencies
+      # One workspace, one lockfile: the engine and the editor share it, which
+      # is what lets an element's editor half live beside its engine half.
+      - name: Install engine and frontend dependencies
         run: npm ci
-        working-directory: frontend
-
-      - name: Install engine dependencies
-        run: npm install
-        working-directory: engine
 
       # First, like checkpoint.py: a stale graph.generated.ts makes the
       # frontend fail in a way that looks unrelated to the real cause.

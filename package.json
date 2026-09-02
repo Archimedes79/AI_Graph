@@ -1,0 +1,13 @@
+{
+  "name": "ai-graph",
+  "private": true,
+  "description": "One workspace, so an element's editor half can live beside its engine half and still find React.",
+  "workspaces": [
+    "engine",
+    "frontend"
+  ],
+  "scripts": {
+    "test": "npm test --workspaces",
+    "typecheck": "npm run typecheck --workspaces"
+  }
+}

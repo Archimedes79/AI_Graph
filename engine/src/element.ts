@@ -28,6 +28,7 @@
 import type { GraphNode, Port, RawConfig, WidgetKind, NodeType } from './graph.ts';
 import type { RuntimeRequirement } from './runtimeValues.ts';
 import type { Logic } from './logic.ts';
+import type { Generation } from './generation.ts';
 
 // ---------------------------------------------------------------------------
 // The world an element is allowed to touch
@@ -114,6 +115,18 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
    * reach into an untyped config. See `logic.ts` for what that cost.
    */
   logic(_subject: S): Logic | undefined {
+    return undefined;
+  }
+
+  /**
+   * How an AI writes this element's body, or undefined if none does.
+   *
+   * A property of the element, not of one subject: whether the button is
+   * *offered* on a particular node — an input node selects files only in
+   * directory mode — is a question about that node, and the editor asks it by
+   * checking whether `logic()` answered.
+   */
+  generation(): Generation | undefined {
     return undefined;
   }
 

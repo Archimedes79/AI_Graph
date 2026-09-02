@@ -1,7 +1,7 @@
 import React from 'react';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import { valueToText } from '../widgetProps';
-import { effectiveTextIoMode } from '../../../elements/gui/widgets/text_io/mode';
+import { effectiveTextIoMode } from '@engine/elements/gui/children/text_io/editor/mode';
 import { FIELD, MUTED } from '../../../ui/theme';
 
 /** Runtime text_io widget.

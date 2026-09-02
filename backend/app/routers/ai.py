@@ -15,7 +15,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from app.elements.registry import generation_for
+from app.services.generation import generation_for
 from app.models.graph import (
     AICall,
     CodeProbeReport,
@@ -131,7 +131,7 @@ async def _generated(name: str, coro):
 
 
 # Which settings key holds the endpoint / credential for each provider. Same
-# mapping the deployed runtime uses (graph-runner/serve.py) -- the editor was
+# mapping the deployed runtime uses (engine/src/host/serve.ts) -- the editor was
 # the only surface that could pick a hosted provider without being able to
 # supply the key it needs.
 _ENDPOINT_KEYS = {
@@ -296,7 +296,7 @@ _GENERATORS = {
 @router.post("/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest):
     """Generate one element's authored text, whatever the element is."""
-    spec = generation_for(req.element) if req.element else None
+    spec = await generation_for(req.element) if req.element else None
     if req.element and spec is None:
         raise HTTPException(400, f"{req.element!r} is not an element that generates anything")
     kind = spec.kind if spec is not None else req.kind

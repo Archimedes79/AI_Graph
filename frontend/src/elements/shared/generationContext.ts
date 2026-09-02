@@ -1,5 +1,5 @@
 import type { ExecutionResult, GraphNode } from '../../types/graph';
-import { describeDataFormat } from '../data/dataElement';
+import { describeDataFormat } from '@engine/elements/data/editor/definition';
 // Read inside functions only. The registry imports every element and an element
 // imports this module, so touching NODE_ELEMENTS at module scope would read a
 // binding that is still being initialised; at call time it is complete.

@@ -138,6 +138,17 @@ export interface GenerationRequest<S> {
    * from -- the part no type annotation can express.
    */
   inputSources?: Record<string, string>;
+  /**
+   * Write down what the generated body actually returned.
+   *
+   * The backend already ran it against real data before handing it over, so the
+   * probe's preview is a measurement rather than a promise — and it is exactly
+   * what the *next* node has to be generated against. Only for a node: a block
+   * inside a page has no output contract of its own, and only when the node
+   * states none, because a contract somebody wrote by hand is not something a
+   * generation gets to overwrite.
+   */
+  recordMeasuredOutput?: boolean;
 }
 
 /**
@@ -168,6 +179,14 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
       input_sources: request.inputSources,
       ...genAI(),
     }),
-    apply: (result) => fields.set(spec.targetField, result.result),
+    apply: (result) => {
+      fields.set(spec.targetField, result.result);
+
+      const measured = result.probe?.output_preview?.trim();
+      if (!request.recordMeasuredOutput || !measured) return;
+      if (fields.get('output_format_prompt').trim()) return;
+      fields.set('output_format_prompt', `Returns, as observed when this was generated: ${measured}`);
+      fields.set('output_format', 'custom');
+    },
   };
 }

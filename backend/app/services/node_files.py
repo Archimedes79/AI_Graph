@@ -13,8 +13,8 @@ executes, and the router fills it in from the file on load.
 
 **One mechanism, not one per node type.** Every element turns out to have the
 same shape -- one authored body, one prompt that produced it -- so each declares
-it once via `NodeElement.authored_file()` and everything here is parameterised
-by that. A new node type gets files by returning an `AuthoredFile`; nothing in
+it once, as a `Logic`, and everything here is parameterised by the
+`AuthoredSpec` the engine derives from it; nothing in
 this module or in the router learns its name.
 
 The file carries a header with the prompt and the context it was generated from,
@@ -100,10 +100,37 @@ def default_file_name(label: str, extension: str, taken: Optional[set] = None) -
 # One view of "a thing with a name and some text somebody wrote"
 # ---------------------------------------------------------------------------
 
+@dataclass(frozen=True)
+class AuthoredSpec:
+    """
+    Which config key holds an element's authored body, and which its request.
+
+    Element knowledge, and therefore not decided here: the engine answers it per
+    graph (`POST /api/elements/authored`), because whether an element authors
+    anything at all can depend on how it is set — an input node has a file
+    selector only while it points at a directory. This is the shape that answer
+    arrives in, so nothing below has to know what a code node is.
+    """
+
+    body_field: str
+    prompt_field: str = ""
+    extension: str = ".md"
+    prompt_on_node: bool = False
+
+    @classmethod
+    def from_engine(cls, row: Dict[str, Any]) -> "AuthoredSpec":
+        return cls(
+            body_field=str(row["body_field"]),
+            prompt_field=str(row.get("prompt_field") or ""),
+            extension=str(row.get("extension") or ".md"),
+            prompt_on_node=bool(row.get("prompt_on_node")),
+        )
+
+
 @dataclass
 class Authored:
     """
-    A node or a widget, seen through its `AuthoredFile`.
+    A node or a widget, seen through its `AuthoredSpec`.
 
     They are the same object at two levels -- a widget is an element that
     happens to live inside a gui node -- and roughly everything about putting
@@ -114,7 +141,7 @@ class Authored:
 
     label: str
     ident: str
-    spec: Any                 # AuthoredFile
+    spec: Any                 # AuthoredSpec
     body_holder: Any          # node.config, or the widget itself
     prompt_holder: Any        # node, node.config, or the widget itself
     pointer_holder: Any       # where `code_file` lives
