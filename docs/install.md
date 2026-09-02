@@ -58,6 +58,19 @@ The container binds `--host 0.0.0.0` because its loopback is its own. On a
 non-loopback bind the file browser switches itself off rather than expose the host's
 filesystem listing to the network; everything else works.
 
+### The published image
+
+Every push to `main` that passes CI is built and pushed to GitHub's own registry, so a
+checkout is not required to run the editor in a container:
+
+```bash
+docker run -p 8000:8000 -v ./data:/app/data ghcr.io/archimedes79/ai_graph:latest
+```
+
+A tagged release (`vX.Y.Z`) additionally publishes that version and its `X.Y`/`X`
+shorthands, so a deployment can pin one instead of tracking `latest`. See
+`.github/workflows/ci.yml`'s `publish` job for exactly what is built.
+
 ## Code nodes and the target machine
 
 A code node is JavaScript and runs on the Node that runs the engine — nothing else to

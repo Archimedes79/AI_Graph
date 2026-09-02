@@ -1,0 +1,26 @@
+# What `COPY . .` in the Dockerfile must never see.
+#
+# Above everything else: ai-settings.json can hold a real API key, and
+# data/attachments is whatever a local run has read in. Neither belongs in an
+# image built once and shared.
+
+.git/
+node_modules/
+engine/node_modules/
+editor/node_modules/
+editor/dist/
+editor/.vite/
+dist/
+build/
+data/
+!engine/src/elements/data/
+ai-settings.json
+*.log
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.vscode/
+.idea/
+.claude/
+*.tsbuildinfo
