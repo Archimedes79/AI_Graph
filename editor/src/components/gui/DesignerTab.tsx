@@ -228,6 +228,7 @@ export default function DesignerTab() {
         </h3>
         <GuiWidgetProperties
           widget={selected}
+          nodeId={selected ? ownerOf(selected.id)?.id ?? '' : ''}
           onChange={updateSelected}
           onRemove={removeSelected}
         />

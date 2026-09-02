@@ -7,12 +7,16 @@ import { widgetLogic } from '../elements/shared/logic';
 import { GUI_WIDGET_ELEMENTS } from '../elements/registry';
 import KeepInFileOption from '../elements/shared/KeepInFileOption';
 import { GenerationReport } from '../elements/shared/GenerationTranscript';
+import { lastRunWidgetInput } from '../elements/shared/generationContext';
+import { useGraphStore } from '../store/graphStore';
 import { GUI_GRID_COLUMNS } from './gui/layout';
 import { TONES, TONE_LABELS, type Tone } from './gui/tone';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, MUTED, NEUTRAL_BUTTON, WELL } from '../ui/theme';
 
 interface GuiWidgetPropertiesProps {
   widget: GuiWidget | null;
+  /** The gui node this block sits on, so its last run can be looked up. */
+  nodeId: string;
   onChange: (patch: Partial<GuiWidget>) => void;
   /** Remove this block from the page. Dragging is what arranges it. */
   onRemove?: () => void;
@@ -30,8 +34,9 @@ interface GuiWidgetPropertiesProps {
  * draws the element's own `ConfigEditor` rather than knowing any widget kind.
  */
 export default function GuiWidgetProperties({
-  widget, onChange, onRemove,
+  widget, nodeId, onChange, onRemove,
 }: GuiWidgetPropertiesProps) {
+  const executionResult = useGraphStore((s) => s.executionResult);
   // Start expanded when there is already a body: collapsed-by-default is right
   // for an empty section and wrong for a full one -- hiding code the user (or
   // the AI) has written is exactly how "where did my code go?" happens.
@@ -78,6 +83,10 @@ Wähle einen Block auf der Seite aus.
         setExpanded(true);
       }),
       exampleFile: (widget.example_file ?? '').trim(),
+      // The real thing that reached this block last run. A chart transform
+      // written against actual rows beats one written against a description of
+      // them, and the verify pass can then run it for real.
+      sampleInputs: lastRunWidgetInput(nodeId, widget.id, executionResult),
     }), widget.id);
   };
 

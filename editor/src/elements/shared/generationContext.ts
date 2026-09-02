@@ -123,6 +123,24 @@ export function lastRunInputs(
   return inputs;
 }
 
+/**
+ * What arrived at one block on a page, last run, shaped as its transform sees it.
+ *
+ * A block's transform is handed `{value: <what came in>}`, and until this
+ * existed it was generated against nothing at all: the node editor passed the
+ * last run's inputs and the block editor passed none, so asking for a chart
+ * meant asking a model to guess what it would be charting.
+ */
+export function lastRunWidgetInput(
+  nodeId: string,
+  widgetId: string,
+  result: ExecutionResult | null,
+): Record<string, unknown> | undefined {
+  const inputs = result?.node_results?.find((r) => r.node_id === nodeId)?.inputs;
+  const arrived = inputs?.[`${widgetId}_in`];
+  return arrived === undefined ? undefined : { value: arrived };
+}
+
 export function lastRunContext(nodeId: string, result: ExecutionResult | null): string {
   const nodeResult = result?.node_results?.find((r) => r.node_id === nodeId);
   const inputs = nodeResult?.inputs;
