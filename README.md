@@ -142,7 +142,6 @@ node engine/src/main.ts my.json --bundle ./out             # to hand to someone
 | [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, GUI nodes and widgets |
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the two AI settings, where the API key goes |
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, Docker, the Graph Runner CLI |
-| [TODO.md](TODO.md) | The open items, and the decisions still waiting |
 
 ## Project structure
 
