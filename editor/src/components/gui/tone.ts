@@ -22,6 +22,12 @@ export const TONE_LABELS: Record<Tone, string> = {
   accent: 'Accent — tinted (the one thing to notice)',
 };
 
+/** What a person may set on top of the tone: a frame, and a colour of their own. */
+export interface Look {
+  border?: boolean;
+  background?: string;
+}
+
 /**
  * The block's own chrome.
  *
@@ -29,25 +35,34 @@ export const TONE_LABELS: Record<Tone, string> = {
  * instead of a labelled box, and it is why the runtime window stopped looking
  * like an inspector. Every widget used to get the same border and background
  * unconditionally, plus a truncated dump of its own output underneath.
+ *
+ * The tone is the default; a `Look` overrides one thing at a time. A frame on
+ * a plain block, or no frame on a raised one, is a choice about that block and
+ * changes nothing else -- and a colour picked by hand is exactly that, the
+ * person's own, not a fifth tone.
  */
-export function toneStyle(tone: Tone | undefined): CSSProperties {
-  switch (tone) {
-    case 'plain':
-      return { background: 'transparent', border: '1px solid transparent' };
-    case 'sunken':
-      return { background: SUNKEN, border: `1px solid ${LINE}` };
-    case 'accent':
-      return {
-        background: ACCENT_FILL,
-        border: `1px solid ${ACCENT}`,
-      };
-    case 'raised':
-    default:
-      return { background: RAISE, border: `1px solid ${LINE}` };
-  }
+export function toneStyle(tone: Tone | undefined, look: Look = {}): CSSProperties {
+  const base = ((): CSSProperties => {
+    switch (tone) {
+      case 'plain':
+        return { background: 'transparent', border: '1px solid transparent' };
+      case 'sunken':
+        return { background: SUNKEN, border: `1px solid ${LINE}` };
+      case 'accent':
+        return { background: ACCENT_FILL, border: `1px solid ${ACCENT}` };
+      case 'raised':
+      default:
+        return { background: RAISE, border: `1px solid ${LINE}` };
+    }
+  })();
+  if (look.border === true) base.border = `1px solid ${tone === 'accent' ? ACCENT : LINE}`;
+  if (look.border === false) base.border = '1px solid transparent';
+  if (look.background) base.background = look.background;
+  return base;
 }
 
-/** Does this tone draw a box at all? A plain block also drops its caption. */
-export function toneIsBare(tone: Tone | undefined): boolean {
-  return tone === 'plain';
+/** Does the block draw a box at all? A bare block also drops its caption. */
+export function toneIsBare(tone: Tone | undefined, look: Look = {}): boolean {
+  if (look.border !== undefined) return !look.border && !look.background;
+  return tone === 'plain' && !look.background;
 }

@@ -5,7 +5,7 @@ import { InputPickerElement, WIDGET_ELEMENTS } from './children/index.ts';
 const BY_KIND = new Map(WIDGET_ELEMENTS.map((e) => [e.widgetKind, e as WidgetElement<unknown>]));
 
 /** The structural fields of a block; everything else belongs to its element. */
-const STRUCTURAL = new Set(['id', 'kind', 'label', 'w', 'h', 'tone']);
+const STRUCTURAL = new Set(['id', 'kind', 'label', 'w', 'h', 'tone', 'border', 'background']);
 
 /**
  * Read one block out of stored JSON.
@@ -28,6 +28,8 @@ export function parseWidget(raw: unknown): Widget {
     w: Number(w.w ?? 8),
     h: Number(w.h ?? 4),
     tone: String(w.tone ?? 'plain'),
+    ...(typeof w.border === 'boolean' ? { border: w.border } : {}),
+    ...(w.background ? { background: String(w.background) } : {}),
     config,
   };
 }

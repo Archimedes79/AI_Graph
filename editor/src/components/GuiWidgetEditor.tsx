@@ -127,6 +127,37 @@ Wähle einen Block auf der Seite aus.
         </div>
       </div>
 
+      {/* On top of the tone: a frame or not, and a colour of your own. Unset
+          means the tone decides, which is what "Standard" puts back. */}
+      <div className="flex items-center gap-4 mb-3 text-sm" style={{ color: MUTED }}>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={widget.border ?? widget.tone !== 'plain'}
+            onChange={(e) => onChange({ border: e.target.checked })}
+          />
+          Rahmen
+        </label>
+        <label className="flex items-center gap-2">
+          Hintergrund
+          <input
+            type="color"
+            value={widget.background || '#000000'}
+            onChange={(e) => onChange({ background: e.target.value })}
+            title={widget.background || 'Standard der Darstellung'}
+          />
+        </label>
+        {(widget.border !== undefined || widget.background) && (
+          <button
+            type="button"
+            className="text-xs underline"
+            onClick={() => onChange({ border: undefined, background: '' })}
+          >
+            Standard
+          </button>
+        )}
+      </div>
+
       {/* Exact cells, for when dragging the corner is fiddlier than typing. */}
       <div className="flex items-center gap-3 mb-3">
         {([['w', 'Breite', GUI_GRID_COLUMNS], ['h', 'Höhe', 99]] as const).map(([field, label, max]) => (

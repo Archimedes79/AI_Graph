@@ -106,6 +106,10 @@ Each widget's ports are named `f"{widget.id}_in"` / `f"{widget.id}_out"`, so a w
 `id` must stay stable once assigned — that's the only thing keeping existing edges
 attached across GUI edits.
 
+Every block has a *tone* (plain, raised, sunken, accent) drawn from the page's scheme,
+and on top of that its own frame toggle and background colour — set in the block's
+editor; "Standard" hands the choice back to the tone.
+
 ### Picking files and folders
 
 Every path field — the picker widget, the *Before running…* prompt, and a node's default

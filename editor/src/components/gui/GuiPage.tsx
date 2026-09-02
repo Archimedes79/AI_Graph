@@ -135,7 +135,8 @@ export function GuiBlock({
 }) {
   const { widget } = placement;
   const RuntimeWidget = GUI_WIDGET_ELEMENTS[widget.kind]?.RuntimeWidget;
-  const bare = toneIsBare(widget.tone as Tone);
+  const look = { border: widget.border, background: widget.background };
+  const bare = toneIsBare(widget.tone as Tone, look);
 
   return (
     <div
@@ -143,7 +144,7 @@ export function GuiBlock({
       className="relative rounded-lg flex flex-col gap-1 min-w-0 overflow-hidden"
       style={{
         ...blockStyle(placement),
-        ...toneStyle(widget.tone as Tone),
+        ...toneStyle(widget.tone as Tone, look),
         // The same horizontal padding either way: a heading that started 10px
         // left of the box beneath it broke the one thing a document must get
         // right, which is a single left margin.

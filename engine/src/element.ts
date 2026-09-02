@@ -271,6 +271,10 @@ export interface Widget {
   w: number;
   h: number;
   tone: string;
+  /** Draw a frame, whatever the tone would do. Unset: the tone decides. */
+  border?: boolean;
+  /** A background colour of the person's own. Empty: the tone decides. */
+  background?: string;
   config: RawConfig;
 }
 

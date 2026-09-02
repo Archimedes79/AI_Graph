@@ -176,6 +176,10 @@ export interface GuiWidget {
   selector_code: string;
   selector_prompt: string;
   tone: 'plain' | 'raised' | 'sunken' | 'accent';
+  /** Draw a frame regardless of the tone; unset lets the tone decide. */
+  border?: boolean;
+  /** A background colour of your own; empty lets the tone decide. */
+  background?: string;
   value?: unknown;
   w?: number;
 }
