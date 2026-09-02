@@ -30,13 +30,17 @@ editor's requests. It listens on loopback only.
 
 ## In VS Code
 
-F5 starts the editor with the debugger attached, so a breakpoint in an element's
-`execute()` is hit while a graph runs. Four configurations: the editor on :8000, the
-same with the page rebuilt first, one graph run without a browser anywhere, and the
-test file the cursor is in.
+Three ways to start it, all from the GUI, all starting the editor empty:
 
-The tasks under Terminal -> Run Task are the npm scripts, so a task and a terminal
-never disagree about how this project starts.
+- **Ctrl+Shift+B** runs the default build task, which is "start the editor".
+- **Run and Debug** (Ctrl+Shift+D) -> "Start the editor (empty)" -> the green arrow,
+  or just F5. This one attaches the debugger, so a breakpoint in an element's
+  `execute()` is hit while a graph runs.
+- **Terminal -> Run Task** lists the same npm scripts by name.
+
+The other launch configurations run one graph without a browser anywhere, and run the
+test file the cursor is in. Open the `AI_Graph` folder itself, not a folder above it:
+VS Code reads `.vscode/` from the folder you opened.
 
 ## Working on the editor
 
