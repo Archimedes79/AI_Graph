@@ -55,8 +55,8 @@ commit that closes it.
 
 ## C · Debts
 
-- [ ] `ElementGeneration` (editor) duplicates `Generation` (engine): guard/success/
-      promptField/targetField — held equal by a test, should be read from the engine.
+- [x] An editor definition takes its generation fields from the engine element beside it
+      (`fromEngine`); only labels, placeholders and `available` are the editor's own.
 - [ ] `/api/ai/complete` (raw completion) was Python-only and unused by the editor; it is
       gone. Anything outside the editor that called it needs `engine/src/ai/providers.ts`.
 - [ ] `test/models` (untracked), old bundles in `dist/`, a root `.venv` and

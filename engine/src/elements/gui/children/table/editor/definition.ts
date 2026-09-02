@@ -1,15 +1,14 @@
 import type { GuiWidgetElementDefinition } from '@/elements/types';
 import TableEditor from './Editor';
 import TableWidget from '@/components/gui/widgets/TableWidget';
+import { TableElement } from '../element.ts';
+import { fromEngine } from '@/elements/shared/generation';
 
 /** Display-only, like plot_window: takes rows to show, emits nothing. */
 export const tableElement: GuiWidgetElementDefinition = {
   widgetKind: 'table',
   generation: {
-    promptField: 'code_prompt',
-    targetField: 'code',
-    guard: 'Please describe how to turn the incoming data into rows first.',
-    success: '✅ Transform generated!',
+    ...fromEngine(new TableElement().generation()),
     promptLabel: 'Prompt',
     promptPlaceholder: 'Describe the rows you want, e.g. one row per file with name, size and date.',
     bodyLabel: 'Optional transform — run(inputs) receives {"value"} and returns {"value"}',

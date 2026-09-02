@@ -2,6 +2,8 @@ import type { NodeElementDefinition } from '@/elements/types';
 import CodeEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { outputFormatContext } from '@/elements/shared/generationContext';
+import { CodeElement } from '../element.ts';
+import { fromEngine } from '@/elements/shared/generation';
 
 /**
  * Reference implementation of the element contract -- every other
@@ -11,10 +13,7 @@ export const codeElement: NodeElementDefinition = {
   nodeType: 'code',
   ownsDescription: true,
   generation: {
-    promptField: 'code_prompt',
-    targetField: 'code',
-    guard: 'Please add a code generation prompt first.',
-    success: '✅ Code generated!',
+    ...fromEngine(new CodeElement().generation()),
     promptLabel: 'Prompt text',
     promptPlaceholder: 'Describe what the generated code should do.',
     bodyLabel: 'Code window (editable)',

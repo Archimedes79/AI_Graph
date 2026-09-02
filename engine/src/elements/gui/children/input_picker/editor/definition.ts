@@ -1,17 +1,16 @@
 import type { GuiWidgetElementDefinition } from '@/elements/types';
 import InputPickerEditor from './Editor';
 import InputPickerWidget from '@/components/gui/widgets/InputPickerWidget';
+import { InputPickerElement } from '../element.ts';
+import { fromEngine } from '@/elements/shared/generation';
 
 export const inputPickerElement: GuiWidgetElementDefinition = {
   widgetKind: 'input_picker',
   // The same declaration the input node carries, because it is the same
   // behaviour one level down -- the backend returns literally the same object.
   generation: {
-    promptField: 'selector_prompt',
-    targetField: 'selector_code',
+    ...fromEngine(new InputPickerElement().generation()),
     available: (widget) => widget.mode === 'directory',
-    guard: 'Please describe which files to select first.',
-    success: '✅ Selector generated!',
     promptLabel: 'Prompt text',
     promptPlaceholder: 'Select Markdown files that contain API documentation',
     mono: true,

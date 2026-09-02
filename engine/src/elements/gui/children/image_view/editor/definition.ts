@@ -1,6 +1,8 @@
 import type { GuiWidgetElementDefinition } from '@/elements/types';
 import ImageViewEditor from './Editor';
 import ImageViewWidget from '@/components/gui/widgets/ImageViewWidget';
+import { ImageViewElement } from '../element.ts';
+import { fromEngine } from '@/elements/shared/generation';
 
 export const imageViewElement: GuiWidgetElementDefinition = {
   widgetKind: 'image_view',
@@ -9,10 +11,7 @@ export const imageViewElement: GuiWidgetElementDefinition = {
   // widget had the code field and no button, purely because generation used to
   // be a switch in a shell rather than a declaration here.
   generation: {
-    promptField: 'code_prompt',
-    targetField: 'code',
-    guard: 'Please describe how to get an image path out of the incoming value first.',
-    success: '✅ Transform generated!',
+    ...fromEngine(new ImageViewElement().generation()),
     promptLabel: 'Prompt',
     promptPlaceholder: "Describe how to get an image path out of the incoming value, e.g. take the 'cover' field of each record.",
     bodyLabel: 'Optional transform — run(inputs) receives {"value"} and returns {"value"}',

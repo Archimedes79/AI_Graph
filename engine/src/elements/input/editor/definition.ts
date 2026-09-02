@@ -4,17 +4,16 @@ import InputEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { derivedNodePorts } from '@/utils/guiWidgets';
 import type { Port } from '@/types/graph';
+import { InputElement } from '../element.ts';
+import { fromEngine } from '@/elements/shared/generation';
 
 
 export const inputElement: NodeElementDefinition = {
   nodeType: 'input',
   ConfigEditor: InputEditor,
   generation: {
-    promptField: 'selector_prompt',
-    targetField: 'selector_code',
+    ...fromEngine(new InputElement().generation()),
     available: (node) => node.config.input_mode === 'directory',
-    guard: 'Please describe which files to select first.',
-    success: '✅ Selector generated!',
     promptLabel: 'Prompt text',
     promptPlaceholder: 'Select Markdown files that contain API documentation',
     mono: true,

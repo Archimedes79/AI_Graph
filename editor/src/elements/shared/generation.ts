@@ -2,6 +2,7 @@ import type { GraphNode, GuiWidget } from '../../types/graph';
 import { generate, type CodeProbeReport, type GenerationResult } from '../../utils/api';
 import { genAI } from '../../store/settingsStore';
 import type { GenerateOptions } from './useGenerate';
+import type { Generation } from '@engine/generation.ts';
 
 /**
  * The ✨ Generate button, declared by the element instead of written out by the
@@ -23,6 +24,25 @@ import type { GenerateOptions } from './useGenerate';
  * that will drift -- which is exactly what happened to the file-selector
  * sentence, which existed three times.
  */
+/**
+ * The half of a generation the engine already declared, in the editor's words.
+ *
+ * Which field holds the request, which the body, and what to say when the
+ * request is missing or the answer arrived -- an element's `Generation` says
+ * all of it, beside its `Logic`, from one constant. The editor's definition
+ * adds only what the engine cannot know: labels, placeholders, and whether the
+ * button is offered on this particular node.
+ */
+export function fromEngine(generation: Generation | undefined): Pick<ElementGeneration, 'promptField' | 'targetField' | 'guard' | 'success'> {
+  if (!generation) throw new Error('This element declares no generation in the engine; the editor cannot offer one.');
+  return {
+    promptField: generation.fields.promptOnSubject ? 'description' : generation.fields.prompt,
+    targetField: generation.fields.body,
+    guard: generation.guard,
+    success: generation.success,
+  };
+}
+
 export interface ElementGeneration<S = any> {
   /**
    * Field holding the user's request. `'description'` means the node's own

@@ -2,6 +2,8 @@ import type { GraphNode } from '@/types/graph';
 import type { NodeElementDefinition } from '@/elements/types';
 import DataEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
+import { DataElement } from '../element.ts';
+import { fromEngine } from '@/elements/shared/generation';
 
 export function describeDataFormat(node: GraphNode): string {
   const details = node.config.data_format_prompt?.trim();
@@ -62,10 +64,7 @@ export const dataElement: NodeElementDefinition = {
   settleMemoryValue: (node, _portId, value) => { node.config.data_value = value as never; },
   ownsDescription: true,
   generation: {
-    promptField: 'data_prompt',
-    targetField: 'data_format_prompt',
-    guard: 'Please describe the data format first.',
-    success: '✅ Data format generated!',
+    ...fromEngine(new DataElement().generation()),
     promptLabel: 'Format generation prompt',
     promptPlaceholder: 'Describe the records, fields, types, constraints, and examples this node stores.',
     bodyLabel: 'Defined data format',

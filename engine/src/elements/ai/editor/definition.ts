@@ -2,6 +2,8 @@ import type { NodeElementDefinition } from '@/elements/types';
 import AIEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { outputFormatContext } from '@/elements/shared/generationContext';
+import { AiElement } from '../element.ts';
+import { fromEngine } from '@/elements/shared/generation';
 
 export const aiElement: NodeElementDefinition = {
   nodeType: 'ai',
@@ -9,11 +11,7 @@ export const aiElement: NodeElementDefinition = {
   // editor -- a second Description field above it showed the same box twice.
   ownsDescription: true,
   generation: {
-    // The one element whose request lives on the node rather than in its config.
-    promptField: 'description',
-    targetField: 'system_prompt',
-    guard: 'Please add a description first.',
-    success: '✅ Prompt generated!',
+    ...fromEngine(new AiElement().generation()),
     promptLabel: 'What this node should do',
     promptPlaceholder: 'Describe what this node should do — ✨ Generate turns it into the system prompt below.',
     bodyLabel: 'System prompt',
