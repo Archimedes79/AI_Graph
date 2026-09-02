@@ -63,7 +63,7 @@ npm test            # both suites
 npm run typecheck   # both, with the compiler
 ```
 
-Or one at a time: `npm test --workspace engine`, `npm test --workspace frontend`.
+Or one at a time: `npm test --workspace engine`, `npm test --workspace editor`.
 
 Prefer adding to an existing workflow-level test — a real graph run through
 `executeGraph`, a bundle actually written and executed — over a new file per element.

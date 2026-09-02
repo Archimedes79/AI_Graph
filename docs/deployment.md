@@ -72,10 +72,10 @@ Without an interface, the result is printed as JSON on stdout and questions and 
 go to stderr, so `./run.sh | jq` works. `--every 5m` schedules it, exactly as above.
 
 **Graphs with a GUI deploy with their GUI.** If the graph contains `gui` nodes and the
-editor has a built frontend (`cd frontend && npm run build`), the bundle also carries the
+editor has a built editor (`cd editor && npm run build`), the bundle also carries the
 page and serves it: the file pickers, text windows and plots the graph was designed with,
 rendered by the very same components the editor used, copied rather than rebuilt. It
-listens on localhost only. Without a built frontend the graph still deploys, just
+listens on localhost only. Without a built editor the graph still deploys, just
 headless, and the bundle's README says so.
 
 The recipient needs Node, and nothing else — no AI-Graph, no Python, no install step.

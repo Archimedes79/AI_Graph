@@ -5,7 +5,7 @@
 //     node src/main.ts graph.json --every 5m           again, after each run
 //     node src/main.ts graph.json --bundle ./out       hand it to someone else
 //     node src/main.ts graph.json --serve             open its page in a browser
-//     node src/main.ts --editor frontend/dist          the editor itself, on :8000
+//     node src/main.ts --editor editor/dist          the editor itself, on :8000
 //
 // The same entry point a bundle uses, so what someone receives is the thing
 // that was tested rather than a second launcher written for them. It is also
@@ -82,7 +82,7 @@ export function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--port') {
       options.port = Number(argv[++i]);
     } else if (arg === '--editor') {
-      options.editor = argv[++i] ?? 'frontend/dist';
+      options.editor = argv[++i] ?? 'editor/dist';
     } else if (arg === '--host') {
       options.host = argv[++i] ?? '';
     } else if (!options.graphPath) {
@@ -170,7 +170,7 @@ export async function makeBundle(options: CliOptions): Promise<number> {
   // runs on the terminal; with it, the recipient gets the tool they were
   // shown. Looked up rather than passed, because the person writing a bundle
   // should not have to know where a build lands.
-  const built = resolve(fileURLToPath(import.meta.url), '..', '..', '..', 'frontend', 'dist');
+  const built = resolve(fileURLToPath(import.meta.url), '..', '..', '..', 'editor', 'dist');
   const written = await writeBundle(graph, options.bundle!, {
     pageDir: existsSync(join(built, 'runtime.html')) ? built : undefined,
   });

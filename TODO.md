@@ -5,7 +5,7 @@ commit that closes it.
 
 ## Decisions waiting on you
 
-- **`NodeConfig` is one flat type holding every element's fields** (`frontend/src/types/graph.generated.ts`,
+- **`NodeConfig` is one flat type holding every element's fields** (`editor/src/types/graph.generated.ts`,
   once generated from a Python model, now hand-kept). Adding a field to one element edits
   a type every element imports. The engine avoids this (`RawConfig` + each element reads
   what it knows); the editor does not. To discuss.
@@ -23,15 +23,16 @@ commit that closes it.
 - [x] Root npm workspace; one lockfile; CI installs once at the root.
 - [x] One element tree: `engine/src/elements/<kind>/` holds `element.ts` and `editor/`.
 - [x] One runtime. The Python server is deleted; the engine serves the editor
-      (`node engine/src/main.ts --editor frontend/dist`) and answers every route the
+      (`node engine/src/main.ts --editor editor/dist`) and answers every route the
       editor calls: files, settings, project files, generation, bundles. `npm start`,
       `npm run dev`, `docker compose up`.
 - [x] Old graphs open everywhere: the one-time migrations run inside `parseGraph`.
-- [ ] The names: `frontend/` → `editor/`; `engine/src/elements/` may lift to `elements/`
-      at the root. Rename once the tree has settled — every path in docs and imports moves.
+- [x] `frontend/` is `editor/`: the page is built on the engine, and its folder says so.
+- [ ] `engine/src/elements/` may lift to `elements/` at the root once nothing else sits
+      beside it — every engine import and the bundle walk move with it.
 - [x] A dropped or pasted graph goes through the engine's `migrateNode`; the editor's
       own copy of the alias migrations is gone.
-- [ ] `frontend/src/elements/shared/` and `registry.ts` are editor infrastructure, not
+- [ ] `editor/src/elements/shared/` and `registry.ts` are editor infrastructure, not
       elements; name them as such.
 
 ## B · Code generation

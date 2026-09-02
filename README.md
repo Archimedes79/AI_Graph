@@ -150,7 +150,7 @@ node engine/src/main.ts my.json --bundle ./out             # to hand to someone
 AI-Graph/
 ├── engine/                 # Elements, executor, hosts: runs a graph, serves the editor, ships as a bundle
 │   └── src/elements/<kind>/  element.ts (the engine's half) · editor/ (the editor's half)
-├── frontend/               # The editor's page: React + ReactFlow, built on the engine
+├── editor/               # The editor's page: React + ReactFlow, built on the engine
 ├── examples/               # Example graph JSON files
 ├── docs/                   # The documents linked above
 ├── scripts/dev.mjs         # npm run dev: engine and Vite in one terminal

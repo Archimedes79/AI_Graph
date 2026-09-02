@@ -221,7 +221,7 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       try {
         // The built page, when this checkout has one -- looked up the way the
         // CLI looks it up, so a bundle from the editor is the bundle from `--bundle`.
-        const built = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', 'frontend', 'dist');
+        const built = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', 'editor', 'dist');
         const pageDir = existsSync(join(built, 'runtime.html')) ? built : undefined;
         await writeBundle(graph, work, { pageDir });
         const entries = [];
@@ -383,7 +383,7 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
         response.writeHead(200, { 'Content-Type': MIME['.html'] });
         response.end(html);
       } catch {
-        send(response, 404, { detail: `No ${entry} in ${dir}. Build the editor first: cd frontend && npm run build` });
+        send(response, 404, { detail: `No ${entry} in ${dir}. Build the editor first: cd editor && npm run build` });
       }
     }
   }

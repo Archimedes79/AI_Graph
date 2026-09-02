@@ -4,12 +4,12 @@
   "description": "One workspace: the engine, and the editor that is built on it.",
   "workspaces": [
     "engine",
-    "frontend"
+    "editor"
   ],
   "scripts": {
-    "start": "node engine/src/main.ts --editor frontend/dist",
+    "start": "node engine/src/main.ts --editor editor/dist",
     "dev": "node scripts/dev.mjs",
-    "build": "npm run build --workspace frontend",
+    "build": "npm run build --workspace editor",
     "test": "npm test --workspaces",
     "typecheck": "npm run typecheck --workspaces"
   }

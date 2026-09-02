@@ -76,7 +76,7 @@ describe('a bundle', () => {
     ));
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-page-bundle-'));
     try {
-      const written = await writeBundle(graph, dir, { pageDir: resolve(REPO, 'frontend/dist') });
+      const written = await writeBundle(graph, dir, { pageDir: resolve(REPO, 'editor/dist') });
       const page = written.filter((p) => p.startsWith('page/'));
       expect(page).toContain('page/runtime.html');
       expect(page.some((p) => p.endsWith('.js'))).toBe(true);

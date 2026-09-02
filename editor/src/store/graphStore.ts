@@ -167,7 +167,7 @@ function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphM
 // from cycle detection exactly when needed to break a cycle -- mirrors
 // backend/app/services/graph_executor.py's `_memory_feedback_edge_ids`
 // (Kahn's algorithm, marking one memory-targeting edge as feedback at a time
-// until the graph is acyclic) so the frontend can tell, after a run, which
+// until the graph is acyclic) so the editor can tell, after a run, which
 // edges' delivered values should be persisted into the target widget's own
 // `value` for the *next* run (see `setExecutionResult` below).
 function isMemoryNode(nodeType: string): boolean {
@@ -448,7 +448,7 @@ export const useGraphStore = create<GraphStore>()(
         // becomes visible on the NEXT run unless we persist the fresh value
         // here now -- mirrors the backend's own in-memory
         // `_settle_memory_feedback`, which mutates its (request-scoped) Graph
-        // copy the same way; the frontend must repeat it against its own
+        // copy the same way; the editor must repeat it against its own
         // long-lived graph state so the loop actually progresses across
         // separate Run clicks.
         const nodes = state.rfNodes.map((n: RFNode) => n.data.graphNode as GraphNode);

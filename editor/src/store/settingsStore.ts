@@ -48,7 +48,7 @@ export const useSettingsStore = create<SettingsState>()(
  * The generation AI as request fields, read non-reactively.
  *
  * Every ✨ Generate call spreads this into its request body -- so there is
- * exactly one place in the frontend that decides which AI generates, and
+ * exactly one place in the editor that decides which AI generates, and
  * adding a new generate action cannot accidentally introduce a second
  * provider setting.
  */

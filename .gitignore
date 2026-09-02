@@ -18,8 +18,8 @@ env/
 
 # Node
 node_modules/
-frontend/dist/
-frontend/.vite/
+editor/dist/
+editor/.vite/
 *.tsbuildinfo
 
 # OS

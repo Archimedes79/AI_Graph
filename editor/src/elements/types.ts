@@ -4,7 +4,7 @@ import type { GuiWidgetRuntimeProps } from '../components/gui/widgetProps';
 import type { ElementGeneration } from './shared/generation';
 
 /**
- * Everything one NodeType needs to behave as a graph node on the frontend:
+ * Everything one NodeType needs to behave as a graph node on the editor:
  * `ConfigEditor` is "draw + interact + save/load" for the node's config panel
  * (NodeEditor.tsx dispatches to it), `create` is "interact with the user" at
  * node-creation time (Sidebar.tsx drag/drop -> graphStore.addNode). Live
@@ -12,7 +12,7 @@ import type { ElementGeneration } from './shared/generation';
  * `backend/app/elements/base.py`.
  */
 /**
- * What a node definition and a widget definition have in common -- the frontend
+ * What a node definition and a widget definition have in common -- the editor
  * half of `Element` in `backend/app/elements/base.py`.
  *
  * They are two interfaces rather than one because what differs genuinely

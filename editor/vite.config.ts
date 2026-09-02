@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react()],
   // Dropbox syncs this workspace and locks files mid-write, causing EBUSY
   // errors when Vite's dep cache lives under node_modules/.vite. Keep it outside.
-  cacheDir: path.join(os.tmpdir(), 'ai-graph-frontend-vite-cache'),
+  cacheDir: path.join(os.tmpdir(), 'ai-graph-editor-vite-cache'),
   build: {
     rollupOptions: {
       // Two entry points, one bundle of shared chunks: index.html is the
@@ -30,7 +30,7 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
     alias: {
       '@': path.resolve(__dirname, './src'),
-      // The engine lives beside the frontend, not inside it: it must run under
+      // The engine lives beside the editor, not inside it: it must run under
       // Node and Deno with no build step, so it cannot live in a React app's
       // source tree. The editor imports it for the things that must not be
       // said twice -- which ports a block contributes, above all, since those

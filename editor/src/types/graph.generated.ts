@@ -3,7 +3,7 @@
  * AUTO-GENERATED -- DO NOT EDIT BY HAND.
  *
  * Generated from backend/app/models/graph.py via
- * backend/scripts/export_graph_schema.py + frontend/scripts/genTypes.mjs.
+ * backend/scripts/export_graph_schema.py + editor/scripts/genTypes.mjs.
  * Run `npm run gen:types` after changing the backend Graph DSL models.
  */
 

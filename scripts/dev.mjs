@@ -13,10 +13,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const shell = process.platform === 'win32';
 
 const children = [
-  spawn('node', [join(root, 'engine', 'src', 'main.ts'), '--editor', join(root, 'frontend', 'dist'), '--port', '8000'], {
+  spawn('node', [join(root, 'engine', 'src', 'main.ts'), '--editor', join(root, 'editor', 'dist'), '--port', '8000'], {
     cwd: root, stdio: 'inherit', env: { ...process.env, AI_GRAPH_NO_BROWSER: '1' },
   }),
-  spawn('npm', ['run', 'dev', '--workspace', 'frontend'], { cwd: root, stdio: 'inherit', shell }),
+  spawn('npm', ['run', 'dev', '--workspace', 'editor'], { cwd: root, stdio: 'inherit', shell }),
 ];
 
 const stop = () => { for (const child of children) if (child.exitCode === null) child.kill(); };
