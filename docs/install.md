@@ -13,9 +13,14 @@ npm ci
 ## Running the editor
 
 ```bash
-start.cmd         # Windows -- type the extension, or double-click the file
-./start.sh        # everywhere else
+.\start.ps1       # PowerShell, which is what the VS Code terminal runs
+start.cmd         # cmd.exe, or double-click the file
+./start.sh        # macOS, Linux
 ```
+
+Bare `start` does not work in PowerShell: there it is an alias for `Start-Process`,
+which answers with a prompt for `FilePath:` and never touches this project. The
+leading `.\` is what tells PowerShell to run the script in this folder.
 
 Installs on first use, builds the page when it is missing, then serves it on
 <http://127.0.0.1:8000> and opens a browser. The same by hand:

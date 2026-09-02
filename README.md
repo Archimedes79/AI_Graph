@@ -117,8 +117,9 @@ node engine/src/main.ts examples/universal_plotter.json
 ```bash
 git clone https://github.com/Archimedes79/AI_Graph.git
 cd AI_Graph
-start.cmd          # Windows (double-clicking it works too)
-./start.sh         # everywhere else
+.\start.ps1       # Windows, PowerShell (bare `start` is a PowerShell command, not this)
+start.cmd          # Windows, cmd -- double-clicking it works too
+./start.sh         # macOS, Linux
 ```
 
 That installs on first use, builds the page, and opens the editor. Node 24 or newer,
