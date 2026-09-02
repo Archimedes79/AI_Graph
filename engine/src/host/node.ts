@@ -57,6 +57,24 @@ export const nodeFiles: FileService = {
  * reason bodies are JavaScript: a recipient who can run the engine can run
  * every body in it, with no interpreter to find and no packages to install.
  */
+/**
+ * What a body is allowed to do, as flags to its own interpreter.
+ *
+ * Node's permission system denies everything once it is on, so what is listed
+ * here is the whole list. Files stay open — reading and writing them is most
+ * of what a body is *for*, and a graph that cannot touch a file is a graph
+ * that cannot do its job.
+ *
+ * What closes: starting other programs, loading native addons, spawning
+ * worker threads, opening a debugger port. A body has no business doing any
+ * of those, and a generated one is run by the sweep before anybody has read
+ * it.
+ *
+ * What this does **not** close is the network: Node has no flag for it (Deno
+ * does). A body can still reach out. Worth knowing rather than assuming.
+ */
+const SANDBOX = ['--permission', '--allow-fs-read=*', '--allow-fs-write=*'];
+
 export const nodeCode: CodeRunner = {
   async run(body, inputs) {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-'));
@@ -66,7 +84,7 @@ export const nodeCode: CodeRunner = {
 
     try {
       await writeFile(file, wrapper, 'utf8');
-      const stdout = await capture(process.execPath, [file, JSON.stringify(inputs)]);
+      const stdout = await capture(process.execPath, [...SANDBOX, file, JSON.stringify(inputs)]);
       const trimmed = stdout.trim();
       if (!trimmed) throw new Error('the body printed nothing; does it return an object?');
       return JSON.parse(trimmed.split('\n').pop() as string) as Record<string, unknown>;

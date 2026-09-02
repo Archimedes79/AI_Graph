@@ -77,6 +77,12 @@ A code node is JavaScript and runs on the Node that runs the engine — nothing 
 install, and nothing installed while a graph runs. A bundle handed to someone else
 needs Node on their machine, and that is the whole list.
 
+It runs in its own process, started with Node's permission system on: files stay
+readable and writable, because that is most of what a body is for, while starting
+other programs, loading native addons, spawning workers and opening a debugger port
+are refused. The network is not covered — Node has no flag for it — so a body can
+still reach out. `engine/src/host/sandbox.test.ts` asserts the policy.
+
 ## Tests
 
 ```bash
