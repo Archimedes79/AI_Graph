@@ -133,6 +133,18 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
   /** A failing snippet: fatal by default, cosmetic where nothing downstream depends on it. */
   readonly snippetFailure: SnippetFailure = 'fatal';
 
+  /**
+   * Whether a failure here becomes an `error` output instead of ending the run.
+   *
+   * Off unless someone asks for it: a graph that has not been given somewhere
+   * to put a failure should stop at one, loudly. Carried out by the executor,
+   * one level up, so every element gets the same behaviour without a copy of
+   * it -- the same division as batching and reading file inputs.
+   */
+  catchesErrors(subject: S): boolean {
+    return subject.config.catch_errors === true;
+  }
+
   deployNeeds(_subject: S): DeployNeeds {
     return { needsInterface: false };
   }

@@ -219,3 +219,74 @@ describe('a batch with failing items', () => {
     expect((await workResult(['ok', 'ok'])).status).toBe('success');
   });
 });
+
+describe('a node that catches its own failure', () => {
+  /**
+   * `catch_errors` is one mechanism for every element rather than a copy in
+   * each: the element throws as it always did, and the executor decides what
+   * that costs. The error port is optional to wire -- unwired, the run simply
+   * carries on, and the node still reports what went wrong.
+   */
+  class Boom extends GraphNodeElement {
+    readonly nodeType = 'code' as const;
+    config() { return {}; }
+    async execute(): Promise<Record<string, unknown>> { throw new Error('the body blew up'); }
+  }
+  const withBoom = { node: (type: string) => (type === 'code' ? new Boom() : registry.node(type)) };
+
+  const graph = (nodes: GraphNode[], edges: GraphEdge[] = []): Graph => ({
+    metadata: {
+      name: 'test', version: '1', description: '', author: '', tags: [],
+      ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night',
+    },
+    nodes, edges,
+  });
+
+  function failing(config: Record<string, unknown>): GraphNode {
+    const bad = node('bad', 'code', config);
+    bad.outputs = [
+      { id: 'value', name: 'Value', kind: 'output', data_type: 'any', multi: false, required: false, description: '' },
+      { id: 'error', name: 'Error', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
+    ];
+    return bad;
+  }
+
+  it('keeps the run going, and puts the message on its error port', async () => {
+    const result = await executeGraph(
+      graph([failing({ catch_errors: true })], []),
+      { runtime: nowhere, registry: withBoom as never },
+    );
+    const bad = result.node_results[0];
+    expect(bad.status).toBe('partial');
+    expect(bad.outputs).toEqual({ value: null, error: 'the body blew up' });
+    expect(bad.error).toBe('the body blew up');
+  });
+
+  it('lets what is downstream run, instead of skipping it', async () => {
+    const result = await executeGraph(
+      graph([failing({ catch_errors: true }), node('after', 'output')],
+            [edge('e', 'bad', 'error', 'after', 'value')]),
+      { runtime: nowhere, registry: withBoom as never },
+    );
+    const status = Object.fromEntries(result.node_results.map((r) => [r.node_id, r.status]));
+    expect(status).toEqual({ bad: 'partial', after: 'success' });
+  });
+
+  it('is off unless asked: the same node without it still ends the run there', async () => {
+    const result = await executeGraph(
+      graph([failing({}), node('after', 'output')], [edge('e', 'bad', 'value', 'after', 'value')]),
+      { runtime: nowhere, registry: withBoom as never },
+    );
+    const status = Object.fromEntries(result.node_results.map((r) => [r.node_id, r.status]));
+    expect(status).toEqual({ bad: 'error', after: 'skipped' });
+  });
+
+  it('does not need the port wired to anything', async () => {
+    const result = await executeGraph(
+      graph([failing({ catch_errors: true })], []),
+      { runtime: nowhere, registry: withBoom as never },
+    );
+    expect(result.status).toBe('partial');
+    expect(result.error).toBeNull();
+  });
+});

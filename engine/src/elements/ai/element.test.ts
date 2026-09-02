@@ -116,21 +116,14 @@ describe('a call that fails', () => {
     ai: { complete: async () => { throw new Error('no content'); } },
   };
 
-  it('still fails the node when catch_errors is off, as it always did', async () => {
+  /**
+   * It throws either way. Whether that ends the run or becomes an `error`
+   * port is `catch_errors`, read by the executor for every element alike --
+   * see `executor.test.ts`, which is where that behaviour is pinned down.
+   */
+  it('throws, and leaves what to do about it to the executor', async () => {
     const element = new AiElement();
     await expect(element.execute(aiNode(), {}, failing)).rejects.toThrow('no content');
-  });
-
-  it('becomes an error port instead, when catch_errors is on', async () => {
-    const element = new AiElement();
-    const result = await element.execute(aiNode({ catch_errors: true }), {}, failing);
-    expect(result).toEqual({ output: '', error: 'no content' });
-  });
-
-  it('reports an empty error alongside a real answer', async () => {
-    const element = new AiElement();
-    const ok: Runtime = { ...failing, ai: { complete: async () => 'fine' } };
-    const result = await element.execute(aiNode({ catch_errors: true }), {}, ok);
-    expect(result).toEqual({ output: 'fine', error: '' });
+    await expect(element.execute(aiNode({ catch_errors: true }), {}, failing)).rejects.toThrow('no content');
   });
 });

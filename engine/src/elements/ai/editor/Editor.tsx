@@ -84,24 +84,6 @@ export default function AIEditor({
         </p>
       </div>
 
-      <div>
-        <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-          <input
-            type="checkbox"
-            checked={!!node.config.catch_errors}
-            onChange={(e) => setConfig('catch_errors', e.target.checked)}
-          />
-          Catch a failed call instead of failing the node
-        </label>
-        <p className="text-xs mt-1" style={{ color: DIMMER }}>
-          A model that cannot be reached fails this node, and the run, the way it always did.
-          Turned on, the failure becomes an <strong style={{ color: '#a78bfa' }}>error</strong>{' '}
-          output instead — add a port named exactly <code>error</code> and wire it to whatever
-          should happen on failure (a note in a window, a fallback branch). Empty when the call
-          worked.
-        </p>
-      </div>
-
       <BatchAndFileInputOptions node={node} setConfig={setConfig} subject="prompt" />
     </>
   );

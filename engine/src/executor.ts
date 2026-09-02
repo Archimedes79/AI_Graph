@@ -253,8 +253,28 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         });
         runtime.report?.({ type: 'node_done', node_id: nodeId, status });
       } catch (error) {
-        failed.add(nodeId);
         const message = error instanceof Error ? error.message : String(error);
+
+        // A node that catches its own failures turns one into data instead of
+        // ending the run: the message goes on its `error` port, its other
+        // ports carry null, and whatever that port feeds gets to react. Asked
+        // of the element rather than switched on a node type here, so a new
+        // element that wants it says so in its own file -- and one mechanism
+        // covers every kind rather than a copy inside each.
+        //
+        // Still `partial`, never `success`: something did go wrong, and a node
+        // whose outputs are nulls nobody explains is how a broken run comes to
+        // look like a clean one.
+        if (element.catchesErrors(node)) {
+          const produced = failureOutputs(node, message);
+          outputs.set(nodeId, produced);
+          partial.add(nodeId);
+          results.push({ node_id: nodeId, status: 'partial', inputs, outputs: produced, error: message });
+          runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'partial' });
+          continue;
+        }
+
+        failed.add(nodeId);
         results.push({ node_id: nodeId, status: 'error', inputs, outputs: {}, error: message });
         runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'error' });
       }
@@ -273,6 +293,23 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
     outputs: finalOutputs(nodes, outputs, registry),
     error: failed.size ? [...failed].map((id) => `${id} failed`).join('; ') : null,
   };
+}
+
+/**
+ * What a node that caught its own failure hands on.
+ *
+ * Null on every declared port so anything downstream sees "nothing arrived"
+ * rather than a missing key, and the message on `error` -- the port a person
+ * wires when they want to do something about it, and may leave unwired when
+ * they only want the run to carry on.
+ */
+export const ERROR_PORT = 'error';
+
+function failureOutputs(node: GraphNode, message: string): Record<string, unknown> {
+  const produced: Record<string, unknown> = {};
+  for (const port of node.outputs) produced[port.id] = null;
+  produced[ERROR_PORT] = message;
+  return produced;
 }
 
 /**

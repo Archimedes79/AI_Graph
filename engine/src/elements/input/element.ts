@@ -111,30 +111,19 @@ export class InputElement extends GraphNodeElement<InputConfig> {
     }
 
     const raw = settings.value || String(inputs.path ?? '');
-    const okay = settings.catchErrors ? { error: '' } : {};
-    if (!raw) {
-      return { ...(settings.mode === 'file' ? { content: '', path: '' } : { files: [], count: 0 }), ...okay };
-    }
+    const blank = settings.mode === 'file' ? { content: '', path: '' } : { files: [], count: 0 };
+    // An empty path is not a failure -- nothing was asked for -- so the error
+    // port, when there is one, says so by staying empty.
+    if (!raw) return { ...blank, ...(settings.catchErrors ? { error: '' } : {}) };
 
-    if (!settings.catchErrors) {
-      if (settings.mode === 'file') {
-        const path = runtime.files.resolve(raw);
-        return { content: await runtime.files.read(path), path };
-      }
-      const files = await selectFiles(this.logic(node), settings, raw, runtime);
-      return { files, count: files.length };
+    // A read that throws is caught by the executor, which fills the port this
+    // element declared just below.
+    if (settings.mode === 'file') {
+      const path = runtime.files.resolve(raw);
+      const content = await runtime.files.read(path);
+      return { content, path, ...(settings.catchErrors ? { error: '' } : {}) };
     }
-
-    try {
-      if (settings.mode === 'file') {
-        const path = runtime.files.resolve(raw);
-        return { content: await runtime.files.read(path), path, error: '' };
-      }
-      const files = await selectFiles(this.logic(node), settings, raw, runtime);
-      return { files, count: files.length, error: '' };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { ...(settings.mode === 'file' ? { content: '', path: '' } : { files: [], count: 0 }), error: message };
-    }
+    const files = await selectFiles(this.logic(node), settings, raw, runtime);
+    return { files, count: files.length, ...(settings.catchErrors ? { error: '' } : {}) };
   }
 }

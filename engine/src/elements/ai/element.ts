@@ -19,8 +19,6 @@ export interface AiConfig {
   /** What the model is told to produce. A generation input, not a runtime check. */
   outputFormat: string;
   outputFormatPrompt: string;
-  /** Return a failed call as an `error` port instead of failing the node. */
-  catchErrors: boolean;
 }
 
 /**
@@ -49,7 +47,6 @@ export class AiElement extends GraphNodeElement<AiConfig> {
       sendImages: c.send_images === true,
       outputFormat: String(c.output_format ?? 'text'),
       outputFormatPrompt: String(c.output_format_prompt ?? ''),
-      catchErrors: c.catch_errors === true,
     };
   }
 
@@ -122,16 +119,10 @@ export class AiElement extends GraphNodeElement<AiConfig> {
       ...(images.length ? { images } : {}),
     };
 
-    // Off by default: a call that fails still fails the node, as it always
-    // did. On, a failure becomes data instead -- an `error` port a person adds
-    // by hand, the same way any other output port on this node is named,
-    // wired to whatever should happen when the model could not be reached.
-    if (!settings.catchErrors) return { output: await runtime.ai.complete(request) };
-    try {
-      return { output: await runtime.ai.complete(request), error: '' };
-    } catch (error) {
-      return { output: '', error: error instanceof Error ? error.message : String(error) };
-    }
+    // A failed call is not caught here: `catch_errors` is read by the executor,
+    // which turns a throw into this node's `error` port for every element
+    // alike. One mechanism, not one per element.
+    return { output: await runtime.ai.complete(request) };
   }
 }
 

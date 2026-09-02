@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import type { GraphNode } from '../types/graph';
+import type { GraphNode, Port } from '../types/graph';
 import { useGraphStore } from '../store/graphStore';
-import { syncGuiNodePorts } from '../utils/guiWidgets';
-import { derivedNodePorts } from '../utils/guiWidgets';
+import { derivedNodePorts, syncGuiNodePorts } from '../utils/guiWidgets';
 import { NODE_ELEMENTS } from '../elements/registry';
 import Modal from './Modal';
 import { useGenerate } from '../elements/shared/useGenerate';
@@ -20,6 +19,17 @@ interface NodeEditorProps {
   nodeId: string;
   onClose: () => void;
 }
+
+/** The output a node grows when it is told to catch its own failures. */
+const ERROR_OUTPUT: Port = {
+  id: 'error',
+  name: 'Error',
+  kind: 'output',
+  data_type: 'text',
+  multi: false,
+  required: false,
+  description: 'Why this node failed. Optional to wire: unwired, the run simply carries on.',
+};
 
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const rfNode = useGraphStore((s) => s.rfNodes.find((n) => n.id === nodeId));
@@ -73,9 +83,19 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   };
 
   const setConfig = (key: string, value: unknown) => {
-    setNode((prev) =>
-      prev ? { ...prev, config: { ...prev.config, [key]: value } } : prev
-    );
+    setNode((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, config: { ...prev.config, [key]: value } };
+      // Ticking "catch failures" is what puts the port on the node. Nobody
+      // should have to add an output by hand and guess that it must be called
+      // `error` for the executor to fill it. Elements whose ports are derived
+      // -- an input node, a page -- declare it themselves, so leave those be.
+      if (key === 'catch_errors' && derivedNodePorts(next) === null) {
+        const without = next.outputs.filter((port) => port.id !== 'error');
+        next.outputs = value ? [...without, ERROR_OUTPUT] : without;
+      }
+      return next;
+    });
   };
 
   /**

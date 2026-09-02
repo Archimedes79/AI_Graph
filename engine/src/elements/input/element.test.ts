@@ -49,16 +49,13 @@ describe('an error port', () => {
 });
 
 describe('a file that cannot be read', () => {
-  it('still throws when catch_errors is off', async () => {
+  // It throws either way; the executor decides what that costs. See executor.test.ts.
+  it('throws, whatever catch_errors says', async () => {
     const element = new InputElement();
     await expect(element.execute(inputNode({ input_mode: 'file', value: '/gone.txt' }), {}, broken))
       .rejects.toThrow('ENOENT');
-  });
-
-  it('reports the reason on the error port when catch_errors is on', async () => {
-    const element = new InputElement();
-    const result = await element.execute(inputNode({ input_mode: 'file', value: '/gone.txt', catch_errors: true }), {}, broken);
-    expect(result).toEqual({ content: '', path: '', error: 'ENOENT: no such file' });
+    await expect(element.execute(inputNode({ input_mode: 'file', value: '/gone.txt', catch_errors: true }), {}, broken))
+      .rejects.toThrow('ENOENT');
   });
 
   it('reports an empty error alongside a real read', async () => {
@@ -66,15 +63,5 @@ describe('a file that cannot be read', () => {
     const okay: Runtime = { ...broken, files: { ...broken.files, resolve: (p) => p, read: async () => 'hi' } };
     const result = await element.execute(inputNode({ input_mode: 'file', value: '/x.txt', catch_errors: true }), {}, okay);
     expect(result).toEqual({ content: 'hi', path: '/x.txt', error: '' });
-  });
-});
-
-describe('a directory that cannot be listed', () => {
-  it('reports the reason on the error port when catch_errors is on', async () => {
-    const element = new InputElement();
-    const result = await element.execute(
-      inputNode({ input_mode: 'directory', value: '/nope', catch_errors: true }), {}, broken,
-    );
-    expect(result).toEqual({ files: [], count: 0, error: 'ENOENT: no such directory' });
   });
 });
