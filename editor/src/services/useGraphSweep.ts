@@ -6,15 +6,15 @@
 // — and writes what comes back into the store.
 
 import { useCallback, useRef, useState } from 'react';
-import type { GraphEdge, GraphNode } from '../types/graph';
+import type { GraphEdge, GraphNode, GuiWidget } from '../types/graph';
 import type { GenerationResult } from '../utils/api';
 import { useGraphStore } from '../store/graphStore';
-import { NODE_ELEMENTS } from '../elements/registry';
-import { buildGeneration, nodeFields } from '../elements/shared/generation';
+import { GUI_WIDGET_ELEMENTS, NODE_ELEMENTS } from '../elements/registry';
+import { buildGeneration, nodeFields, widgetFields } from '../elements/shared/generation';
 import {
-  connectedFormatContext, inputSources, lastRunContext, lastRunInputs,
+  connectedFormatContext, inputSources, lastRunContext, lastRunInputs, lastRunWidgetInput,
 } from '../elements/shared/generationContext';
-import { missingExamples, sampleFromPredecessors, sweep, type SweepUnit } from './graphSweep';
+import { missingExamples, sampleFromPredecessors, sweep, type SweepTarget, type SweepUnit } from './graphSweep';
 
 export interface SweepState {
   run: () => Promise<void>;
@@ -55,7 +55,66 @@ export function useGraphSweep(): SweepState {
     // it is generated against real values even when the graph has never run.
     const produced = new Map<string, Record<string, unknown>>();
 
-    const unitFor = (node: GraphNode): SweepUnit<GenerationResult> | undefined => {
+    const guiNodes = new Set(nodesOf().filter((n) => n.node_type === 'gui').map((n) => n.id));
+
+    /**
+     * One block on a page, generated exactly as its own ✨ button would.
+     *
+     * The same `buildGeneration` the block editor calls, so a sweep and a
+     * button cannot drift apart -- and the sample is what the block before it
+     * just produced, which is the whole point of sweeping rather than pressing
+     * buttons one at a time.
+     */
+    const unitForWidget = (
+      target: SweepTarget & { widget: GuiWidget },
+    ): SweepUnit<GenerationResult> | undefined => {
+      const element = GUI_WIDGET_ELEMENTS[target.widget.kind as keyof typeof GUI_WIDGET_ELEMENTS];
+      const spec = element?.generation;
+      if (!spec) return undefined;
+
+      const node = nodesOf().find((n) => n.id === target.node.id);
+      const widget = (node?.config.gui_widgets ?? []).find((w) => w.id === target.widget.id);
+      if (!node || !widget) return undefined;
+      if (spec.available && !spec.available(widget)) return undefined;
+
+      // Never overwrite a body somebody already has, the same rule a node gets.
+      const written = String((widget as unknown as Record<string, unknown>)[spec.targetField] ?? '').trim();
+      if (written) return undefined;
+
+      const onChange = (patch: Partial<GuiWidget>) => {
+        const latest = nodesOf().find((n) => n.id === node.id);
+        if (!latest) return;
+        useGraphStore.getState().updateNode(node.id, {
+          config: {
+            ...latest.config,
+            gui_widgets: latest.config.gui_widgets.map((w) => (w.id === widget.id ? { ...w, ...patch } : w)),
+          } as GraphNode['config'],
+        });
+      };
+
+      const unit = buildGeneration({
+        element: widget.kind,
+        generation: spec,
+        subject: widget,
+        fields: widgetFields(widget, onChange),
+        exampleFile: (widget.example_file ?? '').trim(),
+        sampleInputs: lastRunWidgetInput(node.id, widget.id, live().executionResult)
+          ?? sampleFromPredecessors(target, rfEdges(), produced, guiNodes),
+      });
+      return {
+        ...unit,
+        apply: (result) => {
+          unit.apply(result);
+          // Filed under the block, so the block after it -- which may be a node
+          // away -- is generated against what this one really returned.
+          if (result.probe?.outputs) produced.set(target.key, result.probe.outputs);
+        },
+      };
+    };
+
+    const unitFor = (target: SweepTarget): SweepUnit<GenerationResult> | undefined => {
+      if (target.widget) return unitForWidget(target as SweepTarget & { widget: GuiWidget });
+      const node = target.node;
       const element = NODE_ELEMENTS[node.node_type];
       const spec = element?.generation;
       if (!spec) return undefined;
@@ -95,7 +154,7 @@ export function useGraphSweep(): SweepState {
           lastRunContext(current.id, live().executionResult),
         ].filter(Boolean).join('\n\n'),
         sampleInputs: lastRunInputs(current.id, live().executionResult)
-          ?? sampleFromPredecessors(current.id, rfEdges(), produced),
+          ?? sampleFromPredecessors(target, rfEdges(), produced, guiNodes),
         inputSources: inputSources(current.id, nodesOf(), rfEdges()),
         // What it turns out to return is written down as this node's contract,
         // which is what the next node is then generated against.
@@ -105,7 +164,7 @@ export function useGraphSweep(): SweepState {
         ...unit,
         apply: (result) => {
           unit.apply(result);
-          if (result.probe?.outputs) produced.set(current.id, result.probe.outputs);
+          if (result.probe?.outputs) produced.set(target.key, result.probe.outputs);
         },
       };
     };

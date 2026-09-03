@@ -39,7 +39,7 @@ describe('the order a graph is generated in', () => {
     const [a, b, c] = [node('a'), node('b'), node('c')];
     // Added c, b, a; wired a -> b -> c.
     const order = generationOrder([c, b, a], [edge('a', 'b'), edge('b', 'c')]);
-    expect(order.map((n) => n.id)).toEqual(['a', 'b', 'c']);
+    expect(order.map((t) => t.key)).toEqual(['a', 'b', 'c']);
   });
 
   it('refuses a graph that cannot run, the way the engine does', () => {
@@ -57,7 +57,7 @@ describe('sweeping a graph', () => {
     const seen: string[] = [];
     const nodes = [node('a'), node('b')];
     const steps = await collect(sweep(nodes, [edge('a', 'b')], {
-      unitFor: (n) => ok(seen, n.id),
+      unitFor: (t) => ok(seen, t.key),
     }));
 
     expect(seen).toEqual(['a', 'b']);
@@ -73,9 +73,9 @@ describe('sweeping a graph', () => {
     const seen: string[] = [];
     const nodes = [node('a'), node('b')];
     const steps = await collect(sweep(nodes, [edge('a', 'b')], {
-      unitFor: (n) => (n.id === 'a'
+      unitFor: (t) => (t.key === 'a'
         ? { guard: () => 'Please add a code generation prompt first.', run: async () => '', apply: () => {} }
-        : ok(seen, n.id)),
+        : ok(seen, t.key)),
     }));
 
     expect(steps.map((s) => s.status)).toEqual(['blocked', 'generated']);
@@ -87,9 +87,9 @@ describe('sweeping a graph', () => {
     const seen: string[] = [];
     const nodes = [node('a'), node('b'), node('c')];
     const steps = await collect(sweep(nodes, [edge('a', 'b'), edge('b', 'c')], {
-      unitFor: (n) => (n.id === 'b'
+      unitFor: (t) => (t.key === 'b'
         ? { run: async () => { throw new Error('the model refused'); }, apply: () => {} }
-        : ok(seen, n.id)),
+        : ok(seen, t.key)),
     }));
 
     expect(steps.map((s) => s.status)).toEqual(['generated', 'failed']);
@@ -102,7 +102,7 @@ describe('sweeping a graph', () => {
     const nodes = [node('a'), node('b')];
     const stopped = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
     const steps = await collect(sweep(nodes, [edge('a', 'b')], {
-      unitFor: (n) => ok(seen, n.id), stopped,
+      unitFor: (t) => ok(seen, t.key), stopped,
     }));
 
     expect(seen).toEqual(['a']);
@@ -145,22 +145,24 @@ describe('what a sweep would have to guess at', () => {
 });
 
 describe('what the next node is generated against', () => {
+  /** A plain node target, for the cases that have nothing to do with a page. */
+  const plain = (id: string) => ({ node: node(id), key: id, label: id });
   const wire = (source: string, sourceHandle: string, target: string, targetHandle: string) => ({ source, sourceHandle, target, targetHandle });
 
   it('is what the node before it returned, port by port', () => {
     const produced = new Map([['a', { out: 'text from a', count: 3 }]]);
-    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'text'), wire('a', 'count', 'b', 'n')], produced))
+    expect(sampleFromPredecessors(plain('b'), [wire('a', 'out', 'b', 'text'), wire('a', 'count', 'b', 'n')], produced))
       .toEqual({ text: 'text from a', n: 3 });
   });
 
   it('collects several sources into a list, as a run would', () => {
     const produced = new Map([['a', { out: 1 }], ['c', { out: 2 }]]);
-    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'items'), wire('c', 'out', 'b', 'items')], produced))
+    expect(sampleFromPredecessors(plain('b'), [wire('a', 'out', 'b', 'items'), wire('c', 'out', 'b', 'items')], produced))
       .toEqual({ items: [1, 2] });
   });
 
   it('is nothing at all when no predecessor has produced anything yet', () => {
-    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'text')], new Map())).toBeUndefined();
+    expect(sampleFromPredecessors(plain('b'), [wire('a', 'out', 'b', 'text')], new Map())).toBeUndefined();
   });
 });
 
@@ -189,5 +191,72 @@ describe('a GUI file picker as a source', () => {
       target_node_id: 'g', target_port_id: 'other_in',
     } as GraphEdge];
     expect(missingExamples([source, fed], edges).map((n) => n.id)).toEqual(['g']);
+  });
+});
+
+describe('a page in the order', () => {
+  /**
+   * The chain that made this necessary, and the reason a page cannot simply be
+   * walked in list order: its blocks have no edges among themselves, and what
+   * connects them runs out through the graph and back.
+   *
+   *   [page] picker ──→ code node ──→ [page] chart
+   *
+   * So the blocks stand in the graph in their node's place, and one sort
+   * answers for both kinds at once.
+   */
+  function plotterish(): { nodes: GraphNode[]; edges: GraphEdge[] } {
+    const page = node('panel', 'gui');
+    page.config.gui_widgets = [
+      { id: 'title', kind: 'text', label: 'Title', value: 'x' },
+      { id: 'picker', kind: 'input_picker', label: 'CSV', mode: 'file', value: '/data.csv' },
+      { id: 'chart', kind: 'plot_window', label: 'Chart' },
+    ] as never;
+    const code = node('points', 'code');
+    return {
+      nodes: [page, code],
+      edges: [
+        {
+          id: 'e1', source_node_id: 'panel', source_port_id: 'picker_out',
+          target_node_id: 'points', target_port_id: 'csv',
+        },
+        {
+          id: 'e2', source_node_id: 'points', source_port_id: 'points',
+          target_node_id: 'panel', target_port_id: 'chart_in',
+        },
+      ] as GraphEdge[],
+    };
+  }
+
+  it('puts each block where its wiring says, not where the page lists it', () => {
+    const { nodes, edges } = plotterish();
+    expect(generationOrder(nodes, edges).map((t) => t.key))
+      .toEqual(['panel::picker', 'points', 'panel::chart']);
+  });
+
+  it('leaves out the blocks that have no ports and generate nothing', () => {
+    const { nodes, edges } = plotterish();
+    expect(generationOrder(nodes, edges).map((t) => t.key)).not.toContain('panel::title');
+  });
+
+  it('names a block by its page and itself, so a step says which one', () => {
+    const { nodes, edges } = plotterish();
+    const chart = generationOrder(nodes, edges).find((t) => t.key === 'panel::chart');
+    expect(chart?.label).toBe(`${nodes[0].label} / Chart`);
+    expect(chart?.widget?.id).toBe('chart');
+  });
+
+  it('hands a block what the node before it produced, as its transform sees it', () => {
+    const { nodes, edges } = plotterish();
+    const chart = generationOrder(nodes, edges).find((t) => t.key === 'panel::chart')!;
+    const produced = new Map([['points', { points: [{ label: 'a', value: 1 }] }]]);
+    const wired = edges.map((e) => ({
+      source: e.source_node_id, sourceHandle: e.source_port_id,
+      target: e.target_node_id, targetHandle: e.target_port_id,
+    }));
+    // `{value: ...}` -- the shape a block's own contract promises it, not the
+    // port name the graph used to get there.
+    expect(sampleFromPredecessors(chart, wired, produced, new Set(['panel'])))
+      .toEqual({ value: [{ label: 'a', value: 1 }] });
   });
 });

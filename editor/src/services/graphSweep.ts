@@ -19,7 +19,8 @@
 
 import { memoryFeedbackEdges, topologicalLevels } from '@engine/executor.ts';
 import { registry } from '@engine/registry.ts';
-import type { GraphEdge, GraphNode } from '../types/graph';
+import type { GraphEdge, GraphNode, GuiWidget } from '../types/graph';
+import { guiWidgetPorts } from '../utils/guiWidgets';
 
 /** What happened to one node. */
 export type SweepStatus =
@@ -53,11 +54,47 @@ export interface SweepUnit<T = unknown> {
   apply: (result: T) => void;
 }
 
+/**
+ * One thing to generate: a node, or a block on a node's page.
+ *
+ * The sweep used to walk nodes alone, and a gui node generates nothing itself
+ * -- so a page's blocks, which are where a chart transform and a file selector
+ * live, were skipped entirely however often the button was pressed.
+ */
+export interface SweepTarget {
+  node: GraphNode;
+  /** Set when the target is a block rather than the node itself. */
+  widget?: GuiWidget;
+  /** `nodeId`, or `nodeId::widgetId`. What a produced sample is filed under. */
+  key: string;
+  label: string;
+}
+
 export interface SweepDeps<T = unknown> {
-  /** The unit for this node, or undefined when it generates nothing. */
-  unitFor: (node: GraphNode) => SweepUnit<T> | undefined;
-  /** Asked before each node, so a long sweep can be stopped from the toolbar. */
+  /** The unit for this target, or undefined when it generates nothing. */
+  unitFor: (target: SweepTarget) => SweepUnit<T> | undefined;
+  /** Asked before each target, so a long sweep can be stopped from the toolbar. */
   stopped?: () => boolean;
+}
+
+/** The key a block's outputs are filed under, so an edge can find them again. */
+export function targetKey(nodeId: string, widgetId?: string): string {
+  return widgetId ? `${nodeId}::${widgetId}` : nodeId;
+}
+
+/**
+ * A block's ports, named the way the graph's edges name them.
+ *
+ * `${id}_in` and `${id}_out` are what the gui node contributes upward, so an
+ * edge into a page is really an edge into one of its blocks -- which is what
+ * makes an order across the two possible at all.
+ */
+function blockPorts(widget: GuiWidget): { inputs: string[]; outputs: string[] } {
+  const ports = guiWidgetPorts(widget);
+  return {
+    inputs: ports.inputs.map((port) => port.id),
+    outputs: ports.outputs.map((port) => port.id),
+  };
 }
 
 /**
@@ -71,18 +108,94 @@ export interface SweepDeps<T = unknown> {
  * generate in, and inventing one would write every node against a guess while
  * looking like it worked.
  */
-export function generationOrder(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
+export function generationOrder(nodes: GraphNode[], edges: GraphEdge[]): SweepTarget[] {
   const byId = new Map(nodes.map((node) => [node.id, node]));
-  // The engine's own registry decides which nodes remember, exactly as it does
-  // when the graph runs: a cycle closing into one of those is not a cycle.
-  const feedback = memoryFeedbackEdges(nodes as never, edges as never, registry);
-  const ordered: GraphNode[] = [];
-  for (const level of topologicalLevels(nodes as never, edges as never, feedback)) {
-    for (const id of level) {
-      const node = byId.get(id);
-      if (node) ordered.push(node);
+
+  /**
+   * The graph with every page opened up.
+   *
+   * A page is not a chain: its blocks have no edges among themselves, and what
+   * order they belong in runs out through the graph and back --
+   * picker -> code node -> chart. So the blocks stand in the graph in their
+   * node's place, and one topological sort answers for both kinds at once.
+   */
+  const targets = new Map<string, SweepTarget>();
+  const virtualNodes: { id: string; node_type: string }[] = [];
+  const portOwner = new Map<string, string>();
+
+  for (const node of nodes) {
+    const widgets = node.node_type === 'gui' && Array.isArray(node.config.gui_widgets)
+      ? node.config.gui_widgets as GuiWidget[]
+      : [];
+    const blocks = widgets.filter((widget) => {
+      const ports = blockPorts(widget);
+      return ports.inputs.length > 0 || ports.outputs.length > 0;
+    });
+
+    if (!blocks.length) {
+      const key = targetKey(node.id);
+      targets.set(key, { node, key, label: node.label || node.id });
+      virtualNodes.push({ id: key, node_type: node.node_type });
+      continue;
+    }
+
+    for (const widget of blocks) {
+      const key = targetKey(node.id, widget.id);
+      targets.set(key, {
+        node,
+        widget,
+        key,
+        label: `${node.label || node.id} / ${widget.label || widget.id}`,
+      });
+      // Keeps its node's type, so the memory rule below still recognises a
+      // block of a page as something that remembers.
+      virtualNodes.push({ id: key, node_type: node.node_type });
+      for (const port of [...blockPorts(widget).inputs, ...blockPorts(widget).outputs]) {
+        portOwner.set(`${node.id}::${port}`, key);
+      }
     }
   }
+
+  /** Which target an edge end belongs to: a block when the port names one. */
+  const endpoint = (nodeId: string, portId: string): string =>
+    portOwner.get(`${nodeId}::${portId}`) ?? targetKey(nodeId);
+
+  const virtualEdges = edges
+    .map((edge) => ({
+      id: edge.id,
+      source_node_id: endpoint(edge.source_node_id, edge.source_port_id),
+      source_port_id: edge.source_port_id,
+      target_node_id: endpoint(edge.target_node_id, edge.target_port_id),
+      target_port_id: edge.target_port_id,
+    }))
+    // An edge between two blocks of the same page would be a self-loop here,
+    // and a self-loop is a cycle the sort cannot resolve.
+    .filter((edge) => edge.source_node_id !== edge.target_node_id);
+
+  /**
+   * Which cycles the memory rule absolves -- decided on the opened-up graph.
+   *
+   * On the graph as written, picker -> code -> chart is a loop through one gui
+   * node, so the edge back into the page was cut and the chart was generated
+   * before the node that feeds it. Opened up those are two different blocks
+   * and there is no loop at all; a loop that survives the expansion is a real
+   * one, and the rule still absolves it if it closes into a page.
+   */
+  const feedback = memoryFeedbackEdges(virtualNodes as never, virtualEdges as never, registry);
+
+  const ordered: SweepTarget[] = [];
+  for (const level of topologicalLevels(virtualNodes as never, virtualEdges as never, feedback)) {
+    for (const key of level) {
+      const target = targets.get(key);
+      if (target) ordered.push(target);
+    }
+  }
+  // A node the sort never reached -- one whose only edges were dropped above --
+  // still has something to generate.
+  for (const [key, target] of targets) {
+    if (!ordered.some((seen) => seen.key === key)) ordered.push(target);
+  }
+  if (byId.size === 0) return [];
   return ordered;
 }
 
@@ -103,11 +216,11 @@ export async function* sweep<T>(
   edges: GraphEdge[],
   deps: SweepDeps<T>,
 ): AsyncGenerator<SweepStep> {
-  for (const node of generationOrder(nodes, edges)) {
+  for (const target of generationOrder(nodes, edges)) {
     if (deps.stopped?.()) return;
 
-    const label = node.label || node.id;
-    const unit = deps.unitFor(node);
+    const { node, label } = target;
+    const unit = deps.unitFor(target);
     if (!unit) {
       yield { nodeId: node.id, label, status: 'skipped', message: 'nothing to generate' };
       continue;
@@ -184,17 +297,28 @@ export interface WiredEdge { source: string; sourceHandle?: string | null; targe
  * produced nothing yet is left out, so a partial sample is still a sample.
  */
 export function sampleFromPredecessors(
-  nodeId: string,
+  target: SweepTarget,
   edges: WiredEdge[],
   produced: Map<string, Record<string, unknown>>,
+  guiNodes: Set<string> = new Set(),
 ): Record<string, unknown> | undefined {
+  /** Which target an edge end belongs to, by the shape of its port name. */
+  const keyFor = (nodeId: string, handle: string | null | undefined): string => {
+    if (!handle || !guiNodes.has(nodeId)) return nodeId;
+    const owner = /^(.+)_(in|out)$/.exec(handle);
+    return owner ? targetKey(nodeId, owner[1]) : nodeId;
+  };
+
   const sample: Record<string, unknown[]> = {};
   for (const edge of edges) {
-    if (edge.target !== nodeId) continue;
-    const outputs = produced.get(edge.source);
+    if (keyFor(edge.target, edge.targetHandle) !== target.key) continue;
+    const outputs = produced.get(keyFor(edge.source, edge.sourceHandle));
     const port = edge.sourceHandle ?? 'output';
     if (!outputs || !(port in outputs)) continue;
-    (sample[edge.targetHandle ?? 'input'] ??= []).push(outputs[port]);
+    // A block's transform is handed `{value: ...}`, not its port name: that is
+    // the shape its own contract promises it.
+    const into = target.widget ? 'value' : (edge.targetHandle ?? 'input');
+    (sample[into] ??= []).push(outputs[port]);
   }
   const entries = Object.entries(sample);
   if (!entries.length) return undefined;
