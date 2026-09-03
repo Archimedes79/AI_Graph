@@ -348,7 +348,7 @@ export default function App() {
             switching back does not reset the canvas or lose a selection. */}
         <div className="flex flex-1 overflow-hidden" style={{ display: view === 'graph' ? 'flex' : 'none' }}>
           <Sidebar onAddNode={handleAddNode} />
-          <GraphCanvas />
+          <GraphCanvas active={view === 'graph'} />
           <ResultsPanel />
         </div>
         {view === 'design' && <DesignerTab />}

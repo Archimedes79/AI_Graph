@@ -44,7 +44,17 @@ function getConnectionRejectionReason(
   return null;
 }
 
-export default function GraphCanvas() {
+/**
+ * @param active Whether the graph tab is the one on screen.
+ *
+ * The canvas stays mounted while another tab is shown, so switching back keeps
+ * the viewport and the selection. Its keyboard shortcuts stayed live with it:
+ * pressing Delete on the surface designer removed the selected block *and* the
+ * gui node selected back on the canvas, which is the whole page -- so Delete
+ * looked like it deleted everything. Keys belong to the view you are looking
+ * at.
+ */
+export default function GraphCanvas({ active = true }: { active?: boolean }) {
   const rfNodes = useGraphStore((s) => s.rfNodes);
   const rfEdges = useGraphStore((s) => s.rfEdges);
   const setRFNodes = useGraphStore((s) => s.setRFNodes);
@@ -137,7 +147,7 @@ export default function GraphCanvas() {
         onInit={setRfInstance}
         onDrop={onDrop}
         onDragOver={onDragOver}
-        deleteKeyCode={['Delete', 'Backspace']}
+        deleteKeyCode={active ? ['Delete', 'Backspace'] : null}
         style={{ background: SUNKEN }}
       >
         <Background
