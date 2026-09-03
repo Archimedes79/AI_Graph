@@ -1,5 +1,6 @@
 import React from 'react';
 import { ACCENT, DIM, DIMMER, HOVER, MUTED, RAISE } from '../ui/theme';
+import { PLOT_VIEW } from '@engine/elements/gui/children/plot_window/element.ts';
 
 interface PlotWidgetProps {
   data: unknown;
@@ -74,14 +75,16 @@ export function axisLabel(value: number): string {
 /**
  * The space the chart draws in, whatever size it is shown at.
  *
- * Fixed, not measured. The chart used to be drawn at whatever a
- * ResizeObserver last reported, which was 188x90 for a block a thousand
- * pixels wide -- so it first drew no axes for lack of room, and then, once it
- * filled its box, magnified that little drawing about six times. A fixed
- * coordinate space with the box scaling it has neither failure: the margins
- * below are always there, and a stale measurement cannot take them away.
+ * Fixed, not measured, and taken from the element rather than declared again
+ * here: a transform that draws its own SVG is told these same numbers, so the
+ * app and the model lay out inside one frame instead of two that drift.
+ *
+ * Fixed because measuring failed twice over. A ResizeObserver reported 188x90
+ * for a block a thousand pixels wide, so the chart drew no axes for lack of
+ * room; and once it filled its box, that same number became the scale and
+ * magnified the drawing about six times.
  */
-export const VIEW = { width: 400, height: 240 };
+export const VIEW = { width: PLOT_VIEW.width, height: PLOT_VIEW.height };
 
 /** Room for axes, or the bare sparkline a canvas preview has space for. */
 export function chartMargins(width: number, height: number) {
@@ -89,7 +92,7 @@ export function chartMargins(width: number, height: number) {
   // canvas, a couple of hundred pixels across at most.
   const labelled = width >= 160 && height >= 80;
   return labelled
-    ? { left: 46, right: 14, top: 16, bottom: 30, labelled }
+    ? { ...PLOT_VIEW.margin, labelled }
     : { left: 6, right: 6, top: 6, bottom: 6, labelled };
 }
 

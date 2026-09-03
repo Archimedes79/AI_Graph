@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { asDrawing, axisLabel, chartMargins, computeAxisRange } from './PlotWidget';
+import { asDrawing, axisLabel, chartMargins, computeAxisRange, VIEW } from './PlotWidget';
+import { PLOT_VIEW, PlotWindowElement } from '@engine/elements/gui/children/plot_window/element.ts';
 
 describe('computeAxisRange', () => {
   it('includes 0 in the range for all-positive data', () => {
@@ -74,5 +75,29 @@ describe('room for axes', () => {
 
   it('is skipped only where text could not be read', () => {
     expect(chartMargins(120, 60).labelled).toBe(false);
+  });
+});
+
+describe('the frame the model is told about', () => {
+  /**
+   * A block is resizable, so neither the app nor a model drawing its own SVG
+   * may think in screen pixels. Both lay out inside one declared frame -- and
+   * the contract that teaches the model must be the same frame the app uses,
+   * or generated charts put their labels where this crops them.
+   */
+  it('is the one the app draws in', () => {
+    expect(VIEW).toEqual({ width: PLOT_VIEW.width, height: PLOT_VIEW.height });
+    const margins = chartMargins(400, 240);
+    expect(margins.left).toBe(PLOT_VIEW.margin.left);
+    expect(margins.bottom).toBe(PLOT_VIEW.margin.bottom);
+  });
+
+  it('is spelled out for the model in the same numbers', () => {
+    const contract = new PlotWindowElement().generation().contract ?? '';
+    expect(contract).toContain(`viewBox="0 0 ${PLOT_VIEW.width} ${PLOT_VIEW.height}"`);
+    expect(contract).toContain(String(PLOT_VIEW.margin.left));
+    expect(contract).toContain(String(PLOT_VIEW.height - PLOT_VIEW.margin.bottom));
+    // The reason the numbers are there at all.
+    expect(contract).toContain('Leave the frame free');
   });
 });
