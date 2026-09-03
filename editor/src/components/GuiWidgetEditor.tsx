@@ -208,7 +208,15 @@ Wähle einen Block auf der Seite aus.
       )}
 
       {ConfigEditor && (
-        <GenerationReport calls={generate.transcript(widget.id)} live={generate.liveTranscript(widget.id)}>
+        <GenerationReport
+          calls={generate.transcript(widget.id)}
+          live={generate.liveTranscript(widget.id)}
+          review={{
+            pending: generate.isPending(widget.id),
+            accept: () => generate.accept(widget.id),
+            discard: () => generate.discard(widget.id),
+          }}
+        >
         <ConfigEditor
           widget={widget}
           generation={element.generation}

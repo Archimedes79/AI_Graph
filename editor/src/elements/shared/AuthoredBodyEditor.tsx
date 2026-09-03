@@ -1,6 +1,6 @@
 import React from 'react';
 import ContextFileAttachment from './ContextFileAttachment';
-import GenerationTranscript, { useLiveGeneration } from './GenerationTranscript';
+import GenerationTranscript, { useGenerationReview, useLiveGeneration } from './GenerationTranscript';
 import LiveGeneration from './LiveGeneration';
 import type { ElementGeneration, FieldAccess } from './generation';
 import { ACCENT_FILL, ACCENT_TEXT, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
@@ -43,6 +43,10 @@ export default function AuthoredBodyEditor({
   // that would do nothing with it but pass it on -- the same reason the
   // transcript is a context.
   const liveCalls = useLiveGeneration();
+  // A finished result is not written in until it is taken, so the exchange
+  // that produced it stays on screen while there is something to judge.
+  const review = useGenerationReview();
+  const reviewing = generating || review.pending;
   const field = onSurface ? FIELD_ON_SURFACE : FIELD;
   const mono = generation.mono;
 
@@ -86,8 +90,28 @@ export default function AuthoredBodyEditor({
               </button>
             </div>
           </div>
-          {generating ? (
-            <LiveGeneration calls={liveCalls} minHeight={generation.bodyHeight ?? 160} />
+          {reviewing ? (
+            <>
+              <LiveGeneration calls={liveCalls} minHeight={generation.bodyHeight ?? 160} />
+              {review.pending && (
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={review.accept}
+                    className="text-xs px-3 py-1 rounded"
+                    style={{ background: SUCCESS, color: 'white' }}
+                  >
+                    Übernehmen
+                  </button>
+                  <button
+                    onClick={review.discard}
+                    className="text-xs px-3 py-1 rounded"
+                    style={{ background: 'transparent', color: MUTED, border: `1px solid ${MUTED}` }}
+                  >
+                    Verwerfen
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <textarea
               className={`w-full rounded-lg px-3 py-2 text-sm resize-none${mono ? ' font-mono' : ''}`}

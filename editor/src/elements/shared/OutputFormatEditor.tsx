@@ -120,8 +120,28 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
           {/* While it writes, the box shows the writing: the same view the code
               window gets, for the same reason -- a declaration you cannot see
               being made is one you cannot judge. */}
-          {generating ? (
-            <LiveGeneration calls={runGenerate.liveTranscript()} minHeight={80} />
+          {generating || runGenerate.isPending() ? (
+            <>
+              <LiveGeneration calls={runGenerate.liveTranscript()} minHeight={80} />
+              {runGenerate.isPending() && (
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={() => runGenerate.accept()}
+                    className="text-xs px-3 py-1 rounded"
+                    style={{ background: SUCCESS, color: 'white' }}
+                  >
+                    Übernehmen
+                  </button>
+                  <button
+                    onClick={() => runGenerate.discard()}
+                    className="text-xs px-3 py-1 rounded"
+                    style={{ background: 'transparent', color: MUTED, border: `1px solid ${MUTED}` }}
+                  >
+                    Verwerfen
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <textarea
               className="w-full rounded-lg px-2 py-1.5 text-sm font-mono resize-none"
@@ -137,7 +157,11 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
           {genMessage && (
             <div className="text-xs mt-1" style={{ color: MUTED }}>{genMessage}</div>
           )}
-          <GenerationReport calls={runGenerate.transcript()} live={runGenerate.liveTranscript()}>
+          <GenerationReport
+            calls={runGenerate.transcript()}
+            live={runGenerate.liveTranscript()}
+            review={{ pending: runGenerate.isPending(), accept: () => runGenerate.accept(), discard: () => runGenerate.discard() }}
+          >
             <GenerationTranscript />
           </GenerationReport>
         </div>

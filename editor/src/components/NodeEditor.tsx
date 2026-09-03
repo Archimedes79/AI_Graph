@@ -238,7 +238,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
             </div>
           )}
 
-          <GenerationReport calls={generate.transcript()} live={generate.liveTranscript()}>
+          <GenerationReport
+            calls={generate.transcript()}
+            live={generate.liveTranscript()}
+            review={{ pending: generate.isPending(), accept: () => generate.accept(), discard: () => generate.discard() }}
+          >
           <div className="space-y-4">
               {ConfigEditor && <ConfigEditor
                 node={node}
