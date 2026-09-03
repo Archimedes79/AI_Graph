@@ -71,19 +71,31 @@ export function axisLabel(value: number): string {
   return value.toFixed(size < 1 ? 2 : 1);
 }
 
+/**
+ * The space the chart draws in, whatever size it is shown at.
+ *
+ * Fixed, not measured. The chart used to be drawn at whatever a
+ * ResizeObserver last reported, which was 188x90 for a block a thousand
+ * pixels wide -- so it first drew no axes for lack of room, and then, once it
+ * filled its box, magnified that little drawing about six times. A fixed
+ * coordinate space with the box scaling it has neither failure: the margins
+ * below are always there, and a stale measurement cannot take them away.
+ */
+export const VIEW = { width: 400, height: 240 };
+
 /** Room for axes, or the bare sparkline a canvas preview has space for. */
 export function chartMargins(width: number, height: number) {
-  // A canvas preview is 220x90 and has no room for text: axes there would be
-  // labels stacked on labels. A block on a page is taller than this.
-  const labelled = width >= 200 && height >= 110;
+  // The one case that genuinely has no room for text: a thumbnail on the graph
+  // canvas, a couple of hundred pixels across at most.
+  const labelled = width >= 160 && height >= 80;
   return labelled
-    ? { left: 38, right: 8, top: 10, bottom: 22, labelled }
-    : { left: 4, right: 4, top: 4, bottom: 4, labelled };
+    ? { left: 46, right: 14, top: 16, bottom: 30, labelled }
+    : { left: 6, right: 6, top: 6, bottom: 6, labelled };
 }
 
 /** Keep a category label inside its slot rather than letting it overlap the next. */
 function fit(label: string, slotWidth: number): string {
-  const chars = Math.max(1, Math.floor(slotWidth / 6));
+  const chars = Math.max(1, Math.floor(slotWidth / 7));
   return label.length <= chars ? label : `${label.slice(0, Math.max(1, chars - 1))}…`;
 }
 
@@ -139,9 +151,12 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
   }
 
   const points = toPoints(data);
+  // The props say how much room there is on screen, which decides whether text
+  // is readable; the drawing itself happens in VIEW and is scaled into place.
   const margin = chartMargins(width, height);
-  const plotW = Math.max(1, width - margin.left - margin.right);
-  const plotH = Math.max(1, height - margin.top - margin.bottom);
+  const view = margin.labelled ? VIEW : { width, height };
+  const plotW = Math.max(1, view.width - margin.left - margin.right);
+  const plotH = Math.max(1, view.height - margin.top - margin.bottom);
 
   // A string that is not points is worth showing verbatim: it is either the raw
   // value that arrived, or a "⚠ transform failed" message from the engine.
@@ -165,9 +180,12 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
 
   return (
     <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
+      // The box decides the size and the viewBox decides the coordinates, so a
+      // measurement that is a little off changes the scale rather than losing
+      // the axes.
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${view.width} ${view.height}`}
       role="img"
       aria-label={points ? `Chart of ${points.length} points` : 'Empty chart, waiting for data'}
       style={{ background: RAISE, borderRadius: 4 }}
@@ -179,13 +197,13 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
           {ticks.map((tick, i) => (
             <g key={i}>
               <line
-                x1={margin.left} x2={width - margin.right}
+                x1={margin.left} x2={view.width - margin.right}
                 y1={scaleY(tick)} y2={scaleY(tick)}
                 stroke="#1e2235" strokeWidth={1}
               />
               <text
                 x={margin.left - 5} y={scaleY(tick) + 3}
-                textAnchor="end" fontSize={9} fill={DIMMER}
+                textAnchor="end" fontSize={11} fill={DIMMER}
               >
                 {axisLabel(tick)}
               </text>
@@ -201,7 +219,7 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
 
       {/* The zero line, which is also the x axis whenever the data is positive. */}
       <line
-        x1={margin.left} x2={width - margin.right}
+        x1={margin.left} x2={view.width - margin.right}
         y1={scaleY(0)} y2={scaleY(0)}
         stroke="#334155" strokeWidth={1}
       />
@@ -224,8 +242,8 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
             </rect>
             {margin.labelled && (
               <text
-                x={x + w / 2} y={margin.top + plotH + 13}
-                textAnchor="middle" fontSize={9} fill={MUTED}
+                x={x + w / 2} y={margin.top + plotH + 18}
+                textAnchor="middle" fontSize={11} fill={MUTED}
               >
                 {fit(p.label, slot)}
               </text>
@@ -248,7 +266,7 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
       {!points && (
         <text
           x={margin.left + plotW / 2} y={margin.top + plotH / 2}
-          textAnchor="middle" fontSize={11} fill={DIMMER}
+          textAnchor="middle" fontSize={13} fill={DIMMER}
         >
           Waiting for data
         </text>

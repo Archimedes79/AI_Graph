@@ -65,8 +65,14 @@ describe('axis labels', () => {
 });
 
 describe('room for axes', () => {
-  it('is made when the block is big enough, and skipped in a canvas preview', () => {
+  it('is made at any size a block on a page has', () => {
     expect(chartMargins(400, 200).labelled).toBe(true);
-    expect(chartMargins(220, 90).labelled).toBe(false);
+    // The size a mismeasured block reported. It has room for axes; the old
+    // threshold sat just above it, which is why a wide chart drew none.
+    expect(chartMargins(188, 90).labelled).toBe(true);
+  });
+
+  it('is skipped only where text could not be read', () => {
+    expect(chartMargins(120, 60).labelled).toBe(false);
   });
 });
