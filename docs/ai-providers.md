@@ -70,11 +70,12 @@ Anything else that speaks the OpenAI protocol — a proxy, a gateway, a self-hos
 server — goes in as **OpenAI-compatible endpoint** with its own base URL and key.
 
 A deployed graph can be re-pointed at a different runtime AI without editing it, highest
-precedence first: `--ai-provider`/`--ai-model` (CLI or the deployed GUI's settings
-panel) → `AI_GRAPH_AI_PROVIDER`/`AI_GRAPH_AI_MODEL` → an `ai-settings.json` next to the
+precedence first: `--ai-provider`/`--ai-model` on the command line → `AI_GRAPH_AI_PROVIDER`/`AI_GRAPH_AI_MODEL` → an `ai-settings.json` next to the
 executable (also holds endpoints/API keys, so a double-clicked tool needs no
 environment variables at all) → the graph's own `metadata.ai_defaults` → `ollama`/`llama3`.
-`--ai-force` overrides even nodes that pin their own provider.
+`--ai-force` overrides even nodes that pin their own provider. The deployed page's
+**⚙ AI settings** shows which of these is in effect, and where the file goes; it does not
+write one, because a page that stored credentials would put a key in a file nobody asked for.
 
 ## Local models: LM Studio and Ollama
 

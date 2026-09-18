@@ -171,7 +171,7 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the two AI settings, where the API key goes |
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, Docker, the Graph Runner CLI |
 | [docs/mcp-server.md](docs/mcp-server.md) | Letting Claude (or any MCP client) generate, check, save and run graphs |
-| [docs/architecture.md](docs/architecture.md) | How the pieces fit, the rules that hold them together, and the known debt |
+| [docs/architecture.md](docs/architecture.md) | How the pieces fit, the rules that hold them together, and the known debt; diagrams mapped to files in [arch/](arch/overview.md) |
 
 ## Project structure
 
@@ -182,6 +182,7 @@ AI-Graph/
 ├── editor/               # The editor's page: React + ReactFlow, built on the engine
 ├── examples/               # Example graph JSON files
 ├── docs/                   # The documents linked above
+├── arch/                   # Architecture diagrams, every box mapped to its files
 ├── scripts/dev.mjs         # npm run dev: engine and Vite in one terminal
 └── Dockerfile              # docker compose up: the editor beside Ollama
 ```
