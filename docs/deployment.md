@@ -7,7 +7,7 @@ without the editor.
 
 ```bash
 node engine/src/main.ts examples/hello_world.json
-node engine/src/main.ts examples/bla_counter.json
+node engine/src/main.ts examples/word_counter.json
 ```
 
 Node 24 or newer, and no build step: the engine is TypeScript that Node runs directly
@@ -18,7 +18,7 @@ graph file.** The examples that read data from disk therefore run from the repos
 root:
 
 ```bash
-node engine/src/main.ts examples/universal_plotter.json
+node engine/src/main.ts examples/word_counter.json
 ```
 
 They ask for their path before running, so any other location works too — the value in
@@ -91,6 +91,24 @@ curl -X POST http://localhost:8000/api/deploy/bundle \
 
 See [engine/src/bundle.ts](../engine/src/bundle.ts) for exactly which files a bundle
 contains and why it can never drift from the editor.
+
+### What a bundle carries
+
+The graph, a verbatim copy of the engine, the page when the graph has one — and **the
+files the graph starts on**: what its file pickers and input nodes name as defaults, copied
+to the same relative place, so a tool handed to someone opens on its example data rather
+than on "no such file". Only relative paths inside the project are carried; an absolute
+path, or anything over 50 MB, is listed in the bundle's README as the recipient's to bring.
+The launchers `cd` into the bundle first, so those relative paths mean the same there.
+
+A bundle's server also keeps the graph's own clock (*⚙ Settings → What starts this graph*):
+`on start` and `every 5m` run with nobody watching, and the page shows the latest result.
+
+## Letting an assistant build graphs
+
+`node engine/src/main.ts --mcp --mcp-root <folder>` is an MCP server: Claude Code, Claude
+Desktop or any MCP client can generate, validate, save and run graphs inside that one
+folder. See [mcp-server.md](mcp-server.md).
 
 ## Deploying the editor itself
 

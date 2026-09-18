@@ -40,7 +40,7 @@ compliance question; the two are not a trade-off.
 - **Document batch processing** — a directory of files, a Code/AI node that extracts or
   summarises each one, an Output node that writes the results back to disk.
 - **Data transformation pipeline** — Input → Code node (hand-written or AI-generated
-  `run(inputs)`) → Output; see [examples/bla_counter.json](examples/bla_counter.json).
+  `run(inputs)`) → Output; see [examples/word_counter.json](examples/word_counter.json).
 - **Local-LLM chat or report tool** — an AI node on Ollama/LM Studio fed by a file input,
   paired with a `gui` node's `text_io` widget: a runnable front-end with zero UI code.
 - **A graph as a standalone tool** — once it works in the editor, 🚀 Deploy hands a
@@ -69,7 +69,7 @@ Nothing leaves the machine unless the graph itself sends it there.
 
 - **Visual graph editor** — a ReactFlow canvas with undo/redo; drop a graph `.json` on
   the window to open it, the way the files in `examples/` load.
-- **Six node types** — Input (text/file/directory), AI, Code (Python/JavaScript), Data,
+- **Six node types** — Input (text/file/directory), AI, Code (JavaScript), Data,
   GUI, Output.
 - **AI generation** — a node's code or system prompt, a plot transform, or an entire
   graph, written from a plain-language description and left visible and editable. Code
@@ -87,29 +87,59 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **A project is a graph plus one file per node** — code, prompts and format contracts
   live in `.py`/`.js`/`.md` files beside the graph, so a language server and `git diff`
   both work on them.
-- **GUI nodes** — a file picker, text window, plot or image view, added and arranged by
-  dragging them on one grid, and deployed together with the graph.
+- **GUI nodes** — a page built like a document: type headings in place, press `/` to
+  insert a chat, a file picker, a dropdown, a chart or a table, and deploy it together
+  with the graph.
+- **Triggers** — a graph starts when the tool opens, on a clock, or from its own page: a
+  button, a chat message or a dropdown starts the graph *at the node it is wired to*, so
+  one page can hold several tools.
+- **A prompt you can see** — an AI node shows the exact request the model will get,
+  tries it with ▶ Test, and can learn its output format from an answer you liked.
+- **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
+- **A real editor** — code and prompts are written in CodeMirror, full-window on ⤢, or
+  in your own editor with one click.
+- **Try it, the same way everywhere** — an AI node, a code node and a chart's transform
+  are each tried in the same panel: get the inputs from the graph, press ▶ Test, see what
+  comes out (a chart is drawn). The same values are what ✨ Generate is written and
+  verified against.
+- **An MCP server** — `--mcp` lets Claude Code or Claude Desktop generate, validate, save
+  and run graphs, confined to one folder.
 - **Deployment** — a self-contained bundle, a Docker Compose stack, or one executable.
 - **Graph Runner CLI** — run any saved graph from the command line.
 
 ## The examples
 
-`examples/` holds runnable graphs; drop any of them onto the editor window to open it.
-Every one of them is executed by the test suite, so they cannot quietly rot.
+`examples/` holds the graphs, `examples/data/` the files they start on. Open one with
+**Open**, or drop it onto the editor window.
 
 | Graph | What it shows | Needs a model |
 |---|---|---|
 | [hello_world.json](examples/hello_world.json) | The smallest graph there is | no |
-| [plotter_interactive.json](examples/plotter_interactive.json) | Pick a CSV at run time, reshape it in a code node, chart it — picker and plot in one GUI node | no |
-| [text_summary.json](examples/text_summary.json) | Summarize each story in a folder, then summarize the summaries: the same AI node twice, differing only in `batch_mode` | yes |
-| [bla_counter.json](examples/bla_counter.json) | A counter that remembers across runs (memory feedback) | no |
-| [gui_file_to_ai_to_text.json](examples/gui_file_to_ai_to_text.json) | Pick a file, run it through AI, read the answer in a window | yes |
+| [text_transform.json](examples/text_transform.json) | Text → a code node → a window: a body's returned keys are its output ports | no |
+| [word_counter.json](examples/word_counter.json) | A folder fans out: one code node runs per file, the next once over all results | no |
+| [population_plotter.json](examples/population_plotter.json) | A page that plots a CSV as bars, columns or a donut; dropdown, slider and file picker each redraw it at once | no |
+| [chat.json](examples/chat.json) | A chatbot in two nodes: a chat block and a model, with a message template laying out history and message | yes |
+| [file_summarizer.json](examples/file_summarizer.json) | Read a file and summarize it; each control on the page starts the graph where it is wired to | yes |
+| [folder_summaries.json](examples/folder_summaries.json) | Summarize every file in a folder, one call per file, then what they have in common; results in a table | yes |
 
-A path inside a graph resolves against the working directory, so run the ones that read
-files from the repository root:
+**Every example is held to the same three things by the test suite**
+(`engine/src/examples.test.ts`), and an example added to the folder is held to them
+without anyone listing it: it runs with a click on **▶ Run** on nothing but its own
+defaults; its page events run what they are wired to; and it can be **deployed** — written
+as a bundle into an empty folder and run from there, with the files it starts on carried
+along.
+
+All but the two smallest are written by `node scripts/make-examples.mjs`, so their code is
+real JavaScript rather than a hand-escaped JSON string; change them there. The ones that
+need a model name Google's `gemini-flash-lite-latest` on the node itself — put a key in
+`ai-settings.json` (see [docs/ai-providers.md](docs/ai-providers.md)), or pick another
+model under the node's *Advanced*; a local LM Studio or Ollama works too.
+
+A path inside a graph resolves against the working directory, so run the examples from
+the repository root:
 
 ```bash
-node engine/src/main.ts examples/universal_plotter.json
+node engine/src/main.ts examples/word_counter.json
 ```
 
 ## Quick start
@@ -143,6 +173,8 @@ node engine/src/main.ts my.json --bundle ./out             # to hand to someone
 | [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, GUI nodes and widgets |
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the two AI settings, where the API key goes |
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, Docker, the Graph Runner CLI |
+| [docs/mcp-server.md](docs/mcp-server.md) | Letting Claude (or any MCP client) generate, check, save and run graphs |
+| [docs/architecture.md](docs/architecture.md) | How the pieces fit, the rules that hold them together, and the known debt |
 
 ## Project structure
 
