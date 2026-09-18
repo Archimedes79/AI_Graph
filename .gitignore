@@ -39,10 +39,7 @@ Thumbs.db
 
 # Data
 # Attachments and other things a running editor keeps beside the project.
-data/
-!engine/src/elements/data/
-# The files the example graphs start on: an example without its data is a broken example.
-!examples/data/
+/data/
 *.log
 
 # Packaged editor deploy artifact (built by start.py --mode package)

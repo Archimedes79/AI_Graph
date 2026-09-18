@@ -308,7 +308,7 @@ automatically excluded from execution ordering — no manual "deferred" marking 
 and settles into the node's stored value once the round finishes, ready for the *next*
 run. See [examples/file_summarizer.json](../examples/file_summarizer.json)
 for a working file → AI → text window graph, and
-[engine/src/executor.ts](../engine/src/executor.ts) for the underlying algorithm.
+[engine/src/execution/executor.ts](../engine/src/execution/executor.ts) for the underlying algorithm.
 
 ### Plot window data transforms
 

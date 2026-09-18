@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useGraphStore } from './graphStore';
-import type { Graph } from '../types/graph';
+import type { Graph } from '@/graph';
 
 const emptyGraph: Graph = {
   metadata: {

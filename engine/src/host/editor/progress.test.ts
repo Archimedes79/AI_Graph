@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { generate } from './generate.ts';
 import type { AICall } from '../api.ts';
-import { registry } from '../../registry.ts';
-import type { AiService, CodeRunner } from '../../element.ts';
+import { registry } from '../../elements/registry.ts';
+import type { AiService, CodeRunner } from '../../elements/Runtime.ts';
 
 /**
  * A generation is several calls over a minute or more, and until it returns

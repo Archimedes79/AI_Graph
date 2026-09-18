@@ -177,9 +177,15 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 
 ```
 AI-Graph/
-├── engine/                 # Elements, executor, hosts: runs a graph, serves the editor, ships as a bundle
-│   └── src/elements/<kind>/  element.ts (the engine's half) · editor/ (the editor's half)
-├── editor/               # The editor's page: React + ReactFlow, built on the engine
+├── engine/src/             # Runs a graph, serves the editor, ships as a bundle. No React.
+│   ├── elements/           #   one folder per element: nodes/<kind>/<Kind>Node.ts, widgets/<kind>/<Kind>Widget.ts
+│   ├── execution/          #   the executor and what starts a run
+│   ├── authoring/          #   how an element's body is written, kept and run
+│   └── host/  ai/  cli/    #   the server and its contract, model providers, the command line
+├── editor/src/             # The page: React + ReactFlow, built on the engine
+│   ├── elements/           #   the same folders: <Kind>Node.ui.ts, <Kind>WidgetView.tsx, <Kind>…Panel.tsx
+│   ├── authoring/          #   ✨ Generate, Try it, the live transcript
+│   └── app/  canvas/  page/  store/  api/  runtime/  ui/
 ├── examples/               # Example graph JSON files
 ├── docs/                   # The documents linked above
 ├── arch/                   # Architecture diagrams, every box mapped to its files
@@ -202,7 +208,7 @@ AI-Graph is **source-available, not open source**: [PolyForm Noncommercial
 **What you build with AI-Graph is yours.** Your graph, and the code generated
 into it, belong to you. A deploy bundle contains nothing but that plus the
 runtime engine — no part of the editor (the canvas, the generator, the deploy
-tool itself) ever travels in one, and `engine/src/bundle.test.ts`
+tool itself) ever travels in one, and `engine/src/cli/bundle.test.ts`
 fails if one starts to. Every bundle carries a copy of the licence, because
 whoever receives the software has to receive the terms with it.
 

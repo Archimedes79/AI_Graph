@@ -6,12 +6,12 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { parseGraph, type Graph } from './graph.ts';
-import type { Trigger } from './triggers.ts';
-import { executeGraph, memoryFeedbackEdges, topologicalLevels } from './executor.ts';
-import { registry } from './registry.ts';
+import type { Trigger } from './execution/triggers.ts';
+import { executeGraph, memoryFeedbackEdges, topologicalLevels } from './execution/executor.ts';
+import { registry } from './elements/registry.ts';
 import { nodeFiles, nodeCode } from './host/node.ts';
 import { aiService } from './ai/providers.ts';
-import { writeBundle } from './bundle.ts';
+import { writeBundle } from './cli/bundle.ts';
 
 /**
  * Every example, run the three ways a person runs one.

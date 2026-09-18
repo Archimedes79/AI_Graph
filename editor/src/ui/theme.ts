@@ -13,7 +13,7 @@
  */
 
 /**
- * Every colour is a `var()` into the active scheme (components/gui/scheme.ts),
+ * Every colour is a `var()` into the active scheme (page/scheme.ts),
  * set once on the app shell. The literal after the comma is the default scheme,
  * so anything rendered outside the shell still has a colour rather than none.
  *

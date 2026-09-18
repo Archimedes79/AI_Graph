@@ -14,8 +14,8 @@
 import { writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { registry } from '../engine/src/registry.ts';
-import { RUN_PORT } from '../engine/src/triggers.ts';
+import { registry } from '../engine/src/elements/registry.ts';
+import { RUN_PORT } from '../engine/src/execution/triggers.ts';
 
 const EXAMPLES = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'examples');
 const MODEL = { provider: 'google', model: 'gemini-flash-lite-latest' };

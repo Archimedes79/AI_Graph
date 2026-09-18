@@ -1,28 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ReactFlowProvider } from 'reactflow';
 
-import Toolbar from './components/Toolbar';
-import Sidebar from './components/Sidebar';
-import GraphCanvas from './components/GraphCanvas';
-import DesignerTab from './components/gui/DesignerTab';
-import PreviewTab from './components/gui/PreviewTab';
-import ViewTabs, { type EditorView } from './components/ViewTabs';
-import { useSchemeOnRoot } from './components/gui/useScheme';
-import NodeEditor from './components/NodeEditor';
-import ConnectorEditor from './components/ConnectorEditor';
-import ResultsPanel from './components/ResultsPanel';
+import Toolbar from '@/app/Toolbar';
+import Sidebar from '@/app/Sidebar';
+import GraphCanvas from '@/canvas/GraphCanvas';
+import DesignerTab from '@/page/DesignerTab';
+import PreviewTab from '@/page/PreviewTab';
+import ViewTabs, { type EditorView } from '@/app/ViewTabs';
+import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
+import NodeEditor from '@/canvas/NodeEditor';
+import ConnectorEditor from '@/canvas/ConnectorEditor';
+import ResultsPanel from '@/app/ResultsPanel';
 
-import SettingsDialog from './components/SettingsDialog';
-import Modal from './components/Modal';
-import FileBrowserDialog from './components/FileBrowserDialog';
+import SettingsDialog from '@/app/SettingsDialog';
+import Modal from '@/ui/Modal';
+import FileBrowserDialog from '@/ui/FileBrowserDialog';
 
-import { useGraphStore } from './store/graphStore';
-import { NODE_ELEMENTS } from './elements/registry';
-import { call } from './utils/api';
-import { externalEditsPossible } from './utils/externalEdits';
-import { errorText } from './utils/errorText';
-import type { NodeType, Graph } from './types/graph';
-import { DANGER_TEXT, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT, WELL } from './ui/theme';
+import { useGraphStore } from '@/store/graphStore';
+import { NODE_UIS } from '@/elements/registry';
+import { call } from '@/api/client';
+import { externalEditsPossible } from '@/store/externalEdits';
+import { errorText } from '@/api/errorText';
+import type { NodeType, Graph } from '@/graph';
+import { DANGER_TEXT, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT, WELL } from '@/ui/theme';
 
 export default function App() {
   const addNode = useGraphStore((s) => s.addNode);
@@ -75,7 +75,7 @@ export default function App() {
   // and a Preview tab that shows nothing useful is a dialog worth not opening.
   const editingGuiNode = useGraphStore((s) => {
     const node = s.rfNodes.find((n) => n.id === s.editingNodeId)?.data.graphNode;
-    return !!node && !!NODE_ELEMENTS[node.node_type]?.hasRuntimeWindow;
+    return !!node && !!NODE_UIS[node.node_type]?.hasRuntimeWindow;
   });
   useEffect(() => {
     if (!editingGuiNode) return;
@@ -384,7 +384,6 @@ export default function App() {
         </div>
         {view === 'design' && <DesignerTab />}
         {view === 'preview' && <PreviewTab />}
-
 
         {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
 

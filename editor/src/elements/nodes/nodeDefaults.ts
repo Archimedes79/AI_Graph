@@ -1,0 +1,49 @@
+import type { GraphNode, NodeType } from '@/graph';
+import { NODE_UIS } from '../registry';
+
+export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
+  return NODE_UIS[nodeType].create(id);
+}
+
+// Shown on hover in the palette. The widget presets below carried a description
+// from the start; the node types -- the ones a newcomer meets first -- did not,
+// so "Data Node" had to be guessed from two words and an icon.
+export const NODE_TYPE_DESCRIPTIONS: Record<NodeType, string> = {
+  input: 'A value from outside the graph: typed text, one file, or a directory listing',
+  ai: 'Send a prompt to a local or hosted model and pass on its answer',
+  code: 'Run JavaScript — write it yourself or have the AI generate it',
+  data: 'Remember a value between runs, so a loop can build on its own last result',
+  output: 'Show the result in a window, or write it to a file or directory',
+  gui: 'Give the graph its own interface, built from widgets',
+};
+
+export const NODE_TYPE_LABELS: Record<NodeType, string> = {
+  input: 'Input',
+  ai: 'AI Node',
+  code: 'Code Node',
+  data: 'Data Node',
+  output: 'Output',
+  gui: 'GUI Node',
+};
+
+// One tint per node type, from the active scheme. A dark navy behind a node
+// is right on Nacht and unreadable on Papier, so the tints belong to the
+// scheme like every other colour -- the fallback is the default scheme's.
+export const NODE_TYPE_COLORS: Record<NodeType, string> = {
+  input: 'var(--ui-node-input, #1e3a5f)',
+  ai: 'var(--ui-node-ai, #2d1b4e)',
+  code: 'var(--ui-node-code, #1a3a2a)',
+  data: 'var(--ui-node-data, #183b3b)',
+  output: 'var(--ui-node-output, #3a2000)',
+  gui: 'var(--ui-node-gui, #4a1d3a)',
+};
+
+export const NODE_TYPE_ICON: Record<NodeType, string> = {
+  input: '📥',
+  ai: '🤖',
+  code: '⚙️',
+  data: '🗃️',
+  output: '📤',
+  gui: '🖥️',
+};
+

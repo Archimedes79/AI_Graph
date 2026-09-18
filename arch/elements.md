@@ -1,57 +1,64 @@
 <!-- last verified: 2026-09-19 -->
-# Elements — engine/src/elements
+# Elements — engine/src/elements ⇄ editor/src/elements
 
-What a node or a block *is*. One class per node type and per block kind, each in its own
-folder with its browser half beside it under `editor/`. Shared code asks the element and
-never switches on a type name. Back to the [overview](overview.md).
+What a node or a widget *is*, and how it looks and is edited. One folder per element, at the
+same relative path on both sides: the engine half says what it is and does, the editor half
+how it looks (`View`), how it is edited (`Panel`) and what the shells ask of it (`.ui.ts`).
+[`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts) keeps the two sides in step.
+Back to the [overview](overview.md).
 
 ```mermaid
-flowchart TD
-  Base["Element — base class"]
-  NodeBase["GraphNodeElement"]
-  WidgetBase["WidgetElement"]
-  Nodes["Node elements"]
-  Gui["GuiElement"]
-  Blocks["Block elements"]
-  Display["Display blocks"]
-  Roster["Block roster"]
-  Registry["Registry"]
-  Executor["Executor"]
-  Runtime["Runtime services"]
-  EditorHalves["Browser halves"]
+flowchart LR
+  subgraph engine["engine/src/elements — what it is and does"]
+    Base["Element"]
+    NodeBase["GraphNodeElement"]
+    WidgetBase["WidgetElement"]
+    Nodes["nodes/<kind>/<Kind>Node"]
+    Widgets["widgets/<kind>/<Kind>Widget"]
+    Registry["registry + roster"]
+    Runtime["Runtime"]
+  end
+  subgraph editor["editor/src/elements — how it looks and is edited"]
+    Contract["ElementUi"]
+    NodeUis["nodes/<kind>/<Kind>Node.ui + Panel"]
+    WidgetUis["widgets/<kind>/<Kind>Widget.ui + View + Panel"]
+    UiRegistry["registry"]
+  end
 
   NodeBase -- extends --> Base
   WidgetBase -- extends --> Base
   Nodes -- extend --> NodeBase
-  Gui -- extends --> NodeBase
-  Blocks -- extend --> WidgetBase
-  Display -- extends --> WidgetBase
-  Gui --> Roster
-  Roster --> Blocks
-  Roster --> Display
+  Widgets -- extend --> WidgetBase
+  Base --> Runtime
   Registry --> Nodes
-  Registry --> Gui
-  Registry --> Roster
-  Executor --> Base
-  Runtime --> Base
-  EditorHalves --> Nodes
+  Registry --> Widgets
+  NodeUis --> Contract
+  WidgetUis --> Contract
+  UiRegistry --> NodeUis
+  UiRegistry --> WidgetUis
+  NodeUis -. "generation()" .-> Nodes
+  WidgetUis -. "generation()" .-> Widgets
+  UiRegistry -. "same kinds" .-> Registry
 ```
 
 | Diagram node | Path | Notes |
 |---|---|---|
-| `Element — base class` | [`engine/src/element.ts`](../engine/src/element.ts) | `Element<Subject, Config>`: `config()`, ports, `execute()`, `generation()`, `catchesErrors()`; also the `Runtime` service interfaces |
-| `GraphNodeElement` | [`engine/src/element.ts`](../engine/src/element.ts) | a node: `derivedPorts`, `display`, `runtimeRequirements`, `settleMemory`, declarations the executor reads |
-| `WidgetElement` | [`engine/src/element.ts`](../engine/src/element.ts) | a block: `ports`, `firesRun`, `settle`, `displayValue`; `StaticWidget`, `DisplayWidget` |
-| `Node elements` | [`input/`](../engine/src/elements/input/element.ts), [`ai/`](../engine/src/elements/ai/element.ts), [`code/`](../engine/src/elements/code/element.ts), [`data/`](../engine/src/elements/data/element.ts), [`output/`](../engine/src/elements/output/element.ts) | `InputElement`, `AiElement` (+ [`prompt.ts`](../engine/src/elements/ai/prompt.ts)), `CodeElement`, `DataElement`, `OutputElement` |
-| `GuiElement` | [`engine/src/elements/gui/element.ts`](../engine/src/elements/gui/element.ts) | a page: a composite of blocks; its ports are theirs (`derivedPorts`), `parseWidget` |
-| `Block elements` | [`engine/src/elements/gui/children/<kind>/element.ts`](../engine/src/elements/gui/children/) | picker, text box, dropdown, slider, button, chat; text, divider, spacer |
-| `Display blocks` | [`engine/src/elements/gui/children/display.ts`](../engine/src/elements/gui/children/display.ts) | `TransformingDisplay`: chart ([`plot_window/`](../engine/src/elements/gui/children/plot_window/), with `check.ts`), table, image |
-| `Block roster` | [`engine/src/elements/gui/children/index.ts`](../engine/src/elements/gui/children/index.ts) | `WIDGET_ELEMENTS`: adding a block kind is one line here |
-| `Registry` | [`engine/src/registry.ts`](../engine/src/registry.ts) | node type / block kind → element; adding a node type is one line here |
-| `Executor` | [`engine/src/executor.ts`](../engine/src/executor.ts) | reads each element's declarations and runs it; knows no type names |
-| `Runtime services` | [`engine/src/host/node.ts`](../engine/src/host/node.ts) | implements `Runtime` (`files`, `code`, `ai`, `tools`) for Node; tests pass fakes |
-| `Browser halves` | `engine/src/elements/*/editor/` ([`definition.ts`](../engine/src/elements/ai/editor/definition.ts), `Editor.tsx`) | config panels and block widgets; collected by [`editor/src/elements/registry.ts`](../editor/src/elements/registry.ts); excluded from engine typecheck and bundles |
+| `Element` | [`engine/src/elements/Element.ts`](../engine/src/elements/Element.ts) | `config()`, `logic()`, `generation()`, `catchesErrors()`, `deployNeeds()`, `runSnippet()` |
+| `GraphNodeElement` | [`engine/src/elements/GraphNodeElement.ts`](../engine/src/elements/GraphNodeElement.ts) | a node: `derivedPorts`, `execute`, `display`, `runtimeRequirements`, `settleMemory`, and what the executor reads (`batchMode`, `readsFileInputs`, …) |
+| `WidgetElement` | [`engine/src/elements/WidgetElement.ts`](../engine/src/elements/WidgetElement.ts) | a widget on a page: `ports`, `execute`, `firesRun`, `settle`, `displayValue`; `Widget`, `WidgetPresentation` |
+| `nodes/<kind>/<Kind>Node` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `InputNode`, `AiNode` (+ `prompt.ts`), `CodeNode`, `DataNode`, `OutputNode`, `GuiNode` (a composite of widgets; `parseWidget`) |
+| `widgets/<kind>/<Kind>Widget` | [`engine/src/elements/widgets/`](../engine/src/elements/widgets/) | 12 kinds; bases [`StaticWidget`](../engine/src/elements/widgets/StaticWidget.ts), [`DisplayWidget`](../engine/src/elements/widgets/DisplayWidget.ts), [`TransformingDisplay`](../engine/src/elements/widgets/TransformingDisplay.ts); chart check in [`plot_window/check.ts`](../engine/src/elements/widgets/plot_window/check.ts) |
+| `registry + roster` | [`engine/src/elements/registry.ts`](../engine/src/elements/registry.ts), [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts) | node type / widget kind → element; one line each to add a kind |
+| `Runtime` | [`engine/src/elements/Runtime.ts`](../engine/src/elements/Runtime.ts) | the services an element is handed: `files`, `code`, `ai`, `tools`; implemented for Node in [`host/node.ts`](../engine/src/host/node.ts) |
+| `ElementUi` | [`editor/src/elements/ElementUi.ts`](../editor/src/elements/ElementUi.ts) | `NodeUi`, `WidgetUi`, and the props every panel is handed (`NodePanelProps`, `WidgetPanelProps`) |
+| `nodes/<kind>/<Kind>Node.ui + Panel` | [`editor/src/elements/nodes/`](../editor/src/elements/nodes/) | `AiNode.ui.ts`, `AiNodePanel.tsx`, `AiNodeAdvancedPanel.tsx`, …; panels registered lazily |
+| `widgets/<kind>/<Kind>Widget.ui + View + Panel` | [`editor/src/elements/widgets/`](../editor/src/elements/widgets/) | `SelectWidget.ui.ts`, `SelectWidgetView.tsx`, `SelectWidgetPanel.tsx`, …; views are what a deployed tool draws |
+| `registry` (editor) | [`editor/src/elements/registry.ts`](../editor/src/elements/registry.ts) | `NODE_UIS`, `WIDGET_UIS` |
 
-Shared building blocks, not drawn: [`generation.ts`](../engine/src/generation.ts) (how an
-AI writes an element's body), [`logic.ts`](../engine/src/logic.ts) (where the body is kept
-and who runs it), [`elements/port.ts`](../engine/src/elements/port.ts).
+Shared by elements, not drawn: [`authoring/generation.ts`](../engine/src/authoring/generation.ts)
+(how an AI writes a body), [`authoring/logic.ts`](../engine/src/authoring/logic.ts) (where a
+body is kept and who runs it), [`elements/port.ts`](../engine/src/elements/port.ts),
+[`elements/fileSelection.ts`](../engine/src/elements/fileSelection.ts); on the editor side
+[`elements/fields/`](../editor/src/elements/fields/) (settings several panels share) and
+[`elements/nodes/gui/guiWidgets.ts`](../editor/src/elements/nodes/gui/guiWidgets.ts) (a page's
+widgets and the ports the engine derives from them).

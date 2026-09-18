@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { parseGraph } from '../graph.ts';
-import { registry } from '../registry.ts';
+import { registry } from './registry.ts';
 
 /**
  * Derived ports, checked against graphs people actually built.

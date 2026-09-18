@@ -1,21 +1,17 @@
 /**
- * Consolidated element-contract test.
+ * What every element's browser half must satisfy.
  *
- * Walks every registered GraphNodeElementDefinition (`registry.ts::NODE_ELEMENTS`)
- * and GuiWidgetElementDefinition (`registry.ts::GUI_WIDGET_ELEMENTS`) and
- * asserts the handful of universal properties every element must satisfy.
- * This REPLACES ad-hoc per-element unit tests: when adding a new NodeType/GuiWidgetKind, extend
- * this file instead of adding a new one. The deep execute()-vs-compile()
- * check only makes sense on the backend (see
- * backend/tests/test_element_contract.py) -- only the backend actually
- * compiles and executes a graph.
+ * Walks every registered `NodeUi` and `WidgetUi` (`registry.ts`) and asserts
+ * the handful of properties each must have. A new node type or widget kind is
+ * held to them by being registered; what it does when a graph runs is the
+ * engine's to test, beside the element (`engine/src/elements/`).
  */
 import { describe, it, expect } from 'vitest';
-import { guiWidgetPorts } from '../utils/guiWidgets';
-import { NODE_ELEMENTS, GUI_WIDGET_ELEMENTS } from './registry';
-import { createGuiWidget } from '../utils/guiWidgets';
-import type { GraphNode, GuiWidget } from '../types/graph';
-import { nodeLogic, widgetLogic } from './shared/logic';
+import { guiWidgetPorts } from './nodes/gui/guiWidgets';
+import { NODE_UIS, WIDGET_UIS } from './registry';
+import { createGuiWidget } from './nodes/gui/guiWidgets';
+import type { GraphNode, GuiWidget } from '@/graph';
+import { nodeLogic, widgetLogic } from '@/authoring/logic';
 
 /**
  * A widget as the app really creates one, with a fixed id so assertions can name
@@ -30,14 +26,19 @@ function makeWidget(kind: GuiWidget['kind']): GuiWidget {
 /** The blocks that carry no settings at all -- page furniture, not fields. */
 const STATIC_KINDS_WITHOUT_SETTINGS = ['divider', 'spacer', 'button', 'chat'];
 
-describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, element) => {
+/** A component registered with `lazy()`: its code is a chunk of its own, fetched when first drawn. */
+function isLazy(component: unknown): boolean {
+  return (component as { $$typeof?: symbol } | undefined)?.$$typeof === Symbol.for('react.lazy');
+}
+
+describe.each(Object.entries(NODE_UIS))('node element: %s', (nodeType, element) => {
   it('create() produces a valid GraphNode shape', () => {
     const node = element.create(`${nodeType}-1`);
     // A few NodeType keys share one element (widget resolves to the gui-style
     // element) -- create() always stamps its own canonical node_type, so assert
     // it round-trips through the registry to this same element rather than
     // requiring an exact string match.
-    expect(NODE_ELEMENTS[node.node_type]).toBe(element);
+    expect(NODE_UIS[node.node_type]).toBe(element);
     expect(node.id).toBe(`${nodeType}-1`);
     expect(node.config).toBeTruthy();
     expect(Array.isArray(node.inputs)).toBe(true);
@@ -59,10 +60,12 @@ describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, elem
     expect(Array.isArray(node.outputs)).toBe(true);
   });
 
-  it('has a defined ConfigEditor component', () => {
+  it('has a Panel, loaded only when the node is opened', () => {
     // Every node type has settings; only page furniture does not (see the
-    // widget suite below).
-    expect(element.ConfigEditor).toBeDefined();
+    // widget suite below). Lazy, so that a deployed tool, which draws pages
+    // and never edits them, never loads a panel.
+    expect(isLazy(element.Panel)).toBe(true);
+    if (element.AdvancedPanel) expect(isLazy(element.AdvancedPanel)).toBe(true);
   });
 
   it('declares a generation whose fields exist, or declares none at all', () => {
@@ -104,7 +107,7 @@ describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, elem
   });
 });
 
-describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (widgetKind, element) => {
+describe.each(Object.entries(WIDGET_UIS))('gui widget element: %s', (widgetKind, element) => {
   it('can be added to and removed from a widget list', () => {
     const widget = makeWidget(widgetKind as GuiWidget['kind']);
     const widgets: GuiWidget[] = [widget, { ...widget, id: 'w2' }];
@@ -123,8 +126,8 @@ describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (wi
     expect(Array.isArray(outputs)).toBe(true);
   });
 
-  it('has a defined RuntimeWidget component', () => {
-    expect(element.RuntimeWidget).toBeDefined();
+  it('has a defined View component', () => {
+    expect(element.View).toBeDefined();
   });
 
   it('has a config editor, or genuinely nothing to configure', () => {
@@ -132,11 +135,11 @@ describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (wi
     // component whose whole body says so is worse than its absence. What must
     // hold is that an element with settings draws them itself -- the shells
     // still know no widget kind.
-    if (element.ConfigEditor === undefined) {
+    if (element.Panel === undefined) {
       expect(STATIC_KINDS_WITHOUT_SETTINGS).toContain(widgetKind);
       return;
     }
-    expect(typeof element.ConfigEditor).toBe('function');
+    expect(isLazy(element.Panel)).toBe(true);
   });
 
   it('declares a generation whose fields exist, or declares none at all', () => {

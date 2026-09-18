@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useGraphStore } from '../store/graphStore';
-import { GuiSurfacePage } from '../components/gui/GuiPage';
-import { useSchemeOnRoot } from '../components/gui/useScheme';
-import GraphWindows from '../components/GraphWindows';
+import { useGraphStore } from '@/store/graphStore';
+import { GuiSurfacePage } from '@/page/GuiPage';
+import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
+import RequirementsDialog from '@/ui/RequirementsDialog';
 import RuntimeAISettings from './RuntimeAISettings';
-import { call, type Requirement, type RunTrigger, type ScheduleState } from '../utils/api';
-import { errorText } from '../utils/errorText';
-import { syncGuiNodePorts } from '../utils/guiWidgets';
-import { NODE_ELEMENTS } from '../elements/registry';
-import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE, TEXT } from '../ui/theme';
+import { call, type Requirement, type RunTrigger, type ScheduleState } from '@/api/client';
+import { errorText } from '@/api/errorText';
+import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { NODE_UIS } from '@/elements/registry';
+import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
 /**
  * The deployed graph's front-end.
@@ -17,7 +17,7 @@ import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE,
  * loads the bundle's one graph into the ordinary graph store and mounts the
  * ordinary `GuiSurface`, so every widget a graph author placed in the
  * designer renders here through the exact component the editor used --
- * `GuiWindow`, `PlotWidget`, each element's `RuntimeWidget`. There is no
+ * `GuiPage`, each widget's `View`. There is no
  * second implementation of a widget anywhere, which is why a deployed tool
  * cannot look or behave differently from what was designed.
  *
@@ -138,7 +138,7 @@ export default function RuntimeApp() {
   // squeezed into a header span next to the buttons.
   const runError = status === 'error' ? executionResult?.error : '';
   const hasWidgets = rfNodes.some(
-    (n) => NODE_ELEMENTS[n.data.graphNode.node_type]?.hasRuntimeWindow ?? false,
+    (n) => NODE_UIS[n.data.graphNode.node_type]?.hasRuntimeWindow ?? false,
   );
 
   return (
@@ -225,7 +225,7 @@ export default function RuntimeApp() {
         )}
 
         <GuiSurfacePage onRun={(trigger) => { void handleRun(trigger); }} />
-        <GraphWindows
+        <RequirementsDialog
           requirements={pendingRequirements}
           onSubmit={handleRequirementsSubmit}
           onCancel={() => setPendingRequirements(null)}
