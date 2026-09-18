@@ -273,6 +273,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           <div className="space-y-4">
               {/* A panel is its own chunk, loaded when a node is first opened. */}
               {Panel && <Suspense fallback={null}><Panel
+                ui={element}
                 node={node}
                 setConfig={setConfig}
                 setDescription={(value: string) => setNode((prev) => (prev ? { ...prev, description: value } : prev))}

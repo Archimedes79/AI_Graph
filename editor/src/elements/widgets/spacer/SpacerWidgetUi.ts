@@ -1,8 +1,18 @@
-import type { WidgetUi } from '../../Ui';
+import { StaticWidgetUi } from '../StaticWidgetUi';
 import SpacerWidgetView from './SpacerWidgetView';
 
-/** Nothing, on purpose: the block that says "this section ends here". */
-export const spacerWidgetUi: WidgetUi = {
-  widgetKind: 'spacer',
-  View: SpacerWidgetView,
-};
+/** Nothing, on purpose: the widget that says "this section ends here". */
+export class SpacerWidgetUi extends StaticWidgetUi {
+  readonly widgetKind = 'spacer';
+  readonly label = 'Gap';
+  readonly View = SpacerWidgetView;
+  override readonly defaultMode = 'horizontal';
+
+  /**
+   * A vertical one stands between two things side by side, so it is narrow
+   * and tall; a horizontal one ends a section, so it is the reverse.
+   */
+  protected override defaultSpan(mode: string) {
+    return mode === 'vertical' ? { w: 1, h: 4 } : { w: 16, h: 1 };
+  }
+}

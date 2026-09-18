@@ -3,7 +3,6 @@ import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, NodeType } from '@/graph';
 import type { RFNodeData } from '@/canvas/nodeData';
-import { nodeTypeDefaults } from '@/elements/nodes/nodeDefaults';
 import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
 import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -214,7 +213,7 @@ function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphM
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
   const nodeType = rawNode.node_type ?? 'input';
   const nodeId = rawNode.id ?? newId(nodeType);
-  const defaults = nodeTypeDefaults(nodeType, nodeId);
+  const defaults = NODE_UIS[nodeType].create(nodeId);
 
   const node: GraphNode = {
     ...defaults,
@@ -347,7 +346,7 @@ export const useGraphStore = create<GraphStore>()(
     addNode: (nodeType, position) => {
       get().commit();
       const id = newId(nodeType);
-      const defaults = nodeTypeDefaults(nodeType, id);
+      const defaults = NODE_UIS[nodeType].create(id);
       const rfNode: Node<RFNodeData> = {
         id,
         type: 'graphNode',

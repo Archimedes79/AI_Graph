@@ -4,12 +4,12 @@ import { useGraphStore } from '@/store/graphStore';
 import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
 import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { ALL_ENTRIES, type PaletteEntry } from './DesignerPalette';
-import { createGuiWidget } from '@/elements/nodes/gui/guiWidgets';
 import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { routePage } from './pageWrite';
 import WidgetEditor from './WidgetEditor';
 import { SCHEMES, type SchemeId } from './scheme';
 import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
+import { WIDGET_UIS } from '@/elements/registry';
 
 /**
  * The graph's interface, on one page, built on the page itself.
@@ -50,14 +50,13 @@ export default function DesignerTab() {
    * kind of step a tool should take on itself.
    */
   const addWidget = (kind: WidgetKind, mode?: string, at?: number) => {
-    // A block with ports starts out named after what it is. Its ports are
-    // named after the block, and on the canvas "widget-1-1789753941087: message"
-    // is what an unnamed chat block's port was called. Words and rules have no
-    // ports and no caption, so they stay unnamed.
+    // A widget with ports starts out named after what it is: its ports are
+    // named after it, and "widget-1-1789753941087: message" is what an unnamed
+    // chat's port was called. Whether a kind is named at all is its Ui's answer.
     const entry = ALL_ENTRIES.find((candidate) => candidate.kind === kind && (candidate.mode ?? '') === (mode ?? ''))
       ?? ALL_ENTRIES.find((candidate) => candidate.kind === kind);
-    const named = kind === 'text' || kind === 'divider' || kind === 'spacer' ? '' : (entry?.label ?? '');
-    const widget = createGuiWidget(kind, named, mode);
+    const ui = WIDGET_UIS[kind];
+    const widget = ui.create(ui.initialLabel(entry?.label ?? ''), mode);
     if (guiNodes.length > 0) {
       const next = blocks.map((b) => b.widget);
       next.splice(at ?? next.length, 0, widget);

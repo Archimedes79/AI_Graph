@@ -1,22 +1,35 @@
 import { lazy } from 'react';
-import type { NodeUi } from '../../Ui';
+import type { GraphNode } from '@/graph';
+import { NodeUi } from '../../NodeUi';
 import { baseNodeConfig } from '../baseNodeConfig';
 
-export const outputNodeUi: NodeUi = {
-  nodeType: 'output',
-  showsResultWindow: (node) => node.config.write_mode === 'window',
-  Panel: lazy(() => import('./OutputNodePanel')),
-  create: (id) => ({
-    id,
-    node_type: 'output',
-    label: 'Output',
-    description: 'Graph output node',
-    position: { x: 0, y: 0 },
-    inputs: [
-      { id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' },
-      { id: 'path', name: 'Path', kind: 'input', data_type: 'file_path', multi: false, required: false, description: 'Optional wired file/directory path, overriding the config value below.' },
-    ],
-    outputs: [],
-    config: { ...baseNodeConfig(), output_label: 'Result' },
-  }),
-};
+/** Ends a branch: shows the result in a window, or writes it to a file or directory. */
+export class OutputNodeUi extends NodeUi {
+  readonly nodeType = 'output';
+  readonly label = 'Output';
+  readonly hint = 'Show the result in a window, or write it to a file or directory';
+  readonly icon = '📤';
+  readonly color = 'var(--ui-node-output, #3a2000)';
+
+  override readonly Panel = lazy(() => import('./OutputNodePanel'));
+
+  override showsResultWindow(node: GraphNode): boolean {
+    return node.config.write_mode === 'window';
+  }
+
+  create(id: string): GraphNode {
+    return {
+      id,
+      node_type: 'output',
+      label: this.label,
+      description: 'Graph output node',
+      position: { x: 0, y: 0 },
+      inputs: [
+        { id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' },
+        { id: 'path', name: 'Path', kind: 'input', data_type: 'file_path', multi: false, required: false, description: 'Optional wired file/directory path, overriding the config value below.' },
+      ],
+      outputs: [],
+      config: { ...baseNodeConfig(), output_label: 'Result' },
+    };
+  }
+}

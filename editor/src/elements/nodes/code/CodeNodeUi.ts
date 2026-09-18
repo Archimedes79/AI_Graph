@@ -1,24 +1,33 @@
 import { lazy } from 'react';
-import type { NodeUi } from '../../Ui';
-import { baseNodeConfig } from '../baseNodeConfig';
+import type { GraphNode } from '@/graph';
+import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { outputFormatContext } from '@/authoring/outputFormat';
 import { CodeNodeElement } from '@engine/elements/nodes/code/CodeNodeElement.ts';
-import { fromEngine } from '@/authoring/generation';
+import { NodeUi } from '../../NodeUi';
+import { baseNodeConfig } from '../baseNodeConfig';
 
-/**
- * Reference implementation of the element contract -- every other
- * NodeUi should look structurally identical to this one.
- */
-export const codeNodeUi: NodeUi = {
-  nodeType: 'code',
-  ownsDescription: true,
-  generation: {
+const STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
+
+export class CodeNodeUi extends NodeUi {
+  readonly nodeType = 'code';
+  readonly label = 'Code Node';
+  readonly hint = 'Run JavaScript — write it yourself or have the AI generate it';
+  readonly icon = '⚙️';
+  readonly color = 'var(--ui-node-code, #1a3a2a)';
+
+  override readonly ownsDescription = true;
+  override readonly outputContract = 'format';
+  override readonly Panel = lazy(() => import('./CodeNodePanel'));
+  override readonly AdvancedPanel = lazy(() => import('./CodeNodeAdvancedPanel'));
+  override readonly advancedSummary = 'batching, files, failures';
+
+  override readonly generation: ElementGeneration<GraphNode> = {
     ...fromEngine(new CodeNodeElement().generation()),
     promptLabel: 'Prompt text',
     promptPlaceholder: 'Describe what the generated code should do.',
     bodyLabel: 'Code window (editable)',
     mono: true,
-    bodyPlaceholder: 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}',
+    bodyPlaceholder: STARTER.trimEnd(),
     bodyHeight: 220,
     // What the user chose in THIS node's config, which the graph around it
     // cannot imply: how batches arrive at `run`, and what shape must come back.
@@ -28,26 +37,26 @@ export const codeNodeUi: NodeUi = {
         : 'Batch mode is `per_item`: each multi input port is expanded before `run(inputs)` is called, so one scalar item from each multi port is passed per invocation.',
       outputFormatContext(node.config),
     ].filter(Boolean).join('\n'),
-  },
-  describeOutput: (node) => {
+  };
+
+  override describeOutput(node: GraphNode): string {
     const format = node.config.output_format;
     if (!format || format === 'text') return 'text';
     const detail = format === 'custom' && node.config.output_format_prompt
       ? `: ${node.config.output_format_prompt}` : '';
     return `${format}${detail}`;
-  },
-  outputContract: 'format',
-  Panel: lazy(() => import('./CodeNodePanel')),
-  AdvancedPanel: lazy(() => import('./CodeNodeAdvancedPanel')),
-  advancedSummary: 'batching, files, failures',
-  create: (id) => ({
-    id,
-    node_type: 'code',
-    label: 'Code Node',
-    description: 'Execute custom code',
-    position: { x: 0, y: 0 },
-    inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-    outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: 'One result per input item' }],
-    config: { ...baseNodeConfig(), code: 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n' },
-  }),
-};
+  }
+
+  create(id: string): GraphNode {
+    return {
+      id,
+      node_type: 'code',
+      label: this.label,
+      description: 'Execute custom code',
+      position: { x: 0, y: 0 },
+      inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+      outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: 'One result per input item' }],
+      config: { ...baseNodeConfig(), code: STARTER },
+    };
+  }
+}

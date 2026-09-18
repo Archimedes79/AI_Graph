@@ -1,15 +1,21 @@
 import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
-import type { NodeUi } from '../../Ui';
+import { fromEngine, type ElementGeneration } from '@/authoring/generation';
+import { InputNodeElement } from '@engine/elements/nodes/input/InputNodeElement.ts';
+import { NodeUi } from '../../NodeUi';
 import { baseNodeConfig } from '../baseNodeConfig';
 import { derivedNodePorts } from '../gui/guiWidgets';
-import { InputNodeElement } from '@engine/elements/nodes/input/InputNodeElement.ts';
-import { fromEngine } from '@/authoring/generation';
 
-export const inputNodeUi: NodeUi = {
-  nodeType: 'input',
-  Panel: lazy(() => import('./InputNodePanel')),
-  generation: {
+export class InputNodeUi extends NodeUi {
+  readonly nodeType = 'input';
+  readonly label = 'Input';
+  readonly hint = 'A value from outside the graph: typed text, one file, or a directory listing';
+  readonly icon = '📥';
+  readonly color = 'var(--ui-node-input, #1e3a5f)';
+
+  override readonly Panel = lazy(() => import('./InputNodePanel'));
+
+  override readonly generation: ElementGeneration<GraphNode> = {
     ...fromEngine(new InputNodeElement().generation()),
     available: (node) => node.config.input_mode === 'directory',
     promptLabel: 'Prompt text',
@@ -17,26 +23,28 @@ export const inputNodeUi: NodeUi = {
     mono: true,
     bodyLabel: 'Code window (editable) — run(inputs) receives {"files"} and must return {"files"}',
     bodyHeight: 140,
-  },
-  describeOutput: (node) => {
+  };
+
+  override describeOutput(node: GraphNode): string {
     const mode = node.config.input_mode ?? 'text';
     if (mode === 'directory') return 'a list of file paths';
     if (mode === 'file') return 'a file path';
     return 'text';
-  },
-  create: (id) => {
+  }
+
+  create(id: string): GraphNode {
     // A new input starts in text mode, and its ports follow from that -- asked
-    // of the element rather than listed again here.
-    const node = {
+    // of the engine rather than listed again here.
+    const node: GraphNode = {
       id,
-      node_type: 'input' as const,
-      label: 'Input',
+      node_type: 'input',
+      label: this.label,
       description: 'A text value, file, or directory',
       position: { x: 0, y: 0 },
       inputs: [],
       outputs: [],
-      config: { ...baseNodeConfig(), input_mode: 'text' as const },
-    } satisfies GraphNode;
+      config: { ...baseNodeConfig(), input_mode: 'text' },
+    };
     return { ...node, ...(derivedNodePorts(node) ?? {}) };
-  },
-};
+  }
+}

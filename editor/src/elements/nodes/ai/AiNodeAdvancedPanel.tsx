@@ -2,7 +2,7 @@ import type { AIProvider } from '@/graph';
 import BatchAndFileInputOptions from '../../fields/BatchAndFileInputOptions';
 import ProviderModelSelect from '../../fields/ProviderModelSelect';
 import { DIMMER, FIELD, MUTED } from '@/ui/theme';
-import type { NodeAdvancedPanelProps } from '../../Ui';
+import type { NodeAdvancedPanelProps } from '../../NodeUi';
 
 /**
  * The knobs: which model, how freely, pictures or not, one call or one per

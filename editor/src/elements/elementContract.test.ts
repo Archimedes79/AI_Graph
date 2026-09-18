@@ -9,18 +9,17 @@
 import { describe, it, expect } from 'vitest';
 import { guiWidgetPorts } from './nodes/gui/guiWidgets';
 import { NODE_UIS, WIDGET_UIS } from './registry';
-import { createGuiWidget } from './nodes/gui/guiWidgets';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { nodeLogic, widgetLogic } from '@/authoring/logic';
 
 /**
  * A widget as the app really creates one, with a fixed id so assertions can name
  * it. This was a hand-written literal -- a second definition of "a new widget"
- * that drifted from `createGuiWidget` and left optional fields out, which made
+ * that drifted from `WIDGET_UIS.create` and left optional fields out, which made
  * the contract test below pass for the wrong reason.
  */
 function makeWidget(kind: GuiWidget['kind']): GuiWidget {
-  return { ...createGuiWidget(kind, ''), id: 'w1' };
+  return { ...WIDGET_UIS[kind].create(''), id: 'w1' };
 }
 
 /** The blocks that carry no settings at all -- page furniture, not fields. */

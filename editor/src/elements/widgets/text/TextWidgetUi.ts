@@ -1,12 +1,22 @@
 import { lazy } from 'react';
-import type { WidgetUi } from '../../Ui';
+import { StaticWidgetUi } from '../StaticWidgetUi';
 import TextWidgetView from './TextWidgetView';
 
-/** Prose on the page, rendered as markdown. No ports — see `StaticWidgetElement`. */
-export const textWidgetUi: WidgetUi = {
-  widgetKind: 'text',
-  Panel: lazy(() => import('./TextWidgetPanel')),
-  View: TextWidgetView,
-  // Typed where it stands, on the page being built.
-  inlineText: true,
-};
+/** Prose on the page, rendered as markdown: a heading, a paragraph, a caption. */
+export class TextWidgetUi extends StaticWidgetUi {
+  readonly widgetKind = 'text';
+  readonly label = 'Text';
+  readonly View = TextWidgetView;
+  override readonly Panel = lazy(() => import('./TextWidgetPanel'));
+  override readonly defaultMode = 'body';
+  /** Typed where it stands, on the page being built. */
+  override readonly inlineText = true;
+
+  /**
+   * One row for a heading or a caption -- it starts where every other widget
+   * starts, with no air above it -- and three for a paragraph.
+   */
+  protected override defaultSpan(mode: string) {
+    return mode === 'heading' || mode === 'caption' ? { w: 16, h: 1 } : { w: 16, h: 3 };
+  }
+}

@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, MUTED } from '@/ui/theme';
 import PromptPreview from './PromptPreview';
-import type { NodePanelProps } from '../../Ui';
+import type { NodePanelProps } from '../../NodeUi';
 
 /**
  * What someone writes for an ai node, in the order the request is built:

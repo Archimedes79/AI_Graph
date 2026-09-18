@@ -1,23 +1,34 @@
 import { lazy } from 'react';
-import type { NodeUi } from '../../Ui';
+import type { GraphNode } from '@/graph';
+import { NodeUi } from '../../NodeUi';
 import { baseNodeConfig } from '../baseNodeConfig';
 
-export const guiNodeUi: NodeUi = {
-  nodeType: 'gui',
-  hasRuntimeWindow: true,
-  Panel: lazy(() => import('./GuiNodePanel')),
-  // A composite: it generates nothing itself, and what it emits is decided by
-  // its widgets, which is why the summary is derived rather than editable.
-  describeOutput: () => 'values from its widgets',
-  outputContract: 'widgets',
-  create: (id) => ({
-    id,
-    node_type: 'gui',
-    label: 'GUI Node',
-    description: 'A composed panel of interactive widgets (file/directory pickers, text/chat windows)',
-    position: { x: 0, y: 0 },
-    inputs: [],
-    outputs: [],
-    config: { ...baseNodeConfig(), gui_widgets: [] },
-  }),
-};
+/** A composite: it holds widgets, generates nothing itself, and emits what its widgets emit. */
+export class GuiNodeUi extends NodeUi {
+  readonly nodeType = 'gui';
+  readonly label = 'GUI Node';
+  readonly hint = 'Give the graph its own interface, built from widgets';
+  readonly icon = '🖥️';
+  readonly color = 'var(--ui-node-gui, #4a1d3a)';
+
+  override readonly hasRuntimeWindow = true;
+  override readonly outputContract = 'widgets';
+  override readonly Panel = lazy(() => import('./GuiNodePanel'));
+
+  override describeOutput(): string {
+    return 'values from its widgets';
+  }
+
+  create(id: string): GraphNode {
+    return {
+      id,
+      node_type: 'gui',
+      label: this.label,
+      description: 'A composed panel of interactive widgets (file/directory pickers, text/chat windows)',
+      position: { x: 0, y: 0 },
+      inputs: [],
+      outputs: [],
+      config: { ...baseNodeConfig(), gui_widgets: [] },
+    };
+  }
+}

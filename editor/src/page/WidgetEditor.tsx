@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import type { GuiWidget } from '@/graph';
-import { GUI_WIDGET_KIND_LABELS, guiWidgetPorts, widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
+import { guiWidgetPorts, widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, widgetFields } from '@/authoring/generation';
 import { widgetLogic } from '@/authoring/logic';
@@ -103,7 +103,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
     <div className="px-3 py-3 rounded-lg" style={WELL}>
       <div className="flex items-center gap-2 mb-3">
         <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#2d1b4e', color: '#c4b5fd' }}>
-          {GUI_WIDGET_KIND_LABELS[widget.kind]}
+          {element.label}
         </span>
         <span className="flex-1" />
         <button
@@ -149,9 +149,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
                 ⚡ Using this starts the graph
               </label>
               <p className="text-xs mt-1" style={{ color: DIMMER }}>
-                {widget.kind === 'text_io'
-                  ? 'Enter sends what was typed (Shift+Enter is a new line), and the box is emptied once it has been delivered.'
-                  : 'Choosing a value runs the nodes this block is wired to, and what follows from them — not the whole graph.'}
+                {element.runOnChangeHint}
               </p>
             </>
           )}
@@ -171,6 +169,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
         {/* A panel is its own chunk, loaded when a widget is first opened. */}
         <Suspense fallback={null}>
         <Panel
+          ui={element}
           widget={widget}
           generation={element.generation}
           fields={widgetFields(widget, onChange)}
