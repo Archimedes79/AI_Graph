@@ -27,7 +27,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { delimiter, extname, join } from 'node:path';
-import type { ToolService, ToolSession, ToolSpec } from '../element.ts';
+import type { ToolService, ToolSession, ToolSpec } from '../elements/Runtime.ts';
 
 /**
  * One configured server: a program to start, or a URL to talk to.

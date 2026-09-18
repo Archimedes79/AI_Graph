@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ToolSession } from '../element.ts';
+import type { ToolSession } from '../elements/Runtime.ts';
 import { mcpToolService, type McpServerConfig } from './mcp.ts';
 
 const FIXTURE = join(__dirname, 'fixtures', 'echo-mcp-server.mjs');

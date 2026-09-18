@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { useGraphStore } from './graphStore';
-import type { Graph, GraphNode } from '../types/graph';
-import { createGuiWidget, guiWidgetPorts } from '../utils/guiWidgets';
-import { baseNodeConfig } from '../elements/shared/baseNodeConfig';
+import type { Graph, GraphNode } from '@/graph';
+import { createGuiWidget, guiWidgetPorts } from '@/elements/nodes/gui/guiWidgets';
+import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
 
 // The same defaults every node type is created with. Copied out field by field
 // here once, which meant adding a field to NodeConfig broke this file for a

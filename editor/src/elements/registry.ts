@@ -1,49 +1,49 @@
-import type { GuiWidgetKind, NodeType } from '../types/graph';
-import type { GuiWidgetElementDefinition, GraphNodeElementDefinition } from './types';
+import type { WidgetKind, NodeType } from '@/graph';
+import type { WidgetUi, NodeUi } from './ElementUi';
 
-import { inputElement } from '@engine/elements/input/editor/definition';
-import { aiElement } from '@engine/elements/ai/editor/definition';
-import { codeElement } from '@engine/elements/code/editor/definition';
-import { dataElement } from '@engine/elements/data/editor/definition';
-import { outputElement } from '@engine/elements/output/editor/definition';
-import { guiElement } from '@engine/elements/gui/editor/definition';
+import { inputNodeUi } from './nodes/input/InputNode.ui';
+import { aiNodeUi } from './nodes/ai/AiNode.ui';
+import { codeNodeUi } from './nodes/code/CodeNode.ui';
+import { dataNodeUi } from './nodes/data/DataNode.ui';
+import { outputNodeUi } from './nodes/output/OutputNode.ui';
+import { guiNodeUi } from './nodes/gui/GuiNode.ui';
 
-import { inputPickerElement } from '@engine/elements/gui/children/input_picker/editor/definition';
-import { textIoElement } from '@engine/elements/gui/children/text_io/editor/definition';
-import { imageViewElement } from '@engine/elements/gui/children/image_view/editor/definition';
-import { plotWindowElement } from '@engine/elements/gui/children/plot_window/editor/definition';
-import { tableElement } from '@engine/elements/gui/children/table/editor/definition';
-import { textElement } from '@engine/elements/gui/children/text/editor/definition';
-import { dividerElement } from '@engine/elements/gui/children/divider/editor/definition';
-import { spacerElement } from '@engine/elements/gui/children/spacer/editor/definition';
-import { selectElement } from '@engine/elements/gui/children/select/editor/definition';
-import { sliderElement } from '@engine/elements/gui/children/slider/editor/definition';
-import { buttonElement } from '@engine/elements/gui/children/button/editor/definition';
-import { chatElement } from '@engine/elements/gui/children/chat/editor/definition';
+import { inputPickerWidgetUi } from './widgets/input_picker/InputPickerWidget.ui';
+import { textIoWidgetUi } from './widgets/text_io/TextIoWidget.ui';
+import { imageViewWidgetUi } from './widgets/image_view/ImageViewWidget.ui';
+import { plotWindowWidgetUi } from './widgets/plot_window/PlotWindowWidget.ui';
+import { tableWidgetUi } from './widgets/table/TableWidget.ui';
+import { textWidgetUi } from './widgets/text/TextWidget.ui';
+import { dividerWidgetUi } from './widgets/divider/DividerWidget.ui';
+import { spacerWidgetUi } from './widgets/spacer/SpacerWidget.ui';
+import { selectWidgetUi } from './widgets/select/SelectWidget.ui';
+import { sliderWidgetUi } from './widgets/slider/SliderWidget.ui';
+import { buttonWidgetUi } from './widgets/button/ButtonWidget.ui';
+import { chatWidgetUi } from './widgets/chat/ChatWidget.ui';
 
 /** Dispatch table every NodeType resolves through. */
-export const NODE_ELEMENTS: Record<NodeType, GraphNodeElementDefinition> = {
-  input:            inputElement,
-  ai:               aiElement,
-  code:             codeElement,
-  data:             dataElement,
-  output:           outputElement,
-  gui:              guiElement,
+export const NODE_UIS: Record<NodeType, NodeUi> = {
+  input:            inputNodeUi,
+  ai:               aiNodeUi,
+  code:             codeNodeUi,
+  data:             dataNodeUi,
+  output:           outputNodeUi,
+  gui:              guiNodeUi,
 };
 
-/** Dispatch table every GuiWidgetKind resolves through. */
-export const GUI_WIDGET_ELEMENTS: Record<GuiWidgetKind, GuiWidgetElementDefinition> = {
-  input_picker:    inputPickerElement,
-  text_io:         textIoElement,
-  plot_window:     plotWindowElement,
-  image_view:      imageViewElement,
-  table:           tableElement,
+/** Dispatch table every WidgetKind resolves through. */
+export const WIDGET_UIS: Record<WidgetKind, WidgetUi> = {
+  input_picker:    inputPickerWidgetUi,
+  text_io:         textIoWidgetUi,
+  plot_window:     plotWindowWidgetUi,
+  image_view:      imageViewWidgetUi,
+  table:           tableWidgetUi,
   // Page furniture: no ports, never executed.
-  text:            textElement,
-  divider:         dividerElement,
-  spacer:          spacerElement,
-  select:          selectElement,
-  slider:          sliderElement,
-  button:          buttonElement,
-  chat:            chatElement,
+  text:            textWidgetUi,
+  divider:         dividerWidgetUi,
+  spacer:          spacerWidgetUi,
+  select:          selectWidgetUi,
+  slider:          sliderWidgetUi,
+  button:          buttonWidgetUi,
+  chat:            chatWidgetUi,
 };

@@ -16,7 +16,7 @@
 // interval is followed by the next one rather than overtaken by it.
 
 import type { ExecutionResult, Graph } from '../graph.ts';
-import { graphTriggers, parseInterval } from '../triggers.ts';
+import { graphTriggers, parseInterval } from '../execution/triggers.ts';
 
 export interface ScheduleState {
   /** Whether this graph runs by itself at all. A page that hears `false` has nothing to wait for. */

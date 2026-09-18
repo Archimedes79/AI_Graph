@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AIProvider } from '../types/graph';
+import type { AIProvider } from '@/graph';
 
 /**
  * Editor-wide settings that are deliberately NOT part of a graph.

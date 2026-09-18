@@ -25,7 +25,7 @@
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
-import { authoredIn, type AuthoredSpec } from '../../describe.ts';
+import { authoredIn, type AuthoredSpec } from '../../authoring/describe.ts';
 import { parseGraph, type Graph, type GraphNode } from '../../graph.ts';
 import { renderSkeleton } from './skeleton.ts';
 

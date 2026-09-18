@@ -6,9 +6,9 @@
 // nothing outside knows what a run record holds.
 
 import type { ExecutionResult, Graph } from '../graph.ts';
-import { executeGraph } from '../executor.ts';
-import { registry } from '../registry.ts';
-import type { Trigger } from '../triggers.ts';
+import { executeGraph } from '../execution/executor.ts';
+import { registry } from '../elements/registry.ts';
+import type { Trigger } from '../execution/triggers.ts';
 import type { RunSnapshot } from './api.ts';
 import { nodeRuntime } from './node.ts';
 

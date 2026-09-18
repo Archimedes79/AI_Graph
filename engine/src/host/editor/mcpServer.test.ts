@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import type { AiService, Runtime } from '../../element.ts';
+import type { AiService, Runtime } from '../../elements/Runtime.ts';
 import { mcpToolService } from '../../ai/mcp.ts';
 import { createGraphTools, serveStdio, type GraphTools, type Problem } from './mcpServer.ts';
 

@@ -1,18 +1,19 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
-import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType } from '../types/graph';
-import { nodeTypeDefaults } from '../utils/nodeDefaults';
-import { syncGuiNodePorts } from '../utils/guiWidgets';
-import { call, type RunTrigger } from '../utils/api';
-import { errorText } from '../utils/errorText';
-import { ACCENT } from '../ui/theme';
-import { delivered } from '../utils/executionStatus';
-import { GUI_WIDGET_ELEMENTS, NODE_ELEMENTS } from '../elements/registry';
-import { RUN_PORT } from '@engine/triggers.ts';
+import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, NodeType } from '@/graph';
+import type { RFNodeData } from '@/canvas/nodeData';
+import { nodeTypeDefaults } from '@/elements/nodes/nodeDefaults';
+import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { call, type RunTrigger } from '@/api/client';
+import { errorText } from '@/api/errorText';
+import { ACCENT } from '@/ui/theme';
+import { delivered } from '@/canvas/executionStatus';
+import { WIDGET_UIS, NODE_UIS } from '@/elements/registry';
+import { RUN_PORT } from '@engine/execution/triggers.ts';
 import type React from 'react';
 import { applyMemory } from '@engine/graph.ts';
-import { registry as engineRegistry } from '@engine/registry.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 
 type RFNode = Node<RFNodeData>;
 
@@ -170,7 +171,7 @@ function collectTextOutputWindows(
   result: ExecutionResult,
 ): { nodeId: string; label: string; content: string }[] {
   return graph.nodes
-    .filter((node) => NODE_ELEMENTS[node.node_type]?.showsResultWindow?.(node) ?? false)
+    .filter((node) => NODE_UIS[node.node_type]?.showsResultWindow?.(node) ?? false)
     .map((node) => {
       const nodeResult = result.node_results.find((r) => r.node_id === node.id);
       if (!nodeResult || !delivered(nodeResult.status)) return null;
@@ -233,8 +234,8 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
   };
 
   // gui/widget node ports are always derived from their widget list -- never
-  // trust hand-edited/imported/AI-generated `inputs`/`outputs`, mirroring the
-  // backend's defensive sync_gui_node_ports call in execute_graph.
+  // trust hand-edited/imported/AI-generated `inputs`/`outputs`: the engine
+  // derives them the same way (`GuiNode.derivedPorts`).
   return nodeType === 'gui' ? syncGuiNodePorts(node) : node;
 }
 
@@ -272,7 +273,6 @@ const defaultMetadata = (): GraphMetadata => ({
   ai_defaults: { provider: 'default', model: '' },
   gui_scheme: 'night',
 });
-
 
 // How often a run in flight is polled. Fast enough that the node name keeps up
 // with a quick graph, slow enough not to flood a local server during a long one.
@@ -364,7 +364,6 @@ export const useGraphStore = create<GraphStore>()(
       });
       return id;
     },
-
 
     updateNode: (nodeId, updates) => {
       get().commit();
@@ -679,7 +678,7 @@ export const useGraphStore = create<GraphStore>()(
           const ran = result.node_results.find((r) => r.node_id === graphNode.id);
           if (!ran || !delivered(ran.status) || !Array.isArray(graphNode.config.gui_widgets)) continue;
           for (const widget of graphNode.config.gui_widgets) {
-            if (GUI_WIDGET_ELEMENTS[widget.kind]?.clearValueAfterRun?.(widget)) widget.value = '';
+            if (WIDGET_UIS[widget.kind]?.clearValueAfterRun?.(widget)) widget.value = '';
           }
         }
       }),

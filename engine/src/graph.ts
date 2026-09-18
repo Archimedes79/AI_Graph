@@ -8,9 +8,8 @@
 // written down separately, as `config_fields`, and enforced by a test that
 // parsed each element's source code — a lint doing a type system's job.
 //
-// Here the element owns its config type (see `element.ts`). This file knows a
+// Here the element owns its config type (see `elements/Element.ts`). This file knows a
 // config is an object; only the element knows what is in it.
-
 
 export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui';
 

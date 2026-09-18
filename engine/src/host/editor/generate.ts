@@ -18,8 +18,8 @@
 // show what was sent when the answer is "the model returned nothing".
 
 import { readFile } from 'node:fs/promises';
-import type { AiRequest, AiService, CodeRunner } from '../../element.ts';
-import type { Generation } from '../../generation.ts';
+import type { AiRequest, AiService, CodeRunner } from '../../elements/Runtime.ts';
+import type { Generation } from '../../authoring/generation.ts';
 import { renderSkeleton } from './skeleton.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { detectFormat } from './files.ts';

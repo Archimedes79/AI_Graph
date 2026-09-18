@@ -29,17 +29,17 @@ const BY_PATH = new Map(
 
 /** Modules that exist for *building* a graph, and have no business in a bundle. */
 const EDITOR_ONLY = [
-  'components/gui/DesignerTab',
-  'components/gui/DesignerSurface',
-  'components/gui/DesignerPalette',
-  'components/gui/PreviewTab',
-  'components/GuiWidgetEditor',
-  'components/GraphCanvas',
-  'components/NodeEditor',
-  'components/Sidebar',
-  'components/Toolbar',
-  'components/ViewTabs',
   'App',
+  'app/Toolbar',
+  'app/Sidebar',
+  'app/ViewTabs',
+  'canvas/GraphCanvas',
+  'canvas/NodeEditor',
+  'page/DesignerTab',
+  'page/DesignerSurface',
+  'page/DesignerPalette',
+  'page/PreviewTab',
+  'page/WidgetEditor',
 ];
 
 function resolveSpec(fromPath: string, spec: string): string | null {
@@ -69,10 +69,11 @@ function runtimeImports(): Set<string> {
 
     const source = BY_PATH.get(path);
     if (!source) continue;
-    // Relative specifiers only: a package from node_modules cannot reach back
-    // into this source tree, so it cannot drag an editor module in with it.
-    for (const match of source.matchAll(/from\s+'(\.[^']+)'/g)) {
-      const resolved = resolveSpec(path, match[1]);
+    // Relative and `@/` specifiers: a package from node_modules cannot reach
+    // back into this source tree, so it cannot drag an editor module in with it.
+    for (const match of source.matchAll(/from\s+'((?:\.|@\/)[^']+)'/g)) {
+      const spec = match[1];
+      const resolved = spec.startsWith('@/') ? resolveSpec('', spec.slice(2)) : resolveSpec(path, spec);
       if (resolved) queue.push(resolved);
     }
   }
@@ -87,8 +88,18 @@ describe('deployment boundary', () => {
     // because nothing was found rather than because nothing is wrong.
     expect(BY_PATH.has('runtime/main.tsx')).toBe(true);
     expect(reachable.has('runtime/RuntimeApp.tsx')).toBe(true);
-    expect(reachable.has('components/gui/GuiPage.tsx')).toBe(true);
+    expect(reachable.has('page/GuiPage.tsx')).toBe(true);
     expect(reachable.size).toBeGreaterThan(10);
+  });
+
+  it('draws elements with their views, and never loads a panel or the authoring UI', () => {
+    // Panels are registered with `lazy(() => import(…))`, which this walk --
+    // like the bundler's static graph -- does not follow: a panel is a chunk
+    // the editor fetches when an element is opened, and a tool never does.
+    const editing = [...reachable].filter((path) => /Panel\.tsx$/.test(path)
+      || /^(authoring|elements\/fields)\/.*\.tsx$/.test(path));
+    expect(editing).toEqual([]);
+    expect([...reachable].some((path) => /WidgetView\.tsx$/.test(path))).toBe(true);
   });
 
   it.each(EDITOR_ONLY)('does not pull %s into a deployed bundle', (module) => {

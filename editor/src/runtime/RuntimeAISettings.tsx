@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import Modal from '../components/Modal';
-import { call, type ToolAiSettings } from '../utils/api';
-import { errorText } from '../utils/errorText';
-import { ACCENT_FILL, ACCENT_TEXT, DIM, MUTED, NEUTRAL_BUTTON } from '../ui/theme';
+import Modal from '@/ui/Modal';
+import { call, type ToolAiSettings } from '@/api/client';
+import { errorText } from '@/api/errorText';
+import { ACCENT_FILL, ACCENT_TEXT, DIM, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 /**
  * Which AI this tool calls, and where to change that.

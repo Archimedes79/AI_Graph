@@ -15,11 +15,11 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseGraph } from '../../graph.ts';
-import { executeNode, inputsFor } from '../../executor.ts';
-import { GuiElement, parseWidget } from '../../elements/gui/element.ts';
-import { registry } from '../../registry.ts';
-import { writeBundle } from '../../bundle.ts';
-import { applyRuntimeValues } from '../../runtimeValues.ts';
+import { executeNode, inputsFor } from '../../execution/executor.ts';
+import { GuiNode, parseWidget } from '../../elements/nodes/gui/GuiNode.ts';
+import { registry } from '../../elements/registry.ts';
+import { writeBundle } from '../../cli/bundle.ts';
+import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
 import { nodeRuntime } from '../node.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile } from '../api.ts';
@@ -81,7 +81,7 @@ export function editorRoutes(): Handlers {
 
     async runBlock(asked) {
       try {
-        const shown = await new GuiElement().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
+        const shown = await new GuiNode().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
         return { status: 'success', shown, error: null };
       } catch (error) {
         return { status: 'error', shown: null, error: message(error) };

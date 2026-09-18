@@ -3,13 +3,13 @@
 // Two processes talk over HTTP -- Node runs graphs, the browser draws them --
 // and they used to describe the conversation twice: the server built its
 // replies by hand in `serve.ts`, and the page declared what it expected in
-// `utils/api.ts`. The two had drifted. The deployed tool's settings dialog read
+// `api/client.ts`. The two had drifted. The deployed tool's settings dialog read
 // fields the server never sent and saved to a route that did not exist; its
 // file picker expected entries with names and got entries without.
 //
 // So this file is the conversation, once. The server serves exactly this table
 // (`serve.ts` fails to start if a route has no handler), the page calls it by
-// name (`editor/src/utils/api.ts`), and both are type-checked against the same
+// name (`editor/src/api/client.ts`), and both are type-checked against the same
 // request and response here. Types and one plain table only -- nothing that
 // needs Node or a browser -- so either side can import it, and a bundle, which
 // carries it, pays for a list.
@@ -19,7 +19,7 @@
 // and a server without the editor answers it with 404.
 
 import type { ExecutionResult, Graph, NodeResult } from '../graph.ts';
-import type { Trigger } from '../triggers.ts';
+import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
 
 // ---------------------------------------------------------------------------

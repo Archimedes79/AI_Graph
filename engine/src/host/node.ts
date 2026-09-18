@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
-import type { CodeRunner, FileService, Runtime } from '../element.ts';
+import type { CodeRunner, FileService, Runtime } from '../elements/Runtime.ts';
 import { aiService } from '../ai/providers.ts';
 import { mcpToolService } from '../ai/mcp.ts';
 import { configuredMcpServers, configuredSettings } from '../ai/settings.ts';

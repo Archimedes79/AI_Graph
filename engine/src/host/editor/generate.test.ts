@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AiRequest, AiService, CodeRunner } from '../../element.ts';
-import { registry } from '../../registry.ts';
+import type { AiRequest, AiService, CodeRunner } from '../../elements/Runtime.ts';
+import { registry } from '../../elements/registry.ts';
 import { GenerationFailed, GenerationRefused, generate, generateGraph, withContextFile } from './generate.ts';
 
 /**

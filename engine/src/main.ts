@@ -3,7 +3,7 @@
 //
 // Separate from cli.ts so that everything there stays importable and testable
 // without a process exiting in the middle of a test run.
-import { main } from './cli.ts';
+import { main } from './cli/cli.ts';
 
 main(process.argv.slice(2))
   .then((code) => process.exit(code))

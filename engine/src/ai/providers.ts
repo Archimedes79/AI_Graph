@@ -17,7 +17,7 @@
 // is written once, below, and what differs per dialect is only what differs on
 // the wire.
 
-import type { AiRequest, AiService, ToolAccess, ToolSpec } from '../element.ts';
+import type { AiRequest, AiService, ToolAccess, ToolSpec } from '../elements/Runtime.ts';
 
 export interface ProviderSettings {
   /** Which provider a node's `default` resolves to. */
