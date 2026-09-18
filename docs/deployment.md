@@ -88,7 +88,7 @@ curl -X POST http://localhost:8000/api/deploy/bundle \
   --output bundle.zip
 ```
 
-See [engine/src/bundle.ts](../engine/src/bundle.ts) for exactly which files a bundle
+See [engine/src/cli/bundle.ts](../engine/src/cli/bundle.ts) for exactly which files a bundle
 contains and why it can never drift from the editor.
 
 ### What a bundle carries
