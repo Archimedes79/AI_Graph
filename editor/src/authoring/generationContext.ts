@@ -1,5 +1,4 @@
 import type { ExecutionResult, GraphNode } from '@/graph';
-import { describeDataFormat } from '@/elements/nodes/data/dataFormat';
 // This module reads the element registry, so no element's `…Ui.ts` may import
 // it: that would be a cycle through the registry (see `outputFormat.ts`).
 import { NODE_UIS } from '@/elements/registry';
@@ -57,20 +56,12 @@ export function connectedFormatContext(
       if (!source) continue;
       const described = describeNodeOutput(source);
       if (!described) continue;
-      // The wording for a data node is kept verbatim: it is the one contract a
-      // user writes deliberately, and existing graphs' prompts were tuned to it.
-      lines.add(source.node_type === 'data'
-        ? `Source data format from "${source.label}": ${described}`
-        : `Input from "${source.label}" (${source.node_type} node): ${described}`);
+      lines.add(NODE_UIS[source.node_type].describeAsSource(source, described));
     }
     if (edge.source === nodeId) {
       const target = nodeById.get(edge.target);
       if (!target) continue;
-      if (target.node_type === 'data') {
-        lines.add(`Target data format required by "${target.label}": ${describeDataFormat(target)}`);
-      } else {
-        lines.add(`Output goes to "${target.label}" (${target.node_type} node).`);
-      }
+      lines.add(NODE_UIS[target.node_type].describeAsTarget(target));
     }
   }
   return [...lines].join('\n');

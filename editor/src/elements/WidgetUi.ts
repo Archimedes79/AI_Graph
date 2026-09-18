@@ -60,6 +60,11 @@ export abstract class WidgetUi extends Ui<GuiWidget, WidgetPanelProps> {
   /** The stored value is a one-shot message, cleared once a run has consumed it. */
   clearValueAfterRun?(widget: GuiWidget): boolean;
 
+  /** The widget is a source whose data nothing describes yet: see `NodeUi.missingExample`. */
+  missingExample(_widget: GuiWidget): boolean {
+    return false;
+  }
+
   /** What a new widget of this kind is called when the palette puts it on a page: the palette's word for it. */
   initialLabel(paletteLabel: string): string {
     return paletteLabel;

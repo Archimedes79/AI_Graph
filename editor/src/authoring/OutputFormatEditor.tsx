@@ -5,6 +5,7 @@ import { useGenerate } from './useGenerate';
 import GenerationTranscript, { GenerationReport } from './GenerationTranscript';
 import LiveGeneration from './LiveGeneration';
 import { describeDataFormat } from '@/elements/nodes/data/dataFormat';
+import { NODE_UIS } from '@/elements/registry';
 import { ACCENT_FILL, ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '@/ui/theme';
 
 interface Props {
@@ -87,12 +88,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
           Expected output format
         </label>
         <p className="text-xs mb-2" style={{ color: DIM }}>
-          {node.node_type === 'ai'
-            ? <>Only needed when something downstream has to <em>parse</em> the answer. It becomes a sentence
-              at the end of the instructions, and the neighbours are generated against it. Nothing checks the
-              answer afterwards — a model that ignores it is caught by a Code node, not here.</>
-            : <>This declaration is given to ✨ Generate, here and in the neighbours, so the code produces and
-              expects the right shape. It does not check or convert the value at run time.</>}
+          {NODE_UIS[node.node_type].outputFormatHint}
         </p>
         <select
           className="w-full rounded-lg px-2 py-1.5 text-sm"

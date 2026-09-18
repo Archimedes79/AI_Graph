@@ -66,9 +66,42 @@ export abstract class NodeUi extends Ui<GraphNode, NodePanelProps> {
   readonly ownsDescription?: boolean;
   /** This node carries the graph's interface: it gets a live page. */
   readonly hasRuntimeWindow?: boolean;
+  /**
+   * The node is a composite of widgets (`config.gui_widgets`): drawn with them
+   * on the canvas, and generated widget by widget.
+   */
+  readonly holdsWidgets: boolean = false;
+  /** What the output-format contract means for this kind of node, said above it. */
+  readonly outputFormatHint?: string;
+  /**
+   * Detecting a wired file's format asks for a sample path, rather than
+   * reading the node's own value -- a directory input holds a folder, not a file.
+   */
+  readonly asksForFormatSample: boolean = false;
 
   /** What this node emits, in one line, for its neighbours' generation context. */
   describeOutput?(node: GraphNode): string;
   /** Whether this particular node shows its result in a window when the run ends. */
   showsResultWindow?(node: GraphNode): boolean;
+  /** A line of what the node holds, shown on the canvas under its ports. Nothing, for most. */
+  canvasSummary?(node: GraphNode): string | undefined;
+
+  /**
+   * The node is a source whose data nothing describes yet -- no sample, no
+   * contract -- so a generation sweep would be written against a guess.
+   * `fed`: something upstream feeds it.
+   */
+  missingExample(_node: GraphNode, _fed: boolean): boolean {
+    return false;
+  }
+
+  /** How a neighbour's generation is told this node feeds it. */
+  describeAsSource(node: GraphNode, emits: string): string {
+    return `Input from "${node.label}" (${node.node_type} node): ${emits}`;
+  }
+
+  /** How a neighbour's generation is told this node receives its output. */
+  describeAsTarget(node: GraphNode): string {
+    return `Output goes to "${node.label}" (${node.node_type} node).`;
+  }
 }

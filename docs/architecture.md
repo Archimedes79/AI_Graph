@@ -295,6 +295,10 @@ and can be watched while it runs; the result waits for the person to accept it.
 - Panels are typed (`NodePanelProps`, `WidgetPanelProps`), not `any`: a shell that stops
   handing a panel what it reads fails to compile.
 - Things that were settable and did nothing are removed rather than documented.
+- No code outside `elements/` compares a node type or a widget kind with a name
+  ([`shells.test.ts`](../editor/src/elements/shells.test.ts)). What such a comparison would
+  decide is a member of the element's class — `holdsWidgets`, `missingExample`,
+  `describeAsSource`, `canvasSummary`, `outputFormatHint` — so a new kind answers for itself.
 
 ## Known debt
 

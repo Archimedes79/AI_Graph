@@ -55,7 +55,7 @@ export function useGraphSweep(): SweepState {
     // it is generated against real values even when the graph has never run.
     const produced = new Map<string, Record<string, unknown>>();
 
-    const guiNodes = new Set(nodesOf().filter((n) => n.node_type === 'gui').map((n) => n.id));
+    const guiNodes = new Set(nodesOf().filter((n) => NODE_UIS[n.node_type]?.holdsWidgets).map((n) => n.id));
 
     /**
      * One block on a page, generated exactly as its own ✨ button would.

@@ -17,6 +17,7 @@ export class AiNodeUi extends NodeUi {
   // panel -- a second Description field above it showed the same box twice.
   override readonly ownsDescription = true;
   override readonly outputContract = 'format';
+  override readonly outputFormatHint = 'Only needed when something downstream has to parse the answer. It becomes a sentence at the end of the instructions, and the neighbours are generated against it. Nothing checks the answer afterwards — a model that ignores it is caught by a Code node, not here.';
   override readonly Panel = lazy(() => import('./AiNodePanel'));
   override readonly AdvancedPanel = lazy(() => import('./AiNodeAdvancedPanel'));
   override readonly advancedSummary = 'model, tools, batching, failures';
