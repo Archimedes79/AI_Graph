@@ -235,7 +235,7 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
 
   // gui/widget node ports are always derived from their widget list -- never
   // trust hand-edited/imported/AI-generated `inputs`/`outputs`: the engine
-  // derives them the same way (`GuiNode.derivedPorts`).
+  // derives them the same way (`GuiNodeElement.derivedPorts`).
   return nodeType === 'gui' ? syncGuiNodePorts(node) : node;
 }
 

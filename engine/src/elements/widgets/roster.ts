@@ -8,32 +8,32 @@
 // This file is the roster — the only place that knows the whole set, which is
 // the role `registry.ts` plays one level up.
 
-import { TextWidget } from './text/TextWidget.ts';
-import { DividerWidget } from './divider/DividerWidget.ts';
-import { SpacerWidget } from './spacer/SpacerWidget.ts';
-import { InputPickerWidget } from './input_picker/InputPickerWidget.ts';
-import { TextIoWidget } from './text_io/TextIoWidget.ts';
-import { PlotWindowWidget } from './plot_window/PlotWindowWidget.ts';
-import { ImageViewWidget } from './image_view/ImageViewWidget.ts';
-import { TableWidget } from './table/TableWidget.ts';
-import { SelectWidget } from './select/SelectWidget.ts';
-import { SliderWidget } from './slider/SliderWidget.ts';
-import { ButtonWidget } from './button/ButtonWidget.ts';
-import { ChatWidget } from './chat/ChatWidget.ts';
+import { TextWidgetElement } from './text/TextWidgetElement.ts';
+import { DividerWidgetElement } from './divider/DividerWidgetElement.ts';
+import { SpacerWidgetElement } from './spacer/SpacerWidgetElement.ts';
+import { InputPickerWidgetElement } from './input_picker/InputPickerWidgetElement.ts';
+import { TextIoWidgetElement } from './text_io/TextIoWidgetElement.ts';
+import { PlotWindowWidgetElement } from './plot_window/PlotWindowWidgetElement.ts';
+import { ImageViewWidgetElement } from './image_view/ImageViewWidgetElement.ts';
+import { TableWidgetElement } from './table/TableWidgetElement.ts';
+import { SelectWidgetElement } from './select/SelectWidgetElement.ts';
+import { SliderWidgetElement } from './slider/SliderWidgetElement.ts';
+import { ButtonWidgetElement } from './button/ButtonWidgetElement.ts';
+import { ChatWidgetElement } from './chat/ChatWidgetElement.ts';
 
-export { InputPickerWidget };
+export { InputPickerWidgetElement };
 
 export const WIDGETS = [
-  new TextWidget(),
-  new DividerWidget(),
-  new SpacerWidget(),
-  new InputPickerWidget(),
-  new TextIoWidget(),
-  new PlotWindowWidget(),
-  new ImageViewWidget(),
-  new TableWidget(),
-  new SelectWidget(),
-  new SliderWidget(),
-  new ButtonWidget(),
-  new ChatWidget(),
+  new TextWidgetElement(),
+  new DividerWidgetElement(),
+  new SpacerWidgetElement(),
+  new InputPickerWidgetElement(),
+  new TextIoWidgetElement(),
+  new PlotWindowWidgetElement(),
+  new ImageViewWidgetElement(),
+  new TableWidgetElement(),
+  new SelectWidgetElement(),
+  new SliderWidgetElement(),
+  new ButtonWidgetElement(),
+  new ChatWidgetElement(),
 ];

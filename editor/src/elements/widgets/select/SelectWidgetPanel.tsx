@@ -1,5 +1,5 @@
 import { DIM, FIELD_ON_SURFACE, MUTED } from '@/ui/theme';
-import type { WidgetPanelProps } from '../../ElementUi';
+import type { WidgetPanelProps } from '../../Ui';
 
 export default function SelectWidgetPanel({ widget, onUpdate }: WidgetPanelProps) {
   const options = typeof widget.options === 'string' ? widget.options : '';

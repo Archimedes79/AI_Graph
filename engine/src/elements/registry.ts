@@ -4,27 +4,27 @@
 // registry of subclasses that add the config panels — this one is what a bundle
 // imports, and it is the reason a bundle contains no editor.
 
-import type { GraphNodeElement } from './GraphNodeElement.ts';
+import type { NodeElement } from './NodeElement.ts';
 import type { WidgetElement } from './WidgetElement.ts';
 import type { NodeType, WidgetKind } from '../graph.ts';
-import { AiNode } from './nodes/ai/AiNode.ts';
-import { CodeNode } from './nodes/code/CodeNode.ts';
-import { DataNode } from './nodes/data/DataNode.ts';
-import { GuiNode } from './nodes/gui/GuiNode.ts';
-import { InputNode } from './nodes/input/InputNode.ts';
-import { OutputNode } from './nodes/output/OutputNode.ts';
+import { AiNodeElement } from './nodes/ai/AiNodeElement.ts';
+import { CodeNodeElement } from './nodes/code/CodeNodeElement.ts';
+import { DataNodeElement } from './nodes/data/DataNodeElement.ts';
+import { GuiNodeElement } from './nodes/gui/GuiNodeElement.ts';
+import { InputNodeElement } from './nodes/input/InputNodeElement.ts';
+import { OutputNodeElement } from './nodes/output/OutputNodeElement.ts';
 import { WIDGETS } from './widgets/roster.ts';
 
-export const NODE_UIS: GraphNodeElement<unknown>[] = [
-  new InputNode(),
-  new AiNode(),
-  new CodeNode(),
-  new DataNode(),
-  new OutputNode(),
-  new GuiNode(),
-] as GraphNodeElement<unknown>[];
+export const NODE_UIS: NodeElement<unknown>[] = [
+  new InputNodeElement(),
+  new AiNodeElement(),
+  new CodeNodeElement(),
+  new DataNodeElement(),
+  new OutputNodeElement(),
+  new GuiNodeElement(),
+] as NodeElement<unknown>[];
 
-const NODES_BY_TYPE = new Map<string, GraphNodeElement<unknown>>(
+const NODES_BY_TYPE = new Map<string, NodeElement<unknown>>(
   NODE_UIS.map((element) => [element.nodeType, element]),
 );
 
@@ -34,7 +34,7 @@ const WIDGETS_BY_KIND = new Map<string, WidgetElement<unknown>>(
 
 /** The registry the executor asks. An unknown type is a missing element, not a crash. */
 export const registry = {
-  node(type: NodeType | string): GraphNodeElement<unknown> | undefined {
+  node(type: NodeType | string): NodeElement<unknown> | undefined {
     return NODES_BY_TYPE.get(type);
   },
   widget(kind: WidgetKind | string): WidgetElement<unknown> | undefined {

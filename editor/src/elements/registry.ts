@@ -1,25 +1,25 @@
 import type { WidgetKind, NodeType } from '@/graph';
-import type { WidgetUi, NodeUi } from './ElementUi';
+import type { WidgetUi, NodeUi } from './Ui';
 
-import { inputNodeUi } from './nodes/input/InputNode.ui';
-import { aiNodeUi } from './nodes/ai/AiNode.ui';
-import { codeNodeUi } from './nodes/code/CodeNode.ui';
-import { dataNodeUi } from './nodes/data/DataNode.ui';
-import { outputNodeUi } from './nodes/output/OutputNode.ui';
-import { guiNodeUi } from './nodes/gui/GuiNode.ui';
+import { inputNodeUi } from './nodes/input/InputNodeUi';
+import { aiNodeUi } from './nodes/ai/AiNodeUi';
+import { codeNodeUi } from './nodes/code/CodeNodeUi';
+import { dataNodeUi } from './nodes/data/DataNodeUi';
+import { outputNodeUi } from './nodes/output/OutputNodeUi';
+import { guiNodeUi } from './nodes/gui/GuiNodeUi';
 
-import { inputPickerWidgetUi } from './widgets/input_picker/InputPickerWidget.ui';
-import { textIoWidgetUi } from './widgets/text_io/TextIoWidget.ui';
-import { imageViewWidgetUi } from './widgets/image_view/ImageViewWidget.ui';
-import { plotWindowWidgetUi } from './widgets/plot_window/PlotWindowWidget.ui';
-import { tableWidgetUi } from './widgets/table/TableWidget.ui';
-import { textWidgetUi } from './widgets/text/TextWidget.ui';
-import { dividerWidgetUi } from './widgets/divider/DividerWidget.ui';
-import { spacerWidgetUi } from './widgets/spacer/SpacerWidget.ui';
-import { selectWidgetUi } from './widgets/select/SelectWidget.ui';
-import { sliderWidgetUi } from './widgets/slider/SliderWidget.ui';
-import { buttonWidgetUi } from './widgets/button/ButtonWidget.ui';
-import { chatWidgetUi } from './widgets/chat/ChatWidget.ui';
+import { inputPickerWidgetUi } from './widgets/input_picker/InputPickerWidgetUi';
+import { textIoWidgetUi } from './widgets/text_io/TextIoWidgetUi';
+import { imageViewWidgetUi } from './widgets/image_view/ImageViewWidgetUi';
+import { plotWindowWidgetUi } from './widgets/plot_window/PlotWindowWidgetUi';
+import { tableWidgetUi } from './widgets/table/TableWidgetUi';
+import { textWidgetUi } from './widgets/text/TextWidgetUi';
+import { dividerWidgetUi } from './widgets/divider/DividerWidgetUi';
+import { spacerWidgetUi } from './widgets/spacer/SpacerWidgetUi';
+import { selectWidgetUi } from './widgets/select/SelectWidgetUi';
+import { sliderWidgetUi } from './widgets/slider/SliderWidgetUi';
+import { buttonWidgetUi } from './widgets/button/ButtonWidgetUi';
+import { chatWidgetUi } from './widgets/chat/ChatWidgetUi';
 
 /** Dispatch table every NodeType resolves through. */
 export const NODE_UIS: Record<NodeType, NodeUi> = {

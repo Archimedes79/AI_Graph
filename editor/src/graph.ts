@@ -89,7 +89,7 @@ export type NodeConfig = {
 
 /**
  * One block on a page. Ports are never edited by hand: they are derived from
- * this list by the engine (`GuiNode.derivedPorts`), so a block's `id` must
+ * this list by the engine (`GuiNodeElement.derivedPorts`), so a block's `id` must
  * stay stable once assigned -- it is what keeps edges attached across edits.
  */
 export type GuiWidget = {

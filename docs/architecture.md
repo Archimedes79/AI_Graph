@@ -27,35 +27,48 @@ both sides**:
 
 ```
 engine/src/elements/                       editor/src/elements/
-  Element.ts   GraphNodeElement.ts           ElementUi.ts         the contract each half fills in
+  Element.ts   NodeElement.ts           Ui.ts         the contract each half fills in
   WidgetElement.ts  Runtime.ts               registry.ts          mirrors the engine's registry
   registry.ts  port.ts  fileSelection.ts     fields/              settings shared by several panels
   nodes/                                     nodes/
-    ai/     AiNode.ts  prompt.ts               ai/     AiNode.ui.ts  AiNodePanel.tsx
+    ai/     AiNodeElement.ts  prompt.ts               ai/     AiNodeUi.ts  AiNodePanel.tsx
                                                        AiNodeAdvancedPanel.tsx  PromptPreview.tsx
-    code/   CodeNode.ts                        code/   CodeNode.ui.ts  CodeNodePanel.tsx …
+    code/   CodeNodeElement.ts                        code/   CodeNodeUi.ts  CodeNodePanel.tsx …
     data/ gui/ input/ output/                  data/ gui/ input/ output/
   widgets/                                   widgets/
-    select/ SelectWidget.ts                    select/ SelectWidget.ui.ts  SelectWidgetView.tsx
+    select/ SelectWidgetElement.ts                    select/ SelectWidgetUi.ts  SelectWidgetView.tsx
                                                        SelectWidgetPanel.tsx
-    plot_window/ PlotWindowWidget.ts           plot_window/ PlotWindowWidget.ui.ts
+    plot_window/ PlotWindowWidgetElement.ts           plot_window/ PlotWindowWidgetUi.ts
                  check.ts  view.ts                          PlotWindowWidgetView.tsx
                                                             PlotWindowWidgetPanel.tsx  PlotChart.tsx
-    …  StaticWidget.ts  DisplayWidget.ts       …  WidgetView.ts
-       TransformingDisplay.ts  roster.ts
+    …  StaticWidgetElement.ts  DisplayWidgetElement.ts       …  WidgetView.ts
+       TransformingDisplayElement.ts  roster.ts
 ```
 
-**Names follow the file format, mechanically.** Node type `ai` is class `AiNode` in
-`nodes/ai/AiNode.ts`; widget kind `plot_window` is class `PlotWindowWidget` in
-`widgets/plot_window/PlotWindowWidget.ts`. One class per file, and the file is named after
-it. Each element has a fixed set of **facets**, told apart by suffix:
+**Names follow the file format, mechanically, and pair across the wire.** Every element
+class ends in `Element`; its editor half swaps `Element` for `Ui`. Node type `ai` is class
+`AiNodeElement` in `nodes/ai/AiNodeElement.ts`, and its editor half `aiNodeUi` in
+`nodes/ai/AiNodeUi.ts`; widget kind `plot_window` is `PlotWindowWidgetElement` and
+`PlotWindowWidgetUi.ts`. One class per file, and the file is named after it.
+
+| Engine | Editor |
+|---|---|
+| `Element` | `Ui` |
+| `NodeElement` | `NodeUi` |
+| `WidgetElement` | `WidgetUi` |
+| `AiNodeElement` | `AiNodeUi.ts` (`aiNodeUi`) |
+| `SelectWidgetElement` | `SelectWidgetUi.ts` (`selectWidgetUi`) |
+
+The engine side is a class hierarchy, because that is where behaviour lives; the editor side
+is typed data (`aiNodeUi: NodeUi`), because its behaviour lives in React components. Each
+element has a fixed set of **facets**, told apart by suffix:
 
 | Facet | Engine (Node) | Editor (browser) |
 |---|---|---|
-| What it is and does: config, ports, `execute`, `generation` | `<Kind>Node.ts` / `<Kind>Widget.ts` | — |
+| What it is and does: config, ports, `execute`, `generation` | `<Kind>NodeElement.ts` / `<Kind>WidgetElement.ts` | — |
 | How it looks on a page — the designer and the deployed tool draw the same component | — | `<Kind>WidgetView.tsx` |
 | Its settings | — | `<Kind>NodePanel.tsx` / `<Kind>WidgetPanel.tsx` |
-| What the editor's shells ask of it | — | `<Kind>Node.ui.ts` / `<Kind>Widget.ui.ts` |
+| What the editor's shells ask of it | — | `<Kind>NodeUi.ts` / `<Kind>WidgetUi.ts` |
 
 A node's look on the canvas is generic (`canvas/GraphNodeView.tsx`), so nodes have no view
 of their own. [`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts) holds the two
@@ -67,18 +80,27 @@ its names, on both sides.
 Behaviour lives in classes. Shared code asks the element and never switches on a type name.
 
 ```
-Element<Subject, Config>                 config() · generation() · catchesErrors() · deployNeeds()
-├── GraphNodeElement<C>                  a node: derivedPorts · execute · display · runtimeRequirements · settleMemory
-│   ├── InputNode  AiNode  CodeNode  DataNode  OutputNode
-│   └── GuiNode                          a composite: holds widgets, its ports are theirs
-└── WidgetElement<C>                     a widget: ports · execute · firesRun · settle · displayValue
-    ├── InputPickerWidget  TextIoWidget  SelectWidget  SliderWidget  ButtonWidget  ChatWidget
-    ├── StaticWidget → TextWidget  DividerWidget  SpacerWidget
-    └── DisplayWidget → TransformingDisplay → PlotWindowWidget  TableWidget  ImageViewWidget
+Element<Subject, Config>          config() · generation() · catchesErrors() · deployNeeds()
+├── NodeElement<C>                a node: derivedPorts · execute · display · runtimeRequirements · settleMemory
+│   ├── InputNodeElement   AiNodeElement   CodeNodeElement
+│   ├── DataNodeElement    OutputNodeElement
+│   └── GuiNodeElement            a composite: holds widgets, its ports are theirs
+└── WidgetElement<C>              a widget: ports · execute · firesRun · settle · displayValue
+    ├── InputPickerWidgetElement   TextIoWidgetElement   SelectWidgetElement
+    ├── SliderWidgetElement        ButtonWidgetElement   ChatWidgetElement
+    ├── StaticWidgetElement       no ports: part of the page, not the graph
+    │   └── TextWidgetElement   DividerWidgetElement   SpacerWidgetElement
+    └── DisplayWidgetElement      one input, nothing out
+        └── TransformingDisplayElement   an optional transform before drawing
+            └── PlotWindowWidgetElement   TableWidgetElement   ImageViewWidgetElement
+
+Ui<Subject, PanelProps>           Panel · generation
+├── NodeUi                        create · AdvancedPanel · describeOutput · …   6 × <kind>NodeUi
+└── WidgetUi                      View · inlineText · ownsValue · …             12 × <kind>WidgetUi
 ```
 
-The browser half mirrors it as data, not as subclasses: `NodeUi` and `WidgetUi`
-(`ElementUi.ts`) are filled in by each element's `.ui.ts`. An element is handed its
+The browser half mirrors it as data, not as subclasses: `NodeUi` and `WidgetUi` (`Ui.ts`)
+are filled in by each element's `<Kind>Ui.ts`. An element is handed its
 services (`Runtime.ts`: `files`, `code`, `ai`, `tools`) rather than reaching for them.
 
 ## Two processes, one contract
@@ -179,7 +201,7 @@ other knows, it imports it or replays its result:
 |---|---|
 | every route, request and response | `host/api.ts` |
 | the graph's types | `graph.ts` |
-| a page node's ports | `GuiNode.derivedPorts` via `elements/nodes/gui/guiWidgets.ts` |
+| a page node's ports | `GuiNodeElement.derivedPorts` via `elements/nodes/gui/guiWidgets.ts` |
 | whether a widget starts the graph | `WidgetElement.firesRun` |
 | the request an AI node will send | `assemblePrompt` (`elements/nodes/ai/prompt.ts`) |
 | what a run remembered | `ExecutionResult.memory`, replayed with `applyMemory` |

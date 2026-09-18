@@ -26,7 +26,7 @@ export interface WidgetPresentation {
  * `parseWidget` on every read anyway, since the stored file is flat, and two
  * copies of one fact are not a clearer design than one. What separates
  * presentation from settings is the type, and `PRESENTATION` in
- * `nodes/gui/GuiNode.ts` is checked against it.
+ * `nodes/gui/GuiNodeElement.ts` is checked against it.
  */
 export interface Widget extends WidgetPresentation {
   id: string;

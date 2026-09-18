@@ -1,6 +1,6 @@
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import { MUTED } from '@/ui/theme';
-import type { WidgetPanelProps } from '../../ElementUi';
+import type { WidgetPanelProps } from '../../Ui';
 
 /**
  * image_view has almost nothing to configure: it shows whatever file path is

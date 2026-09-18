@@ -22,14 +22,14 @@
 // Everything else — what a node *does* — belongs to its element.
 
 import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeResult, NodeStatus } from '../graph.ts';
-import type { GraphNodeElement } from '../elements/GraphNodeElement.ts';
+import type { NodeElement } from '../elements/NodeElement.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
 import { readFileInputs } from './fileInputs.ts';
 import { RUN_PORT, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
 
 export interface Registry {
-  node(type: string): GraphNodeElement<unknown> | undefined;
+  node(type: string): NodeElement<unknown> | undefined;
 }
 
 /** Ids of the fewest edges that must be ignored to make the graph acyclic. */
@@ -382,7 +382,7 @@ function isNothing(value: unknown): boolean {
  * say.
  */
 function nothingToDo(
-  element: GraphNodeElement<unknown>,
+  element: NodeElement<unknown>,
   node: GraphNode,
   inputs: Record<string, unknown>,
   edges: GraphEdge[],
@@ -495,7 +495,7 @@ function failureOutputs(node: GraphNode, message: string): Record<string, unknow
  * ending the batch: one bad row out of two thousand should cost one row.
  */
 async function runNode(
-  element: GraphNodeElement<unknown>,
+  element: NodeElement<unknown>,
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,

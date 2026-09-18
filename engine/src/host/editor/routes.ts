@@ -16,7 +16,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseGraph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
-import { GuiNode, parseWidget } from '../../elements/nodes/gui/GuiNode.ts';
+import { GuiNodeElement, parseWidget } from '../../elements/nodes/gui/GuiNodeElement.ts';
 import { registry } from '../../elements/registry.ts';
 import { writeBundle } from '../../cli/bundle.ts';
 import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
@@ -81,7 +81,7 @@ export function editorRoutes(): Handlers {
 
     async runBlock(asked) {
       try {
-        const shown = await new GuiNode().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
+        const shown = await new GuiNodeElement().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
         return { status: 'success', shown, error: null };
       } catch (error) {
         return { status: 'error', shown: null, error: message(error) };

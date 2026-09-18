@@ -1,5 +1,5 @@
 import { DIMMER, FIELD, LINE, MUTED } from '@/ui/theme';
-import type { NodePanelProps } from '../../ElementUi';
+import type { NodePanelProps } from '../../Ui';
 
 export default function OutputNodePanel({ node, setConfig }: NodePanelProps) {
   const mode = node.config.write_mode;

@@ -3,7 +3,7 @@
 // One class per node type and per widget kind, holding everything that kind
 // needs to behave: what it stores, which ports it contributes, what it does
 // when the graph runs, and how an AI writes its body. Two branches share this
-// base -- `GraphNodeElement` for a node, `WidgetElement` for a widget on a
+// base -- `NodeElement` for a node, `WidgetElement` for a widget on a
 // page -- because a node and a widget differ in what they are attached to and
 // in nothing else.
 //
@@ -15,7 +15,7 @@
 //
 // **Its browser half is a mirror, not a subclass.** How an element looks and
 // is edited lives at the same relative path under `editor/src/elements/`
-// (`<Kind>View.tsx`, `<Kind>Panel.tsx`, `<Kind>.ui.ts`); nothing here imports it,
+// (`<Kind>View.tsx`, `<Kind>Panel.tsx`, `<Kind>Ui.ts`); nothing here imports it,
 // which is what keeps the editor out of a deployed bundle.
 
 import type { RawConfig } from '../graph.ts';

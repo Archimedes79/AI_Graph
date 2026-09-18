@@ -1,8 +1,7 @@
 import type { ExecutionResult, GraphNode } from '@/graph';
 import { describeDataFormat } from '@/elements/nodes/data/dataFormat';
-// Read inside functions only. The registry imports every element and an element
-// imports this module, so touching NODE_UIS at module scope would read a
-// binding that is still being initialised; at call time it is complete.
+// This module reads the element registry, so no element's `…Ui.ts` may import
+// it: that would be a cycle through the registry (see `outputFormat.ts`).
 import { NODE_UIS } from '@/elements/registry';
 
 /**
@@ -33,25 +32,6 @@ const SAMPLE_BUDGET = 1200;
  */
 export function describeNodeOutput(node: GraphNode): string {
   return NODE_UIS[node.node_type]?.describeOutput?.(node) ?? '';
-}
-
-/**
- * The declared output format as a sentence for the model, or nothing when the
- * node emits plain text. Both ai and code generation want it, which is why it
- * is here rather than in either element.
- */
-export function outputFormatContext(config: GraphNode['config']): string {
-  if (!config.output_format || config.output_format === 'text') return '';
-  if (config.output_format === 'example') {
-    // An answer kept from a test run: the shape is shown rather than described.
-    return config.output_example
-      ? `The output must have the same structure as this example:\n${config.output_example}`
-      : '';
-  }
-  const custom = config.output_format === 'custom' && config.output_format_prompt
-    ? ` (${config.output_format_prompt})`
-    : '';
-  return `The function must return output in ${config.output_format} format${custom}.`;
 }
 
 /**
