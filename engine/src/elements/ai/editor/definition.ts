@@ -1,5 +1,5 @@
 import type { GraphNodeElementDefinition } from '@/elements/types';
-import AIEditor from './Editor';
+import AIEditor, { AIAdvanced } from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { outputFormatContext } from '@/elements/shared/generationContext';
 import { AiElement } from '../element.ts';
@@ -24,22 +24,28 @@ export const aiElement: GraphNodeElementDefinition = {
     const format = node.config.output_format;
     if (!format || format === 'text') return 'text';
     const detail = format === 'custom' && node.config.output_format_prompt
-      ? `: ${node.config.output_format_prompt}` : '';
+      ? `: ${node.config.output_format_prompt}`
+      : format === 'example' && node.config.output_example
+        ? `: shaped like ${String(node.config.output_example).slice(0, 400)}` : '';
     return `${format}${detail}`;
   },
   outputContract: 'format',
   ConfigEditor: AIEditor,
+  AdvancedEditor: AIAdvanced,
   create: (id) => ({
     id,
     node_type: 'ai',
     label: 'AI Node',
     description: 'Send a prompt to an AI model',
     position: { x: 0, y: 0 },
+    // One input, one output. There used to be a second, "Context", on every new
+    // node: a port most nodes never wire, that looked like it had to be. A
+    // second input is one click on the node when it is wanted, and the message
+    // template is where it then gets its place.
     inputs: [
-      { id: 'prompt', name: 'Prompt batch', kind: 'input', data_type: 'text', multi: true, required: true, description: 'One prompt per batch item' },
-      { id: 'context', name: 'Context', kind: 'input', data_type: 'any', multi: true, required: false, description: 'Additional context' },
+      { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'text', multi: true, required: false, description: 'What to ask. A list asks once per item.' },
     ],
-    outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'text', multi: true, required: false, description: 'One response per prompt item' }],
+    outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: true, required: false, description: 'The answer. One per item when the prompt was a list.' }],
     config: { ...baseNodeConfig(), system_prompt: 'You are a helpful assistant.' },
   }),
 };

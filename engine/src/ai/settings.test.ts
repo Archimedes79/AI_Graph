@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { candidatePaths, configuredSettings, fromFile } from './settings.ts';
+import { candidatePaths, configuredMcpServers, configuredSettings, fromFile } from './settings.ts';
 
 /**
  * A key belongs in a file, not in a terminal on every run — and not in the
@@ -64,6 +64,52 @@ describe('ai-settings.json', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it('lists the tool servers this machine has, in the shape an MCP README gives', async () => {
+    await withSettings(
+      JSON.stringify({
+        api_keys: { google: 'k' },
+        mcp_servers: {
+          files: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '.'], env: { DEBUG: '1' } },
+          remote: { url: 'https://example.com/mcp', headers: { Authorization: 'Bearer t' } },
+          // Neither a program nor an address: nothing the client could open.
+          half: { args: ['--oops'] },
+          worse: 'npx -y something',
+        },
+      }),
+      async (dir) => {
+        const servers = configuredMcpServers({}, dir);
+        expect(Object.keys(servers)).toEqual(['files', 'remote']);
+        expect(servers.files).toEqual({
+          command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '.'], env: { DEBUG: '1' },
+        });
+        expect(servers.remote).toEqual({ url: 'https://example.com/mcp', headers: { Authorization: 'Bearer t' } });
+      },
+    );
+  });
+
+  it('has no tool servers when the file names none, is broken, or is not there', async () => {
+    await withSettings(JSON.stringify({ ai: { provider: 'google' } }), async (dir) => {
+      expect(configuredMcpServers({}, dir)).toEqual({});
+    });
+    await withSettings('{ "mcp_servers": { "files": ', async (dir) => {
+      expect(configuredMcpServers({}, dir)).toEqual({});
+    });
+    await withSettings('{}', async (dir) => {
+      // Named outright, for the reason given below: the search must not fall
+      // through to this machine's real file, which may well have servers in it.
+      expect(configuredMcpServers({ AI_GRAPH_SETTINGS: join(dir, 'not-there.json') }, dir)).toEqual({});
+    });
+  });
+
+  it('takes no tool server from the environment, unlike everything else here', async () => {
+    // Everything else in this file can be overridden by a variable. A command
+    // line cannot: the settings file is the one place a program to start is named.
+    await withSettings(JSON.stringify({ mcp_servers: { files: { command: 'node' } } }), async (dir) => {
+      const servers = configuredMcpServers({ AI_GRAPH_MCP_SERVERS: '{"evil":{"command":"calc"}}' }, dir);
+      expect(Object.keys(servers)).toEqual(['files']);
+    });
   });
 
   it('uses the named file and only that one, even before it exists', async () => {
