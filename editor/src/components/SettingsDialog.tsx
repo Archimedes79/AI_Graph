@@ -1,4 +1,3 @@
-import React from 'react';
 import { useSettingsStore } from '../store/settingsStore';
 import { useGraphStore } from '../store/graphStore';
 import ProviderModelSelect from '../elements/shared/ProviderModelSelect';

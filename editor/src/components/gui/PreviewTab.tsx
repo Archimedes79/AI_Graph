@@ -1,4 +1,3 @@
-import React from 'react';
 import { GuiSurfacePage, useSurfaceBlocks } from './GuiPage';
 import { DIMMER, LINE, MUTED, SUNKEN } from '../../ui/theme';
 

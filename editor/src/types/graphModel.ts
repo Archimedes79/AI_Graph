@@ -1,93 +1,57 @@
 // The graph as the editor sees it.
 //
-// Written by hand. It was once generated from a Python model, and said so at
-// the top long after that model was gone -- "DO NOT EDIT" over a file that could
-// only be edited. The engine's `graph.ts` is the format's home; this is the
-// editor's view of the same documents: every element's settings in one
-// `NodeConfig`, because a config panel reads `node.config.temperature` and
-// wants a type there. That the engine treats a config as opaque and the editor
-// spells it out is a real difference between the two, not drift -- what must
-// not differ is anything the *graph file* means, which is why the shared parts
-// (`DataType`, the run's result) come from the engine rather than being
-// written down twice.
+// The engine's `graph.ts` is the format's home, and everything the *graph
+// file* means comes from there: ports, edges, node types, block kinds, a run's
+// result. What this adds is one view the engine deliberately does not have:
+// every element's settings spelled out in `NodeConfig`, because a config panel
+// reads `node.config.temperature` and wants a type there, while the engine
+// treats a config as opaque and lets each element read its own.
+//
+// That is the only difference, and it is a narrowing: an editor graph *is* an
+// engine graph (it is sent as one), and an engine graph read back is taken as
+// the editor's view in one place, `utils/api.ts`.
 
-import type { DataType as EngineDataType } from '@engine/graph.ts';
+import type {
+  DataType, ExecutionResult, Graph as EngineGraph, GraphEdge, GraphMetadata as EngineMetadata,
+  GraphNode as EngineNode, NodeResult, NodeType, Port, PortKind, WidgetKind,
+} from '@engine/graph.ts';
 
-export type GuiWidgetKind =
-  'input_picker' | 'text_io' | 'plot_window' | 'image_view' | 'table' | 'text' | 'divider' | 'spacer'
-  | 'select'
-  | 'slider'
-  | 'button'
-  | 'chat';
-export type PortKind = 'input' | 'output';
-export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui';
+export type { DataType, EngineGraph, ExecutionResult, GraphEdge, NodeResult, NodeType, Port, PortKind };
+export type GuiWidgetKind = WidgetKind;
+
 export type AIProvider =
   'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
-/** What a port carries. The engine's list: two lists had already drifted apart. */
-export type DataType = EngineDataType;
-export type ExecutionStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'partial' | 'cancelled';
 
-/**
- * Top-level graph document – this is the Graph DSL schema.
- * Serialised to / from JSON for storage, execution, and deployment.
- */
+/** A node's state on the canvas: what a run said about it, or that one is under way. */
+export type ExecutionStatus = NodeResult['status'] | ExecutionResult['status'] | 'pending' | 'running';
+
 export interface Graph {
-  edges: GraphEdge[];
   metadata: GraphMetadata;
   nodes: GraphNode[];
+  edges: GraphEdge[];
 }
-export interface GraphEdge {
-  id: string;
-  source_node_id: string;
-  source_port_id: string;
-  target_node_id: string;
-  target_port_id: string;
-}
-export interface GraphMetadata {
-  ai_defaults: AIDefaults;
-  author: string;
-  created_at?: string | null;
-  description: string;
+
+export interface GraphMetadata extends EngineMetadata {
+  /**
+   * The graph's own answer to "which AI should my `default` AI nodes use?".
+   * The lowest-priority source: the environment, an `ai-settings.json` beside
+   * a deployed tool, or a CLI flag override it at run time.
+   */
+  ai_defaults: { provider: AIProvider; model: string };
   gui_scheme: 'night' | 'paper' | 'office' | 'graphite' | 'anthracite';
-  name: string;
-  tags: string[];
-  /** What starts this graph without being asked: when the tool opens, and on a clock. */
-  triggers?: { on_start?: boolean; every?: string };
-  updated_at?: string | null;
-  version: string;
 }
-/**
- * The graph's own answer to "which AI should my `default` AI nodes use?",
- * set once in the editor instead of once per node. It is the lowest-priority
- * source: an AI_GRAPH_AI_PROVIDER environment variable, an ai-settings.json
- * beside the deployed tool, or a CLI flag all override it at run time, which
- * is how the same shipped graph runs against a local model on one machine
- * and a hosted endpoint on another. See app.services.ai_settings.
- */
-export interface AIDefaults {
-  model: string;
-  provider:
-    'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
-}
-export interface GraphNode {
+
+export interface GraphNode extends Omit<EngineNode, 'config'> {
   config: NodeConfig;
-  description: string;
-  height?: number | null;
-  id: string;
-  inputs: Port[];
-  label: string;
-  node_type: NodeType;
-  outputs: Port[];
-  position: NodePosition;
-  width?: number | null;
 }
+
 /**
- * Extra configuration that depends on node_type.
+ * Every element's settings, in one type. A type, not an interface, so an
+ * editor node is assignable to the engine's `Record<string, unknown>` config.
  */
-export interface NodeConfig {
+export type NodeConfig = {
   ai_model: string;
-  ai_provider:
-    'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
+  ai_provider: AIProvider;
   batch_concurrency: number;
   batch_mode: 'per_item' | 'whole_list';
   catch_errors?: boolean;
@@ -122,14 +86,14 @@ export interface NodeConfig {
   temperature: number;
   value?: string | null;
   write_mode: 'none' | 'file' | 'directory' | 'window';
-}
+};
+
 /**
- * One element inside a GUI node. Ports are never edited by hand: they are
- * always regenerated from this list (see `sync_gui_node_ports`), so a
- * widget's `id` must stay stable once assigned -- it is the only thing
- * that keeps existing edges attached across GUI edits.
+ * One block on a page. Ports are never edited by hand: they are derived from
+ * this list by the engine (`GuiElement.derivedPorts`), so a block's `id` must
+ * stay stable once assigned -- it is what keeps edges attached across edits.
  */
-export interface GuiWidget {
+export type GuiWidget = {
   code?: string;
   code_file: string;
   code_prompt: string;
@@ -161,58 +125,4 @@ export interface GuiWidget {
   step?: number;
   value?: unknown;
   w?: number;
-}
-export interface Port {
-  data_type: DataType;
-  debug_directory?: string | null;
-  description: string;
-  format?: string | null;
-  id: string;
-  kind: PortKind;
-  multi: boolean;
-  name: string;
-  required: boolean;
-}
-export interface NodePosition {
-  x: number;
-  y: number;
-}
-export interface ExecutionResult {
-  duration_ms?: number | null;
-  error?: string | null;
-  outputs: {
-    [k: string]: unknown;
-  };
-  graph_id?: string | null;
-  node_results: NodeResult[];
-  /** What memory nodes kept from this run, to be replayed into the editor's copy of the graph. */
-  memory?: { node_id: string; port_id: string; value: unknown }[];
-  status: ExecutionStatus;
-}
-export interface NodeResult {
-  duration_ms?: number | null;
-  error?: string | null;
-  inputs: {
-    [k: string]: unknown;
-  };
-  node_id: string;
-  outputs: {
-    [k: string]: unknown;
-  };
-  /** What a page node shows, per block id: what arrived, through the block's own transform. */
-  display?: { [k: string]: unknown };
-  /** Why a node was left alone: nothing arrived that it needs, or the run was stopped. */
-  messages?: string[];
-  status: ExecutionStatus;
-}
-/**
- * A file/directory path that must be supplied before the graph can run.
- */
-export interface RuntimeRequirement {
-  current_value: string;
-  direction: 'input' | 'output';
-  kind: 'text' | 'file' | 'directory';
-  label: string;
-  node_id: string;
-  widget_id?: string | null;
-}
+};

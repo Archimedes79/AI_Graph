@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ALL_ENTRIES, matchesEntry, type PaletteEntry } from './DesignerPalette';
 import { ACCENT, ACCENT_FILL, DIMMER, FIELD, LINE, SURFACE, TEXT } from '../../ui/theme';
 

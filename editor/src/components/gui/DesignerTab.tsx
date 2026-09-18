@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { GraphNode, GuiWidget, GuiWidgetKind } from '../../types/graph';
 import { useGraphStore } from '../../store/graphStore';
 import { syncGuiNodePorts } from '../../utils/guiWidgets';

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { GuiWidget } from '../types/graph';
 import { GUI_WIDGET_KIND_LABELS, guiWidgetPorts, widgetFiresRun } from '../utils/guiWidgets';
 import { useGenerate } from '../elements/shared/useGenerate';
@@ -13,7 +13,7 @@ import { GUI_GRID_COLUMNS } from './gui/layout';
 import { describeScheme, schemeVars } from './gui/scheme';
 import TryItPanel from '../elements/shared/TryItPanel';
 import { sampleFor } from '../elements/shared/tryValues';
-import { fetchNodeInputs, runBlock } from '../utils/api';
+import { call } from '../utils/api';
 import { TONES, TONE_LABELS, type Tone } from './gui/tone';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, WELL } from '../ui/theme';
 
@@ -285,11 +285,11 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
             observed={lastRunWidgetInput(nodeId, widget.id, executionResult) ?? {}}
             context={describeScheme(useGraphStore.getState().metadata.gui_scheme)}
             onFetch={async () => {
-              const got = await fetchNodeInputs(useGraphStore.getState().exportGraph(), nodeId);
+              const got = await call('nodeInputs', { ...useGraphStore.getState().exportGraph(), node_id: nodeId });
               const arrived = got.inputs[`${widget.id}_in`];
               return { inputs: arrived === undefined ? {} : { value: arrived }, error: got.error };
             }}
-            onTest={async (values) => runBlock(widget, values.value)}
+            onTest={async (values) => call('runBlock', { widget, value: values.value })}
             renderResult={(result) => (
               <div
                 className="mt-1 rounded overflow-hidden"

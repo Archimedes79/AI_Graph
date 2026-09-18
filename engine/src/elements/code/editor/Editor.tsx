@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GraphNode } from '@/types/graph';
 import AuthoredBodyEditor from '@/elements/shared/AuthoredBodyEditor';
 import BatchAndFileInputOptions from '@/elements/shared/BatchAndFileInputOptions';
@@ -18,7 +17,7 @@ interface CodeEditorProps {
 }
 
 export default function CodeEditor({
-  node, setConfig, generation, fields, generating, message, onGenerate,
+  node, generation, fields, generating, message, onGenerate,
   contextFile, onContextFileChange,
 }: CodeEditorProps) {
   return (

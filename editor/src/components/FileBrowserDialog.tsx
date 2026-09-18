@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Modal from './Modal';
-import { browseDirectory } from '../utils/api';
+import { call } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import {
   ACCENT_TEXT, DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT,
@@ -57,7 +57,7 @@ export default function FileBrowserDialog({
     try {
       // The filter applies to files only; in directory mode it would just hide
       // the folders the user is trying to navigate through.
-      const data = await browseDirectory(target, mode === 'file' ? extensions : '');
+      const data = await call('browse', { path: target, extensions: mode === 'file' ? extensions ?? '' : '' });
       setPath(data.path);
       setParent(data.parent);
       setEntries(data.entries);

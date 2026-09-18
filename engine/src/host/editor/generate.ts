@@ -23,62 +23,9 @@ import type { Generation } from '../../generation.ts';
 import { renderSkeleton } from './skeleton.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { detectFormat } from './files.ts';
-
-// ---------------------------------------------------------------------------
-// What comes in and what goes out -- the shapes the editor already reads
-// ---------------------------------------------------------------------------
-
-export interface GenerateRequest {
-  /** A node type or block kind; the element's own `Generation` decides the rest. */
-  element?: string;
-  /** For the one generation that belongs to no element: an output-format description. */
-  kind?: string;
-  description: string;
-  context?: string;
-  /** A file whose content is appended to the context, read here. */
-  context_file?: string;
-  inputs?: string[];
-  outputs?: string[];
-  /** Real port values from the last run; enables the verify-and-repair pass. */
-  sample_inputs?: Record<string, unknown> | null;
-  input_sources?: Record<string, string>;
-}
-
-export interface AICall {
-  provider: string;
-  model: string;
-  system: string;
-  prompt: string;
-  sent_chars: number;
-  reply: string | null;
-  reply_chars: number;
-  seconds: number;
-  error: string | null;
-}
-
-export interface ProbeReport {
-  status: 'skipped' | 'ok' | 'repaired' | 'failed';
-  attempts: number;
-  error: string;
-  missing_outputs: string[];
-  /** What the element itself found wrong with a result that ran: a chart drawn off its frame, NaN in the markup. */
-  problems?: string[];
-  output_preview: string;
-  /** What the code actually returned, whole -- the next node's sample, not a preview of it. */
-  outputs?: Record<string, unknown>;
-}
-
-export interface GenerateResponse {
-  result: string;
-  explanation: string;
-  probe: ProbeReport;
-  calls: AICall[];
-}
+import type { AICall, GenerateRequest, GenerateResponse, ProbeReport, Target } from '../api.ts';
 
 export class GenerationRefused extends Error {}
-
-/** The model to ask, already resolved. */
-export interface Target { provider: string; model: string }
 
 // ---------------------------------------------------------------------------
 // The transcript

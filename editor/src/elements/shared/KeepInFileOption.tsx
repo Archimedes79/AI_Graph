@@ -1,4 +1,3 @@
-import React from 'react';
 import { suggestedFileName } from './authoredFileName';
 import { DIMMER, MUTED } from '../../ui/theme';
 

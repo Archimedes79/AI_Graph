@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { generate, type AICall } from './generate.ts';
+import { generate } from './generate.ts';
+import type { AICall } from '../api.ts';
 import { registry } from '../../registry.ts';
 import type { AiService, CodeRunner } from '../../element.ts';
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { ACCENT, DIM, DIMMER, HOVER, LINE, MUTED, RAISE } from '../ui/theme';
 import { PLOT_VIEW } from '@engine/elements/gui/children/plot_window/element.ts';
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ReactFlowProvider } from 'reactflow';
 
 import Toolbar from './components/Toolbar';
@@ -18,7 +18,7 @@ import FileBrowserDialog from './components/FileBrowserDialog';
 
 import { useGraphStore } from './store/graphStore';
 import { NODE_ELEMENTS } from './elements/registry';
-import { loadGraphFile, reloadNodeFiles, saveGraphFile } from './utils/api';
+import { call } from './utils/api';
 import { externalEditsPossible } from './utils/externalEdits';
 import { errorText } from './utils/errorText';
 import type { NodeType, Graph } from './types/graph';
@@ -216,7 +216,7 @@ export default function App() {
     if (!confirmDiscard('Reload the node files?')) return;
     setSaveStatus('Reloading…');
     try {
-      const result = await reloadNodeFiles(currentFilePath);
+      const result = await call('reloadGraph', { path: currentFilePath });
       loadGraph(result.graph);
       setCurrentFilePath(result.path);
       setSaveStatus('✅ Node files reloaded');
@@ -237,7 +237,7 @@ export default function App() {
         return;
       }
       try {
-        const result = await reloadNodeFiles(currentFilePath);
+        const result = await call('reloadGraph', { path: currentFilePath });
         loadGraph(result.graph);
         setCurrentFilePath(result.path);
         setSaveStatus('↻ Node files reloaded from disk');
@@ -256,7 +256,7 @@ export default function App() {
     }
     setSaveStatus('Saving\u2026');
     try {
-      const result = await saveGraphFile(currentFilePath, exportGraph());
+      const result = await call('saveGraph', { path: currentFilePath, graph: exportGraph() });
       if (result.graph) syncNodeFileNames(result.graph);
       markSaved();
       setSaveStatus(`\u2705 Saved to ${currentFilePath}`);
@@ -309,11 +309,11 @@ export default function App() {
     setFilePrompt({ ...filePrompt, busy: true, error: '' });
     try {
       if (filePrompt.mode === 'load') {
-        const result = await loadGraphFile(path);
+        const result = await call('openGraph', { path });
         loadGraph(result.graph);
         setCurrentFilePath(result.path);
       } else {
-        const result = await saveGraphFile(path, exportGraph());
+        const result = await call('saveGraph', { path, graph: exportGraph() });
         setCurrentFilePath(result.path);
         if (result.graph) syncNodeFileNames(result.graph);
         markSaved();

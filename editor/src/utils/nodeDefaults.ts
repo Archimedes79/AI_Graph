@@ -1,5 +1,4 @@
 import type { GraphNode, NodeType } from '../types/graph';
-import { baseNodeConfig } from '../elements/shared/baseNodeConfig';
 import { NODE_ELEMENTS } from '../elements/registry';
 
 export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {

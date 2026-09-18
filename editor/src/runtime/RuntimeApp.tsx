@@ -1,14 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
 import { GuiSurfacePage } from '../components/gui/GuiPage';
 import { useSchemeOnRoot } from '../components/gui/useScheme';
 import GraphWindows from '../components/GraphWindows';
 import RuntimeAISettings from './RuntimeAISettings';
-import { getRuntimeGraph, getRuntimeRequirements, getSchedule, type RunTrigger, type ScheduleState } from '../utils/api';
+import { call, type Requirement, type RunTrigger, type ScheduleState } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { NODE_ELEMENTS } from '../elements/registry';
-import type { Graph, RuntimeRequirement } from '../types/graph';
 import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
 /**
@@ -40,10 +39,10 @@ export default function RuntimeApp() {
   const [loadError, setLoadError] = useState('');
   const [ready, setReady] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [pendingRequirements, setPendingRequirements] = useState<RuntimeRequirement[] | null>(null);
+  const [pendingRequirements, setPendingRequirements] = useState<Requirement[] | null>(null);
 
   useEffect(() => {
-    getRuntimeGraph()
+    call('graph')
       .then((graph) => {
         loadGraph(graph);
         setReady(true);
@@ -63,7 +62,7 @@ export default function RuntimeApp() {
   const handleRun = async (trigger: RunTrigger | null = null) => {
     const graph = exportGraph();
     try {
-      const requirements = await getRuntimeRequirements(graph);
+      const requirements = await call('requirements', graph);
       if (requirements.length > 0) {
         pendingTrigger.current = trigger;
         setPendingRequirements(requirements);
@@ -89,7 +88,7 @@ export default function RuntimeApp() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const look = async () => {
       try {
-        const state = await getSchedule();
+        const state = await call('schedule');
         if (!alive) return;
         setSchedule(state);
         if (state.result && state.runs !== seenRound.current && !useGraphStore.getState().isExecuting) {

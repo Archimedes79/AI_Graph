@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import Markdown from '../markdown';
 import { DIMMER, MUTED, TEXT } from '../../../ui/theme';

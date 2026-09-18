@@ -31,8 +31,7 @@ const edgeOptions = {
 
 function getConnectionRejectionReason(
   params: Connection,
-  rfNodes: ReturnType<typeof useGraphStore.getState>['rfNodes'],
-  rfEdges: ReturnType<typeof useGraphStore.getState>['rfEdges']
+  rfNodes: ReturnType<typeof useGraphStore.getState>['rfNodes']
 ) {
   if (!params.source || !params.target) return null;
 
@@ -67,7 +66,7 @@ export default function GraphCanvas({ active = true }: { active?: boolean }) {
 
   const onConnect = useCallback(
     (params: Connection) => {
-      const rejectionReason = getConnectionRejectionReason(params, rfNodes, rfEdges);
+      const rejectionReason = getConnectionRejectionReason(params, rfNodes);
       if (rejectionReason) {
         window.alert(rejectionReason);
         return;

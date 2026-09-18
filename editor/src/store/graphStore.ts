@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
-import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType, GuiWidgetKind } from '../types/graph';
+import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType } from '../types/graph';
 import { nodeTypeDefaults } from '../utils/nodeDefaults';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
-import { cancelRun, getRunSnapshot, startRun, type RunTrigger } from '../utils/api';
+import { call, type RunTrigger } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import { ACCENT } from '../ui/theme';
 import { delivered } from '../utils/executionStatus';
@@ -616,7 +616,7 @@ export const useGraphStore = create<GraphStore>()(
         // blocking request: that is what lets the toolbar name the node in
         // flight and offer Stop. A run against a slow local model is otherwise
         // ten minutes of a spinner with no way out but reloading the page.
-        const { run_id: runId, total } = await startRun(graph, trigger);
+        const { run_id: runId, total } = await call('startRun', trigger ? { ...graph, trigger } : graph);
         set((state) => {
           state.currentRunId = runId;
           state.runProgress = {
@@ -624,10 +624,10 @@ export const useGraphStore = create<GraphStore>()(
           };
         });
 
-        let snapshot = await getRunSnapshot(runId);
+        let snapshot = await call('run', { id: runId });
         while (!snapshot.done) {
           await new Promise((resolve) => setTimeout(resolve, RUN_POLL_INTERVAL_MS));
-          snapshot = await getRunSnapshot(runId);
+          snapshot = await call('run', { id: runId });
           set((state) => {
             state.runProgress = {
               completed: snapshot.completed,
@@ -688,7 +688,7 @@ export const useGraphStore = create<GraphStore>()(
       const runId = get().currentRunId;
       if (!runId) return;
       try {
-        await cancelRun(runId);
+        await call('stopRun', { id: runId });
       } catch {
         // The run may have finished between the click and the request; the
         // polling loop reports the real outcome either way.

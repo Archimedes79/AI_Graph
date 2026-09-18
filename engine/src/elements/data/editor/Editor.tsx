@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { GraphNode } from '@/types/graph';
 import AuthoredBodyEditor from '@/elements/shared/AuthoredBodyEditor';
 import type { ElementGeneration, FieldAccess } from '@/elements/shared/generation';
@@ -13,7 +13,6 @@ interface DataEditorProps {
   message?: string;
   onGenerate: () => void;
   applyDataFormat: (format: GraphNode['config']['data_format']) => void;
-  setDataDebugDirectory: (path: string) => void;
   contextFile: string;
   onContextFileChange: (path: string) => void;
 }
@@ -26,11 +25,10 @@ function displayValue(value: unknown): string {
 
 export default function DataEditor({
   node, setConfig, generation, fields, generating, message, onGenerate,
-  applyDataFormat, setDataDebugDirectory, contextFile, onContextFileChange,
+  applyDataFormat, contextFile, onContextFileChange,
 }: DataEditorProps) {
   const [content, setContent] = useState(() => displayValue(node.config.data_value));
   const [contentError, setContentError] = useState('');
-  const debugDirectory = node.outputs.find((port) => port.id === 'output')?.debug_directory ?? '';
   const structured = node.config.data_format !== 'text';
 
   useEffect(() => setContent(displayValue(node.config.data_value)), [node.config.data_value]);
@@ -87,17 +85,6 @@ export default function DataEditor({
           spellCheck={false}
         />
         {contentError && <p className="text-xs mt-1" style={{ color: DANGER_SOFT }}>{contentError}</p>}
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Temporary debug directory</label>
-        <input
-          className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-          style={FIELD}
-          value={debugDirectory}
-          onChange={(event) => setDataDebugDirectory(event.target.value)}
-          placeholder="Leave empty to disable runtime snapshots"
-        />
       </div>
     </>
   );

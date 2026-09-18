@@ -141,11 +141,6 @@ export function applyMemory(
   }
 }
 
-/** A port a widget contributes, named after the widget so ids stay unique. */
-export function widgetPortId(widgetId: string, kind: PortKind): string {
-  return `${widgetId}_${kind === 'input' ? 'in' : 'out'}`;
-}
-
 const DEFAULT_METADATA: GraphMetadata = {
   name: 'Untitled Graph',
   version: '1.0.0',

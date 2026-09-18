@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { GraphNode, Port } from '../types/graph';
 import { useGraphStore } from '../store/graphStore';
 import { markExternalEdit } from '../utils/externalEdits';
@@ -15,9 +15,9 @@ import { sampleFor } from '../elements/shared/tryValues';
 import GenerationTranscript, { GenerationReport } from '../elements/shared/GenerationTranscript';
 import WidgetOutputSummary from '@engine/elements/gui/editor/WidgetOutputSummary';
 import { connectedOutputDataNodes } from '@engine/elements/data/editor/definition';
-import { openNodeFile, saveGraphFile } from '../utils/api';
+import { call } from '../utils/api';
 import { errorText } from '../utils/errorText';
-import { ACCENT, ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT } from '../ui/theme';
+import { ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, TEXT } from '../ui/theme';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -98,11 +98,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       setExternalStatus('Saving, then opening…');
       updateNode(nodeId, node!);
       const after = useGraphStore.getState();
-      const saved = await saveGraphFile(state.currentFilePath, after.exportGraph());
+      const saved = await call('saveGraph', { path: state.currentFilePath, graph: after.exportGraph() });
       if (saved.graph) after.syncNodeFileNames(saved.graph);
       after.markSaved();
       const written = saved.graph?.nodes.find((n) => n.id === nodeId)?.config.code_file || node!.config.code_file;
-      const opened = await openNodeFile(state.currentFilePath, String(written));
+      const opened = await call('openExternal', { graph_path: state.currentFilePath, file: String(written) });
       markExternalEdit();
       setExternalStatus(`Opened in ${opened.with}: ${opened.path}. Save there and come back — it is reloaded when this window gets the focus.`);
     } catch (error) {
@@ -185,13 +185,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       inputs: previous.inputs.map((port) => ({ ...port, data_type: dataType, format: portFormat })),
       outputs: previous.outputs.map((port) => ({ ...port, data_type: dataType, format: portFormat })),
       config: { ...previous.config, data_format: format },
-    } : previous);
-  };
-
-  const setDataDebugDirectory = (path: string) => {
-    setNode((previous) => previous ? {
-      ...previous,
-      outputs: previous.outputs.map((port) => port.id === 'output' ? { ...port, debug_directory: path || undefined } : port),
     } : previous);
   };
 
@@ -291,7 +284,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 canGenerate={canGenerate}
                 applyMode={applyInputMode}
                 applyDataFormat={applyDataFormat}
-                setDataDebugDirectory={setDataDebugDirectory}
                 applyWidgets={applyWidgets}
                 contextFile={node.config.example_file ?? ''}
                 onContextFileChange={(path: string) => setConfig('example_file', path)}

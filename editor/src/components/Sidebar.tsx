@@ -1,4 +1,3 @@
-import React from 'react';
 import type { NodeType } from '../types/graph';
 import { NODE_TYPE_DESCRIPTIONS, NODE_TYPE_ICON, NODE_TYPE_LABELS } from '../utils/nodeDefaults';
 import { ACCENT, DIMMER, LINE, SURFACE, TEXT } from '../ui/theme';

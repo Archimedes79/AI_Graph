@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import type { GraphNode } from '../../types/graph';
 import { useGraphStore } from '../../store/graphStore';
-import { fetchNodeInputs, runNode } from '../../utils/api';
+import { call } from '../../utils/api';
 import { connectedFormatContext, lastRunContext, lastRunInputs } from './generationContext';
 import TryItPanel, { type TryResult } from './TryItPanel';
 
@@ -42,8 +42,8 @@ export default function NodeTryIt({ node, title, children, renderResult, testLab
       title={title}
       ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
       observed={observed}
-      onFetch={() => fetchNodeInputs(graphWithDraft(), node.id)}
-      onTest={(values) => runNode(graphWithDraft(), node.id, values)}
+      onFetch={() => call('nodeInputs', { ...graphWithDraft(), node_id: node.id })}
+      onTest={(values) => call('runNode', { ...graphWithDraft(), node_id: node.id, inputs: values })}
       renderResult={renderResult}
       context={context}
       testLabel={testLabel}

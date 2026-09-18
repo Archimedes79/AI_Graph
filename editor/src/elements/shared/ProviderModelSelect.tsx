@@ -1,6 +1,6 @@
-import React, { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { AIProvider } from '../../types/graph';
-import { getProviderStatus, type ProviderStatus } from '../../utils/api';
+import { call, type ProviderStatus } from '../../utils/api';
 import { LINE, MUTED, SUNKEN, TEXT } from '../../ui/theme';
 
 // Single source of truth for the provider dropdown -- previously duplicated
@@ -44,7 +44,7 @@ const AI_PROVIDER_COST: Record<AIProvider, string> = {
 // editor, not per component instance.
 let statusPromise: Promise<ProviderStatus | null> | null = null;
 const fetchStatus = () => {
-  if (!statusPromise) statusPromise = getProviderStatus().catch(() => null);
+  if (!statusPromise) statusPromise = call('providers').catch(() => null);
   return statusPromise;
 };
 

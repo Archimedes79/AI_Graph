@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import { MUTED } from '../../../ui/theme';
 

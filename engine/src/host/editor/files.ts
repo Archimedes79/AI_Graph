@@ -13,8 +13,7 @@ import { homedir, platform } from 'node:os';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
-export interface BrowseEntry { name: string; path: string; is_dir: boolean }
-export interface BrowsePage { path: string; parent: string | null; entries: BrowseEntry[]; roots: string[] }
+import type { BrowseEntry, BrowsePage } from '../api.ts';
 
 export class NotFound extends Error {}
 

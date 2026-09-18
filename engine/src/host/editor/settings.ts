@@ -15,6 +15,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { candidatePaths, fromFile, readSettingsFile, type SettingsFile } from '../../ai/settings.ts';
 import { DEFAULT_SETTINGS, settingsFromEnv } from '../../ai/providers.ts';
+import type { ProviderStatus, SettingsPatch, SettingsStatus, Target } from '../api.ts';
 
 type Env = Record<string, string | undefined>;
 
@@ -54,14 +55,6 @@ export function settingsPath(cwd = process.cwd(), env: Env = process.env): strin
   return candidates.find((path) => existsSync(path)) ?? candidates[0];
 }
 
-export interface SettingsStatus {
-  settings_file: string;
-  settings_file_exists: boolean;
-  endpoint_keys: Record<string, string>;
-  endpoints: Record<string, string>;
-  credentials: Record<string, { configured: boolean; source: string }>;
-}
-
 /** What the dialog shows: endpoints, and whether each credential is set — never the credential. */
 export function status(cwd = process.cwd(), env: Env = process.env): SettingsStatus {
   const path = settingsPath(cwd, env);
@@ -85,15 +78,6 @@ export function status(cwd = process.cwd(), env: Env = process.env): SettingsSta
     endpoints,
     credentials,
   };
-}
-
-export interface SettingsPatch {
-  endpoints?: Record<string, string>;
-  api_keys?: Record<string, string>;
-  /** Providers whose stored key is to be removed — distinct from "left blank". */
-  clear_keys?: string[];
-  ai?: { provider?: string; model?: string; force?: boolean };
-  codegen?: { provider?: string; model?: string };
 }
 
 /**
@@ -184,16 +168,11 @@ export async function probeLocal(
   return models;
 }
 
-export function forgetProbes(): void {
-  probed.clear();
-}
-
 async function defaultModelFor(provider: string, options: { cwd: string; env: Env }): Promise<string> {
   const served = await probeLocal(provider, options);
   return served?.[0] ?? DEFAULT_MODELS[provider] ?? '';
 }
 
-export interface Target { provider: string; model: string }
 
 /**
  * What a run calls when a node names nothing: the environment, then the file,
@@ -237,12 +216,6 @@ export async function generationTarget(
 
   const fallback = await runtimeTarget(cwd, env);
   return { provider: fallback.provider, model: chosenModel || fallback.model };
-}
-
-export interface ProviderStatus {
-  local: Record<string, { reachable: boolean; models: string[] }>;
-  runtime_target: Target;
-  gen_target: Target;
 }
 
 /** Which providers are usable right now, and where the two targets resolve to. */

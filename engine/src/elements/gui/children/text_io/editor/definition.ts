@@ -1,4 +1,3 @@
-import type { GuiWidget, Port } from '@/types/graph';
 import type { GuiWidgetElementDefinition } from '@/elements/types';
 import TextIoWidget from '@/components/gui/widgets/TextIoWidget';
 import TextIoEditor from './Editor';

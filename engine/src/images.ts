@@ -53,12 +53,3 @@ export async function imageDataUrl(path: string, files: FileService): Promise<st
   }
   return `data:${mediaType};base64,${base64}`;
 }
-
-/** `data:image/png;base64,AAAA` -> `["image/png", "AAAA"]`, for providers that want the parts. */
-export function splitDataUrl(url: string): [string, string] {
-  const comma = url.indexOf(',');
-  const header = comma === -1 ? url : url.slice(0, comma);
-  const payload = comma === -1 ? '' : url.slice(comma + 1);
-  const mediaType = header.startsWith('data:') ? header.slice(5).split(';')[0] : '';
-  return [mediaType || 'image/png', payload];
-}

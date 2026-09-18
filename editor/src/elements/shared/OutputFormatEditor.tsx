@@ -1,6 +1,5 @@
-import React from 'react';
 import type { GraphNode } from '../../types/graph';
-import { generate } from '../../utils/api';
+import { call } from '../../utils/api';
 import { genAI } from '../../store/settingsStore';
 import { useGenerate } from './useGenerate';
 import GenerationTranscript, { GenerationReport } from './GenerationTranscript';
@@ -53,7 +52,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
       : 'Please describe the desired format, or fill in the node description, first.',
     pending: 'Generating output format…',
     success: '✅ Format generated!',
-    run: () => generate({
+    run: () => call('generate', {
       kind: 'output_format',
       description: node.config.output_format_prompt || node.description,
       context_file: node.config.example_file,

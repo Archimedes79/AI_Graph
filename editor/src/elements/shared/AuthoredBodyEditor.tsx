@@ -51,7 +51,6 @@ export default function AuthoredBodyEditor({
   const review = useGenerationReview();
   const reviewing = generating || review.pending;
   const field = onSurface ? FIELD_ON_SURFACE : FIELD;
-  const mono = generation.mono;
 
   return (
     <>

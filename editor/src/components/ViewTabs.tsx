@@ -1,4 +1,3 @@
-import React from 'react';
 import { useGraphStore } from '../store/graphStore';
 import { NODE_ELEMENTS } from '../elements/registry';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE } from '../ui/theme';

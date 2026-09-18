@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { GraphNode, GuiWidget, GuiWidgetKind, NodeType, Port } from '../types/graph';
+import type { GraphNode, GuiWidget, GuiWidgetKind, NodeType } from '../types/graph';
 import type { GuiWidgetRuntimeProps } from '../components/gui/widgetProps';
 import type { ElementGeneration } from './shared/generation';
 

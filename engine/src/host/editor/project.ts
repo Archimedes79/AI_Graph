@@ -414,7 +414,4 @@ export async function save(graphPath: string, graph: Graph): Promise<Graph> {
   return graph;
 }
 
-/** Re-read the node files for an open graph: the case the conflict check exists for. */
-export const reloadNodes = load;
-
 export type { GraphNode };

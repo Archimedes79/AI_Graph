@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Server } from 'node:http';
 import { serve } from './serve.ts';
+import { API, pathFor } from './api.ts';
 
 /**
  * The endpoints a deployed page calls, and the two rules about them.
  *
- * The shapes are not this server's to choose: `RunSnapshot` in the page's own
- * client declares them, and a snapshot missing `done` looks to the page exactly
- * like a run that never finishes — which is how it first behaved. Reading the
- * contract rather than inventing it is the whole lesson of this port.
+ * The shapes are not this server's to choose: `api.ts` declares them for both
+ * ends, and a snapshot missing `done` looks to the page exactly like a run that
+ * never finishes — which is how it first behaved.
  *
  * The second rule is what is *absent*. A deployed tool must not offer code
  * generation or graph editing; those routes are not "not implemented yet", they
@@ -154,11 +154,22 @@ describe('the engine as the front door of the editor', () => {
     expect(Array.isArray(requirements)).toBe(true);
     const settings = await asJson(await fetch(`${url}/api/ai/settings`));
     expect(settings.credentials).toBeTruthy();
-    const authored = await (await fetch(`${url}/api/elements/authored`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
-    })).json();
-    expect(Array.isArray(authored)).toBe(true);
   });
+
+  // That the editor serves every route is not tested by calling them -- some
+  // write settings or ask a model -- but by starting it: a server with a route
+  // and no handler refuses to start, and `editor()` above started.
+  it('serves a deployed tool its own routes of the contract, and none of the editor\'s', async () => {
+    const { url } = await serveGraph();
+    for (const [name, route] of Object.entries(API)) {
+      const { path } = pathFor(name as keyof typeof API, { id: 'none' });
+      const init = { method: route.method, headers: { 'Content-Type': 'application/json' }, body: route.method === 'GET' ? undefined : '{}' };
+      // Any answer but "no such route" means a handler: its own refusals (a run that is not there) are its business.
+      const detail = (await asJson(await fetch(`${url}${path}`, init))).detail;
+      if (route.for === 'editor') expect(detail, name).toBe('Not part of this server.');
+      else expect(detail, name).not.toBe('Not part of this server.');
+    }
+  }, 60_000);
 
   it('still refuses what nothing serves, rather than guessing', async () => {
     const url = await editor();

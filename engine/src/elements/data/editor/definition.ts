@@ -10,26 +10,6 @@ export function describeDataFormat(node: GraphNode): string {
   return `${node.config.data_format}${details ? `: ${details}` : ''}`;
 }
 
-export function connectedDataFormatContext(
-  nodeId: string,
-  nodes: GraphNode[],
-  edges: Array<{ source: string; target: string }>,
-): string {
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const contracts: string[] = [];
-  for (const edge of edges) {
-    if (edge.target === nodeId) {
-      const source = nodeById.get(edge.source);
-      if (source?.node_type === 'data') contracts.push(`Source data format from "${source.label}": ${describeDataFormat(source)}`);
-    }
-    if (edge.source === nodeId) {
-      const target = nodeById.get(edge.target);
-      if (target?.node_type === 'data') contracts.push(`Target data format required by "${target.label}": ${describeDataFormat(target)}`);
-    }
-  }
-  return contracts.join('\n');
-}
-
 /**
  * The Data node(s) directly wired to *nodeId*'s output, if any.
  *

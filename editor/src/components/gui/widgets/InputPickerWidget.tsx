@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import { valueToText } from '../widgetProps';
 import FileBrowserDialog from '../../FileBrowserDialog';

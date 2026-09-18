@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GraphNode } from '@/types/graph';
 import { GUI_WIDGET_KIND_LABELS } from '@/utils/guiWidgets';
 import { DIMMER, LINE, MUTED, TEXT } from '@/ui/theme';

@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GraphNode } from '@/types/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { lastRunInputs } from '@/elements/shared/generationContext';
