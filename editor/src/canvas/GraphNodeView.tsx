@@ -16,10 +16,6 @@ const statusStyles: Record<string, { color: string; glyph: string }> = {
   pending: { color: '#6b7280', glyph: '·' },
 };
 
-function dataValuePreview(value: unknown): string {
-  return typeof value === 'string' ? value : JSON.stringify(value);
-}
-
 const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const { graphNode, onEdit, onDelete } = data;
   const executionResult = useGraphStore((s) =>
@@ -31,7 +27,8 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const icon = ui?.icon ?? '⬜';
   const status = executionResult ? statusStyles[executionResult.status] : undefined;
   const statusColor = status?.color;
-  const isGuiLike = graphNode.node_type === 'gui';
+  const isGuiLike = ui?.holdsWidgets ?? false;
+  const summary = ui?.canvasSummary?.(graphNode);
 
   const handleEdit = useCallback(() => onEdit(id), [id, onEdit]);
   // The ✕ sits a few pixels from ✏️, deleting is immediate, it silently takes
@@ -281,14 +278,14 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
           </div>
         )}
 
-        {/* Persisted data-node content preview */}
-        {graphNode.node_type === 'data' && graphNode.config.data_value != null && (
+        {/* What the node holds, when it says: a data node's remembered value. */}
+        {summary !== undefined && (
           <div
             className="text-xs truncate mt-1 px-1 py-0.5 rounded font-mono"
             style={{ background: HOVER, color: MUTED }}
-            title={dataValuePreview(graphNode.config.data_value)}
+            title={summary}
           >
-            {dataValuePreview(graphNode.config.data_value).slice(0, 30)}
+            {summary.slice(0, 30)}
           </div>
         )}
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGraphStore } from '@/store/graphStore';
+import { NODE_UIS } from '@/elements/registry';
 import { call } from '@/api/client';
 import Modal from '@/ui/Modal';
 import { errorText } from '@/api/errorText';
@@ -15,6 +16,8 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
   const graphNode = useGraphStore((state) => state.rfNodes.find((node) => node.id === nodeId)?.data.graphNode);
   const updateNode = useGraphStore((state) => state.updateNode);
   const port = graphNode?.inputs.find((item) => item.id === portId) ?? graphNode?.outputs.find((item) => item.id === portId);
+  // Which file a wired port's format is detected from is the node's answer: its own path, or a sample.
+  const asksForSample = graphNode ? NODE_UIS[graphNode.node_type]?.asksForFormatSample ?? false : false;
   const [format, setFormat] = useState(port?.format ?? '');
   const [samplePath, setSamplePath] = useState(graphNode?.config.value ?? '');
   const [detecting, setDetecting] = useState(false);
@@ -88,7 +91,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
             <p className="text-xs mt-1" style={{ color: DIMMER }}>Use a MIME type or format name. JSON and CSV are parsed at block inputs.</p>
             {port.data_type === 'file_path' && (
               <div className="mt-2">
-                {graphNode.node_type === 'input' && (
+                {asksForSample && (
                   <input
                     className="w-full rounded-lg px-3 py-2 text-sm font-mono mb-2"
                     style={FIELD}
@@ -99,7 +102,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
                 )}
                 <button
                   onClick={() => detectFormat(
-                    graphNode.node_type === 'input'
+                    asksForSample
                       ? samplePath
                       : graphNode.config.value ?? ''
                   )}

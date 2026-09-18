@@ -7,7 +7,8 @@ import { useGraphStore } from '@/store/graphStore';
 import { call, downloadBundle, type AICall, type Requirement } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { Graph } from '@/graph';
-import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { applyRuntimeValues } from '@engine/execution/runtimeValues.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { genAI } from '@/store/settingsStore';
 import RequirementsDialog from '@/ui/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
@@ -124,32 +125,16 @@ export default function Toolbar({
   const handlePromptSubmit = (values: Record<string, string>) => {
     if (!pendingGraph) return;
     const graph: Graph = JSON.parse(JSON.stringify(pendingGraph));
+    // Where an answer goes is each element's own business (`applyRuntimeValue`:
+    // an input keeps it as its value, a page in the widget that asked) -- the
+    // engine's code, run here, rather than a second copy of it.
+    applyRuntimeValues(graph, values, engineRegistry);
+    // Persist the answers back into the graph itself, not just into the copy
+    // about to run -- otherwise the picked file or text is forgotten the moment
+    // the run ends and has to be retyped every time.
+    const answered = new Set(Object.keys(values).map((key) => key.split('::')[0]));
     for (const node of graph.nodes) {
-      let changed = false;
-      if (values[node.id] !== undefined) {
-        node.config.value = values[node.id];
-        changed = true;
-      }
-
-      if (node.node_type === 'gui') {
-        let widgetsChanged = false;
-        for (const widget of node.config.gui_widgets) {
-          const key = `${node.id}::${widget.id}`;
-          if (values[key] !== undefined) {
-            widget.value = values[key];
-            widgetsChanged = true;
-          }
-        }
-        // Widget values don't change port shape, but re-sync for consistency
-        // with how every other widget mutation is applied (see applyWidgets).
-        if (widgetsChanged) Object.assign(node, syncGuiNodePorts(node));
-        changed = changed || widgetsChanged;
-      }
-
-      // Persist the answers back into the graph itself, not just into the
-      // copy we're about to run -- otherwise the picked file/text is forgotten
-      // the moment the run ends and has to be retyped every time.
-      if (changed) updateNode(node.id, { config: node.config });
+      if (answered.has(node.id)) updateNode(node.id, { config: node.config });
     }
     setPendingRequirements(null);
     setPendingGraph(null);

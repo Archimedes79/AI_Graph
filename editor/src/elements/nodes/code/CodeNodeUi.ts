@@ -17,6 +17,7 @@ export class CodeNodeUi extends NodeUi {
 
   override readonly ownsDescription = true;
   override readonly outputContract = 'format';
+  override readonly outputFormatHint = 'This declaration is given to ✨ Generate, here and in the neighbours, so the code produces and expects the right shape. It does not check or convert the value at run time.';
   override readonly Panel = lazy(() => import('./CodeNodePanel'));
   override readonly AdvancedPanel = lazy(() => import('./CodeNodeAdvancedPanel'));
   override readonly advancedSummary = 'batching, files, failures';

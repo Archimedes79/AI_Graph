@@ -33,6 +33,23 @@ export class DataNodeUi extends NodeUi {
     return describeDataFormat(node);
   }
 
+  /** What it remembers, the start of it, under its ports. */
+  override canvasSummary(node: GraphNode): string | undefined {
+    const value = node.config.data_value;
+    if (value === null || value === undefined) return undefined;
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  }
+
+  // The wording for a data node is kept verbatim: its format is the one
+  // contract a user writes deliberately, and existing prompts were tuned to it.
+  override describeAsSource(node: GraphNode, emits: string): string {
+    return `Source data format from "${node.label}": ${emits}`;
+  }
+
+  override describeAsTarget(node: GraphNode): string {
+    return `Target data format required by "${node.label}": ${describeDataFormat(node)}`;
+  }
+
   create(id: string): GraphNode {
     return {
       id,

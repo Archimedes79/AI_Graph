@@ -24,6 +24,15 @@ export class InputPickerWidgetUi extends WidgetUi {
     bodyHeight: 100,
   };
 
+  /**
+   * A picker is a source like an input node in file mode, with no input port:
+   * nothing upstream can feed it, and nothing describes what it holds until a
+   * person gives it a default path.
+   */
+  override missingExample(widget: GuiWidget): boolean {
+    return !String(widget.value ?? '').trim();
+  }
+
   protected override defaultSpan() {
     return { w: 6, h: 2 };
   }

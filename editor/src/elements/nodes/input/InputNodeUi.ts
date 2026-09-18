@@ -14,6 +14,7 @@ export class InputNodeUi extends NodeUi {
   readonly color = 'var(--ui-node-input, #1e3a5f)';
 
   override readonly Panel = lazy(() => import('./InputNodePanel'));
+  override readonly asksForFormatSample = true;
 
   override readonly generation: ElementGeneration<GraphNode> = {
     ...fromEngine(new InputNodeElement().generation()),
@@ -24,6 +25,18 @@ export class InputNodeUi extends NodeUi {
     bodyLabel: 'Code window (editable) — run(inputs) receives {"files"} and must return {"files"}',
     bodyHeight: 140,
   };
+
+  /**
+   * A file or a folder is a guess until something describes it: an attached
+   * sample, or a stated contract. Text is its own example, and a fed input
+   * takes its path from upstream.
+   */
+  override missingExample(node: GraphNode, fed: boolean): boolean {
+    if (fed) return false;
+    if (String(node.config.input_mode ?? 'text') === 'text') return false;
+    return !String(node.config.example_file ?? '').trim()
+      && !String(node.config.output_format_prompt ?? '').trim();
+  }
 
   override describeOutput(node: GraphNode): string {
     const mode = node.config.input_mode ?? 'text';
