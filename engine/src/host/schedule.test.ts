@@ -41,25 +41,27 @@ describe('schedule', () => {
 
   it('waits one interval before the first run when nothing says "at start"', async () => {
     let runs = 0;
-    const clock = schedule(() => graphWith({ every: '0.06' }), async () => { runs += 1; return done(); });
+    // Wide margins: the second round is due at 0.6 s, so a busy machine that
+    // checks late still finds exactly one.
+    const clock = schedule(() => graphWith({ every: '0.3' }), async () => { runs += 1; return done(); });
     expect(clock.state().next_at).not.toBeNull();
-    await wait(20);
+    await wait(60);
     expect(runs).toBe(0);
-    await wait(90);
+    await wait(360);
     expect(runs).toBe(1);
     clock.stop();
   });
 
   it('survives a round that could not run, and tries the next', async () => {
     let rounds = 0;
-    const clock = schedule(() => graphWith({ on_start: true, every: '0.03' }), async () => {
+    const clock = schedule(() => graphWith({ on_start: true, every: '0.3' }), async () => {
       rounds += 1;
       if (rounds === 1) throw new Error('Graph contains a cycle');
       return done();
     });
-    await wait(20);
+    await wait(60);
     expect(clock.state()).toMatchObject({ error: 'Graph contains a cycle', result: null });
-    await wait(80);
+    await wait(400);
     clock.stop();
     expect(clock.state()).toMatchObject({ error: null, result: { status: 'success' } });
   });
