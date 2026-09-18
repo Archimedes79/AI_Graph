@@ -17,7 +17,7 @@
 // differs.
 
 import { registry } from '../elements/registry.ts';
-import { parseWidget } from '../elements/nodes/gui/GuiNode.ts';
+import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import type { Graph } from '../graph.ts';
 import type { Logic } from './logic.ts';
 

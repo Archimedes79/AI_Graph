@@ -1,6 +1,6 @@
 import { GUI_WIDGET_KIND_LABELS } from './guiWidgets';
 import { DIMMER, LINE, MUTED, TEXT } from '@/ui/theme';
-import type { NodePanelProps } from '../../ElementUi';
+import type { NodePanelProps } from '../../Ui';
 
 /**
  * A gui node's config panel: what this node contributes to the page, and where

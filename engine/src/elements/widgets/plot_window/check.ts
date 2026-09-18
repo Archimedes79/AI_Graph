@@ -16,7 +16,7 @@
 // **Colour is not checked.** Whoever asked for the chart may have asked for
 // red, and a threshold line *should* be red on every page. The model is told
 // what the page looks like and which colours follow it (see the contract in
-// `PlotWindowWidget.ts`); what it does with that is its answer, not an error.
+// `PlotWindowWidgetElement.ts`); what it does with that is its answer, not an error.
 
 import { PLOT_VIEW } from './view.ts';
 

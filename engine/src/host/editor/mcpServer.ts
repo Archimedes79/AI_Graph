@@ -60,7 +60,7 @@ import { ERROR_PORT, executeGraph, memoryFeedbackEdges, topologicalLevels } from
 import { RUN_PORT, type Trigger } from '../../execution/triggers.ts';
 import { registry } from '../../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';
-import { parseWidget } from '../../elements/nodes/gui/GuiNode.ts';
+import { parseWidget } from '../../elements/nodes/gui/GuiNodeElement.ts';
 import { candidatePaths, configuredMcpServers, configuredSettings, SETTINGS_FILENAME } from '../../ai/settings.ts';
 import { nodeRuntime } from '../node.ts';
 import { generateGraph } from './generate.ts';

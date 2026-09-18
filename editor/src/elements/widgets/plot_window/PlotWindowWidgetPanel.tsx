@@ -1,6 +1,6 @@
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import { DIMMER, LINE, MUTED } from '@/ui/theme';
-import type { WidgetPanelProps } from '../../ElementUi';
+import type { WidgetPanelProps } from '../../Ui';
 
 export default function PlotWindowWidgetPanel({
   widget, generation, fields, onUpdate, expanded, onToggleExpand,

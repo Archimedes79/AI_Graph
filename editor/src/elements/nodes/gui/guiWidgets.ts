@@ -7,7 +7,7 @@
 // producing one the editor never drew.
 import type { GraphNode, GuiWidget, WidgetKind, Port } from '@/graph';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import { parseWidget } from '@engine/elements/nodes/gui/GuiNode.ts';
+import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeElement.ts';
 import { DEFAULT_WIDGET_SPAN } from '@/page/layout';
 import type { Tone } from '@/page/tone';
 
