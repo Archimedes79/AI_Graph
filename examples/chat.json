@@ -103,8 +103,8 @@
       "label": "Assistant",
       "description": "Answer the user's last message as a friendly, concise assistant that remembers the conversation.",
       "position": {
-        "x": 640,
-        "y": 160
+        "x": 840,
+        "y": 150
       },
       "inputs": [
         {

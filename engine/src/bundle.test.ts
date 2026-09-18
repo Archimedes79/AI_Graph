@@ -31,8 +31,11 @@ function run(dir: string, args: string[] = []): Promise<{ code: number; out: str
   });
 }
 
-async function bundleOf(example: string): Promise<string> {
-  const graph = parseGraph(JSON.parse(await readFile(resolve(REPO, 'examples', example), 'utf8')));
+/** A graph with nothing to carry along: the smallest thing a bundle can hold. */
+const MINIMAL = resolve(REPO, 'engine', 'fixtures', 'minimal.json');
+
+async function bundleOf(path: string): Promise<string> {
+  const graph = parseGraph(JSON.parse(await readFile(path, 'utf8')));
   const dir = await mkdtemp(join(tmpdir(), 'ai-graph-bundle-'));
   await writeBundle(graph, dir, { dataFrom: REPO });
   return dir;
@@ -40,7 +43,7 @@ async function bundleOf(example: string): Promise<string> {
 
 describe('a bundle', () => {
   it('runs the graph from somewhere else entirely', async () => {
-    const dir = await bundleOf('population_plotter.json');
+    const dir = await bundleOf(resolve(REPO, 'examples', 'population_plotter.json'));
     try {
       // No `--inputs`: the CSV the picker starts on came along, at the same
       // relative path, so the tool opens on a chart rather than on an error.
@@ -58,7 +61,7 @@ describe('a bundle', () => {
   }, 180_000);
 
   it('carries no tests, because a recipient has nothing to compare against', async () => {
-    const dir = await bundleOf('hello_world.json');
+    const dir = await bundleOf(MINIMAL);
     try {
       const { code, out } = await run(dir);
       expect(code).toBe(0);
@@ -93,7 +96,7 @@ describe('a bundle', () => {
       await readFile(resolve(REPO, 'examples/population_plotter.json'), 'utf8'),
     ));
     const hello = parseGraph(JSON.parse(
-      await readFile(resolve(REPO, 'examples/hello_world.json'), 'utf8'),
+      await readFile(MINIMAL, 'utf8'),
     ));
 
     // The plotter has a page, so a bundle without one would be half of it.
@@ -103,7 +106,7 @@ describe('a bundle', () => {
   });
 
   it('writes a README that names the model settings only when one is asked', async () => {
-    const dir = await bundleOf('population_plotter.json');
+    const dir = await bundleOf(resolve(REPO, 'examples', 'population_plotter.json'));
     try {
       const readme = await readFile(join(dir, 'README.md'), 'utf8');
       expect(readme).toContain('Node 22 or newer');

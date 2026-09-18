@@ -7,6 +7,8 @@ as a tool that runs on their machine: offline, on a local model, with no account
 
 [Quick start](#quick-start) · [Examples](#the-examples) · [Documentation](#documentation) · [Licence](#licence)
 
+<img src="docs/images/hero.png" alt="The AI-Graph editor with the population plotter graph, and the same graph delivered as a tool that draws a bar chart" width="100%">
+
 </div>
 
 ---
@@ -37,8 +39,8 @@ as a tool that runs on their machine: offline, on a local model, with no account
 
 - **Document batch processing** — a directory of files, a Code/AI node that extracts or
   summarises each one, an Output node that writes the results back to disk.
-- **Data transformation pipeline** — Input → Code node (hand-written or AI-generated
-  `run(inputs)`) → Output; see [examples/word_counter.json](examples/word_counter.json).
+- **Charts from your own data** — a CSV, a Code node that draws it, a page with a
+  dropdown and a slider that redraw it; see [examples/population_plotter.json](examples/population_plotter.json).
 - **Local-LLM chat or report tool** — an AI node on Ollama/LM Studio fed by a file input,
   paired with a `gui` node's `text_io` widget: a runnable front-end with zero UI code.
 - **A graph as a standalone tool** — once it works in the editor, 🚀 Deploy hands a
@@ -112,9 +114,6 @@ Nothing leaves the machine unless the graph itself sends it there.
 
 | Graph | What it shows | Needs a model |
 |---|---|---|
-| [hello_world.json](examples/hello_world.json) | The smallest graph there is | no |
-| [text_transform.json](examples/text_transform.json) | Text → a code node → a window: a body's returned keys are its output ports | no |
-| [word_counter.json](examples/word_counter.json) | A folder fans out: one code node runs per file, the next once over all results | no |
 | [population_plotter.json](examples/population_plotter.json) | A page that plots a CSV as bars, columns or a donut; dropdown, slider and file picker each redraw it at once | no |
 | [chat.json](examples/chat.json) | A chatbot in two nodes: a chat block and a model, with a message template laying out history and message | yes |
 | [file_summarizer.json](examples/file_summarizer.json) | Read a file and summarize it; each control on the page starts the graph where it is wired to | yes |
@@ -127,7 +126,7 @@ defaults; its page events run what they are wired to; and it can be **deployed**
 as a bundle into an empty folder and run from there, with the files it starts on carried
 along.
 
-All but the two smallest are written by `node scripts/make-examples.mjs`, so their code is
+They are written by `node scripts/make-examples.mjs`, so their code is
 real JavaScript rather than a hand-escaped JSON string; change them there. The ones that
 need a model name Google's `gemini-flash-lite-latest` on the node itself — put a key in
 `ai-settings.json` (see [docs/ai-providers.md](docs/ai-providers.md)), or pick another
@@ -137,7 +136,7 @@ A path inside a graph resolves against the working directory, so run the example
 the repository root:
 
 ```bash
-node engine/src/main.ts examples/word_counter.json
+node engine/src/main.ts examples/population_plotter.json
 ```
 
 ## Quick start
@@ -158,9 +157,9 @@ beside Ollama. Details in [docs/install.md](docs/install.md).
 **Running a graph needs no editor at all:**
 
 ```bash
-node engine/src/main.ts examples/hello_world.json          # once
-node engine/src/main.ts my.json --serve                    # with its page
-node engine/src/main.ts my.json --bundle ./out             # to hand to someone
+node engine/src/main.ts examples/population_plotter.json  # once
+node engine/src/main.ts my.json --serve                   # with its page
+node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 ```
 
 ## Documentation

@@ -24,8 +24,10 @@ const started: Server[] = [];
 
 afterAll(() => { for (const server of started) server.close(); });
 
-async function serveGraph(name = 'hello_world.json', pageDir?: string) {
-  const graphPath = resolve(REPO, 'examples', name);
+/** A graph with nothing to carry along, so what is tested is the server. */
+const MINIMAL = resolve(REPO, 'engine', 'fixtures', 'minimal.json');
+
+async function serveGraph(graphPath = MINIMAL, pageDir?: string) {
   const { server, url } = await serve({ graphPath, pageDir, port: 0 });
   started.push(server);
   return { url, graph: JSON.parse(await readFile(graphPath, 'utf8')) };
@@ -103,7 +105,7 @@ describe('the page it serves', () => {
       await writeFile(join(dir, 'runtime.html'), '<!doctype html><title>tool</title>');
       await writeFile(join(dir, 'assets', 'app.js'), 'console.log(1)');
 
-      const { url } = await serveGraph('hello_world.json', dir);
+      const { url } = await serveGraph(MINIMAL, dir);
 
       expect(await (await fetch(`${url}/`)).text()).toContain('<title>tool</title>');
       expect(await (await fetch(`${url}/assets/app.js`)).text()).toBe('console.log(1)');
@@ -118,7 +120,7 @@ describe('the page it serves', () => {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-page-'));
     try {
       await writeFile(join(dir, 'runtime.html'), '<!doctype html><title>tool</title>');
-      const { url } = await serveGraph('hello_world.json', dir);
+      const { url } = await serveGraph(MINIMAL, dir);
       // Whatever this resolves to, it must not be a file from above the page.
       const escaped = await (await fetch(`${url}/../../graph.json`)).text();
       expect(escaped).toContain('<title>tool</title>');
@@ -145,7 +147,7 @@ describe('the engine as the front door of the editor', () => {
 
   it('answers the routes the editor calls itself', async () => {
     const url = await editor();
-    const graph = JSON.parse(await readFile(resolve(REPO, 'examples', 'hello_world.json'), 'utf8'));
+    const graph = JSON.parse(await readFile(MINIMAL, 'utf8'));
     const requirements = await (await fetch(`${url}/api/execute/requirements`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
     })).json();

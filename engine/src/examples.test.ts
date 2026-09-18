@@ -153,27 +153,6 @@ describe.each(EXAMPLES)('%s', (name) => {
 });
 
 describe('what each example is there to show', () => {
-  it('hello_world: a text input reaches the output', async () => {
-    const result = await runGraph(await load('hello_world.json'));
-    expect(outputsOf(result, 'greeting')).toEqual({ output: 'Hello, World!' });
-  }, 60_000);
-
-  it('text_transform: a body\'s returned keys are its output ports', async () => {
-    const result = await runGraph(await load('text_transform.json'));
-    expect(outputsOf(result, 'transform')).toEqual({ word_count: 9, upper: 'THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG' });
-  }, 60_000);
-
-  it('word_counter: a folder fans out per file and adds up', async () => {
-    const result = await runGraph(await load('word_counter.json'));
-    // One run per file, kept as a list: the fan-out is the part that was
-    // easiest to get subtly wrong, and an empty folder must produce none.
-    const perFile = outputsOf(result, 'per_file').output as { words: number }[];
-    expect(perFile).toHaveLength(3);
-    // The wired paths arrived as the files' *content*: real word counts, not 1.
-    expect(perFile.every((item) => item.words > 100)).toBe(true);
-    expect(outputsOf(result, 'total').summary).toMatch(/^3 file\(s\), [\d,]+ words in all/);
-  }, 120_000);
-
   it('chat: a message starts the graph, and the turn is remembered', async () => {
     const before = model.asked.length;
     const graph = await load('chat.json');

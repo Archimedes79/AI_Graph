@@ -6,8 +6,7 @@ without the editor.
 ## Running a graph from the command line
 
 ```bash
-node engine/src/main.ts examples/hello_world.json
-node engine/src/main.ts examples/word_counter.json
+node engine/src/main.ts examples/population_plotter.json
 ```
 
 Node 24 or newer, and no build step: the engine is TypeScript that Node runs directly
@@ -18,7 +17,7 @@ graph file.** The examples that read data from disk therefore run from the repos
 root:
 
 ```bash
-node engine/src/main.ts examples/word_counter.json
+node engine/src/main.ts examples/folder_summaries.json
 ```
 
 They ask for their path before running, so any other location works too — the value in

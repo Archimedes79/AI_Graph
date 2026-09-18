@@ -129,7 +129,7 @@ graph('file_summarizer.json', {
     block('about', 'text_io', { label: 'About the file', mode: 'output', tone: 'raised', w: 6, h: 5 }),
     block('content', 'text_io', { label: 'What was read', mode: 'output', tone: 'raised', w: 16, h: 6 }),
   ]),
-  code('reader', 'Read file', { x: 560, y: 60 }, {
+  code('reader', 'Read file', { x: 840, y: 40 }, {
     description: 'Reads the chosen file and says what it is',
     prompt: 'Pass the file\'s text on, and describe the file in one line: its name, word count, character count and reading time.',
     body: READER,
@@ -140,7 +140,7 @@ graph('file_summarizer.json', {
     outputs: [output('text', 'Text', 'text', false, 'The file\'s content'), output('info', 'Info', 'text', false, 'One line about the file')],
     config: { read_file_inputs: true },
   }),
-  ai('summarizer', 'Summarize', { x: 860, y: 200 }, {
+  ai('summarizer', 'Summarize', { x: 1140, y: 180 }, {
     description: 'Summarize the text faithfully, at the length asked for.',
     system: 'You summarize texts faithfully. Say what the text is about and what it comes to; add nothing that is not in it and do not judge it. Answer in the language of the text. Output the summary only — no preamble, no title.',
     template: 'Length of the summary: {{length}}\n\nThe text:\n{{text}}',
@@ -206,13 +206,13 @@ graph('folder_summaries.json', {
     block('table', 'table', { label: 'Each file', w: 16, h: 5 }),
     block('overall', 'text_io', { label: 'What they have in common', mode: 'output', tone: 'raised', w: 16, h: 4 }),
   ]),
-  ai('per_file', 'Each file', { x: 560, y: 60 }, {
+  ai('per_file', 'Each file', { x: 840, y: 20 }, {
     description: 'Summarize one story in exactly two sentences.',
     system: 'You summarize short stories. Answer with exactly two sentences: the first says what happens, the second what it comes to. Do not repeat the title and do not judge the story. Answer in the language of the story, with the two sentences only.',
     inputs: [input('story', 'Story', 'file_path', true, 'One file per run; arrives as its content')],
     config: { batch_mode: 'per_item', read_file_inputs: true, batch_concurrency: 3 },
   }),
-  code('rows', 'Table rows', { x: 860, y: 40 }, {
+  code('rows', 'Table rows', { x: 1140, y: 0 }, {
     description: 'Puts each file name beside its summary',
     prompt: 'Make one table row per file: the file name and its summary.',
     body: ROWS,
@@ -222,7 +222,7 @@ graph('folder_summaries.json', {
     ],
     outputs: [output('rows', 'Rows', 'json', false, 'A list of {File, Summary}')],
   }),
-  ai('overall', 'In common', { x: 860, y: 300 }, {
+  ai('overall', 'In common', { x: 1140, y: 220 }, {
     description: 'Say what the stories share, from their summaries.',
     system: 'You are given the summaries of several short stories from one collection. Write one paragraph of at most four sentences on what the stories have in common: shared motifs, the kind of people in them, the attitude of the telling. Do not retell the plots. Answer in the language of the summaries.',
     inputs: [input('summaries', 'Summaries', 'text', true, 'Every summary, as paragraphs')],
@@ -442,7 +442,7 @@ graph('population_plotter.json', {
     block('plot', 'plot_window', { label: '', w: 16, h: 7 }),
     block('table', 'table', { label: 'The rows plotted', w: 16, h: 5 }),
   ], { width: 340, height: 300 }),
-  code('chart', 'Draw chart', { x: 580, y: 140 }, {
+  code('chart', 'Draw chart', { x: 840, y: 160 }, {
     description: 'Parses the CSV and draws it',
     prompt: 'Read the CSV (names in the first column, values in the first numeric column), keep the largest "top" rows, and draw them as an SVG chart of the chosen kind: horizontal bars, columns, or a donut with a legend. Also return the plotted rows for a table.',
     body: CHART,
@@ -481,7 +481,7 @@ graph('chat.json', {
     caption('intro', 'Type a message and press Enter. The model sees the whole conversation each time.'),
     block('chat', 'chat', { label: 'Chat', value: { messages: [], pending: '' }, w: 16, h: 8 }),
   ], { width: 340, height: 220 }),
-  ai('assistant', 'Assistant', { x: 640, y: 160 }, {
+  ai('assistant', 'Assistant', { x: 840, y: 150 }, {
     description: 'Answer the user\'s last message as a friendly, concise assistant that remembers the conversation.',
     system: 'You are a friendly, concise assistant in a chat window.\n\nYou are given the conversation so far and the user\'s newest message. Answer the newest message, using the conversation for context. Answer in the language the user writes in. Use Markdown where it helps (lists, **bold**, `code`), and keep answers short unless asked for detail. Reply with the answer only — do not prefix it with "Assistant:".',
     template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}',
@@ -497,83 +497,4 @@ graph('chat.json', {
   wire('page', 'chat_out', 'assistant', 'message'),
   wire('page', 'chat_history', 'assistant', 'history'),
   wire('assistant', 'output', 'page', 'chat_in'),
-]);
-
-// ---------------------------------------------------------------------------
-// 5. Count words per file, then add them up -- no model, no page
-// ---------------------------------------------------------------------------
-
-const COUNT = String.raw`
-/**
- * One file's words. Runs once per file: the node is set to "per item".
- *
- * @typedef {Object} Inputs
- * @property {string} file  one file's content (read for us: the port is a file path)
- */
-
-/** @param {Inputs} inputs */
-function run(inputs) {
-  const words = String(inputs.file ?? '').split(/\s+/).filter(Boolean);
-  return { output: { words: words.length, longest: words.reduce(function (a, b) { return b.length > a.length ? b : a; }, '') } };
-}
-`;
-
-const TOTAL = String.raw`
-/**
- * Every file's count, added up. Runs once, on the whole list.
- *
- * @typedef {Object} Inputs
- * @property {Array<{words: number, longest: string}>} counts  one per file
- */
-
-/** @param {Inputs} inputs */
-function run(inputs) {
-  const counts = [].concat(inputs.counts ?? []).filter(Boolean);
-  const total = counts.reduce(function (sum, item) { return sum + Number(item.words ?? 0); }, 0);
-  return {
-    total: total,
-    summary: counts.length + ' file(s), ' + total.toLocaleString('en') + ' words in all; the longest word is "'
-      + counts.reduce(function (a, item) { return item.longest.length > a.length ? item.longest : a; }, '') + '".',
-  };
-}
-`;
-
-edgeCount = 0;
-graph('word_counter.json', {
-  name: 'Word counter',
-  description: 'A folder fans out: the first code node runs once per file, the second once over all the results. No model and no page -- run it from the command line and read the JSON, or press Run and read the window.',
-  tags: ['example', 'batch', 'code'],
-  ai_defaults: { provider: 'default', model: '' },
-}, [
-  {
-    id: 'folder', node_type: 'input', label: 'Text folder', description: 'Every .txt file in a folder', position: { x: 60, y: 140 },
-    inputs: [input('path', 'Path', 'file_path', false, 'Override the configured path')],
-    outputs: [output('files', 'Files', 'file_path', true, 'Rooted file paths'), output('count', 'Count', 'text')],
-    config: { input_mode: 'directory', value: 'examples/data/stories', extensions: '.txt', select_all_files: true },
-  },
-  code('per_file', 'Count per file', { x: 380, y: 120 }, {
-    description: 'Counts one file\'s words',
-    prompt: 'Count the words in the file, and find its longest word.',
-    body: COUNT,
-    inputs: [input('file', 'File', 'file_path', true, 'One file per run; arrives as its content')],
-    outputs: [output('output', 'Count', 'json', true, '{words, longest} per file')],
-    config: { batch_mode: 'per_item', read_file_inputs: true },
-  }),
-  code('total', 'Total', { x: 700, y: 120 }, {
-    description: 'Adds the counts up',
-    prompt: 'Sum the per-file word counts and write a one-line summary.',
-    body: TOTAL,
-    inputs: [input('counts', 'Counts', 'json', true, 'Every file\'s count')],
-    outputs: [output('total', 'Total', 'any'), output('summary', 'Summary', 'text')],
-  }),
-  {
-    id: 'result', node_type: 'output', label: 'Result', description: '', position: { x: 1020, y: 120 },
-    inputs: [input('total', 'Total', 'any'), input('summary', 'Summary', 'text')], outputs: [],
-    config: { output_label: 'Word count', write_mode: 'window' },
-  },
-], [
-  wire('folder', 'files', 'per_file', 'file'),
-  wire('per_file', 'output', 'total', 'counts'),
-  wire('total', 'total', 'result', 'total'),
-  wire('total', 'summary', 'result', 'summary'),
 ]);

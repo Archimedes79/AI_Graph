@@ -146,8 +146,8 @@
       "label": "Each file",
       "description": "Summarize one story in exactly two sentences.",
       "position": {
-        "x": 560,
-        "y": 60
+        "x": 840,
+        "y": 20
       },
       "inputs": [
         {
@@ -189,8 +189,8 @@
       "label": "Table rows",
       "description": "Puts each file name beside its summary",
       "position": {
-        "x": 860,
-        "y": 40
+        "x": 1140,
+        "y": 0
       },
       "inputs": [
         {
@@ -236,8 +236,8 @@
       "label": "In common",
       "description": "Say what the stories share, from their summaries.",
       "position": {
-        "x": 860,
-        "y": 300
+        "x": 1140,
+        "y": 220
       },
       "inputs": [
         {
