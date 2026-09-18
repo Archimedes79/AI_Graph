@@ -6,6 +6,7 @@
 //     node src/main.ts graph.json --bundle ./out       hand it to someone else
 //     node src/main.ts graph.json --serve             open its page in a browser
 //     node src/main.ts --editor editor/dist          the editor itself, on :8000
+//     node src/main.ts --mcp --mcp-root ./project     graph tools for an assistant, on stdio
 //
 // The same entry point a bundle uses, so what someone receives is the thing
 // that was tested rather than a second launcher written for them. It is also
@@ -29,6 +30,7 @@ import { dirname, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { graphTriggers, parseInterval } from './triggers.ts';
 
 export interface CliOptions {
   graphPath: string;
@@ -46,23 +48,15 @@ export interface CliOptions {
   /** Bind address. Loopback unless said otherwise; see `serve` for what that switches off. */
   host?: string;
   port?: number;
+  /** Be an MCP server on stdio instead of running anything: see `host/editor/mcpServer.ts`. */
+  mcp?: boolean;
+  /** The one folder that server may touch. Where it was started, unless said otherwise. */
+  mcpRoot?: string;
 }
 
-/**
- * `45`, `30s`, `5m`, `2h`, `1d` — seconds when it is only a number.
- *
- * Bare numbers are seconds because that is what "interval" means everywhere
- * else here; the suffixes exist so nobody has to multiply by 86400 to say "a
- * day" and get it wrong at three in the morning.
- */
-export function parseInterval(text: string): number {
-  const match = /^(\d+(?:\.\d+)?)([smhd]?)$/.exec(text.trim());
-  if (!match) throw new Error(`Not an interval: ${text}. Use 45, 30s, 5m, 2h or 1d.`);
-  const scale = { '': 1, s: 1, m: 60, h: 3600, d: 86400 }[match[2]] ?? 1;
-  const seconds = Number(match[1]) * scale;
-  if (seconds <= 0) throw new Error('An interval must be greater than zero.');
-  return seconds;
-}
+// The interval spelling lives with the triggers now: a graph can name its own
+// clock, and the page that serves it reads the same `5m` this flag does.
+export { parseInterval };
 
 export function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = { graphPath: '', inputs: {} };
@@ -85,6 +79,10 @@ export function parseArgs(argv: string[]): CliOptions {
       options.editor = argv[++i] ?? 'editor/dist';
     } else if (arg === '--host') {
       options.host = argv[++i] ?? '';
+    } else if (arg === '--mcp') {
+      options.mcp = true;
+    } else if (arg === '--mcp-root') {
+      options.mcpRoot = argv[++i] ?? '';
     } else if (!options.graphPath) {
       options.graphPath = arg;
     }
@@ -227,9 +225,39 @@ async function open(url: string): Promise<void> {
   }
 }
 
+/**
+ * Be an MCP server until the client hangs up.
+ *
+ * Imported here and not at the top: the server is authoring, it lives under an
+ * `editor/` folder, and a bundle leaves every one of those behind. A static
+ * import would make each bundle fail on a file it was never meant to have.
+ */
+export async function runMcp(options: CliOptions): Promise<number> {
+  let server: typeof import('./host/editor/mcpServer.ts');
+  try {
+    server = await import('./host/editor/mcpServer.ts');
+  } catch (error) {
+    if ((error as { code?: string })?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+    throw new Error('This copy of the engine has no MCP server: it is part of the editor, which a bundle does not carry.');
+  }
+  await server.runMcpServer({ root: options.mcpRoot || undefined });
+  return 0;
+}
+
 export async function main(argv: string[]): Promise<number> {
   const options = parseArgs(argv);
+  // First, and needing no graph: nothing below may get the chance to write a
+  // line to stdout, which from here on belongs to the protocol.
+  if (options.mcp) return runMcp(options);
   if (options.bundle) return makeBundle(options);
   if (options.serve || options.editor) return runServer(options);
+  // The graph's own clock, when the command line names none: a graph saved as
+  // "every 5 minutes" is that on any machine, not only where someone remembers
+  // the flag. `--every` still wins, which is how one run is made of it.
+  if (!options.every && existsSync(resolve(options.graphPath))) {
+    const graph = parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')));
+    const { every } = graphTriggers(graph);
+    if (every) options.every = parseInterval(every);
+  }
   return options.every ? runEvery(options) : runOnce(options);
 }

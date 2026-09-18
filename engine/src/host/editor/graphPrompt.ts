@@ -31,7 +31,8 @@ Valid node_type values: input, data, ai, code, output, gui. An "input" node's co
 /** Where each node type keeps the thing it actually does. */
 const CONFIG_KEYS = `Where each node type keeps what it does. Put it anywhere else and the node will run and produce nothing:
 - code: config.code holds JavaScript as "function run(inputs) { ... }", returning an object whose keys are exactly this node's output port ids. config.code_prompt is the request it was written from. Use only what Node has built in; there is no package manager.
-- ai: the node's own "description" field is the request to the model, and config.system_prompt is the standing instruction. The reply arrives on the node's single output port.
+- ai: the node's own "description" field says what it is for, and config.system_prompt is the standing instruction. Everything wired into it is sent as the message; with more than one input, lay them out in config.prompt_template using {{port_id}} placeholders, for example "Conversation so far: {{history}} User: {{message}}" with line breaks between the parts. The reply arrives on the node's single output port, "output".
+- code and ai, working on FILES: an input port with data_type "file_path" receives a path, or a list of paths from a directory input's "files". Set config.read_file_inputs = true and the node is handed each file's TEXT instead of its path. Set config.batch_mode = "per_item" and mark that port "multi": true, and the node runs ONCE PER FILE, its results collected into a list; with batch_mode = "whole_list" it runs once and gets the whole list. So "do X to every file in a folder" is: directory input --files--> one code or ai node (file_path port, multi, read_file_inputs, per_item). Never chain a second input node to read the files, and never read files yourself in code.
 - input: config.value is the text, the file path or the folder path; config.input_mode is text, file or directory.
 - data: config.data_value is what it remembers between runs.
 - output: config.write_mode is none, file, directory or window; config.output_label names the window.
@@ -60,8 +61,17 @@ const DERIVED_PORTS = `The ports of an input node and of a gui node are DERIVED 
 - input with input_mode "text": one output "output".
 - input with input_mode "file": outputs "content" (the file's text) and "path"; one input "path" that overrides the configured one.
 - input with input_mode "directory": outputs "files" (a list of paths, multi) and "count"; one input "path".
-- gui: every block contributes "<block id>_out", "<block id>_in", or both.
+- gui: every block contributes "<block id>_out", "<block id>_in", or both. A block is {"id", "kind", "label", "w" (1-16 columns), "h" (rows), ...}; kinds are text (mode heading|body|caption, value = the words), divider, input_picker (mode file|directory, value = path), text_io (mode input|output), select (options = one per line), slider (min, max, step), button, chat, table, plot_window, image_view.
+- a "chat" block keeps the conversation itself and contributes "<id>_out" (the message just sent), "<id>_history" (everything before it) and "<id>_in" (the reply). A chatbot is therefore TWO nodes: a gui node with one chat block, and an ai node with inputs "history" and "message" wired from it and its "output" wired back to "<id>_in". Do not add data or code nodes to hold the conversation.
 Every other node type names its own ports, and a code node's returned keys must match its output port ids exactly.`;
+
+/**
+ * What starts a run, for a graph that has a page.
+ *
+ * Without this a generated tool has buttons that do nothing the model
+ * intended: it wires a button's press count into a prompt.
+ */
+const TRIGGERS = `A page can start the graph itself. A "button" block, a "chat" block, and any block with "run_on_change": true (a select, a slider, an input_picker; a text_io sends on Enter) starts the graph AT THE NODES ITS OUTPUT IS WIRED TO, and runs what follows from them plus what they need. Every node also accepts an edge into the special target port "__run": it carries no value and only says "start here". So a button is wired like this: {"source_port_id": "<button id>_out", "target_node_id": "<first node to run>", "target_port_id": "__run"} -- never into a data port. "__run" is NOT declared in the node's inputs.`;
 
 /**
  * One worked document.
@@ -99,4 +109,4 @@ const EXAMPLE = `A complete, working example:
 }
 \`\`\``;
 
-export const GRAPH_SYSTEM = [SHAPE, CONFIG_KEYS, MUST_SHOW, DERIVED_PORTS, EXAMPLE].join('\n\n');
+export const GRAPH_SYSTEM = [SHAPE, CONFIG_KEYS, MUST_SHOW, DERIVED_PORTS, TRIGGERS, EXAMPLE].join('\n\n');

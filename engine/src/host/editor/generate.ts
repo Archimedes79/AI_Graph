@@ -61,6 +61,8 @@ export interface ProbeReport {
   attempts: number;
   error: string;
   missing_outputs: string[];
+  /** What the element itself found wrong with a result that ran: a chart drawn off its frame, NaN in the markup. */
+  problems?: string[];
   output_preview: string;
   /** What the code actually returned, whole -- the next node's sample, not a preview of it. */
   outputs?: Record<string, unknown>;
@@ -271,24 +273,29 @@ function describeInputs(sample: Record<string, unknown>): string {
 async function probe(
   code: CodeRunner, body: string, sample: Record<string, unknown>,
 ): Promise<{ result: Record<string, unknown> | null; error: string }> {
-  // Raced rather than killed: the runner owns its process. A body still busy
-  // after the deadline is reported, and finishes on its own in the background.
-  const deadline = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`The function did not finish within ${PROBE_TIMEOUT_MS / 1000}s on one sample item.`)), PROBE_TIMEOUT_MS).unref();
-  });
+  // Ended, not merely given up on: a generated body in an endless loop is a
+  // process, and one per ✨ press left running is how a laptop gets warm.
+  const stop = new AbortController();
+  const clock = setTimeout(() => stop.abort(), PROBE_TIMEOUT_MS);
+  clock.unref();
   try {
-    const result = await Promise.race([code.run(body, { ...sample }), deadline]);
+    const result = await code.run(body, { ...sample }, stop.signal);
     if (!result || typeof result !== 'object' || Array.isArray(result)) {
       return { result: null, error: `run() returned ${Array.isArray(result) ? 'an array' : typeof result}, but it must return an object.` };
     }
     return { result, error: '' };
   } catch (error) {
+    if (stop.signal.aborted) {
+      return { result: null, error: `The function did not finish within ${PROBE_TIMEOUT_MS / 1000}s on one sample item.` };
+    }
     return { result: null, error: (error instanceof Error ? error.message : String(error)).trim() };
+  } finally {
+    clearTimeout(clock);
   }
 }
 
 /** The evidence block handed to the second pass. */
-function repairPrompt(body: string, sample: Record<string, unknown>, error: string, missing: string[], outputs: string[]): string {
+function repairPrompt(body: string, sample: Record<string, unknown>, error: string, missing: string[], outputs: string[], problems: string[] = []): string {
   const parts = [
     'Your previous attempt was executed against real data and did not work. Fix it. Return the complete corrected function, not a patch.',
     '', '--- your previous attempt ---', body,
@@ -300,6 +307,11 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
       `It ran, but the returned object is missing ${JSON.stringify(missing)}. The declared output ports are `
       + `${JSON.stringify(outputs)}; downstream nodes look values up by exactly these keys, so every one of them `
       + 'must be present in the returned object.');
+  }
+  if (problems.length) {
+    parts.push('', '--- what is wrong with what it produced ---',
+      'It ran and returned the right keys, but the result itself was checked and is not usable as it stands:',
+      ...problems.map((problem) => `- ${problem}`));
   }
   return parts.join('\n');
 }
@@ -313,6 +325,7 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
  */
 async function generateVerifiedCode(
   ai: AiService, code: CodeRunner, target: Target, request: GenerateRequest, context: string,
+  check?: (outputs: Record<string, unknown>) => string[],
 ): Promise<{ text: string; explanation: string; probe: ProbeReport }> {
   const outputs = request.outputs ?? [];
   const sample = request.sample_inputs;
@@ -320,33 +333,48 @@ async function generateVerifiedCode(
   const report: ProbeReport = { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' };
   if (!sample || !Object.keys(sample).length) return { ...first, probe: report };
 
-  report.attempts = 1;
-  const attempt = await probe(code, first.text, sample);
-  const missing = attempt.result ? outputs.filter((port) => !(port in attempt.result!)) : [];
-  if (attempt.result && !missing.length) {
-    return { ...first, probe: { ...report, status: 'ok', output_preview: preview(attempt.result), outputs: attempt.result } };
-  }
+  /**
+   * Run it, then ask three questions in order: did it run, did it return the
+   * right keys, and -- the element's own question -- is what it returned any
+   * good. A chart that runs and returns `value` can still be a drawing with
+   * NaN for every coordinate; only the element that draws it knows to look.
+   */
+  const judge = async (body: string) => {
+    const ran = await probe(code, body, sample);
+    const missing = ran.result ? outputs.filter((port) => !(port in ran.result!)) : [];
+    const problems = ran.result && !missing.length && check ? check(ran.result) : [];
+    // How far it got: not at all, wrong keys, a flawed result, a good one.
+    const reached = !ran.result ? 0 : missing.length ? 1 : problems.length ? 2 : 3;
+    return { ...ran, missing, problems, reached };
+  };
+  const reportOf = (verdict: Awaited<ReturnType<typeof judge>>, status: ProbeReport['status']): ProbeReport => ({
+    ...report, status, error: verdict.error, missing_outputs: verdict.missing, problems: verdict.problems,
+    ...(verdict.result ? { output_preview: preview(verdict.result), outputs: verdict.result } : {}),
+  });
 
-  const evidence = [context, repairPrompt(first.text, sample, attempt.error, missing, outputs)].filter(Boolean).join('\n\n');
+  report.attempts = 1;
+  const attempt = await judge(first.text);
+  if (attempt.reached === 3) return { ...first, probe: reportOf(attempt, 'ok') };
+
+  const evidence = [
+    context,
+    repairPrompt(first.text, sample, attempt.error, attempt.missing, outputs, attempt.problems),
+  ].filter(Boolean).join('\n\n');
   let second: { text: string; explanation: string };
   try {
     second = await generateCode(ai, target, request, evidence);
   } catch {
     // The repair pass is a bonus, never a reason to fail the request.
-    return { ...first, probe: { ...report, status: 'failed', error: attempt.error, missing_outputs: missing } };
+    return { ...first, probe: reportOf(attempt, 'failed') };
   }
   report.attempts = 2;
-  const again = await probe(code, second.text, sample);
-  const stillMissing = again.result ? outputs.filter((port) => !(port in again.result!)) : [];
-  if (again.result && !stillMissing.length) {
-    return { ...second, probe: { ...report, status: 'repaired', output_preview: preview(again.result), outputs: again.result } };
-  }
-  // Still broken. Keep the attempt that got further -- running with wrong
-  // keys beats not running at all -- and say what remains.
-  if (attempt.result && !again.result) {
-    return { ...first, probe: { ...report, status: 'failed', error: attempt.error, missing_outputs: missing } };
-  }
-  return { ...second, probe: { ...report, status: 'failed', error: again.error, missing_outputs: stillMissing } };
+  const again = await judge(second.text);
+  if (again.reached === 3) return { ...second, probe: reportOf(again, 'repaired') };
+  // Still not right. Keep the attempt that got further -- a chart with one
+  // label off the edge beats one that does not run -- and say what remains.
+  return again.reached >= attempt.reached
+    ? { ...second, probe: reportOf(again, 'failed') }
+    : { ...first, probe: reportOf(attempt, 'failed') };
 }
 
 // ---------------------------------------------------------------------------
@@ -376,8 +404,10 @@ export interface GenerateDeps {
  * The element's own contract goes first in the context: it says what the
  * running engine will do with this snippet, which nothing else can imply. A
  * sub-snippet whose ports the element fixes (a selector's `files`, a
- * transform's `value`) is generated against those and not probed against the
- * node's sample, which is keyed by ports it does not have.
+ * transform's `value`) is generated against those -- and probed against a
+ * sample only when the sample is keyed by those same ports. The node's own
+ * sample is keyed by ports the snippet does not have; the block editor sends
+ * one shaped as the snippet sees it (`{value: …}`), and that one is used.
  */
 export async function generate(request: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
   const calls: AICall[] = deps.calls ?? [];
@@ -391,14 +421,19 @@ export async function generate(request: GenerateRequest, deps: GenerateDeps): Pr
     request.context_file,
   );
   const fixedPorts = Boolean(spec?.inputs);
+  const fits = fixedPorts && request.sample_inputs
+    && Object.keys(request.sample_inputs).every((key) => spec!.inputs!.includes(key));
   const shaped: GenerateRequest = fixedPorts
-    ? { ...request, inputs: spec!.inputs, outputs: spec!.outputs ?? request.outputs, sample_inputs: null, input_sources: undefined }
+    ? {
+      ...request, inputs: spec!.inputs, outputs: spec!.outputs ?? request.outputs,
+      sample_inputs: fits ? request.sample_inputs : null, input_sources: undefined,
+    }
     : request;
 
   try {
     switch (kind) {
       case 'code': {
-        const { text, explanation, probe: report } = await generateVerifiedCode(ai, deps.code, deps.target, shaped, context);
+        const { text, explanation, probe: report } = await generateVerifiedCode(ai, deps.code, deps.target, shaped, context, spec?.check);
         return { result: text, explanation, probe: report, calls };
       }
       case 'prompt':

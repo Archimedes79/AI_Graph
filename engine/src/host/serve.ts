@@ -16,7 +16,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { parseGraph, type ExecutionResult, type Graph } from '../graph.ts';
-import { executeGraph } from '../executor.ts';
+import { executeGraph, executeNode, inputsFor, memoryFeedbackEdges } from '../executor.ts';
+import { GuiElement, parseWidget } from '../elements/gui/element.ts';
 import { registry } from '../registry.ts';
 import { authoredIn, generations } from '../describe.ts';
 import type { SettingsPatch } from './editor/settings.ts';
@@ -29,6 +30,8 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { applyRuntimeValues, runtimeRequirements } from '../runtimeValues.ts';
 import { nodeFiles, nodeRuntime } from './node.ts';
+import { triggeredNodes, type Trigger } from '../triggers.ts';
+import { schedule } from './schedule.ts';
 
 /**
  * A run in flight, so the page can watch it and stop it.
@@ -52,6 +55,8 @@ interface Run {
   result: ExecutionResult | null;
   error: string | null;
   cancelled: boolean;
+  /** What Stop pulls: the executor ends the call in flight and starts nothing more. */
+  stop: AbortController;
   finishedAt: number | null;
 }
 
@@ -132,6 +137,19 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     ? parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')))
     : null;
 
+  // The graph this server ships is held, not re-read: what a run remembers is
+  // settled into it, so the next scheduled round -- and the next page to open --
+  // starts from there. A page that runs the graph itself hands over its copy,
+  // so the clock goes on with the file the person picked rather than the one
+  // the bundle was written with.
+  const held = { graph: original };
+  const clock = original
+    ? schedule(() => held.graph!, (graph, signal) => {
+      applyRuntimeValues(graph, {}, registry);
+      return executeGraph(graph, { runtime: nodeRuntime(), registry, signal });
+    })
+    : null;
+
   const server = createServer((request, response) => {
     handle(request, response).catch((error: unknown) => {
       send(response, 500, { detail: error instanceof Error ? error.message : String(error) });
@@ -143,8 +161,13 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     const path = url.pathname;
 
     if (path === '/api/runtime/graph') {
-      if (!original) return send(response, 404, { detail: 'This server ships no graph; post the one to run.' });
-      return send(response, 200, original);
+      if (!held.graph) return send(response, 404, { detail: 'This server ships no graph; post the one to run.' });
+      return send(response, 200, held.graph);
+    }
+
+    // What the graph's own triggers last produced, for a page opened since.
+    if (path === '/api/runtime/last') {
+      return send(response, 200, clock ? clock.state() : { scheduled: false, running: false, runs: 0, result: null, error: null, finished_at: null, next_at: null });
     }
 
     if (path === '/api/execute/requirements' && request.method === 'POST') {
@@ -171,8 +194,55 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     }
 
     if (path === '/api/execute/start' && request.method === 'POST') {
-      const graph = parseGraph(await body(request));
-      return send(response, 200, { run_id: start(graph), total: graph.nodes.length });
+      // The graph, and beside it the page event that asked -- when one did.
+      // Riding on the same body keeps an older page, which sends the graph
+      // alone, meaning exactly what it always meant: run all of it.
+      const asked = await body(request) as { trigger?: Trigger | null };
+      const graph = parseGraph(asked);
+      if (original) held.graph = graph;
+      const trigger = asked.trigger?.node_id ? asked.trigger : null;
+      // Counted here so the progress line reads "2 of 2", not "2 of 9 and done".
+      const only = trigger
+        ? triggeredNodes(graph, trigger, memoryFeedbackEdges(graph.nodes, graph.edges, registry))
+        : null;
+      const total = only?.size ?? graph.nodes.length;
+      return send(response, 200, { run_id: start(graph, trigger, total), total });
+    }
+
+    // One node, on inputs the editor supplies: trying a prompt out while
+    // writing it. The editor's alone -- a deployed tool runs its graph, it does
+    // not take it apart.
+    if (options.editor && path === '/api/execute/node' && request.method === 'POST') {
+      const asked = await body(request) as { node_id?: string; inputs?: Record<string, unknown> };
+      const graph = parseGraph(asked);
+      return send(response, 200, await executeNode(
+        graph, String(asked.node_id ?? ''), asked.inputs ?? {}, { runtime: nodeRuntime(), registry },
+      ));
+    }
+
+    // The same for a block on a page: one value through the block's own
+    // transform, exactly as the page would be shown it. What comes back is what
+    // the block draws, so the editor can draw it -- a chart looked at before
+    // the graph has ever run.
+    if (options.editor && path === '/api/execute/block' && request.method === 'POST') {
+      const asked = await body(request) as { widget?: unknown; value?: unknown };
+      try {
+        const shown = await new GuiElement().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
+        return send(response, 200, { status: 'success', shown, error: null });
+      } catch (error) {
+        return send(response, 200, { status: 'error', shown: null, error: message(error) });
+      }
+    }
+
+    // What would arrive at a node, found by running what feeds it and not the
+    // node: real inputs to try a prompt or a body on, without the full run.
+    if (options.editor && path === '/api/execute/inputs' && request.method === 'POST') {
+      const asked = await body(request) as { node_id?: string };
+      const graph = parseGraph(asked);
+      applyRuntimeValues(graph, {}, registry);
+      const { inputs, upstream } = await inputsFor(graph, String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry });
+      const failed = upstream.node_results.find((result) => result.status === 'error');
+      return send(response, 200, { inputs, error: failed ? `${failed.node_id}: ${failed.error}` : null });
     }
 
     const watching = /^\/api\/execute\/runs\/([^/]+)$/.exec(path);
@@ -185,7 +255,9 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     const stopping = /^\/api\/execute\/runs\/([^/]+)\/cancel$/.exec(path);
     if (stopping && request.method === 'POST') {
       const found = runs.get(stopping[1]);
-      if (found) found.cancelled = true;
+      // A flag nobody read used to be all this set: the page stopped watching
+      // and the run carried on calling the model. Now the run is told.
+      if (found) { found.cancelled = true; found.stop.abort(); }
       return send(response, 200, { cancelled: Boolean(found) });
     }
 
@@ -296,6 +368,21 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       }
     }
 
+    // A node's file, in the person's own editor. Loopback only, like browsing:
+    // this starts a program, and that is for whoever is at the keyboard.
+    if (options.editor && path === '/api/files/open-external' && request.method === 'POST') {
+      if (!loopback) return send(response, 403, { detail: 'Opening files is only offered on this machine.' });
+      const asked = await body(request) as { graph_path?: string; file?: string };
+      if (!asked.graph_path || !asked.file) return send(response, 400, { detail: "Missing 'graph_path' or 'file'." });
+      try {
+        const nodes = editor!.project.nodeDir(resolve(expandHome(asked.graph_path)));
+        return send(response, 200, await editor!.files.openExternal(nodes, asked.file));
+      } catch (error) {
+        const status = error instanceof editor!.files.NotFound ? 404 : 400;
+        return send(response, status, { detail: message(error) });
+      }
+    }
+
     if (options.editor && path === '/api/files/attachments' && request.method === 'POST') {
       // The file itself is the body; its name rides on the query. No multipart
       // to parse, and nothing about the upload a client could get wrong.
@@ -338,12 +425,12 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
   }
 
   /** Start a run in the background and hand back its id, for a page that watches. */
-  function start(graph: Graph): string {
+  function start(graph: Graph, trigger: Trigger | null = null, total = graph.nodes.length): string {
     const id = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const record: Run = {
-      id, total: graph.nodes.length, completed: 0, running: [], currentLabel: '',
+      id, total, completed: 0, running: [], currentLabel: '',
       itemDone: 0, itemTotal: 0, lastActivity: null,
-      result: null, error: null, cancelled: false, finishedAt: null,
+      result: null, error: null, cancelled: false, stop: new AbortController(), finishedAt: null,
     };
     runs.set(id, record);
 
@@ -367,7 +454,7 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       },
     });
 
-    executeGraph(graph, { runtime, registry })
+    executeGraph(graph, { runtime, registry, trigger, signal: record.stop.signal })
       .then((result) => { record.result = result; })
       .catch((error: unknown) => { record.error = error instanceof Error ? error.message : String(error); })
       .finally(() => { record.finishedAt = Date.now(); forget(); });
@@ -417,6 +504,7 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     }
   }
 
+  server.on('close', () => clock?.stop());
   await new Promise<void>((listening) => server.listen(options.port ?? 0, host, listening));
   const port = (server.address() as { port: number }).port;
   return { server, url: `http://${host}:${port}` };

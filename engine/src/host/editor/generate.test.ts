@@ -166,3 +166,57 @@ describe('a whole graph', () => {
     await expect(generateGraph('x', '', { ai: scripted(['no json here']), target })).rejects.toBeInstanceOf(GenerationFailed);
   });
 });
+
+describe('a block\'s snippet is looked at before anyone sees it', () => {
+  const sample = { value: [{ t: '08:00', temp: 61 }, { t: '08:05', temp: 64 }] };
+  const blank = '<svg width="100%" height="100%" viewBox="0 0 400 240"><circle cx="NaN" cy="40" r="3"/></svg>';
+  const drawn = '<svg width="100%" height="100%" viewBox="0 0 400 240"><circle cx="60" cy="40" r="3"/></svg>';
+
+  it('runs a chart transform on the sample the block editor sent -- it used to be thrown away', async () => {
+    const ai = scripted(['```js\nfunction run(i) { return { value: "GOOD" }; }\n```']);
+    const reply = await generate(
+      { element: 'plot_window', description: 'a line', sample_inputs: sample },
+      { ai, code: runner(() => ({ value: drawn })), generationFor, target },
+    );
+    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1 });
+  });
+
+  it('hands a drawing full of NaN back with the reason, and keeps the repair', async () => {
+    const ai = scripted([
+      '```js\nfunction run(i) { return { value: "FIRST" }; }\n```',
+      '```js\nfunction run(i) { return { value: "SECOND" }; }\n```',
+    ]);
+    const reply = await generate(
+      { element: 'plot_window', description: 'a line', sample_inputs: sample },
+      { ai, code: runner((body) => ({ value: body.includes('SECOND') ? drawn : blank })), generationFor, target },
+    );
+    expect(reply.probe).toMatchObject({ status: 'repaired', attempts: 2, problems: [] });
+    expect(reply.result).toContain('SECOND');
+    // The second request carries what was found, in words the model can act on.
+    expect(ai.asked[1].prompt).toContain('what is wrong with what it produced');
+    expect(ai.asked[1].prompt).toContain('cx="NaN"');
+  });
+
+  it('keeps the attempt that got further when the repair is no better, and says what remains', async () => {
+    const ai = scripted([
+      '```js\nfunction run(i) { return { value: "FIRST" }; }\n```',
+      '```js\nfunction run(i) { throw new Error("worse"); }\n```',
+    ]);
+    const reply = await generate(
+      { element: 'plot_window', description: 'a line', sample_inputs: sample },
+      { ai, code: runner((body) => { if (body.includes('worse')) throw new Error('worse'); return { value: blank }; }), generationFor, target },
+    );
+    expect(reply.result).toContain('FIRST');
+    expect(reply.probe.status).toBe('failed');
+    expect(reply.probe.problems?.[0]).toMatch(/not numbers/);
+  });
+
+  it('still ignores a sample keyed by the node\'s ports, which a block\'s snippet does not have', async () => {
+    const ai = scripted(['```js\nfunction run(i) { return { value: [] }; }\n```']);
+    const reply = await generate(
+      { element: 'plot_window', description: 'a line', sample_inputs: { chart_in: [1, 2] } },
+      { ai, code: runner(() => { throw new Error('must not run'); }), generationFor, target },
+    );
+    expect(reply.probe.status).toBe('skipped');
+  });
+});

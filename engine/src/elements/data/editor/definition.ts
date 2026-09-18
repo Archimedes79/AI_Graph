@@ -59,9 +59,6 @@ export const dataElement: GraphNodeElementDefinition = {
   nodeType: 'data',
   // A data node IS the graph's register: it holds its value between runs, which
   // is what lets a feedback edge into it close a cycle.
-  isMemory: true,
-  // One node, one remembered value.
-  settleMemoryValue: (node, _portId, value) => { node.config.data_value = value as never; },
   ownsDescription: true,
   generation: {
     ...fromEngine(new DataElement().generation()),

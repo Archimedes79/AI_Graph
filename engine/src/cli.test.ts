@@ -34,4 +34,16 @@ describe('parseArgs', () => {
   it('defaults to graph.json, the way a bundle is laid out', () => {
     expect(parseArgs([]).graphPath).toBe('graph.json');
   });
+
+  it('reads --mcp with no graph at all, and keeps its root out of the graph path', () => {
+    const options = parseArgs(['--mcp', '--mcp-root', './project']);
+    expect(options.mcp).toBe(true);
+    expect(options.mcpRoot).toBe('./project');
+    // The folder is the flag's value, not a positional: it must not become the graph.
+    expect(options.graphPath).toBe('graph.json');
+  });
+
+  it('is not an MCP server unless asked', () => {
+    expect(parseArgs(['g.json']).mcp).toBeUndefined();
+  });
 });

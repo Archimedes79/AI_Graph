@@ -100,14 +100,9 @@ export class GuiElement extends GraphNodeElement<GuiConfig> {
       const own = element.ports(widget);
       const catches = element.catchesErrors(widget);
       try {
-        if (!own.outputs.length) {
-          // A display block: reshape what arrived and hand it back on the input
-          // it arrived on, because there is no downstream port to carry it.
-          const inId = `${widget.id}_in`;
-          const transformed = await element.runSnippet(widget, { value: inputs[inId] }, runtime);
-          inputs[inId] = await element.displayValue(widget, transformed.value ?? inputs[inId], runtime);
-          continue;
-        }
+        // A display block produces nothing: what it shows is `display`'s
+        // business, once everything -- loops included -- has arrived.
+        if (!own.outputs.length) continue;
         // Merged, not wrapped: the block names its own ports, the same way a node
         // does. A composite that invents the key caps every block at one output.
         Object.assign(produced, await element.execute(widget, inputs, runtime));
@@ -123,6 +118,45 @@ export class GuiElement extends GraphNodeElement<GuiConfig> {
       }
     }
     return produced;
+  }
+
+  /**
+   * What each display block shows: what arrived, through the block's own
+   * transform, as the page can draw it.
+   *
+   * A block nothing arrived at is left out rather than shown as nothing, so a
+   * run that touched half a page leaves the other half as it was.
+   */
+  override async display(node: GraphNode, arrived: Record<string, unknown>, runtime: Runtime) {
+    const shown: Record<string, unknown> = {};
+    for (const widget of this.config(node).widgets) {
+      const element = BY_KIND.get(widget.kind);
+      if (!element || element.ports(widget).outputs.length) continue;
+      const value = arrived[`${widget.id}_in`];
+      if (value === undefined) continue;
+      shown[widget.id] = await this.showBlock(widget, value, runtime);
+    }
+    return shown;
+  }
+
+  /** One block's value, as drawn. Also what the editor's ▶ Test of a block runs. */
+  async showBlock(widget: Widget, value: unknown, runtime: Runtime): Promise<unknown> {
+    const element = BY_KIND.get(widget.kind);
+    if (!element) throw new Error(`Unknown block kind: ${widget.kind}`);
+    const transformed = await element.runSnippet(widget, { value }, runtime);
+    return element.displayValue(widget, transformed.value ?? value, runtime);
+  }
+
+  /** What its pickers start on. */
+  override referencedPaths(node: GraphNode): string[] {
+    const paths: string[] = [];
+    for (const widget of this.config(node).widgets) {
+      const element = BY_KIND.get(widget.kind);
+      if (!(element instanceof InputPickerElement)) continue;
+      const { path } = element.config(widget);
+      if (path) paths.push(path);
+    }
+    return paths;
   }
 
   /** A picker with nothing chosen is a question, and its block is who to ask. */
@@ -158,7 +192,13 @@ export class GuiElement extends GraphNodeElement<GuiConfig> {
     if (!Array.isArray(widgets)) return;
     const widgetId = portId.replace(/_in$/, '');
     for (const raw of widgets) {
-      if ((raw as RawConfig)?.id === widgetId) (raw as RawConfig).value = value as never;
+      const stored = raw as RawConfig;
+      if (stored?.id !== widgetId) continue;
+      // The block decides what arriving means: most become the value, a
+      // conversation adds a turn.
+      const element = BY_KIND.get(String(stored.kind) as Widget['kind']);
+      if (element) element.settle(stored, value);
+      else stored.value = value as never;
     }
   }
 }

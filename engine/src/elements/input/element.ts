@@ -43,6 +43,11 @@ export class InputElement extends GraphNodeElement<InputConfig> {
     };
   }
 
+  override referencedPaths(node: GraphNode): string[] {
+    const settings = this.config(node);
+    return settings.mode !== 'text' && settings.value ? [settings.value] : [];
+  }
+
   override derivedPorts(node: GraphNode) {
     const settings = this.config(node);
     const { mode } = settings;

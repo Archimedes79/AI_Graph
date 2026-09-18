@@ -1,31 +1,38 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readdirSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { resolve } from 'node:path';
-import { parseGraph } from './graph.ts';
-import { executeGraph } from './executor.ts';
+import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join, resolve } from 'node:path';
+import { parseGraph, type Graph } from './graph.ts';
+import type { Trigger } from './triggers.ts';
+import { executeGraph, memoryFeedbackEdges, topologicalLevels } from './executor.ts';
 import { registry } from './registry.ts';
 import { nodeFiles, nodeCode } from './host/node.ts';
 import { aiService } from './ai/providers.ts';
-import { applyRuntimeValues, runtimeRequirements, withDefaults } from './runtimeValues.ts';
+import { writeBundle } from './bundle.ts';
 
 /**
- * Every example, run and checked.
+ * Every example, run the three ways a person runs one.
  *
- * This replaces the differential test, which ran each example through this
- * engine and through the Python one and diffed them. That test did its job —
- * six differences, two of them defects in the older engine — and its job ended
- * when the older engine did: there is nothing left to differ from.
+ * **A click on Run** -- the whole graph, on nothing but its own defaults. An
+ * example that needs a path typed in before it does anything is a puzzle, not
+ * an example.
  *
- * What must not end is the coverage. So the expectations that were implicit in
- * "both engines agree" are written out here: which nodes run, what they
- * produce, and the four behaviours that were hardest to get right — the memory
- * edge that makes a chart-into-panel loop legal, a wired file arriving as
- * content rather than a path, a per-item fan-out over a real folder, and a
- * prompt assembled from everything wired in.
+ * **Its own page** -- where it has one: the event a block fires, and only what
+ * that event is wired to.
+ *
+ * **Deployed** -- written as a bundle into a temporary folder and run *from
+ * there*, with the repository out of reach. The files it starts on have to
+ * have come along.
+ *
+ * The folder is read, not listed: an example added tomorrow is held to the
+ * same three without anyone remembering to add it here.
  */
 
 const REPO = resolve(__dirname, '..', '..');
+const EXAMPLES = readdirSync(resolve(REPO, 'examples')).filter((name) => name.endsWith('.json')).sort();
 
 /** An endpoint that answers with a summary of what it was sent. */
 function startModel(): Promise<{ url: string; server: Server; asked: string[] }> {
@@ -56,85 +63,192 @@ function startModel(): Promise<{ url: string; server: Server; asked: string[] }>
 const model = await startModel();
 afterAll(() => { model.server.close(); });
 
-async function run(name: string, values: Record<string, string> = {}) {
+/**
+ * An example as a graph in hand.
+ *
+ * Two things are changed, and neither is the graph. Its paths are made
+ * absolute, because they are relative to the repository root and a test does
+ * not run from there. And its model is swapped for the stub: these examples
+ * name their provider on every node, and a test must not call it.
+ */
+async function load(name: string): Promise<Graph> {
   const graph = parseGraph(JSON.parse(await readFile(resolve(REPO, 'examples', name), 'utf8')));
-  applyRuntimeValues(graph, withDefaults(runtimeRequirements(graph, registry), values), registry);
+  const rooted = (path: unknown) => (typeof path === 'string' && path && !isAbsolute(path) ? resolve(REPO, path) : path);
+  for (const node of graph.nodes) {
+    if (node.node_type === 'input' && node.config.input_mode !== 'text') node.config.value = rooted(node.config.value);
+    for (const block of (node.config.gui_widgets as { kind: string; value: unknown }[] | undefined) ?? []) {
+      if (block.kind === 'input_picker') block.value = rooted(block.value);
+    }
+    if (node.node_type === 'ai') { node.config.ai_provider = 'default'; node.config.ai_model = ''; }
+  }
+  graph.metadata.ai_defaults = { provider: 'default', model: '' };
+  return graph;
+}
+
+function runGraph(graph: Graph, trigger: Trigger | null = null) {
   return executeGraph(graph, {
     registry,
+    trigger,
     runtime: {
       files: nodeFiles,
       code: nodeCode,
-      ai: aiService({
-        provider: 'openai_compatible',
-        model: 'stub-model',
-        endpoints: { openai_compatible: model.url },
-      }),
+      ai: aiService({ provider: 'openai_compatible', model: 'stub-model', endpoints: { openai_compatible: model.url } }),
     },
   });
 }
 
-const outputsOf = (result: Awaited<ReturnType<typeof run>>, nodeId: string) =>
-  result.node_results.find((node) => node.node_id === nodeId)?.outputs ?? {};
+type Result = Awaited<ReturnType<typeof runGraph>>;
+const outputsOf = (result: Result, nodeId: string) => result.node_results.find((n) => n.node_id === nodeId)?.outputs ?? {};
+const shownOn = (result: Result, nodeId: string) => result.node_results.find((n) => n.node_id === nodeId)?.display ?? {};
+const blocksOf = (graph: Graph, nodeId: string) =>
+  graph.nodes.find((n) => n.id === nodeId)!.config.gui_widgets as { id: string; value: unknown }[];
 
-describe('the examples run', () => {
-  it('hello_world: a text input reaches the output', async () => {
-    const result = await run('hello_world.json');
+/** A bundle's own `run`, from its own folder, reaching the stub as "Google" -- the provider the examples name. */
+function runBundle(dir: string): Promise<{ code: number; out: string; err: string }> {
+  return new Promise((fulfil, fail) => {
+    const child = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), join(dir, 'graph.json'), '--limit', '1'], {
+      cwd: dir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        GOOGLE_BASE_URL: model.url, GOOGLE_API_KEY: 'a-test-key',
+        // This machine's own settings file must not decide what a test does.
+        AI_GRAPH_SETTINGS: join(dir, 'no-settings-here.json'),
+      },
+    });
+    let out = ''; let err = '';
+    child.stdout.on('data', (chunk) => { out += chunk; });
+    child.stderr.on('data', (chunk) => { err += chunk; });
+    child.on('error', fail);
+    child.on('close', (code) => fulfil({ code: code ?? -1, out, err }));
+  });
+}
+
+describe.each(EXAMPLES)('%s', (name) => {
+  it('is a graph the engine can order', async () => {
+    const graph = await load(name);
+    const feedback = memoryFeedbackEdges(graph.nodes, graph.edges, registry);
+    expect(() => topologicalLevels(graph.nodes, graph.edges, feedback)).not.toThrow();
+    expect(graph.metadata.description.length).toBeGreaterThan(20);
+  });
+
+  it('runs with a click on Run, on nothing but its own defaults', async () => {
+    const result = await runGraph(await load(name));
+    expect(result.node_results.filter((n) => n.status === 'error').map((n) => `${n.node_id}: ${n.error}`)).toEqual([]);
     expect(result.status).toBe('success');
+  }, 120_000);
+
+  it('can be deployed: it runs from its own folder, with the files it starts on', async () => {
+    const graph = parseGraph(JSON.parse(await readFile(resolve(REPO, 'examples', name), 'utf8')));
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-example-'));
+    try {
+      await writeBundle(graph, dir, { dataFrom: REPO });
+      const { code, out, err } = await runBundle(dir);
+      expect(err).not.toMatch(/no such file|ENOENT/i);
+      expect(code).toBe(0);
+      expect(JSON.parse(out).status).toBe('success');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 180_000);
+});
+
+describe('what each example is there to show', () => {
+  it('hello_world: a text input reaches the output', async () => {
+    const result = await runGraph(await load('hello_world.json'));
     expect(outputsOf(result, 'greeting')).toEqual({ output: 'Hello, World!' });
   }, 60_000);
 
-  it('plotter: a picked file becomes chart points, and the loop closes', async () => {
-    // The picker's stored default is repo-relative; a test does not run from the repo root.
-    const result = await run('plotter_interactive.json', { 'panel::picker': resolve(REPO, 'examples', 'bev_data.csv') });
-    expect(result.status).toBe('success');
+  it('text_transform: a body\'s returned keys are its output ports', async () => {
+    const result = await runGraph(await load('text_transform.json'));
+    expect(outputsOf(result, 'transform')).toEqual({ word_count: 9, upper: 'THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG' });
+  }, 60_000);
 
-    // The code node was handed the file's *content*, not its path, and turned
-    // it into points. Wiring a file into a node that asked for content is what
-    // `read_file_inputs` means.
-    const points = outputsOf(result, 'points').points as { label: string; value: number }[];
-    expect(points.length).toBeGreaterThan(2);
-    expect(points[0]).toMatchObject({ label: expect.any(String), value: expect.any(Number) });
-
-    // And the chart fed back into the panel that shows it — the memory edge,
-    // settled in the round that produced it rather than the next one.
-    const panel = result.node_results.find((node) => node.node_id === 'panel');
-    expect(panel?.inputs.chart_in).toEqual(points);
-  }, 120_000);
-
-  it('bla_counter: a folder fans out per file and adds up', async () => {
-    const result = await run('bla_counter.json', { folder: resolve(REPO, 'docs') });
-    expect(result.status).toBe('success');
-
+  it('word_counter: a folder fans out per file and adds up', async () => {
+    const result = await runGraph(await load('word_counter.json'));
     // One run per file, kept as a list: the fan-out is the part that was
     // easiest to get subtly wrong, and an empty folder must produce none.
-    const perFile = outputsOf(result, 'count_per_file').output as unknown[];
-    expect(Array.isArray(perFile)).toBe(true);
-    expect(perFile.length).toBeGreaterThan(1);
-
-    const total = outputsOf(result, 'total');
-    expect(total.summary).toMatch(/file\(s\)/);
+    const perFile = outputsOf(result, 'per_file').output as { words: number }[];
+    expect(perFile).toHaveLength(3);
+    // The wired paths arrived as the files' *content*: real word counts, not 1.
+    expect(perFile.every((item) => item.words > 100)).toBe(true);
+    expect(outputsOf(result, 'total').summary).toMatch(/^3 file\(s\), [\d,]+ words in all/);
   }, 120_000);
 
-  it('text_summary: each story, then all of them', async () => {
+  it('chat: a message starts the graph, and the turn is remembered', async () => {
     const before = model.asked.length;
-    const result = await run('text_summary.json', {
-      stories: resolve(REPO, 'examples/kurzgeschichten'),
-    });
-    expect(result.status).toBe('success');
+    const graph = await load('chat.json');
+    const chat = blocksOf(graph, 'page').find((block) => block.id === 'chat') as { value: { messages: unknown[]; pending: string } };
+    const trigger = { node_id: 'page', port_id: 'chat_out' };
 
-    const each = outputsOf(result, 'per_story').output as string[];
-    expect(each.length).toBe(3);
+    chat.value.pending = 'Hello there';
+    expect((await runGraph(graph, trigger)).status).toBe('success');
+    chat.value.pending = 'And again';
+    expect((await runGraph(graph, trigger)).status).toBe('success');
 
-    // The prompts carried the stories' text — thousands of characters, not the
-    // three filenames, which is what it sent before `read_file_inputs` moved to
-    // the executor.
+    // The second request carries the first turn: the block is the memory, and
+    // the message template is what lays history and message out.
+    const [first, second] = model.asked.slice(before);
+    expect(first).toBe('Conversation so far:\n\n\nUser: Hello there');
+    expect(second).toContain('User: Hello there\n\nAssistant: summary(');
+    expect(second.endsWith('User: And again')).toBe(true);
+    expect(chat.value.messages).toHaveLength(4);
+    expect(chat.value.pending).toBe('');
+  }, 60_000);
+
+  it('chat: a click on Run with nothing typed asks nobody and changes nothing', async () => {
+    const before = model.asked.length;
+    const graph = await load('chat.json');
+    const result = await runGraph(graph);
+    expect(model.asked.length).toBe(before);
+    expect(result.node_results.find((n) => n.node_id === 'assistant')?.status).toBe('skipped');
+    expect((blocksOf(graph, 'page')[2].value as { messages: unknown[] }).messages).toEqual([]);
+  }, 60_000);
+
+  it('file_summarizer: changing the length redoes the summary, from the file as read', async () => {
+    const before = model.asked.length;
+    const result = await runGraph(await load('file_summarizer.json'), { node_id: 'page', port_id: 'length_out' });
+    expect(result.node_results.map((n) => n.node_id).sort()).toEqual(['page', 'reader', 'summarizer']);
+    expect(String(outputsOf(result, 'reader').info)).toMatch(/^01_the_lighthouse_keeper\.txt\n\d+ words/);
+
+    const asked = model.asked.slice(before);
+    expect(asked).toHaveLength(1);
+    expect(asked[0].startsWith('Length of the summary: Three sentences\n\nThe text:\nThe Lighthouse')).toBe(true);
+    expect(String(shownOn(result, 'page').summary)).toMatch(/^summary\(/);
+  }, 60_000);
+
+  it('folder_summaries: one call per story, one over all of them, and a row for each', async () => {
+    const before = model.asked.length;
+    const result = await runGraph(await load('folder_summaries.json'), { node_id: 'page', port_id: 'go_out' });
     const prompts = model.asked.slice(before);
-    expect(prompts.length).toBe(4);
+    expect(prompts).toHaveLength(4);
+    // The stories' text, not their filenames; and the last call gets the three
+    // summaries as paragraphs rather than as a serialised list.
     expect(Math.max(...prompts.slice(0, 3).map((p) => p.length))).toBeGreaterThan(500);
-
-    // The last call summarises the three summaries, and they arrive as
-    // paragraphs rather than as a serialised list.
     expect(prompts[3]).not.toContain('[');
     expect(prompts[3].split('\n\n')).toHaveLength(3);
-  }, 180_000);
+
+    const rows = shownOn(result, 'page').table as { File: string; Summary: string }[];
+    expect(rows.map((row) => row.File)).toEqual([
+      '01_the_lighthouse_keeper.txt', '02_the_map_with_a_gap.txt', '03_the_second_key.txt',
+    ]);
+    expect(rows.every((row) => row.Summary.startsWith('summary('))).toBe(true);
+  }, 120_000);
+
+  it('population_plotter: every kind of chart is drawn, and reaches the page across the loop', async () => {
+    for (const [kind, mark] of [['Horizontal bars', '<rect'], ['Columns', '<rect'], ['Donut', '<path']] as const) {
+      const graph = await load('population_plotter.json');
+      blocksOf(graph, 'page').find((block) => block.id === 'kind')!.value = kind;
+      blocksOf(graph, 'page').find((block) => block.id === 'top')!.value = 6;
+
+      const result = await runGraph(graph, { node_id: 'page', port_id: 'kind_out' });
+      expect(result.status).toBe('success');
+      // The chart fed back into the page that holds its controls: the memory
+      // edge, settled and shown in the round that produced it.
+      const drawing = String(shownOn(result, 'page').plot);
+      expect(drawing.startsWith('<svg')).toBe(true);
+      expect(drawing).toContain(mark);
+      expect(drawing).toContain('top 6 of 20');
+      expect((shownOn(result, 'page').table as { Country: string }[]).slice(0, 2).map((row) => row.Country)).toEqual(['India', 'China']);
+    }
+  }, 120_000);
 });

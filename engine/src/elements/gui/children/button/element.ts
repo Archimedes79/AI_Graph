@@ -7,14 +7,15 @@ export interface ButtonConfig {
 }
 
 /**
- * A press, counted.
+ * A press: it starts the graph at whatever the button is wired to.
  *
- * A run is one pass through the whole graph, not a live channel into it —
- * pressing this does not itself start a run, the way it would in a system
- * built around events. What it gives a downstream node is the number of
- * presses since the count was last read: a code node comparing that against
- * what it saw last time can tell whether *this* run follows a press, and by
- * how many.
+ * Wired to a node's run port it says "start here" and nothing else, which is
+ * what a Send button beside a message box means. Wired to nothing it starts
+ * the whole graph, which is what a lone "Go" means. See `triggers.ts` for
+ * what runs and what is left alone.
+ *
+ * It still counts its presses and emits the count, for a node that wants to
+ * know how often rather than merely when.
  */
 export class ButtonElement extends WidgetElement<ButtonConfig> {
   readonly widgetKind = 'button' as const;
@@ -26,6 +27,11 @@ export class ButtonElement extends WidgetElement<ButtonConfig> {
 
   ports(widget: Widget) {
     return { inputs: [], outputs: [port(`${widget.id}_out`, widget.label || widget.id, 'output', 'number')] };
+  }
+
+  /** Pressing it is the event; there is no setting that would make it not one. */
+  override firesRun(): boolean {
+    return true;
   }
 
   async execute(widget: Widget) {
