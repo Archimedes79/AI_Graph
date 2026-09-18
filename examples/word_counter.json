@@ -1,0 +1,217 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "author": "AI-Graph",
+    "ai_defaults": {
+      "provider": "default",
+      "model": ""
+    },
+    "gui_scheme": "night",
+    "name": "Word counter",
+    "description": "A folder fans out: the first code node runs once per file, the second once over all the results. No model and no page -- run it from the command line and read the JSON, or press Run and read the window.",
+    "tags": [
+      "example",
+      "batch",
+      "code"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "folder",
+      "node_type": "input",
+      "label": "Text folder",
+      "description": "Every .txt file in a folder",
+      "position": {
+        "x": 60,
+        "y": 140
+      },
+      "inputs": [
+        {
+          "id": "path",
+          "name": "Path",
+          "kind": "input",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": "Override the configured path"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "files",
+          "name": "Files",
+          "kind": "output",
+          "data_type": "file_path",
+          "multi": true,
+          "required": false,
+          "description": "Rooted file paths"
+        },
+        {
+          "id": "count",
+          "name": "Count",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "config": {
+        "input_mode": "directory",
+        "value": "examples/data/stories",
+        "extensions": ".txt",
+        "select_all_files": true
+      }
+    },
+    {
+      "id": "per_file",
+      "node_type": "code",
+      "label": "Count per file",
+      "description": "Counts one file's words",
+      "position": {
+        "x": 380,
+        "y": 120
+      },
+      "inputs": [
+        {
+          "id": "file",
+          "name": "File",
+          "kind": "input",
+          "data_type": "file_path",
+          "multi": true,
+          "required": false,
+          "description": "One file per run; arrives as its content"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Count",
+          "kind": "output",
+          "data_type": "json",
+          "multi": true,
+          "required": false,
+          "description": "{words, longest} per file"
+        }
+      ],
+      "config": {
+        "code": "/**\n * One file's words. Runs once per file: the node is set to \"per item\".\n *\n * @typedef {Object} Inputs\n * @property {string} file  one file's content (read for us: the port is a file path)\n */\n\n/** @param {Inputs} inputs */\nfunction run(inputs) {\n  const words = String(inputs.file ?? '').split(/\\s+/).filter(Boolean);\n  return { output: { words: words.length, longest: words.reduce(function (a, b) { return b.length > a.length ? b : a; }, '') } };\n}\n",
+        "code_prompt": "Count the words in the file, and find its longest word.",
+        "batch_mode": "per_item",
+        "read_file_inputs": true
+      }
+    },
+    {
+      "id": "total",
+      "node_type": "code",
+      "label": "Total",
+      "description": "Adds the counts up",
+      "position": {
+        "x": 700,
+        "y": 120
+      },
+      "inputs": [
+        {
+          "id": "counts",
+          "name": "Counts",
+          "kind": "input",
+          "data_type": "json",
+          "multi": true,
+          "required": false,
+          "description": "Every file's count"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "total",
+          "name": "Total",
+          "kind": "output",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "summary",
+          "name": "Summary",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "config": {
+        "code": "/**\n * Every file's count, added up. Runs once, on the whole list.\n *\n * @typedef {Object} Inputs\n * @property {Array<{words: number, longest: string}>} counts  one per file\n */\n\n/** @param {Inputs} inputs */\nfunction run(inputs) {\n  const counts = [].concat(inputs.counts ?? []).filter(Boolean);\n  const total = counts.reduce(function (sum, item) { return sum + Number(item.words ?? 0); }, 0);\n  return {\n    total: total,\n    summary: counts.length + ' file(s), ' + total.toLocaleString('en') + ' words in all; the longest word is \"'\n      + counts.reduce(function (a, item) { return item.longest.length > a.length ? item.longest : a; }, '') + '\".',\n  };\n}\n",
+        "code_prompt": "Sum the per-file word counts and write a one-line summary.",
+        "batch_mode": "whole_list",
+        "read_file_inputs": false
+      }
+    },
+    {
+      "id": "result",
+      "node_type": "output",
+      "label": "Result",
+      "description": "",
+      "position": {
+        "x": 1020,
+        "y": 120
+      },
+      "inputs": [
+        {
+          "id": "total",
+          "name": "Total",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "summary",
+          "name": "Summary",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "outputs": [],
+      "config": {
+        "output_label": "Word count",
+        "write_mode": "window"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source_node_id": "folder",
+      "source_port_id": "files",
+      "target_node_id": "per_file",
+      "target_port_id": "file"
+    },
+    {
+      "id": "e2",
+      "source_node_id": "per_file",
+      "source_port_id": "output",
+      "target_node_id": "total",
+      "target_port_id": "counts"
+    },
+    {
+      "id": "e3",
+      "source_node_id": "total",
+      "source_port_id": "total",
+      "target_node_id": "result",
+      "target_port_id": "total"
+    },
+    {
+      "id": "e4",
+      "source_node_id": "total",
+      "source_port_id": "summary",
+      "target_node_id": "result",
+      "target_port_id": "summary"
+    }
+  ]
+}

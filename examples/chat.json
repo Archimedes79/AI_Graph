@@ -1,0 +1,175 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "author": "AI-Graph",
+    "ai_defaults": {
+      "provider": "google",
+      "model": "gemini-flash-lite-latest"
+    },
+    "gui_scheme": "night",
+    "name": "Chat",
+    "description": "A chatbot is two nodes: a page with a chat block, and a model. Sending a message starts the graph at the AI node; the answer comes back into the conversation, and the conversation goes out again as history with the next message.",
+    "tags": [
+      "example",
+      "chat",
+      "gui",
+      "ai",
+      "triggers"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "page",
+      "node_type": "gui",
+      "label": "Chat",
+      "description": "The page this tool shows",
+      "position": {
+        "x": 60,
+        "y": 140
+      },
+      "width": 340,
+      "height": 220,
+      "inputs": [
+        {
+          "id": "chat_in",
+          "name": "Chat: reply",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": "The answer to the message just sent. It is added to the conversation."
+        }
+      ],
+      "outputs": [
+        {
+          "id": "chat_out",
+          "name": "Chat: message",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "What the person just sent. Sending it starts the graph from whatever this is wired to."
+        },
+        {
+          "id": "chat_history",
+          "name": "Chat: history",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "Everything said before this message, one turn per paragraph."
+        }
+      ],
+      "config": {
+        "gui_widgets": [
+          {
+            "id": "title",
+            "kind": "text",
+            "label": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1,
+            "mode": "heading",
+            "value": "Chat"
+          },
+          {
+            "id": "intro",
+            "kind": "text",
+            "label": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1,
+            "mode": "caption",
+            "value": "Type a message and press Enter. The model sees the whole conversation each time."
+          },
+          {
+            "id": "chat",
+            "kind": "chat",
+            "label": "Chat",
+            "tone": "plain",
+            "w": 16,
+            "h": 8,
+            "value": {
+              "messages": [],
+              "pending": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "assistant",
+      "node_type": "ai",
+      "label": "Assistant",
+      "description": "Answer the user's last message as a friendly, concise assistant that remembers the conversation.",
+      "position": {
+        "x": 640,
+        "y": 160
+      },
+      "inputs": [
+        {
+          "id": "history",
+          "name": "History",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The conversation so far"
+        },
+        {
+          "id": "message",
+          "name": "Message",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": true,
+          "description": "What the user just said"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Output",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "What the model answered"
+        }
+      ],
+      "config": {
+        "ai_provider": "google",
+        "ai_model": "gemini-flash-lite-latest",
+        "temperature": 0.7,
+        "system_prompt": "You are a friendly, concise assistant in a chat window.\n\nYou are given the conversation so far and the user's newest message. Answer the newest message, using the conversation for context. Answer in the language the user writes in. Use Markdown where it helps (lists, **bold**, `code`), and keep answers short unless asked for detail. Reply with the answer only — do not prefix it with \"Assistant:\".",
+        "prompt_template": "Conversation so far:\n{{history}}\n\nUser: {{message}}",
+        "output_format": "text",
+        "batch_mode": "whole_list",
+        "read_file_inputs": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source_node_id": "page",
+      "source_port_id": "chat_out",
+      "target_node_id": "assistant",
+      "target_port_id": "message"
+    },
+    {
+      "id": "e2",
+      "source_node_id": "page",
+      "source_port_id": "chat_history",
+      "target_node_id": "assistant",
+      "target_port_id": "history"
+    },
+    {
+      "id": "e3",
+      "source_node_id": "assistant",
+      "source_port_id": "output",
+      "target_node_id": "page",
+      "target_port_id": "chat_in"
+    }
+  ]
+}
