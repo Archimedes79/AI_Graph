@@ -4,7 +4,8 @@ import { useGraphStore } from '../store/graphStore';
 import ProviderModelSelect from '../elements/shared/ProviderModelSelect';
 import AICredentialsSection from './AICredentialsSection';
 import Modal from './Modal';
-import { ACCENT_FILL, ACCENT_TEXT, DIM, PRIMARY_BUTTON, TEXT } from '../ui/theme';
+import { ACCENT_FILL, ACCENT_TEXT, DANGER_TEXT, DIM, FIELD, PRIMARY_BUTTON, TEXT } from '../ui/theme';
+import { parseInterval } from '@engine/triggers.ts';
 
 interface SettingsDialogProps {
   onClose: () => void;
@@ -32,6 +33,19 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
 
   const setAiDefaults = (patch: Partial<typeof aiDefaults>) =>
     setMetadata({ ai_defaults: { ...aiDefaults, ...patch } });
+
+  const triggers = metadata.triggers ?? {};
+  const setTriggers = (patch: Partial<NonNullable<typeof metadata.triggers>>) =>
+    setMetadata({ triggers: { ...triggers, ...patch } });
+  // Said while it is being typed, in the engine's own words: the same function
+  // reads this field when the graph runs, so what it rejects here it would
+  // reject there -- at three in the morning, in a log nobody is reading.
+  let intervalProblem = '';
+  try {
+    if ((triggers.every ?? '').trim()) parseInterval(triggers.every!);
+  } catch (error) {
+    intervalProblem = error instanceof Error ? error.message : String(error);
+  }
 
   return (
     <Modal
@@ -95,6 +109,44 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               line, an <code>AI_GRAPH_AI_PROVIDER</code> environment variable, or an{' '}
               <code>ai-settings.json</code> next to the executable all take precedence over this.
             </div>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>
+              What starts this graph
+            </h3>
+            <p className="text-xs mb-3" style={{ color: DIM }}>
+              Three things can. <strong>Something on its page</strong> — a button, a chat message, a
+              dropdown told to — starts it at the node that block is wired to, and needs no setting
+              here. The other two start the whole graph, and are saved with it
+              as <code>metadata.triggers</code>:
+            </p>
+            <label className="flex items-center gap-2 text-sm mb-2" style={{ color: TEXT }}>
+              <input
+                type="checkbox"
+                checked={triggers.on_start === true}
+                onChange={(e) => setTriggers({ on_start: e.target.checked })}
+              />
+              When the tool is opened
+            </label>
+            <label className="flex items-center gap-2 text-sm" style={{ color: TEXT }}>
+              <span>Again every</span>
+              <input
+                className="rounded-lg px-2 py-1 text-sm font-mono"
+                style={{ ...FIELD, width: 90 }}
+                value={triggers.every ?? ''}
+                onChange={(e) => setTriggers({ every: e.target.value })}
+                placeholder="never"
+                aria-label="Interval"
+              />
+              <span className="text-xs" style={{ color: intervalProblem ? DANGER_TEXT : DIM }}>
+                {intervalProblem || '45, 30s, 5m, 2h or 1d — counted from the end of one run to the start of the next'}
+              </span>
+            </label>
+            <p className="text-xs mt-2" style={{ color: DIM }}>
+              On the command line the same clock applies without a flag
+              (<code>node engine/src/main.ts graph.json</code>); <code>--every</code> overrides it.
+            </p>
           </section>
 
           <section>

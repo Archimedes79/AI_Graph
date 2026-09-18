@@ -73,3 +73,7 @@ button:disabled {
 .hover-raise:hover {
   background: var(--ui-hover, rgba(255,255,255,0.06));
 }
+
+/* A chat block waiting for its answer: three dots, breathing. */
+.chat-typing { letter-spacing: 2px; animation: chat-typing 1.2s ease-in-out infinite; }
+@keyframes chat-typing { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }

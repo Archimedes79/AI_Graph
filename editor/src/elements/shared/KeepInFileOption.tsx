@@ -7,7 +7,7 @@ interface KeepInFileOptionProps {
   label: string;
   /** Current file name, or '' when the text lives in the graph. */
   fileName: string;
-  /** `.py`, `.js`, `.md` — whatever this element's content deserves. */
+  /** `.js` or `.md` — whatever this element's content deserves. */
   extension: string;
   /** How to refer to the content: "this code", "this system prompt". */
   what: string;

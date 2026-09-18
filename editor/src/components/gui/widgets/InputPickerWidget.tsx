@@ -5,7 +5,7 @@ import FileBrowserDialog from '../../FileBrowserDialog';
 import { DANGER_SOFT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '../../../ui/theme';
 
 /** Runtime input_picker widget: unified file or directory picker. */
-export default function InputPickerWidget({ widget, value, onChange }: GuiWidgetRuntimeProps) {
+export default function InputPickerWidget({ widget, value, onChange, onTrigger }: GuiWidgetRuntimeProps) {
   const isDir = widget.mode === 'directory';
   const displayVal = Array.isArray(value) ? `${value.length} file(s) selected` : valueToText(value);
 
@@ -24,6 +24,8 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
           style={FIELD}
           value={Array.isArray(value) ? '' : valueToText(value)}
           onChange={(e) => onChange(e.target.value)}
+          // Typing a path is not choosing one until it is finished: Enter says so.
+          onKeyDown={(e) => { if (e.key === 'Enter') onTrigger?.((e.target as HTMLInputElement).value); }}
           placeholder={isDir ? '/path/to/directory' : '/path/to/file'}
           readOnly={Array.isArray(value)}
         />
@@ -57,7 +59,7 @@ export default function InputPickerWidget({ widget, value, onChange }: GuiWidget
           mode={isDir ? 'directory' : 'file'}
           initialPath={Array.isArray(value) ? '' : valueToText(value)}
           extensions={widget.extensions || ''}
-          onPick={(picked) => { onChange(picked); setBrowsing(false); }}
+          onPick={(picked) => { onChange(picked); setBrowsing(false); onTrigger?.(picked); }}
           onClose={() => setBrowsing(false)}
         />
       )}

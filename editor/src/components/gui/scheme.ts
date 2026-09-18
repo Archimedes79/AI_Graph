@@ -74,7 +74,7 @@ export interface Scheme {
 export const SCHEMES: Scheme[] = [
   {
     id: 'night',
-    label: 'Nacht — dunkles Blau',
+    label: 'Night — dark blue',
     sunken: '#0f1117', surface: '#1a1d2e', line: '#2d3148',
     raise: 'rgba(255,255,255,0.03)', hover: 'rgba(255,255,255,0.06)',
     scrim: 'rgba(0,0,0,0.70)', header: 'rgba(0,0,0,0.30)',
@@ -85,7 +85,7 @@ export const SCHEMES: Scheme[] = [
   },
   {
     id: 'paper',
-    label: 'Papier — hell und warm',
+    label: 'Paper — light and warm',
     light: true,
     // Warm off-white rather than #fff, and ink rather than black: a page you can
     // look at for an afternoon. The accent is a burnt orange, the one hue that
@@ -100,7 +100,7 @@ export const SCHEMES: Scheme[] = [
   },
   {
     id: 'office',
-    label: 'Büro — weiß mit hellem Grau',
+    label: 'Office — white with light grey',
     light: true,
     // White paper with grey boxes on it, which is what a document looks like
     // in every office program. The blue is the one people already read as
@@ -115,7 +115,7 @@ export const SCHEMES: Scheme[] = [
   },
   {
     id: 'anthracite',
-    label: 'Anthrazit — fast schwarz',
+    label: 'Anthracite — almost black',
     // Darker than Graphit and colder: for a room with the lights off, or a
     // second window beside one that is already dark.
     sunken: '#0a0a0b', surface: '#141416', line: '#28282c',
@@ -128,7 +128,7 @@ export const SCHEMES: Scheme[] = [
   },
   {
     id: 'graphite',
-    label: 'Graphit — neutral dunkel',
+    label: 'Graphite — neutral dark',
     sunken: '#111113', surface: '#1b1b1f', line: '#33333a',
     raise: 'rgba(255,255,255,0.04)', hover: 'rgba(255,255,255,0.07)',
     scrim: 'rgba(0,0,0,0.70)', header: 'rgba(0,0,0,0.35)',
@@ -138,6 +138,47 @@ export const SCHEMES: Scheme[] = [
     nodes: { input: '#1d2f36', ai: '#2a2435', code: '#1e3228', data: '#1c3234', output: '#342819', gui: '#35232f' },
   },
 ];
+
+/**
+ * Colours for telling series apart, one set per kind of page.
+ *
+ * Not per scheme: what makes eight colours distinguishable is how they sit on a
+ * dark or a light ground, and there are only those two grounds. The first of
+ * the eight is always the scheme's own accent, so a one-series chart matches
+ * the page it is on. A generated chart reaches them as `var(--plot-1)` …
+ * `var(--plot-8)`, which is how it keeps working when the scheme is changed
+ * after the model has gone home.
+ */
+const PLOT_ON_DARK = ['#22c55e', '#f59e0b', '#ec4899', '#06b6d4', '#a78bfa', '#84cc16', '#fb923c'];
+const PLOT_ON_LIGHT = ['#15803d', '#b45309', '#be185d', '#0e7490', '#6d28d9', '#4d7c0f', '#c2410c'];
+
+export function plotColours(id: string | undefined): string[] {
+  const s = scheme(id);
+  return [s.accent, ...(s.light ? PLOT_ON_LIGHT : PLOT_ON_DARK)];
+}
+
+/**
+ * The page's look, in words, for a model about to draw on it.
+ *
+ * Information, not a rule. Whoever writes the chart -- and it may be a small
+ * local model that has never heard of this app -- cannot see the page; told
+ * nothing, it draws dark text on a white panel, which on the night scheme is a
+ * white slab with a chart nobody asked to be white. Told what the page is and
+ * which colours follow it, it can choose: follow the page where a colour only
+ * tells things apart, fix it where the colour means something.
+ */
+export function describeScheme(id: string | undefined): string {
+  const s = scheme(id);
+  const series = plotColours(id).map((colour, index) => `var(--plot-${index + 1}) = ${colour}`).join(', ');
+  return [
+    `The page this is drawn on: the "${s.label}" scheme, a ${s.light ? 'LIGHT' : 'DARK'} page.`,
+    `Right now its colours are -- page background ${s.sunken}, a block's surface ${s.surface}, text ${s.text} `
+      + `(this is what currentColor resolves to), quieter text ${s.muted}, hairlines ${s.line}, accent ${s.accent}.`,
+    `Series colours, chosen to be told apart on this ground: ${series}.`,
+    'The person can switch schemes later. Colours written as currentColor or var(--…) follow the switch; '
+      + 'a fixed hex stays what it is -- right for a colour that carries meaning, wrong for ordinary text.',
+  ].join('\n');
+}
 
 export function scheme(id: string | undefined): Scheme {
   return SCHEMES.find((s) => s.id === id) ?? SCHEMES[0];
@@ -178,6 +219,7 @@ export function schemeVars(id: string | undefined): React.CSSProperties {
     '--ui-node-data': s.nodes.data,
     '--ui-node-output': s.nodes.output,
     '--ui-node-gui': s.nodes.gui,
+    ...Object.fromEntries(plotColours(id).map((colour, index) => [`--plot-${index + 1}`, colour])),
     // Scrollbars, form controls and the window's own backdrop follow, so a
     // light scheme is light to the edges instead of a light page on a dark desk.
     colorScheme: s.light ? 'light' : 'dark',

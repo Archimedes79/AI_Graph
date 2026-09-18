@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Graph, ExecutionResult, RuntimeRequirement } from '../types/graph';
+import type { Graph, ExecutionResult, NodeResult, RuntimeRequirement } from '../types/graph';
 
 // No clock. A local model asked to design a whole graph takes as long as it
 // takes, and a browser that gives up first turns a slow answer into no answer
@@ -23,6 +23,10 @@ export const saveGraphFile = (path: string, graph: Graph): Promise<{ path: strin
 
 // Re-read the node files of an already-open graph. Only needed for the case the
 // conflict check exists for: edited outside while the editor was open.
+/** Open one of the graph's node files in the person's own editor (VS Code when it is there). */
+export const openNodeFile = (graphPath: string, file: string): Promise<{ path: string; with: string }> =>
+  api.post('/files/open-external', { graph_path: graphPath, file }).then((r) => r.data);
+
 export const reloadNodeFiles = (path: string): Promise<{ path: string; graph: Graph }> =>
   api.post('/graphs/file/reload-nodes', { path }).then((r) => r.data);
 
@@ -34,7 +38,7 @@ export const getRuntimeRequirements = (graph: Graph): Promise<RuntimeRequirement
 /**
  * What running the generated code against real data revealed. `skipped` means
  * no sample was sent, so generation was a single pass -- see
- * backend/app/services/code_refine.py.
+ * engine/src/host/editor/generate.ts.
  */
 export interface CodeProbeReport {
   status: 'skipped' | 'ok' | 'repaired' | 'failed';
@@ -117,9 +121,23 @@ export const generateGraph = (body: {
 }): Promise<{ graph: Graph; explanation?: string }> =>
   api.post('/ai/generate-graph', body).then((r) => r.data);
 
-// Deployed-runtime endpoints (served by a deploy bundle's serve.py, not by the
+// Deployed-runtime endpoints (served by a deploy bundle's engine/host/serve.ts, not by the
 // editor backend): the one graph the bundle ships, and the AI configuration
 // whoever runs it can change without touching the graph.
+/** What a served tool's own triggers last produced; see engine/src/host/schedule.ts. */
+export interface ScheduleState {
+  scheduled: boolean;
+  running: boolean;
+  runs: number;
+  result: ExecutionResult | null;
+  error: string | null;
+  finished_at: number | null;
+  next_at: number | null;
+}
+
+export const getSchedule = (): Promise<ScheduleState> =>
+  api.get('/runtime/last').then((r) => r.data);
+
 export const getRuntimeGraph = (): Promise<Graph> =>
   api.get('/runtime/graph').then((r) => r.data);
 
@@ -150,7 +168,7 @@ export const saveAISettings = (
 // Server-side directory listing for the file/directory pickers. A browser never
 // reveals a chosen file's real location, and the engine resolves real paths, so
 // a picker has to browse the machine the graph runs on. The deployed runtime
-// (graph-runner/serve.py) serves this same route on a loopback bind.
+// (engine/src/host/serve.ts) serves this same route on a loopback bind.
 export const browseDirectory = (
   path: string,
   extensions?: string,
@@ -185,7 +203,7 @@ export const detectFileFormat = (path: string): Promise<{ format: string }> =>
 
 // AI credentials and endpoints for the editor's Settings dialog. Keys are write-
 // only: the server reports whether one is set and where it came from, never its
-// value (see routers/ai.py).
+// value (see engine/src/host/editor/settings.ts).
 export interface AISettingsStatus {
   settings_file: string;
   settings_file_exists: boolean;
@@ -224,8 +242,29 @@ export interface RunSnapshot {
   result: ExecutionResult | null;
 }
 
-export const startRun = (graph: Graph): Promise<{ run_id: string; total: number }> =>
-  api.post('/execute/start', graph).then((r) => r.data);
+/** The page event that asked for a run: the port it fired on. */
+export interface RunTrigger {
+  node_id: string;
+  port_id?: string | null;
+}
+
+export const startRun = (graph: Graph, trigger?: RunTrigger | null): Promise<{ run_id: string; total: number }> =>
+  // Beside the graph, not around it: a server that has never heard of triggers
+  // reads the same body as a graph and runs all of it, which is the right
+  // thing for it to do.
+  api.post('/execute/start', trigger ? { ...graph, trigger } : graph).then((r) => r.data);
+
+/** Run one node by itself on the inputs given: what the node editor's ▶ Test does. */
+export const runNode = (graph: Graph, nodeId: string, inputs: Record<string, unknown>): Promise<NodeResult> =>
+  api.post('/execute/node', { ...graph, node_id: nodeId, inputs }).then((r) => r.data);
+
+/** One value through one block's transform, as the page would be shown it. */
+export const runBlock = (widget: unknown, value: unknown): Promise<{ status: 'success' | 'error'; shown: unknown; error: string | null }> =>
+  api.post('/execute/block', { widget, value }).then((r) => r.data);
+
+/** What would arrive at a node: what feeds it is run, the node is not. */
+export const fetchNodeInputs = (graph: Graph, nodeId: string): Promise<{ inputs: Record<string, unknown>; error: string | null }> =>
+  api.post('/execute/inputs', { ...graph, node_id: nodeId }).then((r) => r.data);
 
 export const getRunSnapshot = (runId: string): Promise<RunSnapshot> =>
   api.get(`/execute/runs/${runId}`).then((r) => r.data);

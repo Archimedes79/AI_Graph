@@ -136,145 +136,77 @@ describe('graphStore width/height persistence', () => {
   });
 });
 
-describe('graphStore memory-feedback settle', () => {
-  it('persists an acyclic data-node update for the next run', () => {
-    const data = graphNode({ id: 'data1', node_type: 'data', config: { ...blankConfig(), data_value: 'old value' } });
-    loadTestGraph([data]);
-
-    useGraphStore.getState().setExecutionResult({
-      status: 'success',
-      node_results: [{ node_id: 'data1', status: 'success', inputs: { input: 'new value' }, outputs: { output: 'new value' } }],
-    } as any);
-
-    const loadedData = useGraphStore.getState().rfNodes[0].data.graphNode;
-    expect(loadedData.config.data_value).toBe('new value');
-  });
-
-  it('persists a cycle-closing edge into a data node for the next run', () => {
-    const data = graphNode({
-      id: 'data1',
-      node_type: 'data',
-      inputs: [{ id: 'input', name: 'Update', kind: 'input', data_type: 'any', multi: false, required: false, description: '' }],
-      outputs: [{ id: 'output', name: 'Value', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }],
-      config: { ...blankConfig(), data_value: 'old value' },
-    });
-    const code = graphNode({
-      id: 'code1',
-      node_type: 'code',
-      inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: false, required: false, description: '' }],
-      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }],
-    });
-    loadTestGraph([data, code], [
-      { id: 'read', source_node_id: 'data1', source_port_id: 'output', target_node_id: 'code1', target_port_id: 'input' },
-      { id: 'write', source_node_id: 'code1', source_port_id: 'output', target_node_id: 'data1', target_port_id: 'input' },
-    ]);
-
-    useGraphStore.getState().setExecutionResult({
-      status: 'success',
-      node_results: [
-        { node_id: 'data1', status: 'success', inputs: {}, outputs: { output: 'old value' } },
-        { node_id: 'code1', status: 'success', inputs: {}, outputs: { output: 'new value' } },
-      ],
-    } as any);
-
-    const loadedData = useGraphStore.getState().rfNodes.find((node) => node.id === 'data1')!.data.graphNode;
-    expect(loadedData.config.data_value).toBe('new value');
-  });
-
-  it('persists a cycle-closing edge\'s fresh value into the target widget for the next run', () => {
-    const widget = createGuiWidget('text_io', 'Answer');
-    const gui = graphNode({
-      id: 'gui1',
-      node_type: 'gui',
+describe('graphStore: what a run remembered', () => {
+  // Which values a run keeps is the engine's decision (engine/src/run.test.ts).
+  // The store's part is to replay that list into its own long-lived copy of the
+  // graph, so the next run starts from it -- and to do nothing else.
+  const gui = (kind: 'text_io' | 'chat') => {
+    const widget = createGuiWidget(kind, 'Block');
+    const node = graphNode({
+      id: 'gui1', node_type: 'gui',
       config: { ...blankConfig(), gui_widgets: [widget] },
       ...guiWidgetPorts(widget),
     });
-    const code = graphNode({
-      id: 'code1',
-      node_type: 'code',
-      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }],
-    });
+    return { widget, node };
+  };
+  const stored = (widgetId: string) => useGraphStore.getState().rfNodes
+    .find((n) => n.id === 'gui1')!.data.graphNode.config.gui_widgets.find((w) => w.id === widgetId)!;
 
-    loadTestGraph([gui, code], [
-      { id: 'e1', source_node_id: 'gui1', source_port_id: `${widget.id}_out`, target_node_id: 'code1', target_port_id: 'value' },
-      { id: 'e2', source_node_id: 'code1', source_port_id: 'output', target_node_id: 'gui1', target_port_id: `${widget.id}_in` },
-    ]);
-
+  it('puts a data node\'s new value where the data node keeps it', () => {
+    loadTestGraph([graphNode({ id: 'data1', node_type: 'data', config: { ...blankConfig(), data_value: 'old value' } })]);
     useGraphStore.getState().setExecutionResult({
-      status: 'success',
-      node_results: [
-        { node_id: 'gui1', status: 'success', inputs: {}, outputs: {} },
-        { node_id: 'code1', status: 'success', inputs: {}, outputs: { output: 'fresh answer' } },
-      ],
+      status: 'success', node_results: [],
+      memory: [{ node_id: 'data1', port_id: 'input', value: 'new value' }],
     } as any);
-
-    const loadedGui = useGraphStore.getState().rfNodes.find((n) => n.id === 'gui1')!.data.graphNode;
-    const loadedWidget = loadedGui.config.gui_widgets.find((w) => w.id === widget.id)!;
-    expect(loadedWidget.value).toBe('fresh answer');
+    expect(useGraphStore.getState().rfNodes[0].data.graphNode.config.data_value).toBe('new value');
   });
 
-  it('does not persist a plain (non-cycle-closing) edge into the target widget', () => {
-    const widget = createGuiWidget('text_io', 'Display');
-    const gui = graphNode({
-      id: 'gui1',
-      node_type: 'gui',
-      config: { ...blankConfig(), gui_widgets: [widget] },
-      ...guiWidgetPorts(widget),
-    });
-    const code = graphNode({
-      id: 'code1',
-      node_type: 'code',
-      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }],
-    });
-
-    loadTestGraph([code, gui], [
-      { id: 'e1', source_node_id: 'code1', source_port_id: 'output', target_node_id: 'gui1', target_port_id: `${widget.id}_in` },
-    ]);
-
+  it('puts a value that came back around a loop into the block it arrived at', () => {
+    const { widget, node } = gui('text_io');
+    loadTestGraph([node]);
     useGraphStore.getState().setExecutionResult({
-      status: 'success',
-      node_results: [
-        { node_id: 'code1', status: 'success', inputs: {}, outputs: { output: 'hello' } },
-        { node_id: 'gui1', status: 'success', inputs: { [`${widget.id}_in`]: 'hello' }, outputs: {} },
-      ],
+      status: 'success', node_results: [],
+      memory: [{ node_id: 'gui1', port_id: `${widget.id}_in`, value: [{ x: 1, y: 2 }] }],
     } as any);
-
-    const loadedGui = useGraphStore.getState().rfNodes.find((n) => n.id === 'gui1')!.data.graphNode;
-    const loadedWidget = loadedGui.config.gui_widgets.find((w) => w.id === widget.id)!;
-    expect(loadedWidget.value).toBe('');
+    // Structured values stay structured: a chart's points are not text.
+    expect(stored(widget.id).value).toEqual([{ x: 1, y: 2 }]);
   });
 
-  it('preserves structured feedback values for the next run', () => {
-    const widget = createGuiWidget('text_io', 'Structured');
-    const gui = graphNode({
-      id: 'gui1',
-      node_type: 'gui',
-      config: { ...blankConfig(), gui_widgets: [widget] },
-      ...guiWidgetPorts(widget),
+  it('lets the block say what arriving means: a reply becomes a turn of the conversation', () => {
+    const { widget, node } = gui('chat');
+    widget.value = { messages: [], pending: 'hello' };
+    loadTestGraph([node]);
+    useGraphStore.getState().setExecutionResult({
+      status: 'success', node_results: [],
+      memory: [{ node_id: 'gui1', port_id: `${widget.id}_in`, value: 'hi there' }],
+    } as any);
+    expect(stored(widget.id).value).toEqual({
+      messages: [{ role: 'user', text: 'hello' }, { role: 'assistant', text: 'hi there' }],
+      pending: '',
     });
-    const code = graphNode({
-      id: 'code1',
-      node_type: 'code',
-      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'json', multi: false, required: false, description: '' }],
-    });
+  });
 
-    loadTestGraph([gui, code], [
-      { id: 'e1', source_node_id: 'gui1', source_port_id: `${widget.id}_out`, target_node_id: 'code1', target_port_id: 'value' },
-      { id: 'e2', source_node_id: 'code1', source_port_id: 'output', target_node_id: 'gui1', target_port_id: `${widget.id}_in` },
-    ]);
-
-    const payload = [{ x: 1, y: 2 }];
+  it('keeps nothing the run did not say it kept', () => {
+    const { widget, node } = gui('text_io');
+    loadTestGraph([node]);
     useGraphStore.getState().setExecutionResult({
       status: 'success',
-      node_results: [
-        { node_id: 'gui1', status: 'success', inputs: {}, outputs: {} },
-        { node_id: 'code1', status: 'success', inputs: {}, outputs: { output: payload } },
-      ],
+      node_results: [{ node_id: 'gui1', status: 'success', inputs: { [`${widget.id}_in`]: 'hello' }, outputs: {} }],
     } as any);
+    expect(stored(widget.id).value).toBe('');
+  });
 
-    const loadedGui = useGraphStore.getState().rfNodes.find((n) => n.id === 'gui1')!.data.graphNode;
-    const loadedWidget = loadedGui.config.gui_widgets.find((w) => w.id === widget.id)!;
-    expect(loadedWidget.value).toEqual(payload);
+  it('replays only the part of a merged result that is new', () => {
+    // A page event re-ran half the graph; what is shown is the old result with
+    // the new one laid over it. Replaying the old half again would add last
+    // turn's answer to the conversation a second time.
+    const { widget, node } = gui('chat');
+    widget.value = { messages: [], pending: 'second' };
+    loadTestGraph([node]);
+    const write = (value: string) => ({ node_id: 'gui1', port_id: `${widget.id}_in`, value });
+    const shown = { status: 'success', node_results: [], memory: [write('first answer'), write('second answer')] };
+    const ran = { status: 'success', node_results: [], memory: [write('second answer')] };
+    useGraphStore.getState().setExecutionResult(shown as any, ran as any);
+    expect((stored(widget.id).value as { messages: unknown[] }).messages).toHaveLength(2);
   });
 });
-

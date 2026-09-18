@@ -9,11 +9,11 @@ import type { ElementGeneration } from './shared/generation';
  * (NodeEditor.tsx dispatches to it), `create` is "interact with the user" at
  * node-creation time (Sidebar.tsx drag/drop -> graphStore.addNode). Live
  * execution and deploy codegen are backend-only concerns -- see
- * `backend/app/elements/base.py`.
+ * `engine/src/element.ts`.
  */
 /**
  * What a node definition and a widget definition have in common -- the editor
- * half of `Element` in `backend/app/elements/base.py`.
+ * half of `Element` in `engine/src/element.ts`.
  *
  * They are two interfaces rather than one because what differs genuinely
  * differs: only a node is created from the palette (`create`), only a widget
@@ -32,6 +32,12 @@ export interface ElementDefinitionBase<S> {
    * Absent says it better than a sentence does.
    */
   ConfigEditor?: React.ComponentType<any>;
+  /**
+   * The settings most people never touch, drawn folded away under everything
+   * else. An element with many knobs and good defaults puts the knobs here, so
+   * that opening it shows what it *does* and not a form to fill in first.
+   */
+  AdvancedEditor?: React.ComponentType<any>;
   /**
    * The ✨ Generate button this element offers, mirroring the engine's
    * `Element.generation()`. Omitted for an element that generates nothing
@@ -65,28 +71,6 @@ export interface GraphNodeElementDefinition extends ElementDefinitionBase<GraphN
   // nothing shared changes.
 
   /**
-   * This node keeps its value between runs, so an edge into it can close a
-   * cycle -- the executor excludes such an edge from topological ordering and
-   * settles the fresh value afterwards for the *next* round.
-   *
-   * Must agree with the engine's `GraphNodeElement.isMemory`: memory meaning two
-   * different things depending on which half is asked would be worse than the
-   * hard-coded list this replaced.
-   */
-  isMemory?: boolean;
-
-  /**
-   * Store a value that arrived on *portId* as this node's remembered state, so
-   * the next run starts from it. Only meaningful when `isMemory`.
-   *
-   * Where the value goes differs per element -- a data node has one
-   * `data_value`, a gui node has one value per widget -- and that was written
-   * out as a `node_type === 'data'` branch in the store, twice. The element
-   * knows its own storage; the store only knows which edge settled.
-   */
-  settleMemoryValue?: (node: GraphNode, portId: string, value: unknown) => void;
-
-  /**
    * This element's own editor already covers what the node is for -- a prompt
    * box, a code body -- so the shell must not draw a second "Description" field
    * above it. For `ai` the description IS the generation prompt, which is why
@@ -116,6 +100,22 @@ export interface GuiWidgetElementDefinition extends ElementDefinitionBase<GuiWid
   // its own copy until the two disagreed about whether a text box accepts
   // anything or only text, and ports are what the graph's edges attach to.
   RuntimeWidget: React.ComponentType<GuiWidgetRuntimeProps>;
+  /**
+   * This block *is* its text: a heading, a paragraph. On the page being built,
+   * selecting it turns it into a box to type in -- the words are written where
+   * they stand, not in a field beside the page.
+   */
+  inlineText?: boolean;
+  /**
+   * What this block shows is its *own* stored value, whatever arrived last run.
+   *
+   * For most blocks with an input the arrival is the point -- a text window
+   * shows what it was sent. A conversation is the other kind: the reply that
+   * arrived is one line of it, already written into the stored transcript by
+   * the time the page draws, and showing the arrival *instead* would replace
+   * the conversation with its last sentence.
+   */
+  ownsValue?: boolean;
   // Optional: widget's stored value is a one-shot "message" that should be
   // cleared once a run has consumed it (e.g. a chat-style text_io widget),
   // rather than being resent on every subsequent round. Omitted/false for

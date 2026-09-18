@@ -36,6 +36,16 @@ export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Po
 }
 
 /**
+ * Whether using this block starts the graph -- the engine's answer, for the
+ * same reason the ports are: a page that fires on something the engine would
+ * not call an event starts runs nobody wired.
+ */
+export function widgetFiresRun(widget: GuiWidget): boolean {
+  const element = engineRegistry.widget(widget.kind);
+  return element ? element.firesRun(parseWidget(widget)) : false;
+}
+
+/**
  * Regenerate a GUI/WIDGET node's inputs/outputs strictly from
  * `config.gui_widgets`, in order. No-op (returns the node unchanged) for any
  * other node type. Call this after any widget-list edit instead of
@@ -78,7 +88,6 @@ export function createGuiWidget(kind: GuiWidgetKind, label = '', mode?: string):
     ...defaultSpanFor(kind, mode),
     tone: defaultToneFor(kind, mode),
     code: '',
-    language: 'python',
     recursive: false,
     select_all_files: true,
     selector_prompt: '',
@@ -94,17 +103,18 @@ export function createGuiWidget(kind: GuiWidgetKind, label = '', mode?: string):
 }
 
 export const GUI_WIDGET_KIND_LABELS: Record<GuiWidgetKind, string> = {
-  text: 'Text / Überschrift',
-  divider: 'Trennlinie',
-  spacer: 'Abstand',
-  input_picker: 'Datei-/Ordnerauswahl',
-  text_io: 'Textfeld (Eingabe / Ausgabe / beides)',
-  table: 'Tabelle',
-  plot_window: 'Diagramm',
-  image_view: 'Bild',
-  select: 'Auswahl (Dropdown)',
-  slider: 'Schieberegler',
-  button: 'Knopf',
+  text: 'Text',
+  divider: 'Divider',
+  spacer: 'Gap',
+  input_picker: 'File or folder',
+  text_io: 'Text box',
+  table: 'Table',
+  plot_window: 'Chart',
+  image_view: 'Image',
+  select: 'Dropdown',
+  slider: 'Slider',
+  button: 'Button',
+  chat: 'Chat',
 };
 
 /**
@@ -151,5 +161,7 @@ function defaultSpanFor(kind: GuiWidgetKind, mode?: string): { w: number; h: num
   if (kind === 'select') return { w: 6, h: 2 };
   if (kind === 'slider') return { w: 8, h: 2 };
   if (kind === 'button') return { w: 5, h: 2 };
+  // A conversation needs room to be one: the full width, and most of a screen.
+  if (kind === 'chat') return { w: 16, h: 9 };
   return DEFAULT_WIDGET_SPAN;
 }

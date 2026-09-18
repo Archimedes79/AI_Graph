@@ -2,6 +2,7 @@ import React from 'react';
 import ContextFileAttachment from './ContextFileAttachment';
 import GenerationTranscript, { useGenerationReview, useLiveGeneration } from './GenerationTranscript';
 import LiveGeneration from './LiveGeneration';
+import CodeField from './CodeField';
 import type { ElementGeneration, FieldAccess } from './generation';
 import { ACCENT_FILL, ACCENT_TEXT, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '../../ui/theme';
 
@@ -21,6 +22,8 @@ interface Props {
   children?: React.ReactNode;
   /** The snippet is not in play right now, so only the prompt half is shown. */
   bodyHidden?: boolean;
+  /** What the enlarged editor is titled: the element's own name. */
+  title?: string;
 }
 
 /**
@@ -37,7 +40,7 @@ interface Props {
  */
 export default function AuthoredBodyEditor({
   generation, fields, exampleFile, onExampleFileChange,
-  generating, message, onGenerate, onSurface, children, bodyHidden,
+  generating, message, onGenerate, onSurface, children, bodyHidden, title,
 }: Props) {
   // From context, not a prop: the path here runs through eight element editors
   // that would do nothing with it but pass it on -- the same reason the
@@ -100,26 +103,26 @@ export default function AuthoredBodyEditor({
                     className="text-xs px-3 py-1 rounded"
                     style={{ background: SUCCESS, color: 'white' }}
                   >
-                    Übernehmen
+                    Accept
                   </button>
                   <button
                     onClick={review.discard}
                     className="text-xs px-3 py-1 rounded"
                     style={{ background: 'transparent', color: MUTED, border: `1px solid ${MUTED}` }}
                   >
-                    Verwerfen
+                    Discard
                   </button>
                 </div>
               )}
             </>
           ) : (
-            <textarea
-              className={`w-full rounded-lg px-3 py-2 text-sm resize-none${mono ? ' font-mono' : ''}`}
-              style={{ ...field, minHeight: generation.bodyHeight ?? 160 }}
+            <CodeField
               value={fields.get(generation.targetField)}
-              onChange={(e) => fields.set(generation.targetField, e.target.value)}
+              onChange={(next) => fields.set(generation.targetField, next)}
+              language={generation.language ?? (generation.targetField.includes('prompt') ? 'markdown' : 'javascript')}
               placeholder={generation.bodyPlaceholder}
-              spellCheck={!mono}
+              minHeight={generation.bodyHeight ?? 160}
+              title={[title, generation.bodyLabel].filter(Boolean).join(' — ')}
             />
           )}
           {message && (

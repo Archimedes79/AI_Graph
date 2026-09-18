@@ -23,11 +23,9 @@ export function baseNodeConfig(): NodeConfig {
     ai_model: '',
     system_prompt: '',
     temperature: 0.7,
-    language: 'javascript',
     code: '',
     code_prompt: '',
     code_file: '',
-    requirements: [],
     data_value: null,
     data_format: 'text',
     data_prompt: '',
@@ -43,6 +41,5 @@ export function baseNodeConfig(): NodeConfig {
     read_file_inputs: false,
     send_images: false,
     gui_widgets: [],
-    extra: {},
   };
 }

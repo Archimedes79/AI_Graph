@@ -14,7 +14,7 @@ import type { AIProvider } from '../types/graph';
  *
  * The runtime AI a graph's `ai` nodes call is a different question with a
  * different home: `metadata.ai_defaults` inside the graph, overridable at run
- * time (see backend/app/services/ai_settings.py).
+ * time (see engine/src/ai/settings.ts).
  *
  * `'default'` means "let the server decide" -- it resolves to
  * AI_GRAPH_GEN_PROVIDER / AI_GRAPH_GEN_MODEL, then ai-settings.json's

@@ -19,6 +19,7 @@ import FileBrowserDialog from './components/FileBrowserDialog';
 import { useGraphStore } from './store/graphStore';
 import { NODE_ELEMENTS } from './elements/registry';
 import { loadGraphFile, reloadNodeFiles, saveGraphFile } from './utils/api';
+import { externalEditsPossible } from './utils/externalEdits';
 import { errorText } from './utils/errorText';
 import type { NodeType, Graph } from './types/graph';
 import { DANGER_TEXT, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT, WELL } from './ui/theme';
@@ -163,7 +164,13 @@ export default function App() {
   // Add a node in the center of the canvas
   const handleAddNode = useCallback(
     (nodeType: NodeType) => {
-      addNode(nodeType, { x: 200 + Math.random() * 200, y: 100 + Math.random() * 200 });
+      // To the right of what is already there, not somewhere at random: a
+      // random spot inside a 200px square put the second node on top of the
+      // first more often than not, and a graph reads left to right anyway.
+      const placed = useGraphStore.getState().rfNodes;
+      const right = Math.max(0, ...placed.map((node) => node.position.x + (node.width ?? 240)));
+      const top = placed.length ? Math.min(...placed.map((node) => node.position.y)) : 120;
+      addNode(nodeType, placed.length ? { x: right + 80, y: top } : { x: 200, y: 120 });
     },
     [addNode]
   );
@@ -217,6 +224,30 @@ export default function App() {
       setSaveStatus(`❌ ${errorText(error, 'Reload failed')}`);
     }
   };
+
+  // A node file was handed to another editor: when this window is looked at
+  // again, take what that editor saved. Silently when nothing here is unsaved
+  // -- the file on disk is then simply the newer truth -- and with a word when
+  // something is, because discarding work is not a thing to do on a focus event.
+  useEffect(() => {
+    const onFocus = async () => {
+      if (!externalEditsPossible() || !currentFilePath) return;
+      if (useGraphStore.getState().isDirty()) {
+        setSaveStatus('A node file may have changed outside — ↻ reloads it (unsaved changes here would be lost).');
+        return;
+      }
+      try {
+        const result = await reloadNodeFiles(currentFilePath);
+        loadGraph(result.graph);
+        setCurrentFilePath(result.path);
+        setSaveStatus('↻ Node files reloaded from disk');
+      } catch {
+        // Nothing to report: the manual ↻ says why when it matters.
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [currentFilePath, loadGraph, setCurrentFilePath]);
 
   const handleSave = async () => {
     if (!currentFilePath) {

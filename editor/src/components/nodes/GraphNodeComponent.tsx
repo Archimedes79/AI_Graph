@@ -6,6 +6,7 @@ import { useGraphStore } from '../../store/graphStore';
 import { GUI_WIDGET_ELEMENTS } from '../../elements/registry';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '../../ui/theme';
 import { delivered } from '../../utils/executionStatus';
+import { RUN_PORT } from '@engine/triggers.ts';
 
 // Colour AND a glyph: a red/green 8px dot is unreadable both to a screen
 // reader and to a colour-blind user scanning a canvas for the failed node.
@@ -77,6 +78,23 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
         onDoubleClick={handleEdit}
       >
         <div className="flex items-center gap-2 overflow-hidden">
+          {/* The run port: every node has it and no node declares it. A page is
+              the one kind that does not -- it is where events come from, not
+              where they go. */}
+          {!isGuiLike && (
+            <Handle
+              type="target"
+              position={Position.Top}
+              id={RUN_PORT}
+              style={{
+                background: '#f59e0b', border: '2px solid #78350f',
+                width: 10, height: 10, borderRadius: 2,
+                position: 'relative', transform: 'rotate(45deg)', top: 'auto', left: 'auto',
+                flexShrink: 0,
+              }}
+              title="Start here. Wire a button — or any block that starts the graph — to this, and using it runs the graph from this node on. It carries no value."
+            />
+          )}
           <span className="text-base leading-none">{icon}</span>
           <span
             className="text-sm font-semibold truncate"
@@ -184,7 +202,7 @@ const GraphNodeComponent = memo(({ id, data, selected }: NodeProps<RFNodeData>) 
                     </div>
                     {CanvasPreview && (
                       <div className="mt-1 mb-1 w-full">
-                        <CanvasPreview data={executionResult?.inputs?.[port.id]} />
+                        <CanvasPreview data={executionResult?.display?.[previewWidget!.id] ?? executionResult?.inputs?.[port.id]} />
                       </div>
                     )}
                   </React.Fragment>

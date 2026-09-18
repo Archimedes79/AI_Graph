@@ -18,7 +18,7 @@ import type { Generation } from '@engine/generation.ts';
  * What is NOT here is as important as what is. The generator kind, the contract
  * sentence describing what the engine will do with the snippet, and any fixed
  * port names live on the *backend* element (`Generation` in
- * `app/elements/base.py`) and are resolved server-side from the element's name.
+ * `engine/src/element.ts`) and are resolved server-side from the element's name.
  * A contract sentence copied into the editor would be a second copy of a
  * statement about backend behaviour, and a prompt that exists twice is a prompt
  * that will drift -- which is exactly what happened to the file-selector
@@ -81,6 +81,11 @@ export interface ElementGeneration<S = any> {
   bodyPlaceholder?: string;
   /** Wording for the 📎 attachment, when "Example input" is not specific enough. */
   exampleLabel?: string;
+  /**
+   * What the body is written in, for the editor it is written with. Omitted:
+   * a body kept in a field called `…prompt` is prose, anything else is code.
+   */
+  language?: 'javascript' | 'markdown';
   /** Render the body in a monospace box: true wherever the body is real code. */
   mono?: boolean;
   /** How tall the body box starts out; a system prompt needs less than a module. */

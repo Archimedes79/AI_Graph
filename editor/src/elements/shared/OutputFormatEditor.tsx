@@ -21,6 +21,7 @@ const FORMAT_LABELS: Record<string, string> = {
   csv: 'CSV (rows as list of dicts)',
   csv_list: 'CSV (rows as list of lists)',
   custom: 'Custom (describe below)',
+  example: 'Like an example (from a test run)',
 };
 
 export default function OutputFormatEditor({ node, setConfig, connectedDataNodes = [] }: Props) {
@@ -87,8 +88,12 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
           Expected output format
         </label>
         <p className="text-xs mb-2" style={{ color: DIM }}>
-          This declaration is injected into AI code &amp; prompt generation so the model produces the correct format.
-          It does not enforce or transform the actual value at runtime — add a Code node after this one for that.
+          {node.node_type === 'ai'
+            ? <>Only needed when something downstream has to <em>parse</em> the answer. It becomes a sentence
+              at the end of the instructions, and the neighbours are generated against it. Nothing checks the
+              answer afterwards — a model that ignores it is caught by a Code node, not here.</>
+            : <>This declaration is given to ✨ Generate, here and in the neighbours, so the code produces and
+              expects the right shape. It does not check or convert the value at run time.</>}
         </p>
         <select
           className="w-full rounded-lg px-2 py-1.5 text-sm"
@@ -130,14 +135,14 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
                     className="text-xs px-3 py-1 rounded"
                     style={{ background: SUCCESS, color: 'white' }}
                   >
-                    Übernehmen
+                    Accept
                   </button>
                   <button
                     onClick={() => runGenerate.discard()}
                     className="text-xs px-3 py-1 rounded"
                     style={{ background: 'transparent', color: MUTED, border: `1px solid ${MUTED}` }}
                   >
-                    Verwerfen
+                    Discard
                   </button>
                 </div>
               )}
@@ -167,7 +172,27 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
         </div>
       )}
 
-      {format !== 'text' && (
+      {format === 'example' && (
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
+            The example to follow
+          </label>
+          <textarea
+            className="w-full rounded-lg px-2 py-1.5 text-sm font-mono resize-y"
+            style={{ ...FIELD, minHeight: 80 }}
+            value={node.config.output_example ?? ''}
+            onChange={(e) => setConfig('output_example', e.target.value)}
+            placeholder="Press ▶ Test above, then “Keep this as the format to follow” — or paste an answer you liked."
+            spellCheck={false}
+          />
+          <p className="text-xs mt-1" style={{ color: DIMMER }}>
+            You do not have to describe a format: run the node once, and if the answer has the shape you
+            want, keep it. The model is told to answer in that same structure with new content.
+          </p>
+        </div>
+      )}
+
+      {format !== 'text' && format !== 'example' && (
         <div
           className="text-xs rounded-lg px-3 py-2"
           style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}

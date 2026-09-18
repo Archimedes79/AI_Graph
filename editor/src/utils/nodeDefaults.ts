@@ -12,7 +12,7 @@ export function nodeTypeDefaults(nodeType: NodeType, id: string): GraphNode {
 export const NODE_TYPE_DESCRIPTIONS: Record<NodeType, string> = {
   input: 'A value from outside the graph: typed text, one file, or a directory listing',
   ai: 'Send a prompt to a local or hosted model and pass on its answer',
-  code: 'Run Python or JavaScript — write it yourself or have the AI generate it',
+  code: 'Run JavaScript — write it yourself or have the AI generate it',
   data: 'Remember a value between runs, so a loop can build on its own last result',
   output: 'Show the result in a window, or write it to a file or directory',
   gui: 'Give the graph its own interface, built from widgets',

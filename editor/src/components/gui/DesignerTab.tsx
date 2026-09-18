@@ -3,9 +3,9 @@ import type { GraphNode, GuiWidget, GuiWidgetKind } from '../../types/graph';
 import { useGraphStore } from '../../store/graphStore';
 import { syncGuiNodePorts } from '../../utils/guiWidgets';
 import DesignerSurface from './DesignerSurface';
-import DesignerPalette, { type PaletteEntry } from './DesignerPalette';
+import DesignerPalette, { ALL_ENTRIES, type PaletteEntry } from './DesignerPalette';
 import { createGuiWidget } from '../../utils/guiWidgets';
-import { useGuiNodes, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
+import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { routePage } from './pageWrite';
 import GuiWidgetProperties from '../GuiWidgetEditor';
 import { SCHEMES, type SchemeId } from './scheme';
@@ -25,6 +25,7 @@ export default function DesignerTab() {
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const blocks = useSurfaceBlocks();
   const guiNodes = useGuiNodes();
+  const events = usePageEvents();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Typing in a live widget while designing: kept local until the next run, so
   // the graph is not marked unsaved on every keystroke.
@@ -49,7 +50,14 @@ export default function DesignerTab() {
    * kind of step a tool should take on itself.
    */
   const addWidget = (kind: GuiWidgetKind, mode?: string, at?: number) => {
-    const widget = createGuiWidget(kind, '', mode);
+    // A block with ports starts out named after what it is. Its ports are
+    // named after the block, and on the canvas "widget-1-1789753941087: message"
+    // is what an unnamed chat block's port was called. Words and rules have no
+    // ports and no caption, so they stay unnamed.
+    const entry = ALL_ENTRIES.find((candidate) => candidate.kind === kind && (candidate.mode ?? '') === (mode ?? ''))
+      ?? ALL_ENTRIES.find((candidate) => candidate.kind === kind);
+    const named = kind === 'text' || kind === 'divider' || kind === 'spacer' ? '' : (entry?.label ?? '');
+    const widget = createGuiWidget(kind, named, mode);
     if (guiNodes.length > 0) {
       const next = blocks.map((b) => b.widget);
       next.splice(at ?? next.length, 0, widget);
@@ -79,6 +87,8 @@ export default function DesignerTab() {
    * element anyone ever tried to drag had to be released on an invisible line,
    * and the gesture looked broken exactly when it mattered most.
    */
+  /** Where the `/` menu is open, as a place in the page order. */
+  const [insertAt, setInsertAt] = useState<number | null>(null);
   const [dragEntry, setDragEntry] = useState<PaletteEntry | null>(null);
   const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -140,15 +150,22 @@ export default function DesignerTab() {
     setSelectedId(null);
   };
 
-  // Delete removes the selected block, Ctrl+Arrow reorders it. Ignored while a
+  // `/` inserts, Delete removes the selected block, Ctrl+Arrow reorders it. Ignored while a
   // field has focus -- the blocks are live, so typing in a text block would
   // otherwise delete it mid-sentence.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (!selectedId) return;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       if (target?.isContentEditable) return;
+      if (event.key === '/') {
+        // After the block in hand, or at the end of the page: where the next
+        // thing would go if this were a document, which it is.
+        event.preventDefault();
+        setInsertAt(selectedIndex === -1 ? blocks.length : selectedIndex + 1);
+        return;
+      }
+      if (!selectedId) return;
       if (event.key === 'Delete') {
         event.preventDefault();
         removeSelected();
@@ -170,8 +187,10 @@ export default function DesignerTab() {
   };
 
   /** A live edit in a widget: remembered locally, and stored on its own node. */
-  const setWidgetValue = (block: SurfaceBlock, value: string) => {
-    setOverrides((prev) => ({ ...prev, [block.widget.id]: value }));
+  const setWidgetValue = (block: SurfaceBlock, value: unknown) => {
+    // Only text is remembered as an edit in progress; a block that stores
+    // something richer holds it itself and has no half-typed state to protect.
+    if (typeof value === 'string') setOverrides((prev) => ({ ...prev, [block.widget.id]: value }));
     updateNode(block.node.id, {
       config: {
         ...block.node.config,
@@ -196,9 +215,16 @@ export default function DesignerTab() {
           blocks={blocks}
           onChange={applyWidgets}
           onWidgetValue={setWidgetValue}
+          onWidgetTrigger={(block, value) => {
+            if (typeof value === 'string') setOverrides((prev) => ({ ...prev, [block.widget.id]: value }));
+            events.fire(block, value);
+          }}
           selectedId={selectedId}
           onSelect={setSelectedId}
           overrides={overrides}
+          insertAt={insertAt}
+          onInsertAt={setInsertAt}
+          onInsert={(entry, index) => { setInsertAt(null); addWidget(entry.kind, entry.mode, index); }}
         />
       </div>
 
@@ -210,7 +236,7 @@ export default function DesignerTab() {
             block is, this says what the tool looks like. Every accent is picked
             to sit on the same surfaces, so no combination can come out wrong. */}
         <label className="block text-xs font-medium uppercase tracking-wider mb-2" style={{ color: MUTED }}>
-          Farbschema der Seite
+          Colour scheme of the page
         </label>
         <select
           className="w-full rounded-lg px-2 py-1.5 text-sm mb-5"
@@ -224,7 +250,7 @@ export default function DesignerTab() {
         </select>
 
         <h3 className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: MUTED }}>
-          Eigenschaften
+          The selected block
         </h3>
         <GuiWidgetProperties
           widget={selected}
@@ -234,7 +260,7 @@ export default function DesignerTab() {
         />
         {selected && new Set(blocks.map((b) => b.node.id)).size > 1 && (
           <p className="text-xs mt-3" style={{ color: DIMMER }}>
-            Gehört zu „{ownerOf(selected.id)?.label}".
+            Belongs to “{ownerOf(selected.id)?.label}”.
           </p>
         )}
       </aside>

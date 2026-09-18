@@ -15,7 +15,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-import { useGraphStore } from '../store/graphStore';
+import { edgeStyle, useGraphStore } from '../store/graphStore';
 import GraphNodeComponent from './nodes/GraphNodeComponent';
 import { removalsToApply } from './nodeRemoval';
 import type { NodeType } from '../types/graph';
@@ -77,7 +77,7 @@ export default function GraphCanvas({ active = true }: { active?: boolean }) {
         ...params,
         id: `edge-${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}`,
         type: 'smoothstep',
-        style: { stroke: ACCENT, strokeWidth: 2 },
+        style: edgeStyle(params.targetHandle),
       } as Edge;
       commit();
       setRFEdges(addEdge(edge, rfEdges));

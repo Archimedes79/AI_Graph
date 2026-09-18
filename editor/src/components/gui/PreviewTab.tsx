@@ -21,17 +21,17 @@ export default function PreviewTab() {
     <div className="flex-1 flex flex-col overflow-hidden" style={{ background: SUNKEN }}>
       <div className="px-8 py-2 flex items-center gap-3" style={{ borderBottom: `1px solid ${LINE}` }}>
         <span className="text-xs" style={{ color: MUTED }}>
-          Ausgeliefert
+          As delivered
         </span>
         <span className="text-xs" style={{ color: DIMMER }}>
-          Dieselbe Seite ohne Werkzeuge — bedienbar, wie sie beim Empfänger läuft.
+          The same page without the tools — it works here exactly as it will for whoever gets it.
         </span>
       </div>
 
       {blocks.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm" style={{ color: DIMMER }}>
-            Noch keine Oberfläche. Im Tab „Oberfläche“ Elemente auf die Seite ziehen.
+            No page yet. Add blocks to it on the “Page” tab.
           </p>
         </div>
       ) : (

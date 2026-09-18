@@ -4,11 +4,15 @@ import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, RFNodeData, NodeType, GuiWidgetKind } from '../types/graph';
 import { nodeTypeDefaults } from '../utils/nodeDefaults';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
-import { cancelRun, getRunSnapshot, startRun } from '../utils/api';
+import { cancelRun, getRunSnapshot, startRun, type RunTrigger } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import { ACCENT } from '../ui/theme';
 import { delivered } from '../utils/executionStatus';
-import { NODE_ELEMENTS } from '../elements/registry';
+import { GUI_WIDGET_ELEMENTS, NODE_ELEMENTS } from '../elements/registry';
+import { RUN_PORT } from '@engine/triggers.ts';
+import type React from 'react';
+import { applyMemory } from '@engine/graph.ts';
+import { registry as engineRegistry } from '@engine/registry.ts';
 
 type RFNode = Node<RFNodeData>;
 
@@ -68,7 +72,13 @@ export interface GraphStore {
   setSelectedNode: (nodeId: string | null) => void;
   setEditingNode: (nodeId: string | null) => void;
   setEditingPort: (port: { nodeId: string; portId: string } | null) => void;
-  setExecutionResult: (result: ExecutionResult | null) => void;
+  /**
+   * `ran` is the part of *result* that is new, when a page event re-ran only
+   * some nodes and the rest was kept from before. Memory is settled from that
+   * part alone: settling a kept result again would add last turn's answer to a
+   * conversation a second time.
+   */
+  setExecutionResult: (result: ExecutionResult | null, ran?: ExecutionResult) => void;
   setIsExecuting: (v: boolean) => void;
   setTextOutputWindows: (windows: { nodeId: string; label: string; content: string }[]) => void;
   closeTextOutputWindow: (nodeId: string) => void;
@@ -119,9 +129,36 @@ export interface GraphStore {
    * editor's toolbar and the deployed runtime page. They had a copy each, and
    * the copies had already drifted.
    */
-  runGraph: (graph: Graph) => Promise<void>;
+  runGraph: (graph: Graph, trigger?: RunTrigger | null) => Promise<void>;
+  /**
+   * Empty the boxes whose content was a message rather than a setting, once a
+   * run has delivered it. Only for pages that ran, and only when they ran
+   * cleanly: a message that reached nobody should still be there to send again.
+   */
+  clearSentValues: (result: ExecutionResult) => void;
   /** Stop the run in flight. Nodes already finished keep their results. */
   stopRun: () => Promise<void>;
+}
+
+/**
+ * A partial run laid over what the page already showed.
+ *
+ * The nodes that ran replace their old results; the ones that were not asked
+ * keep theirs. A page is the one node that is *partly* re-run -- one of its
+ * displays got a new value, the others did not -- so what it received and what
+ * it shows are merged block by block rather than replaced.
+ */
+export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult): ExecutionResult {
+  const ran = new Map(fresh.node_results.map((r) => [r.node_id, r]));
+  const kept = previous.node_results
+    .filter((r) => !ran.has(r.node_id));
+  const merged = fresh.node_results.map((r) => {
+    const before = previous.node_results.find((old) => old.node_id === r.node_id);
+    return before
+      ? { ...r, inputs: { ...before.inputs, ...r.inputs }, display: { ...before.display, ...r.display } }
+      : r;
+  });
+  return { ...fresh, node_results: [...kept, ...merged], outputs: { ...previous.outputs, ...fresh.outputs } };
 }
 
 /**
@@ -147,6 +184,19 @@ function collectTextOutputWindows(
     .filter((w): w is { nodeId: string; label: string; content: string } => w !== null);
 }
 
+/**
+ * A wire that carries a value, and one that only says "start here".
+ *
+ * Drawn differently because they *are* different: a run edge delivers nothing,
+ * and a canvas where it looks like data invites the question of what the AI
+ * node does with a button's press count. Dashed and amber reads as a signal.
+ */
+export function edgeStyle(targetPort: string | null | undefined): React.CSSProperties {
+  return targetPort === RUN_PORT
+    ? { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 4' }
+    : { stroke: ACCENT, strokeWidth: 2 };
+}
+
 let nodeCounter = 1;
 function newId(prefix: string) {
   return `${prefix}-${nodeCounter++}-${Date.now()}`;
@@ -158,59 +208,6 @@ function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphM
     ...(metadata ?? {}),
     tags: Array.isArray(metadata?.tags) ? metadata.tags : [],
   };
-}
-
-// A gui/widget node is a "memory" element: its output reflects its own
-// persisted widget value rather than being freshly recomputed from inputs
-// each round. An edge feeding one of its input ports is therefore excluded
-// from cycle detection exactly when needed to break a cycle -- mirrors
-// backend/app/services/graph_executor.py's `_memory_feedback_edge_ids`
-// (Kahn's algorithm, marking one memory-targeting edge as feedback at a time
-// until the graph is acyclic) so the editor can tell, after a run, which
-// edges' delivered values should be persisted into the target widget's own
-// `value` for the *next* run (see `setExecutionResult` below).
-function isMemoryNode(nodeType: string): boolean {
-  return NODE_ELEMENTS[nodeType as GraphNode['node_type']]?.isMemory ?? false;
-}
-
-function memoryFeedbackEdgeIds(nodes: GraphNode[], edges: GraphEdge[]): Set<string> {
-  const nodeTypeById = new Map(nodes.map((n) => [n.id, n.node_type as string]));
-  const nodeIds = new Set(nodeTypeById.keys());
-  let feedbackIds = new Set<string>();
-
-  while (true) {
-    const active = edges.filter(
-      (e) => !feedbackIds.has(e.id) && nodeIds.has(e.source_node_id) && nodeIds.has(e.target_node_id)
-    );
-    const inDegree = new Map<string, number>();
-    nodeIds.forEach((id) => inDegree.set(id, 0));
-    const successors = new Map<string, GraphEdge[]>();
-    for (const e of active) {
-      inDegree.set(e.target_node_id, (inDegree.get(e.target_node_id) ?? 0) + 1);
-      if (!successors.has(e.source_node_id)) successors.set(e.source_node_id, []);
-      successors.get(e.source_node_id)!.push(e);
-    }
-
-    const queue: string[] = [...nodeIds].filter((id) => inDegree.get(id) === 0);
-    const visited = new Set(queue);
-    while (queue.length) {
-      const id = queue.shift()!;
-      for (const e of successors.get(id) ?? []) {
-        inDegree.set(e.target_node_id, (inDegree.get(e.target_node_id) ?? 0) - 1);
-        if (inDegree.get(e.target_node_id) === 0 && !visited.has(e.target_node_id)) {
-          visited.add(e.target_node_id);
-          queue.push(e.target_node_id);
-        }
-      }
-    }
-
-    if (visited.size === nodeIds.size) return feedbackIds;
-    const candidate = active.find(
-      (e) => !visited.has(e.target_node_id) && isMemoryNode(nodeTypeById.get(e.target_node_id) ?? '')
-    );
-    if (!candidate) return feedbackIds;
-    feedbackIds = new Set([...feedbackIds, candidate.id]);
-  }
 }
 
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
@@ -232,10 +229,6 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
     config: {
       ...defaults.config,
       ...(rawNode.config ?? {}),
-      extra: {
-        ...defaults.config.extra,
-        ...((rawNode.config?.extra as Record<string, unknown> | undefined) ?? {}),
-      },
     },
   };
 
@@ -275,7 +268,7 @@ const defaultMetadata = (): GraphMetadata => ({
   // Which AI this graph's AI nodes call when they run, set once for the whole
   // graph (⚙ Settings) instead of once per node. 'default' means unset, which
   // the backend resolves to its own fallback; whoever runs a deployed copy can
-  // override it without editing the graph -- see backend/app/services/ai_settings.py.
+  // override it without editing the graph -- see engine/src/ai/settings.ts.
   ai_defaults: { provider: 'default', model: '' },
   gui_scheme: 'night',
 });
@@ -317,7 +310,7 @@ function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
     targetHandle: ge.target_port_id,
     type: 'smoothstep',
     animated: false,
-    style: { stroke: ACCENT, strokeWidth: 2 },
+    style: edgeStyle(ge.target_port_id),
   }));
 
   return { rfNodes, rfEdges };
@@ -389,7 +382,8 @@ export const useGraphStore = create<GraphStore>()(
             const inputIds = new Set(updated.inputs.map((p) => p.id));
             const outputIds = new Set(updated.outputs.map((p) => p.id));
             state.rfEdges = state.rfEdges.filter((e: Edge) => {
-              if (e.target === nodeId && e.targetHandle && !inputIds.has(e.targetHandle)) return false;
+              // The run port is every node's and nobody's: it is never in the list.
+              if (e.target === nodeId && e.targetHandle && e.targetHandle !== RUN_PORT && !inputIds.has(e.targetHandle)) return false;
               if (e.source === nodeId && e.sourceHandle && !outputIds.has(e.sourceHandle)) return false;
               return true;
             });
@@ -433,61 +427,22 @@ export const useGraphStore = create<GraphStore>()(
         state.editingPort = port;
       }),
 
-    setExecutionResult: (result) =>
+    setExecutionResult: (shown, ran) =>
       set((state) => {
-        state.executionResult = result;
+        state.executionResult = shown;
+        const result = ran ?? shown;
         if (!result) return;
 
-        // Same-round "memory settle": a gui/widget node's own output reflects
-        // its persisted widget value, so a cycle-closing edge into one only
-        // becomes visible on the NEXT run unless we persist the fresh value
-        // here now -- mirrors the backend's own in-memory
-        // `_settle_memory_feedback`, which mutates its (request-scoped) Graph
-        // copy the same way; the editor must repeat it against its own
-        // long-lived graph state so the loop actually progresses across
-        // separate Run clicks.
-        const nodes = state.rfNodes.map((n: RFNode) => n.data.graphNode as GraphNode);
-        const edges: GraphEdge[] = state.rfEdges.map((e: Edge) => ({
-          id: e.id,
-          source_node_id: e.source,
-          source_port_id: e.sourceHandle ?? 'output',
-          target_node_id: e.target,
-          target_port_id: e.targetHandle ?? 'input',
-        }));
-        const resultByNodeId = new Map(result.node_results.map((r) => [r.node_id, r]));
-        // An acyclic memory node still updates: it delivered a value this round,
-        // and that value is what the next round starts from.
-        for (const rfNode of state.rfNodes) {
-          const graphNode = rfNode.data.graphNode as GraphNode;
-          const element = NODE_ELEMENTS[graphNode.node_type];
-          if (!element?.isMemory || !element.settleMemoryValue) continue;
-          const nodeResult = resultByNodeId.get(graphNode.id);
-          if (delivered(nodeResult?.status) && nodeResult?.outputs && 'output' in nodeResult.outputs) {
-            element.settleMemoryValue(graphNode, 'output', nodeResult.outputs.output);
-          }
-        }
-        const feedbackIds = memoryFeedbackEdgeIds(nodes, edges);
-        if (feedbackIds.size === 0) return;
-
-        for (const edge of edges) {
-          if (!feedbackIds.has(edge.id)) continue;
-          const sourceResult = resultByNodeId.get(edge.source_node_id);
-          if (!sourceResult || !delivered(sourceResult.status)) continue;
-          // Prefer the value the backend's own settle pass wrote into the
-          // target's NodeResult.inputs: for a display-only widget that is the
-          // *transformed* value (apply_display_transform), not the raw source
-          // output. Fall back to the raw output for older results.
-          const settled = resultByNodeId.get(edge.target_node_id)?.inputs?.[edge.target_port_id];
-          const value = settled !== undefined ? settled : sourceResult.outputs?.[edge.source_port_id];
-          if (value === undefined) continue;
-
-          const targetIdx = state.rfNodes.findIndex((n: RFNode) => n.id === edge.target_node_id);
-          if (targetIdx === -1) continue;
-          const targetNode = state.rfNodes[targetIdx].data.graphNode as GraphNode;
-          NODE_ELEMENTS[targetNode.node_type]?.settleMemoryValue?.(
-            targetNode, edge.target_port_id, value,
-          );
-        }
+        // What the run remembered, replayed into this copy of the graph. The
+        // engine decided what was kept and each element decides where it keeps
+        // it; all that happens here is that the long-lived copy catches up with
+        // the one the run settled -- so a loop progresses across separate Run
+        // clicks, and a conversation keeps its turns.
+        applyMemory(
+          state.rfNodes.map((n: RFNode) => n.data.graphNode as never),
+          result.memory,
+          (node, portId, value) => engineRegistry.node(node.node_type)?.settleMemory(node, portId, value),
+        );
       }),
 
     setIsExecuting: (v) =>
@@ -645,17 +600,23 @@ export const useGraphStore = create<GraphStore>()(
       });
     },
 
-    runGraph: async (graph) => {
+    runGraph: async (graph, trigger = null) => {
       const { setIsExecuting, setExecutionResult, setTextOutputWindows } = get();
+      // A page event runs part of the graph, so what the rest of the page
+      // shows is still true and stays: pressing "Plot" must not blank the
+      // summary beside it. A full run starts from a clean slate, as before.
+      const previous = trigger ? get().executionResult : null;
       setIsExecuting(true);
-      setExecutionResult(null);
-      setTextOutputWindows([]);
+      if (!trigger) {
+        setExecutionResult(null);
+        setTextOutputWindows([]);
+      }
       try {
         // Started as a background run and polled, rather than awaited as one
         // blocking request: that is what lets the toolbar name the node in
         // flight and offer Stop. A run against a slow local model is otherwise
         // ten minutes of a spinner with no way out but reloading the page.
-        const { run_id: runId, total } = await startRun(graph);
+        const { run_id: runId, total } = await startRun(graph, trigger);
         set((state) => {
           state.currentRunId = runId;
           state.runProgress = {
@@ -682,16 +643,18 @@ export const useGraphStore = create<GraphStore>()(
           });
         }
 
-        const result: ExecutionResult = snapshot.result ?? {
+        const fresh: ExecutionResult = snapshot.result ?? {
           status: snapshot.cancelled ? 'cancelled' : 'error',
           node_results: [],
           outputs: {},
           error: snapshot.error ?? 'The run ended without a result.',
         };
+        const result = previous ? mergeResults(previous, fresh) : fresh;
         // setExecutionResult also settles memory-feedback values back into the
         // graph, which is why the result goes through the store rather than
         // being held in a component.
-        setExecutionResult(result);
+        setExecutionResult(result, fresh);
+        get().clearSentValues(fresh);
         setTextOutputWindows(collectTextOutputWindows(graph, result));
       } catch (error) {
         setExecutionResult({
@@ -708,6 +671,18 @@ export const useGraphStore = create<GraphStore>()(
         });
       }
     },
+
+    clearSentValues: (result) =>
+      set((state) => {
+        for (const rfNode of state.rfNodes) {
+          const graphNode = rfNode.data.graphNode as GraphNode;
+          const ran = result.node_results.find((r) => r.node_id === graphNode.id);
+          if (!ran || !delivered(ran.status) || !Array.isArray(graphNode.config.gui_widgets)) continue;
+          for (const widget of graphNode.config.gui_widgets) {
+            if (GUI_WIDGET_ELEMENTS[widget.kind]?.clearValueAfterRun?.(widget)) widget.value = '';
+          }
+        }
+      }),
 
     stopRun: async () => {
       const runId = get().currentRunId;

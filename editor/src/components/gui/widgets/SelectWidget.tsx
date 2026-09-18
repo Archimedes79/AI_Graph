@@ -3,7 +3,7 @@ import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import { FIELD } from '../../../ui/theme';
 
 /** Runtime select widget: a dropdown over the block's own option list. */
-export default function SelectWidget({ widget, value, onChange }: GuiWidgetRuntimeProps) {
+export default function SelectWidget({ widget, value, onChange, onTrigger }: GuiWidgetRuntimeProps) {
   const options = String(widget.options ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
   const current = typeof value === 'string' && options.includes(value) ? value : (options[0] ?? '');
 
@@ -12,7 +12,8 @@ export default function SelectWidget({ widget, value, onChange }: GuiWidgetRunti
       className="w-full rounded-lg px-2 py-1.5 text-sm"
       style={FIELD}
       value={current}
-      onChange={(e) => onChange(e.target.value)}
+      // A choice is made in one gesture, so the change is also the event.
+      onChange={(e) => { onChange(e.target.value); onTrigger?.(e.target.value); }}
     >
       {options.length === 0 && <option value="">No options yet</option>}
       {options.map((option) => <option key={option} value={option}>{option}</option>)}
