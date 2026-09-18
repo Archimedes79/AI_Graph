@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { GraphNode, Port } from '../types/graph';
 import { useGraphStore } from '../store/graphStore';
+import { markExternalEdit } from '../utils/externalEdits';
 import { derivedNodePorts, syncGuiNodePorts } from '../utils/guiWidgets';
 import { NODE_ELEMENTS } from '../elements/registry';
 import Modal from './Modal';
@@ -10,10 +11,13 @@ import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs } f
 import OutputFormatEditor from '../elements/shared/OutputFormatEditor';
 import KeepInFileOption from '../elements/shared/KeepInFileOption';
 import { nodeLogic } from '../elements/shared/logic';
+import { sampleFor } from '../elements/shared/tryValues';
 import GenerationTranscript, { GenerationReport } from '../elements/shared/GenerationTranscript';
 import WidgetOutputSummary from '@engine/elements/gui/editor/WidgetOutputSummary';
 import { connectedOutputDataNodes } from '@engine/elements/data/editor/definition';
-import { ACCENT, ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT } from '../ui/theme';
+import { call } from '../utils/api';
+import { errorText } from '../utils/errorText';
+import { ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, TEXT } from '../ui/theme';
 
 interface NodeEditorProps {
   nodeId: string;
@@ -41,6 +45,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const executionResult = useGraphStore((s) => s.executionResult);
 
   const [node, setNode] = useState<GraphNode | null>(null);
+  const [externalStatus, setExternalStatus] = useState('');
   // One state machine for all four ✨ Generate buttons in this editor.
   const generate = useGenerate();
   const generating = generate.busy;
@@ -75,6 +80,36 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
    * used to discard it without a word, so "✅ Transform generated!" followed by
    * Escape lost the code and left no trace of why.
    */
+  /**
+   * Hand this node's file to the person's own editor.
+   *
+   * The file only exists once the graph has been saved with this node told to
+   * keep its body in one, so that is done first -- the draft is taken, the
+   * graph is written -- rather than explained as three steps to do by hand.
+   * Coming back, the window's focus is what reloads the file (see App.tsx).
+   */
+  const openInOwnEditor = async () => {
+    const state = useGraphStore.getState();
+    if (!state.currentFilePath) {
+      setExternalStatus('Save the graph first — the file lives in a folder beside it.');
+      return;
+    }
+    try {
+      setExternalStatus('Saving, then opening…');
+      updateNode(nodeId, node!);
+      const after = useGraphStore.getState();
+      const saved = await call('saveGraph', { path: state.currentFilePath, graph: after.exportGraph() });
+      if (saved.graph) after.syncNodeFileNames(saved.graph);
+      after.markSaved();
+      const written = saved.graph?.nodes.find((n) => n.id === nodeId)?.config.code_file || node!.config.code_file;
+      const opened = await call('openExternal', { graph_path: state.currentFilePath, file: String(written) });
+      markExternalEdit();
+      setExternalStatus(`Opened in ${opened.with}: ${opened.path}. Save there and come back — it is reloaded when this window gets the focus.`);
+    } catch (error) {
+      setExternalStatus(errorText(error, 'Could not open the file.'));
+    }
+  };
+
   const closeWithGuard = () => {
     const stored = rfNode ? JSON.stringify(rfNode.data.graphNode) : '';
     if (JSON.stringify(node) !== stored
@@ -135,7 +170,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       graphContext: surroundingContext(),
       // The same values `lastRunContext` renders as prose, raw: the backend runs
       // the generated function against them and repairs it once if it fails.
-      sampleInputs: lastRunInputs(node.id, executionResult),
+      sampleInputs: sampleFor(node.id, node.inputs.map((port) => port.id), lastRunInputs(node.id, executionResult)),
       inputSources: inputSources(node.id, graphNodes, graphEdges),
       recordMeasuredOutput: true,
     }));
@@ -150,13 +185,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       inputs: previous.inputs.map((port) => ({ ...port, data_type: dataType, format: portFormat })),
       outputs: previous.outputs.map((port) => ({ ...port, data_type: dataType, format: portFormat })),
       config: { ...previous.config, data_format: format },
-    } : previous);
-  };
-
-  const setDataDebugDirectory = (path: string) => {
-    setNode((previous) => previous ? {
-      ...previous,
-      outputs: previous.outputs.map((port) => port.id === 'output' ? { ...port, debug_directory: path || undefined } : port),
     } : previous);
   };
 
@@ -256,7 +284,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 canGenerate={canGenerate}
                 applyMode={applyInputMode}
                 applyDataFormat={applyDataFormat}
-                setDataDebugDirectory={setDataDebugDirectory}
                 applyWidgets={applyWidgets}
                 contextFile={node.config.example_file ?? ''}
                 onContextFileChange={(path: string) => setConfig('example_file', path)}
@@ -271,6 +298,19 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
               )}
               {element.outputContract === 'widgets' && <WidgetOutputSummary node={node} />}
 
+              {/* Knobs with good defaults, folded away: a node should open on
+                  what it does, not on a form to fill in first. */}
+              {element.AdvancedEditor && (
+                <details className="rounded-lg" style={{ border: `1px solid ${LINE}` }}>
+                  <summary className="px-3 py-2 text-xs font-medium cursor-pointer select-none" style={{ color: MUTED }}>
+                    Advanced{node.node_type === 'ai' ? ' — model, tools, batching, failures' : ' — batching, files, failures'}
+                  </summary>
+                  <div className="px-3 pb-3 pt-1 space-y-4">
+                    <element.AdvancedEditor node={node} setConfig={setConfig} />
+                  </div>
+                </details>
+              )}
+
               {(() => {
                 const logic = nodeLogic(node);
                 return logic ? (
@@ -283,6 +323,26 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                     onChange={(name) => setConfig('code_file', name)}
                   />
                 ) : null;
+              })()}
+
+              {(() => {
+                const logic = nodeLogic(node);
+                if (!logic || !node.config.code_file) return null;
+                return (
+                  <div>
+                    <button
+                      onClick={openInOwnEditor}
+                      className="text-xs px-3 py-1.5 rounded-lg"
+                      style={NEUTRAL_BUTTON}
+                      title="Saves the graph, then opens this node's file — in VS Code when it is installed"
+                    >
+                      ↗ Open {node.config.code_file} in my editor
+                    </button>
+                    {externalStatus && (
+                      <p className="text-xs mt-1" style={{ color: MUTED }}>{externalStatus}</p>
+                    )}
+                  </div>
+                );
               })()}
 
               {/* An element with no ✨ button of its own can still have something

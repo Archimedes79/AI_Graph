@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { errorText } from '../../utils/errorText';
-import { getGenerationProgress, type AICall } from '../../utils/api';
+import { ApiError, call, type AICall } from '../../utils/api';
 
 export interface GenerateOptions<T> {
   /**
@@ -79,7 +79,7 @@ export function useGenerate() {
     setLive((prev) => ({ ...prev, [key]: [] }));
     polling.current[key] = window.setInterval(async () => {
       try {
-        const { calls } = await getGenerationProgress(progressId);
+        const { calls } = await call('generationProgress', { id: progressId });
         if (calls.length) setLive((prev) => ({ ...prev, [key]: calls }));
       } catch {
         // A poll that fails changes nothing: the generation is what matters.
@@ -104,9 +104,9 @@ export function useGenerate() {
       }
       const done = typeof options.success === 'function' ? options.success(result) : options.success;
       setPending((prev) => ({ ...prev, [key]: { take: () => options.apply(result), done } }));
-      setMessage('Fertig. Prüfen und übernehmen — bis dahin bleibt alles, wie es war.', key);
+      setMessage('Done. Review it and accept — until then nothing has changed.', key);
     } catch (error) {
-      const calls = (error as { response?: { data?: { calls?: AICall[] } } })?.response?.data?.calls;
+      const calls = error instanceof ApiError ? error.body.calls : undefined;
       if (calls) setTranscripts((prev) => ({ ...prev, [key]: calls }));
       setMessage(`❌ ${errorText(error, options.failure ?? 'Generation failed')}`, key);
     } finally {
@@ -140,7 +140,7 @@ export function useGenerate() {
     discard: (key = '') => {
       setPending(({ [key]: _dropped, ...rest }) => rest);
       setLive((prev) => ({ ...prev, [key]: [] }));
-      setMessage('Verworfen. Nichts geändert.', key);
+      setMessage('Discarded. Nothing changed.', key);
     },
     setMessage,
     run,

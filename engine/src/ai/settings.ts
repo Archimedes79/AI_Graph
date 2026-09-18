@@ -8,17 +8,19 @@
 //
 // The file exists because a key is not something to type into a terminal on
 // every run, and because a double-clicked build has no terminal to type it in.
-// The same file the editor's Python half reads, so one configuration serves
-// both while both exist.
 //
 // It is **not** in the repository and must not be: `.gitignore` names it, and
 // `ai-settings.example.json` beside it shows the shape with no key in it.
+//
+// The same file says which tool servers this machine has (`mcp_servers`), and
+// for those it is the *only* source -- see `configuredMcpServers` for why.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { settingsFromEnv, type ProviderSettings } from './providers.ts';
+import type { McpServerConfig } from './mcp.ts';
 
 const FILENAME = 'ai-settings.json';
 
@@ -28,8 +30,7 @@ const FILENAME = 'ai-settings.json';
  * `AI_GRAPH_SETTINGS` is not the first of several candidates but the only one:
  * "use this file" has to mean that even when the file is not there yet, or the
  * search quietly falls through to some other machine-wide file and the answer
- * depends on what else happens to be installed. The Python half settled this
- * the same way, for the same reason.
+ * depends on what else happens to be installed.
  */
 export function candidatePaths(
   cwd = process.cwd(),
@@ -52,6 +53,14 @@ export interface SettingsFile {
   api_keys?: Record<string, string>;
   /** Keyed by provider name: `endpoints.lmstudio`. */
   endpoints?: Record<string, string>;
+  /**
+   * Tool servers, keyed by the name a graph uses for them.
+   *
+   * The entries are Claude Desktop's `mcpServers` entries, so the snippet in
+   * any MCP server's README pastes in as it is; `{ "url": … }` is added for a
+   * server reached over HTTP.
+   */
+  mcp_servers?: Record<string, McpServerConfig>;
 }
 
 /**
@@ -110,6 +119,41 @@ export function configuredSettings(
     apiKeys: { ...file.apiKeys, ...environment.apiKeys },
     endpoints: { ...file.endpoints, ...environment.endpoints },
   };
+}
+
+/**
+ * The tool servers this machine has configured, from the first settings file
+ * that exists -- the same file the key comes from, found the same way.
+ *
+ * This is the only source there is, and that is the point of it. A graph names
+ * a tool server; what the name *starts* is written here, by whoever owns the
+ * machine, in a file that is not in the repository and does not travel with a
+ * graph. There is deliberately no environment variable on top, unlike
+ * everything else in this file: a command line assembled from `AI_GRAPH_…`
+ * variables is one more place a program to run could come from, and one is the
+ * right number.
+ *
+ * An entry that is neither a command nor a URL is dropped rather than passed
+ * on, so what reaches the client is only ever one of the two shapes it knows.
+ * A graph naming a dropped entry is told it is not configured, which is true.
+ */
+export function configuredMcpServers(
+  env: Record<string, string | undefined> = process.env,
+  cwd = process.cwd(),
+): Record<string, McpServerConfig> {
+  for (const path of candidatePaths(cwd, env)) {
+    if (!existsSync(path)) continue;
+    const listed = readSettingsFile(path).mcp_servers;
+    if (!listed || typeof listed !== 'object' || Array.isArray(listed)) return {};
+
+    const servers: Record<string, McpServerConfig> = {};
+    for (const [name, entry] of Object.entries(listed)) {
+      const { command, url } = (entry ?? {}) as { command?: unknown; url?: unknown };
+      if ((typeof command === 'string' && command) || (typeof url === 'string' && url)) servers[name] = entry;
+    }
+    return servers;
+  }
+  return {};
 }
 
 export { FILENAME as SETTINGS_FILENAME };

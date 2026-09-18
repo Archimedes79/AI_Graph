@@ -12,7 +12,8 @@ import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import type { CodeRunner, FileService, Runtime } from '../element.ts';
 import { aiService } from '../ai/providers.ts';
-import { configuredSettings } from '../ai/settings.ts';
+import { mcpToolService } from '../ai/mcp.ts';
+import { configuredMcpServers, configuredSettings } from '../ai/settings.ts';
 
 export const nodeFiles: FileService = {
   resolve: (path: string) => resolve(path),
@@ -76,7 +77,7 @@ export const nodeFiles: FileService = {
 const SANDBOX = ['--permission', '--allow-fs-read=*', '--allow-fs-write=*'];
 
 export const nodeCode: CodeRunner = {
-  async run(body, inputs) {
+  async run(body, inputs, signal) {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-'));
     const file = join(dir, 'body.mjs');
 
@@ -89,11 +90,16 @@ export const nodeCode: CodeRunner = {
     // nothing.
     const wrapper = "import { createRequire } from 'node:module';\n"
       + 'const require = createRequire(import.meta.url);\n\n'
-      + `${body}\n\nconst __out = await run(JSON.parse(process.argv[2]));\nconsole.log(JSON.stringify(__out));\n`;
+      // The inputs arrive on stdin, not as an argument. A command line has a
+      // ceiling -- about 32 KB on Windows -- and a wired file is an input like
+      // any other: a 100 KB log failed with `spawn ENAMETOOLONG`, a message
+      // about creating processes, for someone who had wired a CSV into a node.
+      + "let __in = '';\nfor await (const __chunk of process.stdin) __in += __chunk;\n\n"
+      + `${body}\n\nconst __out = await run(JSON.parse(__in));\nconsole.log(JSON.stringify(__out));\n`;
 
     try {
       await writeFile(file, wrapper, 'utf8');
-      const stdout = await capture(process.execPath, [...SANDBOX, file, JSON.stringify(inputs)]);
+      const stdout = await capture(process.execPath, [...SANDBOX, file], JSON.stringify(inputs), signal);
       const trimmed = stdout.trim();
       if (!trimmed) throw new Error('the body printed nothing; does it return an object?');
       return JSON.parse(trimmed.split('\n').pop() as string) as Record<string, unknown>;
@@ -103,9 +109,18 @@ export const nodeCode: CodeRunner = {
   },
 };
 
-function capture(command: string, args: string[]): Promise<string> {
+function capture(command: string, args: string[], stdin: string, signal?: AbortSignal): Promise<string> {
   return new Promise((fulfil, fail) => {
+    if (signal?.aborted) return fail(new Error('Stopped.'));
     const child = spawn(command, args, { windowsHide: true });
+    // Stop means stop: a body in a loop is a process, and a process can be ended.
+    const stop = () => { child.kill(); };
+    signal?.addEventListener('abort', stop, { once: true });
+    child.on('close', () => signal?.removeEventListener('abort', stop));
+    // A body that exits before reading its input closes the pipe under the
+    // write. That is the body's failure, and its exit code reports it.
+    child.stdin.on('error', () => {});
+    child.stdin.end(stdin);
     let out = '';
     let err = '';
     child.stdout.on('data', (chunk) => { out += chunk; });
@@ -113,6 +128,7 @@ function capture(command: string, args: string[]): Promise<string> {
     child.on('error', (error) => fail(error));
     child.on('close', (code) => {
       if (code === 0) return fulfil(out);
+      if (signal?.aborted) return fail(new Error('Stopped.'));
       // The sentence a person needs is the one naming the error. A thrown
       // error puts it at the bottom of the traceback; a syntax error puts it
       // near the top, above the stack -- so it is looked for, not assumed.
@@ -129,12 +145,18 @@ function capture(command: string, args: string[]): Promise<string> {
  *
  * The model provider is configured from the environment and the settings
  * file, so a double-clicked build is configurable without a terminal.
+ *
+ * Tool servers come from the settings file and from nowhere else. A graph
+ * names the servers it wants; which program a name starts is this machine's
+ * decision, never the graph's -- `ai/mcp.ts` is where that line is held.
+ * Nothing is started here: a server runs for the length of one node's run.
  */
 export function nodeRuntime(overrides: Partial<Runtime> = {}): Runtime {
   return {
     files: nodeFiles,
     code: nodeCode,
     ai: aiService(configuredSettings()),
+    tools: mcpToolService(configuredMcpServers()),
     ...overrides,
   };
 }

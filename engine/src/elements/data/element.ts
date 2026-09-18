@@ -24,6 +24,8 @@ export interface DataConfig {
 export class DataElement extends GraphNodeElement<DataConfig> {
   readonly nodeType = 'data' as const;
   override readonly isMemory = true;
+  /** It keeps what it is handed, whether or not the edge closes a loop. */
+  override readonly settlesOnArrival = true;
 
   config(node: GraphNode): DataConfig {
     return { value: node.config.data_value ?? '' };

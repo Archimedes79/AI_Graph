@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { AICall } from '../../utils/api';
 import { DIMMER, FIELD, MUTED } from '../../ui/theme';
 

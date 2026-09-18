@@ -7,7 +7,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type { GraphEdge, GraphNode, GuiWidget } from '../types/graph';
-import type { GenerationResult } from '../utils/api';
+import type { GenerateResponse } from '../utils/api';
 import { useGraphStore } from '../store/graphStore';
 import { GUI_WIDGET_ELEMENTS, NODE_ELEMENTS } from '../elements/registry';
 import { buildGeneration, nodeFields, widgetFields } from '../elements/shared/generation';
@@ -67,7 +67,7 @@ export function useGraphSweep(): SweepState {
      */
     const unitForWidget = (
       target: SweepTarget & { widget: GuiWidget },
-    ): SweepUnit<GenerationResult> | undefined => {
+    ): SweepUnit<GenerateResponse> | undefined => {
       const element = GUI_WIDGET_ELEMENTS[target.widget.kind as keyof typeof GUI_WIDGET_ELEMENTS];
       const spec = element?.generation;
       if (!spec) return undefined;
@@ -112,7 +112,7 @@ export function useGraphSweep(): SweepState {
       };
     };
 
-    const unitFor = (target: SweepTarget): SweepUnit<GenerationResult> | undefined => {
+    const unitFor = (target: SweepTarget): SweepUnit<GenerateResponse> | undefined => {
       if (target.widget) return unitForWidget(target as SweepTarget & { widget: GuiWidget });
       const node = target.node;
       const element = NODE_ELEMENTS[node.node_type];
@@ -174,7 +174,7 @@ export function useGraphSweep(): SweepState {
     let written = 0;
     const held: string[] = [];
     try {
-      for await (const step of sweep<GenerationResult>(nodesOf(), dslEdges(), {
+      for await (const step of sweep<GenerateResponse>(nodesOf(), dslEdges(), {
         unitFor, stopped: () => stopping.current,
       })) {
         if (step.status === 'failed') {

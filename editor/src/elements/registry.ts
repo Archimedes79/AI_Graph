@@ -19,6 +19,7 @@ import { spacerElement } from '@engine/elements/gui/children/spacer/editor/defin
 import { selectElement } from '@engine/elements/gui/children/select/editor/definition';
 import { sliderElement } from '@engine/elements/gui/children/slider/editor/definition';
 import { buttonElement } from '@engine/elements/gui/children/button/editor/definition';
+import { chatElement } from '@engine/elements/gui/children/chat/editor/definition';
 
 /** Dispatch table every NodeType resolves through. */
 export const NODE_ELEMENTS: Record<NodeType, GraphNodeElementDefinition> = {
@@ -44,4 +45,5 @@ export const GUI_WIDGET_ELEMENTS: Record<GuiWidgetKind, GuiWidgetElementDefiniti
   select:          selectElement,
   slider:          sliderElement,
   button:          buttonElement,
+  chat:            chatElement,
 };

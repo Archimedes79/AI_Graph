@@ -3,12 +3,24 @@
 
   "ai": {
     "provider": "google",
-    "model": "gemini-2.5-flash"
+    "model": "gemini-flash-lite-latest"
   },
 
   "api_keys": {
     "google": "PUT-YOUR-AI-STUDIO-KEY-HERE"
   },
+
+  "mcp_servers": {
+    "files": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "PUT-A-FOLDER-THE-MODEL-MAY-TOUCH-HERE"]
+    },
+    "remote-example": {
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer PUT-A-TOKEN-HERE" }
+    }
+  },
+  "_mcp_servers": "Tool (MCP) servers an AI node may use, keyed by the name a graph refers to them by. An entry is what an MCP server's README gives you for Claude Desktop's \"mcpServers\" -- {command, args, env, cwd} -- or {url, headers} for a server reached over HTTP. A graph can only *name* a server: the command line lives here, on your machine, so opening someone else's graph can never start a program you did not choose. A graph may also give an http(s) URL directly; that gets no headers from this file. Delete the two examples if you use neither.",
 
   "_providers": "google | openai | anthropic | ollama | lmstudio | openai_compatible | github_copilot",
   "_keys": "google -> aistudio.google.com/apikey (free tier) | openai -> OPENAI_API_KEY | anthropic -> ANTHROPIC_API_KEY",

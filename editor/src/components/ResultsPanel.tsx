@@ -1,6 +1,5 @@
-import React from 'react';
 import { useGraphStore } from '../store/graphStore';
-import { ACCENT, ACCENT_TEXT, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '../ui/theme';
+import { ACCENT, ACCENT_TEXT, DANGER_TEXT, DIM, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 import { delivered, statusTone } from '../utils/executionStatus';
 
 export default function ResultsPanel() {
@@ -37,11 +36,6 @@ export default function ResultsPanel() {
             {result.status}
           </span>
         </div>
-        {result.duration_ms && (
-          <p className="text-xs mt-1" style={{ color: DIMMER }}>
-            {Math.round(result.duration_ms)}ms total
-          </p>
-        )}
       </div>
 
       {/* Final outputs */}
@@ -92,11 +86,6 @@ export default function ResultsPanel() {
                 {nodeLabel(nr.node_id)}
               </span>
               <div className="flex items-center gap-2">
-                {nr.duration_ms && (
-                  <span className="text-xs" style={{ color: DIMMER }}>
-                    {Math.round(nr.duration_ms)}ms
-                  </span>
-                )}
                 <span
                   className="text-xs px-1.5 py-0.5 rounded"
                   style={{

@@ -13,8 +13,7 @@ import { homedir, platform } from 'node:os';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
-export interface BrowseEntry { name: string; path: string; is_dir: boolean }
-export interface BrowsePage { path: string; parent: string | null; entries: BrowseEntry[]; roots: string[] }
+import type { BrowseEntry, BrowsePage } from '../api.ts';
 
 export class NotFound extends Error {}
 
@@ -140,4 +139,64 @@ export async function detectFormat(path: string): Promise<string> {
   } catch {
     return 'binary';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Handing a node's file to the person's own editor
+// ---------------------------------------------------------------------------
+
+export class NotOpenable extends Error {}
+
+/** What a node's body can be kept as. Nothing else is ever handed to another program. */
+const OPENABLE = new Set(['.js', '.md']);
+
+/**
+ * Open one of a graph's node files in the editor the person actually works in.
+ *
+ * The box in the node dialog is fine for an edit; an afternoon's work wants a
+ * language server, a debugger's view, a second monitor. The file is already
+ * there -- "keep this in a file beside the graph" -- so the missing piece was
+ * only the way to it.
+ *
+ * Narrow on purpose, because this starts a program on the machine: the path
+ * must be an existing `.js`/`.md` inside the graph's own `.nodes` folder, so a
+ * page cannot use it to launch an arbitrary file. VS Code is tried first, by
+ * its `code` command, since that is where a `.js` with a JSDoc header is most
+ * useful; anything else falls to whatever the system opens that file type with.
+ */
+export async function openExternal(nodesDir: string, relative: string): Promise<{ path: string; with: string }> {
+  const root = resolve(nodesDir);
+  const path = resolve(root, relative);
+  if (!path.startsWith(root + sep)) throw new NotOpenable('That file is not one of this graph\'s node files.');
+  if (!OPENABLE.has(extname(path).toLowerCase())) throw new NotOpenable('Only a node\'s .js or .md file can be opened.');
+  if (!existsSync(path)) throw new NotFound(`${path} does not exist yet. Save the graph first: saving is what writes it.`);
+
+  const { spawn } = await import('node:child_process');
+  const start = (command: string, args: string[], shell: boolean): Promise<boolean> => new Promise((done) => {
+    try {
+      const child = spawn(command, args, { detached: !shell, stdio: 'ignore', shell, windowsHide: true });
+      child.on('error', () => done(false));
+      if (shell) {
+        // Through a shell, "started" only means the shell did. Whether the
+        // command exists is its exit code: `code` returns 0 as soon as it has
+        // handed the file over, and a shell that cannot find it returns 1.
+        const patience = setTimeout(() => done(true), 5000);
+        child.on('exit', (code) => { clearTimeout(patience); done(code === 0); });
+        return;
+      }
+      child.on('spawn', () => { child.unref(); done(true); });
+    } catch {
+      done(false);
+    }
+  });
+
+  const windows = platform() === 'win32';
+  // `code` is a .cmd shim on Windows, which only a shell can start; quoted, because a path may hold spaces.
+  if (await start(windows ? `code -g "${path}"` : 'code', windows ? [] : ['-g', path], windows)) {
+    return { path, with: 'VS Code' };
+  }
+  const opener = windows ? ['cmd', ['/c', 'start', '', path]] as const
+    : platform() === 'darwin' ? ['open', [path]] as const : ['xdg-open', [path]] as const;
+  if (await start(opener[0], [...opener[1]], false)) return { path, with: 'the system default' };
+  throw new NotOpenable(`Nothing on this machine could open ${path}.`);
 }

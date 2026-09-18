@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GraphNode } from '@/types/graph';
 import { GUI_WIDGET_KIND_LABELS } from '@/utils/guiWidgets';
 import { DIMMER, LINE, MUTED, TEXT } from '@/ui/theme';
@@ -14,7 +13,7 @@ interface GuiEditorProps {
  * the page is edited.
  *
  * Deliberately **not** a second designer. The interface is one page built from
- * every gui node's blocks, so it is designed in the Oberfläche tab -- at the
+ * every gui node's blocks, so it is designed in the Page tab -- at the
  * size it will really have, next to the blocks it will really sit beside.
  * Editing one list in two places is what this whole refactor kept removing:
  * first the `widgets | designer` switch inside this panel, then the `size`
@@ -26,17 +25,17 @@ export default function GuiEditor({ node }: GuiEditorProps) {
   return (
     <div>
       <p className="text-sm mb-3" style={{ color: MUTED }}>
-        Die Oberfläche wird im Tab <strong style={{ color: TEXT }}>Oberfläche</strong> gestaltet —
-        auf einer Seite, zu der jeder GUI-Node seine Blöcke beisteuert.
+        The page is built on the <strong style={{ color: TEXT }}>Page</strong> tab — one page,
+        to which every GUI node contributes its blocks.
       </p>
 
       {widgets.length === 0 ? (
-        <p className="text-xs" style={{ color: DIMMER }}>Dieser Node steuert noch nichts bei.</p>
+        <p className="text-xs" style={{ color: DIMMER }}>This node contributes nothing yet.</p>
       ) : (
         <>
           <p className="text-xs mb-2" style={{ color: DIMMER }}>
-            {widgets.length} {widgets.length === 1 ? 'Block' : 'Blöcke'} von diesem Node.
-            Die Ports entstehen automatisch daraus.
+            {widgets.length} {widgets.length === 1 ? 'block' : 'blocks'} from this node.
+            Its ports follow from them.
           </p>
           <ul className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
             {widgets.map((widget, index) => (

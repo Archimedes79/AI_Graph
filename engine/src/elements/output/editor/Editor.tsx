@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GraphNode } from '@/types/graph';
 import { DIMMER, FIELD, LINE, MUTED } from '@/ui/theme';
 

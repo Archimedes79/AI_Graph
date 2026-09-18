@@ -1,12 +1,10 @@
-// Graph DSL types as the editor sees them.
+// The graph's types, as every editor file imports them.
 //
-// `graph.generated.ts` was once derived from a Python model; the engine's
-// `graph.ts` is the DSL's home now, and this file is the editor's typed view of
-// it (every element's config field in one type -- an open question, see
-// TODO.md). Only genuinely editor-only types (ReactFlow node data) belong here.
-export * from './graph.generated';
+// `graphModel.ts` holds the documents themselves; what is added here is only
+// what exists because of the canvas -- the data ReactFlow carries per node.
+export * from './graphModel';
 
-import type { ExecutionStatus, GraphNode } from './graph.generated';
+import type { ExecutionStatus, GraphNode } from './graphModel';
 
 // ReactFlow-compatible types
 export interface RFNodeData {

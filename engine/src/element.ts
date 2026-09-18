@@ -45,7 +45,27 @@ export interface FileService {
 
 /** Running an authored body: `run(inputs) -> outputs`, both plain JSON. */
 export interface CodeRunner {
-  run(body: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /** `signal` ends the body early: a run that was stopped must not leave one grinding on. */
+  run(body: string, inputs: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>>;
+}
+
+/** One tool a model may call: a name, what it is for, and a JSON schema of its arguments. */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+/**
+ * The tools offered with one request, and the way to call one.
+ *
+ * Carried on the request rather than known to the provider layer: that layer
+ * speaks three dialects of "the model wants to call something" and should not
+ * also have to know where the something lives.
+ */
+export interface ToolAccess {
+  specs: ToolSpec[];
+  call(name: string, args: Record<string, unknown>): Promise<string>;
 }
 
 /** One completion from a model. */
@@ -56,10 +76,31 @@ export interface AiRequest {
   model?: string;
   temperature?: number;
   images?: string[];
+  /** When set, the model may call these, and the answer is what it says once it has. */
+  tools?: ToolAccess;
+  /** Ends the call early. Put there by the executor for a run that can be stopped; no element sets it. */
+  signal?: AbortSignal;
 }
 
 export interface AiService {
   complete(request: AiRequest): Promise<string>;
+}
+
+/** Tool servers opened for the length of one node's run, then closed. */
+export interface ToolSession extends ToolAccess {
+  close(): Promise<void>;
+}
+
+/**
+ * Where tools come from: MCP servers, named by the graph.
+ *
+ * A name is either a URL -- a server reached over HTTP, the same class of
+ * thing as calling a model -- or a name this *machine* has configured, which
+ * is the only way a graph gets to start a program: a graph someone hands you
+ * must not be able to choose a command line.
+ */
+export interface ToolService {
+  open(servers: string[]): Promise<ToolSession>;
 }
 
 /** Progress, for a caller that wants to show it. Ignoring it is valid. */
@@ -74,6 +115,8 @@ export interface Runtime {
   files: FileService;
   code: CodeRunner;
   ai: AiService;
+  /** Absent where no tool server can be reached; an element that wants one says so. */
+  tools?: ToolService;
   report?(event: ProgressEvent): void;
 }
 
@@ -209,8 +252,39 @@ export abstract class GraphNodeElement<C = unknown> extends Element<GraphNode, C
    */
   readonly isMemory: boolean = false;
 
+  /**
+   * A memory node that keeps whatever is delivered to it, loop or no loop. A
+   * data node is one: "remember this" does not depend on the edge closing a
+   * cycle. A page is not -- what it is *shown* is not what it *holds*.
+   */
+  readonly settlesOnArrival: boolean = false;
+
+  /**
+   * Whether this node works *on* what is wired into it, so that a round in
+   * which every wire came up empty is a round with nothing to do. An ai node
+   * does: its inputs are the question. A code node does not -- "no file chosen
+   * yet" is a case its body may well want to draw.
+   */
+  needsInput(_node: GraphNode): boolean {
+    return false;
+  }
+
   /** This node carries the graph's interface. */
   readonly hasInterface: boolean = false;
+
+  /**
+   * What this node shows, per block id, given everything that arrived.
+   *
+   * Asked by the executor once the round has settled, so values that came back
+   * around a loop are here too. Only a node with an interface answers.
+   */
+  async display(
+    _node: GraphNode,
+    _arrived: Record<string, unknown>,
+    _runtime: Runtime,
+  ): Promise<Record<string, unknown>> {
+    return {};
+  }
 
   /**
    * Whether this node runs once for the whole list or once per item.
@@ -264,6 +338,18 @@ export abstract class GraphNodeElement<C = unknown> extends Element<GraphNode, C
    * terminal's prompts and a bundle's `--inputs` all read the same list.
    */
   runtimeRequirements(_node: GraphNode): RuntimeRequirement[] {
+    return [];
+  }
+
+  /**
+   * Files and folders this node names as its own defaults: the CSV a picker
+   * starts on, the folder an input node reads.
+   *
+   * A bundle carries them. A tool handed to someone with its default file left
+   * behind opens on an error, and the person it was handed to has no way to
+   * know which file on someone else's machine it wanted.
+   */
+  referencedPaths(_node: GraphNode): string[] {
     return [];
   }
 
@@ -325,6 +411,29 @@ export abstract class WidgetElement<C = unknown> extends Element<Widget, C> {
     inputs: Record<string, unknown>,
     runtime: Runtime,
   ): Promise<Record<string, unknown>>;
+
+  /**
+   * Keep a value that came back around a loop, for the next run.
+   *
+   * `stored` is the block as the graph file holds it. Most blocks simply
+   * become the value; one that holds more than the last thing it was told --
+   * a conversation -- says here what arriving means.
+   */
+  settle(stored: RawConfig, value: unknown): void {
+    stored.value = value;
+  }
+
+  /**
+   * Whether this block starts the graph when the person uses it.
+   *
+   * A button always does: that is all a button is. Anything else does when it
+   * was told to (`run_on_change`) -- a dropdown that redraws the chart the
+   * moment it changes, a message box that sends on Enter. What starts is what
+   * the block is wired to, not the whole graph: see `triggers.ts`.
+   */
+  firesRun(widget: Widget): boolean {
+    return widget.config.run_on_change === true;
+  }
 
   /** Last step before a display-only widget's value reaches the page. */
   async displayValue(_widget: Widget, value: unknown, _runtime: Runtime): Promise<unknown> {

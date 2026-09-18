@@ -17,12 +17,17 @@ export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui';
 export type WidgetKind =
   | 'input_picker' | 'text_io' | 'plot_window' | 'image_view'
   | 'table' | 'text' | 'divider' | 'spacer'
-  | 'select' | 'slider' | 'button';
+  | 'select' | 'slider' | 'button' | 'chat';
 
 export type PortKind = 'input' | 'output';
 
+/**
+ * What a port carries. A label for people and for generation, with one
+ * exception the engine acts on: a `file_path` input is what `read_file_inputs`
+ * reads. One list, used by the editor too.
+ */
 export type DataType =
-  | 'text' | 'number' | 'boolean' | 'json' | 'file_path' | 'image' | 'any';
+  | 'text' | 'number' | 'boolean' | 'json' | 'list' | 'file_path' | 'image' | 'binary' | 'any';
 
 export interface Port {
   id: string;
@@ -71,6 +76,8 @@ export interface GraphMetadata {
   created_at?: string | null;
   updated_at?: string | null;
   gui_scheme: string;
+  /** What starts this graph without being asked: see `triggers.ts`. */
+  triggers?: { on_start?: boolean; every?: string };
 }
 
 export interface Graph {
@@ -84,22 +91,54 @@ export type NodeStatus = 'success' | 'error' | 'partial' | 'skipped';
 export interface NodeResult {
   node_id: string;
   status: NodeStatus;
+  /** What came off the wires: paths rather than file contents, raw rather than reshaped. */
   inputs: Record<string, unknown>;
   outputs: Record<string, unknown>;
+  /**
+   * What a node with an interface shows, per block id -- after the block's own
+   * transform, which is why it is not `inputs`: those say what arrived, this
+   * says what is on the screen.
+   */
+  display?: Record<string, unknown>;
   error?: string | null;
   messages?: string[];
 }
 
+/** One value a memory node kept from a run: which node, arriving on which port. */
+export interface MemoryWrite {
+  node_id: string;
+  port_id: string;
+  value: unknown;
+}
+
 export interface ExecutionResult {
-  status: 'success' | 'error' | 'partial';
+  status: 'success' | 'error' | 'partial' | 'cancelled';
   node_results: NodeResult[];
   outputs: Record<string, unknown>;
+  /**
+   * Everything memory nodes kept, in order. The run settled its own copy of the
+   * graph; whoever holds another copy replays this into it (`applyMemory`).
+   */
+  memory?: MemoryWrite[];
   error?: string | null;
 }
 
-/** A port a widget contributes, named after the widget so ids stay unique. */
-export function widgetPortId(widgetId: string, kind: PortKind): string {
-  return `${widgetId}_${kind === 'input' ? 'in' : 'out'}`;
+/**
+ * Put what a run remembered into another copy of the graph.
+ *
+ * The one way memory travels: the engine decides what was kept, each element
+ * decides where it keeps it, and a holder of the graph -- the editor's store, a
+ * served page, the scheduler between rounds -- only replays.
+ */
+export function applyMemory(
+  nodes: GraphNode[],
+  memory: MemoryWrite[] | undefined,
+  settle: (node: GraphNode, portId: string, value: unknown) => void,
+): void {
+  for (const write of memory ?? []) {
+    const node = nodes.find((candidate) => candidate.id === write.node_id);
+    if (node) settle(node, write.port_id, write.value);
+  }
 }
 
 const DEFAULT_METADATA: GraphMetadata = {

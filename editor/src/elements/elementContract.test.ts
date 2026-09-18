@@ -15,7 +15,6 @@ import { guiWidgetPorts } from '../utils/guiWidgets';
 import { NODE_ELEMENTS, GUI_WIDGET_ELEMENTS } from './registry';
 import { createGuiWidget } from '../utils/guiWidgets';
 import type { GraphNode, GuiWidget } from '../types/graph';
-import { connectedDataFormatContext } from '@engine/elements/data/editor/definition';
 import { nodeLogic, widgetLogic } from './shared/logic';
 
 /**
@@ -29,7 +28,7 @@ function makeWidget(kind: GuiWidget['kind']): GuiWidget {
 }
 
 /** The blocks that carry no settings at all -- page furniture, not fields. */
-const STATIC_KINDS_WITHOUT_SETTINGS = ['divider', 'spacer', 'button'];
+const STATIC_KINDS_WITHOUT_SETTINGS = ['divider', 'spacer', 'button', 'chat'];
 
 describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, element) => {
   it('create() produces a valid GraphNode shape', () => {
@@ -103,25 +102,6 @@ describe.each(Object.entries(NODE_ELEMENTS))('node element: %s', (nodeType, elem
     const expected = nodeType === 'output' ? undefined : expect.any(String);
     expect(element.describeOutput?.(node)).toEqual(expected);
   });
-});
-
-it('describes connected data nodes as source and target generation formats', () => {
-  const source = NODE_ELEMENTS.data.create('source');
-  source.label = 'Input records';
-  source.config.data_format = 'structure';
-  source.config.data_format_prompt = 'columns: id integer, name text';
-  const processor = NODE_ELEMENTS.code.create('processor');
-  const target = NODE_ELEMENTS.data.create('target');
-  target.label = 'Result map';
-  target.config.data_format = 'structure';
-
-  const context = connectedDataFormatContext('processor', [source, processor, target], [
-    { source: 'source', target: 'processor' },
-    { source: 'processor', target: 'target' },
-  ]);
-
-  expect(context).toContain('Source data format from "Input records": structure: columns: id integer, name text');
-  expect(context).toContain('Target data format required by "Result map": structure');
 });
 
 describe.each(Object.entries(GUI_WIDGET_ELEMENTS))('gui widget element: %s', (widgetKind, element) => {

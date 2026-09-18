@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GraphNode } from '@/types/graph';
 import { guiWidgetPorts } from '@/utils/guiWidgets';
 import { ACCENT_TEXT, DIM, MUTED, SUNKEN, TEXT, WELL } from '@/ui/theme';

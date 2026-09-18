@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { authoredIn, generations } from './describe.ts';
+import { authoredIn } from './describe.ts';
+import { registry } from './registry.ts';
 import { parseGraph } from './graph.ts';
 
 /**
@@ -64,33 +65,31 @@ describe('the authored bodies of a graph', () => {
 });
 
 describe('how an element gets its body written', () => {
+  const of = (name: string) => registry.node(name)?.generation() ?? registry.widget(name)?.generation();
+
   it('writes into the field the same element authors', () => {
     // One constant per element feeds both declarations, so this cannot drift --
     // and it is the failure that would otherwise be invisible: a button filling
     // a config key nothing ever runs.
-    const found = generations();
-    expect(found.code).toMatchObject({ target_field: 'code', prompt_field: 'code_prompt', kind: 'code' });
-    expect(found.ai).toMatchObject({ target_field: 'system_prompt', prompt_field: 'description', prompt_on_node: true });
-    expect(found.input).toMatchObject({ target_field: 'selector_code', inputs: ['files'], outputs: ['files'] });
+    expect(of('code')).toMatchObject({ kind: 'code', fields: { body: 'code', prompt: 'code_prompt' } });
+    expect(of('ai')?.fields).toMatchObject({ body: 'system_prompt', prompt: 'description', promptOnSubject: true });
+    expect(of('input')).toMatchObject({ fields: { body: 'selector_code' }, inputs: ['files'], outputs: ['files'] });
   });
 
   it('gives the same declaration to the input node and the picker block', () => {
-    const found = generations();
-    expect(found.input).toEqual(found.input_picker);
+    expect(of('input')).toEqual(of('input_picker'));
   });
 
   it('tells a drawing block what its snippet must return, and every one of them', () => {
-    const found = generations();
     for (const kind of ['plot_window', 'image_view', 'table']) {
-      expect(found[kind].contract).toContain('run(inputs)');
-      expect(found[kind].inputs).toEqual(['value']);
+      expect(of(kind)?.contract).toContain('run(inputs)');
+      expect(of(kind)?.inputs).toEqual(['value']);
     }
   });
 
   it('offers nothing to an element that authors nothing', () => {
-    const found = generations();
     for (const name of ['output', 'gui', 'text', 'divider', 'spacer', 'text_io']) {
-      expect(found[name]).toBeUndefined();
+      expect(of(name)).toBeUndefined();
     }
   });
 });

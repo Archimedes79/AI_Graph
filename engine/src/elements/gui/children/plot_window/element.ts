@@ -1,22 +1,10 @@
 import { TransformingDisplay } from '../display.ts';
 import type { Generation } from '../../../../generation.ts';
 import { TRANSFORM_FIELDS } from '../display.ts';
+import { PLOT_VIEW } from './view.ts';
+import { checkPlot } from './check.ts';
 
-/**
- * The space a chart is drawn in, and the frame left free inside it.
- *
- * Declared here, in the element, because two parties have to agree on it: the
- * app when it draws points itself, and the model when it draws its own SVG. A
- * block is resizable, so neither may think in screen pixels -- everything is
- * in these coordinates, and the box scales them. The model was told to draw
- * its own axes but not that a margin had to be left for them, so its labels
- * ran off the edge of whatever size the block happened to be.
- */
-export const PLOT_VIEW = {
-  width: 400,
-  height: 240,
-  margin: { left: 46, right: 14, top: 16, bottom: 30 },
-};
+export { PLOT_VIEW } from './view.ts';
 
 /** Points to draw: a list of numbers, or of {label, value}. */
 export class PlotWindowElement extends TransformingDisplay {
@@ -63,6 +51,16 @@ export class PlotWindowElement extends TransformingDisplay {
         'and no labels around your SVG -- everything visible is yours. Build the markup by',
         'concatenating strings.',
         '',
+        'Colour. The page has a colour scheme the person chose, light or dark, and it can change',
+        'after you are done -- the context below says what it is right now. Text, axes and gridlines',
+        'drawn with fill="currentColor" / stroke="currentColor" (and an opacity for the quieter ones)',
+        'are readable on every scheme. These CSS variables resolve inside your SVG and follow the',
+        'scheme too: var(--plot-1) … var(--plot-8) are series colours chosen to be told apart,',
+        'var(--ui-accent) is the accent of the page, var(--ui-muted) quieter text, var(--ui-line) a',
+        'hairline. Use them where a colour is only there to tell things apart; use a colour of',
+        'your own wherever the colour MEANS something -- red for a limit, green for ok -- or was',
+        'asked for. Do not paint a background rectangle: the block has one.',
+        '',
         'Either way, answer for empty or missing input too -- an empty list, or an SVG of',
         'empty axes -- rather than throwing, so the block shows a waiting chart instead of',
         'an error. Do NOT import plotting or third-party libraries: the code runs in a',
@@ -70,6 +68,8 @@ export class PlotWindowElement extends TransformingDisplay {
         'SVG are stripped before it is drawn.',
       ].join('\n'),
       inputs: ['value'], outputs: ['value'],
+      // Looked at before anyone sees it: see check.ts.
+      check: checkPlot,
       guard: 'Please describe the chart you want first.',
       success: '✅ Chart generated!',
     };

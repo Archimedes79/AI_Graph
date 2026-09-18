@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GuiWidget } from '@/types/graph';
 import AuthoredBodyEditor from '@/elements/shared/AuthoredBodyEditor';
 import type { ElementGeneration, FieldAccess } from '@/elements/shared/generation';

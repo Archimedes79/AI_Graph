@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import { DIMMER, LINE, MUTED, TEXT } from '../../../ui/theme';
 
@@ -56,7 +55,7 @@ export default function TableWidget({ widget, value, incoming }: GuiWidgetRuntim
 
   if (!table) {
     const text = data === undefined || data === null || data === ''
-      ? 'Keine Daten'
+      ? 'No data yet'
       : typeof data === 'string' ? data : JSON.stringify(data);
     return (
       <div className="text-xs h-full overflow-auto" style={{ color: DIMMER }} title={widget.label}>

@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GuiWidget } from '@/types/graph';
 import { FIELD_ON_SURFACE, MUTED } from '@/ui/theme';
 

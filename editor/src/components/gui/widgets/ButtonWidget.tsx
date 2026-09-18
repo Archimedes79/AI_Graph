@@ -1,24 +1,22 @@
-import React from 'react';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import { PRIMARY_BUTTON } from '../../../ui/theme';
 
 /**
- * Runtime button widget: each press adds one to its own count.
+ * Runtime button widget: a press starts the graph where the button is wired to.
  *
- * There is no live channel into a running graph — pressing this does not
- * start a run by itself. What it leaves behind is the number of presses since
- * the count was last read, for whatever a downstream node does with it on the
- * next run.
+ * It also counts, and the count is what its port carries -- for a node that
+ * wants to know how often rather than merely when.
  */
-export default function ButtonWidget({ widget, value, onChange }: GuiWidgetRuntimeProps) {
-  const count = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+export default function ButtonWidget({ widget, value, onChange, onTrigger, busy }: GuiWidgetRuntimeProps) {
+  const count = Number.isFinite(Number(value)) ? Number(value) : 0;
 
   return (
     <button
       type="button"
       className="w-full h-full rounded-lg text-sm font-medium"
-      style={PRIMARY_BUTTON}
-      onClick={() => onChange(String(count + 1))}
+      style={{ ...PRIMARY_BUTTON, opacity: busy ? 0.6 : 1 }}
+      disabled={busy}
+      onClick={() => (onTrigger ? onTrigger(count + 1) : onChange(count + 1))}
     >
       {widget.label || 'Press'}
     </button>

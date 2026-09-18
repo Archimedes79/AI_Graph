@@ -1,5 +1,5 @@
 import type { GraphNode, GuiWidget } from '../../types/graph';
-import { generate, type CodeProbeReport, type GenerationResult } from '../../utils/api';
+import { call, type GenerateResponse, type ProbeReport } from '../../utils/api';
 import { genAI } from '../../store/settingsStore';
 import type { GenerateOptions } from './useGenerate';
 import type { Generation } from '@engine/generation.ts';
@@ -18,7 +18,7 @@ import type { Generation } from '@engine/generation.ts';
  * What is NOT here is as important as what is. The generator kind, the contract
  * sentence describing what the engine will do with the snippet, and any fixed
  * port names live on the *backend* element (`Generation` in
- * `app/elements/base.py`) and are resolved server-side from the element's name.
+ * `engine/src/element.ts`) and are resolved server-side from the element's name.
  * A contract sentence copied into the editor would be a second copy of a
  * statement about backend behaviour, and a prompt that exists twice is a prompt
  * that will drift -- which is exactly what happened to the file-selector
@@ -81,6 +81,11 @@ export interface ElementGeneration<S = any> {
   bodyPlaceholder?: string;
   /** Wording for the 📎 attachment, when "Example input" is not specific enough. */
   exampleLabel?: string;
+  /**
+   * What the body is written in, for the editor it is written with. Omitted:
+   * a body kept in a field called `…prompt` is prose, anything else is code.
+   */
+  language?: 'javascript' | 'markdown';
   /** Render the body in a monospace box: true wherever the body is real code. */
   mono?: boolean;
   /** How tall the body box starts out; a system prompt needs less than a module. */
@@ -125,7 +130,7 @@ export function widgetFields(
  * before handing it over, so there is more to report than "done" -- and when it
  * still does not run, saying so now is kinder than letting the next ▶ Run say it.
  */
-function probeMessage(probe: CodeProbeReport | undefined, fallback: string): string {
+function probeMessage(probe: ProbeReport | undefined, fallback: string): string {
   switch (probe?.status) {
     case 'ok':
       return '✅ Generated and verified against the last run\'s data.';
@@ -156,7 +161,7 @@ function shapeOf(value: unknown): string {
  * what a generator downstream needs to write against; the example after it is
  * for the reader. Measured, not promised: the verify pass ran the code.
  */
-export function measuredContract(probe: CodeProbeReport | undefined): string {
+export function measuredContract(probe: ProbeReport | undefined): string {
   const outputs = probe?.outputs;
   if (outputs && Object.keys(outputs).length) {
     const shape = Object.entries(outputs).map(([key, value]) => `${key}: ${shapeOf(value)}`).join(', ');
@@ -206,7 +211,7 @@ export interface GenerationRequest<S> {
  * code path -- as they already execute, author files and declare ports through
  * one.
  */
-export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerationResult> {
+export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
   const { generation: spec, subject, fields } = request;
   const prompt = fields.get(spec.promptField).trim();
   const context = [spec.context?.(subject), request.graphContext].filter(Boolean).join('\n\n');
@@ -216,7 +221,7 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
     pending: 'Generating…',
     success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!'),
     failure: 'Generation failed',
-    run: (progressId?: string) => generate({
+    run: (progressId?: string) => call('generate', {
       element: request.element,
       description: prompt,
       context,

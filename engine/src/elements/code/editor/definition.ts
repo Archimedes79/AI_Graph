@@ -1,5 +1,5 @@
 import type { GraphNodeElementDefinition } from '@/elements/types';
-import CodeEditor from './Editor';
+import CodeEditor, { CodeAdvanced } from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { outputFormatContext } from '@/elements/shared/generationContext';
 import { CodeElement } from '../element.ts';
@@ -38,6 +38,7 @@ export const codeElement: GraphNodeElementDefinition = {
   },
   outputContract: 'format',
   ConfigEditor: CodeEditor,
+  AdvancedEditor: CodeAdvanced,
   create: (id) => ({
     id,
     node_type: 'code',

@@ -20,7 +20,6 @@ import { registry } from './registry.ts';
 import { parseWidget } from './elements/gui/element.ts';
 import type { Graph } from './graph.ts';
 import type { Logic } from './logic.ts';
-import type { Generation } from './generation.ts';
 
 /** One authored body: whose it is, and which config keys hold its two halves. */
 export interface AuthoredSpec {
@@ -75,54 +74,3 @@ export function authoredIn(graph: Graph): AuthoredSpec[] {
   return found;
 }
 
-
-/** One element's generation descriptor, flattened for the wire. */
-export interface GenerationDescriptor {
-  kind: string;
-  /** The config key the generated text is written into. */
-  target_field: string;
-  /** The config key holding the request it is written from. */
-  prompt_field: string;
-  /** That request is the node's own description rather than a config key. */
-  prompt_on_node: boolean;
-  contract: string;
-  /** A sub-snippet's fixed ports; empty means "the node's real ports". */
-  inputs: string[];
-  outputs: string[];
-  guard: string;
-  success: string;
-}
-
-function flatten(generation: Generation): GenerationDescriptor {
-  return {
-    kind: generation.kind,
-    target_field: generation.fields.body,
-    prompt_field: generation.fields.prompt,
-    prompt_on_node: generation.fields.promptOnSubject === true,
-    contract: generation.contract ?? '',
-    inputs: generation.inputs ?? [],
-    outputs: generation.outputs ?? [],
-    guard: generation.guard,
-    success: generation.success,
-  };
-}
-
-/**
- * Every element that can have its body written for it, by name.
- *
- * Node types and block kinds share one namespace here because a caller has one
- * name and no reason to know which level it came from — the same reason
- * `authoredIn` returns one list.
- */
-export function generations(): Record<string, GenerationDescriptor> {
-  const found: Record<string, GenerationDescriptor> = {};
-  for (const type of registry.nodeTypes()) {
-    const generation = registry.node(type)?.generation();
-    if (generation) found[type] = flatten(generation);
-  }
-  for (const kind of registry.widgetKinds()) {
-    const generation = registry.widget(kind)?.generation();
-    if (generation) found[kind] = flatten(generation);
-  }
-  return found;
-}

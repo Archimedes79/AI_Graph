@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { deleteAttachment, uploadAttachment } from '../../utils/api';
+import { useRef, useState } from 'react';
+import { call } from '../../utils/api';
 import { errorText } from '../../utils/errorText';
 import { DANGER_SOFT, DIM, LINE, MUTED, SUNKEN, TEXT, WELL } from '../../ui/theme';
 
@@ -26,7 +26,7 @@ export default function ContextFileAttachment({ label, path, onChange }: Context
     setBusy(true);
     setError('');
     try {
-      const result = await uploadAttachment(file);
+      const result = await call('attach', { name: file.name, bytes: file });
       onChange(result.path);
     } catch (e: any) {
       setError(errorText(e, 'Upload failed'));
@@ -38,7 +38,7 @@ export default function ContextFileAttachment({ label, path, onChange }: Context
   const handleRemove = async () => {
     setBusy(true);
     try {
-      await deleteAttachment(path);
+      await call('detach', { path });
     } catch {
       // best-effort -- clear the reference either way
     } finally {

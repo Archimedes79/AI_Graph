@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Server } from 'node:http';
 import { serve } from './serve.ts';
+import { API, pathFor } from './api.ts';
 
 /**
  * The endpoints a deployed page calls, and the two rules about them.
  *
- * The shapes are not this server's to choose: `RunSnapshot` in the page's own
- * client declares them, and a snapshot missing `done` looks to the page exactly
- * like a run that never finishes — which is how it first behaved. Reading the
- * contract rather than inventing it is the whole lesson of this port.
+ * The shapes are not this server's to choose: `api.ts` declares them for both
+ * ends, and a snapshot missing `done` looks to the page exactly like a run that
+ * never finishes — which is how it first behaved.
  *
  * The second rule is what is *absent*. A deployed tool must not offer code
  * generation or graph editing; those routes are not "not implemented yet", they
@@ -24,8 +24,10 @@ const started: Server[] = [];
 
 afterAll(() => { for (const server of started) server.close(); });
 
-async function serveGraph(name = 'hello_world.json', pageDir?: string) {
-  const graphPath = resolve(REPO, 'examples', name);
+/** A graph with nothing to carry along, so what is tested is the server. */
+const MINIMAL = resolve(REPO, 'engine', 'fixtures', 'minimal.json');
+
+async function serveGraph(graphPath = MINIMAL, pageDir?: string) {
   const { server, url } = await serve({ graphPath, pageDir, port: 0 });
   started.push(server);
   return { url, graph: JSON.parse(await readFile(graphPath, 'utf8')) };
@@ -103,7 +105,7 @@ describe('the page it serves', () => {
       await writeFile(join(dir, 'runtime.html'), '<!doctype html><title>tool</title>');
       await writeFile(join(dir, 'assets', 'app.js'), 'console.log(1)');
 
-      const { url } = await serveGraph('hello_world.json', dir);
+      const { url } = await serveGraph(MINIMAL, dir);
 
       expect(await (await fetch(`${url}/`)).text()).toContain('<title>tool</title>');
       expect(await (await fetch(`${url}/assets/app.js`)).text()).toBe('console.log(1)');
@@ -118,7 +120,7 @@ describe('the page it serves', () => {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-page-'));
     try {
       await writeFile(join(dir, 'runtime.html'), '<!doctype html><title>tool</title>');
-      const { url } = await serveGraph('hello_world.json', dir);
+      const { url } = await serveGraph(MINIMAL, dir);
       // Whatever this resolves to, it must not be a file from above the page.
       const escaped = await (await fetch(`${url}/../../graph.json`)).text();
       expect(escaped).toContain('<title>tool</title>');
@@ -145,18 +147,29 @@ describe('the engine as the front door of the editor', () => {
 
   it('answers the routes the editor calls itself', async () => {
     const url = await editor();
-    const graph = JSON.parse(await readFile(resolve(REPO, 'examples', 'hello_world.json'), 'utf8'));
+    const graph = JSON.parse(await readFile(MINIMAL, 'utf8'));
     const requirements = await (await fetch(`${url}/api/execute/requirements`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
     })).json();
     expect(Array.isArray(requirements)).toBe(true);
     const settings = await asJson(await fetch(`${url}/api/ai/settings`));
     expect(settings.credentials).toBeTruthy();
-    const authored = await (await fetch(`${url}/api/elements/authored`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
-    })).json();
-    expect(Array.isArray(authored)).toBe(true);
   });
+
+  // That the editor serves every route is not tested by calling them -- some
+  // write settings or ask a model -- but by starting it: a server with a route
+  // and no handler refuses to start, and `editor()` above started.
+  it('serves a deployed tool its own routes of the contract, and none of the editor\'s', async () => {
+    const { url } = await serveGraph();
+    for (const [name, route] of Object.entries(API)) {
+      const { path } = pathFor(name as keyof typeof API, { id: 'none' });
+      const init = { method: route.method, headers: { 'Content-Type': 'application/json' }, body: route.method === 'GET' ? undefined : '{}' };
+      // Any answer but "no such route" means a handler: its own refusals (a run that is not there) are its business.
+      const detail = (await asJson(await fetch(`${url}${path}`, init))).detail;
+      if (route.for === 'editor') expect(detail, name).toBe('Not part of this server.');
+      else expect(detail, name).not.toBe('Not part of this server.');
+    }
+  }, 60_000);
 
   it('still refuses what nothing serves, rather than guessing', async () => {
     const url = await editor();

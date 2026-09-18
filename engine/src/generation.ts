@@ -41,6 +41,16 @@ export interface Generation {
    */
   inputs?: string[];
   outputs?: string[];
+  /**
+   * What is wrong with a result that ran, in sentences the model can act on;
+   * empty when nothing is.
+   *
+   * Running proves the code runs. It does not prove the chart is a chart: a
+   * drawing can come back with the right key and NaN for every coordinate. The
+   * element that will show the result is the one that knows what to look for,
+   * so it says so here -- and the generator stays ignorant of SVG.
+   */
+  check?: (outputs: Record<string, unknown>) => string[];
   /** Shown when the request field is still empty. */
   guard: string;
   /** Shown when the generated text arrives. */

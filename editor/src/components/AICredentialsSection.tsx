@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { getEditorAISettings, saveEditorAISettings, type AISettingsStatus } from '../utils/api';
+import { useEffect, useState } from 'react';
+import { call, type SettingsPatch, type SettingsStatus } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import { ACCENT_TEXT, DIM, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, TEXT } from '../ui/theme';
 
@@ -32,23 +32,23 @@ const NEEDS_ENDPOINT = [
  * it came from, never its value, so a key never travels back into the browser.
  */
 export default function AICredentialsSection() {
-  const [status, setStatus] = useState<AISettingsStatus | null>(null);
+  const [status, setStatus] = useState<SettingsStatus | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [endpoints, setEndpoints] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    getEditorAISettings()
+    call('aiSettings')
       .then((data) => { setStatus(data); setEndpoints(data.endpoints); })
       .catch((e) => setMessage(errorText(e, 'Could not read the AI settings file.')));
   }, []);
 
-  const persist = async (body: Parameters<typeof saveEditorAISettings>[0], note: string) => {
+  const persist = async (body: SettingsPatch, note: string) => {
     setBusy(true);
     setMessage('');
     try {
-      const data = await saveEditorAISettings(body);
+      const data = await call('saveAiSettings', body);
       setStatus((prev) => (prev ? { ...prev, ...data } : prev));
       setEndpoints(data.endpoints);
       setDrafts({});

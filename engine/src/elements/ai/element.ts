@@ -4,31 +4,37 @@ import type { GraphNode } from '../../graph.ts';
 import { imageDataUrl, imageMediaType } from '../../images.ts';
 import type { LogicFields } from '../../logic.ts';
 import type { Generation } from '../../generation.ts';
+import { assemblePrompt, type PromptSettings } from './prompt.ts';
 
 /** Where an ai node keeps its two halves; used by both declarations below. */
 const PROMPT_FIELDS: LogicFields = {
   body: 'system_prompt', prompt: 'description', file: 'code_file', promptOnSubject: true,
 };
 
-export interface AiConfig {
-  systemPrompt: string;
+export interface AiConfig extends PromptSettings {
   provider: string;
   model: string;
   temperature: number;
   sendImages: boolean;
-  /** What the model is told to produce. A generation input, not a runtime check. */
-  outputFormat: string;
-  outputFormatPrompt: string;
+  /** Tool servers the model may call while answering: URLs, or names this machine configured. */
+  toolServers: string[];
+}
+
+/** One per line, or a list: both are what a person would write. */
+function serverList(raw: unknown): string[] {
+  const entries = Array.isArray(raw) ? raw : String(raw ?? '').split(/\r?\n/);
+  return entries.map((entry) => String(entry).trim()).filter(Boolean);
 }
 
 /**
  * A node that asks a model.
  *
- * The prompt is **everything wired into it**, joined by blank lines, in port
- * order. Not a port named `prompt`: a node with two inputs wired to two
- * different upstream nodes should send both, and naming one of them would make
- * the second silently disappear. What the node itself adds is the system
- * prompt — the part someone wrote.
+ * The prompt is **everything wired into it**, in port order -- laid out by the
+ * node's message template when it has one, joined by blank lines when it does
+ * not (see `prompt.ts`). Not a port named `prompt`: a node with two inputs
+ * wired to two different upstream nodes should send both, and naming one of
+ * them would make the second silently disappear. What the node itself adds is
+ * the system prompt — the part someone wrote.
  *
  * Running once per item is not here. A node that fans out does so the same way
  * a code node does, in the executor, because "run this once per element" is a
@@ -45,8 +51,11 @@ export class AiElement extends GraphNodeElement<AiConfig> {
       model: String(c.ai_model ?? ''),
       temperature: Number(c.temperature ?? 0.7),
       sendImages: c.send_images === true,
+      template: String(c.prompt_template ?? ''),
       outputFormat: String(c.output_format ?? 'text'),
       outputFormatPrompt: String(c.output_format_prompt ?? ''),
+      outputExample: String(c.output_example ?? ''),
+      toolServers: serverList(c.mcp_servers),
     };
   }
 
@@ -74,12 +83,23 @@ export class AiElement extends GraphNodeElement<AiConfig> {
     return { needsInterface: false };
   }
 
+  /** What is wired in is the question: with all of it empty there is nothing to ask. */
+  override needsInput(): boolean {
+    return true;
+  }
+
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const settings = this.config(node);
-    const parts: string[] = [];
+    const text: Record<string, unknown> = {};
     const images: string[] = [];
 
-    for (const value of Object.values(inputs)) {
+    // Port order, not the order the edges happen to be stored in: the message
+    // a person previews must be the message that is sent.
+    const declared = node.inputs.map((port) => port.id);
+    const order = [...declared.filter((id) => id in inputs), ...Object.keys(inputs).filter((id) => !declared.includes(id))];
+
+    for (const name of order) {
+      const value = inputs[name];
       if (value === null || value === undefined) continue;
       if (settings.sendImages) {
         // An input that *is* an image becomes an image in the request rather
@@ -100,19 +120,13 @@ export class AiElement extends GraphNodeElement<AiConfig> {
           continue;
         }
       }
-      // A list becomes its items, one per paragraph -- not a serialization of
-      // the list, which puts brackets, quotes and commas into the prompt and
-      // makes the model read around syntax to find the text. Three summaries
-      // wired into a node should arrive as three paragraphs.
-      for (const item of Array.isArray(value) ? value : [value]) {
-        parts.push(typeof item === 'string' ? item : JSON.stringify(item));
-      }
+      text[name] = value;
     }
 
-    const instruction = formatInstruction(settings);
+    const { system, user } = assemblePrompt(settings, text);
     const request = {
-      prompt: parts.join('\n\n'),
-      system: instruction ? `${settings.systemPrompt}\n\n${instruction}` : settings.systemPrompt,
+      prompt: user,
+      system,
       provider: settings.provider,
       model: settings.model,
       temperature: settings.temperature,
@@ -122,16 +136,19 @@ export class AiElement extends GraphNodeElement<AiConfig> {
     // A failed call is not caught here: `catch_errors` is read by the executor,
     // which turns a throw into this node's `error` port for every element
     // alike. One mechanism, not one per element.
-    return { output: await runtime.ai.complete(request) };
-  }
-}
+    if (!settings.toolServers.length) return { output: await runtime.ai.complete(request) };
 
-/** What the node was told to ask for, as a sentence the model can follow. */
-function formatInstruction(settings: AiConfig): string {
-  if (settings.outputFormat === 'custom') return settings.outputFormatPrompt;
-  if (settings.outputFormat === 'json') return 'Respond with JSON and nothing else.';
-  if (settings.outputFormat.startsWith('csv')) return 'Respond with CSV and nothing else.';
-  return '';
+    // Tools live for one run of this node and no longer: a server started for
+    // a question is stopped when the question is answered, so a graph that ran
+    // leaves nothing running behind it.
+    if (!runtime.tools) throw new Error('This node asks for tool servers, and nothing here can reach one.');
+    const session = await runtime.tools.open(settings.toolServers);
+    try {
+      return { output: await runtime.ai.complete({ ...request, tools: session }) };
+    } finally {
+      await session.close();
+    }
+  }
 }
 
 /**

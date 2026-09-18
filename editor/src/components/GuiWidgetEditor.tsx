@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { GuiWidget } from '../types/graph';
-import { GUI_WIDGET_KIND_LABELS, guiWidgetPorts } from '../utils/guiWidgets';
+import { GUI_WIDGET_KIND_LABELS, guiWidgetPorts, widgetFiresRun } from '../utils/guiWidgets';
 import { useGenerate } from '../elements/shared/useGenerate';
 import { buildGeneration, widgetFields } from '../elements/shared/generation';
 import { widgetLogic } from '../elements/shared/logic';
@@ -10,8 +10,12 @@ import { GenerationReport } from '../elements/shared/GenerationTranscript';
 import { lastRunWidgetInput } from '../elements/shared/generationContext';
 import { useGraphStore } from '../store/graphStore';
 import { GUI_GRID_COLUMNS } from './gui/layout';
+import { describeScheme, schemeVars } from './gui/scheme';
+import TryItPanel from '../elements/shared/TryItPanel';
+import { sampleFor } from '../elements/shared/tryValues';
+import { call } from '../utils/api';
 import { TONES, TONE_LABELS, type Tone } from './gui/tone';
-import { DANGER, DIMMER, FIELD_ON_SURFACE, MUTED, NEUTRAL_BUTTON, WELL } from '../ui/theme';
+import { DANGER, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, WELL } from '../ui/theme';
 
 interface GuiWidgetPropertiesProps {
   widget: GuiWidget | null;
@@ -50,13 +54,15 @@ export default function GuiWidgetProperties({
   if (!widget) {
     return (
       <p className="text-xs" style={{ color: DIMMER }}>
-Wähle einen Block auf der Seite aus.
+Select a block on the page — or press <kbd>/</kbd> to add one.
       </p>
     );
   }
 
   const element = GUI_WIDGET_ELEMENTS[widget.kind];
   const ConfigEditor = element.ConfigEditor;
+  const subject = `${nodeId}::${widget.id}`;
+  const RuntimeWidget = element.RuntimeWidget;
   const logic = widgetLogic(widget);
 
   /**
@@ -83,10 +89,13 @@ Wähle einen Block auf der Seite aus.
         setExpanded(true);
       }),
       exampleFile: (widget.example_file ?? '').trim(),
+      // What a block draws is seen on this page, in this scheme -- and the model
+      // writing it cannot see either. Said, not enforced: see `describeScheme`.
+      graphContext: describeScheme(useGraphStore.getState().metadata.gui_scheme),
       // The real thing that reached this block last run. A chart transform
       // written against actual rows beats one written against a description of
       // them, and the verify pass can then run it for real.
-      sampleInputs: lastRunWidgetInput(nodeId, widget.id, executionResult),
+      sampleInputs: sampleFor(subject, ['value'], lastRunWidgetInput(nodeId, widget.id, executionResult)),
     }), widget.id);
   };
 
@@ -101,109 +110,51 @@ Wähle einen Block auf der Seite aus.
           onClick={onRemove}
           className="text-xs px-2 py-1 rounded"
           style={{ background: DANGER, color: 'white' }}
-          title="Entfernen (Entf)"
-          aria-label="Entfernen"
+          title="Remove (Del)"
+          aria-label="Remove"
         >
           ✕
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Name</label>
-          <input
-            className="w-full rounded-lg px-2 py-1.5 text-sm"
-            style={FIELD_ON_SURFACE}
-            value={widget.label}
-            onChange={(e) => onChange({ label: e.target.value })}
-            placeholder="Beschriftung"
-          />
-        </div>
-        <div>
-          {/* A closed set, not a colour picker: every value comes from the one
-              palette, so no combination can look wrong. */}
-          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Darstellung</label>
-          <select
-            className="w-full rounded-lg px-2 py-1.5 text-sm"
-            style={FIELD_ON_SURFACE}
-            value={(widget.tone as Tone) ?? 'raised'}
-            onChange={(e) => onChange({ tone: e.target.value as Tone })}
-          >
-            {TONES.map((tone) => (
-              <option key={tone} value={tone}>{TONE_LABELS[tone]}</option>
-            ))}
-          </select>
-        </div>
+      <div className="mb-3">
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Label</label>
+        <input
+          className="w-full rounded-lg px-2 py-1.5 text-sm"
+          style={FIELD_ON_SURFACE}
+          value={widget.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+          placeholder="What it says above the block"
+        />
       </div>
 
-      {/* On top of the tone: a frame or not, and a colour of your own. Unset
-          means the tone decides, which is what "Standard" puts back. */}
-      <div className="flex items-center gap-4 mb-3 text-sm" style={{ color: MUTED }}>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={widget.border ?? widget.tone !== 'plain'}
-            onChange={(e) => onChange({ border: e.target.checked })}
-          />
-          Rahmen
-        </label>
-        <label className="flex items-center gap-2">
-          Hintergrund
-          <input
-            type="color"
-            value={widget.background || '#000000'}
-            onChange={(e) => onChange({ background: e.target.value })}
-            title={widget.background || 'Standard der Darstellung'}
-          />
-        </label>
-        {(widget.border !== undefined || widget.background) && (
-          <button
-            type="button"
-            className="text-xs underline"
-            onClick={() => onChange({ border: undefined, background: '' })}
-          >
-            Standard
-          </button>
-        )}
-      </div>
-
-      {/* Exact cells, for when dragging the corner is fiddlier than typing. */}
-      <div className="flex items-center gap-3 mb-3">
-        {([['w', 'Breite', GUI_GRID_COLUMNS], ['h', 'Höhe', 99]] as const).map(([field, label, max]) => (
-          <label key={field} className="flex items-center gap-1 text-xs" style={{ color: DIMMER }}>
-            {label}
-            <input
-              type="number"
-              min={1}
-              max={max}
-              className="w-14 rounded px-1 py-0.5 text-xs"
-              style={FIELD_ON_SURFACE}
-              value={(widget[field] as number) ?? 1}
-              onChange={(e) => onChange({ [field]: Math.max(1, Math.min(max, Number(e.target.value) || 1)) })}
-            />
-          </label>
-        ))}
-        <span className="text-xs" style={{ color: DIMMER }}>Zellen von {GUI_GRID_COLUMNS}</span>
-      </div>
-
-      {/* Only for a block that does something: a rule or a gap cannot fail. */}
+      {/* What starts the graph. A button or a chat always does; anything else
+          with an output can be told to. */}
       {guiWidgetPorts(widget).outputs.length > 0 && (
         <div className="mb-3">
-          <label className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
-            <input
-              type="checkbox"
-              checked={widget.catch_errors === true}
-              onChange={(e) => onChange({ catch_errors: e.target.checked })}
-            />
-            Fehler auffangen statt die Seite abzubrechen
-          </label>
-          <p className="text-xs mt-1" style={{ color: DIMMER }}>
-            Aus: ein Fehler in diesem Block bricht den ganzen Lauf ab, samt der Ausgaben aller
-            anderen Blöcke. An: der Block bekommt einen{' '}
-            <strong style={{ color: '#a78bfa' }}>Fehler</strong>-Ausgang mit der Ursache, seine
-            übrigen Ausgänge bleiben leer, und die Seite läuft weiter. Den Ausgang zu verbinden
-            ist freigestellt.
-          </p>
+          {widgetFiresRun({ ...widget, run_on_change: false }) ? (
+            <p className="text-xs" style={{ color: MUTED }}>
+              ⚡ Using this starts the graph — at the nodes it is wired to, or all of it when it is
+              wired to nothing. Wire it to a node's <span style={{ color: '#f59e0b' }}>◆</span> to say
+              “start here” without sending a value.
+            </p>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+                <input
+                  type="checkbox"
+                  checked={widget.run_on_change === true}
+                  onChange={(e) => onChange({ run_on_change: e.target.checked })}
+                />
+                ⚡ Using this starts the graph
+              </label>
+              <p className="text-xs mt-1" style={{ color: DIMMER }}>
+                {widget.kind === 'text_io'
+                  ? 'Enter sends what was typed (Shift+Enter is a new line), and the box is emptied once it has been delivered.'
+                  : 'Choosing a value runs the nodes this block is wired to, and what follows from them — not the whole graph.'}
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -230,6 +181,125 @@ Wähle einen Block auf der Seite aus.
           canGenerate={!!element.generation && (element.generation.available?.(widget) ?? true)}
         />
         </GenerationReport>
+      )}
+
+      {/* Everything that is a preference rather than a decision: how it looks,
+          its exact size, what a failure costs. Folded, because a block is
+          finished without any of it -- the page used to open on these. */}
+      <details className="mt-3 rounded-lg" style={{ border: `1px solid ${LINE}` }}>
+        <summary className="px-3 py-2 text-xs font-medium cursor-pointer select-none" style={{ color: MUTED }}>
+          Look, size & failures
+        </summary>
+        <div className="px-3 pb-3 pt-1">
+          {/* A closed set, not a colour picker: every value comes from the one
+              palette, so no combination can look wrong. */}
+          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Style</label>
+          <select
+            className="w-full rounded-lg px-2 py-1.5 text-sm mb-2"
+            style={FIELD_ON_SURFACE}
+            value={(widget.tone as Tone) ?? 'raised'}
+            onChange={(e) => onChange({ tone: e.target.value as Tone })}
+          >
+            {TONES.map((tone) => (
+              <option key={tone} value={tone}>{TONE_LABELS[tone]}</option>
+            ))}
+          </select>
+
+          {/* On top of the style: a frame or not, and a colour of your own. Unset
+              means the style decides, which is what "Default" puts back. */}
+          <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: MUTED }}>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={widget.border ?? widget.tone !== 'plain'}
+                onChange={(e) => onChange({ border: e.target.checked })}
+              />
+              Frame
+            </label>
+            <label className="flex items-center gap-2">
+              Background
+              <input
+                type="color"
+                value={widget.background || '#000000'}
+                onChange={(e) => onChange({ background: e.target.value })}
+                title={widget.background || 'Decided by the style'}
+              />
+            </label>
+            {(widget.border !== undefined || widget.background) && (
+              <button type="button" className="text-xs underline" onClick={() => onChange({ border: undefined, background: '' })}>
+                Default
+              </button>
+            )}
+          </div>
+
+          {/* Exact cells, for when ¼ ½ ¾ on the block is not the size wanted. */}
+          <div className="flex items-center gap-3 mb-3">
+            {([['w', 'Width', GUI_GRID_COLUMNS], ['h', 'Height', 99]] as const).map(([field, label, max]) => (
+              <label key={field} className="flex items-center gap-1 text-xs" style={{ color: DIMMER }}>
+                {label}
+                <input
+                  type="number"
+                  min={1}
+                  max={max}
+                  className="w-14 rounded px-1 py-0.5 text-xs"
+                  style={FIELD_ON_SURFACE}
+                  value={(widget[field] as number) ?? 1}
+                  onChange={(e) => onChange({ [field]: Math.max(1, Math.min(max, Number(e.target.value) || 1)) })}
+                />
+              </label>
+            ))}
+            <span className="text-xs" style={{ color: DIMMER }}>cells of {GUI_GRID_COLUMNS}</span>
+          </div>
+
+          {/* Only for a block that does something: a rule or a gap cannot fail. */}
+          {guiWidgetPorts(widget).outputs.length > 0 && (
+            <div>
+              <label className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+                <input
+                  type="checkbox"
+                  checked={widget.catch_errors === true}
+                  onChange={(e) => onChange({ catch_errors: e.target.checked })}
+                />
+                Catch a failure instead of ending the run
+              </label>
+              <p className="text-xs mt-1" style={{ color: DIMMER }}>
+                Off, a failure in this block ends the whole run, and every other block's output with
+                it. On, the block grows an <strong style={{ color: '#a78bfa' }}>error</strong> output
+                saying why, its other outputs stay empty, and the page carries on. Wiring that
+                output is optional.
+              </p>
+            </div>
+          )}
+        </div>
+      </details>
+
+      {/* A block that reshapes what it is shown is tried like any other element
+          -- and what comes back is drawn by the block itself, at the block's own
+          proportions: the chart, looked at, before the graph has ever run. */}
+      {element.generation && logic?.kind === 'code' && guiWidgetPorts(widget).inputs.length > 0 && (
+        <div className="mt-3">
+          <TryItPanel
+            subject={subject}
+            title="Try it: what arrives, and what this block shows"
+            ports={[{ id: 'value', name: 'what arrives' }]}
+            observed={lastRunWidgetInput(nodeId, widget.id, executionResult) ?? {}}
+            context={describeScheme(useGraphStore.getState().metadata.gui_scheme)}
+            onFetch={async () => {
+              const got = await call('nodeInputs', { ...useGraphStore.getState().exportGraph(), node_id: nodeId });
+              const arrived = got.inputs[`${widget.id}_in`];
+              return { inputs: arrived === undefined ? {} : { value: arrived }, error: got.error };
+            }}
+            onTest={async (values) => call('runBlock', { widget, value: values.value })}
+            renderResult={(result) => (
+              <div
+                className="mt-1 rounded overflow-hidden"
+                style={{ aspectRatio: `${widget.w ?? 8} / ${widget.h ?? 4}`, maxHeight: 260, border: `1px solid ${LINE}`, ...schemeVars(useGraphStore.getState().metadata.gui_scheme) }}
+              >
+                <RuntimeWidget widget={widget} value={result.shown} incoming={result.shown} onChange={() => {}} />
+              </div>
+            )}
+          />
+        </div>
       )}
 
       {logic && (

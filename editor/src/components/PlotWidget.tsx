@@ -1,5 +1,4 @@
-import React from 'react';
-import { ACCENT, DIM, DIMMER, HOVER, MUTED, RAISE } from '../ui/theme';
+import { ACCENT, DIM, DIMMER, HOVER, LINE, MUTED, RAISE } from '../ui/theme';
 import { PLOT_VIEW } from '@engine/elements/gui/children/plot_window/element.ts';
 
 interface PlotWidgetProps {
@@ -202,7 +201,7 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
               <line
                 x1={margin.left} x2={view.width - margin.right}
                 y1={scaleY(tick)} y2={scaleY(tick)}
-                stroke="#1e2235" strokeWidth={1}
+                stroke={LINE} strokeWidth={1}
               />
               <text
                 x={margin.left - 5} y={scaleY(tick) + 3}
@@ -215,7 +214,7 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
           <line
             x1={margin.left} x2={margin.left}
             y1={margin.top} y2={margin.top + plotH}
-            stroke="#334155" strokeWidth={1}
+            stroke={DIMMER} strokeWidth={1}
           />
         </g>
       )}
@@ -224,7 +223,7 @@ export default function PlotWidget({ data, width = 220, height = 90 }: PlotWidge
       <line
         x1={margin.left} x2={view.width - margin.right}
         y1={scaleY(0)} y2={scaleY(0)}
-        stroke="#334155" strokeWidth={1}
+        stroke={DIMMER} strokeWidth={1}
       />
 
       {points && useBars && points.map((p, i) => {

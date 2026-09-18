@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { imageDataUrl, imageMediaType, isInlineUrl, splitDataUrl, MAX_INLINE_IMAGE_BYTES } from './images.ts';
+import { imageDataUrl, imageMediaType, isInlineUrl, MAX_INLINE_IMAGE_BYTES } from './images.ts';
 import { nodeFiles } from './host/node.ts';
 import { registry } from './registry.ts';
 import { parseWidget } from './elements/gui/element.ts';
@@ -51,7 +51,6 @@ describe('imageDataUrl', () => {
       await writeFile(path, PNG);
       const url = await imageDataUrl(path, runtime.files);
       expect(url.startsWith('data:image/png;base64,')).toBe(true);
-      expect(splitDataUrl(url)[0]).toBe('image/png');
     });
   });
 

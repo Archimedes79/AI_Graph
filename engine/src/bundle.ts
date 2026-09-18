@@ -10,9 +10,9 @@
 // authored body is JavaScript, so the interpreter that runs the engine runs
 // them too.
 
-import { copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Graph } from './graph.ts';
 import { registry } from './registry.ts';
@@ -46,6 +46,45 @@ export function bundleNeeds(graph: Graph): BundleNeeds {
   }
 
   return needs;
+}
+
+/** More than this and the data is the recipient's to bring, not the bundle's to carry. */
+const DATA_LIMIT_BYTES = 50 * 1024 * 1024;
+
+async function sizeOf(path: string): Promise<number> {
+  const found = await stat(path);
+  if (!found.isDirectory()) return found.size;
+  let total = 0;
+  for (const entry of await readdir(path, { withFileTypes: true })) total += await sizeOf(join(path, entry.name));
+  return total;
+}
+
+/**
+ * The files a graph names as its defaults, copied to the same relative place.
+ *
+ * The same place, so nothing in the graph is rewritten: a bundle runs from its
+ * own folder (the launchers see to that), and `examples/data/population.csv`
+ * means there what it meant here. Only relative paths that stay inside --
+ * an absolute path is somebody's machine, and `..` is somewhere a bundle has
+ * no business writing to.
+ */
+async function dataFiles(graph: Graph, from: string, target: string): Promise<{ copied: string[]; left: string[] }> {
+  const copied: string[] = [];
+  const left: string[] = [];
+  const wanted = new Set<string>();
+  for (const node of graph.nodes) {
+    for (const path of registry.node(node.node_type)?.referencedPaths(node) ?? []) wanted.add(path);
+  }
+  for (const path of wanted) {
+    const tidy = normalize(path);
+    const source = resolve(from, tidy);
+    if (isAbsolute(path) || tidy.split(sep).includes('..') || !existsSync(source)) { left.push(path); continue; }
+    if (await sizeOf(source) > DATA_LIMIT_BYTES) { left.push(path); continue; }
+    await mkdir(dirname(resolve(target, tidy)), { recursive: true });
+    await cp(source, resolve(target, tidy), { recursive: true });
+    copied.push(tidy.replace(/\\/g, '/'));
+  }
+  return { copied, left };
 }
 
 /** Every engine source file, so the copy is complete without a list to maintain. */
@@ -95,7 +134,7 @@ async function pageFiles(pageDir: string): Promise<string[]> {
 export async function writeBundle(
   graph: Graph,
   target: string,
-  options: { name?: string; pageDir?: string } = {},
+  options: { name?: string; pageDir?: string; dataFrom?: string } = {},
 ): Promise<string[]> {
   const needs = bundleNeeds(graph);
   const name = options.name || graph.metadata.name || 'graph';
@@ -133,15 +172,24 @@ export async function writeBundle(
     }
   }
 
+  const data = await dataFiles(graph, options.dataFrom ?? process.cwd(), target);
+  written.push(...data.copied);
+
+  // From its own folder, wherever it was started from: the graph's paths are
+  // relative to the bundle, and a double-click starts in whatever folder the
+  // shell felt like.
   const command = servesPage ? 'engine/main.ts graph.json --serve' : 'engine/main.ts graph.json';
-  await put('run.cmd', ['@echo off', `node ${command.replace(/\//g, '\\')} %*`, ''].join('\r\n'));
-  await put('run.sh', ['#!/bin/sh', `exec node ${command} "$@"`, ''].join('\n'));
-  await put('README.md', readme(name, needs, servesPage));
+  await put('run.cmd', ['@echo off', 'cd /d "%~dp0"', `node ${command.replace(/\//g, '\\')} %*`, ''].join('\r\n'));
+  await put('run.sh', ['#!/bin/sh', 'cd "$(dirname "$0")" || exit 1', `exec node ${command} "$@"`, ''].join('\n'));
+  await put('README.md', readme(name, needs, servesPage, data));
 
   return written;
 }
 
-function readme(name: string, needs: BundleNeeds, servesPage = false): string {
+function readme(
+  name: string, needs: BundleNeeds, servesPage = false,
+  data: { copied: string[]; left: string[] } = { copied: [], left: [] },
+): string {
   const lines = [
     `# ${name}`,
     '',
@@ -203,6 +251,25 @@ function readme(name: string, needs: BundleNeeds, servesPage = false): string {
       "the page's blocks with values, but does not draw them; the fields it",
       'would otherwise ask you to fill are asked for on the terminal instead.',
     );
+  }
+
+  if (data.copied.length || data.left.length) {
+    lines.push('', '## Its files', '');
+    if (data.copied.length) {
+      lines.push(
+        'The files this graph starts on came with it, in the same relative place',
+        'they had where it was built:', '',
+        ...data.copied.map((path) => `- \`${path}\``),
+      );
+    }
+    if (data.left.length) {
+      lines.push(
+        '', 'These it names but does not carry -- an absolute path is a place on',
+        "somebody else's machine, and anything over 50 MB is yours to bring. Choose",
+        'your own in the tool, or pass `--inputs`:', '',
+        ...data.left.map((path) => `- \`${path}\``),
+      );
+    }
   }
 
   lines.push('');

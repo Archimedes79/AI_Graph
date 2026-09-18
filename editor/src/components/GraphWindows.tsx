@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
-import type { RuntimeRequirement } from '../types/graph';
+import type { Requirement } from '../utils/api';
 import Modal from './Modal';
 import FileBrowserDialog from './FileBrowserDialog';
 import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
 interface GraphWindowsProps {
-  requirements: RuntimeRequirement[] | null;
+  requirements: Requirement[] | null;
   onSubmit: (values: Record<string, string>) => void;
   onCancel: () => void;
 }
@@ -34,7 +34,7 @@ export default function GraphWindows({ requirements, onSubmit, onCancel }: Graph
   // Widget-scoped requirements are keyed "{node_id}::{widget_id}", matching
   // the backend's apply_runtime_values convention; plain node requirements
   // use node_id alone.
-  const keyFor = (req: RuntimeRequirement) => (req.widget_id ? `${req.node_id}::${req.widget_id}` : req.node_id);
+  const keyFor = (req: Requirement) => (req.widget_id ? `${req.node_id}::${req.widget_id}` : req.node_id);
 
   useEffect(() => {
     if (requirements) {

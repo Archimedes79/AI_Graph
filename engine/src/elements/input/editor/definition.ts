@@ -3,7 +3,6 @@ import type { GraphNodeElementDefinition } from '@/elements/types';
 import InputEditor from './Editor';
 import { baseNodeConfig } from '@/elements/shared/baseNodeConfig';
 import { derivedNodePorts } from '@/utils/guiWidgets';
-import type { Port } from '@/types/graph';
 import { InputElement } from '../element.ts';
 import { fromEngine } from '@/elements/shared/generation';
 

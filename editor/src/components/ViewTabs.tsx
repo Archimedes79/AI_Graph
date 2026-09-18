@@ -1,4 +1,3 @@
-import React from 'react';
 import { useGraphStore } from '../store/graphStore';
 import { NODE_ELEMENTS } from '../elements/registry';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE } from '../ui/theme';
@@ -28,9 +27,9 @@ export default function ViewTabs({
     .reduce((total, n) => total + n.config.gui_widgets.length, 0));
 
   const tabs: { id: EditorView; label: string; hint: string }[] = [
-    { id: 'graph', label: 'Graph', hint: 'Nodes und Verbindungen' },
-    { id: 'design', label: 'Oberfläche', hint: 'Die Seite, die das Werkzeug zeigt' },
-    { id: 'preview', label: 'Vorschau', hint: 'Genau das, was ausgeliefert läuft — ohne Bearbeiten' },
+    { id: 'graph', label: 'Graph', hint: 'Nodes and the wires between them' },
+    { id: 'design', label: 'GUI editor', hint: 'The page this tool shows — build it here' },
+    { id: 'preview', label: 'Preview', hint: 'Exactly what is delivered, and it works — try it' },
   ];
 
   return (

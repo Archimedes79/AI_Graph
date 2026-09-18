@@ -1,5 +1,5 @@
 import React from 'react';
-import type { GraphNode, GuiWidget } from '../../types/graph';
+import type { ExecutionResult, GraphNode, GuiWidget } from '../../types/graph';
 import { useGraphStore } from '../../store/graphStore';
 import { NODE_ELEMENTS, GUI_WIDGET_ELEMENTS } from '../../elements/registry';
 import { useContainerCell } from './useContainerCell';
@@ -7,6 +7,8 @@ import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from
 import { toneIsBare, toneStyle, type Tone } from './tone';
 import { schemeVars } from './scheme';
 import { DANGER, MUTED } from '../../ui/theme';
+import { widgetFiresRun } from '../../utils/guiWidgets';
+import type { RunTrigger } from '../../utils/api';
 
 /**
  * The page a graph shows: every gui node's blocks, in graph order, on one grid.
@@ -67,7 +69,19 @@ export function blockValue(
   overrides?: Record<string, string>,
 ): unknown {
   const own = overrides?.[block.widget.id] ?? block.widget.value ?? '';
+  if (GUI_WIDGET_ELEMENTS[block.widget.kind]?.ownsValue) return own;
   return incoming !== undefined && overrides?.[block.widget.id] === undefined ? incoming : own;
+}
+
+/**
+ * What a run put on one block: the engine's `display`, which is what arrived
+ * *through the block's own transform*. A server from before `display` existed
+ * answers without one, and then what arrived is the best there is.
+ */
+export function shownOn(result: ExecutionResult | null, nodeId: string, widgetId: string): unknown {
+  const ran = result?.node_results.find((r) => r.node_id === nodeId);
+  const shown = ran?.display?.[widgetId];
+  return shown !== undefined ? shown : ran?.inputs?.[`${widgetId}_in`];
 }
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */
@@ -120,18 +134,27 @@ export function PageGrid({
  * none, and none of that code is in its bundle.
  */
 export function GuiBlock({
-  placement, value, incoming, onChange, style, onMouseDown, blockRef, labelInset, children,
+  placement, value, incoming, onChange, onTrigger, busy, style, onMouseDown, blockRef, labelInset, children, content,
 }: {
   placement: WidgetPlacement;
   value: unknown;
   incoming: unknown;
-  onChange: (next: string) => void;
+  onChange: (next: unknown) => void;
+  /** Absent in the designer: a page being laid out must not start runs. */
+  onTrigger?: (value?: unknown) => void;
+  busy?: boolean;
   style?: React.CSSProperties;
   onMouseDown?: (event: React.MouseEvent) => void;
   blockRef?: (element: HTMLElement | null) => void;
   /** Room for a drag grip beside the caption. Designer only. */
   labelInset?: number;
   children?: React.ReactNode;
+  /**
+   * Drawn in place of the block's own widget. Designer only: it is how a
+   * heading becomes a box you type in while it is selected. A deployed page
+   * passes none, so nothing that edits can be reached from it.
+   */
+  content?: React.ReactNode;
 }) {
   const { widget } = placement;
   const RuntimeWidget = GUI_WIDGET_ELEMENTS[widget.kind]?.RuntimeWidget;
@@ -162,11 +185,11 @@ export function GuiBlock({
       )}
 
       <div className="flex-1 min-h-0">
-        {RuntimeWidget ? (
-          <RuntimeWidget widget={widget} value={value} incoming={incoming} onChange={onChange} />
+        {content ?? (RuntimeWidget ? (
+          <RuntimeWidget widget={widget} value={value} incoming={incoming} onChange={onChange} onTrigger={onTrigger} busy={busy} />
         ) : (
-          <span className="text-xs" style={{ color: DANGER }}>Unbekannte Art: {widget.kind}</span>
-        )}
+          <span className="text-xs" style={{ color: DANGER }}>Unknown kind of block: {widget.kind}</span>
+        ))}
       </div>
     </div>
   );
@@ -174,20 +197,21 @@ export function GuiBlock({
 
 /** The page itself: what a deployed tool renders, and what the preview shows. */
 export default function GuiPage({
-  blocks, onWidgetValue,
+  blocks, onWidgetValue, onWidgetTrigger,
 }: {
   blocks: SurfaceBlock[];
-  onWidgetValue: (block: SurfaceBlock, value: string) => void;
+  onWidgetValue: (block: SurfaceBlock, value: unknown) => void;
+  onWidgetTrigger?: (block: SurfaceBlock, value?: unknown) => void;
 }) {
   const executionResult = useGraphStore((s) => s.executionResult);
+  const busy = useGraphStore((s) => s.isExecuting);
   const placements = resolveWidgetLayout(blocks.map((b) => b.widget));
 
   return (
     <PageGrid>
       {placements.map((placement, index) => {
         const block = blocks[index];
-        const incoming = executionResult?.node_results
-          .find((r) => r.node_id === block.node.id)?.inputs?.[`${placement.widget.id}_in`];
+        const incoming = shownOn(executionResult, block.node.id, placement.widget.id);
         return (
           <GuiBlock
             key={placement.widget.id}
@@ -195,6 +219,8 @@ export default function GuiPage({
             incoming={incoming}
             value={blockValue(block, incoming)}
             onChange={(next) => onWidgetValue(block, next)}
+            onTrigger={onWidgetTrigger ? (next) => onWidgetTrigger(block, next) : undefined}
+            busy={busy}
           />
         );
       })}
@@ -206,25 +232,69 @@ export default function GuiPage({
  * The page wired to the graph: what a deployed tool serves, and what the
  * editor's preview tab shows. One component, so a preview cannot flatter.
  */
-export function GuiSurfacePage() {
+/**
+ * What using a block does: keep its value, and start the graph if it is a
+ * block that starts it.
+ *
+ * One implementation, for the delivered page and for the page being built. The
+ * designer used to pass no event at all, on the theory that a page being laid
+ * out must not start runs -- so on the Page tab a chat's Send did nothing and a
+ * button was a picture of a button, on the very surface whose promise is that
+ * its blocks are live.
+ */
+export function usePageEvents(onRun?: (trigger: RunTrigger) => void) {
   const updateNode = useGraphStore((s) => s.updateNode);
-  const blocks = useSurfaceBlocks();
+  const exportGraph = useGraphStore((s) => s.exportGraph);
+  const runGraph = useGraphStore((s) => s.runGraph);
 
-  const setWidgetValue = (block: SurfaceBlock, value: string) => {
+  const setWidgetValue = (block: SurfaceBlock, value: unknown) => {
+    // Read from the store, not from `block`: a value and the event that
+    // follows it arrive in the same tick, and the block in hand is the one
+    // from before either.
+    const current = useGraphStore.getState().rfNodes.find((n) => n.id === block.node.id)?.data.graphNode as GraphNode | undefined;
+    const config = current?.config ?? block.node.config;
     updateNode(block.node.id, {
       config: {
-        ...block.node.config,
-        gui_widgets: block.node.config.gui_widgets.map(
+        ...config,
+        gui_widgets: config.gui_widgets.map(
           (w) => (w.id === block.widget.id ? { ...w, value } : w),
         ),
       },
     });
   };
 
+  /**
+   * A block was used. If it is one that starts the graph, start it -- where the
+   * block is wired to, which is the engine's question to answer, not the page's.
+   */
+  const fire = (block: SurfaceBlock, value?: unknown) => {
+    if (value !== undefined) setWidgetValue(block, value);
+    if (!widgetFiresRun(block.widget)) return;
+    if (useGraphStore.getState().isExecuting) return;
+    const trigger: RunTrigger = { node_id: block.node.id, port_id: `${block.widget.id}_out` };
+    if (onRun) onRun(trigger);
+    else void runGraph(exportGraph(), trigger);
+  };
+
+  return { setWidgetValue, fire };
+}
+
+export function GuiSurfacePage({ onRun }: {
+  /**
+   * Start a run for a page event. The host supplies it because the host is who
+   * knows what has to happen first -- asking for a file nobody chose yet, say --
+   * and that must be the same whether ▶ Run or a button on the page asked.
+   * Without one, the store's plain `runGraph` is used.
+   */
+  onRun?: (trigger: RunTrigger) => void;
+}) {
+  const blocks = useSurfaceBlocks();
+  const { setWidgetValue, fire } = usePageEvents(onRun);
+
   if (blocks.length === 0) return null;
   return (
     <div className="flex-1 overflow-auto px-8 py-6">
-      <GuiPage blocks={blocks} onWidgetValue={setWidgetValue} />
+      <GuiPage blocks={blocks} onWidgetValue={setWidgetValue} onWidgetTrigger={fire} />
     </div>
   );
 }

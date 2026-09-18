@@ -42,6 +42,12 @@ export function describeNodeOutput(node: GraphNode): string {
  */
 export function outputFormatContext(config: GraphNode['config']): string {
   if (!config.output_format || config.output_format === 'text') return '';
+  if (config.output_format === 'example') {
+    // An answer kept from a test run: the shape is shown rather than described.
+    return config.output_example
+      ? `The output must have the same structure as this example:\n${config.output_example}`
+      : '';
+  }
   const custom = config.output_format === 'custom' && config.output_format_prompt
     ? ` (${config.output_format_prompt})`
     : '';
@@ -109,9 +115,9 @@ function preview(value: unknown): string {
  * The raw values this node's input ports received on the last run.
  *
  * `lastRunContext` above renders the same values as prose for the model to read.
- * This is the machine-readable half: the backend runs the generated function
- * against it and repairs the code if it fails (see backend/app/services/
- * code_refine.py). Undefined when the node has never run, which turns the
+ * This is the machine-readable half: the server runs the generated function
+ * against it and repairs the code if it fails (see
+ * engine/src/host/editor/generate.ts). Undefined when the node has never run, which turns the
  * verification pass off rather than inventing a sample.
  */
 export function lastRunInputs(

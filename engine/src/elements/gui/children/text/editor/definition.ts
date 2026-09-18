@@ -7,4 +7,6 @@ export const textElement: GuiWidgetElementDefinition = {
   widgetKind: 'text',
   ConfigEditor: TextEditor,
   RuntimeWidget: TextWidget,
+  // Typed where it stands, on the page being built.
+  inlineText: true,
 };

@@ -1,14 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
 import { GuiSurfacePage } from '../components/gui/GuiPage';
 import { useSchemeOnRoot } from '../components/gui/useScheme';
 import GraphWindows from '../components/GraphWindows';
 import RuntimeAISettings from './RuntimeAISettings';
-import { getRuntimeGraph, getRuntimeRequirements } from '../utils/api';
+import { call, type Requirement, type RunTrigger, type ScheduleState } from '../utils/api';
 import { errorText } from '../utils/errorText';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { NODE_ELEMENTS } from '../elements/registry';
-import type { Graph, RuntimeRequirement } from '../types/graph';
 import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE, TEXT } from '../ui/theme';
 
 /**
@@ -22,7 +21,7 @@ import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE,
  * second implementation of a widget anywhere, which is why a deployed tool
  * cannot look or behave differently from what was designed.
  *
- * Served by the bundle's `serve.py` at `runtime.html`.
+ * Served by the bundle's `engine/host/serve.ts` at `runtime.html`.
  */
 export default function RuntimeApp() {
   const loadGraph = useGraphStore((s) => s.loadGraph);
@@ -35,14 +34,15 @@ export default function RuntimeApp() {
   useSchemeOnRoot(metadata.gui_scheme);
   const executionResult = useGraphStore((s) => s.executionResult);
   const runGraph = useGraphStore((s) => s.runGraph);
+  const setExecutionResult = useGraphStore((s) => s.setExecutionResult);
 
   const [loadError, setLoadError] = useState('');
   const [ready, setReady] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [pendingRequirements, setPendingRequirements] = useState<RuntimeRequirement[] | null>(null);
+  const [pendingRequirements, setPendingRequirements] = useState<Requirement[] | null>(null);
 
   useEffect(() => {
-    getRuntimeGraph()
+    call('graph')
       .then((graph) => {
         loadGraph(graph);
         setReady(true);
@@ -53,11 +53,18 @@ export default function RuntimeApp() {
   // Anything the graph still needs before it can run (a file to read, a place
   // to write) is asked for in the same window the editor uses -- the deployed
   // equivalent of the CLI's stdin prompts, but clickable.
-  const handleRun = async () => {
+  //
+  // One path for all three ways a run starts -- ▶ Run, the tool's own triggers,
+  // and a block on the page -- because what has to happen first is the same
+  // for each of them. A page event brings the port it fired on, and the run is
+  // then only what that port is wired to.
+  const pendingTrigger = useRef<RunTrigger | null>(null);
+  const handleRun = async (trigger: RunTrigger | null = null) => {
     const graph = exportGraph();
     try {
-      const requirements = await getRuntimeRequirements(graph);
+      const requirements = await call('requirements', graph);
       if (requirements.length > 0) {
+        pendingTrigger.current = trigger;
         setPendingRequirements(requirements);
         return;
       }
@@ -65,8 +72,38 @@ export default function RuntimeApp() {
       // Requirements are an optimisation; if the check fails, just run and let
       // the engine report a missing value properly.
     }
-    await runGraph(graph);
+    await runGraph(graph, trigger);
   };
+
+  // The graph's own triggers -- when the tool starts, and on its clock -- run in
+  // the server, not here: a page is a window, and a window is not always open.
+  // This only watches. What the server last produced is shown as soon as the
+  // page opens, and each new round as it lands; what that round remembered is
+  // replayed into this page's copy of the graph like any other run's.
+  const [schedule, setSchedule] = useState<ScheduleState | null>(null);
+  const seenRound = useRef(0);
+  useEffect(() => {
+    if (!ready) return undefined;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const look = async () => {
+      try {
+        const state = await call('schedule');
+        if (!alive) return;
+        setSchedule(state);
+        if (state.result && state.runs !== seenRound.current && !useGraphStore.getState().isExecuting) {
+          seenRound.current = state.runs;
+          setExecutionResult(state.result);
+        }
+        // Nothing scheduled: asked once, and that is the end of it.
+        if (state.scheduled) timer = setTimeout(look, 2000);
+      } catch {
+        // An older server has no schedule to report. Nothing to watch.
+      }
+    };
+    void look();
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+  }, [ready, setExecutionResult]);
 
   const handleRequirementsSubmit = async (values: Record<string, string>) => {
     const graph = exportGraph();
@@ -90,7 +127,9 @@ export default function RuntimeApp() {
       updateNode(node.id, { config: node.config });
     }
     setPendingRequirements(null);
-    await runGraph(graph);
+    const trigger = pendingTrigger.current;
+    pendingTrigger.current = null;
+    await runGraph(graph, trigger);
   };
 
   const status = executionResult?.status;
@@ -126,7 +165,7 @@ export default function RuntimeApp() {
           ⚙ AI Settings
         </button>
         <button
-          onClick={handleRun}
+          onClick={() => handleRun()}
           disabled={!ready || isExecuting}
           className="px-4 py-1.5 text-xs rounded-lg font-semibold"
           style={{
@@ -137,6 +176,13 @@ export default function RuntimeApp() {
         >
           {isExecuting ? '⏳ Running…' : '▶ Run'}
         </button>
+        {schedule?.scheduled && (
+          <span className="text-xs whitespace-nowrap" style={{ color: DIM }} title="This tool runs by itself; the clock is in the server, so it keeps running with this page closed.">
+            {schedule.running ? '⏱ running…' : schedule.next_at
+              ? `⏱ next ${new Date(schedule.next_at).toLocaleTimeString()}`
+              : schedule.finished_at ? `⏱ ran ${new Date(schedule.finished_at).toLocaleTimeString()}` : '⏱'}
+          </span>
+        )}
         {statusLabel && (
           <span className="text-xs font-medium whitespace-nowrap" style={{ color: status === 'error' ? DANGER_TEXT : MUTED }}>
             {statusLabel}
@@ -178,7 +224,7 @@ export default function RuntimeApp() {
           </div>
         )}
 
-        <GuiSurfacePage />
+        <GuiSurfacePage onRun={(trigger) => { void handleRun(trigger); }} />
         <GraphWindows
           requirements={pendingRequirements}
           onSubmit={handleRequirementsSubmit}

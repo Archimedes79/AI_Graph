@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2, Wand2,
 } from 'lucide-react';
 import ToolbarButton, { ToolbarSeparator } from './ToolbarButton';
 import { useGraphStore } from '../store/graphStore';
-import { downloadBundle, getRuntimeRequirements, generateGraph, getGenerationProgress, type AICall } from '../utils/api';
+import { call, downloadBundle, type AICall, type Requirement } from '../utils/api';
 import { errorText } from '../utils/errorText';
-import type { Graph, RuntimeRequirement } from '../types/graph';
+import type { Graph } from '../types/graph';
 import { syncGuiNodePorts } from '../utils/guiWidgets';
 import { genAI } from '../store/settingsStore';
 import GraphWindows from './GraphWindows';
@@ -80,9 +80,7 @@ export default function Toolbar({
   const [showDeploy, setShowDeploy] = useState(false);
   const [deployBusy, setDeployBusy] = useState('');
   const [deployError, setDeployError] = useState('');
-  const [deployContent, setDeployContent] = useState('');
-  const [deployLabel, setDeployLabel] = useState('');
-  const [pendingRequirements, setPendingRequirements] = useState<RuntimeRequirement[] | null>(null);
+  const [pendingRequirements, setPendingRequirements] = useState<Requirement[] | null>(null);
   const [pendingGraph, setPendingGraph] = useState<Graph | null>(null);
 
   const [showAiGraph, setShowAiGraph] = useState(false);
@@ -97,7 +95,7 @@ export default function Toolbar({
   const handleRun = async () => {
     const graph = exportGraph();
     try {
-      const requirements = await getRuntimeRequirements(graph);
+      const requirements = await call('requirements', graph);
 
       // A requirement that belongs to a block is one the *page* asks for, and
       // the page is a better place to answer it than a dialog: it has the
@@ -208,12 +206,12 @@ export default function Toolbar({
     const progressId = `graph-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const watching = window.setInterval(async () => {
       try {
-        const { calls } = await getGenerationProgress(progressId);
+        const { calls } = await call('generationProgress', { id: progressId });
         if (calls.length) setAiCalls(calls);
       } catch { /* a poll that fails changes nothing */ }
     }, 500);
     try {
-      const result = await generateGraph({ description: aiDescription, progress_id: progressId, ...genAI() });
+      const result = await call('generateGraph', { description: aiDescription, progress_id: progressId, ...genAI() });
       setAiResult(result);
     } catch (e: any) {
       setAiError(errorText(e, 'Failed to generate graph.'));
@@ -253,7 +251,7 @@ export default function Toolbar({
   const statusColor = executionResult
     ? executionResult.status === 'success' ? SUCCESS : DANGER
     : DIMMER;
-  const statusLabel = executionResult ? `${executionResult.status} (${Math.round(executionResult.duration_ms ?? 0)}ms)` : '';
+  const statusLabel = executionResult ? executionResult.status : '';
 
   return (
     <>
@@ -441,14 +439,6 @@ export default function Toolbar({
         </div>
       )}
 
-      {/* Deploy preview modal */}
-      {deployContent && (
-        <Modal title={deployLabel} onClose={() => setDeployContent('')} maxWidth="max-w-2xl">
-          <pre className="p-5 overflow-auto text-xs font-mono" style={{ color: MUTED, maxHeight: '60vh' }}>
-            {deployContent}
-          </pre>
-        </Modal>
-      )}
 
       <GraphWindows
         requirements={pendingRequirements}

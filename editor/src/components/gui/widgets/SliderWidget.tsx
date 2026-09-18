@@ -1,13 +1,16 @@
-import React from 'react';
 import type { GuiWidgetRuntimeProps } from '../widgetProps';
 import { MUTED } from '../../../ui/theme';
 
 /** Runtime slider widget: a range input with its current number shown beside it. */
-export default function SliderWidget({ widget, value, onChange }: GuiWidgetRuntimeProps) {
+export default function SliderWidget({ widget, value, onChange, onTrigger }: GuiWidgetRuntimeProps) {
   const min = typeof widget.min === 'number' ? widget.min : 0;
   const max = typeof widget.max === 'number' && widget.max > min ? widget.max : min + 1;
   const step = typeof widget.step === 'number' && widget.step > 0 ? widget.step : 1;
-  const current = typeof value === 'number' && Number.isFinite(value) ? value : min;
+  // The page stores what the input reports, which is a string; read it as the
+  // number it is rather than falling back to the minimum and snapping the
+  // handle home after every drag.
+  const parsed = typeof value === 'string' && value.trim() ? Number(value) : value;
+  const current = typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : min;
 
   return (
     <div className="flex items-center gap-3">
@@ -19,6 +22,11 @@ export default function SliderWidget({ widget, value, onChange }: GuiWidgetRunti
         step={step}
         value={current}
         onChange={(e) => onChange(e.target.value)}
+        // Dragging passes through every value on the way; the event is letting
+        // go, or a run would start for each of them.
+        onMouseUp={(e) => onTrigger?.((e.target as HTMLInputElement).value)}
+        onTouchEnd={(e) => onTrigger?.((e.target as HTMLInputElement).value)}
+        onKeyUp={(e) => onTrigger?.((e.target as HTMLInputElement).value)}
       />
       <span className="text-sm font-mono w-12 text-right" style={{ color: MUTED }}>{current}</span>
     </div>

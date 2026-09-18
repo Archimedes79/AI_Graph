@@ -19,6 +19,7 @@ import { TableElement } from './table/element.ts';
 import { SelectElement } from './select/element.ts';
 import { SliderElement } from './slider/element.ts';
 import { ButtonElement } from './button/element.ts';
+import { ChatElement } from './chat/element.ts';
 
 export { InputPickerElement };
 
@@ -34,4 +35,5 @@ export const WIDGET_ELEMENTS = [
   new SelectElement(),
   new SliderElement(),
   new ButtonElement(),
+  new ChatElement(),
 ];

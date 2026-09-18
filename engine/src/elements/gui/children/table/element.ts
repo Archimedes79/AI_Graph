@@ -17,6 +17,14 @@ export class TableElement extends TransformingDisplay {
         + 'it as text and do NOT import third-party libraries: the code runs in a sandbox with '
         + 'only the standard library available.',
       inputs: ['value'], outputs: ['value'],
+      check: (outputs) => {
+        const rows = outputs.value;
+        if (!Array.isArray(rows)) return [`"value" is ${rows === null ? 'null' : typeof rows}; a table needs a list of rows.`];
+        if (!rows.length) return [];
+        const objects = rows.every((row) => row && typeof row === 'object' && !Array.isArray(row));
+        const lists = rows.every((row) => Array.isArray(row));
+        return objects || lists ? [] : ['The rows are a mix of shapes. Return either a list of objects with the same keys, or a list of lists whose first row is the header.'];
+      },
       guard: 'Please describe how to turn the incoming data into rows first.',
       success: '✅ Transform generated!',
     };

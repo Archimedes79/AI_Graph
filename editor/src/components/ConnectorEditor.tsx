@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
-import { detectFileFormat } from '../utils/api';
+import { call } from '../utils/api';
 import Modal from './Modal';
 import { errorText } from '../utils/errorText';
 import { ACCENT, DANGER_SOFT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '../ui/theme';
@@ -16,15 +16,13 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
   const updateNode = useGraphStore((state) => state.updateNode);
   const port = graphNode?.inputs.find((item) => item.id === portId) ?? graphNode?.outputs.find((item) => item.id === portId);
   const [format, setFormat] = useState(port?.format ?? '');
-  const [debugDirectory, setDebugDirectory] = useState(port?.debug_directory ?? '');
   const [samplePath, setSamplePath] = useState(graphNode?.config.value ?? '');
   const [detecting, setDetecting] = useState(false);
   const [detectError, setDetectError] = useState('');
 
   useEffect(() => {
     setFormat(port?.format ?? '');
-    setDebugDirectory(port?.debug_directory ?? '');
-  }, [port?.format, port?.debug_directory]);
+  }, [port?.format]);
 
   useEffect(() => {
     setSamplePath(graphNode?.config.value ?? '');
@@ -40,7 +38,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
     setDetecting(true);
     setDetectError('');
     try {
-      const result = await detectFileFormat(path);
+      const result = await call('detectFormat', { path });
       setFormat(result.format);
     } catch (e: any) {
       setDetectError(errorText(e, 'Detection failed'));
@@ -51,7 +49,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
 
   const save = () => {
     const updatePort = (candidate: typeof port) => candidate.id === portId
-      ? { ...candidate, format: format || undefined, debug_directory: debugDirectory || undefined }
+      ? { ...candidate, format: format || undefined }
       : candidate;
     updateNode(nodeId, {
       inputs: graphNode.inputs.map(updatePort),
@@ -87,7 +85,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>File format</label>
             <input className="w-full rounded-lg px-3 py-2 text-sm" style={FIELD} value={format} onChange={(event) => setFormat(event.target.value)} placeholder="application/json or text/csv" />
-            <p className="text-xs mt-1" style={{ color: DIMMER }}>Use a MIME type or format name. JSON and CSV are parsed at block inputs and serialized at debug outputs.</p>
+            <p className="text-xs mt-1" style={{ color: DIMMER }}>Use a MIME type or format name. JSON and CSV are parsed at block inputs.</p>
             {port.data_type === 'file_path' && (
               <div className="mt-2">
                 {graphNode.node_type === 'input' && (
@@ -114,11 +112,6 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
                 {detectError && <p className="text-xs mt-1" style={{ color: DANGER_SOFT }}>{detectError}</p>}
               </div>
             )}
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Runtime debug directory</label>
-            <input className="w-full rounded-lg px-3 py-2 text-sm font-mono" style={FIELD} value={debugDirectory} onChange={(event) => setDebugDirectory(event.target.value)} placeholder="E:\\test\\debug" />
-            <p className="text-xs mt-1" style={{ color: DIMMER }}>Each value crossing this connector is written here during a run for inspection.</p>
           </div>
       </div>
     </Modal>

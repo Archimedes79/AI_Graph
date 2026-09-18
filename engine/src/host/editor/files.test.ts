@@ -76,3 +76,27 @@ describe('what a file holds', () => {
     expect(await detectFormat(join(dir, 'rows.csv'))).toBe('csv');
   });
 });
+
+describe('openExternal', () => {
+  // Only the refusals are tested: the acceptance starts a program on whatever
+  // machine runs the suite, and a test that opens an editor window is one
+  // nobody keeps switched on.
+  it('refuses a path outside the graph\'s own node folder', async () => {
+    const { openExternal, NotOpenable } = await import('./files.ts');
+    const dir = await sandbox();
+    await expect(openExternal(join(dir, 'sub'), '../b.txt')).rejects.toBeInstanceOf(NotOpenable);
+  });
+
+  it('refuses anything that is not a node\'s .js or .md', async () => {
+    const { openExternal, NotOpenable } = await import('./files.ts');
+    const dir = await sandbox();
+    await expect(openExternal(dir, 'b.txt')).rejects.toBeInstanceOf(NotOpenable);
+    await expect(openExternal(dir, 'blob.bin')).rejects.toBeInstanceOf(NotOpenable);
+  });
+
+  it('says the graph must be saved when the file is not there yet', async () => {
+    const { openExternal, NotFound } = await import('./files.ts');
+    const dir = await sandbox();
+    await expect(openExternal(dir, 'Analyse.js')).rejects.toBeInstanceOf(NotFound);
+  });
+});

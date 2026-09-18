@@ -70,7 +70,7 @@ describe('what a save may change', () => {
   });
 
   it('creates the file, and its folder, on first save', async () => {
-    const { dir, env } = await own();
+    const { dir } = await own();
     const nested = join(dir, 'deep', 'ai-settings.json');
     const seen = await save({ endpoints: { ollama: 'http://x' } }, '/nowhere', { AI_GRAPH_SETTINGS: nested });
     expect(seen.settings_file_exists).toBe(true);
