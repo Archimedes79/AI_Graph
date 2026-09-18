@@ -1,44 +1,28 @@
+<div align="center">
+
 # AI-Graph
 
-**A visual node editor for LLM workflows: build and run AI graphs, then export them as
-standalone tools that run offline on a local model.**
+**Wire nodes on a canvas into an AI workflow — then hand the result to someone else<br>
+as a tool that runs on their machine: offline, on a local model, with no account and no cloud bill.**
 
-If you know Langflow, Flowise or n8n, the canvas will feel familiar. AI-Graph is built
-around what happens after it works: 🚀 Deploy writes a **self-contained bundle** — the
-graph, its page and the engine that runs it — that someone else starts on their own
-machine with nothing but Node installed. No account, no server, no cloud bill.
+[Quick start](#quick-start) · [Examples](#the-examples) · [Documentation](#documentation) · [Licence](#licence)
 
-```bash
-git clone https://github.com/Archimedes79/AI_Graph.git
-cd AI_Graph
-./start.sh          # Windows: start.cmd
-```
+</div>
 
-Node 24 or newer, nothing else; the editor opens at <http://127.0.0.1:8000>. Other ways
-to start it are under [Quick start](#quick-start).
+---
 
 ## Why
 
-- **Your data stays on the machine.** Ollama and LM Studio are the default, not a
-  fallback; everything binds to `127.0.0.1`; there is no telemetry. With a local model,
-  contracts, records or personnel files are processed where they already are, with no
-  cloud account and no third party in between. (What that means for your own
-  data-protection obligations is yours to assess — this is not legal advice.)
-- **It is free to run.** A 7B model on an ordinary workstation classifies, extracts,
-  summarises and rewrites. Where that is not enough, pin *one* node to a paid provider
-  instead of moving the whole pipeline into the cloud.
-- **No AI expertise required.** Describe in plain language what a node should do and
-  ✨ Generate writes the system prompt or the JavaScript. No prompt engineering, no vector
-  store, no framework, no glue code.
-- **You ship a tool, not a prototype.** 🚀 Deploy packages the graph with the real
-  execution engine; the recipient needs Node and nothing else, and the code nodes run
-  there too. A graph with `gui` nodes deploys *with its interface*.
-- **Nothing is hidden.** Typed ports say what flows between nodes, generated code stays
-  visible and editable, graphs are plain JSON, and a node's body can live in its own
-  `.js`/`.md` file beside the graph — so `git diff` reads like text.
+| | |
+|---|---|
+| 🔒 **Your data stays on the machine** | Ollama and LM Studio are the default, not a fallback. Everything binds to `127.0.0.1`, and there is no telemetry. Contracts, records or personnel files are processed where they already are. |
+| 💶 **It is free to run** | A 7B model on an ordinary workstation classifies, extracts, summarises and rewrites. Where that is not enough, pin *one* node to a paid provider instead of moving the whole pipeline into the cloud. |
+| ✨ **No AI expertise required** | Describe in plain language what a node should do, and ✨ Generate writes the system prompt or the JavaScript. No prompt engineering, no vector store, no framework, no glue code. |
+| 🚀 **You ship a tool, not a prototype** | 🚀 Deploy packages the graph with the real execution engine. The recipient needs Node and nothing else, and the code nodes run there too. A graph with `gui` nodes deploys *with its interface*. |
+| 🔍 **Nothing is hidden** | Typed ports say what flows between nodes, generated code stays visible and editable, graphs are plain JSON, and a node's body can live in its own `.js`/`.md` file beside the graph — so `git diff` reads like text. |
 
-**The cheap option is the private one.** Running locally costs nothing *and* keeps the data
-where it is; the two are not a trade-off.
+> **The cheap option is the private one.** Running locally costs nothing *and* keeps the
+> data where it is; the two are not a trade-off.
 
 ## What is different about it
 
@@ -224,7 +208,3 @@ whoever receives the software has to receive the terms with it.
 
 Licensing is not final. If you want to use AI-Graph commercially, open an
 issue — that conversation is welcome.
-
-Langflow, Flowise and n8n are named above only to say what kind of tool this is.
-They are trademarks of their respective owners; AI-Graph is not affiliated with or
-endorsed by any of them.
