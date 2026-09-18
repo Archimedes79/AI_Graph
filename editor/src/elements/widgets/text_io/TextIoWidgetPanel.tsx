@@ -1,6 +1,6 @@
 import { effectiveTextIoMode } from './mode';
 import { DIM, FIELD_ON_SURFACE, MUTED } from '@/ui/theme';
-import type { WidgetPanelProps } from '../../Ui';
+import type { WidgetPanelProps } from '../../WidgetUi';
 
 export default function TextIoWidgetPanel({ widget, onUpdate }: WidgetPanelProps) {
   const mode = effectiveTextIoMode(widget);

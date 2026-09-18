@@ -5,11 +5,9 @@
 // does this block have" is the one disagreement that silently deletes wires:
 // the editor drawing a port the engine will not produce, or the engine
 // producing one the editor never drew.
-import type { GraphNode, GuiWidget, WidgetKind, Port } from '@/graph';
+import type { GraphNode, GuiWidget, Port } from '@/graph';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeElement.ts';
-import { DEFAULT_WIDGET_SPAN } from '@/page/layout';
-import type { Tone } from '@/page/tone';
 
 /**
  * The ports a node has, when they follow from its settings rather than being
@@ -66,102 +64,4 @@ export function syncGuiNodePorts(node: GraphNode): GraphNode {
   }
 
   return { ...node, inputs, outputs };
-}
-
-let widgetCounter = 1;
-function newGuiWidgetId(): string {
-  return `widget-${widgetCounter++}-${Date.now()}`;
-}
-
-export function createGuiWidget(kind: WidgetKind, label = '', mode?: string): GuiWidget {
-  return {
-    id: newGuiWidgetId(),
-    kind,
-    label,
-    value: '',
-    extensions: '',
-    mode: mode ?? (kind === 'input_picker' ? 'file' : kind === 'text_io' ? 'both'
-      : kind === 'text' ? 'body'
-      : kind === 'divider' || kind === 'spacer' ? 'horizontal' : ''),
-    // No x/y: the order of the list is the position, so a new block simply goes
-    // last -- "add" never has to ask where to put it.
-    ...defaultSpanFor(kind, mode),
-    tone: defaultToneFor(kind, mode),
-    code: '',
-    recursive: false,
-    select_all_files: true,
-    selector_prompt: '',
-    selector_code: '',
-    code_prompt: '',
-    code_file: '',
-    example_file: '',
-    options: kind === 'select' ? 'Option A\nOption B' : '',
-    min: kind === 'slider' ? 0 : undefined,
-    max: kind === 'slider' ? 100 : undefined,
-    step: kind === 'slider' ? 1 : undefined,
-  };
-}
-
-export const GUI_WIDGET_KIND_LABELS: Record<WidgetKind, string> = {
-  text: 'Text',
-  divider: 'Divider',
-  spacer: 'Gap',
-  input_picker: 'File or folder',
-  text_io: 'Text box',
-  table: 'Table',
-  plot_window: 'Chart',
-  image_view: 'Image',
-  select: 'Dropdown',
-  slider: 'Slider',
-  button: 'Button',
-  chat: 'Chat',
-};
-
-/**
- * A sensible first appearance per kind -- the counterpart of defaultSpanFor.
- *
- * Only what you *operate* gets a frame. A box around a heading, a plot or a
- * table is a box around something that already has a shape of its own, and a
- * page of them reads as an inspector rather than a document; a field you type
- * into, on the other hand, has to look like a field or nobody clicks it.
- *
- * A default, not a rule: every block's `tone` is still yours to change in the
- * properties panel, which is where "lift this one out" belongs.
- */
-function defaultToneFor(kind: WidgetKind, mode?: string): Tone {
-  if (kind === 'input_picker') return 'sunken';
-  if (kind === 'text_io' && mode !== 'output') return 'sunken';
-  if (kind === 'select' || kind === 'slider') return 'sunken';
-  // A button is its own label -- a caption above it would just repeat the
-  // text on its face -- so it stays plain, the same reason a heading does.
-  return 'plain';
-}
-
-/**
- * A sensible first size per kind, so a new block never lands absurdly shaped.
- *
- * A heading is one row and the full width because that is what a heading is;
- * you should not have to resize it before it looks right.
- */
-function defaultSpanFor(kind: WidgetKind, mode?: string): { w: number; h: number } {
-  if (kind === 'divider' || kind === 'spacer') {
-    // A vertical rule or gap stands between two things side by side, so it is
-    // narrow and tall; a horizontal one ends a section, so it is the reverse.
-    return mode === 'vertical' ? { w: 1, h: 4 } : { w: 16, h: 1 };
-  }
-  if (kind === 'text') {
-    // One row for a heading. It used to get two and hang from the bottom of
-    // them, which produced air above it -- at the price of being the only text
-    // on the page that did not start where every other block starts.
-    if (mode === 'heading') return { w: 16, h: 1 };
-    if (mode === 'caption') return { w: 16, h: 1 };
-    return { w: 16, h: 3 };
-  }
-  if (kind === 'input_picker') return { w: 6, h: 2 };
-  if (kind === 'select') return { w: 6, h: 2 };
-  if (kind === 'slider') return { w: 8, h: 2 };
-  if (kind === 'button') return { w: 5, h: 2 };
-  // A conversation needs room to be one: the full width, and most of a screen.
-  if (kind === 'chat') return { w: 16, h: 9 };
-  return DEFAULT_WIDGET_SPAN;
 }

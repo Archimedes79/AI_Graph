@@ -15,7 +15,7 @@ import { InputNodeElement } from './nodes/input/InputNodeElement.ts';
 import { OutputNodeElement } from './nodes/output/OutputNodeElement.ts';
 import { WIDGETS } from './widgets/roster.ts';
 
-export const NODE_UIS: NodeElement<unknown>[] = [
+export const NODES: NodeElement<unknown>[] = [
   new InputNodeElement(),
   new AiNodeElement(),
   new CodeNodeElement(),
@@ -25,7 +25,7 @@ export const NODE_UIS: NodeElement<unknown>[] = [
 ] as NodeElement<unknown>[];
 
 const NODES_BY_TYPE = new Map<string, NodeElement<unknown>>(
-  NODE_UIS.map((element) => [element.nodeType, element]),
+  NODES.map((element) => [element.nodeType, element]),
 );
 
 const WIDGETS_BY_KIND = new Map<string, WidgetElement<unknown>>(

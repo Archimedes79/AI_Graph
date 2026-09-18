@@ -1,9 +1,8 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import type { RFNodeData } from './nodeData';
-import { NODE_TYPE_COLORS, NODE_TYPE_ICON, NODE_TYPE_LABELS } from '@/elements/nodes/nodeDefaults';
 import { useGraphStore } from '@/store/graphStore';
-import { WIDGET_UIS } from '@/elements/registry';
+import { NODE_UIS, WIDGET_UIS } from '@/elements/registry';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { delivered } from './executionStatus';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
@@ -27,8 +26,9 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
     s.executionResult?.node_results.find((r) => r.node_id === id)
   );
 
-  const bgColor = NODE_TYPE_COLORS[graphNode.node_type] ?? SURFACE;
-  const icon = NODE_TYPE_ICON[graphNode.node_type] ?? '⬜';
+  const ui = NODE_UIS[graphNode.node_type];
+  const bgColor = ui?.color ?? SURFACE;
+  const icon = ui?.icon ?? '⬜';
   const status = executionResult ? statusStyles[executionResult.status] : undefined;
   const statusColor = status?.color;
   const isGuiLike = graphNode.node_type === 'gui';
@@ -348,7 +348,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
         className="px-3 py-1 text-xs"
         style={{ color: DIMMER, background: HEADER, textAlign: 'right' }}
       >
-        {NODE_TYPE_LABELS[graphNode.node_type]}
+        {ui?.label}
       </div>
     </div>
   );

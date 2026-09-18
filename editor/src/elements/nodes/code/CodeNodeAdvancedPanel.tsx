@@ -1,5 +1,5 @@
 import BatchAndFileInputOptions from '../../fields/BatchAndFileInputOptions';
-import type { NodeAdvancedPanelProps } from '../../Ui';
+import type { NodeAdvancedPanelProps } from '../../NodeUi';
 
 /** The switches with good defaults, folded away under the body: see `AdvancedPanel`. */
 export default function CodeNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPanelProps) {

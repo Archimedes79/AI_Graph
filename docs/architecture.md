@@ -3,7 +3,7 @@
 How AI-Graph is put together, which rules hold it together, and what is knowingly left
 untidy. Read this before changing anything structural; the code comments explain the
 *why* of each file, this explains how the files relate. Diagrams with every box mapped to
-its files are in [`arch/`](../arch/overview.md).
+its files are in [`arch/overview.md`](../arch/overview.md).
 
 ## The shape
 
@@ -12,7 +12,7 @@ engine/    runs a graph. TypeScript that Node executes by stripping types: no bu
 editor/    the page: React + ReactFlow. Built on the engine, never the other way round.
 examples/  graphs that are run, event-driven and deployed by the test suite.
 scripts/   dev server, packaging, and the generator for the examples that carry real code.
-arch/      the architecture diagrams.
+arch/      the architecture diagrams, one file.
 ```
 
 One process serves everything: `node engine/src/main.ts --editor editor/dist`. The same
@@ -26,42 +26,46 @@ organised around them, and each element is one folder, at the **same relative pa
 both sides**:
 
 ```
-engine/src/elements/                       editor/src/elements/
-  Element.ts   NodeElement.ts           Ui.ts         the contract each half fills in
-  WidgetElement.ts  Runtime.ts               registry.ts          mirrors the engine's registry
-  registry.ts  port.ts  fileSelection.ts     fields/              settings shared by several panels
-  nodes/                                     nodes/
-    ai/     AiNodeElement.ts  prompt.ts               ai/     AiNodeUi.ts  AiNodePanel.tsx
-                                                       AiNodeAdvancedPanel.tsx  PromptPreview.tsx
-    code/   CodeNodeElement.ts                        code/   CodeNodeUi.ts  CodeNodePanel.tsx …
-    data/ gui/ input/ output/                  data/ gui/ input/ output/
-  widgets/                                   widgets/
-    select/ SelectWidgetElement.ts                    select/ SelectWidgetUi.ts  SelectWidgetView.tsx
-                                                       SelectWidgetPanel.tsx
-    plot_window/ PlotWindowWidgetElement.ts           plot_window/ PlotWindowWidgetUi.ts
-                 check.ts  view.ts                          PlotWindowWidgetView.tsx
-                                                            PlotWindowWidgetPanel.tsx  PlotChart.tsx
-    …  StaticWidgetElement.ts  DisplayWidgetElement.ts       …  WidgetView.ts
-       TransformingDisplayElement.ts  roster.ts
+engine/src/elements/                          editor/src/elements/
+  Element.ts                                    Ui.ts
+  NodeElement.ts                                NodeUi.ts
+  WidgetElement.ts                              WidgetUi.ts
+  registry.ts                                   registry.ts
+  Runtime.ts  port.ts  fileSelection.ts         fields/  (settings several panels share)
+  nodes/                                        nodes/
+    ai/     AiNodeElement.ts  prompt.ts           ai/     AiNodeUi.ts  AiNodePanel.tsx
+                                                          AiNodeAdvancedPanel.tsx  PromptPreview.tsx
+    code/   CodeNodeElement.ts                    code/   CodeNodeUi.ts  CodeNodePanel.tsx …
+    data/ gui/ input/ output/                     data/ gui/ input/ output/
+  widgets/                                      widgets/
+    roster.ts                                     roster.ts
+    StaticWidgetElement.ts                        StaticWidgetUi.ts
+    DisplayWidgetElement.ts                       DisplayWidgetUi.ts
+    TransformingDisplayElement.ts                 TransformingDisplayUi.ts  TransformingDisplayPanel.tsx
+    select/ SelectWidgetElement.ts                select/ SelectWidgetUi.ts  SelectWidgetView.tsx
+                                                          SelectWidgetPanel.tsx
+    plot_window/ PlotWindowWidgetElement.ts       plot_window/ PlotWindowWidgetUi.ts
+                 check.ts  view.ts                             PlotWindowWidgetView.tsx  PlotChart.tsx
+    …                                             …  WidgetView.ts
 ```
 
 **Names follow the file format, mechanically, and pair across the wire.** Every element
-class ends in `Element`; its editor half swaps `Element` for `Ui`. Node type `ai` is class
-`AiNodeElement` in `nodes/ai/AiNodeElement.ts`, and its editor half `aiNodeUi` in
-`nodes/ai/AiNodeUi.ts`; widget kind `plot_window` is `PlotWindowWidgetElement` and
-`PlotWindowWidgetUi.ts`. One class per file, and the file is named after it.
+class ends in `Element`; its editor half is a class that swaps `Element` for `Ui`, and
+inherits the same way. Node type `ai` is `AiNodeElement` in `nodes/ai/AiNodeElement.ts`
+and `AiNodeUi` in `nodes/ai/AiNodeUi.ts`; widget kind `plot_window` is
+`PlotWindowWidgetElement` and `PlotWindowWidgetUi`. One class per file, and the file is
+named after it.
 
 | Engine | Editor |
 |---|---|
 | `Element` | `Ui` |
 | `NodeElement` | `NodeUi` |
 | `WidgetElement` | `WidgetUi` |
-| `AiNodeElement` | `AiNodeUi.ts` (`aiNodeUi`) |
-| `SelectWidgetElement` | `SelectWidgetUi.ts` (`selectWidgetUi`) |
+| `StaticWidgetElement`, `DisplayWidgetElement`, `TransformingDisplayElement` | `StaticWidgetUi`, `DisplayWidgetUi`, `TransformingDisplayUi` |
+| `AiNodeElement` | `AiNodeUi` |
+| `SelectWidgetElement` | `SelectWidgetUi` |
 
-The engine side is a class hierarchy, because that is where behaviour lives; the editor side
-is typed data (`aiNodeUi: NodeUi`), because its behaviour lives in React components. Each
-element has a fixed set of **facets**, told apart by suffix:
+Each element has a fixed set of **facets**, told apart by suffix:
 
 | Facet | Engine (Node) | Editor (browser) |
 |---|---|---|
@@ -95,13 +99,26 @@ Element<Subject, Config>          config() · generation() · catchesErrors() ·
             └── PlotWindowWidgetElement   TableWidgetElement   ImageViewWidgetElement
 
 Ui<Subject, PanelProps>           Panel · generation
-├── NodeUi                        create · AdvancedPanel · describeOutput · …   6 × <kind>NodeUi
-└── WidgetUi                      View · inlineText · ownsValue · …             12 × <kind>WidgetUi
+├── NodeUi                        create(id) · label · icon · color · hint · AdvancedPanel · describeOutput
+│   ├── InputNodeUi   AiNodeUi   CodeNodeUi
+│   ├── DataNodeUi    OutputNodeUi
+│   └── GuiNodeUi
+└── WidgetUi                      create(label, mode) · label · View · defaultSpan · defaultTone · runOnChangeHint
+    ├── InputPickerWidgetUi   TextIoWidgetUi   SelectWidgetUi
+    ├── SliderWidgetUi        ButtonWidgetUi   ChatWidgetUi
+    ├── StaticWidgetUi            starts unnamed: page furniture has no ports to name
+    │   └── TextWidgetUi   DividerWidgetUi   SpacerWidgetUi
+    └── DisplayWidgetUi           nothing to operate, so nothing starts the graph
+        └── TransformingDisplayUi     one panel for the transform, words from each kind
+            └── PlotWindowWidgetUi   TableWidgetUi   ImageViewWidgetUi
 ```
 
-The browser half mirrors it as data, not as subclasses: `NodeUi` and `WidgetUi` (`Ui.ts`)
-are filled in by each element's `<Kind>Ui.ts`. An element is handed its
-services (`Runtime.ts`: `files`, `code`, `ai`, `tools`) rather than reaching for them.
+The browser half is the same tree with `Ui` for `Element`, and
+[`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts) compares the two lineages
+class by class. What each kind knows about its own appearance — its name, icon and colour,
+a new widget's size, tone and first values — is a member of its `Ui`, not a table in a
+shell. An element is handed its services (`Runtime.ts`: `files`, `code`, `ai`, `tools`)
+rather than reaching for them.
 
 ## Two processes, one contract
 

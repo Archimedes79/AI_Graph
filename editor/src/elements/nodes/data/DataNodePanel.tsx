@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { GraphNode } from '@/graph';
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import { DANGER_SOFT, FIELD, LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
-import type { NodePanelProps } from '../../Ui';
+import type { NodePanelProps } from '../../NodeUi';
 
 function displayValue(value: unknown): string {
   if (typeof value === 'string') return value;

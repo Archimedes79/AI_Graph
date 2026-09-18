@@ -4,7 +4,7 @@ import type { NodeConfig } from '@/graph';
  * The one `NodeConfig` shape every node type starts from -- every
  * NodeUi.create() spreads and overrides this rather than
  * repeating the full field list. Verbatim extraction of the object literal
- * every case in the old `nodeDefaults.ts` switch used to build inline.
+ * each create() used to build inline.
  */
 export function baseNodeConfig(): NodeConfig {
   return {

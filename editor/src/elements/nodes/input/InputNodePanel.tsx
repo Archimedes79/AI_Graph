@@ -3,7 +3,7 @@ import FileBrowserDialog from '@/ui/FileBrowserDialog';
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import ContextFileAttachment from '@/authoring/ContextFileAttachment';
 import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
-import type { NodePanelProps } from '../../Ui';
+import type { NodePanelProps } from '../../NodeUi';
 
 export default function InputNodePanel({
   node, setConfig, generation, fields, generating, message, onGenerate,

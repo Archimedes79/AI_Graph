@@ -1,5 +1,5 @@
 import { DIMMER, MUTED } from '@/ui/theme';
-import type { WidgetPanelProps } from '../../Ui';
+import type { WidgetPanelProps } from '../../WidgetUi';
 
 /**
  * Prose. The role -- heading, body, caption -- comes from the palette entry you

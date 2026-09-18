@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { GraphNode } from '@/graph';
-import { syncGuiNodePorts, createGuiWidget, guiWidgetPorts } from './guiWidgets';
+import { syncGuiNodePorts, guiWidgetPorts } from './guiWidgets';
 import { DEFAULT_WIDGET_SPAN } from '@/page/layout';
 import { baseNodeConfig } from '../baseNodeConfig';
+import { WIDGET_UIS } from '@/elements/registry';
 
 function blankGuiNode(): GraphNode {
   return {
@@ -29,11 +30,11 @@ describe('syncGuiNodePorts', () => {
 
   it('generates the exact port shape for each widget kind', () => {
     let node = blankGuiNode();
-    const filePicker = createGuiWidget('input_picker', 'Pick file');
-    const dirPicker = { ...createGuiWidget('input_picker', 'Pick dir'), mode: 'directory' };
-    const textIo = createGuiWidget('text_io', 'Text');
-    const chatIo = createGuiWidget('text_io', 'Chat');
-    const plotWindow = createGuiWidget('plot_window', 'Plot');
+    const filePicker = WIDGET_UIS.input_picker.create('Pick file');
+    const dirPicker = { ...WIDGET_UIS.input_picker.create('Pick dir'), mode: 'directory' };
+    const textIo = WIDGET_UIS.text_io.create('Text');
+    const chatIo = WIDGET_UIS.text_io.create('Chat');
+    const plotWindow = WIDGET_UIS.plot_window.create('Plot');
     node.config.gui_widgets = [filePicker, dirPicker, textIo, chatIo, plotWindow];
 
     node = syncGuiNodePorts(node);
@@ -72,7 +73,7 @@ describe('syncGuiNodePorts', () => {
 
   it('plot_window is display-only: one input port, no output port', () => {
     let node = blankGuiNode();
-    const plotWindow = createGuiWidget('plot_window', 'Plot');
+    const plotWindow = WIDGET_UIS.plot_window.create('Plot');
     node.config.gui_widgets = [plotWindow];
 
     node = syncGuiNodePorts(node);
@@ -84,7 +85,7 @@ describe('syncGuiNodePorts', () => {
 
   it('keeps port ids stable across re-syncs (edge-preserving)', () => {
     let node = blankGuiNode();
-    const widget = createGuiWidget('text_io', 'Text');
+    const widget = WIDGET_UIS.text_io.create('Text');
     node.config.gui_widgets = [widget];
 
     const first = syncGuiNodePorts(node);
@@ -96,9 +97,9 @@ describe('syncGuiNodePorts', () => {
 
   it('removing a widget removes only that widget\'s ports, leaving others identical', () => {
     let node = blankGuiNode();
-    const a = createGuiWidget('text_io', 'A');
-    const b = createGuiWidget('text_io', 'B');
-    const c = createGuiWidget('input_picker', 'C');
+    const a = WIDGET_UIS.text_io.create('A');
+    const b = WIDGET_UIS.text_io.create('B');
+    const c = WIDGET_UIS.input_picker.create('C');
     node.config.gui_widgets = [a, b, c];
     node = syncGuiNodePorts(node);
 
@@ -119,17 +120,17 @@ describe('syncGuiNodePorts', () => {
   });
 });
 
-describe('createGuiWidget sizing', () => {
+describe('a new widget: its size and tone, from its Ui', () => {
   it('gives a new widget concrete cells and no size preset', () => {
     // `size` was a second way of saying what w/h say, so the same widget could
     // be described twice and disagree. There is one encoding now.
-    const widget = createGuiWidget('text_io', 'A');
+    const widget = WIDGET_UIS.text_io.create('A');
     expect({ w: widget.w, h: widget.h }).toEqual(DEFAULT_WIDGET_SPAN);
     expect('size' in widget).toBe(false);
   });
 
   it('carries no coordinates at all — the list order is the position', () => {
-    const widget = createGuiWidget('text_io', 'A');
+    const widget = WIDGET_UIS.text_io.create('A');
     expect('x' in widget).toBe(false);
     expect('y' in widget).toBe(false);
   });
@@ -139,13 +140,13 @@ describe('createGuiWidget sizing', () => {
     // it used to get a second row to hang from the bottom of, which was the
     // only text on the page that did not start where the others start. Air
     // between sections is the spacer's job.
-    const heading = createGuiWidget('text', 'Titel', 'heading');
+    const heading = WIDGET_UIS.text.create('Titel', 'heading');
     expect({ w: heading.w, h: heading.h }).toEqual({ w: 16, h: 1 });
     expect(heading.tone).toBe('plain');
 
     // A rule and a spacer are a single row of the grid and nothing else.
     for (const kind of ['divider', 'spacer'] as const) {
-      const block = createGuiWidget(kind, '');
+      const block = WIDGET_UIS[kind].create('');
       expect({ w: block.w, h: block.h }).toEqual({ w: 16, h: 1 });
       expect(block.tone).toBe('plain');
     }
@@ -154,17 +155,17 @@ describe('createGuiWidget sizing', () => {
   it('frames what you operate, and nothing else', () => {
     // Only fields get a box by default. A plot and a table already have a shape
     // of their own, and framing them turned the page into an inspector.
-    expect(createGuiWidget('plot_window', 'P').tone).toBe('plain');
-    expect(createGuiWidget('table', 'T').tone).toBe('plain');
-    expect(createGuiWidget('input_picker', 'F').tone).toBe('sunken');
-    expect(createGuiWidget('text_io', 'In', 'input').tone).toBe('sunken');
+    expect(WIDGET_UIS.plot_window.create('P').tone).toBe('plain');
+    expect(WIDGET_UIS.table.create('T').tone).toBe('plain');
+    expect(WIDGET_UIS.input_picker.create('F').tone).toBe('sunken');
+    expect(WIDGET_UIS.text_io.create('In', 'input').tone).toBe('sunken');
     // ...except a text block that only ever shows output, which is prose.
-    expect(createGuiWidget('text_io', 'Out', 'output').tone).toBe('plain');
+    expect(WIDGET_UIS.text_io.create('Out', 'output').tone).toBe('plain');
   });
 
   it('page furniture contributes no ports', () => {
     for (const kind of ['text', 'divider', 'spacer'] as const) {
-      const ports = guiWidgetPorts(createGuiWidget(kind, kind));
+      const ports = guiWidgetPorts(WIDGET_UIS[kind].create(kind));
       expect(ports.inputs).toEqual([]);
       expect(ports.outputs).toEqual([]);
     }

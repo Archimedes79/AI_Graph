@@ -1,14 +1,20 @@
 import { lazy } from 'react';
-import type { WidgetUi } from '../../Ui';
-import InputPickerWidgetView from './InputPickerWidgetView';
+import type { GuiWidget } from '@/graph';
+import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { InputPickerWidgetElement } from '@engine/elements/widgets/input_picker/InputPickerWidgetElement.ts';
-import { fromEngine } from '@/authoring/generation';
+import { WidgetUi } from '../../WidgetUi';
+import InputPickerWidgetView from './InputPickerWidgetView';
 
-export const inputPickerWidgetUi: WidgetUi = {
-  widgetKind: 'input_picker',
+export class InputPickerWidgetUi extends WidgetUi {
+  readonly widgetKind = 'input_picker';
+  readonly label = 'File or folder';
+  readonly View = InputPickerWidgetView;
+  override readonly Panel = lazy(() => import('./InputPickerWidgetPanel'));
+  override readonly defaultMode = 'file';
+
   // The same declaration the input node carries, because it is the same
-  // behaviour one level down -- the backend returns literally the same object.
-  generation: {
+  // behaviour one level down -- the engine returns literally the same object.
+  override readonly generation: ElementGeneration<GuiWidget> = {
     ...fromEngine(new InputPickerWidgetElement().generation()),
     available: (widget) => widget.mode === 'directory',
     promptLabel: 'Prompt text',
@@ -16,7 +22,14 @@ export const inputPickerWidgetUi: WidgetUi = {
     mono: true,
     bodyLabel: 'Code window (editable) — run(inputs) receives {"files"} and must return {"files"}',
     bodyHeight: 100,
-  },
-  Panel: lazy(() => import('./InputPickerWidgetPanel')),
-  View: InputPickerWidgetView,
-};
+  };
+
+  protected override defaultSpan() {
+    return { w: 6, h: 2 };
+  }
+
+  /** A field you operate looks like a field, or nobody clicks it. */
+  protected override defaultTone() {
+    return 'sunken' as const;
+  }
+}
