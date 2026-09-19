@@ -16,7 +16,7 @@ export class CodeNodeUi extends NodeUi {
   readonly icon = '⚙️';
   readonly color = 'var(--ui-node-code, #1a3a2a)';
   readonly settings: NodeUi['settings'] = [
-    'code', 'code_prompt', 'output_schema', 'output_format', 'output_format_prompt',
+    'code', 'code_prompt', 'output_schema', 'examples', 'output_format', 'output_format_prompt',
     'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
   ];
 

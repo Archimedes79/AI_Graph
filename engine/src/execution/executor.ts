@@ -93,7 +93,7 @@ export function memoryFeedbackEdges(
  * different provider without editing it -- and above the provider layer's own
  * fallback. A graph that names nothing changes nothing.
  */
-function withGraphDefaults(runtime: Runtime, graph: Graph): Runtime {
+export function withGraphDefaults(runtime: Runtime, graph: Graph): Runtime {
   const wanted = graph.metadata?.ai_defaults;
   const provider = wanted?.provider && wanted.provider !== 'default' ? wanted.provider : '';
   const model = wanted?.model ?? '';

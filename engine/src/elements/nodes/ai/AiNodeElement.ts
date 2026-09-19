@@ -35,6 +35,8 @@ const AI_TEXTS: readonly TextFile[] = [
   // What the model is told its answer must look like.
   { field: 'output_format_prompt', file: 'output.md' },
   { field: 'output_example', file: 'output.example.md' },
+  // Optional: inputs, and what the answer must meet. See `execution/examples.ts`.
+  { field: 'examples', file: 'examples.md' },
 ];
 
 /**
@@ -55,6 +57,8 @@ export class AiNodeElement extends NodeElement<AiConfig> {
   override texts(): readonly TextFile[] {
     return AI_TEXTS;
   }
+
+  override readonly asksModel = true;
 
   readonly nodeType = 'ai' as const;
 

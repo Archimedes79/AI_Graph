@@ -101,6 +101,9 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
     return node.config.read_file_inputs === true;
   }
 
+  /** Running this node asks a model: its examples are skipped by an offline `test`. */
+  readonly asksModel: boolean = false;
+
   /**
    * What this node's outputs are held to, once someone has kept one: see
    * `execution/interface.ts`. None by default -- a model's answer is described

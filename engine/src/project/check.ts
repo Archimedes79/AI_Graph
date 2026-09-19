@@ -15,7 +15,8 @@ import { RUN_PORT } from '../execution/triggers.ts';
 import { registry } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { ALL_INPUTS, placeholders } from '../elements/nodes/ai/prompt.ts';
-import { readInterface } from '../execution/interface.ts';
+import { mismatches, readInterface } from '../execution/interface.ts';
+import { parseExamples } from '../execution/examples.ts';
 import { NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
 
 /** One thing to fix: where it is, what it is, and what to do about it. */
@@ -112,6 +113,7 @@ export function problemsIn(graph: Graph): Problem[] {
     }
 
     problems.push(...interfaceProblems(node, where));
+    problems.push(...exampleProblems(graph, node, where));
 
     // A placeholder nobody fills is sent to the model as the literal "{{name}}".
     const template = String(node.config.prompt_template ?? '');
@@ -304,4 +306,57 @@ export async function checkPath(path: string): Promise<{ problems: Problem[]; gr
   const folder = projectFolderOf(path);
   if (folder) problems.push(...await folderProblems(folder, graph));
   return { problems, graph };
+}
+
+/**
+ * A node's examples, held to the node and to its neighbours.
+ *
+ * To the node: every input an example gives, and every output it expects,
+ * must be a port the node has. To its neighbours: an example says what the
+ * node needs to receive, and the node wired into that port has an output
+ * interface saying what it gives -- when the two disagree, one of them has to
+ * change, and this says which port and why, before anything is run.
+ */
+function exampleProblems(graph: Graph, node: GraphNode, where: string): Problem[] {
+  const text = String(node.config.examples ?? '');
+  if (!text.trim()) return [];
+  const { examples, problems: unreadable } = parseExamples(text);
+  const found: Problem[] = unreadable.map((problem) => ({
+    where: `${where}, examples.md`, problem, fix: 'Give each "## title" section a ```json input block, and a ```json expect or ```judge block.',
+  }));
+  const inputs = new Set(node.inputs.map((port) => port.id));
+  const outputs = new Set(node.outputs.map((port) => port.id));
+  // A port whose path is read into text arrives as the text; the producer's interface describes the path.
+  const readsFiles = node.config.read_file_inputs === true;
+  const filePorts = new Set(node.inputs.filter((port) => port.data_type === 'file_path').map((port) => port.id));
+
+  for (const example of examples) {
+    const at = `${where}, example "${example.title}"`;
+    for (const port of Object.keys(example.inputs)) {
+      if (!inputs.has(port)) {
+        found.push({ where: at, problem: `It gives an input "${port}", which the node does not have.`, fix: `Its inputs are ${names(inputs)}.` });
+        continue;
+      }
+      if (readsFiles && filePorts.has(port)) continue;
+      for (const edge of graph.edges.filter((e) => e.target_node_id === node.id && e.target_port_id === port)) {
+        const producer = graph.nodes.find((candidate) => candidate.id === edge.source_node_id);
+        const iface = producer && registry.node(producer.node_type)?.outputInterface(producer);
+        const given = iface?.properties?.[edge.source_port_id];
+        if (!given) continue;
+        const off = mismatches(example.inputs[port], given, `input "${port}"`);
+        if (!off.length) continue;
+        found.push({
+          where: at,
+          problem: `"${producer!.id}" is wired into "${port}", and what this example gives there does not fit its output interface: ${off[0]}.`,
+          fix: `Either this example asks for the wrong thing, or "${producer!.id}" has to deliver it: change one, then run it again to set its interface.`,
+        });
+      }
+    }
+    for (const port of Object.keys(example.expect ?? {})) {
+      if (!outputs.has(port)) {
+        found.push({ where: at, problem: `It expects an output "${port}", which the node does not have.`, fix: `Its outputs are ${names(outputs)}.` });
+      }
+    }
+  }
+  return found;
 }

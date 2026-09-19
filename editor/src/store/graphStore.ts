@@ -318,9 +318,19 @@ function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
   return { rfNodes, rfEdges };
 }
 
-/** Whether this node keeps an output interface: its element has a file for one. */
+/** Whether this node's element keeps *field* as a file of its own: asked of the engine, never of a node type. */
+function keepsText(node: GraphNode, field: string): boolean {
+  return engineRegistry.node(node.node_type)?.texts(node).some((text) => text.field === field) ?? false;
+}
+
+/** Whether this node keeps an output interface (`output.schema.json`). */
 export function keepsOutputInterface(node: GraphNode): boolean {
-  return engineRegistry.node(node.node_type)?.texts(node).some((text) => text.field === 'output_schema') ?? false;
+  return keepsText(node, 'output_schema');
+}
+
+/** Whether this node can keep examples (`examples.md`). */
+export function keepsExamples(node: GraphNode): boolean {
+  return keepsText(node, 'examples');
 }
 
 export const useGraphStore = create<GraphStore>()(

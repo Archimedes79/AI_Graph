@@ -56,7 +56,8 @@ import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/pro
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import type { AiService, Runtime, ToolSpec } from '../../elements/Runtime.ts';
 import { parseGraph, type Graph } from '../../graph.ts';
-import { ERROR_PORT, executeGraph } from '../../execution/executor.ts';
+import { ERROR_PORT, executeGraph, executeNode, inputsFor } from '../../execution/executor.ts';
+import { runExamples } from '../../execution/examples.ts';
 import { RUN_PORT, type Trigger } from '../../execution/triggers.ts';
 import { registry } from '../../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';
@@ -66,7 +67,7 @@ import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { generationTarget } from './settings.ts';
 import { loadGraph as loadProject, projectFolderOf, writeProject } from '../../project/folder.ts';
-import { names, problemsIn, type Problem } from '../../project/check.ts';
+import { folderProblems, names, problemsIn, type Problem } from '../../project/check.ts';
 
 export type { Problem };
 
@@ -264,6 +265,39 @@ const SPECS: ToolSpec[] = [
           additionalProperties: false,
           description: 'The page event to simulate: the gui node, and the output port of the block that fired ("<block id>_out").',
         },
+      },
+      required: ['path'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'run_node',
+    description: 'Run one node of a saved graph by itself and report its outputs, each value cut to about '
+      + `${VALUE_LIMIT} characters. With inputs, on those (keyed by the node's input port ids); without, on what `
+      + 'the nodes feeding it produce -- those are run for that, the node\'s own successors are not. For writing '
+      + 'one node at a time: change its code, run it, compare.',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder (a project: its graph.json).' },
+        node_id: { type: 'string', description: 'The node to run.' },
+        inputs: { type: 'object', description: 'Values by input port id. Omit to use what the graph feeds the node.' },
+      },
+      required: ['path', 'node_id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'test_graph',
+    description: 'Run the examples nodes keep in their examples.md -- inputs, and what must come out -- and report each '
+      + 'as pass, fail (with what differed), error or skipped. All nodes that have examples, or one with node_id. '
+      + 'offline: ask no model; an AI node\'s examples and judged expectations are skipped.',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder (a project: its graph.json).' },
+        node_id: { type: 'string', description: 'Only this node\'s examples.' },
+        offline: { type: 'boolean', description: 'Ask no model.' },
       },
       required: ['path'],
       additionalProperties: false,
@@ -509,7 +543,52 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
         return json({ valid: false, problems: [{ where: 'graph', problem: error.message, fix: 'A graph is { "metadata": {...}, "nodes": [...], "edges": [...] }; authoring_guide shows a complete one.' }] });
       }
       const problems = problemsIn(graph);
+      // A project also has its folder to be wrong about: files nothing reads, folders no node owns.
+      if (args.path !== undefined) {
+        const folder = projectFolderOf(await confine(args.path, 'path'));
+        if (folder) problems.push(...await folderProblems(folder, graph));
+      }
       return json({ valid: problems.length === 0, problems });
+    },
+
+    async run_node(args) {
+      const { graph } = await loadGraph(args.path);
+      const nodeId = String(args.node_id ?? '');
+      if (!graph.nodes.some((node) => node.id === nodeId)) {
+        throw new Refused(`"node_id" must name a node of this graph: ${names(graph.nodes.map((node) => node.id))}.`);
+      }
+      if (args.inputs !== undefined && (!args.inputs || typeof args.inputs !== 'object' || Array.isArray(args.inputs))) {
+        throw new Refused('"inputs" must be an object of values by input port id.');
+      }
+      applyRuntimeValues(graph, {}, registry);
+      const runtime = options.runtime();
+      const inputs = (args.inputs as Record<string, unknown> | undefined)
+        ?? (await inputsFor(graph, nodeId, { runtime, registry })).inputs;
+      const result = await executeNode(graph, nodeId, inputs, { runtime, registry });
+      return json({
+        status: result.status,
+        ...(result.error ? { error: brief(result.error, ERROR_LIMIT) } : {}),
+        inputs: briefAll(inputs),
+        outputs: briefAll(result.outputs),
+      });
+    },
+
+    async test_graph(args) {
+      const { graph } = await loadGraph(args.path);
+      const only = args.node_id === undefined ? '' : String(args.node_id);
+      const nodes = graph.nodes.filter((node) => (only ? node.id === only : String(node.config.examples ?? '').trim()));
+      if (only && !nodes.length) throw new Refused(`"node_id" must name a node of this graph: ${names(graph.nodes.map((node) => node.id))}.`);
+      const results = [];
+      for (const node of nodes) {
+        for (const result of await runExamples(graph, node.id, { runtime: options.runtime(), registry, offline: args.offline === true })) {
+          results.push({
+            node: node.id, example: result.title, status: result.status,
+            ...(result.details.length ? { details: result.details.map((line) => brief(line, ERROR_LIMIT)) } : {}),
+          });
+        }
+      }
+      const failed = results.filter((result) => result.status === 'fail' || result.status === 'error').length;
+      return json({ passed: failed === 0, results, ...(nodes.length ? {} : { note: 'No node of this graph has examples.' }) });
     },
 
     async save_graph(args) {

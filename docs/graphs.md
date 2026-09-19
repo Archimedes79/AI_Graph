@@ -189,8 +189,8 @@ my_tool/
 
 | Node | Files |
 |---|---|
-| Code | `code.js`, `task.md`, `output.schema.json` |
-| AI | `system.md`, `message.md`, `output.md`, `output.example.md` |
+| Code | `code.js`, `task.md`, `output.schema.json`, `examples.md` |
+| AI | `system.md`, `message.md`, `output.md`, `output.example.md`, `examples.md` |
 | Data | `format.md` (the contract neighbours are generated against), `task.md` |
 | Input (directory) | `select.js` (the file selector), `task.md` |
 | A chart, table, image or file-picker block | `code.js` / `select.js`, `task.md` |
@@ -224,13 +224,44 @@ nodes after it are generated against it. **Set from last run** in the node's dia
 replaces it after a deliberate change. An AI node has `output.md` instead: a description
 of the answer that is sent to the model with every request.
 
+**Examples: a node's own tests.** A code or AI node can keep `examples.md` — inputs, and
+what must come out. Optional, and nothing uses them to write code (✨ Generate works as
+before); they check what was written, whoever wrote it:
+
+````markdown
+## The three largest, largest first
+
+```json input
+{ "csv": "examples/data/population.csv", "kind": "Horizontal bars", "top": 3 }
+```
+
+```json expect
+{ "rows": [{ "Country": "India" }, { "Country": "China" }, { "Country": "United States" }] }
+```
+````
+
+An `expect` block names only the fields it cares about; anything else the node returns is
+its own business. A model's answer is never the same twice, so an AI node's example can
+have a ````judge` block instead — a sentence (*"about two sentences, in prose"*) that a
+model holds the answer to. In the node's dialog, **+ Add from last run** writes down what
+the last successful run gave the node and what it returned, and **▶ Run examples** runs
+them on the node as it stands in the dialog.
+
+`node engine/src/main.ts test my_tool` runs every node's examples; `--offline` asks no
+model and skips what needs one, which is how CI runs this repository's examples.
+`node engine/src/main.ts run-node my_tool count` runs one node by itself — on what the
+nodes feeding it produce, or on inputs given as JSON — and prints what it returned.
+
 **Checking a project.** `node engine/src/main.ts check my_tool other_tool` says what is
 wrong without running anything: edges to ports that do not exist, cycles, a code node
 without code, a message placeholder no input fills, an interface naming an output the
 node does not have, a folder under `nodes/` that belongs to no node, a file there that
-nothing reads (`prompt.md` where an AI node reads `system.md`). It exits with 1 when it
-finds anything, so a CI job fails on a broken graph; this repository checks its examples
-that way.
+nothing reads (`prompt.md` where an AI node reads `system.md`), and examples that no
+longer fit — an input or output the node does not have, or an input that the node wired
+into that port does not give according to its output interface. That last one is where a
+need meets a supply: either the example asks for the wrong thing, or the node before it
+has to deliver it. It exits with 1 when it finds anything, so a CI job fails on a broken
+graph; this repository checks its examples that way.
 
 ### Trying an element out: the same way everywhere
 

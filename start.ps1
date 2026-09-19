@@ -4,8 +4,8 @@
 # alias for Start-Process, which answers with a prompt for `FilePath:` and
 # never touches this project.
 #
-# Installs on first use, builds the page when it is missing, then serves it on
-# http://127.0.0.1:8000 and opens a browser.
+# The shared launcher installs on first use, rebuilds stale sources, restarts an
+# existing editor on the same port, then opens http://127.0.0.1:8000.
 
 $ErrorActionPreference = 'Stop'
 Set-Location -Path $PSScriptRoot
@@ -17,16 +17,5 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   exit 1
 }
 
-if (-not (Test-Path 'node_modules')) {
-  Write-Host 'Installing dependencies...'
-  npm ci
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-}
-
-if (-not (Test-Path 'editor/dist/index.html')) {
-  Write-Host 'Building the editor...'
-  npm run build
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-}
-
-npm start -- @args
+node scripts/start.mjs @args
+exit $LASTEXITCODE

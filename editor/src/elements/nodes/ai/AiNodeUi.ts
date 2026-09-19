@@ -15,7 +15,7 @@ export class AiNodeUi extends NodeUi {
   readonly settings: NodeUi['settings'] = [
     'ai_provider', 'ai_model', 'system_prompt', 'temperature', 'prompt_template',
     'output_format', 'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
-    'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
+    'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors', 'examples',
   ];
 
   // The description IS this element's generation prompt, drawn by its own

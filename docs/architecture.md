@@ -172,7 +172,7 @@ engine/src                               editor/src
     triggers.ts      what starts a run     page/               a gui node's page: GuiPage (drawn by
     batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike),
     runtimeValues.ts  images.ts              DesignerTab …       the designer, layout, schemes
-    reuse.ts  interface.ts
+    reuse.ts  interface.ts  examples.ts
   project/           a graph on disk
     folder.ts        read · write · watch
     check.ts         what is wrong
@@ -294,6 +294,10 @@ learns what a code node is.
   its first successful run produced ([`execution/interface.ts`](../engine/src/execution/interface.ts)),
   checked against on every later run (a message, not a failure), and handed to the next
   node's generation. An AI node's `output.md` is sent to the model instead.
+- **Examples are tests, not prompts.** A node's optional `examples.md`
+  ([`execution/examples.ts`](../engine/src/execution/examples.ts)) is run by `test`, the
+  node dialog and the MCP server's `test_graph`; nothing generates from it. `check` holds
+  an example's inputs to the output interface of the node wired into that port.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving.
 

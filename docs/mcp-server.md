@@ -63,6 +63,8 @@ npx @modelcontextprotocol/inspector --cli --config servers.json --server ai-grap
 | `validate_graph` | `graph` *or* `path` | Lists what is wrong, each with where and how to fix it. Empty list = valid. |
 | `save_graph` | `path`, `graph` | Validates, then writes pretty JSON. Refuses a graph with problems and returns them. |
 | `run_graph` | `path`, `inputs?`, `trigger?` | Runs once. Reports overall status, each node's status and error, and each node's outputs with every value cut to about 600 characters. |
+| `run_node` | `path`, `node_id`, `inputs?` | Runs one node by itself: on the inputs given, or on what the nodes feeding it produce. For writing one node at a time. |
+| `test_graph` | `path`, `node_id?`, `offline?` | Runs the examples nodes keep in their `examples.md` and reports each as pass, fail (with what differed), error or skipped. |
 | `list_graphs` | — | The graphs under the root: path, name, description, node count. Four folders deep, 200 at most. |
 
 A project folder is reached through its `graph.json` (`examples/chat/graph.json`): reading

@@ -22,6 +22,7 @@ import type { ExecutionResult, Graph, NodeResult } from '../graph.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/folder.ts';
+import type { ExampleResult } from '../execution/examples.ts';
 
 export type { TextChange };
 
@@ -237,6 +238,8 @@ export const API = {
   runBlock: route<{ widget: unknown; value: unknown }, BlockResult>('POST', '/api/execute/block', 'editor'),
   /** What would arrive at a node: what feeds it is run, the node is not. */
   nodeInputs: route<OnNode, { inputs: Record<string, unknown>; error: string | null }>('POST', '/api/execute/inputs', 'editor'),
+  /** Run a node's examples.md: each example's inputs, held to what it expects. */
+  testNode: route<OnNode, { results: ExampleResult[] }>('POST', '/api/execute/examples', 'editor'),
 
   /** A project folder or a single graph file: see `project/folder.ts`. */
   openGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),

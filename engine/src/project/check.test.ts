@@ -89,3 +89,39 @@ describe('what check finds in a project folder', () => {
     expect(problems[0].problem).toMatch(/not valid JSON/);
   });
 });
+
+describe('what check finds in a node\'s examples', () => {
+  const fence = '```';
+  const example = (title: string, input: unknown, expect: unknown) =>
+    `## ${title}\n${fence}json input\n${JSON.stringify(input)}\n${fence}\n${fence}json expect\n${JSON.stringify(expect)}\n${fence}\n`;
+  /** count produces "total"; say consumes it, and its examples say what it expects to be given. */
+  const withExamples = (examples: string, schema: unknown = { type: 'object', properties: { total: { type: 'integer' } } }) => {
+    const g = graph({ schema });
+    g.nodes[1].node_type = 'code';
+    g.nodes[1].config = { code: 'function run(i) { return { output: i.total }; }', examples };
+    return g;
+  };
+
+  it('is content with examples that fit the node and its neighbours', () => {
+    expect(problemsIn(withExamples(example('Seven', { total: 7 }, { output: 7 })))).toEqual([]);
+  });
+
+  it('finds ports an example names that the node does not have', () => {
+    const problems = problemsIn(withExamples(example('Typo', { totl: 7 }, { outptu: 7 })));
+    expect(problems.map((p) => p.problem)).toEqual([
+      'It gives an input "totl", which the node does not have.',
+      'It expects an output "outptu", which the node does not have.',
+    ]);
+  });
+
+  it('finds an example asking for what the node wired into that port does not give', () => {
+    const [problem] = problemsIn(withExamples(example('As text', { total: 'seven' }, { output: 'seven' })));
+    expect(problem.where).toBe('node "say", example "As text"');
+    expect(problem.problem).toBe('"count" is wired into "total", and what this example gives there does not fit its output interface: input "total" is string; the interface says integer.');
+    expect(problem.fix).toMatch(/Either this example asks for the wrong thing, or "count" has to deliver it/);
+  });
+
+  it('reports examples.md it cannot read', () => {
+    expect(problemsIn(withExamples('## Half\n```json input\n{\n```\n'))[0].where).toBe('node "say", examples.md');
+  });
+});

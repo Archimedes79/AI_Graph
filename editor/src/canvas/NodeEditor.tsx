@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
-import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
+import { keepsExamples, keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { derivedNodePorts, syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
 import { NODE_UIS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
@@ -9,6 +9,7 @@ import { buildGeneration, nodeFields } from '@/authoring/generation';
 import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs, readFilePorts } from '@/authoring/generationContext';
 import OutputFormatEditor from '@/authoring/OutputFormatEditor';
 import OutputInterface from '@/authoring/OutputInterface';
+import NodeExamples from '@/authoring/NodeExamples';
 import { nodeLogic } from '@/authoring/logic';
 import { sampleFor } from '@/authoring/tryValues';
 import GenerationTranscript, { GenerationReport } from '@/authoring/GenerationTranscript';
@@ -335,6 +336,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
               {element.outputContract === 'widgets' && <WidgetOutputSummary node={node} />}
               {keepsOutputInterface(node) && (
                 <OutputInterface node={node} setConfig={setConfig} executionResult={executionResult} />
+              )}
+              {keepsExamples(node) && (
+                <NodeExamples node={node} setConfig={setConfig} executionResult={executionResult} />
               )}
 
               {/* Knobs with good defaults, folded away: a node should open on

@@ -3,6 +3,8 @@
 //     node src/main.ts graph.json                     once
 //     node src/main.ts my_project/                    the same, for a project folder
 //     node src/main.ts check my_project/ other.json   what is wrong, without running
+//     node src/main.ts test my_project/ --offline     run the nodes' examples.md
+//     node src/main.ts run-node my_project/ count     one node, on what feeds it (or '{"input": …}')
 //     node src/main.ts graph.json --inputs key=value  answering what it asks
 //     node src/main.ts graph.json --every 5m           again, after each run
 //     node src/main.ts graph.json --bundle ./out       hand it to someone else
@@ -22,7 +24,8 @@
 import { createInterface } from 'node:readline/promises';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/check.ts';
-import { executeGraph } from '../execution/executor.ts';
+import { executeGraph, executeNode, inputsFor } from '../execution/executor.ts';
+import { runExamples } from '../execution/examples.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
@@ -268,8 +271,53 @@ export async function runCheck(paths: string[]): Promise<number> {
   return failed ? 1 : 0;
 }
 
+/**
+ * Run the examples every node keeps in its examples.md, or one node's with
+ * `--node`. `--offline` asks no model: an AI node's examples and every judged
+ * expectation are skipped, which is how CI runs them. Exit code 1 when one fails.
+ */
+export async function runTests(argv: string[]): Promise<number> {
+  const offline = argv.includes('--offline');
+  const only = argv.includes('--node') ? argv[argv.indexOf('--node') + 1] : '';
+  const paths = argv.filter((arg, index) => !arg.startsWith('--') && argv[index - 1] !== '--node');
+  let failed = 0;
+  for (const path of paths.length ? paths : ['.']) {
+    const graph = await loadGraph(path);
+    const nodes = graph.nodes.filter((node) => (only ? node.id === only : String(node.config.examples ?? '').trim()));
+    if (!nodes.length) process.stdout.write(`· ${path}: ${only ? `no node "${only}"` : 'no node has examples'}\n`);
+    for (const node of nodes) {
+      for (const result of await runExamples(graph, node.id, { runtime: nodeRuntime(), registry, offline })) {
+        const mark = { pass: '✓', fail: '✗', error: '✗', skipped: '·' }[result.status];
+        process.stdout.write(`${mark} ${path} ${node.id}: ${result.title}${result.status === 'skipped' ? ' (skipped)' : ''}\n`);
+        for (const line of result.status === 'skipped' ? [] : result.details) process.stdout.write(`    ${line}\n`);
+        if (result.status === 'fail' || result.status === 'error') failed += 1;
+      }
+    }
+  }
+  return failed ? 1 : 0;
+}
+
+/**
+ * Run one node by itself and print what it returned: on the inputs given as
+ * JSON, or -- without them -- on what the nodes feeding it produce, which are
+ * run for that and nothing else.
+ */
+export async function runNodeCommand([path, nodeId, given]: string[]): Promise<number> {
+  if (!path || !nodeId) throw new Error('Usage: run-node <graph or project> <node id> [\'{"port": value}\']');
+  const graph = await loadGraph(path);
+  applyRuntimeValues(graph, {}, registry);
+  const inputs = given
+    ? JSON.parse(given) as Record<string, unknown>
+    : (await inputsFor(graph, nodeId, { runtime: nodeRuntime(), registry })).inputs;
+  const result = await executeNode(graph, nodeId, inputs, { runtime: nodeRuntime(), registry });
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  return result.status === 'error' ? 1 : 0;
+}
+
 export async function main(argv: string[]): Promise<number> {
   if (argv[0] === 'check') return runCheck(argv.slice(1));
+  if (argv[0] === 'test') return runTests(argv.slice(1));
+  if (argv[0] === 'run-node') return runNodeCommand(argv.slice(1));
   const options = parseArgs(argv);
   // First, and needing no graph: nothing below may get the chance to write a
   // line to stdout, which from here on belongs to the protocol.

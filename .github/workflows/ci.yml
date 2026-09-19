@@ -46,6 +46,11 @@ jobs:
       - name: Check the examples
         run: node engine/src/main.ts check $(ls -d examples/*/ | grep -v '^examples/data/$')
 
+      # The nodes' own examples.md, without a model: there is no key here, so
+      # an AI node's examples and judged expectations are skipped, not failed.
+      - name: Test the examples' nodes
+        run: node engine/src/main.ts test --offline $(ls -d examples/*/ | grep -v '^examples/data/$')
+
   # The download for people who do not want a container: one zip holding the
   # engine's source, the built page and the examples. The engine has no runtime
   # dependencies and Node runs its TypeScript unbuilt, so a recipient unzips it

@@ -20,6 +20,8 @@ const CODE_TEXTS: readonly TextFile[] = [
   { field: 'code_prompt', file: 'task.md' },
   // The output interface, set from a run: see `execution/interface.ts`.
   { field: 'output_schema', file: 'output.schema.json', json: true },
+  // Optional: inputs, and the outputs they must give. See `execution/examples.ts`.
+  { field: 'examples', file: 'examples.md' },
 ];
 
 /**

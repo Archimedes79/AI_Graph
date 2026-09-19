@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { parseGraph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
+import { runExamples } from '../../execution/examples.ts';
 import { GuiNodeElement, parseWidget } from '../../elements/nodes/gui/GuiNodeElement.ts';
 import { registry } from '../../elements/registry.ts';
 import { writeBundle } from '../../cli/bundle.ts';
@@ -84,6 +85,10 @@ export function editorRoutes(): Handlers {
     runNode: (asked) => executeNode(
       parseGraph(asked), String(asked.node_id ?? ''), asked.inputs ?? {}, { runtime: nodeRuntime(), registry },
     ),
+
+    testNode: async (asked) => ({
+      results: await runExamples(parseGraph(asked), String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry }),
+    }),
 
     async runBlock(asked) {
       try {

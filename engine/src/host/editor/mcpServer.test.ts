@@ -474,6 +474,47 @@ describe('confinement', () => {
   });
 });
 
+describe('one node at a time', () => {
+  const chain = (examples = '') => {
+    const work = code('work');
+    if (examples) (work.config as Record<string, unknown>).examples = examples;
+    return graphOf([textInput('greeting'), work, output('result')],
+      [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')]);
+  };
+  const example = (title: string, input: string, out: string) =>
+    `## ${title}\n\`\`\`json input\n{ "in": ${JSON.stringify(input)} }\n\`\`\`\n\`\`\`json expect\n{ "out": ${JSON.stringify(out)} }\n\`\`\`\n`;
+
+  it('run_node runs a node on what feeds it, or on the inputs given', async () => {
+    await writeFile(join(root, 'g.json'), JSON.stringify(chain()));
+    const fed = await answer(toolsWith(), 'run_node', { path: 'g.json', node_id: 'work' });
+    expect(fed.json).toMatchObject({ status: 'success', inputs: { in: 'hello' }, outputs: { out: 'ran on hello' } });
+    const given = await answer(toolsWith(), 'run_node', { path: 'g.json', node_id: 'work', inputs: { in: 'x' } });
+    expect(given.json.outputs).toEqual({ out: 'ran on x' });
+    const wrong = await toolsWith().call('run_node', { path: 'g.json', node_id: 'ghost' });
+    expect(wrong.isError).toBe(true);
+    expect(wrong.text).toMatch(/"greeting", "work", "result"/);
+  });
+
+  it('test_graph runs the examples a node keeps, and says what differed', async () => {
+    await writeFile(join(root, 'g.json'), JSON.stringify(chain(
+      example('Passes', 'a', 'ran on a') + example('Fails', 'b', 'something else'),
+    )));
+    const tested = await answer(toolsWith(), 'test_graph', { path: 'g.json' });
+    expect(tested.json.passed).toBe(false);
+    expect(tested.json.results).toEqual([
+      { node: 'work', example: 'Passes', status: 'pass' },
+      { node: 'work', example: 'Fails', status: 'fail', details: ['output.out is "ran on b"; expected "something else"'] },
+    ]);
+  });
+
+  it('validate_graph on a project also finds what is wrong with its folder', async () => {
+    await mkdir(join(root, 'proj', 'nodes', 'gone'), { recursive: true });
+    await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(chain()));
+    const checked = await answer(toolsWith(), 'validate_graph', { path: 'proj/graph.json' });
+    expect(checked.json.problems.map((p: Problem) => p.where)).toContain('nodes/gone');
+  });
+});
+
 describe('run_graph', () => {
   it('runs a tiny graph and reports it compactly, every value cut short', async () => {
     const tools = toolsWith();
@@ -576,14 +617,14 @@ describe('call', () => {
     const tools = toolsWith();
     const unknown = await tools.call('format_disk', {});
     expect(unknown.isError).toBe(true);
-    expect(unknown.text).toMatch(/authoring_guide, generate_graph, validate_graph, save_graph, run_graph, list_graphs/);
+    expect(unknown.text).toMatch(/authoring_guide, generate_graph, validate_graph, save_graph, run_graph, run_node, test_graph, list_graphs/);
 
     for (const args of [null, 'text', [1, 2], { path: 42 }, { path: { toString: null } }]) {
       const result = await tools.call('run_graph', args as never);
       expect(result.isError).toBe(true);
     }
     expect(tools.specs.map((spec) => spec.name)).toEqual(
-      ['authoring_guide', 'generate_graph', 'validate_graph', 'save_graph', 'run_graph', 'list_graphs']);
+      ['authoring_guide', 'generate_graph', 'validate_graph', 'save_graph', 'run_graph', 'run_node', 'test_graph', 'list_graphs']);
   });
 });
 
@@ -612,7 +653,7 @@ describe('serveStdio', () => {
   const rpc = (id: number | undefined, method: string, params?: unknown): string =>
     JSON.stringify({ jsonrpc: '2.0', ...(id === undefined ? {} : { id }), method, ...(params === undefined ? {} : { params }) });
 
-  it('shakes hands, lists six tools, answers a ping, and says nothing to a notification', async () => {
+  it('shakes hands, lists eight tools, answers a ping, and says nothing to a notification', async () => {
     const { answers } = await exchange(toolsWith(), [
       rpc(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } }),
       rpc(undefined, 'notifications/initialized'),
@@ -623,7 +664,7 @@ describe('serveStdio', () => {
     const byId = new Map(answers.map((answer) => [answer.id, answer]));
     expect(byId.get(1).result).toMatchObject({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'ai-graph' } });
     expect(byId.get(2).result).toEqual({});
-    expect(byId.get(3).result.tools).toHaveLength(6);
+    expect(byId.get(3).result.tools).toHaveLength(8);
     expect(byId.get(3).result.tools[1]).toMatchObject({ name: 'generate_graph', inputSchema: { type: 'object', required: ['description'] } });
   });
 
@@ -732,7 +773,7 @@ describe('node main.ts --mcp', () => {
     const session = await service.open(['ai-graph']);
     try {
       expect(session.specs.map((spec) => spec.name)).toEqual(
-        ['authoring_guide', 'generate_graph', 'validate_graph', 'save_graph', 'run_graph', 'list_graphs']);
+        ['authoring_guide', 'generate_graph', 'validate_graph', 'save_graph', 'run_graph', 'run_node', 'test_graph', 'list_graphs']);
 
       expect(await session.call('authoring_guide', {})).toContain('Graph DSL');
 
