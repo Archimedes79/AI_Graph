@@ -14,6 +14,7 @@ import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
 import type { BrowseEntry, BrowsePage } from '../api.ts';
+import { isProjectFolder } from '../../project/folder.ts';
 
 export class NotFound extends Error {}
 
@@ -65,7 +66,9 @@ export async function browse(path: string, extensions: string[] = []): Promise<B
     } catch {
       continue;
     }
-    if (isDir) directories.push({ name: entry.name, path: full, is_dir: true });
+    if (isDir) {
+      directories.push({ name: entry.name, path: full, is_dir: true, ...(isProjectFolder(full) ? { project: true } : {}) });
+    }
     else if (!extensions.length || extensions.includes(extname(entry.name).toLowerCase())) {
       files.push({ name: entry.name, path: full, is_dir: false });
     }
@@ -150,8 +153,8 @@ export async function detectFormat(path: string): Promise<string> {
 
 export class NotOpenable extends Error {}
 
-/** What a node's body can be kept as. Nothing else is ever handed to another program. */
-const OPENABLE = new Set(['.js', '.md']);
+/** What a project keeps writing in. Nothing else is ever handed to another program. */
+const OPENABLE = new Set(['.js', '.md', '.json']);
 
 /**
  * Open one of a graph's node files in the editor the person actually works in.
@@ -162,7 +165,7 @@ const OPENABLE = new Set(['.js', '.md']);
  * only the way to it.
  *
  * Narrow on purpose, because this starts a program on the machine: the path
- * must be an existing `.js`/`.md` inside the graph's own `.nodes` folder, so a
+ * must be an existing `.js`/`.md`/`.json` inside the project's `nodes/` folder, so a
  * page cannot use it to launch an arbitrary file. VS Code is tried first, by
  * its `code` command, since that is where a `.js` with a JSDoc header is most
  * useful; anything else falls to whatever the system opens that file type with.
@@ -170,8 +173,8 @@ const OPENABLE = new Set(['.js', '.md']);
 export async function openExternal(nodesDir: string, relative: string): Promise<{ path: string; with: string }> {
   const root = resolve(nodesDir);
   const path = resolve(root, relative);
-  if (!path.startsWith(root + sep)) throw new NotOpenable('That file is not one of this graph\'s node files.');
-  if (!OPENABLE.has(extname(path).toLowerCase())) throw new NotOpenable('Only a node\'s .js or .md file can be opened.');
+  if (!path.startsWith(root + sep)) throw new NotOpenable('That file is not one of this project\'s node files.');
+  if (!OPENABLE.has(extname(path).toLowerCase())) throw new NotOpenable('Only a node\'s .js, .md or .json file can be opened.');
   if (!existsSync(path)) throw new NotFound(`${path} does not exist yet. Save the graph first: saving is what writes it.`);
 
   const { spawn } = await import('node:child_process');

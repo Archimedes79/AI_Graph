@@ -10,8 +10,8 @@ its files are in [`arch/overview.md`](../arch/overview.md).
 ```
 engine/    runs a graph. TypeScript that Node executes by stripping types: no build, no dependencies.
 editor/    the page: React + ReactFlow. Built on the engine, never the other way round.
-examples/  graphs that are run, event-driven and deployed by the test suite.
-scripts/   dev server, packaging, and the generator for the examples that carry real code.
+examples/  project folders that are run, event-driven, deployed and checked by the test suite.
+scripts/   dev server and packaging.
 arch/      the architecture diagrams, one file.
 ```
 
@@ -172,6 +172,11 @@ engine/src                               editor/src
     triggers.ts      what starts a run     page/               a gui node's page: GuiPage (drawn by
     batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike),
     runtimeValues.ts  images.ts              DesignerTab …       the designer, layout, schemes
+    reuse.ts  interface.ts
+  project/           a graph on disk
+    folder.ts        read · write · watch
+    check.ts         what is wrong
+    legacy.ts        the old .nodes/ layout
   host/              Node and HTTP         api/client.ts       the contract's client
     api.ts           the contract          app/                toolbar, sidebar, dialogs, results
     serve.ts  http.ts  runs.ts             store/              the open graph, runs, undo
@@ -261,14 +266,42 @@ what it should do ──✨──▶ body ──▶ Try it: [values] ⟳ from th
 ```
 
 Generation (`host/editor/generate.ts`) is: write → run once on the sample → ask the
-element's `check` → repair once with the evidence. Every model call is recorded (`AICall`)
+element's `check` → repair once with the evidence. The sample is what came off the wires,
+so for a node that reads its file inputs the files are read first, by the function a run
+reads them with (`execution/fileInputs.ts`) — code tried on a filename finds no rows,
+returns an empty chart, and passes. Every model call is recorded (`AICall`)
 and can be watched while it runs; the result waits for the person to accept it.
+
+## A graph on disk
+
+A graph is a folder: `graph.json` holds the structure (nodes, settings, ports, edges),
+`layout.json` the positions, and every piece of writing is a file of its own under
+`nodes/<node id>/` — `code.js`, `system.md`, `output.schema.json`, and a block's files one
+folder further down. Which fields become which files is element knowledge, so each element
+declares it (`Element.texts`); [`project/folder.ts`](../engine/src/project/folder.ts) reads
+and writes a folder for everyone — editor, CLI, a served tool, the MCP server — and never
+learns what a code node is.
+
+- **The file wins, `graph.json` is the fallback.** A text is read from its file when there
+  is one. That single rule is why a deploy bundle (a folder whose `graph.json` carries
+  everything inline) and a plain `.json` file open the same way.
+- **Structure and writing never share a file**, and writing sorts its keys, so an unchanged
+  save changes nothing and a moved node changes only `layout.json`.
+- **Two editors, one folder.** Every file read or written is remembered by signature; a
+  save that would overwrite a file changed since refuses (`FileChanged`), and the editor
+  asks every 1.5 s what changed (`changesOnDisk`) and takes it in as one undo step.
+- **Interfaces come from runs.** A code node's `output.schema.json` is inferred from what
+  its first successful run produced ([`execution/interface.ts`](../engine/src/execution/interface.ts)),
+  checked against on every later run (a message, not a failure), and handed to the next
+  node's generation. An AI node's `output.md` is sent to the model instead.
+- **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
+  problems: the CLI prints it and CI fails on it, the MCP server returns it before saving.
 
 ## Where state lives
 
 | State | Lives in | Travels as |
 |---|---|---|
-| the graph | `graph.json` (+ optional `<graph>.nodes/*.js|md`) | the document |
+| the graph | a project folder: `graph.json`, `layout.json`, `nodes/<id>/<file>` — or one `.json` with everything inline | the document ([`project/folder.ts`](../engine/src/project/folder.ts)) |
 | a widget's value, a conversation, a data node's value | inside the graph, in the element's own config | `result.memory` → `applyMemory` |
 | a run in flight | `RunBoard` on the server | `RunSnapshot`, polled |
 | the last run | the editor's store / the served page / `schedule.ts` | `ExecutionResult` |

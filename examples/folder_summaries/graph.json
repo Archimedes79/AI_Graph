@@ -1,21 +1,21 @@
 {
   "metadata": {
-    "version": "1.0.0",
-    "author": "AI-Graph",
-    "ai_defaults": {
-      "provider": "google",
-      "model": "gemini-flash-lite-latest"
-    },
-    "gui_scheme": "night",
     "name": "Summarize a folder",
+    "version": "1.0.0",
     "description": "Every text file in a folder is summarized on its own — the AI node runs once per file — and a second AI node then says what the files have in common. Paths are relative to the working directory, so run this from the repository root.",
+    "author": "AI-Graph",
     "tags": [
       "example",
       "gui",
       "ai",
       "batch",
       "triggers"
-    ]
+    ],
+    "ai_defaults": {
+      "provider": "google",
+      "model": "gemini-flash-lite-latest"
+    },
+    "gui_scheme": "night"
   },
   "nodes": [
     {
@@ -23,12 +23,6 @@
       "node_type": "gui",
       "label": "Folder summaries",
       "description": "The page this tool shows",
-      "position": {
-        "x": 60,
-        "y": 140
-      },
-      "width": 340,
-      "height": 260,
       "inputs": [
         {
           "id": "table_in",
@@ -72,70 +66,70 @@
       "config": {
         "gui_widgets": [
           {
+            "h": 1,
             "id": "title",
             "kind": "text",
             "label": "",
-            "tone": "plain",
-            "w": 16,
-            "h": 1,
             "mode": "heading",
-            "value": "Summarize a folder"
+            "tone": "plain",
+            "value": "Summarize a folder",
+            "w": 16
           },
           {
+            "h": 1,
             "id": "intro",
             "kind": "text",
             "label": "",
-            "tone": "plain",
-            "w": 16,
-            "h": 1,
             "mode": "caption",
-            "value": "Every .txt file in the folder gets its own two-sentence summary; then one paragraph on what they share."
+            "tone": "plain",
+            "value": "Every .txt file in the folder gets its own two-sentence summary; then one paragraph on what they share.",
+            "w": 16
           },
           {
+            "extensions": ".txt",
+            "h": 2,
             "id": "folder",
             "kind": "input_picker",
             "label": "Folder",
-            "tone": "sunken",
-            "w": 12,
-            "h": 2,
             "mode": "directory",
+            "select_all_files": true,
+            "tone": "sunken",
             "value": "examples/data/stories",
-            "extensions": ".txt",
-            "select_all_files": true
+            "w": 12
           },
           {
+            "h": 2,
             "id": "go",
             "kind": "button",
             "label": "Summarize all",
             "tone": "plain",
-            "w": 4,
-            "h": 2
+            "w": 4
           },
           {
+            "h": 1,
             "id": "rule",
             "kind": "divider",
             "label": "",
+            "mode": "horizontal",
             "tone": "plain",
-            "w": 16,
-            "h": 1,
-            "mode": "horizontal"
+            "w": 16
           },
           {
+            "h": 5,
             "id": "table",
             "kind": "table",
             "label": "Each file",
             "tone": "plain",
-            "w": 16,
-            "h": 5
+            "w": 16
           },
           {
+            "h": 4,
             "id": "overall",
             "kind": "text_io",
             "label": "What they have in common",
+            "mode": "output",
             "tone": "raised",
-            "w": 16,
-            "h": 4,
-            "mode": "output"
+            "w": 16
           }
         ]
       }
@@ -145,10 +139,6 @@
       "node_type": "ai",
       "label": "Each file",
       "description": "Summarize one story in exactly two sentences.",
-      "position": {
-        "x": 840,
-        "y": 20
-      },
       "inputs": [
         {
           "id": "story",
@@ -172,15 +162,13 @@
         }
       ],
       "config": {
-        "ai_provider": "google",
         "ai_model": "gemini-flash-lite-latest",
-        "temperature": 0.3,
-        "system_prompt": "You summarize short stories. Answer with exactly two sentences: the first says what happens, the second what it comes to. Do not repeat the title and do not judge the story. Answer in the language of the story, with the two sentences only.",
-        "prompt_template": "",
-        "output_format": "text",
+        "ai_provider": "google",
+        "batch_concurrency": 3,
         "batch_mode": "per_item",
+        "output_format": "text",
         "read_file_inputs": true,
-        "batch_concurrency": 3
+        "temperature": 0.3
       }
     },
     {
@@ -188,10 +176,6 @@
       "node_type": "code",
       "label": "Table rows",
       "description": "Puts each file name beside its summary",
-      "position": {
-        "x": 1140,
-        "y": 0
-      },
       "inputs": [
         {
           "id": "files",
@@ -224,8 +208,6 @@
         }
       ],
       "config": {
-        "code": "/**\n * One row per file: its name beside its summary.\n *\n * @typedef {Object} Inputs\n * @property {string[]} files      every path in the folder\n * @property {string[]} summaries  one summary per file, in the same order\n */\n\n/** @param {Inputs} inputs */\nfunction run(inputs) {\n  const files = [].concat(inputs.files ?? []);\n  const summaries = [].concat(inputs.summaries ?? []);\n  return {\n    rows: files.map(function (path, index) {\n      return {\n        File: String(path).split(/[\\\\/]/).pop(),\n        Summary: summaries[index] == null ? '(no summary — this file failed)' : String(summaries[index]).trim(),\n      };\n    }),\n  };\n}\n",
-        "code_prompt": "Make one table row per file: the file name and its summary.",
         "batch_mode": "whole_list",
         "read_file_inputs": false
       }
@@ -235,10 +217,6 @@
       "node_type": "ai",
       "label": "In common",
       "description": "Say what the stories share, from their summaries.",
-      "position": {
-        "x": 1140,
-        "y": 220
-      },
       "inputs": [
         {
           "id": "summaries",
@@ -262,14 +240,12 @@
         }
       ],
       "config": {
-        "ai_provider": "google",
         "ai_model": "gemini-flash-lite-latest",
-        "temperature": 0.4,
-        "system_prompt": "You are given the summaries of several short stories from one collection. Write one paragraph of at most four sentences on what the stories have in common: shared motifs, the kind of people in them, the attitude of the telling. Do not retell the plots. Answer in the language of the summaries.",
-        "prompt_template": "",
-        "output_format": "text",
+        "ai_provider": "google",
         "batch_mode": "whole_list",
-        "read_file_inputs": false
+        "output_format": "text",
+        "read_file_inputs": false,
+        "temperature": 0.4
       }
     }
   ],

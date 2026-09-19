@@ -102,7 +102,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
         </select>
       </div>
 
-      {format === 'custom' && (
+      {(format === 'custom' || !!node.config.output_format_prompt?.trim()) && (
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="block text-xs font-medium" style={{ color: MUTED }}>
@@ -194,7 +194,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
         >
           <strong>Note:</strong> When generating code for this node, the AI will be instructed to produce{' '}
           <strong>{FORMAT_LABELS[format] ?? format}</strong>.
-          {format === 'custom' && node.config.output_format_prompt && (
+          {node.config.output_format_prompt?.trim() && (
             <> Format spec: "{node.config.output_format_prompt}"</>
           )}
         </div>

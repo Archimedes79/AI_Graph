@@ -67,7 +67,7 @@ built. Nothing is installed, and nothing is installed while a graph runs.
 
     engine/     the engine and the editor's server, as source
     editor/dist the editor's page, built
-    examples/   graphs to open from the editor's Open dialog
+    examples/   project folders to open from the editor's Open dialog
     LICENSE
 
 A graph you build here can be handed on with the Deploy button, which writes a

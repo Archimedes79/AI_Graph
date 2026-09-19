@@ -3,6 +3,7 @@ import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { outputFormatContext } from '@/authoring/outputFormat';
 import { CodeNodeElement } from '@engine/elements/nodes/code/CodeNodeElement.ts';
+import { readInterface } from '@engine/execution/interface.ts';
 import { NodeUi } from '../../NodeUi';
 import { baseNodeConfig } from '../baseNodeConfig';
 
@@ -15,7 +16,7 @@ export class CodeNodeUi extends NodeUi {
   readonly icon = '⚙️';
   readonly color = 'var(--ui-node-code, #1a3a2a)';
   readonly settings: NodeUi['settings'] = [
-    'code', 'code_file', 'code_prompt', 'output_format', 'output_format_prompt',
+    'code', 'code_prompt', 'output_schema', 'output_format', 'output_format_prompt',
     'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
   ];
 
@@ -45,6 +46,10 @@ export class CodeNodeUi extends NodeUi {
   };
 
   override describeOutput(node: GraphNode): string {
+    // A kept interface is what a run actually produced: the best description
+    // there is of what the next node will be handed.
+    const schema = readInterface(node.config.output_schema);
+    if (schema) return `its outputs, keyed by port, follow this JSON Schema: ${JSON.stringify(schema)}`;
     const format = node.config.output_format;
     if (!format || format === 'text') return 'text';
     const detail = format === 'custom' && node.config.output_format_prompt

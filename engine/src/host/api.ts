@@ -21,6 +21,9 @@
 import type { ExecutionResult, Graph, NodeResult } from '../graph.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
+import type { TextChange } from '../project/folder.ts';
+
+export type { TextChange };
 
 // ---------------------------------------------------------------------------
 // What travels
@@ -63,7 +66,8 @@ export interface Requirement {
   current_value: string;
 }
 
-export interface BrowseEntry { name: string; path: string; is_dir: boolean }
+/** `project`: a folder with a `graph.json` in it, which opens rather than being walked into. */
+export interface BrowseEntry { name: string; path: string; is_dir: boolean; project?: boolean }
 /** One directory, for a picker. A deployed tool lists files only: no parent, no drives. */
 export interface BrowsePage { path: string; parent: string | null; entries: BrowseEntry[]; roots: string[] }
 
@@ -102,6 +106,12 @@ export interface GenerateRequest {
   /** Real port values from the last run; enables the verify-and-repair pass. */
   sample_inputs?: Record<string, unknown> | null;
   input_sources?: Record<string, string>;
+  /**
+   * Input ports the running node is handed a file's text on, not the path the
+   * wire carries (`read_file_inputs`). The sample holds what came off the wire,
+   * so these are read, as a run reads them, before the sample is shown or used.
+   */
+  read_file_ports?: string[];
 }
 
 /** One request to a model, as it happened: for looking at when an answer is wrong or missing. */
@@ -166,7 +176,8 @@ export interface ProviderStatus {
 }
 
 /** A graph file on disk, as Open, Save and Reload return it. */
-export interface GraphFile { path: string; graph: Graph }
+/** `project`: the path is a project folder, whose code and prompts are files of their own. */
+export interface GraphFile { path: string; graph: Graph; project: boolean }
 
 /** A failed call's body. A failed generation carries its transcript too. */
 export interface Failure { detail: string; calls?: AICall[] }
@@ -227,11 +238,14 @@ export const API = {
   /** What would arrive at a node: what feeds it is run, the node is not. */
   nodeInputs: route<OnNode, { inputs: Record<string, unknown>; error: string | null }>('POST', '/api/execute/inputs', 'editor'),
 
+  /** A project folder or a single graph file: see `project/folder.ts`. */
   openGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),
-  /** Returns the graph as written: saving renames a node's file to follow its label. */
+  /** A `.json` path is written as one file; any other path as a project folder. */
   saveGraph: route<{ path: string; graph: Graph }, GraphFile>('POST', '/api/graphs/file/save', 'editor'),
-  /** Re-read the node files of an open graph, after they were edited outside. */
-  reloadGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/reload-nodes', 'editor'),
+  /** Open the same path again: after `graph.json` itself changed outside the editor. */
+  reloadGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/reload', 'editor'),
+  /** The code and prompts of an open project that changed on disk since last asked. */
+  projectChanges: route<{ path: string }, { changes: TextChange[] }>('GET', '/api/graphs/file/changes', 'editor'),
 
   generate: route<GenerateRequest & ModelChoice & Watched, GenerateResponse>('POST', '/api/ai/generate', 'editor'),
   /** What the generation with this id has sent and received so far. */
@@ -247,8 +261,8 @@ export const API = {
   providers: route<void, ProviderStatus>('GET', '/api/ai/providers', 'editor'),
 
   detectFormat: route<{ path: string }, { format: string }>('POST', '/api/files/detect-format', 'editor'),
-  /** A node's file in the person's own editor. Loopback only: it starts a program. */
-  openExternal: route<{ graph_path: string; file: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
+  /** A node's (or block's) body file in a project -- `nodes/<id>/code.js` -- in the person's own editor. Loopback only: it starts a program. */
+  openExternal: route<{ graph_path: string; node_id: string; widget_id?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
   /** The file is the body and its name rides on the query: nothing multipart to get wrong. */
   attach: route<{ name: string; bytes: Uint8Array | Blob }, { path: string; name: string }>('POST', '/api/files/attachments', 'editor', true),
   detach: route<{ path: string }, { ok: true }>('DELETE', '/api/files/attachments', 'editor'),

@@ -35,7 +35,7 @@
       "type": "node",
       "request": "launch",
       "program": "${workspaceFolder}/engine/src/main.ts",
-      "args": ["examples/bla_counter.json"],
+      "args": ["examples/population_plotter"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**"]

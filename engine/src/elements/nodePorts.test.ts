@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { parseGraph } from '../graph.ts';
+import { loadGraph } from '../project/folder.ts';
 import { registry } from './registry.ts';
 
 /**
@@ -26,14 +26,15 @@ const EXAMPLES = resolve(__dirname, '..', '..', '..', 'examples');
 
 describe('derived node ports match the graphs people built', () => {
   it('agrees with every example, in both directions', async () => {
-    const files = (await readdir(EXAMPLES)).filter((name) => name.endsWith('.json'));
+    const files = (await readdir(EXAMPLES, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && entry.name !== 'data').map((entry) => entry.name);
     expect(files.length).toBeGreaterThan(2);
 
     const differences: string[] = [];
     let checked = 0;
 
     for (const name of files) {
-      const graph = parseGraph(JSON.parse(await readFile(join(EXAMPLES, name), 'utf8')));
+      const graph = await loadGraph(join(EXAMPLES, name));
       for (const node of graph.nodes) {
         const declared = registry.node(node.node_type)?.derivedPorts(node);
         if (!declared) continue;

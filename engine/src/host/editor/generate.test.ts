@@ -102,6 +102,41 @@ describe('code', () => {
   });
 });
 
+describe('a node that is handed a file\'s text, not its path', () => {
+  const files = (known: Record<string, string>) => ({
+    read: async (path: string) => {
+      if (!(path in known)) throw new Error(`no such file: ${path}`);
+      return known[path];
+    },
+  }) as never;
+  const request = {
+    element: 'code', description: 'count rows', inputs: ['csv', 'top'], outputs: ['rows'],
+    sample_inputs: { csv: 'data/people.csv', top: '5' },
+    input_sources: { csv: '"Page" (port "CSV file")' },
+    read_file_ports: ['csv'],
+  };
+
+  it('shows the model the text and tries the code on it -- it used to try it on the filename and pass', async () => {
+    const ai = scripted(['```js\nfunction run(i) { return { rows: 2 }; }\n```']);
+    let received: Record<string, unknown> = {};
+    const code: CodeRunner = { run: async (_body, inputs) => { received = inputs; return { rows: 2 }; } };
+    const reply = await generate(request, { ai, code, generationFor, target, files: files({ 'data/people.csv': 'name,age\nAda,36' }) });
+    expect(received).toEqual({ csv: 'name,age\nAda,36', top: '5' });
+    expect(ai.asked[0].prompt).toContain('e.g. "name,age\\nAda,36"');
+    expect(ai.asked[0].prompt).toContain('from "Page" (port "CSV file"): the text of the file, already read');
+    expect(ai.asked[0].prompt).not.toContain('data/people.csv');
+    expect(reply.probe.status).toBe('ok');
+  });
+
+  it('does not vouch for code when the sample\'s file cannot be read', async () => {
+    const ai = scripted(['```js\nfunction run(i) { return { rows: 0 }; }\n```']);
+    let probed = false;
+    const reply = await generate(request, { ai, code: runner(() => { probed = true; return { rows: 0 }; }), generationFor, target, files: files({}) });
+    expect(probed).toBe(false);
+    expect(reply.probe.status).toBe('skipped');
+  });
+});
+
 describe('prose', () => {
   it('takes the text between the tags and the explanation after them', async () => {
     const ai = scripted(['<system_prompt>Be terse.</system_prompt>\nBecause.']);

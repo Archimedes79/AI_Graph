@@ -2,6 +2,8 @@ import type { ExecutionResult, GraphNode } from '@/graph';
 // This module reads the element registry, so no element's `…Ui.ts` may import
 // it: that would be a cycle through the registry (see `outputFormat.ts`).
 import { NODE_UIS } from '@/elements/registry';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { filePorts } from '@engine/execution/fileInputs.ts';
 
 /**
  * What the ✨ Generate buttons tell the AI about the world around a node.
@@ -91,6 +93,17 @@ function preview(value: unknown): string {
  * engine/src/host/editor/generate.ts). Undefined when the node has never run, which turns the
  * verification pass off rather than inventing a sample.
  */
+/**
+ * The input ports a running node is handed a file's text on.
+ *
+ * A sample holds what came off the wire -- the path. The server reads these
+ * before it shows the sample to the model or tries the code on it, as a run
+ * does; asked of the engine's element, so the two cannot disagree on which.
+ */
+export function readFilePorts(node: GraphNode): string[] {
+  return engineRegistry.node(node.node_type)?.readsFileInputs(node) ? filePorts(node) : [];
+}
+
 export function lastRunInputs(
   nodeId: string,
   result: ExecutionResult | null,
@@ -118,12 +131,21 @@ export function lastRunWidgetInput(
   return arrived === undefined ? undefined : { value: arrived };
 }
 
-export function lastRunContext(nodeId: string, result: ExecutionResult | null): string {
+/**
+ * *asFiles* names the ports the node is handed a file's text on: what the run
+ * recorded there is the path, and quoting it as "the value received" tells the
+ * model to expect a filename where the code will get the content.
+ */
+export function lastRunContext(nodeId: string, result: ExecutionResult | null, asFiles: string[] = []): string {
   const nodeResult = result?.node_results?.find((r) => r.node_id === nodeId);
   const inputs = nodeResult?.inputs;
   if (!inputs || Object.keys(inputs).length === 0) return '';
 
   const lines = Object.entries(inputs).map(([port, value]) => {
+    if (asFiles.includes(port)) {
+      const what = Array.isArray(value) ? `a list of ${value.length} texts, one per file` : 'the text of one file';
+      return `- ${port}: ${what}, already read -- never a path. See the function's signature for how it starts.`;
+    }
     const shape = Array.isArray(value) ? `list of ${value.length}` : typeof value;
     return `- ${port} (${shape}):\n${preview(value)}`;
   });

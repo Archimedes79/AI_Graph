@@ -12,7 +12,7 @@ import { useGraphStore } from '@/store/graphStore';
 import { WIDGET_UIS, NODE_UIS } from '@/elements/registry';
 import { buildGeneration, nodeFields, widgetFields } from './generation';
 import {
-  connectedFormatContext, inputSources, lastRunContext, lastRunInputs, lastRunWidgetInput,
+  connectedFormatContext, inputSources, lastRunContext, lastRunInputs, lastRunWidgetInput, readFilePorts,
 } from './generationContext';
 import { missingExamples, sampleFromPredecessors, sweep, type SweepTarget, type SweepUnit } from './graphSweep';
 
@@ -151,11 +151,12 @@ export function useGraphSweep(): SweepState {
         exampleFile: current.config.example_file,
         graphContext: [
           connectedFormatContext(current.id, nodesOf(), rfEdges()),
-          lastRunContext(current.id, live().executionResult),
+          lastRunContext(current.id, live().executionResult, readFilePorts(current)),
         ].filter(Boolean).join('\n\n'),
         sampleInputs: lastRunInputs(current.id, live().executionResult)
           ?? sampleFromPredecessors(target, rfEdges(), produced, guiNodes),
         inputSources: inputSources(current.id, nodesOf(), rfEdges()),
+        readFilePorts: readFilePorts(current),
         // What it turns out to return is written down as this node's contract,
         // which is what the next node is then generated against.
         recordMeasuredOutput: true,

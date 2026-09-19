@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { connectedFormatContext, lastRunContext, describeNodeOutput } from './generationContext';
+import { connectedFormatContext, lastRunContext, describeNodeOutput, readFilePorts } from './generationContext';
 import { NODE_UIS } from '@/elements/registry';
 import type { ExecutionResult } from '@/graph';
 
@@ -62,6 +62,14 @@ describe('describeNodeOutput', () => {
     expect(describeNodeOutput(node)).toBe('text');
   });
 
+  it('describes a code node by its output interface once a run has set one', () => {
+    const node = NODE_UIS.code.create('c');
+    node.config.output_schema = { type: 'object', properties: { rows: { type: 'array' } } };
+    expect(describeNodeOutput(node)).toBe(
+      'its outputs, keyed by port, follow this JSON Schema: {"type":"object","properties":{"rows":{"type":"array"}}}',
+    );
+  });
+
   it('spells out a custom output format', () => {
     const node = NODE_UIS.code.create('c');
     node.config.output_format = 'custom';
@@ -94,6 +102,36 @@ describe('lastRunContext', () => {
     expect(lastRunContext('worker', null)).toBe('');
     expect(lastRunContext('someone-else', resultWith({ a: 1 }))).toBe('');
     expect(lastRunContext('worker', resultWith({}))).toBe('');
+  });
+});
+
+describe('a node that is handed the text of a file', () => {
+  const reader = () => {
+    const node = NODE_UIS.code.create('worker');
+    node.inputs = [
+      { id: 'csv', name: 'CSV', kind: 'input', data_type: 'file_path', multi: false, required: false },
+      { id: 'top', name: 'Top', kind: 'input', data_type: 'text', multi: false, required: false },
+    ] as typeof node.inputs;
+    node.config.read_file_inputs = true;
+    return node;
+  };
+
+  it('names the ports the server must read before it tries generated code on the sample', () => {
+    const node = reader();
+    expect(readFilePorts(node)).toEqual(['csv']);
+    node.config.read_file_inputs = false;
+    expect(readFilePorts(node)).toEqual([]);
+  });
+
+  it('does not quote the recorded path as the value the code will receive', () => {
+    const result = {
+      status: 'success', outputs: {},
+      node_results: [{ node_id: 'worker', status: 'success', inputs: { csv: 'data/people.csv', top: '5' }, outputs: {} }],
+    } as ExecutionResult;
+    const context = lastRunContext('worker', result, readFilePorts(reader()));
+    expect(context).not.toContain('people.csv');
+    expect(context).toContain('- csv: the text of one file, already read');
+    expect(context).toContain('- top (string)');
   });
 });
 

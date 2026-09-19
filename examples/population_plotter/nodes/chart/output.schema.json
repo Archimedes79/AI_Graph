@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "properties": {
+    "drawing": {
+      "type": "string"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "#": {
+            "type": "integer"
+          },
+          "Country": {
+            "type": "string"
+          },
+          "Population": {
+            "type": "string"
+          },
+          "Share of all": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "#",
+          "Country",
+          "Population",
+          "Share of all"
+        ]
+      }
+    }
+  },
+  "required": [
+    "drawing",
+    "rows"
+  ]
+}

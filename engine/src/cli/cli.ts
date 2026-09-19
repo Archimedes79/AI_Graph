@@ -1,6 +1,8 @@
 // Running a graph from a command line.
 //
 //     node src/main.ts graph.json                     once
+//     node src/main.ts my_project/                    the same, for a project folder
+//     node src/main.ts check my_project/ other.json   what is wrong, without running
 //     node src/main.ts graph.json --inputs key=value  answering what it asks
 //     node src/main.ts graph.json --every 5m           again, after each run
 //     node src/main.ts graph.json --bundle ./out       hand it to someone else
@@ -17,9 +19,9 @@
 // to stderr, so `run graph.json | jq` works. A prompt printed to stdout put
 // "Text for 'Greeting': " in front of the JSON and nobody could parse it.
 
-import { readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
-import { parseGraph } from '../graph.ts';
+import { loadGraph, projectFolderOf } from '../project/folder.ts';
+import { checkPath } from '../project/check.ts';
 import { executeGraph } from '../execution/executor.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
@@ -124,7 +126,7 @@ async function answer(
 }
 
 export async function runOnce(options: CliOptions): Promise<number> {
-  const graph = parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')));
+  const graph = await loadGraph(options.graphPath);
   applyRuntimeValues(graph, await answer(runtimeRequirements(graph, registry), options.inputs), registry);
 
   const runtime = nodeRuntime({
@@ -163,7 +165,7 @@ export async function runEvery(options: CliOptions): Promise<number> {
 
 /** Write the graph and the engine somewhere someone else can run them. */
 export async function makeBundle(options: CliOptions): Promise<number> {
-  const graph = parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')));
+  const graph = await loadGraph(options.graphPath);
   // The built page, when this checkout has one. A bundle without it still
   // runs on the terminal; with it, the recipient gets the tool they were
   // shown. Looked up rather than passed, because the person writing a bundle
@@ -194,7 +196,9 @@ export async function runServer(options: CliOptions): Promise<number> {
   // itself purely to execute, and posts the graph being edited with every
   // request; a bundle is the other case, and there the graph is right here.
   const hasGraph = existsSync(resolve(options.graphPath));
-  const pageDir = resolve(dirname(resolve(options.graphPath)), 'page');
+  // Beside the graph file, or inside the project folder: where a bundle puts it.
+  const folder = projectFolderOf(options.graphPath);
+  const pageDir = folder ? join(folder, 'page') : resolve(dirname(resolve(options.graphPath)), 'page');
 
   const { url } = await serve({
     ...(hasGraph ? { graphPath: options.graphPath } : {}),
@@ -244,7 +248,28 @@ export async function runMcp(options: CliOptions): Promise<number> {
   return 0;
 }
 
+/**
+ * Say what is wrong with each graph or project, without running anything.
+ * The result on stdout, one problem per paragraph; exit code 1 when there is
+ * any, so a CI job fails on a broken graph before anyone opens it.
+ */
+export async function runCheck(paths: string[]): Promise<number> {
+  let failed = 0;
+  for (const path of paths.length ? paths : ['.']) {
+    const { problems, graph } = await checkPath(path);
+    if (!problems.length) {
+      process.stdout.write(`✓ ${path}: ${graph!.nodes.length} nodes, ${graph!.edges.length} edges\n`);
+      continue;
+    }
+    failed += 1;
+    process.stdout.write(`✗ ${path}: ${problems.length} problem${problems.length === 1 ? '' : 's'}\n`);
+    for (const { where, problem, fix } of problems) process.stdout.write(`  ${where}: ${problem}\n    → ${fix}\n`);
+  }
+  return failed ? 1 : 0;
+}
+
 export async function main(argv: string[]): Promise<number> {
+  if (argv[0] === 'check') return runCheck(argv.slice(1));
   const options = parseArgs(argv);
   // First, and needing no graph: nothing below may get the chance to write a
   // line to stdout, which from here on belongs to the protocol.
@@ -255,7 +280,7 @@ export async function main(argv: string[]): Promise<number> {
   // "every 5 minutes" is that on any machine, not only where someone remembers
   // the flag. `--every` still wins, which is how one run is made of it.
   if (!options.every && existsSync(resolve(options.graphPath))) {
-    const graph = parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8')));
+    const graph = await loadGraph(options.graphPath);
     const { every } = graphTriggers(graph);
     if (every) options.every = parseInterval(every);
   }

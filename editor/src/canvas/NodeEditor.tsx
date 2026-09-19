@@ -1,15 +1,14 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
-import { useGraphStore } from '@/store/graphStore';
-import { markExternalEdit } from '@/store/externalEdits';
+import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { derivedNodePorts, syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
 import { NODE_UIS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, nodeFields } from '@/authoring/generation';
-import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs } from '@/authoring/generationContext';
+import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs, readFilePorts } from '@/authoring/generationContext';
 import OutputFormatEditor from '@/authoring/OutputFormatEditor';
-import KeepInFileOption from '@/elements/fields/KeepInFileOption';
+import OutputInterface from '@/authoring/OutputInterface';
 import { nodeLogic } from '@/authoring/logic';
 import { sampleFor } from '@/authoring/tryValues';
 import GenerationTranscript, { GenerationReport } from '@/authoring/GenerationTranscript';
@@ -44,18 +43,49 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // it was sitting in the store unused.
   const executionResult = useGraphStore((s) => s.executionResult);
 
+  const isProject = useGraphStore((s) => s.isProject);
+
   const [node, setNode] = useState<GraphNode | null>(null);
   const [externalStatus, setExternalStatus] = useState('');
+  // The store's copy of this node as the draft last matched it, and a newer
+  // one that arrived while the draft held edits of its own.
+  const baseline = useRef('');
+  const draft = useRef<GraphNode | null>(null);
+  draft.current = node;
+  const [newer, setNewer] = useState<GraphNode | null>(null);
   // One state machine for all four ✨ Generate buttons in this editor.
   const generate = useGenerate();
   const generating = generate.busy;
   const genMessage = generate.message();
 
+  // The node can change while this dialog is open: its code edited in
+  // another editor, its interface set by a run. An untouched draft simply
+  // follows; a draft with edits of its own is not overwritten -- the person is
+  // asked which to keep.
   useEffect(() => {
-    if (rfNode) {
-      setNode(JSON.parse(JSON.stringify(rfNode.data.graphNode)));
+    if (!rfNode) return;
+    const incoming = JSON.stringify(rfNode.data.graphNode);
+    if (incoming === baseline.current) return;
+    if (!draft.current || JSON.stringify(draft.current) === baseline.current) {
+      baseline.current = incoming;
+      setNode(JSON.parse(incoming));
+      setNewer(null);
+    } else {
+      setNewer(JSON.parse(incoming));
     }
   }, [rfNode]);
+
+  const takeNewer = () => {
+    if (!newer) return;
+    baseline.current = JSON.stringify(newer);
+    setNode(newer);
+    setNewer(null);
+  };
+  const keepMine = () => {
+    if (!newer) return;
+    baseline.current = JSON.stringify(newer);
+    setNewer(null);
+  };
 
   if (!node) return null;
 
@@ -83,28 +113,22 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   /**
    * Hand this node's file to the person's own editor.
    *
-   * The file only exists once the graph has been saved with this node told to
-   * keep its body in one, so that is done first -- the draft is taken, the
-   * graph is written -- rather than explained as three steps to do by hand.
-   * Coming back, the window's focus is what reloads the file (see App.tsx).
+   * The draft is taken and the project saved first, so the file holds what
+   * the dialog shows. What is saved there comes back by itself: the editor
+   * watches the project folder (see App.tsx).
    */
   const openInOwnEditor = async () => {
     const state = useGraphStore.getState();
-    if (!state.currentFilePath) {
-      setExternalStatus('Save the graph first — the file lives in a folder beside it.');
-      return;
-    }
+    if (!state.currentFilePath || !state.isProject) return;
     try {
       setExternalStatus('Saving, then opening…');
       updateNode(nodeId, node!);
+      baseline.current = JSON.stringify(node);
       const after = useGraphStore.getState();
-      const saved = await call('saveGraph', { path: state.currentFilePath, graph: after.exportGraph() });
-      if (saved.graph) after.syncNodeFileNames(saved.graph);
+      await call('saveGraph', { path: state.currentFilePath, graph: after.exportGraph() });
       after.markSaved();
-      const written = saved.graph?.nodes.find((n) => n.id === nodeId)?.config.code_file || node!.config.code_file;
-      const opened = await call('openExternal', { graph_path: state.currentFilePath, file: String(written) });
-      markExternalEdit();
-      setExternalStatus(`Opened in ${opened.with}: ${opened.path}. Save there and come back — it is reloaded when this window gets the focus.`);
+      const opened = await call('openExternal', { graph_path: state.currentFilePath, node_id: nodeId });
+      setExternalStatus(`Opened in ${opened.with}: ${opened.path}. What you save there appears here by itself.`);
     } catch (error) {
       setExternalStatus(errorText(error, 'Could not open the file.'));
     }
@@ -140,7 +164,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
    */
   const surroundingContext = () => [
     connectedFormatContext(node.id, graphNodes, graphEdges),
-    lastRunContext(node.id, executionResult),
+    lastRunContext(node.id, executionResult, readFilePorts(node)),
   ].filter(Boolean).join('\n\n');
 
   const setDescription = (value: string) =>
@@ -172,6 +196,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // the generated function against them and repairs it once if it fails.
       sampleInputs: sampleFor(node.id, node.inputs.map((port) => port.id), lastRunInputs(node.id, executionResult)),
       inputSources: inputSources(node.id, graphNodes, graphEdges),
+      readFilePorts: readFilePorts(node),
       recordMeasuredOutput: true,
     }));
   };
@@ -247,6 +272,16 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       }
     >
       <div className="px-6 py-5">
+          {newer && (
+            <div className="mb-4 px-3 py-2 rounded-lg text-sm flex flex-wrap items-center gap-2"
+              style={{ background: ACCENT_FILL, color: ACCENT_TEXT }} role="alert">
+              <span className="flex-1 min-w-0">
+                This node changed while it was open here — in its project files, or by a run.
+              </span>
+              <button className="text-xs px-2 py-1 rounded" style={PRIMARY_BUTTON} onClick={takeNewer}>Take that version</button>
+              <button className="text-xs px-2 py-1 rounded" style={NEUTRAL_BUTTON} onClick={keepMine}>Keep mine</button>
+            </div>
+          )}
           {/* Only for elements whose own editor does not already ask what the
               node is for. An ai node's description IS its generation prompt, so
               drawing this above it showed the same box twice. */}
@@ -298,6 +333,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 />
               )}
               {element.outputContract === 'widgets' && <WidgetOutputSummary node={node} />}
+              {keepsOutputInterface(node) && (
+                <OutputInterface node={node} setConfig={setConfig} executionResult={executionResult} />
+              )}
 
               {/* Knobs with good defaults, folded away: a node should open on
                   what it does, not on a form to fill in first. */}
@@ -314,39 +352,21 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 </details>
               )}
 
-              {(() => {
-                const logic = nodeLogic(node);
-                return logic ? (
-                  <KeepInFileOption
-                    label={node.label}
-                    fileName={node.config.code_file ?? ''}
-                    extension={logic.extension}
-                    what={logic.what}
-                    folderHint="<graph>.nodes/"
-                    onChange={(name) => setConfig('code_file', name)}
-                  />
-                ) : null;
-              })()}
-
-              {(() => {
-                const logic = nodeLogic(node);
-                if (!logic || !node.config.code_file) return null;
-                return (
-                  <div>
-                    <button
-                      onClick={openInOwnEditor}
-                      className="text-xs px-3 py-1.5 rounded-lg"
-                      style={NEUTRAL_BUTTON}
-                      title="Saves the graph, then opens this node's file — in VS Code when it is installed"
-                    >
-                      ↗ Open {node.config.code_file} in my editor
-                    </button>
-                    {externalStatus && (
-                      <p className="text-xs mt-1" style={{ color: MUTED }}>{externalStatus}</p>
-                    )}
-                  </div>
-                );
-              })()}
+              {isProject && nodeLogic(node) && (
+                <div>
+                  <button
+                    onClick={openInOwnEditor}
+                    className="text-xs px-3 py-1.5 rounded-lg"
+                    style={NEUTRAL_BUTTON}
+                    title="Saves the project, then opens this node's file — in VS Code when it is installed"
+                  >
+                    ↗ Open in my editor
+                  </button>
+                  {externalStatus && (
+                    <p className="text-xs mt-1" style={{ color: MUTED }}>{externalStatus}</p>
+                  )}
+                </div>
+              )}
 
               {/* An element with no ✨ button of its own can still have something
                   to report -- the message is drawn next to the button otherwise. */}

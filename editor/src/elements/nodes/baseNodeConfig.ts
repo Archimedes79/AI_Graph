@@ -25,7 +25,6 @@ export function baseNodeConfig(): NodeConfig {
     temperature: 0.7,
     code: '',
     code_prompt: '',
-    code_file: '',
     data_value: null,
     data_format: 'text',
     data_prompt: '',

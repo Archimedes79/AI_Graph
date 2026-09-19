@@ -10,6 +10,8 @@ export interface BrowseEntry {
   name: string;
   path: string;
   is_dir: boolean;
+  /** A folder with a graph.json: a project, which is chosen rather than walked into. */
+  project?: boolean;
 }
 
 interface FileBrowserDialogProps {
@@ -24,6 +26,8 @@ interface FileBrowserDialogProps {
   initialPath?: string;
   /** Comma-separated extension filter, e.g. ".md, .txt" — files only. */
   extensions?: string;
+  /** Graphs are being opened or saved: a project folder is a thing to choose, like a file. */
+  projects?: boolean;
   onPick: (path: string) => void;
   onClose: () => void;
 }
@@ -40,7 +44,7 @@ interface FileBrowserDialogProps {
  * engine can actually open.
  */
 export default function FileBrowserDialog({
-  mode, initialPath, extensions, defaultName, onPick, onClose,
+  mode, initialPath, extensions, defaultName, projects, onPick, onClose,
 }: FileBrowserDialogProps) {
   const [path, setPath] = useState('');
   const [parent, setParent] = useState<string | null>(null);
@@ -72,8 +76,12 @@ export default function FileBrowserDialog({
 
   useEffect(() => { load(initialPath || ''); }, [load, initialPath]);
 
+  /** A project folder, where projects are what is being chosen. */
+  const isProject = (entry: BrowseEntry) => !!projects && !!entry.project;
+
   const activate = (entry: BrowseEntry) => {
-    if (entry.is_dir) load(entry.path);
+    if (isProject(entry) && mode !== 'directory') onPick(entry.path);
+    else if (entry.is_dir) load(entry.path);
     else if (mode === 'file') onPick(entry.path);
   };
 
@@ -90,6 +98,9 @@ export default function FileBrowserDialog({
   const confirm = () => {
     if (mode === 'directory') return onPick(path);
     if (mode === 'save') return onPick(join(path, fileName.trim()));
+    // A plain folder selected and confirmed is a folder to go into, not a choice.
+    const entry = entries.find((candidate) => candidate.path === selected);
+    if (entry?.is_dir && !isProject(entry)) return load(entry.path);
     return onPick(selected);
   };
 
@@ -170,22 +181,27 @@ export default function FileBrowserDialog({
             </div>
           )}
           {!loading && !error && entries.map((entry) => {
-            const isSelected = !entry.is_dir && selected === entry.path;
+            const choosable = !entry.is_dir || isProject(entry);
+            const isSelected = selected === entry.path;
             return (
               <button
                 key={entry.path}
                 className="w-full text-left px-3 py-1.5 text-sm font-mono flex items-center gap-2"
                 style={{ background: isSelected ? LINE : 'transparent', color: entry.is_dir ? ACCENT_TEXT : TEXT }}
+                // One click selects, a double-click opens -- a folder too. A folder
+                // that opened on the first click put a different row under the
+                // pointer for the second, and a double-click on "examples" opened
+                // whichever project had slid into its place.
                 onClick={() => {
-                  if (entry.is_dir) return load(entry.path);
                   setSelected(entry.path);
-                  if (mode === 'save') setFileName(entry.name);
+                  if (mode === 'save' && choosable) setFileName(entry.name);
                 }}
                 onDoubleClick={() => activate(entry)}
                 title={entry.path}
               >
-                <span aria-hidden="true">{entry.is_dir ? '📁' : '📄'}</span>
+                <span aria-hidden="true">{isProject(entry) ? '📦' : entry.is_dir ? '📁' : '📄'}</span>
                 <span className="truncate">{entry.name}</span>
+                {isProject(entry) && <span className="text-xs flex-shrink-0" style={{ color: DIMMER }}>project</span>}
               </button>
             );
           })}
@@ -203,17 +219,21 @@ export default function FileBrowserDialog({
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && canConfirm) confirm(); }}
-              placeholder="my_graph.json"
+              placeholder={projects ? 'my_graph  (or my_graph.json for one file)' : 'my_graph.json'}
             />
           </div>
         )}
 
         <p className="text-xs" style={{ color: DIMMER }}>
           {mode === 'directory'
-            ? 'Navigate into the folder you want, then confirm. Paths are on the machine running the graph.'
+            ? 'Double-click folders to go into the one you want, then confirm. Paths are on the machine running the graph.'
             : mode === 'save'
-              ? 'Navigate to the folder, then name the file. Clicking an existing file reuses its name. Paths are on the machine running the graph.'
-              : 'Click a file to select it, double-click to select and confirm. Paths are on the machine running the graph.'}
+              ? projects
+                ? 'Double-click folders to go where it should be saved, then name it: a name is a project folder, a name ending in .json is one file. Paths are on the machine running the graph.'
+                : 'Double-click folders to go to the right one, then name the file. Clicking an existing file reuses its name. Paths are on the machine running the graph.'
+              : projects
+                ? 'Double-click folders to go into them, and a 📦 project or a graph file to open it. Paths are on the machine running the graph.'
+                : 'Click a file to select it, double-click to select and confirm. Paths are on the machine running the graph.'}
         </p>
       </div>
     </Modal>

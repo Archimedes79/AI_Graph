@@ -191,6 +191,8 @@ export interface GenerationRequest<S> {
    * from -- the part no type annotation can express.
    */
   inputSources?: Record<string, string>;
+  /** Ports whose sample is a path the running node gets the text of (`readFilePorts`). */
+  readFilePorts?: string[];
   /**
    * Write down what the generated body actually returned.
    *
@@ -230,6 +232,7 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
       outputs: request.ports?.outputs,
       sample_inputs: request.sampleInputs,
       input_sources: request.inputSources,
+      read_file_ports: request.readFilePorts?.length ? request.readFilePorts : undefined,
       ...genAI(),
       // Only a single ✨ button passes one; a sweep runs unattended.
       ...(progressId ? { progress_id: progressId } : {}),

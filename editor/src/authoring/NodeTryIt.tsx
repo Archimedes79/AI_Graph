@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import type { GraphNode } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { call } from '@/api/client';
-import { connectedFormatContext, lastRunContext, lastRunInputs } from './generationContext';
+import { connectedFormatContext, lastRunContext, lastRunInputs, readFilePorts } from './generationContext';
 import TryItPanel, { type TryResult } from './TryItPanel';
 
 /**
@@ -33,7 +33,7 @@ export default function NodeTryIt({ node, title, children, renderResult, testLab
 
   const context = [
     connectedFormatContext(node.id, rfNodes.map((n) => n.data.graphNode), rfEdges),
-    lastRunContext(node.id, executionResult),
+    lastRunContext(node.id, executionResult, readFilePorts(node)),
   ].filter(Boolean).join('\n\n');
 
   return (

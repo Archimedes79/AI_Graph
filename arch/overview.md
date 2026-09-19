@@ -29,6 +29,7 @@ flowchart LR
     Executor["Executor"]
     Elements["Elements + registry"]
     Graph["Graph document"]
+    Project["Project folder + check"]
     AI["AI providers + MCP"]
   end
 
@@ -43,6 +44,11 @@ flowchart LR
   EditorRoutes --> Executor
   CLI --> Server
   CLI --> Executor
+  CLI --> Project
+  Server --> Project
+  EditorRoutes --> Project
+  Project --> Elements
+  Project --> Graph
   Executor --> Elements
   Executor --> Graph
   Server --> Services
@@ -60,10 +66,11 @@ flowchart LR
 | `Server` | [`engine/src/host/serve.ts`](../engine/src/host/serve.ts), [`http.ts`](../engine/src/host/http.ts), [`runs.ts`](../engine/src/host/runs.ts), [`schedule.ts`](../engine/src/host/schedule.ts) | serves the page and the `tool` routes; refuses to start if a route has no handler |
 | `Editor routes` | [`engine/src/host/editor/routes.ts`](../engine/src/host/editor/routes.ts) | the `editor` routes; dynamic import, never in a bundle |
 | `Runtime services` | [`engine/src/host/node.ts`](../engine/src/host/node.ts) | files, sandboxed code, models, tools: the `Runtime` handed to elements |
-| `CLI` | [`engine/src/main.ts`](../engine/src/main.ts), [`engine/src/cli/cli.ts`](../engine/src/cli/cli.ts) | run once / on a clock / `--serve` / `--bundle` / `--mcp` / `--editor` |
-| `Executor` | [`engine/src/execution/`](../engine/src/execution/): `executor.ts`, `triggers.ts`, `batching.ts`, `reuse.ts` | order, fan-out, memory, displays, stopping; reuses context a page event only needs |
+| `CLI` | [`engine/src/main.ts`](../engine/src/main.ts), [`engine/src/cli/cli.ts`](../engine/src/cli/cli.ts) | run a folder or a file once / on a clock / `--serve` / `--bundle` / `--mcp` / `--editor` / `check` |
+| `Executor` | [`engine/src/execution/`](../engine/src/execution/): `executor.ts`, `triggers.ts`, `batching.ts`, `reuse.ts`, `interface.ts` | order, fan-out, memory, displays, stopping; reuses context a page event only needs; holds outputs to a kept output interface |
 | `Elements + registry` | [`engine/src/elements/`](../engine/src/elements/), and its mirror [`editor/src/elements/`](../editor/src/elements/) | one class per node type and widget kind, mirrored file for file; see [elements](#elements) |
 | `Graph document` | [`engine/src/graph.ts`](../engine/src/graph.ts), [`editor/src/graph.ts`](../editor/src/graph.ts) | the engine's types; the editor adds only the typed `NodeConfig` view |
+| `Project folder + check` | [`engine/src/project/`](../engine/src/project/): [`folder.ts`](../engine/src/project/folder.ts), [`check.ts`](../engine/src/project/check.ts), [`legacy.ts`](../engine/src/project/legacy.ts) | a graph as a folder (`graph.json`, `layout.json`, `nodes/<id>/<file>` per `Element.texts`), read and written for every caller; changes on disk; the one list of problems (`check`, MCP) |
 | `AI providers + MCP` | [`engine/src/ai/`](../engine/src/ai/) | providers, `ai-settings.json`, MCP client |
 
 The page also runs engine code directly — elements for ports and previews, the graph
@@ -147,7 +154,6 @@ flowchart TD
     subgraph editor["host/editor/ — never bundled"]
       Routes["routes.ts"]
       Generate["generate.ts"]
-      Project["project.ts"]
       Settings["settings.ts"]
       Files["files.ts"]
       Mcp["mcpServer.ts"]
@@ -167,7 +173,7 @@ flowchart TD
   Routes --> Http
   Routes --> Node
   Routes --> Generate
-  Routes --> Project
+  Routes -. "project/folder.ts" .-> Files
   Routes --> Settings
   Routes --> Files
   Generate --> Api
@@ -175,7 +181,6 @@ flowchart TD
   Settings --> Api
   Files --> Api
   Mcp --> Generate
-  Mcp --> Project
   Mcp --> Settings
   Mcp --> Node
 ```
@@ -188,16 +193,15 @@ flowchart TD
 | `runs.ts — RunBoard` | [`engine/src/host/runs.ts`](../engine/src/host/runs.ts) | runs in flight: start, snapshot, stop, forget after 5 min |
 | `schedule.ts` | [`engine/src/host/schedule.ts`](../engine/src/host/schedule.ts) | on start / every N; `ScheduleState`, kept in `<graph>.last-run.json` across restarts |
 | `node.ts — Runtime` | [`engine/src/host/node.ts`](../engine/src/host/node.ts) | `nodeFiles`, `nodeCode` (sandboxed `node --permission`), `nodeRuntime()` |
-| `routes.ts` | [`engine/src/host/editor/routes.ts`](../engine/src/host/editor/routes.ts) | `editorRoutes()`: try a node/block, project files, generation + live transcripts, bundle, settings, attachments |
+| `routes.ts` | [`engine/src/host/editor/routes.ts`](../engine/src/host/editor/routes.ts) | `editorRoutes()`: try a node/block, open/save/reload a project or file and what changed on disk (through [`project/folder.ts`](../engine/src/project/folder.ts)), generation + live transcripts, bundle, settings, attachments |
 | `generate.ts` | [`engine/src/host/editor/generate.ts`](../engine/src/host/editor/generate.ts) | write → run on a sample → check → repair once; `generateGraph` with [`graphPrompt.ts`](../engine/src/host/editor/graphPrompt.ts) |
-| `project.ts` | [`engine/src/host/editor/project.ts`](../engine/src/host/editor/project.ts) | a graph plus one file per authored body; conflict check (`FileChanged`) |
 | `settings.ts` | [`engine/src/host/editor/settings.ts`](../engine/src/host/editor/settings.ts) | the settings dialog's view of `ai-settings.json`; which model generates |
 | `files.ts` | [`engine/src/host/editor/files.ts`](../engine/src/host/editor/files.ts) | directory browsing, attachments, format detection, open in own editor |
-| `mcpServer.ts` | [`engine/src/host/editor/mcpServer.ts`](../engine/src/host/editor/mcpServer.ts) | `--mcp`: graph tools for Claude, confined to one folder; started from [`cli/cli.ts`](../engine/src/cli/cli.ts) |
+| `mcpServer.ts` | [`engine/src/host/editor/mcpServer.ts`](../engine/src/host/editor/mcpServer.ts) | `--mcp`: graph tools for Claude, confined to one folder, reading and writing projects through [`project/folder.ts`](../engine/src/project/folder.ts) and checking with [`project/check.ts`](../engine/src/project/check.ts); started from [`cli/cli.ts`](../engine/src/cli/cli.ts) |
 
 Not drawn: every handler also calls into `executor.ts`, `registry.ts` and `graph.ts`
 (see the [overview](#the-whole)); `zip.ts` and `skeleton.ts` are small helpers of
-`routes.ts` and `generate.ts`/`project.ts`.
+`routes.ts` and `generate.ts`.
 
 ## Browser
 

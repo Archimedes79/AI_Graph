@@ -1,4 +1,5 @@
 import { NodeElement } from '../../NodeElement.ts';
+import type { TextFile } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type GraphNode } from '../../../graph.ts';
 import { logicFrom, Logic } from '../../../authoring/logic.ts';
@@ -18,6 +19,12 @@ export interface InputConfig {
   catchErrors: boolean;
 }
 
+/** What this keeps in files of its own in a project folder: see `Element.texts`. */
+const SELECTOR_TEXTS: readonly TextFile[] = [
+  { field: 'selector_code', file: 'select.js' },
+  { field: 'selector_prompt', file: 'task.md' },
+];
+
 /**
  * A value from outside the graph: typed text, one file, or a folder listing.
  *
@@ -28,6 +35,10 @@ export interface InputConfig {
  * wrong first if it invents names of its own.
  */
 export class InputNodeElement extends NodeElement<InputConfig> {
+  override texts(): readonly TextFile[] {
+    return SELECTOR_TEXTS;
+  }
+
   readonly nodeType = 'input' as const;
 
   config(node: GraphNode): InputConfig {
@@ -85,7 +96,7 @@ export class InputNodeElement extends NodeElement<InputConfig> {
   /** Only a folder listing is authored: a text or single-file input selects nothing. */
   override logic(node: GraphNode): Logic | undefined {
     if (this.config(node).mode !== 'directory') return undefined;
-    return logicFrom(node, 'code', SELECTOR_FIELDS, 'this file selector');
+    return logicFrom(node, 'code', SELECTOR_FIELDS);
   }
 
   /** Literally the object the file-picker block returns: one behaviour, two levels. */

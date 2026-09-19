@@ -1,0 +1,1 @@
+Read the CSV (names in the first column, values in the first numeric column), keep the largest "top" rows, and draw them as an SVG chart of the chosen kind: horizontal bars, columns, or a donut with a legend. Also return the plotted rows for a table.

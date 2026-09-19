@@ -19,7 +19,6 @@ import FileBrowserDialog from '@/ui/FileBrowserDialog';
 import { useGraphStore } from '@/store/graphStore';
 import { NODE_UIS } from '@/elements/registry';
 import { call } from '@/api/client';
-import { externalEditsPossible } from '@/store/externalEdits';
 import { errorText } from '@/api/errorText';
 import type { NodeType, Graph } from '@/graph';
 import { DANGER_TEXT, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT, WELL } from '@/ui/theme';
@@ -39,7 +38,8 @@ export default function App() {
   const setCurrentFilePath = useGraphStore((s) => s.setCurrentFilePath);
   const isDirty = useGraphStore((s) => s.isDirty);
   const markSaved = useGraphStore((s) => s.markSaved);
-  const syncNodeFileNames = useGraphStore((s) => s.syncNodeFileNames);
+  const isProject = useGraphStore((s) => s.isProject);
+  const takeDiskChanges = useGraphStore((s) => s.takeDiskChanges);
 
   // The browser's own "leave site?" prompt. Nothing else stands between an
   // hour of wiring and an accidental Cmd-R or tab close: the graph lives only
@@ -194,8 +194,9 @@ export default function App() {
   /** Which file prompt has its browser open ('load' | 'save'), or null. */
   const [browsingFor, setBrowsingFor] = useState<'load' | 'save' | null>(null);
 
+  // A project folder by default: a name without .json. Typing .json saves one file instead.
   const suggestedFileName = () =>
-    `${useGraphStore.getState().metadata.name.toLowerCase().replace(/\s+/g, '_') || 'graph'}.json`;
+    useGraphStore.getState().metadata.name.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'my_graph';
 
   // Open and Save As go straight to the file browser: choosing a file is what
   // they are for, and a path box first -- "/path/to/graph.json" -- asked the
@@ -213,49 +214,48 @@ export default function App() {
   };
 
   /**
-   * Take whatever the node files say now.
-   *
-   * The graph is reopened from disk rather than patched field by field: the
-   * files are authoritative for what they carry, so re-reading is the same
-   * operation as opening, and asking first is the same courtesy.
+   * Open the project again from disk: for `graph.json` itself changing
+   * outside -- a git pull, a merge. Code and prompts need no such thing: they
+   * are watched (below).
    */
-  const handleReloadNodeFiles = async () => {
+  const handleReloadProject = async () => {
     if (!currentFilePath) return;
-    if (!confirmDiscard('Reload the node files?')) return;
+    if (!confirmDiscard('Reload the project from disk?')) return;
     setSaveStatus('Reloading…');
     try {
       const result = await call('reloadGraph', { path: currentFilePath });
       loadGraph(result.graph);
-      setCurrentFilePath(result.path);
-      setSaveStatus('✅ Node files reloaded');
+      setCurrentFilePath(result.path, result.project);
+      setSaveStatus('✅ Reloaded from disk');
     } catch (error) {
       setSaveStatus(`❌ ${errorText(error, 'Reload failed')}`);
     }
   };
 
-  // A node file was handed to another editor: when this window is looked at
-  // again, take what that editor saved. Silently when nothing here is unsaved
-  // -- the file on disk is then simply the newer truth -- and with a word when
-  // something is, because discarding work is not a thing to do on a focus event.
+  // A project's code and prompts are files, and files get edited elsewhere:
+  // in VS Code, by git, by an assistant. The folder is asked every second and
+  // a half what changed, and what did comes in as one undo step -- no reload,
+  // no button, and nothing typed here is lost (see takeDiskChanges, and the
+  // node dialog's "changed while open" question). Only while the page is
+  // looked at: a hidden tab has nobody to show a change to.
   useEffect(() => {
-    const onFocus = async () => {
-      if (!externalEditsPossible() || !currentFilePath) return;
-      if (useGraphStore.getState().isDirty()) {
-        setSaveStatus('A node file may have changed outside — ↻ reloads it (unsaved changes here would be lost).');
-        return;
-      }
+    if (!isProject || !currentFilePath) return;
+    let alive = true;
+    const look = async () => {
+      if (document.hidden) return;
       try {
-        const result = await call('reloadGraph', { path: currentFilePath });
-        loadGraph(result.graph);
-        setCurrentFilePath(result.path);
-        setSaveStatus('↻ Node files reloaded from disk');
+        const { changes } = await call('projectChanges', { path: currentFilePath });
+        if (!alive || !changes.length) return;
+        takeDiskChanges(changes);
+        const what = changes.map((c) => (c.widget_id ? `${c.node_id}/${c.widget_id}` : c.node_id));
+        setSaveStatus(`↻ From disk: ${[...new Set(what)].join(', ')}`);
       } catch {
-        // Nothing to report: the manual ↻ says why when it matters.
+        // Half-written by the other editor, most likely: the next look gets it.
       }
     };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [currentFilePath, loadGraph, setCurrentFilePath]);
+    const timer = window.setInterval(look, 1500);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [isProject, currentFilePath, takeDiskChanges]);
 
   const handleSave = async () => {
     if (!currentFilePath) {
@@ -264,8 +264,7 @@ export default function App() {
     }
     setSaveStatus('Saving\u2026');
     try {
-      const result = await call('saveGraph', { path: currentFilePath, graph: exportGraph() });
-      if (result.graph) syncNodeFileNames(result.graph);
+      await call('saveGraph', { path: currentFilePath, graph: exportGraph() });
       markSaved();
       setSaveStatus(`\u2705 Saved to ${currentFilePath}`);
     } catch (error) {
@@ -320,11 +319,10 @@ export default function App() {
       if (filePrompt.mode === 'load') {
         const result = await call('openGraph', { path });
         loadGraph(result.graph);
-        setCurrentFilePath(result.path);
+        setCurrentFilePath(result.path, result.project);
       } else {
         const result = await call('saveGraph', { path, graph: exportGraph() });
-        setCurrentFilePath(result.path);
-        if (result.graph) syncNodeFileNames(result.graph);
+        setCurrentFilePath(result.path, result.project);
         markSaved();
         setSaveStatus(`\u2705 Saved to ${result.path}`);
       }
@@ -372,7 +370,7 @@ export default function App() {
           onNewGraph={handleNewGraph}
           onSave={handleSave}
           onSaveAs={handleOpenSaveAs}
-          onReloadNodeFiles={handleReloadNodeFiles}
+          onReloadProject={handleReloadProject}
           onLoad={handleOpenLoad}
           onInjectJson={handleOpenJsonImport}
           onOpenSettings={() => setShowSettings(true)}
@@ -477,6 +475,7 @@ export default function App() {
             mode={browsingFor === 'load' ? 'file' : 'save'}
             initialPath={filePrompt.path}
             extensions=".json"
+            projects
             defaultName={suggestedFileName()}
             onPick={(picked) => {
               // Picking a file is the choice: it is loaded, or saved to, straight away.
