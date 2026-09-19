@@ -45,6 +45,11 @@ export class OutputNodeElement extends NodeElement<OutputConfig> {
     };
   }
 
+  /** Everything a graph produces leaves through one of these. */
+  override boundaryRole(): 'out' {
+    return 'out';
+  }
+
   override runtimeRequirements(node: GraphNode) {
     const settings = this.config(node);
     if (!settings.promptAtRuntime || settings.mode === 'none') return [];

@@ -36,7 +36,7 @@ export function portsOf(node: GraphNode, registry: Registry): { inputs: Set<stri
   const element = registry.node(node.node_type);
   let derived: ReturnType<NonNullable<typeof element>['derivedPorts']> = null;
   try {
-    derived = element?.derivedPorts(node) ?? null;
+    derived = element?.derivedPorts(node, registry) ?? null;
   } catch {
     // Settings too broken to derive from. The declared ports are the best guess left.
   }

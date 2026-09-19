@@ -67,7 +67,7 @@ const holder = (config: Record<string, unknown> = {}) =>
 describe('a node that holds a graph', () => {
   it('has the graph inside it as its ports', () => {
     const element = registry.node('subgraph')!;
-    const ports = element.derivedPorts(holder())!;
+    const ports = element.derivedPorts(holder(), registry)!;
     expect(ports.inputs.map((p) => p.id)).toEqual(['subject']);
     expect(ports.outputs.map((p) => p.id)).toEqual(['loud']);
   });

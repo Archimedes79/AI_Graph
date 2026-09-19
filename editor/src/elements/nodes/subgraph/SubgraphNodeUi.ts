@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
 import { SubgraphNodeElement } from '@engine/elements/nodes/subgraph/SubgraphNodeElement.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { NodeUi } from '../../NodeUi';
 import { baseNodeConfig } from '../baseNodeConfig';
 
@@ -29,7 +30,7 @@ export class SubgraphNodeUi extends NodeUi {
   override readonly opensNestedGraph = true;
 
   override describeOutput(node: GraphNode): string {
-    const ports = ELEMENT.derivedPorts(node as never)?.outputs ?? [];
+    const ports = ELEMENT.derivedPorts(node as never, engineRegistry)?.outputs ?? [];
     return ports.length
       ? `Whatever the graph inside puts on: ${ports.map((port) => port.name).join(', ')}.`
       : 'Nothing yet: the graph inside has no output node.';

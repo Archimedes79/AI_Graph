@@ -1,6 +1,7 @@
 import { DIMMER, FIELD, LINE, MUTED, PRIMARY_BUTTON } from '@/ui/theme';
 import { useGraphStore } from '@/store/graphStore';
 import { SubgraphNodeElement } from '@engine/elements/nodes/subgraph/SubgraphNodeElement.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import type { NodePanelProps } from '../../NodeUi';
 
 const ELEMENT = new SubgraphNodeElement();
@@ -15,7 +16,7 @@ const ELEMENT = new SubgraphNodeElement();
  * would be a second place for them to live.
  */
 export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
-  const ports = ELEMENT.derivedPorts(node as never) ?? { inputs: [], outputs: [] };
+  const ports = ELEMENT.derivedPorts(node as never, engineRegistry) ?? { inputs: [], outputs: [] };
   const inner = ELEMENT.nestedGraph(node as never);
   const count = inner?.nodes.length ?? 0;
 

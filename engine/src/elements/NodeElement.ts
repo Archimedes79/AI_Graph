@@ -15,6 +15,15 @@ import type { Runtime } from './Runtime.ts';
  */
 export const NESTED_GRAPH_FIELD = 'nested_graph';
 
+/**
+ * The elements, as anything that derives ports may need to ask about them: a
+ * node holding a graph has to know which nodes inside it stand at its edge.
+ * The registry answers this; so does a test with two elements in a map.
+ */
+export interface Elements {
+  node(type: string): NodeElement<unknown> | undefined;
+}
+
 export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
   abstract readonly nodeType: NodeType;
 
@@ -35,7 +44,7 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    * that checks declarations against real graphs is what made the distinction
    * visible in the first place.
    */
-  derivedPorts(_node: GraphNode): { inputs: Port[]; outputs: Port[] } | null {
+  derivedPorts(_node: GraphNode, _elements: Elements): { inputs: Port[]; outputs: Port[] } | null {
     return null;
   }
 
@@ -60,6 +69,20 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    * project folder only says what it found.
    */
   setNestedGraph(_node: GraphNode, _graph: Graph | null): void {}
+
+  /**
+   * Whether this node is where its graph meets whatever holds it: `'in'` for a
+   * value handed down, `'out'` for one handed back up.
+   *
+   * What makes an input node a port of the node above is the input node's own
+   * business -- it depends on its mode -- so it is answered here rather than
+   * guessed from a node type somewhere else. A graph run on its own has the
+   * same two ends: they are what a person is asked for and what they are
+   * shown.
+   */
+  boundaryRole(_node: GraphNode): 'in' | 'out' | null {
+    return null;
+  }
 
   /**
    * This node keeps its value between runs, so an edge into it can close a

@@ -327,8 +327,8 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         // What the run reports having received is what came off the wires --
         // the paths, not the megabytes behind them. Only the element sees the
         // contents.
-        const given = await readInputs(element, node, inputs, runtime);
-        const key = options.reuse?.key(node, given);
+        const arrived = await readInputs(element, node, inputs, runtime);
+        const key = options.reuse?.key(node, arrived);
         const kept = key && context(nodeId) ? options.reuse!.get(key) : undefined;
         if (kept) {
           outputs.set(nodeId, kept);
@@ -340,7 +340,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
           continue;
         }
         const { produced, failures } = await runNode(
-          element, node, given, withSubgraph(runtime, options, node, depth), signal,
+          element, node, arrived, withSubgraph(runtime, options, node, depth), signal,
         );
         if (signal?.aborted) throw new Error('Stopped.');
         outputs.set(nodeId, produced);
@@ -439,7 +439,7 @@ function stoppable(runtime: Runtime, signal: AbortSignal | undefined): Runtime {
  * depth past which a person has lost the thread, and the thing that ends a
  * graph that somehow came to hold itself.
  */
-const NESTING_LIMIT = 5;
+export const NESTING_LIMIT = 5;
 
 /**
  * The runtime a node that holds a graph is handed: the same one, plus the way
@@ -463,6 +463,7 @@ function withSubgraph(runtime: Runtime, options: RunOptions, node: GraphNode, de
   return {
     ...runtime,
     subgraph: {
+      elements: options.registry,
       run: (graph, given) => {
         if (depth + 1 > NESTING_LIMIT) {
           throw new Error(`Graphs may hold graphs ${NESTING_LIMIT} deep; "${node.id}" is one deeper than that.`);
@@ -577,8 +578,10 @@ export async function executeNode(
   }
   const runtime = withGraphDefaults(options.runtime, graph);
   try {
-    const given = await readInputs(element, node, inputs, runtime);
-    const { produced, failures } = await runNode(element, node, given, withSubgraph(runtime, options, node, 0));
+    const arrived = await readInputs(element, node, inputs, runtime);
+    const { produced, failures } = await runNode(
+      element, node, arrived, withSubgraph(runtime, options, node, options.depth ?? 0),
+    );
     return {
       node_id: nodeId, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
       error: failures.length ? `${failures.length} of ${failures.total} items failed: ${failures[0]}` : null,

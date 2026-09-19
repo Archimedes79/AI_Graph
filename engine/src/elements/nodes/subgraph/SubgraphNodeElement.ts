@@ -1,9 +1,9 @@
 import { NodeElement } from '../../NodeElement.ts';
 import type { TextFile } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
-import { parseGraph, type Graph, type GraphNode } from '../../../graph.ts';
+import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
 import { port } from '../../port.ts';
-import { boundaryInputs, boundaryOutputs, boundaryPorts, handedUp } from './boundary.ts';
+import { boundaryInputs, boundaryOutputs, boundaryPorts, handedUp, type Elements } from './boundary.ts';
 
 export interface SubgraphConfig {
   /** The graph this node holds. An empty one for a node nobody has filled in yet. */
@@ -68,12 +68,12 @@ export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
     else delete node.config.subgraph;
   }
 
-  override derivedPorts(node: GraphNode) {
+  override derivedPorts(node: GraphNode, elements: Elements) {
     const graph = this.nestedGraph(node);
     // Not readable as a graph: no ports rather than an exception. `check` is
     // where an unreadable graph is reported; a node drawn on a canvas is not.
     if (!graph) return { inputs: [], outputs: [] };
-    const ports = boundaryPorts(graph);
+    const ports = boundaryPorts(graph, elements);
     if (!this.catchesErrors(node)) return ports;
     return {
       inputs: ports.inputs,
@@ -90,6 +90,7 @@ export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
     const graph = this.nestedGraph(node);
     if (!graph) throw new Error('This node holds no graph that can be read.');
     if (!runtime.subgraph) throw new Error('A graph inside a node can only be run by the engine that runs graphs.');
+    const elements = runtime.subgraph.elements;
 
     // The graph this node sits in has already had its AI default applied to
     // the runtime; the inner graph's own default would otherwise override it
@@ -98,7 +99,7 @@ export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
     graph.metadata.ai_defaults = { provider: 'default', model: '' };
 
     const given: Record<string, Record<string, unknown>> = {};
-    for (const boundary of boundaryInputs(graph)) {
+    for (const boundary of boundaryInputs(graph, elements)) {
       // A port nothing is wired to is not answered, and the node inside runs
       // as it is configured.
       if (!(boundary.id in inputs)) continue;
@@ -106,19 +107,41 @@ export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
     }
 
     const run = await runtime.subgraph.run(graph, given);
-    // Any failure inside is this node's failure -- `error` is set exactly when
-    // a node in there failed or could not run because of one. A run that ended
-    // half-done would hand nulls out of ports that nobody could explain, and
-    // the reason would stay in a report nobody is looking at.
-    if (run.error) throw new Error(`Inside "${node.label || node.id}": ${run.error}`);
+    // Anything short of a clean run inside is this node's failure.
+    //
+    // From out here this is one node, and "half of it worked" is not something
+    // a port can carry: what it would carry is a null nobody can explain,
+    // while the reason stays in a report nobody is looking at. A `partial` run
+    // counts -- an item of a fan-out that failed, a node that caught its own
+    // failure and passed nothing on. To let the graph above carry on anyway,
+    // tick this node's own catch-errors: then the reason arrives on its error
+    // port, which is the one place a caught failure belongs.
+    if (run.status !== 'success') {
+      throw new Error(`Inside "${node.label || node.id}": ${trouble(run)}`);
+    }
 
     const produced: Record<string, unknown> = {};
-    for (const boundary of boundaryOutputs(graph)) {
+    for (const boundary of boundaryOutputs(graph, elements)) {
       const arrived = run.node_results.find((result) => result.node_id === boundary.id)?.inputs ?? {};
       produced[boundary.id] = handedUp(boundary, arrived);
     }
     return produced;
   }
+}
+
+/**
+ * What went wrong in there, in one sentence.
+ *
+ * The run's own summary when it has one -- it names the node already -- and
+ * otherwise the first node that has something to say, which is where a caught
+ * failure and a partly failed fan-out leave their reason.
+ */
+function trouble(run: ExecutionResult): string {
+  if (run.error) return run.error;
+  const said = run.node_results.find((result) => result.error);
+  if (said) return `${said.node_id}: ${said.error}`;
+  const idle = run.node_results.filter((result) => result.status === 'skipped').length;
+  return idle ? `${idle} of its nodes had nothing to do.` : 'it did not finish.';
 }
 
 /** The stored graph, or null when there is nothing readable there. */

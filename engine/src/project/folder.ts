@@ -354,47 +354,43 @@ function sorted<T extends Record<string, unknown>>(record: T): T {
  * by someone else since it was last read.
  */
 export async function writeProject(folder: string, graph: Graph, guard?: Guard): Promise<void> {
-  const copy = JSON.parse(JSON.stringify(graph)) as Graph;
+  // Every level is worked out before any of it is written, because a project
+  // is now a tree: a child written while its parent is still being checked is
+  // exactly the half-save this promises not to do.
+  const plans = planProject(folder, JSON.parse(JSON.stringify(graph)) as Graph);
+  await refuseIfChangedOutside(plans);
+  for (const plan of plans) await commit(plan, guard);
+}
 
-  // First, and deepest first: a node's graph is a project folder of its own,
-  // and once it is written it comes out of the `graph.json` above it -- the
-  // same rule that keeps a code node's body out of it.
-  for (const nested of nestedGraphs(copy)) {
-    await writeProject(join(folder, nested.folder), nested.graph, guard);
-    registry.node(nested.node.node_type)?.setNestedGraph(nested.node, null);
+/** One folder's worth of writing, worked out and not yet done. */
+interface Plan {
+  folder: string;
+  /** Path to content, or null for a file that must go. */
+  files: Map<string, string | null>;
+  /** The folders under `nodes/` that hold a project of their own: `tidy` leaves them to it. */
+  nested: Set<string>;
+  document: { graph: unknown; layout: unknown };
+}
+
+/** What writing *graph* into *folder* comes to, this level and every level below it. */
+function planProject(folder: string, copy: Graph, root = folder): Plan[] {
+  const deeper: Plan[] = [];
+  const nested = new Set<string>();
+  for (const held of nestedGraphs(copy)) {
+    const inside = join(folder, held.folder);
+    nested.add(inside);
+    deeper.push(...planProject(inside, held.graph, root));
+    // Written down there, so it comes out of the graph.json up here -- the
+    // same rule that keeps a code node's body out of it.
+    registry.node(held.node.node_type)?.setNestedGraph(held.node, null);
   }
 
-  const texts = projectTexts(copy);
-
-  const planned = new Map<string, string | null>();
-  for (const text of texts) {
+  const files = new Map<string, string | null>();
+  for (const text of projectTexts(copy)) {
     const value = text.holder[text.field];
     delete text.holder[text.field];
-    planned.set(join(folder, text.path), isBlank(value) ? null : toFile(value, text.json));
+    files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, text.json));
   }
-
-  // Look first, write after: half a save is worse than none. Only what exists
-  // can be lost -- a file deleted outside since is simply written again.
-  for (const [path, content] of planned) {
-    const known = seen.get(path);
-    const now = await signature(path);
-    if (known === undefined || known === now || now === ABSENT) continue;
-    if (await readFile(path, 'utf8') !== content) throw new FileChanged(path.slice(folder.length + 1).replace(/\\/g, '/'));
-  }
-
-  for (const [path, content] of planned) {
-    await guard?.(path);
-    if (content === null) {
-      if (existsSync(path)) await rm(path);
-    } else {
-      await mkdir(dirname(path), { recursive: true });
-      // Beside, then over: a crash mid-write leaves the old file whole.
-      await writeFile(`${path}.tmp`, content, 'utf8');
-      await rename(`${path}.tmp`, path);
-    }
-    await remember(path);
-  }
-  await tidy(join(folder, NODES_DIR), new Set(planned.keys()), textFileNames());
 
   const layout: Record<string, Record<string, number>> = {};
   const nodes = copy.nodes.map((node) => {
@@ -412,20 +408,78 @@ export async function writeProject(folder: string, graph: Graph, guard?: Guard):
     return { ...rest, config };
   });
 
-  await mkdir(folder, { recursive: true });
-  for (const [name, content] of [
-    [GRAPH_FILE, { metadata: copy.metadata, nodes, edges: copy.edges }],
-    [LAYOUT_FILE, layout],
-  ] as const) {
-    const path = join(folder, name);
+  // Deepest first, so a level is only written once everything it holds is.
+  return [...deeper, {
+    folder,
+    files,
+    nested,
+    document: { graph: { metadata: copy.metadata, nodes, edges: copy.edges }, layout },
+  }];
+}
+
+/**
+ * Look first, write after: half a save is worse than none.
+ *
+ * Over the whole tree before anything is written. Only what exists can be
+ * lost -- a file deleted outside since is simply written again.
+ */
+async function refuseIfChangedOutside(plans: Plan[]): Promise<void> {
+  const root = plans[plans.length - 1].folder;
+  for (const plan of plans) {
+    for (const [path, content] of plan.files) {
+      const known = seen.get(path);
+      const now = await signature(path);
+      if (known === undefined || known === now || now === ABSENT) continue;
+      if (await readFile(path, 'utf8') !== content) {
+        // Named from the project a person opened, not from the folder this
+        // level happens to be: `nodes/part/nodes/shorten/code.js` is a path
+        // they can find, `nodes/shorten/code.js` is not.
+        throw new FileChanged(path.slice(root.length + 1).replace(/\\/g, '/'));
+      }
+    }
+  }
+}
+
+/** One level, written: its files, what is left over, and the two documents. */
+async function commit(plan: Plan, guard?: Guard): Promise<void> {
+  for (const [path, content] of plan.files) {
+    await guard?.(path);
+    if (content === null) {
+      if (existsSync(path)) await rm(path);
+    } else {
+      await mkdir(dirname(path), { recursive: true });
+      // Beside, then over: a crash mid-write leaves the old file whole.
+      await writeFile(`${path}.tmp`, content, 'utf8');
+      await rename(`${path}.tmp`, path);
+    }
+    await remember(path);
+  }
+  // The two documents count as files a save may tidy away, because under
+  // `nodes/` they can only be a subgraph's -- and the folder of a subgraph
+  // node that is still there is protected by `plan.nested`.
+  const names = new Set([...textFileNames(), GRAPH_FILE, LAYOUT_FILE]);
+  await tidy(join(plan.folder, NODES_DIR), new Set(plan.files.keys()), names, plan.nested);
+
+  await mkdir(plan.folder, { recursive: true });
+  for (const [name, content] of [[GRAPH_FILE, plan.document.graph], [LAYOUT_FILE, plan.document.layout]] as const) {
+    const path = join(plan.folder, name);
     await guard?.(path);
     await writeFile(path, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
     await remember(path);
   }
 }
 
-/** Remove element files nothing claims any more, and the folders that leaves empty. */
-async function tidy(directory: string, claimed: Set<string>, names: Set<string>): Promise<boolean> {
+/**
+ * Remove element files nothing claims any more, and the folders that leaves
+ * empty.
+ *
+ * *nested* is the folders of the nodes that hold a graph **now**: their files
+ * are claimed by that project's own save, which has already run. Anything else
+ * is this project's to clean, a folder left behind by a subgraph node that was
+ * deleted included -- "it has a graph.json in it" would have kept that one
+ * forever.
+ */
+async function tidy(directory: string, claimed: Set<string>, names: Set<string>, nested: Set<string>): Promise<boolean> {
   let entries;
   try {
     entries = await readdir(directory, { withFileTypes: true });
@@ -436,11 +490,8 @@ async function tidy(directory: string, claimed: Set<string>, names: Set<string>)
   for (const entry of entries) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
-      // A folder with a `graph.json` of its own belongs to a node that holds a
-      // graph. Its files are claimed by *that* project's save, which has
-      // already run; from here they look like files nothing reads.
-      if (existsSync(join(path, GRAPH_FILE))) empty = false;
-      else if (await tidy(path, claimed, names)) await rmdir(path);
+      if (nested.has(path)) empty = false;
+      else if (await tidy(path, claimed, names, nested)) await rmdir(path);
       else empty = false;
     } else if (names.has(entry.name) && !claimed.has(path)) {
       await rm(path);
@@ -532,32 +583,48 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
   for (const nested of nestedGraphs(graph)) {
     const inside = join(folder, nested.folder);
     if (!existsSync(join(inside, GRAPH_FILE))) continue;
-    if (!await changedUnder(inside)) continue;
-    changes.push({
-      node_id: nested.node.id, widget_id: '', field: NESTED_GRAPH_FIELD, value: await readProject(inside),
-    });
+    try {
+      if (!await changedUnder(inside)) continue;
+      changes.push({
+        node_id: nested.node.id, widget_id: '', field: NESTED_GRAPH_FIELD, value: await readProject(inside),
+      });
+    } catch {
+      // Half-written by whoever is editing it, most likely. What was collected
+      // above is still good and is handed over; this folder is not marked as
+      // seen, so the next look asks again.
+    }
   }
   return changes;
 }
 
-/** Whether anything in the project at *folder* changed since it was last read or written. */
+/**
+ * Whether anything in the project at *folder* changed since it was last read
+ * or written.
+ *
+ * Nothing is marked as seen until the whole folder has been looked at without
+ * trouble: a `graph.json` caught half-written throws, and a file marked seen
+ * on the way to that would never be reported again.
+ */
 async function changedUnder(folder: string): Promise<boolean> {
   let changed = false;
-  const noticed = async (path: string): Promise<void> => {
-    const known = seen.get(path);
+  const looked = new Map<string, string>();
+  const look = async (path: string): Promise<void> => {
     const now = await signature(path);
+    const known = seen.get(path);
     if (known !== undefined && known !== now) changed = true;
-    seen.set(path, now);
+    looked.set(path, now);
   };
 
   const graphPath = join(folder, GRAPH_FILE);
-  await noticed(graphPath);
-  await noticed(join(folder, LAYOUT_FILE));
+  await look(graphPath);
+  await look(join(folder, LAYOUT_FILE));
   const graph = asGraph(await readJson(graphPath, 'graph'), graphPath);
-  for (const text of projectTexts(graph)) await noticed(join(folder, text.path));
+  for (const text of projectTexts(graph)) await look(join(folder, text.path));
   for (const nested of nestedGraphs(graph)) {
     const inside = join(folder, nested.folder);
     if (existsSync(join(inside, GRAPH_FILE)) && await changedUnder(inside)) changed = true;
   }
+
+  for (const [path, signed] of looked) seen.set(path, signed);
   return changed;
 }

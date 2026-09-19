@@ -37,7 +37,7 @@ describe('the graph prompt', () => {
       const element = registry.node(source.node_type)!;
       // A derived-port element ignores what the document declares, so its real
       // ports are the ones to check against.
-      const derived = element.derivedPorts(source);
+      const derived = element.derivedPorts(source, registry);
       const emitted = (derived ?? { outputs: source.outputs }).outputs.map((p) => p.id);
       expect(emitted, `${source.id} must really emit ${edge.source_port_id}`).toContain(edge.source_port_id);
     }

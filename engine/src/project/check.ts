@@ -10,15 +10,14 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Graph, GraphNode } from '../graph.ts';
-import { memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
+import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
 import { names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { ALL_INPUTS, placeholders } from '../elements/nodes/ai/prompt.ts';
 import { mismatches, readInterface } from '../execution/interface.ts';
 import { parseExamples } from '../execution/examples.ts';
-import { boundaryInputs, boundaryOutputs } from '../elements/nodes/subgraph/boundary.ts';
-import { valuePorts } from '../elements/nodes/output/OutputNodeElement.ts';
+import { boundaryInputs, boundaryOutputs, valuePorts } from '../elements/nodes/subgraph/boundary.ts';
 import { NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
@@ -48,7 +47,7 @@ function knot(graph: Graph, feedback: Set<string>): string[] {
  * So they are found here, by name, with the repair spelled out -- the reader is
  * a model, and a model fixes what it is told precisely.
  */
-export function problemsIn(graph: Graph, inside = ''): Problem[] {
+export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
   // First: with these wrong, a run refuses to start (see wiring.ts).
   const problems: Problem[] = wiringProblems(graph, registry).map((problem) => within(problem, inside));
 
@@ -74,7 +73,7 @@ export function problemsIn(graph: Graph, inside = ''): Problem[] {
 
     problems.push(...interfaceProblems(node, where));
     problems.push(...exampleProblems(graph, node, where));
-    problems.push(...nestedProblems(node, where, inside));
+    problems.push(...nestedProblems(node, where, depth));
 
     // A placeholder nobody fills is sent to the model as the literal "{{name}}".
     const template = String(node.config.prompt_template ?? '');
@@ -158,14 +157,11 @@ function within(problem: Problem, inside: string): Problem {
   return inside ? { ...problem, where: `${inside}${problem.where}` } : problem;
 }
 
-/** How deep graphs may hold graphs before nobody can follow them. Matches the executor's. */
-const NESTING_LIMIT = 5;
-
 /**
  * What is wrong with the graph a node holds -- including the graph itself,
  * checked here by the same function that checked the one above it.
  */
-function nestedProblems(node: GraphNode, where: string, inside: string): Problem[] {
+function nestedProblems(node: GraphNode, where: string, depth: number): Problem[] {
   const element = registry.node(node.node_type);
   if (!element) return [];
   const held = element.nestedGraph(node);
@@ -179,7 +175,9 @@ function nestedProblems(node: GraphNode, where: string, inside: string): Problem
   }
 
   const deeper = `${where} ▸ `;
-  if (inside.split(' ▸ ').length > NESTING_LIMIT) {
+  // Counted, not read off the breadcrumb: a node id may hold anything, this
+  // one included.
+  if (depth + 1 > NESTING_LIMIT) {
     return [{
       where,
       problem: `Graphs are nested more than ${NESTING_LIMIT} deep here.`,
@@ -198,7 +196,7 @@ function nestedProblems(node: GraphNode, where: string, inside: string): Problem
 
   // The boundary, as two lists that must not collide.
   const labels = new Map<string, string>();
-  for (const boundary of [...boundaryInputs(held), ...boundaryOutputs(held)]) {
+  for (const boundary of [...boundaryInputs(held, registry), ...boundaryOutputs(held, registry)]) {
     const name = boundary.label || boundary.id;
     const other = labels.get(name);
     if (other) {
@@ -211,7 +209,7 @@ function nestedProblems(node: GraphNode, where: string, inside: string): Problem
     labels.set(name, boundary.id);
   }
 
-  for (const boundary of boundaryOutputs(held)) {
+  for (const boundary of boundaryOutputs(held, registry)) {
     // `path` says where to write, not what: it is not one of the values.
     const carried = valuePorts(boundary);
     if (carried.length === 1) continue;
@@ -242,7 +240,7 @@ function nestedProblems(node: GraphNode, where: string, inside: string): Problem
     }
   }
 
-  return [...problems, ...problemsIn(held, deeper)];
+  return [...problems, ...problemsIn(held, deeper, depth + 1)];
 }
 
 /** A kept output interface that cannot be read, or that names ports the node does not have. */

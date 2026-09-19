@@ -36,7 +36,7 @@ describe('derived node ports match the graphs people built', () => {
     for (const name of files) {
       const graph = await loadGraph(join(EXAMPLES, name));
       for (const node of graph.nodes) {
-        const declared = registry.node(node.node_type)?.derivedPorts(node);
+        const declared = registry.node(node.node_type)?.derivedPorts(node, registry);
         if (!declared) continue;
         checked += 1;
 

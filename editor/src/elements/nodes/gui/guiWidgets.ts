@@ -21,7 +21,7 @@ import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeElement.ts';
  */
 export function derivedNodePorts(node: GraphNode): { inputs: Port[]; outputs: Port[] } | null {
   const element = engineRegistry.node(node.node_type);
-  return (element?.derivedPorts(node as never) ?? null) as { inputs: Port[]; outputs: Port[] } | null;
+  return (element?.derivedPorts(node as never, engineRegistry as never) ?? null) as { inputs: Port[]; outputs: Port[] } | null;
 }
 
 /** Return the (inputs, outputs) a single GUI widget contributes to its node. */

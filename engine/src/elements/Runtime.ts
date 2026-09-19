@@ -6,6 +6,7 @@
 // server (`host/node.ts`), in a browser tab and inside a test with fakes.
 
 import type { ExecutionResult, Graph } from '../graph.ts';
+import type { Elements } from './NodeElement.ts';
 
 /** Reading and writing files, wherever this engine happens to run. */
 export interface FileService {
@@ -94,6 +95,8 @@ export type ProgressEvent =
  */
 export interface SubgraphService {
   run(graph: Graph, given: Record<string, Record<string, unknown>>): Promise<ExecutionResult>;
+  /** The elements of this run, for asking about the nodes inside. */
+  elements: Elements;
 }
 
 /** Everything an element may reach outside itself. */

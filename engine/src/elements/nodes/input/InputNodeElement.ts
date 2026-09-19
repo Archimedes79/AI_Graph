@@ -55,6 +55,16 @@ export class InputNodeElement extends NodeElement<InputConfig> {
     };
   }
 
+  /**
+   * A text input is a value handed in: from the node above when this graph is
+   * one, and from whoever runs it otherwise. A file or directory input reads
+   * something instead -- to say from outside *which* file, wire a port to its
+   * `path` input.
+   */
+  override boundaryRole(node: GraphNode): 'in' | null {
+    return this.config(node).mode === 'text' ? 'in' : null;
+  }
+
   override referencedPaths(node: GraphNode): string[] {
     const settings = this.config(node);
     return settings.mode !== 'text' && settings.value ? [settings.value] : [];

@@ -320,3 +320,127 @@ describe('a graph inside a node', () => {
     expect(await changesOnDisk(dir)).toEqual([]);
   });
 });
+
+/**
+ * What a save must not do once a project is a tree: write half of it, and
+ * leave behind what no node claims any more.
+ */
+describe('saving a project that holds a project', () => {
+  const holder = (id: string, inner: unknown, extra: Record<string, unknown> = {}) => ({
+    id, node_type: 'subgraph', label: id, position: { x: 0, y: 0 }, inputs: [], outputs: [],
+    config: { subgraph: inner, ...extra },
+  });
+  const body = (id: string) => ({
+    metadata: { name: id },
+    nodes: [{
+      id: 'shorten', node_type: 'code', label: 'Shorten', position: { x: 0, y: 0 },
+      inputs: [port('text', 'input')], outputs: [port('short', 'output')],
+      config: { code: `function run() { return { short: '${id}' }; }` },
+    }],
+    edges: [],
+  });
+
+  it('gives up the whole folder of a node that no longer holds a graph', async () => {
+    const graph = parseGraph({ metadata: { name: 'Outer' }, nodes: [holder('part', body('part'))], edges: [] });
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'nodes/part/nodes/shorten/code.js'))).toBe(true);
+
+    // The node is gone. Its folder was a project of its own, which is no
+    // reason to keep it: nothing in graph.json claims it any more.
+    graph.nodes = [];
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'nodes/part'))).toBe(false);
+  });
+
+  it('gives it up when the node with that id no longer holds one either', async () => {
+    const graph = parseGraph({ metadata: { name: 'Outer' }, nodes: [holder('part', body('part'))], edges: [] });
+    await writeProject(dir, graph);
+
+    graph.nodes = [{
+      ...graph.nodes[0], node_type: 'code', inputs: [], outputs: [port('output', 'output')],
+      config: { code: 'function run() { return { output: 1 }; }' },
+    }] as Graph['nodes'];
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'nodes/part/graph.json'))).toBe(false);
+    expect(await text('nodes/part/code.js')).toContain('output: 1');
+  });
+
+  it('writes nothing at all when two ids would share a folder', async () => {
+    const graph = parseGraph({
+      metadata: { name: 'Outer' },
+      nodes: [holder('a/b', body('one')), holder('a:b', body('two'))],
+      edges: [],
+    });
+    await expect(writeProject(dir, graph)).rejects.toThrow(/share the folder/);
+    // Not one folder written, not one graph.json: the save was refused before
+    // anything happened, which is what "look first, write after" means.
+    expect(existsSync(join(dir, 'nodes/a_b'))).toBe(false);
+    expect(existsSync(join(dir, 'graph.json'))).toBe(false);
+  });
+
+  it('writes nothing at all when a file up here changed under it', async () => {
+    const graph = parseGraph({
+      metadata: { name: 'Outer' },
+      nodes: [
+        holder('part', body('part')),
+        {
+          id: 'note', node_type: 'code', label: 'Note', position: { x: 0, y: 0 },
+          inputs: [], outputs: [port('output', 'output')], config: { code: 'function run() { return {}; }' },
+        },
+      ],
+      edges: [],
+    });
+    await writeProject(dir, graph);
+    await touch(join(dir, 'nodes/note/code.js'), 'function run() { return { mine: true }; }\n');
+
+    // The inner graph changed in the editor, and an outer file changed on
+    // disk. The save is refused -- and the inner folder still holds what it
+    // held, rather than half of the next version.
+    graph.nodes[0].config.subgraph = body('changed');
+    await expect(writeProject(dir, graph)).rejects.toThrow(/was changed outside the editor/);
+    expect(await text('nodes/part/nodes/shorten/code.js')).toContain("'part'");
+  });
+
+  it('names a file deep inside by the path a person would look for', async () => {
+    const graph = parseGraph({ metadata: { name: 'Outer' }, nodes: [holder('part', body('part'))], edges: [] });
+    await writeProject(dir, graph);
+    await touch(join(dir, 'nodes/part/nodes/shorten/code.js'), 'function run() { return { short: "theirs" }; }\n');
+
+    graph.nodes[0].config.subgraph = body('mine');
+    await expect(writeProject(dir, graph)).rejects.toThrow(/nodes\/part\/nodes\/shorten\/code\.js/);
+  });
+});
+
+describe('looking for what changed, while someone else is writing', () => {
+  it('still hands over what it found when a graph inside is caught half-written', async () => {
+    const graph = parseGraph({
+      metadata: { name: 'Outer' },
+      nodes: [
+        {
+          id: 'part', node_type: 'subgraph', label: 'Part', position: { x: 0, y: 0 }, inputs: [], outputs: [],
+          config: { subgraph: { metadata: { name: 'Inner' }, nodes: [], edges: [] } },
+        },
+        {
+          id: 'note', node_type: 'code', label: 'Note', position: { x: 0, y: 0 },
+          inputs: [], outputs: [port('output', 'output')], config: { code: 'function run() { return {}; }' },
+        },
+      ],
+      edges: [],
+    });
+    await writeProject(dir, graph);
+    expect(await changesOnDisk(dir)).toEqual([]);
+
+    await touch(join(dir, 'nodes/note/code.js'), 'function run() { return { mine: true }; }\n');
+    await touch(join(dir, 'nodes/part/graph.json'), '{ "nodes": [');
+
+    // The half-written file is skipped, and the change that *was* found comes
+    // back rather than being lost with the exception.
+    const changes = await changesOnDisk(dir);
+    expect(changes.map((change) => change.node_id)).toEqual(['note']);
+
+    // And once the other editor has finished, the graph inside is reported too.
+    await touch(join(dir, 'nodes/part/graph.json'), JSON.stringify({ metadata: { name: 'Mended' }, nodes: [], edges: [] }));
+    const after = await changesOnDisk(dir);
+    expect(after.map((change) => change.field)).toEqual(['nested_graph']);
+  });
+});
