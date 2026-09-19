@@ -10,16 +10,9 @@ engine/node_modules/
 editor/node_modules/
 editor/dist/
 editor/.vite/
-dist/
-build/
 data/
-!engine/src/elements/data/
 ai-settings.json
 *.log
-.venv/
-venv/
-__pycache__/
-.pytest_cache/
 .vscode/
 .idea/
 .claude/

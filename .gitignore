@@ -1,9 +1,5 @@
-# Local environment, and what older local builds left in the working copy.
+# Local environment.
 .env
-.venv/
-/backend/
-/build/
-/dist/
 
 # Node
 node_modules/
