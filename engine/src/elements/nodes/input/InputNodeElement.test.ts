@@ -48,6 +48,31 @@ describe('an error port', () => {
   });
 });
 
+describe('where it reads', () => {
+  const reads: Runtime = {
+    ...broken,
+    files: { ...broken.files, read: async (path: string) => `contents of ${path}` },
+  };
+
+  it('takes the wired path over the configured one, as the port promises', async () => {
+    const element = new InputNodeElement();
+    const result = await element.execute(
+      inputNode({ input_mode: 'file', value: '/configured.txt' }),
+      { path: '/wired.txt' },
+      reads,
+    );
+    expect(result).toEqual({ content: 'contents of /wired.txt', path: '/wired.txt' });
+  });
+
+  it('falls back to the configured path when the wire brought nothing', async () => {
+    const element = new InputNodeElement();
+    for (const arrived of [{}, { path: '' }, { path: '   ' }, { path: null }]) {
+      const result = await element.execute(inputNode({ input_mode: 'file', value: '/configured.txt' }), arrived, reads);
+      expect(result).toMatchObject({ path: '/configured.txt' });
+    }
+  });
+});
+
 describe('a file that cannot be read', () => {
   // It throws either way; the executor decides what that costs. See executor.test.ts.
   it('throws, whatever catch_errors says', async () => {

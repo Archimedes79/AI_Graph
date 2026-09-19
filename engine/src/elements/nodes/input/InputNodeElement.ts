@@ -127,7 +127,13 @@ export class InputNodeElement extends NodeElement<InputConfig> {
       return { output: settings.value || inputs.value || inputs.path || '' };
     }
 
-    const raw = settings.value || String(inputs.path ?? '');
+    // The wired path wins over the configured one -- what the port promises
+    // ("Override the configured path") and what the output node has always
+    // done with its own `path`. It used to be the other way round, so a node
+    // told at run time where to read went on reading what it was set up with,
+    // and the wire looked like it had done nothing. A wire that brought
+    // nothing is nothing, and leaves the configured path standing.
+    const raw = String(inputs.path ?? '').trim() || settings.value;
     const blank = settings.mode === 'file' ? { content: '', path: '' } : { files: [], count: 0 };
     // An empty path is not a failure -- nothing was asked for -- so the error
     // port, when there is one, says so by staying empty.
