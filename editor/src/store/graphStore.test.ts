@@ -268,3 +268,17 @@ describe('graphStore, a project open on disk', () => {
     expect(nodeById('count').config.output_schema).toMatchObject({ properties: { total: { type: 'integer' } } });
   });
 });
+
+describe('graphStore, a graph just opened', () => {
+  it('stays saved when the canvas measures its nodes, and a page keeps the size it was given', () => {
+    const page = graphNode({ id: 'page', node_type: 'gui', width: 340, height: 300, config: { ...blankConfig(), gui_widgets: [] } });
+    loadTestGraph([graphNode({ id: 'count', node_type: 'code' }), page]);
+    // What ReactFlow does once the nodes are drawn: every node gets its measured size.
+    useGraphStore.getState().setRFNodes(useGraphStore.getState().rfNodes.map((n) => ({ ...n, width: 212, height: 96 })));
+    const exported = useGraphStore.getState().exportGraph();
+    expect(exported.nodes.find((n) => n.id === 'count')!.width).toBeUndefined();
+    expect(useGraphStore.getState().isDirty()).toBe(true);   // the page was resized to 212 x 96
+    useGraphStore.getState().setRFNodes(useGraphStore.getState().rfNodes.map((n) => (n.id === 'page' ? { ...n, width: 340, height: 300 } : n)));
+    expect(useGraphStore.getState().isDirty()).toBe(false);
+  });
+});

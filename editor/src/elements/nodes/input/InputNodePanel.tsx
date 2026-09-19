@@ -92,7 +92,7 @@ export default function InputNodePanel({
 
       <div className="mb-4">
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-          {isText ? 'Default Text (shown in the run dialog)' : 'Default Path (shown in the run dialog)'}
+          {isText ? 'Text' : isDirectory ? 'Directory' : 'File'}
         </label>
         <div className="flex items-center gap-2">
           <input
@@ -122,8 +122,20 @@ export default function InputNodePanel({
             onClose={() => setBrowsing(false)}
           />
         )}
+        {/* The one setting this text used to promise without offering: the engine
+            asks only when it is on (`runtimeRequirements`). */}
+        <label className="flex items-center gap-2 mt-2 text-sm" style={{ color: MUTED }}>
+          <input
+            type="checkbox"
+            checked={!!node.config.prompt_at_runtime}
+            onChange={(e) => setConfig('prompt_at_runtime', e.target.checked)}
+          />
+          Ask for it when running (web, CLI, and deployed runs)
+        </label>
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
-          Whenever the graph runs, a dialog asks the user for this value (pre-filled with the default above).
+          {node.config.prompt_at_runtime
+            ? `Every run asks for the ${isText ? 'text' : 'path'}, with what is above filled in.`
+            : `Every run uses what is above. Tick to be asked each time instead.`}
         </p>
       </div>
 

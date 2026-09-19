@@ -177,10 +177,12 @@ function collectTextOutputWindows(
     .map((node) => {
       const nodeResult = result.node_results.find((r) => r.node_id === node.id);
       if (!nodeResult || !delivered(nodeResult.status)) return null;
+      // Text as text; anything else as the JSON it is -- String() of an object
+      // is "[object Object]", which says nothing about the result it replaced.
       const content = Object.values(nodeResult.outputs)
         .flatMap((value) => (Array.isArray(value) ? value : [value]))
         .filter((value) => value !== null && value !== undefined)
-        .map(String)
+        .map((value) => (typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)))
         .join('\n');
       return { nodeId: node.id, label: node.config.output_label || node.label, content };
     })
@@ -524,13 +526,21 @@ export const useGraphStore = create<GraphStore>()(
     exportGraph: () => {
       const { rfNodes, rfEdges, metadata } = get();
 
-      // As a file keeps it: each node's own settings, not every field every node starts with.
-      const nodes: GraphNode[] = rfNodes.map((rfn) => NODE_UIS[rfn.data.graphNode.node_type].saved({
-        ...rfn.data.graphNode,
-        position: { x: rfn.position.x, y: rfn.position.y },
-        width: rfn.width ?? rfn.data.graphNode.width,
-        height: rfn.height ?? rfn.data.graphNode.height,
-      }));
+      // As a file keeps it: each node's own settings, not every field every node
+      // starts with -- and a size only where someone can set one. ReactFlow
+      // measures every node once it is drawn and writes that onto it; kept for
+      // a node that sizes itself, the measurement made every graph read as
+      // "unsaved" the moment it was opened.
+      const nodes: GraphNode[] = rfNodes.map((rfn) => {
+        const ui = NODE_UIS[rfn.data.graphNode.node_type];
+        const resizable = ui.hasRuntimeWindow === true;
+        return ui.saved({
+          ...rfn.data.graphNode,
+          position: { x: rfn.position.x, y: rfn.position.y },
+          width: resizable ? rfn.width ?? rfn.data.graphNode.width : rfn.data.graphNode.width,
+          height: resizable ? rfn.height ?? rfn.data.graphNode.height : rfn.data.graphNode.height,
+        });
+      });
 
       const edges: GraphEdge[] = rfEdges.map((rfe) => ({
         id: rfe.id,

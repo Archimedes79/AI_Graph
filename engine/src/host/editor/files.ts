@@ -87,6 +87,37 @@ export async function browse(path: string, extensions: string[] = []): Promise<B
 }
 
 /**
+ * Project folders named *name* under *root*, a few levels down.
+ *
+ * For a folder dropped onto the editor: a browser hands over its name and not
+ * where it is, and the projects someone drops are almost always in the folder
+ * the editor was started in. Dependencies, build output and dot-folders are
+ * not looked into.
+ */
+export async function findProjects(name: string, root = process.cwd(), depth = 4): Promise<string[]> {
+  const found: string[] = [];
+  const walk = async (directory: string, level: number): Promise<void> => {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.') || SKIPPED.has(entry.name)) continue;
+      const path = join(directory, entry.name);
+      if (entry.name === name && isProjectFolder(path)) found.push(path);
+      else if (level < depth) await walk(path, level + 1);
+    }
+  };
+  if (basename(root) === name && isProjectFolder(root)) return [root];
+  await walk(root, 1);
+  return found;
+}
+
+const SKIPPED = new Set(['node_modules', 'dist', 'build']);
+
+/**
  * Where the example files people attach to a node are kept.
  *
  * Beside the project, under `data/attachments`, so a graph and the samples it

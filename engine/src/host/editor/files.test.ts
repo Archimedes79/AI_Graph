@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { browse, deleteAttachment, detectFormat, extensionFilter, saveAttachment } from './files.ts';
+import { browse, deleteAttachment, detectFormat, extensionFilter, findProjects, saveAttachment } from './files.ts';
 
 /**
  * What the editor's file picker and attachment box get from the machine.
@@ -98,5 +98,21 @@ describe('openExternal', () => {
     const { openExternal, NotFound } = await import('./files.ts');
     const dir = await sandbox();
     await expect(openExternal(dir, 'Analyse.js')).rejects.toBeInstanceOf(NotFound);
+  });
+});
+
+describe('findProjects', () => {
+  it('finds the project folders of a dropped folder\'s name, and nothing in dependencies or build output', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ai-graph-find-'));
+    for (const folder of ['examples/chat', 'work/chat', 'node_modules/pkg/chat', 'examples/data', 'notes/chat']) {
+      await mkdir(join(root, folder), { recursive: true });
+    }
+    for (const project of ['examples/chat', 'work/chat', 'node_modules/pkg/chat']) {
+      await writeFile(join(root, project, 'graph.json'), '{"nodes": [], "edges": []}');
+    }
+    expect((await findProjects('chat', root)).map((path) => path.slice(root.length + 1).split(/[\\/]/).join('/')).sort())
+      .toEqual(['examples/chat', 'work/chat']);
+    expect(await findProjects('data', root)).toEqual([]);
+    expect(await findProjects('chat', join(root, 'examples', 'chat'))).toEqual([join(root, 'examples', 'chat')]);
   });
 });

@@ -126,6 +126,11 @@ export function editorRoutes(): Handlers {
     }),
     reloadGraph: (asked) => onFile(asked.path, 'reload', (path) => project.loadGraph(path)),
 
+    findProjects: async (asked, { loopback }) => {
+      if (!loopback) throw new Refusal(403, 'Looking for projects is only offered on this machine.');
+      return { paths: asked.name ? await files.findProjects(String(asked.name)) : [] };
+    },
+
     async projectChanges(asked) {
       const folder = asked.path ? project.projectFolderOf(resolve(expandHome(asked.path))) : null;
       if (!folder) return { changes: [] };

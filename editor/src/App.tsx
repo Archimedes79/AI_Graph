@@ -128,11 +128,23 @@ export default function App() {
       setSaveStatus(`❌ ${file.name} is not a .json graph file.`);
       return;
     }
+    let text: string;
     let graph: Graph;
     try {
-      graph = parseGraphJson(await file.text());
+      text = await file.text();
+      graph = parseGraphJson(text);
     } catch (error) {
       setSaveStatus(`❌ ${errorText(error, `Could not read ${file.name}`)}`);
+      return;
+    }
+    // A project's graph.json is its wiring only: the code, the prompts and the
+    // positions are files beside it, which a browser does not hand over.
+    // Loaded as it stands it would be every node stacked in one place with
+    // nothing in it -- so it is not loaded, and the way that works is named.
+    const raw = JSON.parse(text) as { nodes?: Array<{ position?: unknown }> };
+    if (file.name === 'graph.json' && raw.nodes?.length && raw.nodes.every((node) => !node.position)) {
+      setSaveStatus('❌ This is a project\'s graph.json: its code and prompts are files beside it, which a browser '
+        + 'does not hand over. Drop the project folder, or open it with 📂 Open.');
       return;
     }
     if (!confirmDiscard(`Load ${file.name}?`)) return;
@@ -140,6 +152,30 @@ export default function App() {
     setCurrentFilePath(null);
     setSaveStatus(`✅ Loaded ${file.name}`);
   }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath]);
+
+  /**
+   * A dropped folder: a project, most likely. A browser gives its name and not
+   * where it is, so the editor's server looks for a project of that name under
+   * the folder it runs in, and opens it when there is exactly one.
+   */
+  const handleProjectFolderDrop = useCallback(async (name: string) => {
+    if (!confirmDiscard(`Open the project ${name}?`)) return;
+    try {
+      const { paths } = await call('findProjects', { name });
+      if (paths.length !== 1) {
+        setSaveStatus(paths.length
+          ? `❌ ${paths.length} projects are called "${name}". Open the one you mean with 📂 Open.`
+          : `❌ No project called "${name}" under the folder the editor was started in. Open it with 📂 Open.`);
+        return;
+      }
+      const result = await call('openGraph', { path: paths[0] });
+      loadGraph(result.graph);
+      setCurrentFilePath(result.path, result.project);
+      setSaveStatus(`✅ Opened ${result.path}`);
+    } catch (error) {
+      setSaveStatus(`❌ ${errorText(error, `Could not open ${name}`)}`);
+    }
+  }, [confirmDiscard, loadGraph, setCurrentFilePath]);
 
   useEffect(() => {
     const onDragOver = (event: DragEvent) => {
@@ -151,7 +187,9 @@ export default function App() {
       const file = event.dataTransfer?.files?.[0];
       if (!file) return;   // a palette drag: leave it to the canvas
       event.preventDefault();
-      void handleGraphFileDrop(file);
+      // Only answerable while the event lasts: afterwards the item is gone.
+      if (event.dataTransfer?.items?.[0]?.webkitGetAsEntry()?.isDirectory) void handleProjectFolderDrop(file.name);
+      else void handleGraphFileDrop(file);
     };
     window.addEventListener('dragover', onDragOver);
     window.addEventListener('drop', onDrop);
@@ -159,7 +197,7 @@ export default function App() {
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('drop', onDrop);
     };
-  }, [handleGraphFileDrop]);
+  }, [handleGraphFileDrop, handleProjectFolderDrop]);
 
   // Add a node from a palette click
   const handleAddNode = useCallback(
@@ -321,6 +359,11 @@ export default function App() {
         loadGraph(result.graph);
         setCurrentFilePath(result.path, result.project);
       } else {
+        // An untitled graph is called what it was saved as: reopened, it
+        // should not say "Untitled Graph" above a folder named word_stats.
+        if (useGraphStore.getState().metadata.name === 'Untitled Graph') {
+          setMetadata({ name: (path.split(/[\\/]/).filter(Boolean).pop() ?? '').replace(/\.json$/i, '') || 'Untitled Graph' });
+        }
         const result = await call('saveGraph', { path, graph: exportGraph() });
         setCurrentFilePath(result.path, result.project);
         markSaved();

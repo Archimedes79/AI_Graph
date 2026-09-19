@@ -245,6 +245,8 @@ export const API = {
   openGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),
   /** A `.json` path is written as one file; any other path as a project folder. */
   saveGraph: route<{ path: string; graph: Graph }, GraphFile>('POST', '/api/graphs/file/save', 'editor'),
+  /** Project folders with this name under where the editor runs: for a folder dropped onto the page. */
+  findProjects: route<{ name: string }, { paths: string[] }>('GET', '/api/graphs/find', 'editor'),
   /** Open the same path again: after `graph.json` itself changed outside the editor. */
   reloadGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/reload', 'editor'),
   /** The code and prompts of an open project that changed on disk since last asked. */
