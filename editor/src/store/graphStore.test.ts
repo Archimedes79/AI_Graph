@@ -398,6 +398,64 @@ describe('a graph inside a node', () => {
     expect(store().isDirty()).toBe(false);
   });
 
+  it('makes everything done in there one step out here', () => {
+    loadTestGraph([holder()]);
+    store().openSubgraph('part');
+    store().addNode('output', { x: 0, y: 0 });
+    store().addNode('code', { x: 0, y: 0 });
+    store().closeSubgraph();
+
+    // One Ctrl+Z used to throw away everything built inside, because nothing
+    // in there had ever been a step out here.
+    expect(store().canUndo()).toBe(true);
+    const built = (store().rfNodes[0].data.graphNode.config.subgraph as Graph).nodes.length;
+    expect(built).toBe(2);
+    store().undo();
+    expect((store().rfNodes[0].data.graphNode.config.subgraph as Graph).nodes).toHaveLength(0);
+    store().redo();
+    expect((store().rfNodes[0].data.graphNode.config.subgraph as Graph).nodes).toHaveLength(2);
+  });
+
+  it('costs no undo step when nothing was changed in there', () => {
+    loadTestGraph([holder()]);
+    store().openSubgraph('part');
+    store().closeSubgraph();
+    expect(store().canUndo()).toBe(false);
+  });
+
+  it('will not change level while a run is in flight', () => {
+    loadTestGraph([holder()]);
+    useGraphStore.setState({ isExecuting: true });
+    store().openSubgraph('part');
+    expect(store().subgraphStack).toHaveLength(0);
+    useGraphStore.setState({ isExecuting: false });
+  });
+
+  it('leaves nothing of the level behind when it swaps', () => {
+    loadTestGraph([holder()]);
+    useGraphStore.setState({
+      selectedNodeId: 'part',
+      textOutputWindows: [{ nodeId: 'part', label: 'Result', content: 'from the level above' }],
+    });
+    store().openSubgraph('part');
+    expect(store().selectedNodeId).toBeNull();
+    expect(store().textOutputWindows).toEqual([]);
+  });
+
+  it('leaves a graph changed on disk alone while there is unsaved work here', () => {
+    loadTestGraph([holder()]);
+    store().markSaved();
+    store().addNode('output', { x: 0, y: 0 });   // unsaved work, out here
+
+    const refused = store().takeDiskChanges([{
+      node_id: 'part', widget_id: '', field: NESTED_GRAPH_FIELD, value: inner([graphNode({ id: 'theirs' })]),
+    }]);
+
+    // Taking it would have replaced that whole graph without a word.
+    expect(refused).toEqual(['part']);
+    expect((store().rfNodes[0].data.graphNode.config.subgraph as Graph).nodes).toHaveLength(0);
+  });
+
   it('drops the frames when a different document is opened', () => {
     loadTestGraph([holder()]);
     store().openSubgraph('part');

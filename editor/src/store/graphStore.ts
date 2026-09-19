@@ -142,7 +142,8 @@ export interface GraphStore {
    * other. What is on disk is saved by definition: a graph that was clean stays
    * clean, and one with unsaved edits keeps exactly those.
    */
-  takeDiskChanges: (changes: TextChange[]) => void;
+  /** Returns the nodes whose graph was left on disk because there is unsaved work here. */
+  takeDiskChanges: (changes: TextChange[]) => string[];
   /**
    * Execute *graph* and put the whole outcome into the store: the result, the
    * text-output windows, the busy flag, and a synthesised error result if the
@@ -568,6 +569,10 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     openSubgraph: (nodeId) => {
+      // Not while a run is in flight: its result is about to arrive, and it
+      // would arrive at a canvas showing a different graph, where node ids
+      // that happen to match would be given another level's values.
+      if (get().isExecuting) return;
       const node = get().rfNodes.find((n: RFNode) => n.id === nodeId)?.data.graphNode;
       if (!node || !NODE_UIS[node.node_type]?.opensNestedGraph) return;
       const held = engineRegistry.node(node.node_type)?.nestedGraph(node as never) as Graph | null;
@@ -587,15 +592,24 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     closeSubgraph: () => {
+      if (get().isExecuting) return;
       const { subgraphStack } = get();
       const frame = subgraphStack[subgraphStack.length - 1];
       if (!frame) return;
       const inner = get().exportGraph();
-      get().applyGraphSnapshot(JSON.stringify(withNested(frame.graph, frame.nodeId, inner)));
+      const merged = withNested(frame.graph, frame.nodeId, inner);
+      const before = JSON.stringify(frame.graph);
+      const changed = JSON.stringify(merged) !== before;
+
+      get().applyGraphSnapshot(JSON.stringify(merged));
       set((state) => {
         state.subgraphStack.pop();
-        state.past = frame.past;
-        state.future = frame.future;
+        // Everything done in there is one step out here, like any other change
+        // to this node. Without it the first Ctrl+Z after coming out would
+        // restore the graph as it was before going in -- an hour of work, one
+        // keystroke, and nothing to say it was about to happen.
+        state.past = changed ? [...frame.past, before].slice(-HISTORY_LIMIT) : frame.past;
+        state.future = changed ? [] : frame.future;
       });
     },
 
@@ -695,10 +709,15 @@ export const useGraphStore = create<GraphStore>()(
         state.metadata = graph.metadata;
         state.rfNodes = rfNodes as any;
         state.rfEdges = rfEdges;
-        // A stale result would point at nodes that may no longer exist.
+        // Everything that names a node of the graph that was here. Left
+        // standing, each points at something that may not exist any more: a
+        // result against ids that now mean other nodes, a window from another
+        // graph's run floating over this one, a selection nobody can see.
         state.executionResult = null;
         state.editingNodeId = null;
         state.editingPort = null;
+        state.selectedNodeId = null;
+        state.textOutputWindows = [];
       });
     },
 
@@ -713,8 +732,9 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     takeDiskChanges: (changes) => {
-      if (!changes.length) return;
+      if (!changes.length) return [];
       const wasClean = !get().isDirty();
+      const refused: string[] = [];
       get().commit();
       set((state) => {
         for (const change of changes) {
@@ -722,7 +742,13 @@ export const useGraphStore = create<GraphStore>()(
           if (!node) continue;
           // A whole graph a node holds, changed in its own folder. Where it is
           // kept is the element's business, and the ports follow from it.
+          //
+          // Taken only into a document with nothing unsaved in it: unlike a
+          // text, which patches one field, this replaces every node, edge and
+          // position in that graph. Over unsaved work it would be silent and
+          // total, so it is left on disk and said out loud instead.
           if (change.field === NESTED_GRAPH_FIELD) {
+            if (!wasClean) { refused.push(change.node_id); continue; }
             engineRegistry.node(node.node_type)?.setNestedGraph(node as never, change.value as never);
             Object.assign(node, derivedNodePorts(node) ?? {});
             continue;
@@ -734,6 +760,7 @@ export const useGraphStore = create<GraphStore>()(
         }
       });
       if (wasClean) get().markSaved();
+      return refused;
     },
 
     markSaved: () => {

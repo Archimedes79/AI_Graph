@@ -289,9 +289,16 @@ export default function App() {
       try {
         const { changes } = await call('projectChanges', { path: currentFilePath });
         if (!alive || !changes.length) return;
-        takeDiskChanges(changes);
-        const what = changes.map((c) => (c.widget_id ? `${c.node_id}/${c.widget_id}` : c.node_id));
-        setSaveStatus(`↻ From disk: ${[...new Set(what)].join(', ')}`);
+        const refused = takeDiskChanges(changes);
+        const what = changes.filter((c) => !refused.includes(c.node_id))
+          .map((c) => (c.widget_id ? `${c.node_id}/${c.widget_id}` : c.node_id));
+        if (what.length) setSaveStatus(`↻ From disk: ${[...new Set(what)].join(', ')}`);
+        // A graph inside a node changed on disk while there is unsaved work
+        // here. Taking it would replace that graph whole, so it waits.
+        if (refused.length) {
+          setSaveStatus(`⚠ The graph inside ${[...new Set(refused)].join(', ')} changed on disk. `
+            + 'Save or undo your changes, then reload the project to take it.');
+        }
       } catch {
         // Half-written by the other editor, most likely: the next look gets it.
       }

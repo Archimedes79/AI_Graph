@@ -1,4 +1,4 @@
-import { DIMMER, FIELD, LINE, MUTED, PRIMARY_BUTTON } from '@/ui/theme';
+import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, PRIMARY_BUTTON } from '@/ui/theme';
 import { useGraphStore } from '@/store/graphStore';
 import { SubgraphNodeElement } from '@engine/elements/nodes/subgraph/SubgraphNodeElement.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
@@ -34,14 +34,23 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
 
   return (
     <div>
-      <button
-        type="button"
-        className="w-full mb-4 px-3 py-2 rounded-lg text-sm font-medium"
-        style={PRIMARY_BUTTON}
-        onClick={enter}
-      >
-        Open this graph ▸
-      </button>
+      {inner ? (
+        <button
+          type="button"
+          className="w-full mb-4 px-3 py-2 rounded-lg text-sm font-medium"
+          style={PRIMARY_BUTTON}
+          onClick={enter}
+        >
+          Open this graph ▸
+        </button>
+      ) : (
+        // A button that closes the dialog and opens nothing is worse than no
+        // button: this is the one case it cannot do its job, and it says so.
+        <p className="mb-4 text-sm" style={{ color: DANGER_TEXT }}>
+          The graph this node holds cannot be read. Open its <code>graph.json</code> under the project&apos;s{' '}
+          <code>nodes/</code> folder and fix it, or delete the node and build it again.
+        </p>
+      )}
       <div className="mb-4">
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           What this part is meant to do
