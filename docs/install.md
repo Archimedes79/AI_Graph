@@ -33,6 +33,12 @@ npm start         # http://127.0.0.1:8000, opened in your browser
 `npm start` is one process: the engine, serving the built page and answering the
 editor's requests. It listens on loopback only.
 
+Starting `start.cmd`, `start.ps1` or `start.sh` again while the editor is already
+running stops the existing editor on the same port first, rebuilds the page when
+editor sources are newer, and starts one fresh instance. Closing the browser tab
+does not stop the Node server; press Ctrl+C in its terminal, or start the launcher
+again, to stop/restart it.
+
 ## In VS Code
 
 Three ways to start it, all from the GUI, all starting the editor empty:
