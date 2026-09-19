@@ -300,14 +300,19 @@ and can be watched while it runs; the result waits for the person to accept it.
   decide is a member of the element's class — `holdsWidgets`, `missingExample`,
   `describeAsSource`, `canvasSummary`, `outputFormatHint` — so a new kind answers for itself.
 
-## Known debt
+## Settled debt, and what is deliberately not there
 
-- **`NodeConfig` is one type for six node kinds** (`editor/src/graph.ts`), and
-  `baseNodeConfig()` gives every new node every field, so a saved graph carries keys its
-  node never reads. Harmless to the engine (elements pick what they know), noisy in diffs.
-  The fix is per-element `create()` defaults plus a config type per element; it touches
-  every panel, which is why it has not been done in passing.
-- **Partial runs re-run upstream nodes** rather than reusing their last outputs. Correct,
-  and cheap for readers and pages; a cache keyed on inputs would be the next step.
-- **No server-side persistence of scheduled results** beyond the process's lifetime, and no
-  ingest endpoint: a scheduled tool is a clock around a run, not a monitoring system.
+- **A saved node carries its own settings only.** In memory every node has the full
+  `NodeConfig`, so a panel can read any field with a type. Each `<Kind>NodeUi` names the
+  `settings` it owns; `NodeUi.saved` writes those and any other key someone changed, and
+  loading fills the rest back in. [`savedConfig.test.ts`](../editor/src/elements/savedConfig.test.ts)
+  asks the engine's element the questions a run asks, for every node type and mode, and
+  holds the lean node to the full one's answers.
+- **A page event reuses what it only needs.** What the event is *for* — the nodes it is
+  wired to and everything after them — runs fresh; a node upstream of that, run only as
+  context, hands back its last outputs when its definition and every input (files already
+  read) are unchanged ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)). A node with
+  nothing wired in reads the outside world and always runs; a whole-graph Run reuses nothing.
+- **A scheduled tool remembers its last round across restarts**, in
+  `<graph>.last-run.json` beside the graph. It is still a clock around a run: no history
+  and no ingest endpoint, because a monitoring system is a different product.

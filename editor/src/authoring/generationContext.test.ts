@@ -34,7 +34,7 @@ describe('connectedFormatContext', () => {
 
     const context = connectedFormatContext('worker', [input, code], [edge('src', 'worker')]);
 
-    expect(context).toContain('Input from "Reports folder" (input node): a list of file paths');
+    expect(context).toContain('Input from "Reports folder" (input node): port "Files" carries a list of file paths');
   });
 
   it('carries an upstream ai node\'s declared output format', () => {
@@ -57,7 +57,7 @@ describe('describeNodeOutput', () => {
   it('distinguishes the input node modes', () => {
     const node = NODE_UIS.input.create('i');
     node.config.input_mode = 'file';
-    expect(describeNodeOutput(node)).toBe('a file path');
+    expect(describeNodeOutput(node)).toContain('port "Content" carries the file');
     node.config.input_mode = 'text';
     expect(describeNodeOutput(node)).toBe('text');
   });

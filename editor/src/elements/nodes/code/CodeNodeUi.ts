@@ -14,6 +14,10 @@ export class CodeNodeUi extends NodeUi {
   readonly hint = 'Run JavaScript — write it yourself or have the AI generate it';
   readonly icon = '⚙️';
   readonly color = 'var(--ui-node-code, #1a3a2a)';
+  readonly settings: NodeUi['settings'] = [
+    'code', 'code_file', 'code_prompt', 'output_format', 'output_format_prompt',
+    'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
+  ];
 
   override readonly ownsDescription = true;
   override readonly outputContract = 'format';

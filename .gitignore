@@ -1,20 +1,9 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg
-*.egg-info/
-dist/
-build/
-.eggs/
-.venv/
-venv/
-env/
+# Local environment, and what older local builds left in the working copy.
 .env
-*.so
-.pytest_cache/
+.venv/
+/backend/
+/build/
+/dist/
 
 # Node
 node_modules/
@@ -28,7 +17,7 @@ Thumbs.db
 
 # Editor
 .vscode/*
-# ...but keep the shared workspace config (Python test discovery, run tasks)
+# ...but keep the shared workspace config (test discovery, run tasks)
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/extensions.json
@@ -42,9 +31,6 @@ Thumbs.db
 /data/
 *.log
 
-# Packaged editor deploy artifact (built by start.py --mode package)
-ai-graph-editor-package.zip
-
 # AI credentials written by ⚙ Settings → Keys and addresses. Its default location
 # is the working directory, which for a dev run is this repo -- never commit it.
 ai-settings.json
@@ -55,7 +41,8 @@ ai-settings.json
 # The engine's installed packages.
 engine/node_modules/
 
-# A graph saved by a test run, not part of the project.
+# The last scheduled run a served tool keeps beside its graph.
+*.last-run.json
 
 # The downloadable package, built by scripts/package.mjs.
 ai-graph*.zip

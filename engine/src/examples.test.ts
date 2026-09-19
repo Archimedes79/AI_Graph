@@ -144,7 +144,7 @@ describe.each(EXAMPLES)('%s', (name) => {
       await writeBundle(graph, dir, { dataFrom: REPO });
       const { code, out, err } = await runBundle(dir);
       expect(err).not.toMatch(/no such file|ENOENT/i);
-      expect(code).toBe(0);
+      expect(code, err.slice(-1500)).toBe(0);
       expect(JSON.parse(out).status).toBe('success');
     } finally {
       await rm(dir, { recursive: true, force: true });

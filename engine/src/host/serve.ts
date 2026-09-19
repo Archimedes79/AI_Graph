@@ -71,7 +71,7 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     ? schedule(() => held.graph!, (graph, signal) => {
       applyRuntimeValues(graph, {}, registry);
       return executeGraph(graph, { runtime: nodeRuntime(), registry, signal });
-    })
+    }, `${options.graphPath}.last-run.json`)
     : null;
 
   const handlers: Handlers = {

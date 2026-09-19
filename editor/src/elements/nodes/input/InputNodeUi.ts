@@ -12,6 +12,10 @@ export class InputNodeUi extends NodeUi {
   readonly hint = 'A value from outside the graph: typed text, one file, or a directory listing';
   readonly icon = '📥';
   readonly color = 'var(--ui-node-input, #1e3a5f)';
+  readonly settings: NodeUi['settings'] = [
+    'input_mode', 'value', 'prompt_at_runtime', 'recursive', 'extensions', 'select_all_files',
+    'selector_prompt', 'selector_code', 'example_file', 'output_format_prompt', 'catch_errors',
+  ];
 
   override readonly Panel = lazy(() => import('./InputNodePanel'));
   override readonly asksForFormatSample = true;
@@ -40,8 +44,10 @@ export class InputNodeUi extends NodeUi {
 
   override describeOutput(node: GraphNode): string {
     const mode = node.config.input_mode ?? 'text';
-    if (mode === 'directory') return 'a list of file paths';
-    if (mode === 'file') return 'a file path';
+    // Per port, because a file input offers two things and code written for
+    // the path when it is handed the content reads a CSV as a file name.
+    if (mode === 'directory') return 'port "Files" carries a list of file paths, port "Count" how many there are';
+    if (mode === 'file') return 'port "Content" carries the file\'s text (already read), port "Path" its path';
     return 'text';
   }
 

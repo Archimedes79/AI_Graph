@@ -16,6 +16,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseGraph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
+import { LastOutputs } from '../../execution/reuse.ts';
 import { GuiNodeElement, parseWidget } from '../../elements/nodes/gui/GuiNodeElement.ts';
 import { registry } from '../../elements/registry.ts';
 import { writeBundle } from '../../cli/bundle.ts';
@@ -33,6 +34,9 @@ import { zip } from './zip.ts';
 const BUILT_PAGE = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', '..', 'editor', 'dist');
 
 export function editorRoutes(): Handlers {
+  // Asking what arrives at a node, again and again while writing it, need not
+  // ask the model upstream again each time when nothing there has changed.
+  const reuse = new LastOutputs();
   /**
    * Transcripts of generations still in flight, by the id the page sent.
    *
@@ -91,7 +95,7 @@ export function editorRoutes(): Handlers {
     async nodeInputs(asked) {
       const graph = parseGraph(asked);
       applyRuntimeValues(graph, {}, registry);
-      const { inputs, upstream } = await inputsFor(graph, String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry });
+      const { inputs, upstream } = await inputsFor(graph, String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry, reuse });
       const failed = upstream.node_results.find((result) => result.status === 'error');
       return { inputs, error: failed ? `${failed.node_id}: ${failed.error}` : null };
     },

@@ -161,16 +161,18 @@ export default function App() {
     };
   }, [handleGraphFileDrop]);
 
-  // Add a node in the center of the canvas
+  // Add a node from a palette click
   const handleAddNode = useCallback(
     (nodeType: NodeType) => {
       // To the right of what is already there, not somewhere at random: a
       // random spot inside a 200px square put the second node on top of the
-      // first more often than not, and a graph reads left to right anyway.
+      // first more often than not, and a graph reads left to right anyway. The
+      // gap is generous because a node widens once it is configured (a file
+      // input grows a path field) and must not then cover its neighbour.
       const placed = useGraphStore.getState().rfNodes;
       const right = Math.max(0, ...placed.map((node) => node.position.x + (node.width ?? 240)));
       const top = placed.length ? Math.min(...placed.map((node) => node.position.y)) : 120;
-      addNode(nodeType, placed.length ? { x: right + 80, y: top } : { x: 200, y: 120 });
+      addNode(nodeType, placed.length ? { x: right + 160, y: top } : { x: 200, y: 120 });
     },
     [addNode]
   );
@@ -195,13 +197,19 @@ export default function App() {
   const suggestedFileName = () =>
     `${useGraphStore.getState().metadata.name.toLowerCase().replace(/\s+/g, '_') || 'graph'}.json`;
 
+  // Open and Save As go straight to the file browser: choosing a file is what
+  // they are for, and a path box first -- "/path/to/graph.json" -- asked the
+  // one question a newcomer cannot answer. Closing the browser leaves the path
+  // box, for whoever would rather type.
   const handleOpenLoad = () => {
     if (!confirmDiscard('Load another graph?')) return;
     setFilePrompt({ mode: 'load', path: currentFilePath ?? '', error: '', busy: false });
+    setBrowsingFor('load');
   };
 
   const handleOpenSaveAs = () => {
     setFilePrompt({ mode: 'save', path: currentFilePath ?? suggestedFileName(), error: '', busy: false });
+    setBrowsingFor('save');
   };
 
   /**
@@ -299,9 +307,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
-  const handleFilePromptConfirm = async () => {
+  /** Load or save *chosen* -- a file picked in the browser -- or what the path box holds. */
+  const handleFilePromptConfirm = async (chosen?: string) => {
     if (!filePrompt) return;
-    const path = filePrompt.path.trim();
+    const path = (chosen ?? filePrompt.path).trim();
     if (!path) {
       setFilePrompt({ ...filePrompt, error: 'Please enter a file path.' });
       return;
@@ -419,7 +428,7 @@ export default function App() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleFilePromptConfirm}
+                  onClick={() => { void handleFilePromptConfirm(); }}
                   disabled={filePrompt.busy}
                   className="px-3 py-1.5 text-xs rounded-lg font-semibold"
                   style={{ ...PRIMARY_BUTTON, opacity: filePrompt.busy ? 0.7 : 1 }}
@@ -470,8 +479,10 @@ export default function App() {
             extensions=".json"
             defaultName={suggestedFileName()}
             onPick={(picked) => {
+              // Picking a file is the choice: it is loaded, or saved to, straight away.
               setFilePrompt({ ...filePrompt, path: picked, error: '' });
               setBrowsingFor(null);
+              void handleFilePromptConfirm(picked);
             }}
             onClose={() => setBrowsingFor(null)}
           />

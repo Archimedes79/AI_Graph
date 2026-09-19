@@ -14,7 +14,12 @@
 // The interval counts from the end of one run to the start of the next -- the
 // rule `--every` follows on the command line -- so a run slower than its
 // interval is followed by the next one rather than overtaken by it.
+//
+// The last round is kept on disk as well, when the server says where: a tool
+// that restarts overnight should still show this morning's run, not an empty
+// page until the next one is due.
 
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { ExecutionResult, Graph } from '../graph.ts';
 import { graphTriggers, parseInterval } from '../execution/triggers.ts';
 
@@ -36,16 +41,43 @@ export interface Schedule {
   stop(): void;
 }
 
+/** What is kept of the last round between two lives of the server. */
+type Kept = Pick<ScheduleState, 'runs' | 'result' | 'error' | 'finished_at'>;
+
+/** The last round a previous server wrote down; nothing when there was none, or it is unreadable. */
+function recall(path: string | undefined): Partial<Kept> {
+  if (!path) return {};
+  try {
+    const kept = JSON.parse(readFileSync(path, 'utf8')) as Kept;
+    return { runs: Number(kept.runs) || 0, result: kept.result ?? null, error: kept.error ?? null, finished_at: kept.finished_at ?? null };
+  } catch {
+    return {};
+  }
+}
+
+/** Written beside and then renamed over, so a crash mid-write leaves the round before intact. */
+function keep(path: string, state: ScheduleState): void {
+  const kept: Kept = { runs: state.runs, result: state.result, error: state.error, finished_at: state.finished_at };
+  try {
+    writeFileSync(`${path}.tmp`, JSON.stringify(kept));
+    renameSync(`${path}.tmp`, path);
+  } catch {
+    // A read-only bundle still runs on its clock; it only forgets on restart.
+  }
+}
+
 /**
  * Start running *graph* as its own triggers say.
  *
  * `run` is handed the graph and a signal; it is the server's ordinary run, so
  * a scheduled round is a round like any other. Nothing here knows what a node
- * is.
+ * is. *keptAt*, when given, is the file the last round is written to and read
+ * back from at start.
  */
 export function schedule(
   graph: () => Graph,
   run: (graph: Graph, signal: AbortSignal) => Promise<ExecutionResult>,
+  keptAt?: string,
 ): Schedule {
   const triggers = graphTriggers(graph());
   // Said once, at start, rather than discovered at three in the morning: an
@@ -60,8 +92,10 @@ export function schedule(
 
   const current: ScheduleState = {
     scheduled: triggers.on_start || seconds > 0,
-    running: false, runs: 0, result: null, error: problem, finished_at: null, next_at: null,
+    running: false, runs: 0, result: null, error: null, finished_at: null, next_at: null,
+    ...(triggers.on_start || seconds > 0 ? recall(keptAt) : {}),
   };
+  if (problem) current.error = problem;
   const abort = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -80,6 +114,7 @@ export function schedule(
     current.running = false;
     current.runs += 1;
     current.finished_at = Date.now();
+    if (keptAt) keep(keptAt, current);
     if (seconds > 0 && !abort.signal.aborted) {
       current.next_at = Date.now() + seconds * 1000;
       timer = setTimeout(() => { void round(); }, seconds * 1000);

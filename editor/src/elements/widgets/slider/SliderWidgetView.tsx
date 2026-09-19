@@ -1,6 +1,9 @@
 import type { WidgetViewProps } from '../WidgetView';
 import { MUTED } from '@/ui/theme';
 
+/** The keys that move a range input. Tabbing onto one is not using it. */
+const MOVES = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+
 /** Runtime slider widget: a range input with its current number shown beside it. */
 export default function SliderWidgetView({ widget, value, onChange, onTrigger }: WidgetViewProps) {
   const min = typeof widget.min === 'number' ? widget.min : 0;
@@ -26,7 +29,7 @@ export default function SliderWidgetView({ widget, value, onChange, onTrigger }:
         // go, or a run would start for each of them.
         onMouseUp={(e) => onTrigger?.((e.target as HTMLInputElement).value)}
         onTouchEnd={(e) => onTrigger?.((e.target as HTMLInputElement).value)}
-        onKeyUp={(e) => onTrigger?.((e.target as HTMLInputElement).value)}
+        onKeyUp={(e) => { if (MOVES.has(e.key)) onTrigger?.((e.target as HTMLInputElement).value); }}
       />
       <span className="text-sm font-mono w-12 text-right" style={{ color: MUTED }}>{current}</span>
     </div>

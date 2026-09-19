@@ -76,6 +76,23 @@ Which blocks fire:
   (`run_on_change`). A dropdown then redraws the chart the moment it changes; a text box
   sends on Enter (Shift+Enter is a new line) and is emptied once delivered.
 
+**A value and an event are two different things.** Every block with an output carries a
+*value* on its port — the text typed, the option chosen, the number, the path — and a run
+reads whatever it holds at that moment. Using the block is an *event* only when it starts
+the graph as above. Without the tick a dropdown is a setting: changing it starts nothing,
+and the next run (by a button, the toolbar, or the clock) picks the new value up. When it
+does fire, the moment is the one a person means: a dropdown on choosing, a slider on
+letting go (or an arrow key) rather than on every value it passes, a file picker on
+picking, a text box on Enter. A button carries a value too (how often it was pressed), but
+it is wired to a node's ◆ for its event, not for that.
+
+**What only has to be there is reused.** Of the nodes an event runs, the ones it is *for*
+always run fresh. A node upstream of them, run only because they need its output, hands
+back what it produced last time when neither it nor anything it received has changed —
+so changing a chart's type below a model call does not ask the model again. A node with
+nothing wired in (a file input, the page itself) always runs, so an edited file is read
+anew; a whole-graph ▶ Run reuses nothing.
+
 **The run port.** Every node has one input nobody declares: the amber ◆ on its header
 (`__run` in the file). A wire into it carries no value — it says *start here*. That is
 how a Send button beside a message box is wired to a model it has nothing to say to,

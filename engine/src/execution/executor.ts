@@ -26,7 +26,8 @@ import type { NodeElement } from '../elements/NodeElement.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
 import { readFileInputs } from './fileInputs.ts';
-import { RUN_PORT, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
+import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
+import type { LastOutputs } from './reuse.ts';
 
 export interface Registry {
   node(type: string): NodeElement<unknown> | undefined;
@@ -201,6 +202,12 @@ export interface RunOptions {
   signal?: AbortSignal;
   /** Run these nodes and no others. How `inputsFor` asks for one node's upstream. */
   only?: Set<string>;
+  /**
+   * What nodes produced before, for the ones this run needs only as context:
+   * upstream of what a page event is for, or of the node `inputsFor` asks
+   * about. See `reuse.ts`. Absent, everything runs.
+   */
+  reuse?: LastOutputs;
 }
 
 /**
@@ -220,6 +227,13 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   const feedback = memoryFeedbackEdges(nodes, edges, registry);
   const levels = topologicalLevels(nodes, edges, feedback);
   const only = options.only ?? (options.trigger ? triggeredNodes(graph, options.trigger, feedback) : null);
+  // Context, as opposed to what this run is for: only in a run that is not
+  // the whole graph, never the node that fired, never what it fired, and
+  // never a node with nothing wired in -- that one reads the outside world.
+  const fired = options.trigger && !options.only ? firedNodes(graph, options.trigger, feedback) : null;
+  const context = (nodeId: string): boolean => !!options.reuse && !!only
+    && nodeId !== options.trigger?.node_id && !fired?.has(nodeId)
+    && edges.some((e) => e.target_node_id === nodeId && e.target_port_id !== RUN_PORT && !feedback.has(e.id));
 
   const outputs = new Map<string, Record<string, unknown>>();
   const results: NodeResult[] = [];
@@ -279,9 +293,22 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         const given = element.readsFileInputs(node)
           ? await readFileInputs(node, inputs, runtime)
           : inputs;
+        const key = options.reuse?.key(node, given);
+        const kept = key && context(nodeId) ? options.reuse!.get(key) : undefined;
+        if (kept) {
+          outputs.set(nodeId, kept);
+          results.push({
+            node_id: nodeId, status: 'success', inputs, outputs: kept, error: null,
+            messages: ['Reused from an earlier run: nothing it depends on has changed.'],
+          });
+          runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'success' });
+          continue;
+        }
         const { produced, failures } = await runNode(element, node, given, runtime, signal);
         if (signal?.aborted) throw new Error('Stopped.');
         outputs.set(nodeId, produced);
+        // Kept only when it went through whole: a partial result is not one to hand back.
+        if (key && !failures.length) options.reuse!.set(key, produced);
         // Some items failed and the rest went through: the node is partial and
         // says so, rather than a success whose gaps are nulls nobody explains.
         const status = failures.length ? 'partial' : 'success';

@@ -491,7 +491,8 @@ export const useGraphStore = create<GraphStore>()(
     exportGraph: () => {
       const { rfNodes, rfEdges, metadata } = get();
 
-      const nodes: GraphNode[] = rfNodes.map((rfn) => ({
+      // As a file keeps it: each node's own settings, not every field every node starts with.
+      const nodes: GraphNode[] = rfNodes.map((rfn) => NODE_UIS[rfn.data.graphNode.node_type].saved({
         ...rfn.data.graphNode,
         position: { x: rfn.position.x, y: rfn.position.y },
         width: rfn.width ?? rfn.data.graphNode.width,

@@ -1,9 +1,16 @@
 // A node's browser half: the mirror of `engine/src/elements/NodeElement.ts`.
 
 import type { ComponentType } from 'react';
-import type { GraphNode, NodeType } from '@/graph';
+import type { GraphNode, NodeConfig, NodeType } from '@/graph';
 import type { ElementGeneration, FieldAccess } from '@/authoring/generation';
 import { Ui } from './Ui';
+import { baseNodeConfig } from './nodes/baseNodeConfig';
+
+/**
+ * Written for every node whatever its type: the engine batches any node, and
+ * reads a missing `batch_mode` as a whole list where a new node starts per item.
+ */
+const ALWAYS_SAVED = ['batch_mode'];
 
 /** What the node editor hands every node panel. A panel takes the part it needs. */
 export interface NodePanelProps {
@@ -45,6 +52,28 @@ export abstract class NodeUi extends Ui<GraphNode, NodePanelProps> {
 
   /** A new node of this type, as the palette drops it on the canvas. */
   abstract create(id: string): GraphNode;
+
+  /**
+   * The settings this node type owns, always written when the graph is saved.
+   *
+   * Every node is created from the one full `NodeConfig`, so the panels can
+   * read any field with a type; a saved file should not carry thirty keys its
+   * node never reads. See `saved`.
+   */
+  abstract readonly settings: readonly (keyof NodeConfig)[];
+
+  /**
+   * The node as a graph file keeps it: its own settings, and any other key
+   * only when it no longer holds the value every node starts with. Loading
+   * fills the rest back in from `create`, so nothing is lost either way.
+   */
+  saved(node: GraphNode): GraphNode {
+    const untouched: Record<string, unknown> = baseNodeConfig();
+    const own = new Set<string>([...ALWAYS_SAVED, ...this.settings]);
+    const config = Object.fromEntries(Object.entries(node.config)
+      .filter(([key, value]) => own.has(key) || JSON.stringify(value) !== JSON.stringify(untouched[key])));
+    return { ...node, config: config as NodeConfig };
+  }
 
   /**
    * The settings most people never touch, drawn folded away under everything

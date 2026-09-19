@@ -11,6 +11,8 @@ export class InputPickerWidgetUi extends WidgetUi {
   readonly View = InputPickerWidgetView;
   override readonly Panel = lazy(() => import('./InputPickerWidgetPanel'));
   override readonly defaultMode = 'file';
+  override readonly runOnChangeHint =
+    'Picking a file or folder (or Enter in the path box) runs the nodes this picker is wired to.';
 
   // The same declaration the input node carries, because it is the same
   // behaviour one level down -- the engine returns literally the same object.

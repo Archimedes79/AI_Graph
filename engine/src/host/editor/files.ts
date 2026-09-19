@@ -42,12 +42,14 @@ export function filesystemRoots(): string[] {
  *
  * Exists because the engine resolves *real* paths while a browser's file input
  * only ever reveals a name — so a picker has to browse the machine the graph
- * will run on. An empty path starts at home; an unreadable child is skipped
- * rather than failing the page, since one denied entry should not make a
- * directory unbrowsable.
+ * will run on. An empty path starts in the working directory -- where the
+ * graphs and their data are, rather than in a home folder of dot-directories.
+ * Hidden entries are left out; an unreadable child is skipped rather than
+ * failing the page, since one denied entry should not make a directory
+ * unbrowsable.
  */
 export async function browse(path: string, extensions: string[] = []): Promise<BrowsePage> {
-  let root = path ? resolve(path.replace(/^~(?=$|[\\/])/, homedir())) : homedir();
+  let root = path ? resolve(path.replace(/^~(?=$|[\\/])/, homedir())) : process.cwd();
   const info = await stat(root).catch(() => null);
   if (!info) throw new NotFound(`Directory not found: ${root}`);
   if (!info.isDirectory()) root = dirname(root);
@@ -55,6 +57,7 @@ export async function browse(path: string, extensions: string[] = []): Promise<B
   const directories: BrowseEntry[] = [];
   const files: BrowseEntry[] = [];
   for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (entry.name.startsWith('.')) continue;
     const full = join(root, entry.name);
     let isDir: boolean;
     try {

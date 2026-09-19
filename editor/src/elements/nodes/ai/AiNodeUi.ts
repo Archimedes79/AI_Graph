@@ -12,6 +12,11 @@ export class AiNodeUi extends NodeUi {
   readonly hint = 'Send a prompt to a local or hosted model and pass on its answer';
   readonly icon = '🤖';
   readonly color = 'var(--ui-node-ai, #2d1b4e)';
+  readonly settings: NodeUi['settings'] = [
+    'ai_provider', 'ai_model', 'system_prompt', 'temperature', 'prompt_template',
+    'output_format', 'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
+    'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
+  ];
 
   // The description IS this element's generation prompt, drawn by its own
   // panel -- a second Description field above it showed the same box twice.

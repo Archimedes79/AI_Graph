@@ -10,6 +10,7 @@ export class OutputNodeUi extends NodeUi {
   readonly hint = 'Show the result in a window, or write it to a file or directory';
   readonly icon = '📤';
   readonly color = 'var(--ui-node-output, #3a2000)';
+  readonly settings: NodeUi['settings'] = ['output_label', 'write_mode', 'value', 'prompt_at_runtime'];
 
   override readonly Panel = lazy(() => import('./OutputNodePanel'));
 
@@ -29,7 +30,9 @@ export class OutputNodeUi extends NodeUi {
         { id: 'path', name: 'Path', kind: 'input', data_type: 'file_path', multi: false, required: false, description: 'Optional wired file/directory path, overriding the config value below.' },
       ],
       outputs: [],
-      config: { ...baseNodeConfig(), output_label: 'Result' },
+      // A window, not nowhere: an output that shows nothing until someone finds
+      // the setting is the one node whose whole point would be missing.
+      config: { ...baseNodeConfig(), output_label: 'Result', write_mode: 'window' },
     };
   }
 }
