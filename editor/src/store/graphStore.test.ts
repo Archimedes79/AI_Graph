@@ -4,6 +4,7 @@ import type { Graph, GraphNode } from '@/graph';
 import { guiWidgetPorts } from '@/elements/nodes/gui/guiWidgets';
 import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
 import { WIDGET_UIS } from '@/elements/registry';
+import { NESTED_GRAPH_FIELD } from '@engine/elements/NodeElement.ts';
 
 // The same defaults every node type is created with. Copied out field by field
 // here once, which meant adding a field to NodeConfig broke this file for a
@@ -374,6 +375,27 @@ describe('a graph inside a node', () => {
     store().closeSubgraph();
     store().closeSubgraph();
     expect(JSON.stringify(store().exportGraph())).toBe(JSON.stringify(root));
+  });
+
+  it('takes the whole graph back when its folder changed on disk, ports and all', () => {
+    loadTestGraph([holder()]);
+    store().markSaved();
+
+    // What the engine reports for a node whose folder changed: the graph it
+    // holds, whole. An output node appeared in there while we were away.
+    store().takeDiskChanges([{
+      node_id: 'part',
+      widget_id: '',
+      field: NESTED_GRAPH_FIELD,
+      value: inner([graphNode({ id: 'result', node_type: 'output', label: 'Result' })]),
+    }]);
+
+    const node = store().rfNodes[0].data.graphNode;
+    expect((node.config.subgraph as Graph).nodes.map((n) => n.id)).toEqual(['result']);
+    // The ports follow the graph inside, here as everywhere else.
+    expect(node.outputs.map((port) => port.name)).toEqual(['Result']);
+    // What is on disk is saved by definition.
+    expect(store().isDirty()).toBe(false);
   });
 
   it('drops the frames when a different document is opened', () => {
