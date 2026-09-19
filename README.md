@@ -69,8 +69,9 @@ Nothing leaves the machine unless the graph itself sends it there.
 
 - **Visual graph editor** — a ReactFlow canvas with undo/redo; drop a graph `.json` on
   the window to open it, the way the files in `examples/` load.
-- **Six node types** — Input (text/file/directory), AI, Code (JavaScript), Data,
-  GUI, Output.
+- **Seven node types** — Input (text/file/directory), AI, Code (JavaScript), Data,
+  GUI, Output, and Subgraph: a node that holds a graph of its own, so a graph grows in
+  depth as well as in width.
 - **AI generation** — a node's code or system prompt, a plot transform, or an entire
   graph, written from a plain-language description and left visible and editable. Code
   generation starts from a typed skeleton of the node's real ports — the types and

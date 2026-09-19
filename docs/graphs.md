@@ -314,6 +314,81 @@ keeps a bundle runnable on a machine that was handed nothing but the bundle.
 
 ---
 
+## Subgraph Nodes
+
+A `subgraph` node holds a graph. Outside it is one box with ports and a sentence saying
+what it is for; inside it is an ordinary graph on an ordinary canvas.
+
+**It really is an ordinary graph**, and everything follows from that. The same engine
+runs it, the same `check` checks it, the same editor edits it — and because its folder is
+a project folder like any other, it can be opened, checked and run on its own:
+
+```bash
+node engine/src/main.ts examples/nested_statistics/                      # the whole thing
+node engine/src/main.ts examples/nested_statistics/nodes/statistics/     # just the part
+```
+
+### Its ports are the graph inside it
+
+| Outside | Inside |
+|---|---|
+| an input port | an `input` node in text mode |
+| an output port | an `output` node, carrying one value |
+| the port's name | that node's label |
+
+There is no separate port list to keep in step: add an input node in there and the node
+out here grows an input. Renaming changes what a port is *called* and never which edges
+lead to it, because the port's id is the inner node's id.
+
+An input port nothing is wired to leaves the node inside using its own value — which is
+not a special case, but what an input node with nothing wired into it has always done. It
+is also what lets the graph inside run on its own.
+
+A file or directory input node in there is **not** a port: it is a node that reads
+something. To say from outside which file it should read, wire a port to its `path`
+input, exactly as one graph's nodes do to each other.
+
+### On disk
+
+The graph a node holds is a project folder of its own, under that node's folder:
+
+```
+nested_statistics/
+  graph.json
+  layout.json
+  nodes/
+    statistics/
+      task.md              what this part is for
+      graph.json           the graph it holds
+      layout.json
+      nodes/
+        counts/code.js     a node of that graph, with its body in a file as usual
+        counts/examples.md
+```
+
+`check` descends into it and says where it was (`node "statistics" ▸ edge "e3"`), `test`
+runs the examples of the nodes in there, and a bundle carries the whole depth: a model
+called from inside is a model the recipient is told to configure.
+
+### In the editor
+
+**Open this graph ▸** in the node's dialog goes in; the breadcrumb in the toolbar comes
+back out, one click per level. Each level has its own undo. Save and Deploy are about the
+whole document from any depth, while ▶ Run stays on the level in front of you — running a
+part on its own is what you want while you are in it.
+
+A subgraph may be nothing but its sentence to begin with: an empty one with a description
+is how a plan is drawn before it is built, and `check` lists it as something still to do.
+
+### What it does not do yet
+
+A page belongs to the graph at the top, so a `gui` node inside is reported as a mistake.
+Ports carry single values, not lists. A memory (`data`) node in there does not keep its
+value between runs of the graph above. A node in there that asks for a value when the run
+starts is never asked — only the top graph is.
+
+---
+
 ## GUI Nodes
 
 A `gui` node is a composable interface node: it holds an ordered list of **widgets**

@@ -21,7 +21,7 @@ server serves a deployed tool, with the editor's routes simply not loaded.
 ## Elements first
 
 Everything the tool can do is an **element**: a node type (input, ai, code, data, output,
-gui) or a widget kind on a page (text, picker, dropdown, chart, chat, …). The design is
+gui, subgraph) or a widget kind on a page (text, picker, dropdown, chart, chat, …). The design is
 organised around them, and each element is one folder, at the **same relative path on
 both sides**:
 

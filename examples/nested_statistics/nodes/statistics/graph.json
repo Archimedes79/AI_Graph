@@ -1,0 +1,107 @@
+{
+  "metadata": {
+    "name": "Statistics",
+    "version": "1.0.0",
+    "description": "Counts what is in a text. A graph like any other: it runs on its own, and it runs as one node of the graph above it.",
+    "author": "",
+    "tags": [],
+    "ai_defaults": {
+      "provider": "default",
+      "model": ""
+    },
+    "gui_scheme": "night"
+  },
+  "nodes": [
+    {
+      "id": "text",
+      "node_type": "input",
+      "label": "Text",
+      "description": "Handed in by the node above; on its own run, this value",
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Output",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "config": {
+        "input_mode": "text",
+        "value": "Two sentences, eight words, and one of them is long."
+      }
+    },
+    {
+      "id": "counts",
+      "node_type": "code",
+      "label": "Counts",
+      "description": "",
+      "inputs": [
+        {
+          "id": "text",
+          "name": "Text",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Output",
+          "kind": "output",
+          "data_type": "json",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "config": {
+        "batch_mode": "whole_list"
+      }
+    },
+    {
+      "id": "numbers",
+      "node_type": "output",
+      "label": "Numbers",
+      "description": "",
+      "inputs": [
+        {
+          "id": "value",
+          "name": "Value",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "outputs": [],
+      "config": {
+        "output_label": "Numbers",
+        "write_mode": "window"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "i1",
+      "source_node_id": "text",
+      "source_port_id": "output",
+      "target_node_id": "counts",
+      "target_port_id": "text"
+    },
+    {
+      "id": "i2",
+      "source_node_id": "counts",
+      "source_port_id": "output",
+      "target_node_id": "numbers",
+      "target_port_id": "value"
+    }
+  ]
+}

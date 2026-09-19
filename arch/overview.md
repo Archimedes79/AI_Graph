@@ -70,7 +70,7 @@ flowchart LR
 | `Executor` | [`engine/src/execution/`](../engine/src/execution/): `executor.ts`, `triggers.ts`, `batching.ts`, `reuse.ts`, `interface.ts`, `examples.ts` | order, fan-out, memory, displays, stopping; reuses context a page event only needs; holds outputs to a kept output interface; runs a node's `examples.md` |
 | `Elements + registry` | [`engine/src/elements/`](../engine/src/elements/), and its mirror [`editor/src/elements/`](../editor/src/elements/) | one class per node type and widget kind, mirrored file for file; see [elements](#elements) |
 | `Graph document` | [`engine/src/graph.ts`](../engine/src/graph.ts), [`editor/src/graph.ts`](../editor/src/graph.ts) | the engine's types; the editor adds only the typed `NodeConfig` view |
-| `Project folder + check` | [`engine/src/project/`](../engine/src/project/): [`folder.ts`](../engine/src/project/folder.ts), [`check.ts`](../engine/src/project/check.ts), [`legacy.ts`](../engine/src/project/legacy.ts) | a graph as a folder (`graph.json`, `layout.json`, `nodes/<id>/<file>` per `Element.texts`), read and written for every caller; changes on disk; the one list of problems (`check`, MCP) |
+| `Project folder + check` | [`engine/src/project/`](../engine/src/project/): [`folder.ts`](../engine/src/project/folder.ts), [`check.ts`](../engine/src/project/check.ts), [`legacy.ts`](../engine/src/project/legacy.ts) | a graph as a folder (`graph.json`, `layout.json`, `nodes/<id>/<file>` per `Element.texts`, and a project folder of its own under a node that holds a graph), read and written for every caller; changes on disk; the one list of problems (`check`, MCP) |
 | `AI providers + MCP` | [`engine/src/ai/`](../engine/src/ai/) | providers, `ai-settings.json`, MCP client |
 
 The page also runs engine code directly — elements for ports and previews, the graph
@@ -91,14 +91,14 @@ flowchart TD
     Element["Element"]
     NodeElement["NodeElement"]
     WidgetElement["WidgetElement"]
-    Nodes["6 × <Kind>NodeElement"]
+    Nodes["7 × <Kind>NodeElement"]
     Widgets["<Kind>WidgetElement · StaticWidgetElement · DisplayWidgetElement → TransformingDisplayElement"]
   end
   subgraph editor["editor/src/elements — how it looks and is edited"]
     Ui["Ui"]
     NodeUi["NodeUi"]
     WidgetUi["WidgetUi"]
-    NodeUis["6 × <Kind>NodeUi"]
+    NodeUis["7 × <Kind>NodeUi"]
     WidgetUis["<Kind>WidgetUi · StaticWidgetUi · DisplayWidgetUi → TransformingDisplayUi"]
   end
 
@@ -120,12 +120,12 @@ flowchart TD
 | `Element` | [`engine/src/elements/Element.ts`](../engine/src/elements/Element.ts) | `config()`, `logic()`, `generation()`, `catchesErrors()`, `deployNeeds()`, `runSnippet()`; services in [`Runtime.ts`](../engine/src/elements/Runtime.ts) |
 | `NodeElement` | [`engine/src/elements/NodeElement.ts`](../engine/src/elements/NodeElement.ts) | `derivedPorts`, `execute`, `display`, `runtimeRequirements`, `settleMemory`, and what the executor reads |
 | `WidgetElement` | [`engine/src/elements/WidgetElement.ts`](../engine/src/elements/WidgetElement.ts) | `ports`, `execute`, `firesRun`, `settle`, `displayValue` |
-| `6 × <Kind>NodeElement` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeElement.ts`; listed in [`registry.ts`](../engine/src/elements/registry.ts) |
+| `7 × <Kind>NodeElement` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeElement.ts`; listed in [`registry.ts`](../engine/src/elements/registry.ts) |
 | `<Kind>WidgetElement …` | [`engine/src/elements/widgets/`](../engine/src/elements/widgets/) | 12 kinds, with [`StaticWidgetElement`](../engine/src/elements/widgets/StaticWidgetElement.ts), [`DisplayWidgetElement`](../engine/src/elements/widgets/DisplayWidgetElement.ts), [`TransformingDisplayElement`](../engine/src/elements/widgets/TransformingDisplayElement.ts); listed in [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts) |
 | `Ui` | [`editor/src/elements/Ui.ts`](../editor/src/elements/Ui.ts) | `Panel` (lazy), `generation` |
 | `NodeUi` | [`editor/src/elements/NodeUi.ts`](../editor/src/elements/NodeUi.ts) | `create(id)`, `label`, `icon`, `color`, `hint`, `AdvancedPanel`, `describeOutput`; `NodePanelProps` |
 | `WidgetUi` | [`editor/src/elements/WidgetUi.ts`](../editor/src/elements/WidgetUi.ts) | `create(label, mode)`, `label`, `View`, `defaultSpan`, `defaultTone`, `runOnChangeHint`; `WidgetPanelProps` |
-| `6 × <Kind>NodeUi` | [`editor/src/elements/nodes/`](../editor/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeUi.ts` beside `<Kind>NodePanel.tsx`; listed in [`registry.ts`](../editor/src/elements/registry.ts) |
+| `7 × <Kind>NodeUi` | [`editor/src/elements/nodes/`](../editor/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeUi.ts` beside `<Kind>NodePanel.tsx`; listed in [`registry.ts`](../editor/src/elements/registry.ts) |
 | `<Kind>WidgetUi …` | [`editor/src/elements/widgets/`](../editor/src/elements/widgets/) | `widgets/<kind>/<Kind>WidgetUi.ts` beside `<Kind>WidgetView.tsx` and, if it has settings, `<Kind>WidgetPanel.tsx`; [`TransformingDisplayUi`](../editor/src/elements/widgets/TransformingDisplayUi.ts) owns the one panel of chart, table and image; listed in [`widgets/roster.ts`](../editor/src/elements/widgets/roster.ts) |
 
 Shared by elements, not drawn: [`authoring/generation.ts`](../engine/src/authoring/generation.ts)

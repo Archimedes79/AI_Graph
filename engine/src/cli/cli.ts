@@ -22,6 +22,7 @@
 // "Text for 'Greeting': " in front of the JSON and nobody could parse it.
 
 import { createInterface } from 'node:readline/promises';
+import type { Graph } from '../graph.ts';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/check.ts';
 import { executeGraph, executeNode, inputsFor, nodeName } from '../execution/executor.ts';
@@ -303,19 +304,36 @@ export async function runTests(argv: string[]): Promise<number> {
   const paths = argv.filter((arg, index) => !arg.startsWith('--') && argv[index - 1] !== '--node');
   let failed = 0;
   for (const path of paths.length ? paths : ['.']) {
-    const graph = await loadGraph(path);
-    const nodes = graph.nodes.filter((node) => (only ? node.id === only : String(node.config.examples ?? '').trim()));
-    if (!nodes.length) process.stdout.write(`· ${path}: ${only ? `no node "${only}"` : 'no node has examples'}\n`);
-    for (const node of nodes) {
-      for (const result of await runExamples(graph, node.id, { runtime: nodeRuntime(), registry, offline })) {
-        const mark = { pass: '✓', fail: '✗', error: '✗', skipped: '·' }[result.status];
-        process.stdout.write(`${mark} ${path} ${node.id}: ${result.title}${result.status === 'skipped' ? ' (skipped)' : ''}\n`);
-        for (const line of result.status === 'skipped' ? [] : result.details) process.stdout.write(`    ${line}\n`);
-        if (result.status === 'fail' || result.status === 'error') failed += 1;
+    let tested = 0;
+    // A node that holds a graph holds nodes with examples of their own, and
+    // they are tested here for the same reason `check` descends: the graph
+    // inside is part of this project, not a second one.
+    for (const { graph, inside } of everyGraphIn(await loadGraph(path))) {
+      const nodes = graph.nodes.filter((node) => (only ? node.id === only : String(node.config.examples ?? '').trim()));
+      tested += nodes.length;
+      for (const node of nodes) {
+        for (const result of await runExamples(graph, node.id, { runtime: nodeRuntime(), registry, offline })) {
+          const mark = { pass: '✓', fail: '✗', error: '✗', skipped: '·' }[result.status];
+          process.stdout.write(`${mark} ${path} ${inside}${node.id}: ${result.title}${result.status === 'skipped' ? ' (skipped)' : ''}\n`);
+          for (const line of result.status === 'skipped' ? [] : result.details) process.stdout.write(`    ${line}\n`);
+          if (result.status === 'fail' || result.status === 'error') failed += 1;
+        }
       }
     }
+    if (!tested) process.stdout.write(`· ${path}: ${only ? `no node "${only}"` : 'no node has examples'}\n`);
   }
   return failed ? 1 : 0;
+}
+
+/** The graph loaded, and every graph its nodes hold, with the way down to each. */
+function everyGraphIn(graph: Graph, inside = ''): { graph: Graph; inside: string }[] {
+  return [
+    { graph, inside },
+    ...graph.nodes.flatMap((node) => {
+      const held = registry.node(node.node_type)?.nestedGraph(node);
+      return held ? everyGraphIn(held, `${inside}${node.id} ▸ `) : [];
+    }),
+  ];
 }
 
 /**

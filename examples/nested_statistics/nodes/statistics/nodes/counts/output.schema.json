@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "output": {
+      "type": "object",
+      "properties": {
+        "words": { "type": "integer" },
+        "sentences": { "type": "integer" },
+        "longest": { "type": "string" }
+      },
+      "required": ["words", "sentences", "longest"]
+    }
+  },
+  "required": ["output"]
+}

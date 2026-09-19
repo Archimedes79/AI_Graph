@@ -1,0 +1,108 @@
+{
+  "metadata": {
+    "name": "Nested statistics",
+    "version": "1.0.0",
+    "description": "A part of the work built as its own graph: the counting lives inside one node, and the graph above it reads as a sentence.",
+    "author": "",
+    "tags": [
+      "subgraph",
+      "code"
+    ],
+    "ai_defaults": {
+      "provider": "default",
+      "model": ""
+    },
+    "gui_scheme": "night"
+  },
+  "nodes": [
+    {
+      "id": "paragraph",
+      "node_type": "input",
+      "label": "Paragraph",
+      "description": "The text to measure",
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Output",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "config": {
+        "input_mode": "text",
+        "value": "A graph grows in two directions. It grows wider as nodes are added beside each other, and it grows deeper when a part of the work becomes a graph of its own."
+      }
+    },
+    {
+      "id": "statistics",
+      "node_type": "subgraph",
+      "label": "Statistics",
+      "description": "A graph of its own: open it to see how the counting is done",
+      "inputs": [
+        {
+          "id": "text",
+          "name": "Text",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": "The text to measure"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "numbers",
+          "name": "Numbers",
+          "kind": "output",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": "What was counted"
+        }
+      ],
+      "config": {}
+    },
+    {
+      "id": "report",
+      "node_type": "output",
+      "label": "Report",
+      "description": "",
+      "inputs": [
+        {
+          "id": "value",
+          "name": "Value",
+          "kind": "input",
+          "data_type": "any",
+          "multi": true,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "outputs": [],
+      "config": {
+        "output_label": "Statistics",
+        "write_mode": "window"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source_node_id": "paragraph",
+      "source_port_id": "output",
+      "target_node_id": "statistics",
+      "target_port_id": "text"
+    },
+    {
+      "id": "e2",
+      "source_node_id": "statistics",
+      "source_port_id": "numbers",
+      "target_node_id": "report",
+      "target_port_id": "value"
+    }
+  ]
+}
