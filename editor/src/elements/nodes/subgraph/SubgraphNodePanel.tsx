@@ -68,6 +68,25 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
         </p>
       </div>
 
+      {/* The one setting this node has of its own. It matters more here than
+          elsewhere: anything short of a clean run inside fails this node, so
+          this is how the graph above is allowed to carry on regardless. */}
+      <div className="mb-4">
+        <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
+          <input
+            type="checkbox"
+            checked={node.config.catch_errors === true}
+            onChange={(e) => setConfig('catch_errors', e.target.checked)}
+          />
+          Catch a failed run instead of ending this one
+        </label>
+        <p className="text-xs mt-1" style={{ color: DIMMER }}>
+          Off, a failure anywhere in the graph inside stops the run out here. On, this node
+          grows an <strong style={{ color: '#a78bfa' }}>Error</strong> output carrying the
+          reason, its other outputs carry nothing, and the run goes on.
+        </p>
+      </div>
+
       <div className="pt-4" style={{ borderTop: `1px solid ${LINE}` }}>
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           Ports — the input and output nodes of the graph inside

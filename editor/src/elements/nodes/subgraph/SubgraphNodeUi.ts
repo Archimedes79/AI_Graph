@@ -21,7 +21,7 @@ export class SubgraphNodeUi extends NodeUi {
   readonly hint = 'A graph inside a node: build a part of the work on its own canvas';
   readonly icon = '🧩';
   readonly color = 'var(--ui-node-subgraph, #2a2a4a)';
-  readonly settings: NodeUi['settings'] = ['subgraph', 'task'];
+  readonly settings: NodeUi['settings'] = ['subgraph', 'task', 'catch_errors'];
 
   override readonly ownsDescription = true;
   override readonly Panel = lazy(() => import('./SubgraphNodePanel'));

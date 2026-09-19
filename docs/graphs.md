@@ -380,6 +380,18 @@ part on its own is what you want while you are in it.
 A subgraph may be nothing but its sentence to begin with: an empty one with a description
 is how a plan is drawn before it is built, and `check` lists it as something still to do.
 
+### When something in there goes wrong
+
+Anything short of a clean run inside fails the node that holds it, with the reason and the
+name of the inner node it came from. That includes a run that only half worked — an item
+of a fan-out that failed, or a node in there that caught its own failure and passed
+nothing on. From outside this is *one* node, and half of it having worked is not something
+a port can carry: what it would carry is a null nobody can explain.
+
+To let the graph above carry on regardless, tick **Catch a failed run instead of ending this one** on the
+subgraph node itself. The reason then arrives on its `error` port, which is where a caught failure
+belongs, and everything wired to that port gets to react.
+
 ### What it does not do yet
 
 A page belongs to the graph at the top, so a `gui` node inside is reported as a mistake.

@@ -24,11 +24,11 @@ const SUBGRAPH_TEXTS: readonly TextFile[] = [
  * **A subgraph is an ordinary graph**, and almost nothing here exists to make
  * that true -- the same `executeGraph` runs it, the same project folder stores
  * it, the same `check` checks it, the same editor edits it. What is left for
- * this file is the dictionary at the boundary: which values arrive on which
- * inner node, and which inner node's value leaves by which port. That is
- * `boundary.ts`, and it is twenty lines.
+ * this file is one node's own contract: the dictionary at the boundary
+ * (`boundary.ts`), what may stand at it (`problems`), and handing the values
+ * across (`execute`).
  *
- * Two consequences worth stating, because both are asked about:
+ * Three consequences worth stating, because all three are asked about:
  *
  * - An input node inside that nothing is wired to still uses its own value.
  *   That is not a special case for subgraphs; it is what an input node with
@@ -36,6 +36,9 @@ const SUBGRAPH_TEXTS: readonly TextFile[] = [
  * - The graph inside can be run, checked and deployed on its own -- its folder
  *   is a project folder like any other. A subgraph that only works while
  *   enclosed would be a second kind of graph, and there is only one kind.
+ * - Anything short of a clean run in there fails this node. From out here it
+ *   is one node, and half of it having worked is not something a port can
+ *   carry; `execute` says why at more length.
  */
 export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
   readonly nodeType = 'subgraph' as const;

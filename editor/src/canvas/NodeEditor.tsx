@@ -146,11 +146,16 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     setNode((prev) => {
       if (!prev) return prev;
       const next = { ...prev, config: { ...prev.config, [key]: value } };
+      // A setting an element derives its ports from has just changed, so the
+      // ports follow it here and now. They used to follow only on the next
+      // load, which is why ticking "catch failures" on an input node grew its
+      // error port sometime later, to a person who had gone looking for it.
+      const derived = derivedNodePorts(next);
+      if (derived) return { ...next, ...derived };
       // Ticking "catch failures" is what puts the port on the node. Nobody
       // should have to add an output by hand and guess that it must be called
-      // `error` for the executor to fill it. Elements whose ports are derived
-      // -- an input node, a page -- declare it themselves, so leave those be.
-      if (key === 'catch_errors' && derivedNodePorts(next) === null) {
+      // `error` for the executor to fill it.
+      if (key === 'catch_errors') {
         const without = next.outputs.filter((port) => port.id !== 'error');
         next.outputs = value ? [...without, ERROR_OUTPUT] : without;
       }
