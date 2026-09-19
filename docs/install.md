@@ -35,7 +35,9 @@ editor's requests. It listens on loopback only.
 
 Starting `start.cmd`, `start.ps1` or `start.sh` again while the editor is already
 running stops the existing editor on the same port first, rebuilds the page when
-editor sources are newer, and starts one fresh instance. Closing the browser tab
+editor or engine sources are newer, and starts one fresh instance. Only an AI-Graph
+server is stopped: if another program holds the port, the launcher says so and leaves
+it alone (`--port 8001` picks another). Closing the browser tab
 does not stop the Node server. Use `stop.cmd`, `./stop.ps1` or `./stop.sh` to stop
 it without restarting; Ctrl+C in its terminal and starting the launcher again also
 stop/restart it.
