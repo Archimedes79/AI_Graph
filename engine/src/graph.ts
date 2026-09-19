@@ -11,7 +11,7 @@
 // Here the element owns its config type (see `elements/Element.ts`). This file knows a
 // config is an object; only the element knows what is in it.
 
-export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui';
+export type NodeType = 'input' | 'ai' | 'code' | 'data' | 'output' | 'gui' | 'subgraph';
 
 export type WidgetKind =
   | 'input_picker' | 'text_io' | 'plot_window' | 'image_view'

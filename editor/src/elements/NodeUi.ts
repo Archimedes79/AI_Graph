@@ -96,6 +96,12 @@ export abstract class NodeUi extends Ui<GraphNode, NodePanelProps> {
   /** This node carries the graph's interface: it gets a live page. */
   readonly hasRuntimeWindow?: boolean;
   /**
+   * This node holds a graph of its own, which the editor can go into. The
+   * mirror of `NodeElement.nestedGraph`, and the reason no shell has to know
+   * which node type that is.
+   */
+  readonly opensNestedGraph?: boolean;
+  /**
    * The node is a composite of widgets (`config.gui_widgets`): drawn with them
    * on the canvas, and generated widget by widget.
    */

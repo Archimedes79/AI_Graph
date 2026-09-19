@@ -220,6 +220,8 @@ export interface RunOptions {
    * input nodes are answered rather than asked.
    */
   given?: Record<string, Record<string, unknown>>;
+  /** How many graphs this run is already inside. Set by the executor, for itself. */
+  depth?: number;
 }
 
 /**
@@ -238,6 +240,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   const broken = fatalProblems(graph);
   if (broken.length) throw new Error(unrunnable(broken));
   const { signal } = options;
+  const depth = options.depth ?? 0;
   const runtime = stoppable(withGraphDefaults(options.runtime, graph), signal);
   const { nodes, edges } = graph;
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -336,7 +339,9 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
           runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'success' });
           continue;
         }
-        const { produced, failures } = await runNode(element, node, given, runtime, signal);
+        const { produced, failures } = await runNode(
+          element, node, given, withSubgraph(runtime, options, node, depth), signal,
+        );
         if (signal?.aborted) throw new Error('Stopped.');
         outputs.set(nodeId, produced);
         // Kept only when it went through whole: a partial result is not one to hand back.
@@ -424,6 +429,57 @@ function stoppable(runtime: Runtime, signal: AbortSignal | undefined): Runtime {
     ...runtime,
     ai: { complete: (request) => runtime.ai.complete({ ...request, signal }) },
     code: { run: (body, inputs) => runtime.code.run(body, inputs, signal) },
+  };
+}
+
+/**
+ * How deep a graph may hold a graph.
+ *
+ * Not a technical ceiling -- nothing here recurses on the stack -- but the
+ * depth past which a person has lost the thread, and the thing that ends a
+ * graph that somehow came to hold itself.
+ */
+const NESTING_LIMIT = 5;
+
+/**
+ * The runtime a node that holds a graph is handed: the same one, plus the way
+ * to run that graph.
+ *
+ * Made per node rather than per run, because the inner run's progress is the
+ * *outer* node's progress. A page watching a run counts what it was told to
+ * expect ("3 of 7"), and inner nodes it never heard of would count past the
+ * end; they are forwarded as activity of the node they happened inside.
+ */
+function withSubgraph(runtime: Runtime, options: RunOptions, node: GraphNode, depth: number): Runtime {
+  const inner: Runtime = {
+    ...runtime,
+    ...(runtime.report ? {
+      report: (event) => {
+        if (event.type === 'node_start' || event.type === 'node_done') return;
+        runtime.report!({ ...event, node_id: node.id });
+      },
+    } : {}),
+  };
+  return {
+    ...runtime,
+    subgraph: {
+      run: (graph, given) => {
+        if (depth + 1 > NESTING_LIMIT) {
+          throw new Error(`Graphs may hold graphs ${NESTING_LIMIT} deep; "${node.id}" is one deeper than that.`);
+        }
+        return executeGraph(graph, {
+          ...options,
+          runtime: inner,
+          given,
+          depth: depth + 1,
+          // The inner graph runs whole. A page event and a single-node run are
+          // asked at the level they were asked at, and mean nothing here.
+          trigger: null,
+          only: undefined,
+          reuse: undefined,
+        });
+      },
+    },
   };
 }
 
@@ -522,7 +578,7 @@ export async function executeNode(
   const runtime = withGraphDefaults(options.runtime, graph);
   try {
     const given = await readInputs(element, node, inputs, runtime);
-    const { produced, failures } = await runNode(element, node, given, runtime);
+    const { produced, failures } = await runNode(element, node, given, withSubgraph(runtime, options, node, 0));
     return {
       node_id: nodeId, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
       error: failures.length ? `${failures.length} of ${failures.total} items failed: ${failures[0]}` : null,

@@ -10,6 +10,7 @@ import { CodeNodeUi } from './nodes/code/CodeNodeUi';
 import { DataNodeUi } from './nodes/data/DataNodeUi';
 import { OutputNodeUi } from './nodes/output/OutputNodeUi';
 import { GuiNodeUi } from './nodes/gui/GuiNodeUi';
+import { SubgraphNodeUi } from './nodes/subgraph/SubgraphNodeUi';
 
 /** Every node type's Ui, by type. */
 export const NODE_UIS: Record<NodeType, NodeUi> = {
@@ -19,6 +20,7 @@ export const NODE_UIS: Record<NodeType, NodeUi> = {
   data: new DataNodeUi(),
   output: new OutputNodeUi(),
   gui: new GuiNodeUi(),
+  subgraph: new SubgraphNodeUi(),
 };
 
 export { WIDGET_UIS } from './widgets/roster';

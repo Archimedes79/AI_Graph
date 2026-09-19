@@ -5,6 +5,8 @@
 // be tested by monkey-patching a module. Passed in, the same element runs on a
 // server (`host/node.ts`), in a browser tab and inside a test with fakes.
 
+import type { ExecutionResult, Graph } from '../graph.ts';
+
 /** Reading and writing files, wherever this engine happens to run. */
 export interface FileService {
   read(path: string, mode?: 'text' | 'binary'): Promise<string>;
@@ -82,6 +84,18 @@ export type ProgressEvent =
   | { type: 'batch'; node_id: string; done: number; total: number }
   | { type: 'activity'; node_id: string; message: string };
 
+/**
+ * Running a graph, for the element whose node holds one.
+ *
+ * Put there by the executor, the way the stop signal is: running a graph is
+ * what the executor does, and everything an inner run must inherit -- the
+ * registry, the signal, how deep it already is -- is known there and nowhere
+ * else. An element only says "run this, with these results already known".
+ */
+export interface SubgraphService {
+  run(graph: Graph, given: Record<string, Record<string, unknown>>): Promise<ExecutionResult>;
+}
+
 /** Everything an element may reach outside itself. */
 export interface Runtime {
   files: FileService;
@@ -89,5 +103,7 @@ export interface Runtime {
   ai: AiService;
   /** Absent where no tool server can be reached; an element that wants one says so. */
   tools?: ToolService;
+  /** Absent outside a run: only the executor can offer it. */
+  subgraph?: SubgraphService;
   report?(event: ProgressEvent): void;
 }
