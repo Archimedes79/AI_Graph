@@ -151,6 +151,10 @@ export async function writeBundle(
   target: string,
   options: { name?: string; pageDir?: string; dataFrom?: string } = {},
 ): Promise<string[]> {
+  // A bundle is something handed to someone else. One of a graph with no nodes
+  // is a zip that starts, does nothing and says nothing -- and the person who
+  // opens it has no way to tell that from a tool that failed.
+  if (!graph.nodes.length) throw new Error('This graph has no nodes: there is nothing to hand over.');
   const needs = bundleNeeds(graph);
   const name = options.name || graph.metadata.name || 'graph';
   const written: string[] = [];

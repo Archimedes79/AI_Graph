@@ -31,7 +31,7 @@
       ],
       "config": {
         "input_mode": "text",
-        "value": "Two sentences, eight words, and one of them is long."
+        "value": "One sentence, and it has exactly eight words."
       }
     },
     {

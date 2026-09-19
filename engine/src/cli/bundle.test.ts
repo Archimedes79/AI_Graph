@@ -120,6 +120,15 @@ describe('a bundle', () => {
     expect(bundleNeeds(deep).ai).toBe(true);
   });
 
+  it('refuses a graph with nothing in it: a bundle is something handed over', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-empty-'));
+    try {
+      await expect(writeBundle(parseGraph({ nodes: [], edges: [] }), dir)).rejects.toThrow(/nothing to hand over/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('writes a README that names the model settings only when one is asked', async () => {
     const dir = await bundleOf(resolve(REPO, 'examples', 'population_plotter'));
     try {
