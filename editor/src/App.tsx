@@ -30,7 +30,9 @@ export default function App() {
   const editingPort = useGraphStore((s) => s.editingPort);
   const setEditingPort = useGraphStore((s) => s.setEditingPort);
   const loadGraph = useGraphStore((s) => s.loadGraph);
-  const exportGraph = useGraphStore((s) => s.exportGraph);
+  // Saving and exporting are about the whole document, whichever level of it
+  // the canvas is showing; running is about the level you are looking at.
+  const rootGraph = useGraphStore((s) => s.rootGraph);
   const setRFNodes = useGraphStore((s) => s.setRFNodes);
   const setRFEdges = useGraphStore((s) => s.setRFEdges);
   const setMetadata = useGraphStore((s) => s.setMetadata);
@@ -39,6 +41,7 @@ export default function App() {
   const isDirty = useGraphStore((s) => s.isDirty);
   const markSaved = useGraphStore((s) => s.markSaved);
   const isProject = useGraphStore((s) => s.isProject);
+  const insideSubgraph = useGraphStore((s) => s.subgraphStack.length > 0);
   const takeDiskChanges = useGraphStore((s) => s.takeDiskChanges);
 
   // The browser's own "leave site?" prompt. Nothing else stands between an
@@ -277,7 +280,9 @@ export default function App() {
   // node dialog's "changed while open" question). Only while the page is
   // looked at: a hidden tab has nobody to show a change to.
   useEffect(() => {
-    if (!isProject || !currentFilePath) return;
+    // Not while a node is open from the inside: a change down there arrives as
+    // "that whole graph changed", which is the graph being edited right now.
+    if (!isProject || !currentFilePath || insideSubgraph) return;
     let alive = true;
     const look = async () => {
       if (document.hidden) return;
@@ -293,7 +298,7 @@ export default function App() {
     };
     const timer = window.setInterval(look, 1500);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [isProject, currentFilePath, takeDiskChanges]);
+  }, [isProject, currentFilePath, insideSubgraph, takeDiskChanges]);
 
   const handleSave = async () => {
     if (!currentFilePath) {
@@ -302,7 +307,7 @@ export default function App() {
     }
     setSaveStatus('Saving\u2026');
     try {
-      await call('saveGraph', { path: currentFilePath, graph: exportGraph() });
+      await call('saveGraph', { path: currentFilePath, graph: rootGraph() });
       markSaved();
       setSaveStatus(`\u2705 Saved to ${currentFilePath}`);
     } catch (error) {
@@ -364,7 +369,7 @@ export default function App() {
         if (useGraphStore.getState().metadata.name === 'Untitled Graph') {
           setMetadata({ name: (path.split(/[\\/]/).filter(Boolean).pop() ?? '').replace(/\.json$/i, '') || 'Untitled Graph' });
         }
-        const result = await call('saveGraph', { path, graph: exportGraph() });
+        const result = await call('saveGraph', { path, graph: rootGraph() });
         setCurrentFilePath(result.path, result.project);
         markSaved();
         setSaveStatus(`\u2705 Saved to ${result.path}`);
@@ -379,11 +384,11 @@ export default function App() {
   };
 
   const handleOpenJsonImport = useCallback(() => {
-    setJsonImportValue(JSON.stringify(exportGraph(), null, 2));
+    setJsonImportValue(JSON.stringify(rootGraph(), null, 2));
     setJsonImportError('');
     setCopyStatus('');
     setShowJsonImport(true);
-  }, [exportGraph]);
+  }, [rootGraph]);
 
   const handleCopyJson = async () => {
     try {

@@ -282,3 +282,105 @@ describe('graphStore, a graph just opened', () => {
     expect(useGraphStore.getState().isDirty()).toBe(false);
   });
 });
+
+/**
+ * Going into a node that holds a graph. One document is open at a time and the
+ * canvas does not know the difference -- what changes is which graph it shows,
+ * and that is the whole mechanism.
+ */
+describe('a graph inside a node', () => {
+  const inner = (nodes: unknown[] = []) => ({
+    metadata: {
+      name: 'Inner', version: '1.0.0', description: '', author: '', tags: [],
+      ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night',
+    },
+    nodes,
+    edges: [],
+  });
+
+  const holder = (held: unknown = inner()) => graphNode({
+    id: 'part', node_type: 'subgraph', label: 'Part',
+    config: { ...blankConfig(), subgraph: held },
+  });
+
+  const store = () => useGraphStore.getState();
+
+  it('opens what the node holds, and puts back what was built in there', () => {
+    loadTestGraph([holder()]);
+    store().markSaved();
+
+    store().openSubgraph('part');
+    expect(store().rfNodes).toHaveLength(0);
+    expect(store().metadata.name).toBe('Inner');
+
+    store().addNode('output', { x: 0, y: 0 });
+    store().closeSubgraph();
+
+    // Back outside, with the node holding what was added -- and an output node
+    // in there is an output port out here.
+    expect(store().metadata.name).toBe('Test');
+    const node = store().rfNodes[0].data.graphNode;
+    expect((node.config.subgraph as Graph).nodes).toHaveLength(1);
+    expect(node.outputs).toHaveLength(1);
+  });
+
+  it('is unsaved work like any other, measured on the whole document', () => {
+    loadTestGraph([holder()]);
+    store().markSaved();
+    expect(store().isDirty()).toBe(false);
+
+    store().openSubgraph('part');
+    // Going in changes nothing.
+    expect(store().isDirty()).toBe(false);
+
+    store().addNode('output', { x: 0, y: 0 });
+    // A change in there is a change, seen from in there.
+    expect(store().isDirty()).toBe(true);
+
+    // And saving from in there saves the whole thing.
+    store().markSaved();
+    expect(store().isDirty()).toBe(false);
+    store().closeSubgraph();
+    expect(store().isDirty()).toBe(false);
+  });
+
+  it('gives each level its own undo, and lets neither reach the other', () => {
+    loadTestGraph([holder()]);
+    store().openSubgraph('part');
+    expect(store().canUndo()).toBe(false);
+
+    store().addNode('output', { x: 0, y: 0 });
+    expect(store().canUndo()).toBe(true);
+    store().undo();
+    expect(store().rfNodes).toHaveLength(0);
+
+    store().closeSubgraph();
+    // Outside, the history is the one that was left here.
+    expect(store().canUndo()).toBe(false);
+    expect(store().rfNodes.map((n) => n.id)).toEqual(['part']);
+  });
+
+  it('folds every level up, however deep', () => {
+    loadTestGraph([holder(inner([{ ...holder(), id: 'deeper', label: 'Deeper' }]))]);
+    store().openSubgraph('part');
+    store().openSubgraph('deeper');
+    store().addNode('output', { x: 0, y: 0 });
+
+    const root = store().rootGraph();
+    const middle = root.nodes[0].config.subgraph as Graph;
+    const bottom = middle.nodes[0].config.subgraph as Graph;
+    expect(bottom.nodes).toHaveLength(1);
+    // And what `rootGraph` says is what closing twice leaves behind.
+    store().closeSubgraph();
+    store().closeSubgraph();
+    expect(JSON.stringify(store().exportGraph())).toBe(JSON.stringify(root));
+  });
+
+  it('drops the frames when a different document is opened', () => {
+    loadTestGraph([holder()]);
+    store().openSubgraph('part');
+    loadTestGraph([graphNode({ id: 'other' })]);
+    expect(store().subgraphStack).toHaveLength(0);
+    expect(store().rootGraph().nodes.map((n) => n.id)).toEqual(['other']);
+  });
+});

@@ -318,7 +318,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
               if (!state.currentFilePath) return;
               try {
                 setExternalStatus('Saving, then opening…');
-                await call('saveGraph', { path: state.currentFilePath, graph: state.exportGraph() });
+                await call('saveGraph', { path: state.currentFilePath, graph: state.rootGraph() });
                 state.markSaved();
                 const opened = await call('openExternal', { graph_path: state.currentFilePath, node_id: nodeId, widget_id: widget.id });
                 setExternalStatus(`Opened in ${opened.with}: ${opened.path}. What you save there appears here by itself.`);

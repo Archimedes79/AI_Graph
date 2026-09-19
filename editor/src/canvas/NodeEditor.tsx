@@ -126,7 +126,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       updateNode(nodeId, node!);
       baseline.current = JSON.stringify(node);
       const after = useGraphStore.getState();
-      await call('saveGraph', { path: state.currentFilePath, graph: after.exportGraph() });
+      await call('saveGraph', { path: state.currentFilePath, graph: after.rootGraph() });
       after.markSaved();
       const opened = await call('openExternal', { graph_path: state.currentFilePath, node_id: nodeId });
       setExternalStatus(`Opened in ${opened.with}: ${opened.path}. What you save there appears here by itself.`);

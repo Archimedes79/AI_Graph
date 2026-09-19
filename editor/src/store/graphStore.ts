@@ -3,7 +3,7 @@ import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, NodeType } from '@/graph';
 import type { RFNodeData } from '@/canvas/nodeData';
-import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { derivedNodePorts } from '@/elements/nodes/gui/guiWidgets';
 import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { ACCENT } from '@/ui/theme';
@@ -15,6 +15,7 @@ import { applyMemory } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { inferInterface } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
+import { NESTED_GRAPH_FIELD } from '@engine/project/folder.ts';
 
 type RFNode = Node<RFNodeData>;
 
@@ -38,6 +39,16 @@ export interface GraphStore {
 
   // Text Output node windows shown after a run
   textOutputWindows: { nodeId: string; label: string; content: string }[];
+
+  /**
+   * The graphs this one is inside, outermost first: one frame per node that
+   * was opened, each with the undo history of its own level.
+   *
+   * One document is open at a time, and going into a node swaps which. That
+   * keeps the canvas, the run button and undo exactly as they are, and it is
+   * why nothing in here says "subgraph" twice.
+   */
+  subgraphStack: { nodeId: string; graph: Graph; past: string[]; future: string[] }[];
 
   // Serialised graph as of the last load/save, for `isDirty`.
   savedSnapshot: string | null;
@@ -88,6 +99,16 @@ export interface GraphStore {
   closeTextOutputWindow: (nodeId: string) => void;
   loadGraph: (graph: Graph) => void;
   exportGraph: () => Graph;
+  /** Go into the graph a node holds. It becomes the open document. */
+  openSubgraph: (nodeId: string) => void;
+  /** Come back out one level, putting what was edited back into the node that holds it. */
+  closeSubgraph: () => void;
+  /**
+   * The whole document: what is open, folded back through every node it is
+   * inside. What is saved, and what "unsaved" is measured against, whatever
+   * level the canvas happens to be showing.
+   */
+  rootGraph: () => Graph;
   /**
    * Whether the graph differs from the last loaded or saved version.
    *
@@ -237,10 +258,30 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
     },
   };
 
-  // gui/widget node ports are always derived from their widget list -- never
-  // trust hand-edited/imported/AI-generated `inputs`/`outputs`: the engine
-  // derives them the same way (`GuiNodeElement.derivedPorts`).
-  return nodeType === 'gui' ? syncGuiNodePorts(node) : node;
+  // Where the element derives its ports -- a gui node from its blocks, an
+  // input node from its mode, a subgraph node from the graph it holds -- they
+  // come from the element, never from what a file, an import or a model said.
+  // The engine works them out the same way (`portsOf` in `wiring.ts`), and a
+  // second answer here is a second answer that can disagree.
+  const derived = derivedNodePorts(node);
+  return derived ? { ...node, ...derived } : node;
+}
+
+/**
+ * *outer* with *inner* put back into the node it came out of, and that node's
+ * ports derived from it again -- an output node added in there is a port out
+ * here, and this is the moment that becomes true.
+ */
+function withNested(outer: Graph, nodeId: string, inner: Graph): Graph {
+  return {
+    ...outer,
+    nodes: outer.nodes.map((node) => {
+      if (node.id !== nodeId) return node;
+      const held = { ...node, config: { ...node.config } };
+      engineRegistry.node(held.node_type)?.setNestedGraph(held as never, inner as never);
+      return { ...held, ...(derivedNodePorts(held) ?? {}) };
+    }),
+  };
 }
 
 function normalizeGraph(graph: Graph): Graph {
@@ -348,6 +389,7 @@ export const useGraphStore = create<GraphStore>()(
     selectedNodeId: null,
     editingNodeId: null,
     editingPort: null,
+    subgraphStack: [],
     savedSnapshot: null,
     past: [],
     future: [],
@@ -513,14 +555,57 @@ export const useGraphStore = create<GraphStore>()(
         state.currentFilePath = null;
         state.isProject = false;
         // A different document: its predecessor's undo steps would restore
-        // nodes belonging to a graph that is no longer open.
+        // nodes belonging to a graph that is no longer open, and its frames
+        // would fold this one into a node it never came from.
         state.past = [];
         state.future = [];
+        state.subgraphStack = [];
       });
       // Snapshot through exportGraph() rather than from normalizedGraph: it is
       // the same serialisation isDirty() compares against, so a freshly loaded
       // graph is guaranteed to read as clean.
       get().markSaved();
+    },
+
+    openSubgraph: (nodeId) => {
+      const node = get().rfNodes.find((n: RFNode) => n.id === nodeId)?.data.graphNode;
+      if (!node || !NODE_UIS[node.node_type]?.opensNestedGraph) return;
+      const held = engineRegistry.node(node.node_type)?.nestedGraph(node as never) as Graph | null;
+      if (!held) return;
+
+      const frame = { nodeId, graph: get().exportGraph(), past: get().past, future: get().future };
+      // Not `loadGraph`: that is for opening a different *document*, and would
+      // throw away the frames this one is inside. What changes here is which
+      // level the canvas shows.
+      get().applyGraphSnapshot(JSON.stringify(held));
+      set((state) => {
+        state.subgraphStack.push(frame);
+        // Its own level, its own history: an undo in here cannot reach out.
+        state.past = [];
+        state.future = [];
+      });
+    },
+
+    closeSubgraph: () => {
+      const { subgraphStack } = get();
+      const frame = subgraphStack[subgraphStack.length - 1];
+      if (!frame) return;
+      const inner = get().exportGraph();
+      get().applyGraphSnapshot(JSON.stringify(withNested(frame.graph, frame.nodeId, inner)));
+      set((state) => {
+        state.subgraphStack.pop();
+        state.past = frame.past;
+        state.future = frame.future;
+      });
+    },
+
+    rootGraph: () => {
+      const { subgraphStack } = get();
+      let graph = get().exportGraph();
+      for (let level = subgraphStack.length - 1; level >= 0; level -= 1) {
+        graph = withNested(subgraphStack[level].graph, subgraphStack[level].nodeId, graph);
+      }
+      return graph;
     },
 
     exportGraph: () => {
@@ -619,10 +704,12 @@ export const useGraphStore = create<GraphStore>()(
 
     isDirty: () => {
       const { savedSnapshot } = get();
-      const current = JSON.stringify(get().exportGraph());
+      // The whole document, not the level that happens to be open: going into
+      // a node changes nothing, and a change made in there is a change.
+      const root = get().rootGraph();
       // A never-saved graph counts as dirty only once it has something in it.
-      if (savedSnapshot === null) return get().rfNodes.length > 0;
-      return current !== savedSnapshot;
+      if (savedSnapshot === null) return root.nodes.length > 0;
+      return JSON.stringify(root) !== savedSnapshot;
     },
 
     takeDiskChanges: (changes) => {
@@ -633,6 +720,13 @@ export const useGraphStore = create<GraphStore>()(
         for (const change of changes) {
           const node = state.rfNodes.find((n: RFNode) => n.id === change.node_id)?.data.graphNode;
           if (!node) continue;
+          // A whole graph a node holds, changed in its own folder. Where it is
+          // kept is the element's business, and the ports follow from it.
+          if (change.field === NESTED_GRAPH_FIELD) {
+            engineRegistry.node(node.node_type)?.setNestedGraph(node as never, change.value as never);
+            Object.assign(node, derivedNodePorts(node) ?? {});
+            continue;
+          }
           const holder: Record<string, unknown> | undefined = change.widget_id
             ? (node.config.gui_widgets ?? []).find((widget) => widget.id === change.widget_id)
             : node.config;
@@ -643,7 +737,7 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     markSaved: () => {
-      const snapshot = JSON.stringify(get().exportGraph());
+      const snapshot = JSON.stringify(get().rootGraph());
       set((state) => {
         state.savedSnapshot = snapshot;
       });

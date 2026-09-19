@@ -1,4 +1,5 @@
-import { DIMMER, FIELD, LINE, MUTED } from '@/ui/theme';
+import { DIMMER, FIELD, LINE, MUTED, PRIMARY_BUTTON } from '@/ui/theme';
+import { useGraphStore } from '@/store/graphStore';
 import { SubgraphNodeElement } from '@engine/elements/nodes/subgraph/SubgraphNodeElement.ts';
 import type { NodePanelProps } from '../../NodeUi';
 
@@ -18,8 +19,28 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
   const inner = ELEMENT.nestedGraph(node as never);
   const count = inner?.nodes.length ?? 0;
 
+  /**
+   * In. The draft is taken first -- as "open in your own editor" does -- and
+   * then the dialog goes, because what is behind it is about to be a
+   * different graph.
+   */
+  const enter = () => {
+    const store = useGraphStore.getState();
+    store.updateNode(node.id, node);
+    store.setEditingNode(null);
+    store.openSubgraph(node.id);
+  };
+
   return (
     <div>
+      <button
+        type="button"
+        className="w-full mb-4 px-3 py-2 rounded-lg text-sm font-medium"
+        style={PRIMARY_BUTTON}
+        onClick={enter}
+      >
+        Open this graph ▸
+      </button>
       <div className="mb-4">
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           What this part is meant to do
