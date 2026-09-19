@@ -17,8 +17,7 @@ import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { ALL_INPUTS, placeholders } from '../elements/nodes/ai/prompt.ts';
 import { mismatches, readInterface } from '../execution/interface.ts';
 import { parseExamples } from '../execution/examples.ts';
-import { boundaryInputs, boundaryOutputs, valuePorts } from '../elements/nodes/subgraph/boundary.ts';
-import { NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
+import { GRAPH_FILE, LAYOUT_FILE, NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
 
@@ -158,89 +157,29 @@ function within(problem: Problem, inside: string): Problem {
 }
 
 /**
- * What is wrong with the graph a node holds -- including the graph itself,
- * checked here by the same function that checked the one above it.
+ * The graph a node holds, checked as a graph -- by the function that checked
+ * the one above it, with the node in front of what it found.
+ *
+ * What is wrong with the *node* is the element's to say (`NodeElement.problems`);
+ * what is here is the walking, and how far it may go.
  */
 function nestedProblems(node: GraphNode, where: string, depth: number): Problem[] {
   const element = registry.node(node.node_type);
   if (!element) return [];
+  const own = element.problems(node, registry, where);
   const held = element.nestedGraph(node);
-  if (!held) {
-    // It says it holds one and there is something there that is not a graph.
-    return node.config.subgraph === undefined ? [] : [{
-      where,
-      problem: 'The graph this node holds cannot be read.',
-      fix: 'Open its folder and fix its graph.json, or delete the node and build it again.',
-    }];
-  }
+  if (!held) return own;
 
-  const deeper = `${where} ▸ `;
   // Counted, not read off the breadcrumb: a node id may hold anything, this
   // one included.
   if (depth + 1 > NESTING_LIMIT) {
-    return [{
+    return [...own, {
       where,
       problem: `Graphs are nested more than ${NESTING_LIMIT} deep here.`,
       fix: 'Flatten one of the levels: past this, nobody can follow what runs where.',
     }];
   }
-
-  const problems: Problem[] = [];
-  if (!held.nodes.length && String(node.config.task ?? '').trim()) {
-    problems.push({
-      where,
-      problem: 'This part is described and empty: it says what it should do and does nothing.',
-      fix: 'Open it and build the graph inside, or delete the node if the plan has changed.',
-    });
-  }
-
-  // The boundary, as two lists that must not collide.
-  const labels = new Map<string, string>();
-  for (const boundary of [...boundaryInputs(held, registry), ...boundaryOutputs(held, registry)]) {
-    const name = boundary.label || boundary.id;
-    const other = labels.get(name);
-    if (other) {
-      problems.push({
-        where: `${deeper}node "${boundary.id}"`,
-        problem: `It is called "${name}", and so is "${other}": that is two ports of the same name on the node above.`,
-        fix: 'Give one of them another label.',
-      });
-    }
-    labels.set(name, boundary.id);
-  }
-
-  for (const boundary of boundaryOutputs(held, registry)) {
-    // `path` says where to write, not what: it is not one of the values.
-    const carried = valuePorts(boundary);
-    if (carried.length === 1) continue;
-    problems.push({
-      where: `${deeper}node "${boundary.id}"`,
-      problem: `An output node inside a graph is one port of the node above, carrying one value; this one has ${carried.length}.`,
-      fix: carried.length
-        ? `It carries ${names(carried.map((port) => port.id))}. Leave it one, and give the others their own output node.`
-        : 'Give it an input to carry, or delete it.',
-    });
-  }
-
-  for (const inner of held.nodes) {
-    const kind = registry.node(inner.node_type);
-    if (kind?.hasInterface) {
-      problems.push({
-        where: `${deeper}node "${inner.id}"`,
-        problem: 'A page belongs to the graph at the top; a page in here would never be shown.',
-        fix: 'Move the gui node up to the graph that has the interface, and wire this one\'s output to it.',
-      });
-    }
-    if (kind?.runtimeRequirements(inner).length) {
-      problems.push({
-        where: `${deeper}node "${inner.id}"`,
-        problem: 'It asks for a value when the run starts, and only the graph at the top is asked.',
-        fix: 'Give it a value of its own, or make it an input node the node above feeds.',
-      });
-    }
-  }
-
-  return [...problems, ...problemsIn(held, deeper, depth + 1)];
+  return [...own, ...problemsIn(held, `${where} ▸ `, depth + 1)];
 }
 
 /** A kept output interface that cannot be read, or that names ports the node does not have. */
@@ -298,7 +237,8 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
     if (!held) continue;
     const dir = nodeFolder(node.id);
     nested.set(dir, held);
-    for (const name of ['graph.json', 'layout.json']) expected.get(dir)?.add(name) ?? expected.set(dir, new Set([name]));
+    // Every node's folder is in `expected` already, from the loop above.
+    for (const name of [GRAPH_FILE, LAYOUT_FILE]) expected.get(dir)!.add(name);
   }
 
   const walk = async (relative: string): Promise<void> => {

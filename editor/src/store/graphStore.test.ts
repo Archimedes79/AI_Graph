@@ -4,7 +4,7 @@ import type { Graph, GraphNode } from '@/graph';
 import { guiWidgetPorts } from '@/elements/nodes/gui/guiWidgets';
 import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
 import { WIDGET_UIS } from '@/elements/registry';
-import { NESTED_GRAPH_FIELD } from '@engine/elements/NodeElement.ts';
+import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 
 // The same defaults every node type is created with. Copied out field by field
 // here once, which meant adding a field to NodeConfig broke this file for a

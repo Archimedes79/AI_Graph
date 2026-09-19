@@ -30,9 +30,9 @@ export interface DeployNeeds {
   /**
    * It calls a model, so whoever receives the bundle needs a provider set up.
    *
-   * Asked of the element rather than looked for by node type, because an
-   * element may reach a model without being the one that speaks to it: a node
-   * holding a graph is told to say yes when anything inside it does.
+   * Asked of the element rather than looked for by node type. A node that
+   * holds a graph answers for itself; what is *inside* it is followed by
+   * `bundleNeeds`, which walks the graphs.
    */
   asksAi: boolean;
 }

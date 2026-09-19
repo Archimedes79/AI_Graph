@@ -3,17 +3,9 @@
 import type { Graph, GraphNode, NodeType, Port } from '../graph.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 import type { Schema } from '../execution/interface.ts';
+import type { Problem } from '../execution/wiring.ts';
 import { Element } from './Element.ts';
 import type { Runtime } from './Runtime.ts';
-
-/**
- * The name a change to the graph a node holds is reported under, when the
- * folder it lives in changed outside the editor (see `project/folder.ts`).
- *
- * Here, beside the two methods that read and write that graph, because both
- * ends of the wire need the name and neither end may reach for a file.
- */
-export const NESTED_GRAPH_FIELD = 'nested_graph';
 
 /**
  * The elements, as anything that derives ports may need to ask about them: a
@@ -69,6 +61,21 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    * project folder only says what it found.
    */
   setNestedGraph(_node: GraphNode, _graph: Graph | null): void {}
+
+  /**
+   * What is wrong with this node that only this element can say.
+   *
+   * `check` finds what any node can get wrong -- an edge to a port that is not
+   * there, a cycle, an interface naming a lost output. What is *this kind of
+   * node's* own contract belongs here, in the file that defines it: a node
+   * holding a graph knows what may and may not stand at that graph's edge, and
+   * the project checker should not have to.
+   *
+   * Nothing recursive: `check` walks the graphs, this speaks about one node.
+   */
+  problems(_node: GraphNode, _elements: Elements, _where: string): Problem[] {
+    return [];
+  }
 
   /**
    * Whether this node is where its graph meets whatever holds it: `'in'` for a

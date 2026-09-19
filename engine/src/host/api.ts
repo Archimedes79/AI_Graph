@@ -21,7 +21,7 @@
 import type { ExecutionResult, Graph, NodeResult } from '../graph.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
-import type { TextChange } from '../project/folder.ts';
+import type { TextChange } from '../project/changes.ts';
 import type { ExampleResult } from '../execution/examples.ts';
 
 export type { TextChange };

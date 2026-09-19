@@ -32,7 +32,7 @@ import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from 'no
 import { basename, dirname, extname, join, resolve } from 'node:path';
 
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
-import { NESTED_GRAPH_FIELD } from '../elements/NodeElement.ts';
+import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry, NODES, WIDGETS } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { readLegacyNodeFiles } from './legacy.ts';
@@ -548,14 +548,7 @@ export async function bodyFileOf(folder: string, nodeId: string, widgetId = ''):
 // What changed on disk
 // ---------------------------------------------------------------------------
 
-/** A piece of writing someone changed outside the editor. */
-export interface TextChange {
-  node_id: string;
-  widget_id: string;
-  field: string;
-  /** What the file says now; empty when it was deleted. */
-  value: unknown;
-}
+export type { TextChange };
 
 /**
  * The texts of the project in *folder* whose files changed since this process

@@ -53,6 +53,10 @@ export function bundleNeeds(graph: Graph): BundleNeeds {
     if (!held) continue;
     const inner = bundleNeeds(held);
     if (inner.ai) needs.ai = true;
+    // A page in there is a check problem rather than a thing to carry, and a
+    // bundle is not the place to find out: it is followed all the same, so a
+    // graph that somehow has one is not shipped without its page.
+    if (inner.interface) needs.interface = true;
   }
 
   return needs;

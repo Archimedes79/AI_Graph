@@ -53,19 +53,9 @@ export class SubgraphNodeUi extends NodeUi {
       // nothing in there yet.
       inputs: [],
       outputs: [],
-      config: { ...baseNodeConfig(), subgraph: emptyGraph(), task: '' },
+      // The engine's own idea of an empty graph, rather than a second copy
+      // of what a graph's metadata starts as.
+      config: { ...baseNodeConfig(), subgraph: ELEMENT.nestedGraph({ config: {} } as never), task: '' },
     };
   }
-}
-
-/** A graph with nothing in it, which is what a new subgraph is. */
-function emptyGraph(): unknown {
-  return {
-    metadata: {
-      name: 'Subgraph', version: '1.0.0', description: '', author: '', tags: [],
-      ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night',
-    },
-    nodes: [],
-    edges: [],
-  };
 }

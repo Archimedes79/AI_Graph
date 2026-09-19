@@ -3,7 +3,8 @@ import type { TextFile } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
 import { port } from '../../port.ts';
-import { boundaryInputs, boundaryOutputs, boundaryPorts, handedUp, type Elements } from './boundary.ts';
+import type { Problem } from '../../../execution/wiring.ts';
+import { boundaryInputs, boundaryOutputs, boundaryPorts, handedUp, valuePorts, type Elements } from './boundary.ts';
 
 export interface SubgraphConfig {
   /** The graph this node holds. An empty one for a node nobody has filled in yet. */
@@ -84,6 +85,82 @@ export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
   /** A path that arrives here is a path: what to do with it is the inner graph's business. */
   override readsFileInputs(): boolean {
     return false;
+  }
+
+  /**
+   * What this node's own contract says about the graph it holds.
+   *
+   * The boundary is this element's idea, so the rules about it live here
+   * rather than in the project checker. `check` walks into the graph and
+   * checks it as a graph, which is the other half and none of this file's
+   * business.
+   */
+  override problems(node: GraphNode, elements: Elements, where: string): Problem[] {
+    const held = this.nestedGraph(node);
+    if (!held) {
+      return [{
+        where,
+        problem: 'The graph this node holds cannot be read.',
+        fix: 'Open its folder and fix its graph.json, or delete the node and build it again.',
+      }];
+    }
+
+    const found: Problem[] = [];
+    const inside = `${where} ▸ `;
+    if (!held.nodes.length && this.config(node).task.trim()) {
+      found.push({
+        where,
+        problem: 'This part is described and empty: it says what it should do and does nothing.',
+        fix: 'Open it and build the graph inside, or delete the node if the plan has changed.',
+      });
+    }
+
+    // The boundary, as one list of names that must not collide: each of these
+    // nodes is a port on this one.
+    const named = new Map<string, string>();
+    for (const boundary of [...boundaryInputs(held, elements), ...boundaryOutputs(held, elements)]) {
+      const name = boundary.label || boundary.id;
+      const other = named.get(name);
+      if (other) {
+        found.push({
+          where: `${inside}node "${boundary.id}"`,
+          problem: `It is called "${name}", and so is "${other}": that is two ports of the same name on the node above.`,
+          fix: 'Give one of them another label.',
+        });
+      }
+      named.set(name, boundary.id);
+    }
+
+    for (const boundary of boundaryOutputs(held, elements)) {
+      const carried = valuePorts(boundary);
+      if (carried.length === 1) continue;
+      found.push({
+        where: `${inside}node "${boundary.id}"`,
+        problem: `An output node inside a graph is one port of the node above, carrying one value; this one has ${carried.length}.`,
+        fix: carried.length
+          ? `It carries ${carried.map((p) => `"${p.id}"`).join(', ')}. Leave it one, and give the others their own output node.`
+          : 'Give it an input to carry, or delete it.',
+      });
+    }
+
+    for (const inner of held.nodes) {
+      const kind = elements.node(inner.node_type);
+      if (kind?.hasInterface) {
+        found.push({
+          where: `${inside}node "${inner.id}"`,
+          problem: 'A page belongs to the graph at the top; a page in here would never be shown.',
+          fix: 'Move the gui node up to the graph that has the interface, and wire this one\'s output to it.',
+        });
+      }
+      if (kind?.runtimeRequirements(inner).length) {
+        found.push({
+          where: `${inside}node "${inner.id}"`,
+          problem: 'It asks for a value when the run starts, and only the graph at the top is asked.',
+          fix: 'Give it a value of its own, or make it an input node the node above feeds.',
+        });
+      }
+    }
+    return found;
   }
 
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
