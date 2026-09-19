@@ -1,6 +1,6 @@
 // A node: the element branch that sits on the canvas and runs in the graph.
 
-import type { GraphNode, NodeType, Port } from '../graph.ts';
+import type { Graph, GraphNode, NodeType, Port } from '../graph.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 import type { Schema } from '../execution/interface.ts';
 import { Element } from './Element.ts';
@@ -27,6 +27,19 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    * visible in the first place.
    */
   derivedPorts(_node: GraphNode): { inputs: Port[]; outputs: Port[] } | null {
+    return null;
+  }
+
+  /**
+   * The graph this node holds, or null for a node that holds none.
+   *
+   * The one question asked about hierarchy, and it is asked of the element so
+   * that nothing else has to know which node type holds a graph. The project
+   * folder recurses on it, `check` descends on it, a bundle follows it, and the
+   * editor opens what it returns. A node that answers with a graph is a node
+   * whose folder is a project folder of its own.
+   */
+  nestedGraph(_node: GraphNode): Graph | null {
     return null;
   }
 

@@ -123,6 +123,43 @@ describe('executeGraph', () => {
     expect(result.error).toBe('code node "bad" failed: no (1 more could not run)');
   });
 
+  it('takes a result that is handed in, and does not run that node', async () => {
+    let ran = 0;
+    class Counts extends NodeElement {
+      readonly nodeType = 'code' as const;
+      config() { return {}; }
+      async execute(_node: GraphNode, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+        ran += 1;
+        return { output: `saw ${String(inputs.value)}` };
+      }
+    }
+    const counting = { node: (type: string) => (type === 'code' ? new Counts() : registry.node(type)) };
+
+    const result = await executeGraph(
+      graph([node('source'), node('after'), node('show', 'output')], [
+        edge('e1', 'source', 'output', 'after', 'value'),
+        edge('e2', 'after', 'output', 'show', 'value'),
+      ]),
+      { runtime: nowhere, registry: counting as never, given: { source: { output: 'a value' } } },
+    );
+
+    // Only the two nodes that were not answered ran, and the answer travelled.
+    expect(ran).toBe(1);
+    const source = result.node_results.find((r) => r.node_id === 'source')!;
+    expect(source.status).toBe('success');
+    expect(source.outputs).toEqual({ output: 'a value' });
+    expect(source.messages?.[0]).toMatch(/Handed in from outside/);
+    expect(result.node_results.filter((r) => r.node_id === 'source')).toHaveLength(1);
+    expect(result.node_results.find((r) => r.node_id === 'after')?.outputs).toEqual({ output: 'saw a value' });
+  });
+
+  it('refuses a result for a node that is not in the graph', async () => {
+    await expect(executeGraph(
+      graph([node('here', 'output')]),
+      { runtime: nowhere, registry, given: { elsewhere: { output: 1 } } },
+    )).rejects.toThrow(/"elsewhere", which is not a node in this graph/);
+  });
+
   it('will not start on two nodes with one id, or an edge that ends nowhere', async () => {
     await expect(executeGraph(
       graph([node('twice'), node('twice')]),

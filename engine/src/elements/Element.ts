@@ -27,6 +27,14 @@ import type { Runtime } from './Runtime.ts';
 export interface DeployNeeds {
   /** The bundle needs the interface: a page, not just a CLI. */
   needsInterface: boolean;
+  /**
+   * It calls a model, so whoever receives the bundle needs a provider set up.
+   *
+   * Asked of the element rather than looked for by node type, because an
+   * element may reach a model without being the one that speaks to it: a node
+   * holding a graph is told to say yes when anything inside it does.
+   */
+  asksAi: boolean;
 }
 
 /**
@@ -112,7 +120,7 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
   }
 
   deployNeeds(_subject: S): DeployNeeds {
-    return { needsInterface: false };
+    return { needsInterface: false, asksAi: false };
   }
 
   /**

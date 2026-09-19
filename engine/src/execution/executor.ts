@@ -210,6 +210,16 @@ export interface RunOptions {
    * about. See `reuse.ts`. Absent, everything runs.
    */
   reuse?: LastOutputs;
+  /**
+   * Nodes whose result is already known: they do not run, and what is here is
+   * what the rest of the graph receives from them.
+   *
+   * The same idea as `reuse`, without the cache and without the conditions --
+   * a caller who already has the answer says so. It is how a graph inside a
+   * node is handed the values that arrived on that node's ports: the run's
+   * input nodes are answered rather than asked.
+   */
+  given?: Record<string, Record<string, unknown>>;
 }
 
 /**
@@ -254,11 +264,27 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   const dependsOn = (nodeId: string, those: Set<string>): boolean =>
     edges.some((e) => e.target_node_id === nodeId && !feedback.has(e.id) && those.has(e.source_node_id));
 
+  // Answered before anything is asked. Put in before the levels rather than
+  // inside them, because a node whose result is already known has nothing the
+  // loop does to it: no element to find, no upstream failure to inherit, no
+  // "nothing to do" to decide, and nothing to report as started.
+  const given = new Set<string>();
+  for (const [nodeId, produced] of Object.entries(options.given ?? {})) {
+    if (!byId.has(nodeId)) throw new Error(`Given a result for "${nodeId}", which is not a node in this graph.`);
+    given.add(nodeId);
+    outputs.set(nodeId, produced);
+    results.push({
+      node_id: nodeId, status: 'success', inputs: {}, outputs: produced, error: null,
+      messages: ['Handed in from outside: this node was not run.'],
+    });
+  }
+
   for (const level of levels) {
     for (const nodeId of level) {
       // Not part of what this event started: left alone, and left out of the
       // report too -- it did not fail and it was not skipped, it was not asked.
       if (only && !only.has(nodeId)) continue;
+      if (given.has(nodeId)) continue;
       if (signal?.aborted) continue;
       const node = byId.get(nodeId)!;
       const element = registry.node(node.node_type);

@@ -42,8 +42,9 @@ export function bundleNeeds(graph: Graph): BundleNeeds {
     const element = registry.node(node.node_type);
     if (!element) continue;
 
-    if (element.deployNeeds(node).needsInterface) needs.interface = true;
-    if (node.node_type === 'ai') needs.ai = true;
+    const asked = element.deployNeeds(node);
+    if (asked.needsInterface) needs.interface = true;
+    if (asked.asksAi) needs.ai = true;
   }
 
   return needs;

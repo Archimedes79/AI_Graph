@@ -99,7 +99,7 @@ export class AiNodeElement extends NodeElement<AiConfig> {
   }
 
   override deployNeeds() {
-    return { needsInterface: false };
+    return { needsInterface: false, asksAi: true };
   }
 
   /** What is wired in is the question: with all of it empty there is nothing to ask. */
