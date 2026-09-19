@@ -32,6 +32,7 @@ import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from 'no
 import { basename, dirname, extname, join, resolve } from 'node:path';
 
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
+import { NESTED_GRAPH_FIELD } from '../elements/NodeElement.ts';
 import { registry, NODES, WIDGETS } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { readLegacyNodeFiles } from './legacy.ts';
@@ -143,15 +144,6 @@ export function projectTexts(graph: Graph): ProjectText[] {
   }
   return found;
 }
-
-/**
- * The name a change inside a node's own project folder is reported under.
- *
- * Not a config field: which field a node keeps its graph in is the element's
- * business, and whoever takes the change asks the element to put it back
- * (`NodeElement.setNestedGraph`).
- */
-export const NESTED_GRAPH_FIELD = 'nested_graph';
 
 /** One node that holds a graph, and the folder that graph is kept in. */
 export interface NestedGraph {

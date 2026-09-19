@@ -168,7 +168,8 @@ describe('a graph inside a node', () => {
       { id: 'two', node_type: 'output', label: 'Two', inputs: [port('one', 'input'), port('other', 'input')], outputs: [], config: {} },
     ])));
     expect(said(problems)).toContainEqual(expect.stringContaining('that is two ports of the same name'));
-    expect(said(problems)).toContainEqual(expect.stringContaining('has 2 inputs'));
+    // Two values, and 'path' -- which says where to write -- is not one of them.
+    expect(said(problems)).toContainEqual(expect.stringContaining('carrying one value; this one has 2'));
   });
 
   it('says a page in there would never be shown, and a question in there never asked', () => {

@@ -15,7 +15,7 @@ import { applyMemory } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { inferInterface } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
-import { NESTED_GRAPH_FIELD } from '@engine/project/folder.ts';
+import { NESTED_GRAPH_FIELD } from '@engine/elements/NodeElement.ts';
 
 type RFNode = Node<RFNodeData>;
 

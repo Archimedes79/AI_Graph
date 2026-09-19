@@ -6,6 +6,15 @@ import type { Schema } from '../execution/interface.ts';
 import { Element } from './Element.ts';
 import type { Runtime } from './Runtime.ts';
 
+/**
+ * The name a change to the graph a node holds is reported under, when the
+ * folder it lives in changed outside the editor (see `project/folder.ts`).
+ *
+ * Here, beside the two methods that read and write that graph, because both
+ * ends of the wire need the name and neither end may reach for a file.
+ */
+export const NESTED_GRAPH_FIELD = 'nested_graph';
+
 export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
   abstract readonly nodeType: NodeType;
 

@@ -18,6 +18,7 @@ import { ALL_INPUTS, placeholders } from '../elements/nodes/ai/prompt.ts';
 import { mismatches, readInterface } from '../execution/interface.ts';
 import { parseExamples } from '../execution/examples.ts';
 import { boundaryInputs, boundaryOutputs } from '../elements/nodes/subgraph/boundary.ts';
+import { valuePorts } from '../elements/nodes/output/OutputNodeElement.ts';
 import { NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
@@ -211,11 +212,15 @@ function nestedProblems(node: GraphNode, where: string, inside: string): Problem
   }
 
   for (const boundary of boundaryOutputs(held)) {
-    if (boundary.inputs.length === 1) continue;
+    // `path` says where to write, not what: it is not one of the values.
+    const carried = valuePorts(boundary);
+    if (carried.length === 1) continue;
     problems.push({
       where: `${deeper}node "${boundary.id}"`,
-      problem: `An output node inside a graph is one port of the node above, carrying one value; this one has ${boundary.inputs.length} inputs.`,
-      fix: 'Leave it one input, and give anything else its own output node.',
+      problem: `An output node inside a graph is one port of the node above, carrying one value; this one has ${carried.length}.`,
+      fix: carried.length
+        ? `It carries ${names(carried.map((port) => port.id))}. Leave it one, and give the others their own output node.`
+        : 'Give it an input to carry, or delete it.',
     });
   }
 

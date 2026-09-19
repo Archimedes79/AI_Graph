@@ -1,6 +1,17 @@
 import { NodeElement } from '../../NodeElement.ts';
 import { type Runtime } from '../../Runtime.ts';
-import { type GraphNode } from '../../../graph.ts';
+import { type GraphNode, type Port } from '../../../graph.ts';
+
+/**
+ * The input that says *where* to write rather than *what*: a control input,
+ * and the one port of an output node that is not part of its value.
+ */
+export const WRITE_PATH_PORT = 'path';
+
+/** What this node was actually given to report. */
+export function valuePorts(node: GraphNode): Port[] {
+  return node.inputs.filter((port) => port.id !== WRITE_PATH_PORT);
+}
 
 export interface OutputConfig {
   /** Where to write, when writing at all. */
@@ -54,9 +65,9 @@ export class OutputNodeElement extends NodeElement<OutputConfig> {
     const settings = this.config(node);
     // A wired `path` sets the target at run time and always wins over the
     // configured one; it is a control input, not a value to report back.
-    const target = inputs.path ? runtime.files.resolve(String(inputs.path)) : settings.path;
+    const target = inputs[WRITE_PATH_PORT] ? runtime.files.resolve(String(inputs[WRITE_PATH_PORT])) : settings.path;
     const values: Record<string, unknown> = { ...inputs };
-    delete values.path;
+    delete values[WRITE_PATH_PORT];
 
     const result: Record<string, unknown> = { ...values };
     if (settings.mode === 'file' && target) {

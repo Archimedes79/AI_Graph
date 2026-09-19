@@ -13,6 +13,7 @@
 import type { Graph, GraphNode, Port } from '../../../graph.ts';
 import { port } from '../../port.ts';
 import { InputNodeElement } from '../input/InputNodeElement.ts';
+import { valuePorts } from '../output/OutputNodeElement.ts';
 
 /** Asked rather than read: the mode is the input element's field, not ours. */
 const INPUT = new InputNodeElement();
@@ -34,9 +35,9 @@ export function boundaryOutputs(graph: Graph): GraphNode[] {
   return graph.nodes.filter((node) => node.node_type === 'output');
 }
 
-/** What an output node hands up: the one thing wired into it. */
+/** What an output node hands up: the one thing wired into it, never the path it writes to. */
 export function handedUp(node: GraphNode, arrived: Record<string, unknown>): unknown {
-  const wanted = node.inputs[0]?.id;
+  const wanted = valuePorts(node)[0]?.id;
   // Explicitly null rather than missing: a node that produced nothing must
   // still fill its port, or `reconcileOutputs` reads the empty record as the
   // single output it was supposed to be.
@@ -51,6 +52,10 @@ export function boundaryPorts(graph: Graph): { inputs: Port[]; outputs: Port[] }
   const named = (node: GraphNode): string => node.label || node.id;
   return {
     inputs: boundaryInputs(graph).map((node) => port(node.id, named(node), 'input', 'any', false, node.description)),
-    outputs: boundaryOutputs(graph).map((node) => port(node.id, named(node), 'output', 'any', false, node.description)),
+    // A list in there is a list out here: what an output node collects is what
+    // its port says it collects, and a port that lied about it would stop the
+    // node after this one from fanning out over what it is handed.
+    outputs: boundaryOutputs(graph).map((node) =>
+      port(node.id, named(node), 'output', 'any', valuePorts(node)[0]?.multi === true, node.description)),
   };
 }
