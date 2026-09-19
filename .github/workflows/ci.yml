@@ -51,6 +51,22 @@ jobs:
       - name: Test the examples' nodes
         run: node engine/src/main.ts test --offline $(ls -d examples/*/ | grep -v '^examples/data/$')
 
+  # The launcher, on a checkout that has nothing installed yet -- which is what
+  # a person has when they clone this and double-click start. It installs and
+  # builds on its own, so there is deliberately no Install step above it.
+  launcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Start, restart and stop the editor
+        run: node --test scripts/launcher.test.mjs
+
   # The download for people who do not want a container: one zip holding the
   # engine's source, the built page and the examples. The engine has no runtime
   # dependencies and Node runs its TypeScript unbuilt, so a recipient unzips it

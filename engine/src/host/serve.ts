@@ -99,12 +99,14 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       const handler = found ? handlers[found.name] as ((request: unknown, exchange: Exchange) => unknown) | undefined : undefined;
       if (!found || !handler) return sendJson(response, 404, { detail: 'Not part of this server.' });
       const route = API[found.name];
-      const asked = {
-        ...Object.fromEntries(url.searchParams),
-        ...found.params,
-        ...(route.raw ? { bytes: await readBytes(request) } : route.method === 'POST' ? await readJson(request) : {}),
-      };
       try {
+        // Inside the try: a body that is not JSON, or is too big to accept, is
+        // this request being turned down -- 400 or 413, not a server that broke.
+        const asked = {
+          ...Object.fromEntries(url.searchParams),
+          ...found.params,
+          ...(route.raw ? { bytes: await readBytes(request) } : route.method === 'POST' ? await readJson(request) : {}),
+        };
         const answer = await handler(asked, exchange);
         return answer instanceof Download ? sendDownload(response, answer) : sendJson(response, 200, answer);
       } catch (error) {

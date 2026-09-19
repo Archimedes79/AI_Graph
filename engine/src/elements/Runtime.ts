@@ -36,7 +36,8 @@ export interface ToolSpec {
  */
 export interface ToolAccess {
   specs: ToolSpec[];
-  call(name: string, args: Record<string, unknown>): Promise<string>;
+  /** *stop* is the run's: a tool call is where a stopped run would otherwise sit and wait. */
+  call(name: string, args: Record<string, unknown>, stop?: AbortSignal): Promise<string>;
 }
 
 /** One completion from a model. */

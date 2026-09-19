@@ -24,7 +24,7 @@
 import { createInterface } from 'node:readline/promises';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/check.ts';
-import { executeGraph, executeNode, inputsFor } from '../execution/executor.ts';
+import { executeGraph, executeNode, inputsFor, nodeName } from '../execution/executor.ts';
 import { runExamples } from '../execution/examples.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
@@ -79,7 +79,14 @@ export function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--serve') {
       options.serve = true;
     } else if (arg === '--port') {
-      options.port = Number(argv[++i]);
+      // Checked here rather than at `listen`, which answers a mistyped port
+      // with ERR_SOCKET_BAD_PORT and a stack.
+      const given = argv[++i] ?? '';
+      const port = Number(given);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error(`--port wants a number from 1 to 65535, not "${given}".`);
+      }
+      options.port = port;
     } else if (arg === '--editor') {
       options.editor = argv[++i] ?? 'editor/dist';
     } else if (arg === '--host') {
@@ -136,7 +143,8 @@ export async function runOnce(options: CliOptions): Promise<number> {
     report: (event) => {
       if (event.type === 'batch') process.stderr.write(`\r  ${event.done}/${event.total}`);
       if (event.type === 'node_done' && event.status === 'error') {
-        process.stderr.write(`\n  ${event.node_id} failed\n`);
+        const node = graph.nodes.find((n) => n.id === event.node_id);
+        process.stderr.write(`\n  ${node ? nodeName(node) : event.node_id} failed\n`);
       }
     },
   });
@@ -211,6 +219,13 @@ export async function runServer(options: CliOptions): Promise<number> {
     ...(options.host ? { host: options.host } : {}),
   });
   process.stderr.write(`Serving on ${url}\n`);
+  // Only the editor: a deployed tool is configured by whoever runs it, and its
+  // terminal is a log rather than something a person is sitting in front of.
+  if (options.editor) {
+    // Imported here for the reason `runMcp` gives: a bundle has no `editor/`.
+    const { setupLines } = await import('../host/editor/settings.ts');
+    for (const line of await setupLines()) process.stderr.write(`${line}\n`);
+  }
   // Opening a browser is for something a person starts -- a tool they were
   // handed, or the editor -- not for a helper another process started.
   if (hasGraph || options.editor) await open(url);

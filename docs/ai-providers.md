@@ -124,3 +124,10 @@ credentials, likewise live only in the settings file.
 
 Servers are opened when the node runs and closed when it has answered, so a finished run
 leaves nothing running. The model gets at most eight rounds of tool calls per answer.
+
+**Clocks.** A tool call is given two minutes, which is about a wedged server rather than a
+slow one: a scheduled run has nobody watching it. A tool that genuinely takes longer — a
+crawl, a build — gets more with `AI_GRAPH_MCP_TIMEOUT_MS`, and `0` takes the clock off
+entirely. Stop ends a call either way, so nothing waits forever for a run that was
+abandoned. The model calls themselves have no clock by default (a local model asked for a
+whole graph is simply slow); `AI_GRAPH_TIMEOUT_MS` puts one back on.

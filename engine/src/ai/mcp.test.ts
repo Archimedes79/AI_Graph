@@ -55,7 +55,7 @@ describe('a stdio server', () => {
   it('lists its tools across pages, past a banner that is not JSON', async () => {
     const session = track(await mcpToolService({ echo: echo() }).open(['echo']));
 
-    expect(session.specs.map((spec) => spec.name)).toEqual(['add', 'echo', 'fail', 'picture', 'whoami', 'ghost_tool']);
+    expect(session.specs.map((spec) => spec.name)).toEqual(['add', 'echo', 'fail', 'picture', 'whoami', 'hang', 'ghost_tool']);
     expect(session.specs[0]).toMatchObject({
       name: 'add',
       description: 'Add two numbers.',
@@ -83,6 +83,18 @@ describe('a stdio server', () => {
     // The same for the protocol's own errors, and for a name the model invented.
     expect(await session.call('ghost_tool', {})).toBe('Tool error: Unknown tool: ghost.tool');
     expect(await session.call('subtract', {})).toMatch(/^Tool error: there is no tool named "subtract".*add, echo/);
+  });
+
+  it('gives up on a tool that never answers, and lets Stop do it sooner', async () => {
+    const wedged = track(await mcpToolService({ echo: echo() }, { callTimeoutMs: 300 }).open(['echo']));
+    await expect(wedged.call('hang', {})).rejects.toThrow(/did not answer tools\/call within 0\.3 s/);
+
+    // With no clock at all -- AI_GRAPH_MCP_TIMEOUT_MS=0 -- the run's own Stop
+    // is what ends the call, or a stopped run would sit here forever.
+    const patient = track(await mcpToolService({ echo: echo() }, { callTimeoutMs: 0 }).open(['echo']));
+    const stop = new AbortController();
+    setTimeout(() => stop.abort(), 100);
+    await expect(patient.call('hang', {}, stop.signal)).rejects.toThrow(/Stopped\./);
   });
 
   it('leaves a marker where content was not text', async () => {

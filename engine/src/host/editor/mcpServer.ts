@@ -56,7 +56,8 @@ import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/pro
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import type { AiService, Runtime, ToolSpec } from '../../elements/Runtime.ts';
 import { parseGraph, type Graph } from '../../graph.ts';
-import { ERROR_PORT, executeGraph, executeNode, inputsFor } from '../../execution/executor.ts';
+import { executeGraph, executeNode, inputsFor } from '../../execution/executor.ts';
+import { ERROR_PORT } from '../../execution/wiring.ts';
 import { runExamples } from '../../execution/examples.ts';
 import { RUN_PORT, type Trigger } from '../../execution/triggers.ts';
 import { registry } from '../../elements/registry.ts';

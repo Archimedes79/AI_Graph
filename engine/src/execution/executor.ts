@@ -29,6 +29,7 @@ import { readFileInputs } from './fileInputs.ts';
 import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
 import type { LastOutputs } from './reuse.ts';
 import { mismatches } from './interface.ts';
+import { ERROR_PORT, fatalProblems, unrunnable } from './wiring.ts';
 
 export interface Registry {
   node(type: string): NodeElement<unknown> | undefined;
@@ -220,6 +221,12 @@ export interface RunOptions {
  */
 export async function executeGraph(graph: Graph, options: RunOptions): Promise<ExecutionResult> {
   const { registry } = options;
+  // Before anything runs: an edge that ends nowhere delivers nothing and fails
+  // nothing, so a run that went ahead would report a result computed without
+  // it. Said here rather than in each caller -- `check` says the same thing
+  // about the same graph before it is ever run, and more of it.
+  const broken = fatalProblems(graph);
+  if (broken.length) throw new Error(unrunnable(broken));
   const { signal } = options;
   const runtime = stoppable(withGraphDefaults(options.runtime, graph), signal);
   const { nodes, edges } = graph;
@@ -291,9 +298,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         // What the run reports having received is what came off the wires --
         // the paths, not the megabytes behind them. Only the element sees the
         // contents.
-        const given = element.readsFileInputs(node)
-          ? await readFileInputs(node, inputs, runtime)
-          : inputs;
+        const given = await readInputs(element, node, inputs, runtime);
         const key = options.reuse?.key(node, given);
         const kept = key && context(nodeId) ? options.reuse!.get(key) : undefined;
         if (kept) {
@@ -376,7 +381,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
     node_results: results,
     outputs: finalOutputs(nodes, outputs, registry),
     memory,
-    error: failed.size ? [...failed].map((id) => `${id} failed`).join('; ') : null,
+    error: failed.size ? failureSummary(results, byId) : null,
   };
 }
 
@@ -490,7 +495,7 @@ export async function executeNode(
   }
   const runtime = withGraphDefaults(options.runtime, graph);
   try {
-    const given = element.readsFileInputs(node) ? await readFileInputs(node, inputs, runtime) : inputs;
+    const given = await readInputs(element, node, inputs, runtime);
     const { produced, failures } = await runNode(element, node, given, runtime);
     return {
       node_id: nodeId, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
@@ -505,6 +510,55 @@ export async function executeNode(
 }
 
 /**
+ * A node the way a person finds it on the canvas.
+ *
+ * `code node "Chart transform" (transform_1)`, not `transform_1`: the id is
+ * what the report needs and the label is what the reader recognises, and a
+ * message that carries only one of them sends them looking for the other.
+ */
+export function nodeName(node: GraphNode): string {
+  return `${node.node_type} node ${node.label && node.label !== node.id ? `"${node.label}" (${node.id})` : `"${node.id}"`}`;
+}
+
+/**
+ * What the element is given: the wired values, with file paths read where it
+ * asked for contents.
+ *
+ * The reading is named in the failure. A node that never got as far as its own
+ * work failed at a missing file, and "ENOENT" on its own reads as though the
+ * body went looking for one.
+ */
+async function readInputs(
+  element: NodeElement,
+  node: GraphNode,
+  inputs: Record<string, unknown>,
+  runtime: Runtime,
+): Promise<Record<string, unknown>> {
+  if (!element.readsFileInputs(node)) return inputs;
+  try {
+    return await readFileInputs(node, inputs, runtime);
+  } catch (error) {
+    throw new Error(`Reading its input files: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** The run's own sentence about what went wrong: which nodes, by name, and why. */
+function failureSummary(results: NodeResult[], byId: Map<string, GraphNode>): string {
+  const broken = results.filter((result) => result.status === 'error');
+  const skipped = results.filter((result) => result.status === 'skipped' && !result.messages?.length).length;
+  const named = broken.map((result) => {
+    const node = byId.get(result.node_id);
+    const first = (result.error ?? '').split('\n')[0].trim();
+    return `${node ? nodeName(node) : `node "${result.node_id}"`} failed${first ? `: ${first}` : ''}`;
+  });
+  // Nothing errored but something is in `failed`: a node that could not run
+  // because what feeds it did not. Naming the count keeps the run from
+  // claiming success with no reason given.
+  if (!named.length) return `${skipped} node${skipped === 1 ? '' : 's'} could not run.`;
+  return named.join('; ') + (skipped ? ` (${skipped} more could not run)` : '');
+}
+
+/**
  * What a node that caught its own failure hands on.
  *
  * Null on every declared port so anything downstream sees "nothing arrived"
@@ -512,8 +566,6 @@ export async function executeNode(
  * wires when they want to do something about it, and may leave unwired when
  * they only want the run to carry on.
  */
-export const ERROR_PORT = 'error';
-
 function failureOutputs(node: GraphNode, message: string): Record<string, unknown> {
   const produced: Record<string, unknown> = {};
   for (const port of node.outputs) produced[port.id] = null;

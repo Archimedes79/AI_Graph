@@ -10,8 +10,8 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Graph, GraphNode } from '../graph.ts';
-import { ERROR_PORT, memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
-import { RUN_PORT } from '../execution/triggers.ts';
+import { memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
+import { names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { ALL_INPUTS, placeholders } from '../elements/nodes/ai/prompt.ts';
@@ -19,36 +19,7 @@ import { mismatches, readInterface } from '../execution/interface.ts';
 import { parseExamples } from '../execution/examples.ts';
 import { NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
 
-/** One thing to fix: where it is, what it is, and what to do about it. */
-export interface Problem {
-  where: string;
-  problem: string;
-  fix: string;
-}
-
-export const names = (ids: Iterable<string>): string => [...ids].map((id) => `"${id}"`).join(', ') || '(none)';
-
-/** The ports *node* really has -- derived where the engine derives them, declared where a person names them. */
-function portsOf(node: GraphNode): { inputs: Set<string>; outputs: Set<string>; derived: boolean } {
-  const element = registry.node(node.node_type);
-  let derived: ReturnType<NonNullable<typeof element>['derivedPorts']> = null;
-  try {
-    derived = element?.derivedPorts(node) ?? null;
-  } catch {
-    // Settings too broken to derive from. The declared ports are the best guess left.
-  }
-  const ids = (ports: unknown): string[] => (Array.isArray(ports) ? ports : [])
-    .map((port) => (port as { id?: unknown })?.id)
-    .filter((id): id is string => typeof id === 'string');
-
-  const inputs = new Set(ids(derived ? derived.inputs : node.inputs));
-  const outputs = new Set(ids(derived ? derived.outputs : node.outputs));
-  // The input every node has and none declares.
-  inputs.add(RUN_PORT);
-  // A node told to catch its own failure grows the port the executor puts it on.
-  if (element?.catchesErrors(node)) outputs.add(ERROR_PORT);
-  return { inputs, outputs, derived: derived !== null };
-}
+export { names, type Problem } from '../execution/wiring.ts';
 
 /** The nodes a cycle is made of: whatever is left once everything with a free end is taken away. */
 function knot(graph: Graph, feedback: Set<string>): string[] {
@@ -76,21 +47,8 @@ function knot(graph: Graph, feedback: Set<string>): string[] {
  * a model, and a model fixes what it is told precisely.
  */
 export function problemsIn(graph: Graph): Problem[] {
-  const problems: Problem[] = [];
-
-  const seen = new Set<string>();
-  const duplicated = new Set<string>();
-  for (const node of graph.nodes) (seen.has(node.id) ? duplicated : seen).add(node.id);
-  for (const id of duplicated) {
-    problems.push({
-      where: `node "${id}"`,
-      problem: 'More than one node has this id.',
-      fix: 'Give every node its own id, and point each edge at the one it means.',
-    });
-  }
-
-  const byId = new Map<string, GraphNode>();
-  for (const node of graph.nodes) if (!byId.has(node.id)) byId.set(node.id, node);
+  // First: with these wrong, a run refuses to start (see wiring.ts).
+  const problems: Problem[] = wiringProblems(graph, registry);
 
   for (const node of graph.nodes) {
     const where = `node "${node.id}"`;
@@ -152,44 +110,15 @@ export function problemsIn(graph: Graph): Problem[] {
 
   const edgeIds = new Set<string>();
   for (const edge of graph.edges) {
-    const where = `edge "${edge.id}"`;
     if (edgeIds.has(edge.id)) {
-      problems.push({ where, problem: 'More than one edge has this id.', fix: 'Give every edge its own id.' });
+      problems.push({ where: `edge "${edge.id}"`, problem: 'More than one edge has this id.', fix: 'Give every edge its own id.' });
     }
     edgeIds.add(edge.id);
-
-    for (const end of ['source', 'target'] as const) {
-      const nodeId = end === 'source' ? edge.source_node_id : edge.target_node_id;
-      const portId = end === 'source' ? edge.source_port_id : edge.target_port_id;
-      const node = byId.get(nodeId);
-      if (!node) {
-        problems.push({
-          where,
-          problem: `Its ${end} is node "${nodeId}", and there is no such node.`,
-          fix: `Point it at one of: ${names(byId.keys())} -- or add the node.`,
-        });
-        continue;
-      }
-      // An unknown node type has been reported already, and has no ports to be wrong about.
-      if (!registry.node(node.node_type)) continue;
-      const ports = portsOf(node);
-      const side = end === 'source' ? ports.outputs : ports.inputs;
-      if (side.has(portId)) continue;
-      const kind = end === 'source' ? 'output' : 'input';
-      problems.push({
-        where,
-        problem: `Its ${end} port "${portId}" is not an ${kind} of node "${nodeId}".`,
-        fix: ports.derived
-          ? `The ports of a${node.node_type === 'input' ? 'n' : ''} ${node.node_type} node are derived from its settings, not from what the document declares. `
-            + `Its ${kind}s are: ${names([...side].filter((id) => id !== RUN_PORT))}. Wire to one of those, or change the settings that produce them.`
-          : `Its ${kind}s are: ${names([...side].filter((id) => id !== RUN_PORT))}. Wire to one of those, or declare "${portId}" in the node's ${kind}s.`,
-      });
-    }
   }
 
   // With two nodes sharing an id the ordering cannot be trusted either way, and
   // the duplicate is the thing to fix first.
-  if (!duplicated.size) {
+  if (new Set(graph.nodes.map((node) => node.id)).size === graph.nodes.length) {
     const feedback = memoryFeedbackEdges(graph.nodes, graph.edges, registry);
     try {
       topologicalLevels(graph.nodes, graph.edges, feedback);

@@ -39,11 +39,11 @@ export type McpServerConfig =
   | { command: string; args?: string[]; env?: Record<string, string>; cwd?: string }
   | { url: string; headers?: Record<string, string> };
 
-/** The clocks. Arguments only so a test can make them short. */
+/** The clocks. Arguments so a test can make them short, and a machine can set its own. */
 export interface McpOptions {
   /** `initialize` and `tools/list`: a server that takes longer than this to say hello is not coming. */
   handshakeTimeoutMs?: number;
-  /** One tool call. Longer, because a tool is allowed to do real work. */
+  /** One tool call. Longer, because a tool is allowed to do real work. 0 waits forever. */
   callTimeoutMs?: number;
 }
 
@@ -89,7 +89,8 @@ export class McpRpcError extends Error {
 
 /** One open connection, whichever way the bytes travel. */
 interface Transport {
-  request(method: string, params: unknown, timeoutMs: number): Promise<unknown>;
+  /** *timeoutMs* 0 is no clock; *stop* is the run's, and ends the call wherever it is. */
+  request(method: string, params: unknown, timeoutMs: number, stop?: AbortSignal): Promise<unknown>;
   notify(method: string, params?: unknown): Promise<void>;
   /** The version `initialize` settled on; HTTP has to repeat it on every request after. */
   negotiated(version: string): void;
@@ -161,7 +162,7 @@ function stdioTransport(label: string, config: { command: string; args?: string[
   const env = { ...process.env, ...config.env };
   const plan = launchPlan(config.command, config.args ?? [], env);
 
-  const pending = new Map<number, { fulfil(value: unknown): void; fail(error: Error): void; timer: NodeJS.Timeout }>();
+  const pending = new Map<number, { fulfil(value: unknown): void; fail(error: Error): void; release(): void }>();
   let nextId = 1;
   let stderr = '';
   let buffered = '';
@@ -184,7 +185,7 @@ function stdioTransport(label: string, config: { command: string; args?: string[
     const tail = stderr.trim().slice(-STDERR_TAIL);
     gone = new Error(tail ? `${why}\n${tail}` : why);
     for (const [, waiting] of pending) {
-      clearTimeout(waiting.timer);
+      waiting.release();
       waiting.fail(gone);
     }
     pending.clear();
@@ -220,7 +221,7 @@ function stdioTransport(label: string, config: { command: string; args?: string[
     const waiting = typeof message.id === 'number' ? pending.get(message.id) : undefined;
     if (!waiting) return;
     pending.delete(message.id as number);
-    clearTimeout(waiting.timer);
+    waiting.release();
     try {
       waiting.fulfil(unwrap(message));
     } catch (error) {
@@ -249,18 +250,41 @@ function stdioTransport(label: string, config: { command: string; args?: string[
   return {
     negotiated() {},
 
-    request(method, params, timeoutMs) {
+    request(method, params, timeoutMs, stop) {
       return new Promise((fulfil, fail) => {
         if (gone) return fail(gone);
+        if (stop?.aborted) return fail(new Error('Stopped.'));
         const id = nextId++;
-        const timer = setTimeout(() => {
+
+        // Given up on, by the clock or by whoever pressed Stop. The server is
+        // told, so a tool that is merely slow does not go on working for a
+        // caller who has left.
+        const giveUp = (reason: string, why: Error): void => {
+          const waiting = pending.get(id);
+          if (!waiting) return;
           pending.delete(id);
-          // Tell the server to stop, so a tool that is merely slow does not go
-          // on working for a caller who has left.
-          send({ method: 'notifications/cancelled', params: { requestId: id, reason: 'timed out' } });
-          fail(new Error(`Tool server "${label}" did not answer ${method} within ${seconds(timeoutMs)}.`));
-        }, timeoutMs);
-        pending.set(id, { fulfil, fail, timer });
+          waiting.release();
+          send({ method: 'notifications/cancelled', params: { requestId: id, reason } });
+          fail(why);
+        };
+
+        const timer = timeoutMs > 0
+          ? setTimeout(
+            () => giveUp('timed out', new Error(`Tool server "${label}" did not answer ${method} within ${seconds(timeoutMs)}.`)),
+            timeoutMs,
+          )
+          : null;
+        const stopped = (): void => giveUp('the run was stopped', new Error('Stopped.'));
+        stop?.addEventListener('abort', stopped, { once: true });
+
+        pending.set(id, {
+          fulfil,
+          fail,
+          release: () => {
+            if (timer) clearTimeout(timer);
+            stop?.removeEventListener('abort', stopped);
+          },
+        });
         send({ id, method, ...(params === undefined ? {} : { params }) });
       });
     },
@@ -370,11 +394,15 @@ function httpTransport(label: string, url: string, configuredHeaders: Record<str
     message: RpcMessage,
     timeoutMs: number,
     read: (response: Response) => Promise<T>,
+    stop?: AbortSignal,
   ): Promise<T> => {
     const abort = new AbortController();
     // One clock over the request *and* the reading of its answer: a stream that
     // opens promptly and then says nothing is the slow case worth catching.
-    const timer = setTimeout(() => abort.abort(), timeoutMs);
+    const timer = timeoutMs > 0 ? setTimeout(() => abort.abort(), timeoutMs) : null;
+    const stopped = (): void => abort.abort();
+    if (stop?.aborted) throw new Error('Stopped.');
+    stop?.addEventListener('abort', stopped, { once: true });
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -392,18 +420,20 @@ function httpTransport(label: string, url: string, configuredHeaders: Record<str
       return await read(response);
     } catch (error) {
       if ((error as { name?: string })?.name === 'AbortError') {
+        if (stop?.aborted) throw new Error('Stopped.');
         throw new Error(`Tool server "${label}" did not answer ${message.method} within ${seconds(timeoutMs)}.`);
       }
       throw error;
     } finally {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
+      stop?.removeEventListener('abort', stopped);
     }
   };
 
   return {
     negotiated(settled) { version = settled; },
 
-    request(method, params, timeoutMs) {
+    request(method, params, timeoutMs, stop) {
       const id = nextId++;
       return exchange({ id, method, ...(params === undefined ? {} : { params }) }, timeoutMs, async (response) => {
         const type = response.headers.get('content-type') ?? '';
@@ -412,7 +442,7 @@ function httpTransport(label: string, url: string, configuredHeaders: Record<str
           : pick(JSON.parse(await response.text()), id);
         if (!answer) throw new Error(`Tool server "${label}" closed the response to ${method} without answering it.`);
         return unwrap(answer);
-      });
+      }, stop);
     },
 
     async notify(method, params) {
@@ -530,6 +560,20 @@ const safeName = (name: string): string => name.replace(/[^A-Za-z0-9_-]/g, '_').
 const isUrl = (server: string): boolean => /^https?:\/\//i.test(server);
 
 /**
+ * `AI_GRAPH_MCP_TIMEOUT_MS`, or undefined when the machine said nothing.
+ *
+ * Two minutes is the default because a tool call that hangs is nearly always a
+ * server that died, and a scheduled run has nobody to notice. A tool that
+ * genuinely takes longer -- a crawl, a build -- is why the knob exists, and 0
+ * takes the clock off entirely. Stop ends the call either way.
+ */
+function envCallTimeout(env: Record<string, string | undefined> = process.env): number | undefined {
+  const given = env.AI_GRAPH_MCP_TIMEOUT_MS;
+  const ms = Number(given);
+  return given && Number.isFinite(ms) && ms >= 0 ? ms : undefined;
+}
+
+/**
  * Tool servers for this machine.
  *
  * *configured* is what the machine's settings file says -- see
@@ -541,7 +585,7 @@ export function mcpToolService(
   options: McpOptions = {},
 ): ToolService {
   const handshakeTimeout = options.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS;
-  const callTimeout = options.callTimeoutMs ?? CALL_TIMEOUT_MS;
+  const callTimeout = options.callTimeoutMs ?? envCallTimeout() ?? CALL_TIMEOUT_MS;
 
   /**
    * THE SECURITY BOUNDARY. A graph must never be able to supply a command line.
@@ -637,14 +681,14 @@ export function mcpToolService(
       return {
         specs,
 
-        async call(name, args) {
+        async call(name, args, stop) {
           const route = routes.get(name);
           // A name the model made up is the model's mistake, and it can only
           // correct a mistake it is told about.
           if (!route) return `Tool error: there is no tool named "${name}". The tools are: ${specs.map((spec) => spec.name).join(', ') || '(none)'}.`;
           try {
             return resultText(await route.server.transport.request(
-              'tools/call', { name: route.tool, arguments: args ?? {} }, callTimeout,
+              'tools/call', { name: route.tool, arguments: args ?? {} }, callTimeout, stop,
             ));
           } catch (error) {
             if (error instanceof McpRpcError) return `Tool error: ${error.message}`;

@@ -221,7 +221,7 @@ describe('the tool loop, in OpenAI\'s dialect', () => {
     await ai.complete({ prompt: 'x', tools });
 
     expect(tools.call).toHaveBeenCalledTimes(1);
-    expect(tools.call).toHaveBeenCalledWith('ping', {});
+    expect(tools.call).toHaveBeenCalledWith('ping', {}, undefined);
     // A schema-less tool still gets the object schema every provider insists on.
     expect(calls[0].body.tools[0].function.parameters).toEqual({ type: 'object', properties: {} });
     const [first, second] = calls[1].body.messages.slice(-2);

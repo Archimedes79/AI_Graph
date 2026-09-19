@@ -119,6 +119,33 @@ describe('executeGraph', () => {
     expect(status).toEqual({ bad: 'error', after: 'skipped', elsewhere: 'success' });
     // Partial, not error: something did run, and the report should say so.
     expect(result.status).toBe('partial');
+    // And what the reader is told: which node, by the name on the canvas, and why.
+    expect(result.error).toBe('code node "bad" failed: no (1 more could not run)');
+  });
+
+  it('will not start on two nodes with one id, or an edge that ends nowhere', async () => {
+    await expect(executeGraph(
+      graph([node('twice'), node('twice')]),
+      { runtime: nowhere, registry },
+    )).rejects.toThrow(/More than one node has this id/);
+
+    // Silent otherwise: nothing is ever put on that wire, and the run would
+    // report a result computed without it.
+    await expect(executeGraph(
+      graph([node('here', 'output')], [edge('e', 'ghost', 'output', 'here', 'value')]),
+      { runtime: nowhere, registry },
+    )).rejects.toThrow(/edge "e": Its source is node "ghost", and there is no such node/);
+  });
+
+  it('runs a graph whose nodes declare no ports: the edges are the wiring', async () => {
+    // What a graph written by hand looks like. `check` says the ports are
+    // missing; the run does not, because the value travels by edge.
+    const result = await executeGraph(
+      graph([node('make', 'code', { code: 'x', language: 'js' }), node('show', 'output')],
+            [edge('e', 'make', 'output', 'show', 'value')]),
+      { runtime: { ...nowhere, code: { run: async () => ({ output: 'made' }) } }, registry },
+    );
+    expect(result.status).toBe('success');
   });
 
   it('settles a feedback edge into the node that remembers, for the next round', async () => {

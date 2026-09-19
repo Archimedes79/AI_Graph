@@ -54,6 +54,11 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} },
   },
   {
+    name: 'hang',
+    description: 'Never answers, the way a wedged server does: for the clock and for Stop.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
     // Listed and then denied, which is how a JSON-RPC *error* -- as opposed to
     // a result flagged `isError` -- gets to a client that only calls listed tools.
     name: 'ghost.tool',
@@ -100,6 +105,8 @@ lines.on('line', (line) => {
     if (!params?.cursor) send({ id, result: { tools: TOOLS.slice(0, 2), nextCursor: 'page-2' } });
     else send({ id, result: { tools: TOOLS.slice(2) } });
   } else if (method === 'tools/call') {
+    // No answer, ever: what a client does about that is the point of it.
+    if (params.name === 'hang') return;
     const result = call(params.name, params.arguments ?? {});
     if (result) send({ id, result });
     else send({ id, error: { code: -32602, message: `Unknown tool: ${params.name}` } });

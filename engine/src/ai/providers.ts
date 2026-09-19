@@ -343,7 +343,7 @@ const functionTool = (spec: ToolSpec): unknown => ({
  * where an `onToolCall` hook goes on the day the interface wants to show "is
  * searching the web…": `report(call)` before, `report(call, result)` after.
  */
-async function runTool(tools: ToolAccess, call: ToolCall): Promise<string> {
+async function runTool(tools: ToolAccess, call: ToolCall, stop?: AbortSignal): Promise<string> {
   if (typeof call.args === 'string') return `Tool error: ${call.args}`;
   if (!tools.specs.some((spec) => spec.name === call.name)) {
     const names = tools.specs.map((spec) => spec.name).join(', ');
@@ -352,7 +352,7 @@ async function runTool(tools: ToolAccess, call: ToolCall): Promise<string> {
   // No catch. What comes back from here as text is the model's to react to;
   // what is *thrown* is the tool server itself failing, and the node should
   // fail with it rather than answer as though it had tools.
-  const result = await tools.call(call.name, call.args);
+  const result = await tools.call(call.name, call.args, stop);
   // Some providers refuse an empty tool message, and "nothing" is an answer.
   return result.trim() ? result : '(the tool returned nothing)';
 }
@@ -368,6 +368,7 @@ async function toolLoop(
   conversation: Conversation,
   ask: (mode: AskMode) => Promise<ModelTurn>,
   tools: ToolAccess,
+  stop?: AbortSignal,
 ): Promise<string> {
   for (let round = 1; round <= MAX_TOOL_ROUNDS; round += 1) {
     const turn = await ask('tools');
@@ -376,7 +377,7 @@ async function toolLoop(
     if (!turn.calls.length) return turn.text;
 
     const results: string[] = [];
-    for (const call of turn.calls) results.push(await runTool(tools, call));
+    for (const call of turn.calls) results.push(await runTool(tools, call, stop));
     conversation.record(results);
   }
 
@@ -676,7 +677,7 @@ export function aiService(settings: Partial<ProviderSettings> = {}): AiService {
       // a session that opened no servers should cost a request nothing.
       const tools = request.tools;
       if (!tools?.specs.length) return (await ask('plain')).text;
-      return toolLoop(conversation, ask, tools);
+      return toolLoop(conversation, ask, tools, request.signal);
     },
   };
 }

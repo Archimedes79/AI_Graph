@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { generationTarget, save, settingsPath, status } from './settings.ts';
+import { generationTarget, save, settingsPath, setupLines, status } from './settings.ts';
 import { readSettingsFile } from '../../ai/settings.ts';
 
 /**
@@ -124,5 +124,21 @@ describe('a provider named without a model', () => {
     const { env } = await own({ ai: { provider: 'openai', model: 'gpt-4o-mini' } });
     expect(await generationTarget('', 'gpt-5', '/nowhere', env))
       .toEqual({ provider: 'openai', model: 'gpt-5' });
+  });
+});
+
+describe('what the terminal is told at startup', () => {
+  it('names both targets, and what is missing, and never a key', async () => {
+    const { env } = await own({
+      ai: { provider: 'anthropic', model: 'claude-opus-5' },
+      codegen: { provider: 'openai', model: 'gpt-4o-mini' },
+      api_keys: { openai: 'sk-secret' },
+    });
+    const lines = await setupLines('/nowhere', env);
+
+    expect(lines[0]).toBe('Runs use: anthropic/claude-opus-5 -- no anthropic API key (⚙ Settings, or ANTHROPIC_API_KEY)');
+    // Configured, so nothing to report but the target itself.
+    expect(lines[1]).toBe('✨ Generate uses: openai/gpt-4o-mini');
+    expect(lines.join('\n')).not.toContain('sk-secret');
   });
 });

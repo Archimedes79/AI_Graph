@@ -88,14 +88,14 @@ export const nodeCode: CodeRunner = {
     // read. Both styles are ordinary JavaScript and both come out of a model,
     // so both work: the bridge below defines `require`, and `import` needs
     // nothing.
-    const wrapper = "import { createRequire } from 'node:module';\n"
+    const lead = "import { createRequire } from 'node:module';\n"
       + 'const require = createRequire(import.meta.url);\n\n'
       // The inputs arrive on stdin, not as an argument. A command line has a
       // ceiling -- about 32 KB on Windows -- and a wired file is an input like
       // any other: a 100 KB log failed with `spawn ENAMETOOLONG`, a message
       // about creating processes, for someone who had wired a CSV into a node.
-      + "let __in = '';\nfor await (const __chunk of process.stdin) __in += __chunk;\n\n"
-      + `${body}\n\nconst __out = await run(JSON.parse(__in));\nconsole.log(JSON.stringify(__out));\n`;
+      + "let __in = '';\nfor await (const __chunk of process.stdin) __in += __chunk;\n\n";
+    const wrapper = `${lead}${body}\n\nconst __out = await run(JSON.parse(__in));\nconsole.log(JSON.stringify(__out));\n`;
 
     try {
       await writeFile(file, wrapper, 'utf8');
@@ -103,11 +103,34 @@ export const nodeCode: CodeRunner = {
       const trimmed = stdout.trim();
       if (!trimmed) throw new Error('the body printed nothing; does it return an object?');
       return JSON.parse(trimmed.split('\n').pop() as string) as Record<string, unknown>;
+    } catch (error) {
+      throw inBodyLines(error, lead);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   },
 };
+
+/**
+ * A failure in the body, counted in the body's own lines.
+ *
+ * Node reports `/tmp/ai-graph-x9/body.mjs:7:24` -- a file that is deleted
+ * before anyone reads the message, at a line the wrapper above moved. The
+ * person looking at the error wrote line 1 of a body, and that is what it now
+ * says.
+ */
+function inBodyLines(error: unknown, lead: string): unknown {
+  if (!(error instanceof Error)) return error;
+  const offset = lead.split('\n').length - 1;
+  error.message = error.message.replace(
+    /\S*body\.mjs:(\d+)(?::(\d+))?/g,
+    (whole, line: string, column?: string) => {
+      const inBody = Number(line) - offset;
+      return inBody > 0 ? `line ${inBody}${column ? `, column ${column}` : ''}` : whole;
+    },
+  );
+  return error;
+}
 
 function capture(command: string, args: string[], stdin: string, signal?: AbortSignal): Promise<string> {
   return new Promise((fulfil, fail) => {

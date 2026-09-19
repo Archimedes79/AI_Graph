@@ -65,11 +65,37 @@ export function sendDownload(response: ServerResponse, download: Download): void
   response.end(download.bytes);
 }
 
+/**
+ * The most a request may weigh, attachments included.
+ *
+ * A body is held whole in memory before a handler sees any of it, so without a
+ * ceiling one wrong `Content-Length` -- a truncated upload retried, a file
+ * picked by mistake, a graph that went in a loop writing one -- is the server
+ * growing until the machine is out of memory. Generous rather than tight: the
+ * biggest honest body here is a file someone attached to a node.
+ */
+export const MAX_BODY_BYTES = 128 * 1024 * 1024;
+
 /** The request body as it came: an upload is bytes, not JSON. */
-export function readBytes(request: IncomingMessage): Promise<Buffer> {
+export function readBytes(request: IncomingMessage, limit = MAX_BODY_BYTES): Promise<Buffer> {
   return new Promise((done, fail) => {
+    const tooBig = (): void => {
+      // Nothing more is read and nothing already read is kept: the point of
+      // the limit is the memory, and a handler is never given half a body.
+      request.destroy();
+      fail(new Refusal(413, `The body is larger than ${Math.round(limit / (1024 * 1024))} MB.`));
+    };
+    const declared = Number(request.headers['content-length']);
+    if (Number.isFinite(declared) && declared > limit) return tooBig();
+
     const chunks: Buffer[] = [];
-    request.on('data', (chunk: Buffer) => chunks.push(chunk));
+    let size = 0;
+    request.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      // A body that arrives without a length, or with one that was not true.
+      if (size > limit) { chunks.length = 0; return tooBig(); }
+      chunks.push(chunk);
+    });
     request.on('end', () => done(Buffer.concat(chunks)));
     request.on('error', fail);
   });

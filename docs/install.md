@@ -2,7 +2,8 @@
 
 One runtime: Node 24 or newer. The engine is TypeScript that Node runs directly, so
 there is no build step for it and no interpreter to find — a graph runs on any machine
-that can run Node, and so does the editor.
+that can run Node, and so does the editor. The version is written down in `.nvmrc` and in
+each `package.json`, so `nvm use` picks it and npm says so when it is too old.
 
 ```bash
 git clone https://github.com/Archimedes79/AI_Graph.git

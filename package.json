@@ -2,6 +2,9 @@
   "name": "ai-graph",
   "private": true,
   "description": "One workspace: the engine, and the editor that is built on it.",
+  "engines": {
+    "node": ">=24"
+  },
   "workspaces": [
     "engine",
     "editor"

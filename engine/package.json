@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "The graph engine: reads a graph, runs it, and knows nothing about a browser.",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

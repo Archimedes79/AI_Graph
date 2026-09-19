@@ -86,6 +86,15 @@ describe('what a deployed tool serves', () => {
     expect((snapshot.result as { status: string }).status).toBe('success');
   }, 60_000);
 
+  it('turns down a body that is not JSON, rather than breaking over it', async () => {
+    // This request being refused, not the server failing: a 500 has nothing
+    // for the caller to act on. The size limit beside it is in `http.test.ts`.
+    const { url } = await serveGraph();
+    const refused = await fetch(`${url}/api/execute/requirements`, { method: 'POST', body: 'not json at all' });
+    expect(refused.status).toBe(400);
+    expect((await asJson(refused)).detail).toMatch(/not JSON/);
+  });
+
   it('offers nothing a deployed tool has no business offering', async () => {
     // Not "not implemented": these are the boundary. Code generation and graph
     // editing belong to building one, not to running one.

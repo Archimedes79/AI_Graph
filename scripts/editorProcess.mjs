@@ -44,7 +44,7 @@ export async function isAiGraph(port) {
 }
 
 /** The processes listening on *port*. */
-function listenerPids(port) {
+export function listenerPids(port) {
   if (process.platform === 'win32') {
     let output = '';
     try { output = execFileSync('netstat.exe', ['-ano', '-p', 'tcp'], { encoding: 'utf8' }); } catch { return []; }
@@ -60,7 +60,14 @@ function listenerPids(port) {
     return execFileSync('lsof', [`-tiTCP:${port}`, '-sTCP:LISTEN'], { encoding: 'utf8' })
       .split(/\s+/).filter(Boolean).map(Number);
   } catch {
-    return [];
+    // No lsof: a slim container, and some distributions do not install it.
+    // `ss` prints `users:(("node",pid=1234,fd=20))` for the same sockets.
+    try {
+      const output = execFileSync('ss', ['-ltnpH', `sport = :${port}`], { encoding: 'utf8' });
+      return [...new Set([...output.matchAll(/pid=(\d+)/g)].map((match) => Number(match[1])))];
+    } catch {
+      return [];
+    }
   }
 }
 

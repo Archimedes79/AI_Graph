@@ -11,6 +11,14 @@ describe('the sandbox', () => {
     await expect(nodeCode.run('function run() { throw new Error("boom"); }', {})).rejects.toThrow(/boom/);
   });
 
+  it('counts the lines as the body was written, not as the wrapper runs it', async () => {
+    // The traceback names a temp file that is deleted before anyone reads the
+    // message, at a line the wrapper above the body moved.
+    const failed = await nodeCode.run('function run() {\n  throw new Error("boom");\n}', {}).catch((error: Error) => error);
+    expect((failed as Error).message).not.toMatch(/body\.mjs/);
+    expect((failed as Error).message).toMatch(/line 2/);
+  });
+
   it('returns what the body returned', async () => {
     await expect(nodeCode.run('function run(i) { return { n: i.a + 1 }; }', { a: 1 })).resolves.toEqual({ n: 2 });
   });

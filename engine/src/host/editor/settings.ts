@@ -218,6 +218,37 @@ export async function generationTarget(
   return { provider: fallback.provider, model: chosenModel || fallback.model };
 }
 
+/**
+ * What the editor would use if asked right now, as lines for the terminal it
+ * was started from.
+ *
+ * Printed at startup because both targets have a default that resolves to
+ * something -- Ollama, whether or not it is running -- so a machine with
+ * nothing configured looks configured until the first run fails. Never a key,
+ * only whether one is there: this goes to a terminal and into scrollback.
+ */
+export async function setupLines(cwd = process.cwd(), env: Env = process.env): Promise<string[]> {
+  const { local, runtime_target: runs, gen_target: generates } = await providerStatus(cwd, env);
+  const configured = status(cwd, env);
+
+  const trouble = (target: Target): string => {
+    if ((LOCAL_PROVIDERS as readonly string[]).includes(target.provider)) {
+      return local[target.provider]?.reachable
+        ? ''
+        : ` -- not answering at ${configured.endpoints[target.provider] || DEFAULT_SETTINGS.endpoints[target.provider]}`;
+    }
+    const wanted = CREDENTIALS[target.provider];
+    return wanted && !configured.credentials[target.provider]?.configured
+      ? ` -- no ${target.provider} API key (⚙ Settings, or ${wanted.env})`
+      : '';
+  };
+
+  const say = (what: string, target: Target): string =>
+    `${what}: ${target.provider}/${target.model || '(no model)'}${trouble(target)}`;
+
+  return [say('Runs use', runs), say('✨ Generate uses', generates)];
+}
+
 /** Which providers are usable right now, and where the two targets resolve to. */
 export async function providerStatus(cwd = process.cwd(), env: Env = process.env): Promise<ProviderStatus> {
   const local: ProviderStatus['local'] = {};
