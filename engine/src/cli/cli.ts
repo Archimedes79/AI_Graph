@@ -31,6 +31,7 @@ import { nodeRuntime } from '../host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
 import { writeBundle } from './bundle.ts';
 import { serve } from '../host/serve.ts';
+import { untilStopped } from '../host/lifecycle.ts';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -211,7 +212,7 @@ export async function runServer(options: CliOptions): Promise<number> {
   const folder = projectFolderOf(options.graphPath);
   const pageDir = folder ? join(folder, 'page') : resolve(dirname(resolve(options.graphPath)), 'page');
 
-  const { url } = await serve({
+  const { url, shutdown } = await serve({
     ...(hasGraph ? { graphPath: options.graphPath } : {}),
     pageDir: existsSync(join(pageDir, 'runtime.html')) ? pageDir : undefined,
     port: options.port ?? 8000,
@@ -229,8 +230,13 @@ export async function runServer(options: CliOptions): Promise<number> {
   // Opening a browser is for something a person starts -- a tool they were
   // handed, or the editor -- not for a helper another process started.
   if (hasGraph || options.editor) await open(url);
-  // Nothing to await: the server holds the process open until it is stopped.
-  return new Promise(() => {});
+  // The server holds the process open until someone asks it to stop. Then the
+  // runs in flight are ended rather than abandoned, and the code is returned so
+  // the process ends by itself (see main.ts). Should something still hold it
+  // open after that, it is not something worth waiting for.
+  const code = await untilStopped(shutdown);
+  setTimeout(() => process.exit(code), 2000).unref();
+  return code;
 }
 
 /** Show the tool, if this machine has something to show it in. */

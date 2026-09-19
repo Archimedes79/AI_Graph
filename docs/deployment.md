@@ -103,6 +103,14 @@ The launchers `cd` into the bundle first, so those relative paths mean the same 
 A bundle's server also keeps the graph's own clock (*⚙ Settings → What starts this graph*):
 `on start` and `every 5m` run with nobody watching, and the page shows the latest result.
 
+**Stopping it.** Ctrl+C in its terminal, `kill`, a supervisor or `docker stop` all ask the
+server to stop rather than ending it where it stands: no new round starts, runs in flight
+are cancelled — the model call is aborted, the code node's process ended — and the process
+exits with 0, normally well under a second and after eight at most. A round that was cut
+off is not remembered; the page shows the last one that finished. A second Ctrl+C stops at
+once. (`stop.cmd` on Windows still ends the process outright: Windows has no SIGTERM to
+send to another process.)
+
 ## Letting an assistant build graphs
 
 `node engine/src/main.ts --mcp --mcp-root <folder>` is an MCP server: Claude Code, Claude

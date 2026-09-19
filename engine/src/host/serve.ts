@@ -29,6 +29,7 @@ import {
 import { RunBoard } from './runs.ts';
 import { nodeFiles, nodeRuntime } from './node.ts';
 import { schedule } from './schedule.ts';
+import { Lifecycle } from './lifecycle.ts';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 
 /** Where a served tool keeps its last scheduled round: inside a project, beside a file. */
@@ -61,7 +62,18 @@ export interface ServeOptions {
   editor?: { dist: string };
 }
 
-export async function serve(options: ServeOptions): Promise<{ server: Server; url: string }> {
+/** A server that is up: where it listens, and the one way to take it down. */
+export interface Served {
+  server: Server;
+  url: string;
+  /** Stop the clock, end the runs in flight, then close. Resolves to what would not stop in time. */
+  shutdown: (graceMs?: number) => Promise<string[]>;
+}
+
+export async function serve(options: ServeOptions): Promise<Served> {
+  // Everything below that outlives a request is written down here as it is
+  // started, and stopped in that order: see lifecycle.ts.
+  const lifecycle = new Lifecycle();
   const host = options.host ?? '127.0.0.1';
   const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
   const exchange: Exchange = { loopback: (options.allowBrowse ?? true) && loopback };
@@ -79,9 +91,12 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
       return executeGraph(graph, { runtime: nodeRuntime(), registry, signal });
     }, lastRunFile(options.graphPath!))
     : null;
+  if (clock) lifecycle.own('the schedule', () => clock.stop());
+  const runs = new RunBoard();
+  lifecycle.own('runs in flight', () => runs.stopAll());
 
   const handlers: Handlers = {
-    ...toolRoutes(held, clock, options.graphPath !== undefined),
+    ...toolRoutes(held, clock, runs, options.graphPath !== undefined),
     // Loaded, not imported: a bundle carries this file without the `editor/`
     // folder beside it, and a static import would stop every deployed tool.
     ...(options.editor ? (await import('./editor/routes.ts')).editorRoutes() : {}),
@@ -95,6 +110,10 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
     const path = url.pathname;
 
     if (path.startsWith('/api/')) {
+      // Watching and stopping still answer while the runs wind down; nothing new starts.
+      if (lifecycle.stopping && request.method !== 'GET') {
+        return sendJson(response, 503, { detail: 'This server is stopping.' });
+      }
       const found = matchRoute(request.method ?? 'GET', path);
       const handler = found ? handlers[found.name] as ((request: unknown, exchange: Exchange) => unknown) | undefined : undefined;
       if (!found || !handler) return sendJson(response, 404, { detail: 'Not part of this server.' });
@@ -123,20 +142,27 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
   const server = createServer((request, response) => {
     handle(request, response).catch((error: unknown) => sendJson(response, 500, { detail: message(error) }));
   });
-  server.on('close', () => clock?.stop());
+  // Closed directly -- a test, an embedding program -- it still lets go of the rest.
+  server.on('close', () => { void lifecycle.shutdown(); });
+  lifecycle.own('the HTTP server', () => new Promise<void>((closed) => {
+    if (!server.listening) return closed();
+    server.close(() => closed());
+    // A page polling over keep-alive would hold `close` open for as long as it polls.
+    server.closeIdleConnections();
+    setTimeout(() => server.closeAllConnections(), 1000).unref();
+  }));
   await new Promise<void>((listening) => server.listen(options.port ?? 0, host, listening));
   const port = (server.address() as { port: number }).port;
-  return { server, url: `http://${host}:${port}` };
+  return { server, url: `http://${host}:${port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
 }
 
 /** The `tool` rows: what any server answers, a deployed tool's included. */
 function toolRoutes(
   held: { graph: Graph | null },
   clock: ReturnType<typeof schedule> | null,
+  runs: RunBoard,
   ships: boolean,
 ): Handlers {
-  const runs = new RunBoard();
-
   return {
     graph() {
       if (!held.graph) throw new Refusal(404, 'This server ships no graph; post the one to run.');

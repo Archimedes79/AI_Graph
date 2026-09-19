@@ -38,7 +38,8 @@ export interface ScheduleState {
 
 export interface Schedule {
   state(): ScheduleState;
-  stop(): void;
+  /** No round starts afterwards, the one in flight is told, and the promise settles once it has ended. */
+  stop(): Promise<void>;
 }
 
 /** What is kept of the last round between two lives of the server. */
@@ -98,40 +99,48 @@ export function schedule(
   if (problem) current.error = problem;
   const abort = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let inFlight: Promise<void> = Promise.resolve();
 
   const round = async (): Promise<void> => {
     if (abort.signal.aborted) return;
     current.running = true;
     current.next_at = null;
+    let result: ExecutionResult | null = null;
+    let failure: string | null = null;
     try {
-      current.result = await run(graph(), abort.signal);
-      current.error = null;
+      result = await run(graph(), abort.signal);
     } catch (error) {
       // A round that could not even start -- a cycle, a graph edited into
       // nonsense -- must not end the schedule: the next round may be fine.
-      current.error = error instanceof Error ? error.message : String(error);
+      failure = error instanceof Error ? error.message : String(error);
     }
     current.running = false;
+    // Stopped in the middle: not a round. What is remembered stays the last one
+    // that ran to its end, not the half of one the shutdown cut off.
+    if (abort.signal.aborted) return;
+    if (failure === null) current.result = result;
+    current.error = failure;
     current.runs += 1;
     current.finished_at = Date.now();
     if (keptAt) keep(keptAt, current);
     if (seconds > 0 && !abort.signal.aborted) {
       current.next_at = Date.now() + seconds * 1000;
-      timer = setTimeout(() => { void round(); }, seconds * 1000);
+      timer = setTimeout(begin, seconds * 1000);
       // The server is what keeps the process alive, not a pending round.
       timer.unref?.();
     }
   };
 
-  if (triggers.on_start) void round();
+  const begin = (): void => { inFlight = round(); };
+  if (triggers.on_start) begin();
   else if (seconds > 0) {
     current.next_at = Date.now() + seconds * 1000;
-    timer = setTimeout(() => { void round(); }, seconds * 1000);
+    timer = setTimeout(begin, seconds * 1000);
     timer.unref?.();
   }
 
   return {
     state: () => ({ ...current }),
-    stop: () => { abort.abort(); if (timer) clearTimeout(timer); },
+    stop: () => { abort.abort(); if (timer) clearTimeout(timer); return inFlight; },
   };
 }

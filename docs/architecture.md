@@ -181,6 +181,7 @@ engine/src                               editor/src
     api.ts           the contract          app/                toolbar, sidebar, dialogs, results
     serve.ts  http.ts  runs.ts             store/              the open graph, runs, undo
     schedule.ts  node.ts                   runtime/            the deployed tool's page
+    lifecycle.ts     what is stopped, in order
     editor/          never bundled         ui/                 theme, Modal, Markdown, dialogs
   ai/                providers · MCP · settings
   cli/               cli.ts  bundle.ts
@@ -248,6 +249,15 @@ other knows, it imports it or replays its result:
 5. **Watching and stopping.** `RunBoard` (`host/runs.ts`) starts a run in the background,
    turns the executor's progress events into the `RunSnapshot` the page polls, and aborts
    it on Stop. An `AbortSignal` reaches every model call and every sandboxed body.
+6. **Shutting down.** A server holds a clock, runs in flight, the children those started,
+   and a socket. `serve()` writes each into a `Lifecycle` (`host/lifecycle.ts`) as it starts
+   it, and `shutdown()` stops them in that order — what makes work before what carries it:
+   the schedule, the runs (`RunBoard.stopAll`), then HTTP, which meanwhile still answers a
+   page watching its run and refuses anything new with 503. Each step gets what is left of
+   eight seconds; what would not stop is named. A scheduled round that was cut off is not
+   recorded, so `<graph>.last-run.json` keeps the last round that finished. The CLI maps
+   Ctrl+C, SIGTERM, SIGHUP and Ctrl+Break to it (`untilStopped`); a second signal exits at
+   once. `serve()` itself installs no signal handler: it is a library function.
 
 `executeNode` (one node on given inputs) and `inputsFor` (run what feeds a node, not the
 node) are the same machinery, and are what the editor's **Try it** panel uses.

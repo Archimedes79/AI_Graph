@@ -31,6 +31,8 @@ class Run {
   finishedAt: number | null = null;
   /** What Stop pulls: the executor ends the call in flight and starts nothing more. */
   readonly stop = new AbortController();
+  /** Settles when the run has ended, however it ended: what a shutdown waits on. */
+  ended: Promise<void> = Promise.resolve();
 
   constructor(id: string, total: number) {
     this.id = id;
@@ -91,7 +93,7 @@ export class RunBoard {
       },
     });
 
-    executeGraph(graph, { runtime, registry, trigger, signal: run.stop.signal, reuse: this.reuse })
+    run.ended = executeGraph(graph, { runtime, registry, trigger, signal: run.stop.signal, reuse: this.reuse })
       .then((result) => { run.result = result; })
       .catch((error: unknown) => { run.error = error instanceof Error ? error.message : String(error); })
       .finally(() => { run.finishedAt = Date.now(); this.forgetOld(); });
@@ -110,6 +112,23 @@ export class RunBoard {
     run.cancelled = true;
     run.stop.abort();
     return true;
+  }
+
+  /**
+   * Stop every run still going, and wait until each has wound down.
+   *
+   * For a server that is shutting down: a run left alone goes on calling
+   * models and running code for a page that will never ask again, and its
+   * children outlive the process that would have reaped them.
+   */
+  async stopAll(): Promise<number> {
+    const going = [...this.runs.values()].filter((run) => run.finishedAt === null);
+    for (const run of going) {
+      run.cancelled = true;
+      run.stop.abort();
+    }
+    await Promise.all(going.map((run) => run.ended));
+    return going.length;
   }
 
   private forgetOld(): void {
