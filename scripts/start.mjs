@@ -31,7 +31,7 @@ const child = spawn(process.execPath, ['engine/src/main.ts', '--editor', 'editor
 const forward = (signal) => child.kill(signal);
 process.on('SIGINT', () => forward('SIGINT'));
 process.on('SIGTERM', () => forward('SIGTERM'));
-child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
+child.on('exit', (code, signal) => process.exit(code ?? (signal ? 0 : 1)));
 child.on('error', (error) => fail(`Could not start the editor: ${error.message}`));
 
 function readPort(args) {

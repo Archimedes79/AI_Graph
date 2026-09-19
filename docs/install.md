@@ -36,8 +36,9 @@ editor's requests. It listens on loopback only.
 Starting `start.cmd`, `start.ps1` or `start.sh` again while the editor is already
 running stops the existing editor on the same port first, rebuilds the page when
 editor sources are newer, and starts one fresh instance. Closing the browser tab
-does not stop the Node server; press Ctrl+C in its terminal, or start the launcher
-again, to stop/restart it.
+does not stop the Node server. Use `stop.cmd`, `./stop.ps1` or `./stop.sh` to stop
+it without restarting; Ctrl+C in its terminal and starting the launcher again also
+stop/restart it.
 
 ## In VS Code
 
