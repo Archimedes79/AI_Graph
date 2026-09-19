@@ -18,8 +18,9 @@
 // show what was sent when the answer is "the model returned nothing".
 
 import { readFile } from 'node:fs/promises';
-import type { AiRequest, AiService, CodeRunner } from '../../elements/Runtime.ts';
+import type { AiRequest, AiService, CodeRunner, FileService } from '../../elements/Runtime.ts';
 import type { Generation } from '../../authoring/generation.ts';
+import { readPorts } from '../../execution/fileInputs.ts';
 import { renderSkeleton } from './skeleton.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { detectFormat } from './files.ts';
@@ -331,6 +332,8 @@ async function generateVerifiedCode(
 export interface GenerateDeps {
   ai: AiService;
   code: CodeRunner;
+  /** Reads the files a sample names, for a node that is handed their text. Without it the sample stays as sent. */
+  files?: FileService;
   /** The element's declaration, or undefined for a name that generates nothing. */
   generationFor: (element: string) => Generation | undefined;
   target: Target;
@@ -356,7 +359,32 @@ export interface GenerateDeps {
  * sample is keyed by ports the snippet does not have; the block editor sends
  * one shaped as the snippet sees it (`{value: …}`), and that one is used.
  */
-export async function generate(request: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
+/**
+ * The request with its sample as the body will meet it.
+ *
+ * A sample is what came off the wires, and for a node that reads its file
+ * inputs that is a path where the body gets the text. Shown as it was, the
+ * model is told `csv` is "D:\data\sales.csv" and the code is then tried on
+ * that string: it finds no rows, returns an empty chart, and the probe calls
+ * that a pass. So the files are read here, by the function a run reads them
+ * with. One that cannot be read turns the verify pass off rather than letting
+ * it vouch for code it tried on a filename.
+ */
+async function asReceived(request: GenerateRequest, files?: FileService): Promise<GenerateRequest> {
+  const sample = request.sample_inputs;
+  const ports = (request.read_file_ports ?? []).filter((port) => sample && sample[port] !== null && sample[port] !== undefined);
+  if (!sample || !ports.length || !files) return request;
+  const sources = { ...request.input_sources };
+  for (const port of ports) sources[port] = [sources[port], 'the text of the file, already read'].filter(Boolean).join(': ');
+  try {
+    return { ...request, sample_inputs: await readPorts(sample, ports, files), input_sources: sources };
+  } catch {
+    return { ...request, sample_inputs: null, input_sources: sources };
+  }
+}
+
+export async function generate(asked: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
+  const request = await asReceived(asked, deps.files);
   const calls: AICall[] = deps.calls ?? [];
   const ai = recording(deps.ai, calls);
   const spec = request.element ? deps.generationFor(request.element) : undefined;

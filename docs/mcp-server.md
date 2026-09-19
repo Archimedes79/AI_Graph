@@ -43,6 +43,17 @@ Use absolute paths for both. Node 24 or newer, as for the rest of the engine.
 the client started the process in. A deploy bundle does not contain the server — it
 is authoring, and ships with the editor only.
 
+To check a registration without an assistant in the loop, the official
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) speaks to it from the
+command line. Put the `mcpServers` block above in a file and name it — given the command
+inline, the Inspector takes `--mcp` for a flag of its own and the server never starts:
+
+```sh
+npx @modelcontextprotocol/inspector --cli --config servers.json --server ai-graph --method tools/list
+npx @modelcontextprotocol/inspector --cli --config servers.json --server ai-graph \
+    --method tools/call --tool-name run_graph --tool-arg path=graphs/count_rows.json
+```
+
 ## The tools
 
 | Tool | Arguments | What it does |

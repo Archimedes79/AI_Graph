@@ -102,6 +102,12 @@ export interface GenerateRequest {
   /** Real port values from the last run; enables the verify-and-repair pass. */
   sample_inputs?: Record<string, unknown> | null;
   input_sources?: Record<string, string>;
+  /**
+   * Input ports the running node is handed a file's text on, not the path the
+   * wire carries (`read_file_inputs`). The sample holds what came off the wire,
+   * so these are read, as a run reads them, before the sample is shown or used.
+   */
+  read_file_ports?: string[];
 }
 
 /** One request to a model, as it happened: for looking at when an answer is wrong or missing. */

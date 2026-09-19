@@ -10,25 +10,42 @@
 // error would arrive as "no such file: Once upon a time".
 
 import type { GraphNode } from '../graph.ts';
-import type { Runtime } from '../elements/Runtime.ts';
+import type { FileService, Runtime } from '../elements/Runtime.ts';
 
-export async function readFileInputs(
-  node: GraphNode,
+/** The ports of *node* whose wired value is a path. */
+export function filePorts(node: GraphNode): string[] {
+  return node.inputs.filter((port) => port.data_type === 'file_path').map((port) => port.id);
+}
+
+/**
+ * *inputs* with the paths on *ports* replaced by what the files say.
+ *
+ * Its own function because a run is not the only thing that must do this:
+ * code generated for such a node is tried on a sample before anyone sees it,
+ * and a sample still holding the path tries the code on a filename.
+ */
+export async function readPorts(
   inputs: Record<string, unknown>,
-  runtime: Runtime,
+  ports: string[],
+  files: FileService,
 ): Promise<Record<string, unknown>> {
-  const ports = new Map(node.inputs.map((p) => [p.id, p]));
   const resolved: Record<string, unknown> = {};
-
   for (const [key, value] of Object.entries(inputs)) {
-    const port = ports.get(key);
-    if (!port || port.data_type !== 'file_path' || value === null || value === undefined) {
+    if (!ports.includes(key) || value === null || value === undefined) {
       resolved[key] = value;
       continue;
     }
     resolved[key] = Array.isArray(value)
-      ? await Promise.all(value.map((path) => runtime.files.read(String(path))))
-      : await runtime.files.read(String(value));
+      ? await Promise.all(value.map((path) => files.read(String(path))))
+      : await files.read(String(value));
   }
   return resolved;
+}
+
+export function readFileInputs(
+  node: GraphNode,
+  inputs: Record<string, unknown>,
+  runtime: Runtime,
+): Promise<Record<string, unknown>> {
+  return readPorts(inputs, filePorts(node), runtime.files);
 }

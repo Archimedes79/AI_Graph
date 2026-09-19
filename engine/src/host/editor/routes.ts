@@ -120,6 +120,7 @@ export function editorRoutes(): Handlers {
       return gen.generate(asked, {
         ai: runtime.ai,
         code: runtime.code,
+        files: runtime.files,
         generationFor: (name) => registry.node(name)?.generation() ?? registry.widget(name)?.generation(),
         target: await settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? ''),
         calls,

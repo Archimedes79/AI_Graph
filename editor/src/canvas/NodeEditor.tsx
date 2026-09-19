@@ -7,7 +7,7 @@ import { NODE_UIS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, nodeFields } from '@/authoring/generation';
-import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs } from '@/authoring/generationContext';
+import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs, readFilePorts } from '@/authoring/generationContext';
 import OutputFormatEditor from '@/authoring/OutputFormatEditor';
 import KeepInFileOption from '@/elements/fields/KeepInFileOption';
 import { nodeLogic } from '@/authoring/logic';
@@ -140,7 +140,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
    */
   const surroundingContext = () => [
     connectedFormatContext(node.id, graphNodes, graphEdges),
-    lastRunContext(node.id, executionResult),
+    lastRunContext(node.id, executionResult, readFilePorts(node)),
   ].filter(Boolean).join('\n\n');
 
   const setDescription = (value: string) =>
@@ -172,6 +172,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // the generated function against them and repairs it once if it fails.
       sampleInputs: sampleFor(node.id, node.inputs.map((port) => port.id), lastRunInputs(node.id, executionResult)),
       inputSources: inputSources(node.id, graphNodes, graphEdges),
+      readFilePorts: readFilePorts(node),
       recordMeasuredOutput: true,
     }));
   };

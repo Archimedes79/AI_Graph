@@ -261,7 +261,10 @@ what it should do ──✨──▶ body ──▶ Try it: [values] ⟳ from th
 ```
 
 Generation (`host/editor/generate.ts`) is: write → run once on the sample → ask the
-element's `check` → repair once with the evidence. Every model call is recorded (`AICall`)
+element's `check` → repair once with the evidence. The sample is what came off the wires,
+so for a node that reads its file inputs the files are read first, by the function a run
+reads them with (`execution/fileInputs.ts`) — code tried on a filename finds no rows,
+returns an empty chart, and passes. Every model call is recorded (`AICall`)
 and can be watched while it runs; the result waits for the person to accept it.
 
 ## Where state lives
