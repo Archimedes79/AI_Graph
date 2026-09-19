@@ -7,6 +7,7 @@
 
 import type { ExecutionResult, Graph } from '../graph.ts';
 import { executeGraph } from '../execution/executor.ts';
+import { LastOutputs } from '../execution/reuse.ts';
 import { registry } from '../elements/registry.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import type { RunSnapshot } from './api.ts';
@@ -56,6 +57,8 @@ class Run {
 
 export class RunBoard {
   private readonly runs = new Map<string, Run>();
+  /** Shared by every run on this board: what one page event computed, the next may reuse. */
+  private readonly reuse = new LastOutputs();
 
   /**
    * Start *graph* in the background and hand back the run's id.
@@ -88,7 +91,7 @@ export class RunBoard {
       },
     });
 
-    executeGraph(graph, { runtime, registry, trigger, signal: run.stop.signal })
+    executeGraph(graph, { runtime, registry, trigger, signal: run.stop.signal, reuse: this.reuse })
       .then((result) => { run.result = result; })
       .catch((error: unknown) => { run.error = error instanceof Error ? error.message : String(error); })
       .finally(() => { run.finishedAt = Date.now(); this.forgetOld(); });

@@ -76,10 +76,10 @@ export default function GenerationTranscript() {
         className="w-full text-left px-2 py-1 rounded"
         style={{ color: failed ? ACCENT_TEXT : MUTED, background: SUNKEN }}
       >
-        {open ? '▾' : '▸'} {calls.length === 1 ? '1 Aufruf' : `${calls.length} Aufrufe`}
-        {' · '}{sent.toLocaleString('de-DE')} Zeichen gesendet
+        {open ? '▾' : '▸'} {calls.length === 1 ? '1 call' : `${calls.length} calls`}
+        {' · '}{sent.toLocaleString('en-US')} chars sent
         {seconds > 0 && ` · ${seconds.toFixed(1)}s`}
-        {failed > 0 && ` · ${failed} fehlgeschlagen`}
+        {failed > 0 && ` · ${failed} failed`}
       </button>
 
       {open && (
@@ -92,10 +92,10 @@ export default function GenerationTranscript() {
                 style={{ color: call.error ? ACCENT_TEXT : MUTED }}
               >
                 {shown === index ? '▾' : '▸'} {index + 1}. {call.provider}/{call.model}
-                {' · '}{call.sent_chars.toLocaleString('de-DE')} hin
-                {call.reply_chars > 0 && ` · ${call.reply_chars.toLocaleString('de-DE')} zurück`}
+                {' · '}{call.sent_chars.toLocaleString('en-US')} out
+                {call.reply_chars > 0 && ` · ${call.reply_chars.toLocaleString('en-US')} back`}
                 {call.seconds > 0 && ` · ${call.seconds.toFixed(1)}s`}
-                {call.error && ' · Fehler'}
+                {call.error && ' · error'}
               </button>
 
               {shown === index && (
@@ -103,8 +103,8 @@ export default function GenerationTranscript() {
                   <Part label="System" text={call.system} />
                   <Part label="Prompt" text={call.prompt} />
                   {call.error
-                    ? <Part label="Fehler" text={call.error} tone={ACCENT_TEXT} />
-                    : <Part label="Antwort" text={call.reply ?? ''} />}
+                    ? <Part label="Error" text={call.error} tone={ACCENT_TEXT} />
+                    : <Part label="Reply" text={call.reply ?? ''} />}
                 </div>
               )}
             </div>
@@ -128,7 +128,7 @@ function Part({ label, text, tone }: { label: string; text: string; tone?: strin
   return (
     <div>
       <div className="mb-0.5" style={{ color: DIMMER }}>
-        {label} · {text.length.toLocaleString('de-DE')} Zeichen
+        {label} · {text.length.toLocaleString('en-US')} chars
       </div>
       <pre
         className="whitespace-pre-wrap break-words rounded p-2 overflow-auto"

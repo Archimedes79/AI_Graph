@@ -7,6 +7,8 @@ export class SliderWidgetUi extends WidgetUi {
   readonly label = 'Slider';
   readonly View = SliderWidgetView;
   override readonly Panel = lazy(() => import('./SliderWidgetPanel'));
+  override readonly runOnChangeHint =
+    'Letting go of the handle (or an arrow key) runs the nodes this slider is wired to — not every value it passes on the way.';
 
   protected override defaultSpan() {
     return { w: 8, h: 2 };

@@ -12,6 +12,9 @@ export class DataNodeUi extends NodeUi {
   readonly hint = 'Remember a value between runs, so a loop can build on its own last result';
   readonly icon = '🗃️';
   readonly color = 'var(--ui-node-data, #183b3b)';
+  readonly settings: NodeUi['settings'] = [
+    'data_value', 'data_format', 'data_prompt', 'data_format_prompt', 'example_file',
+  ];
 
   // A data node IS the graph's register: it holds its value between runs,
   // which is what lets a feedback edge into it close a cycle.

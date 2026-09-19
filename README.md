@@ -118,6 +118,7 @@ Nothing leaves the machine unless the graph itself sends it there.
 | [chat.json](examples/chat.json) | A chatbot in two nodes: a chat block and a model, with a message template laying out history and message | yes |
 | [file_summarizer.json](examples/file_summarizer.json) | Read a file and summarize it; each control on the page starts the graph where it is wired to | yes |
 | [folder_summaries.json](examples/folder_summaries.json) | Summarize every file in a folder, one call per file, then what they have in common; results in a table | yes |
+| [paper_review_panel.json](examples/paper_review_panel.json) | Several AI reviewers (scientific, adversarial, claims, references, figures) read a manuscript in parallel; a judge merges their findings into ranked advice | yes |
 
 **Every example is held to the same three things by the test suite**
 (`engine/src/examples.test.ts`), and an example added to the folder is held to them
@@ -171,7 +172,7 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the two AI settings, where the API key goes |
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, Docker, the Graph Runner CLI |
 | [docs/mcp-server.md](docs/mcp-server.md) | Letting Claude (or any MCP client) generate, check, save and run graphs |
-| [docs/architecture.md](docs/architecture.md) | How the pieces fit, the rules that hold them together, and the known debt; diagrams mapped to files in [arch/](arch/overview.md) |
+| [docs/architecture.md](docs/architecture.md) | How the pieces fit, the rules that hold them together, and what is deliberately left out; diagrams mapped to files in [arch/](arch/overview.md) |
 
 ## Project structure
 

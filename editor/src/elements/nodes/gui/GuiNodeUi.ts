@@ -11,6 +11,7 @@ export class GuiNodeUi extends NodeUi {
   readonly hint = 'Give the graph its own interface, built from widgets';
   readonly icon = '🖥️';
   readonly color = 'var(--ui-node-gui, #4a1d3a)';
+  readonly settings: NodeUi['settings'] = ['gui_widgets'];
 
   override readonly hasRuntimeWindow = true;
   override readonly holdsWidgets = true;

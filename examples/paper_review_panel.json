@@ -1,0 +1,670 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "author": "AI-Graph",
+    "ai_defaults": {
+      "provider": "google",
+      "model": "gemini-flash-lite-latest"
+    },
+    "gui_scheme": "night",
+    "name": "Paper review panel",
+    "description": "A pre-submission review panel: five AI reviewers — scientific soundness, an adversarial referee, evidence and claims, references, figures and tables — read the same manuscript in parallel, and a judge consolidates their findings into one ranked list with a recommendation. The AI advises; the researcher decides. The sample paper is fictional and has problems planted in it. Paths are relative to the working directory, so run this from the repository root.",
+    "tags": [
+      "example",
+      "gui",
+      "ai",
+      "multi-agent",
+      "review"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "page",
+      "node_type": "gui",
+      "label": "Review panel",
+      "description": "The page this tool shows",
+      "position": {
+        "x": 60,
+        "y": 120
+      },
+      "width": 340,
+      "height": 300,
+      "inputs": [
+        {
+          "id": "verdict_in",
+          "name": "Judge — consolidated advice",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "scientific_in",
+          "name": "Scientific reviewer",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "adversarial_in",
+          "name": "Adversarial reviewer",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "claims_in",
+          "name": "Evidence & claims reviewer",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "references_in",
+          "name": "References reviewer",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "figures_in",
+          "name": "Figures & tables reviewer",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "outputs": [
+        {
+          "id": "paper_out",
+          "name": "Manuscript",
+          "kind": "output",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "go_out",
+          "name": "Review",
+          "kind": "output",
+          "data_type": "number",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "config": {
+        "gui_widgets": [
+          {
+            "id": "title",
+            "kind": "text",
+            "label": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1,
+            "mode": "heading",
+            "value": "Paper review panel"
+          },
+          {
+            "id": "intro",
+            "kind": "text",
+            "label": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1,
+            "mode": "caption",
+            "value": "Five AI reviewers read the manuscript in parallel, each with its own remit; a judge merges what they found. The AI advises — you decide."
+          },
+          {
+            "id": "paper",
+            "kind": "input_picker",
+            "label": "Manuscript",
+            "tone": "sunken",
+            "w": 12,
+            "h": 2,
+            "mode": "file",
+            "value": "examples/data/paper/sample_paper.md",
+            "extensions": ".md,.txt"
+          },
+          {
+            "id": "go",
+            "kind": "button",
+            "label": "Review",
+            "tone": "plain",
+            "w": 4,
+            "h": 2
+          },
+          {
+            "id": "rule",
+            "kind": "divider",
+            "label": "",
+            "tone": "plain",
+            "w": 16,
+            "h": 1,
+            "mode": "horizontal"
+          },
+          {
+            "id": "verdict",
+            "kind": "text_io",
+            "label": "Judge — consolidated advice",
+            "tone": "raised",
+            "w": 16,
+            "h": 8,
+            "mode": "output"
+          },
+          {
+            "id": "scientific",
+            "kind": "text_io",
+            "label": "Scientific reviewer",
+            "tone": "raised",
+            "w": 8,
+            "h": 6,
+            "mode": "output"
+          },
+          {
+            "id": "adversarial",
+            "kind": "text_io",
+            "label": "Adversarial reviewer",
+            "tone": "raised",
+            "w": 8,
+            "h": 6,
+            "mode": "output"
+          },
+          {
+            "id": "claims",
+            "kind": "text_io",
+            "label": "Evidence & claims reviewer",
+            "tone": "raised",
+            "w": 8,
+            "h": 6,
+            "mode": "output"
+          },
+          {
+            "id": "references",
+            "kind": "text_io",
+            "label": "References reviewer",
+            "tone": "raised",
+            "w": 8,
+            "h": 6,
+            "mode": "output"
+          },
+          {
+            "id": "figures",
+            "kind": "text_io",
+            "label": "Figures & tables reviewer",
+            "tone": "raised",
+            "w": 16,
+            "h": 6,
+            "mode": "output"
+          }
+        ]
+      }
+    },
+    {
+      "id": "read",
+      "node_type": "code",
+      "label": "Read manuscript",
+      "description": "Reads the chosen file once, for every reviewer",
+      "position": {
+        "x": 520,
+        "y": 160
+      },
+      "inputs": [
+        {
+          "id": "file",
+          "name": "File",
+          "kind": "input",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": "The chosen manuscript; arrives as its content"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "text",
+          "name": "Text",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The manuscript as text"
+        }
+      ],
+      "config": {
+        "code": "/**\n * The manuscript as text, read once and handed to every reviewer.\n *\n * @typedef {Object} Inputs\n * @property {string} file  the file's content (read for us: the port is a file path)\n */\n\n/** @param {Inputs} inputs */\nfunction run(inputs) {\n  return { text: String(inputs.file ?? '') };\n}\n",
+        "code_prompt": "Pass the file's text on unchanged.",
+        "batch_mode": "whole_list",
+        "read_file_inputs": true
+      }
+    },
+    {
+      "id": "scientific",
+      "node_type": "ai",
+      "label": "Scientific",
+      "description": "Scientific reviewer: scientific soundness.",
+      "position": {
+        "x": 900,
+        "y": -100
+      },
+      "inputs": [
+        {
+          "id": "paper",
+          "name": "Paper",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The manuscript as text"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Findings",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "One finding per line"
+        }
+      ],
+      "config": {
+        "ai_provider": "google",
+        "ai_model": "gemini-flash-lite-latest",
+        "temperature": 0.2,
+        "system_prompt": "You are one reviewer on a panel that checks a scientific manuscript before submission. Report only problems within your own remit; other reviewers cover the rest. Answer with at most six findings, most serious first, one per line, each starting with \"- [major]\" or \"- [minor]\", naming where in the paper it is (section, table, figure or reference number) and saying in one sentence what is wrong and what would fix it. Quote the paper only when a few words make the point. If you find nothing in your remit, answer \"- No findings.\" Do not summarize the paper, do not praise it, and do not add an introduction or a closing line.\n\nYour remit is scientific soundness: the study design, the sample, the controls, how groups were assigned, the statistics (or their absence), and whether the methods can answer the question asked.",
+        "prompt_template": "",
+        "output_format": "text",
+        "batch_mode": "whole_list",
+        "read_file_inputs": false
+      }
+    },
+    {
+      "id": "adversarial",
+      "node_type": "ai",
+      "label": "Adversarial",
+      "description": "Adversarial reviewer: to argue against the paper as a hostile but fair referee would.",
+      "position": {
+        "x": 900,
+        "y": 30
+      },
+      "inputs": [
+        {
+          "id": "paper",
+          "name": "Paper",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The manuscript as text"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Findings",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "One finding per line"
+        }
+      ],
+      "config": {
+        "ai_provider": "google",
+        "ai_model": "gemini-flash-lite-latest",
+        "temperature": 0.2,
+        "system_prompt": "You are one reviewer on a panel that checks a scientific manuscript before submission. Report only problems within your own remit; other reviewers cover the rest. Answer with at most six findings, most serious first, one per line, each starting with \"- [major]\" or \"- [minor]\", naming where in the paper it is (section, table, figure or reference number) and saying in one sentence what is wrong and what would fix it. Quote the paper only when a few words make the point. If you find nothing in your remit, answer \"- No findings.\" Do not summarize the paper, do not praise it, and do not add an introduction or a closing line.\n\nYour remit is to argue against the paper as a hostile but fair referee would: alternative explanations, confounders, cherry-picking, weaknesses a critic would attack first, and what one experiment would most likely overturn the result.",
+        "prompt_template": "",
+        "output_format": "text",
+        "batch_mode": "whole_list",
+        "read_file_inputs": false
+      }
+    },
+    {
+      "id": "claims",
+      "node_type": "ai",
+      "label": "Evidence & claims",
+      "description": "Evidence & claims reviewer: whether each claim is backed by the evidence in the paper.",
+      "position": {
+        "x": 900,
+        "y": 160
+      },
+      "inputs": [
+        {
+          "id": "paper",
+          "name": "Paper",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The manuscript as text"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Findings",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "One finding per line"
+        }
+      ],
+      "config": {
+        "ai_provider": "google",
+        "ai_model": "gemini-flash-lite-latest",
+        "temperature": 0.2,
+        "system_prompt": "You are one reviewer on a panel that checks a scientific manuscript before submission. Report only problems within your own remit; other reviewers cover the rest. Answer with at most six findings, most serious first, one per line, each starting with \"- [major]\" or \"- [minor]\", naming where in the paper it is (section, table, figure or reference number) and saying in one sentence what is wrong and what would fix it. Quote the paper only when a few words make the point. If you find nothing in your remit, answer \"- No findings.\" Do not summarize the paper, do not praise it, and do not add an introduction or a closing line.\n\nYour remit is whether each claim is backed by the evidence in the paper: find statements in the abstract, discussion and conclusion that go further than the data shown, numbers that do not match between sections, and generalizations the study cannot support.",
+        "prompt_template": "",
+        "output_format": "text",
+        "batch_mode": "whole_list",
+        "read_file_inputs": false
+      }
+    },
+    {
+      "id": "references",
+      "node_type": "ai",
+      "label": "References",
+      "description": "References reviewer: the references.",
+      "position": {
+        "x": 900,
+        "y": 290
+      },
+      "inputs": [
+        {
+          "id": "paper",
+          "name": "Paper",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The manuscript as text"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Findings",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "One finding per line"
+        }
+      ],
+      "config": {
+        "ai_provider": "google",
+        "ai_model": "gemini-flash-lite-latest",
+        "temperature": 0.2,
+        "system_prompt": "You are one reviewer on a panel that checks a scientific manuscript before submission. Report only problems within your own remit; other reviewers cover the rest. Answer with at most six findings, most serious first, one per line, each starting with \"- [major]\" or \"- [minor]\", naming where in the paper it is (section, table, figure or reference number) and saying in one sentence what is wrong and what would fix it. Quote the paper only when a few words make the point. If you find nothing in your remit, answer \"- No findings.\" Do not summarize the paper, do not praise it, and do not add an introduction or a closing line.\n\nYour remit is the references: incomplete entries (missing venue, volume, pages, DOI), claims in the text that cite nothing, citations that do not seem to support what they are cited for, and obviously missing prior work. You cannot look anything up; judge only from the paper.",
+        "prompt_template": "",
+        "output_format": "text",
+        "batch_mode": "whole_list",
+        "read_file_inputs": false
+      }
+    },
+    {
+      "id": "figures",
+      "node_type": "ai",
+      "label": "Figures & tables",
+      "description": "Figures & tables reviewer: the figures and tables.",
+      "position": {
+        "x": 900,
+        "y": 420
+      },
+      "inputs": [
+        {
+          "id": "paper",
+          "name": "Paper",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The manuscript as text"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Findings",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "One finding per line"
+        }
+      ],
+      "config": {
+        "ai_provider": "google",
+        "ai_model": "gemini-flash-lite-latest",
+        "temperature": 0.2,
+        "system_prompt": "You are one reviewer on a panel that checks a scientific manuscript before submission. Report only problems within your own remit; other reviewers cover the rest. Answer with at most six findings, most serious first, one per line, each starting with \"- [major]\" or \"- [minor]\", naming where in the paper it is (section, table, figure or reference number) and saying in one sentence what is wrong and what would fix it. Quote the paper only when a few words make the point. If you find nothing in your remit, answer \"- No findings.\" Do not summarize the paper, do not praise it, and do not add an introduction or a closing line.\n\nYour remit is the figures and tables: whether they match the text, whether counts, units, error bars and sample sizes are shown and consistent, and whether each figure actually shows what the text says it shows.",
+        "prompt_template": "",
+        "output_format": "text",
+        "batch_mode": "whole_list",
+        "read_file_inputs": false
+      }
+    },
+    {
+      "id": "judge",
+      "node_type": "ai",
+      "label": "Judge",
+      "description": "Merges the five reviews into one ranked list and a recommendation",
+      "position": {
+        "x": 1300,
+        "y": 160
+      },
+      "inputs": [
+        {
+          "id": "scientific",
+          "name": "Scientific",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The scientific reviewer's findings"
+        },
+        {
+          "id": "adversarial",
+          "name": "Adversarial",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The adversarial reviewer's findings"
+        },
+        {
+          "id": "claims",
+          "name": "Evidence & claims",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The evidence & claims reviewer's findings"
+        },
+        {
+          "id": "references",
+          "name": "References",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The references reviewer's findings"
+        },
+        {
+          "id": "figures",
+          "name": "Figures & tables",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The figures & tables reviewer's findings"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "output",
+          "name": "Advice",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "The consolidated review"
+        }
+      ],
+      "config": {
+        "ai_provider": "google",
+        "ai_model": "gemini-flash-lite-latest",
+        "temperature": 0.2,
+        "system_prompt": "You chair a pre-submission review panel. You receive the findings of five reviewers who each checked one aspect of the same manuscript. Merge them: combine findings that describe the same problem (say which reviewers raised it), drop findings that are not supported by what the reviewers wrote, and rank the rest by how much they threaten the paper's conclusions. Answer in this form and nothing else:\nRecommendation: <Ready to submit | Minor revision | Major revision | Not ready> — one sentence why.\n\nMust fix:\n- <finding> (raised by: <reviewers>)\n\nShould fix:\n- <finding> (raised by: <reviewers>)\n\nReviewers disagree on:\n- <point, or \"nothing\">\n\nThis is advice for the authors, who make the final decision. Do not invent problems no reviewer raised.",
+        "prompt_template": "## Scientific reviewer\n{{scientific}}\n\n## Adversarial reviewer\n{{adversarial}}\n\n## Evidence & claims reviewer\n{{claims}}\n\n## References reviewer\n{{references}}\n\n## Figures & tables reviewer\n{{figures}}",
+        "output_format": "text",
+        "batch_mode": "whole_list",
+        "read_file_inputs": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source_node_id": "page",
+      "source_port_id": "paper_out",
+      "target_node_id": "read",
+      "target_port_id": "file"
+    },
+    {
+      "id": "e2",
+      "source_node_id": "page",
+      "source_port_id": "go_out",
+      "target_node_id": "read",
+      "target_port_id": "__run"
+    },
+    {
+      "id": "e3",
+      "source_node_id": "read",
+      "source_port_id": "text",
+      "target_node_id": "scientific",
+      "target_port_id": "paper"
+    },
+    {
+      "id": "e4",
+      "source_node_id": "scientific",
+      "source_port_id": "output",
+      "target_node_id": "judge",
+      "target_port_id": "scientific"
+    },
+    {
+      "id": "e5",
+      "source_node_id": "scientific",
+      "source_port_id": "output",
+      "target_node_id": "page",
+      "target_port_id": "scientific_in"
+    },
+    {
+      "id": "e6",
+      "source_node_id": "read",
+      "source_port_id": "text",
+      "target_node_id": "adversarial",
+      "target_port_id": "paper"
+    },
+    {
+      "id": "e7",
+      "source_node_id": "adversarial",
+      "source_port_id": "output",
+      "target_node_id": "judge",
+      "target_port_id": "adversarial"
+    },
+    {
+      "id": "e8",
+      "source_node_id": "adversarial",
+      "source_port_id": "output",
+      "target_node_id": "page",
+      "target_port_id": "adversarial_in"
+    },
+    {
+      "id": "e9",
+      "source_node_id": "read",
+      "source_port_id": "text",
+      "target_node_id": "claims",
+      "target_port_id": "paper"
+    },
+    {
+      "id": "e10",
+      "source_node_id": "claims",
+      "source_port_id": "output",
+      "target_node_id": "judge",
+      "target_port_id": "claims"
+    },
+    {
+      "id": "e11",
+      "source_node_id": "claims",
+      "source_port_id": "output",
+      "target_node_id": "page",
+      "target_port_id": "claims_in"
+    },
+    {
+      "id": "e12",
+      "source_node_id": "read",
+      "source_port_id": "text",
+      "target_node_id": "references",
+      "target_port_id": "paper"
+    },
+    {
+      "id": "e13",
+      "source_node_id": "references",
+      "source_port_id": "output",
+      "target_node_id": "judge",
+      "target_port_id": "references"
+    },
+    {
+      "id": "e14",
+      "source_node_id": "references",
+      "source_port_id": "output",
+      "target_node_id": "page",
+      "target_port_id": "references_in"
+    },
+    {
+      "id": "e15",
+      "source_node_id": "read",
+      "source_port_id": "text",
+      "target_node_id": "figures",
+      "target_port_id": "paper"
+    },
+    {
+      "id": "e16",
+      "source_node_id": "figures",
+      "source_port_id": "output",
+      "target_node_id": "judge",
+      "target_port_id": "figures"
+    },
+    {
+      "id": "e17",
+      "source_node_id": "figures",
+      "source_port_id": "output",
+      "target_node_id": "page",
+      "target_port_id": "figures_in"
+    },
+    {
+      "id": "e18",
+      "source_node_id": "judge",
+      "source_port_id": "output",
+      "target_node_id": "page",
+      "target_port_id": "verdict_in"
+    }
+  ]
+}

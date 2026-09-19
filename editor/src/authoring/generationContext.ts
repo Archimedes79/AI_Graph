@@ -131,11 +131,14 @@ export function lastRunContext(nodeId: string, result: ExecutionResult | null): 
 }
 
 /**
- * Which node feeds each of *nodeId*'s input ports, by label.
+ * Which node, and which of its ports, feeds each of *nodeId*'s input ports.
  *
  * The wiring is the one thing a generation request cannot otherwise carry, and
  * it is what turns a skeleton line from `files: list[str]` into
- * `files: list[str]  # from "Ordner"` — provenance, which no type expresses.
+ * `files: list[str]  // from "Folder" (port "Files")` — provenance, which no
+ * type expresses. The port matters as much as the node: an Input in file mode
+ * offers both the file's content and its path, and code written against the
+ * wrong one reads a CSV as a file name.
  *
  * A port fed by several nodes (fan-in) names them all: that a value is a list
  * *because two nodes write into it* is exactly the case generated code gets
@@ -144,18 +147,18 @@ export function lastRunContext(nodeId: string, result: ExecutionResult | null): 
 export function inputSources(
   nodeId: string,
   nodes: GraphNode[],
-  edges: Array<{ source: string; target: string; targetHandle?: string | null }>,
+  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
 ): Record<string, string> {
-  const labelById = new Map(nodes.map((node) => [node.id, node.label]));
+  const byId = new Map(nodes.map((node) => [node.id, node]));
   const byPort: Record<string, string[]> = {};
   for (const edge of edges) {
     if (edge.target !== nodeId) continue;
-    const port = edge.targetHandle ?? 'input';
-    const label = labelById.get(edge.source);
-    if (!label) continue;
-    (byPort[port] ??= []).push(label);
+    const source = byId.get(edge.source);
+    if (!source) continue;
+    const port = source.outputs.find((p) => p.id === edge.sourceHandle)?.name;
+    (byPort[edge.targetHandle ?? 'input'] ??= []).push(port ? `"${source.label}" (port "${port}")` : `"${source.label}"`);
   }
   return Object.fromEntries(
-    Object.entries(byPort).map(([port, labels]) => [port, [...new Set(labels)].join('" + "')]),
+    Object.entries(byPort).map(([port, origins]) => [port, [...new Set(origins)].join(' + ')]),
   );
 }

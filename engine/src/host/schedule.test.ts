@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { parseGraph, type ExecutionResult, type Graph } from '../graph.ts';
 import { schedule } from './schedule.ts';
 
@@ -80,6 +83,29 @@ describe('schedule', () => {
     await wait(120);
     expect(told).toBe(true);
     expect(runs).toBe(1);
+  });
+
+  it('keeps the last round on disk, and a restarted server shows it before its next run', async () => {
+    const kept = join(mkdtempSync(join(tmpdir(), 'schedule-')), 'tool.json.last-run.json');
+    const first = schedule(() => graphWith({ on_start: true }), async () => done(), kept);
+    await wait(30);
+    first.stop();
+
+    // Every 10 s: nothing runs during this test, so what it shows can only be what was kept.
+    const second = schedule(() => graphWith({ every: '10' }), async () => done(), kept);
+    expect(second.state()).toMatchObject({ runs: 1, running: false, result: { status: 'success' } });
+    expect(second.state().finished_at).not.toBeNull();
+    second.stop();
+  });
+
+  it('starts empty when the kept file is missing or unreadable', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'schedule-'));
+    writeFileSync(join(dir, 'broken.json'), '{ not json');
+    for (const path of [join(dir, 'absent.json'), join(dir, 'broken.json')]) {
+      const clock = schedule(() => graphWith({ every: '10' }), async () => done(), path);
+      expect(clock.state()).toMatchObject({ runs: 0, result: null });
+      clock.stop();
+    }
   });
 
   it('reports an interval nobody can read instead of running on a guess', () => {

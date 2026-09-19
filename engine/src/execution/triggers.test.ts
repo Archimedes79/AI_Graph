@@ -4,6 +4,7 @@ import { executeGraph, memoryFeedbackEdges } from './executor.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
 import { RUN_PORT, graphTriggers, triggeredNodes } from './triggers.ts';
+import { LastOutputs } from './reuse.ts';
 
 /** A code node needs a body to be allowed to run; the fake runner ignores what it says. */
 const BODY = { code: 'function run(inputs) { return inputs; }' };
@@ -132,5 +133,67 @@ describe('graphTriggers', () => {
     const graph = graphOf([], []);
     graph.metadata.triggers = { on_start: true, every: ' 5m ' };
     expect(graphTriggers(graph)).toEqual({ on_start: true, every: '5m' });
+  });
+});
+
+describe('reusing context', () => {
+  /** A message goes through an expensive step; a length choice only shapes what comes after it. */
+  function modelThenShape(message: string): Graph {
+    const page = node('page', 'gui', {
+      gui_widgets: [
+        { id: 'msg', kind: 'text_io', mode: 'input', value: message },
+        { id: 'len', kind: 'select', options: 'short\nlong', value: 'short', run_on_change: true },
+        { id: 'show', kind: 'text_io', mode: 'output' },
+      ],
+    });
+    return graphOf(
+      [
+        page,
+        node('model', 'code', { code: 'function run(inputs) { /* model */ return inputs; }' }, { in: ['text'], out: ['text'] }),
+        node('shape', 'code', {}, { in: ['text', 'len'], out: ['text'] }),
+      ],
+      [
+        edge('m', 'page', 'msg_out', 'model', 'text'),
+        edge('t', 'model', 'text', 'shape', 'text'),
+        edge('l', 'page', 'len_out', 'shape', 'len'),
+        edge('s', 'shape', 'text', 'page', 'show_in'),
+      ],
+    );
+  }
+
+  let asked = 0;
+  const counting: Runtime = {
+    ...runtime,
+    code: { run: async (body, inputs) => { if (body.includes('model')) asked += 1; return inputs; } },
+  };
+  const choose = { node_id: 'page', port_id: 'len_out' };
+
+  it('does not run what an event only needs again when nothing it depends on changed', async () => {
+    const reuse = new LastOutputs();
+    asked = 0;
+    await executeGraph(modelThenShape('hello'), { runtime: counting, registry, trigger: choose, reuse });
+    const second = await executeGraph(modelThenShape('hello'), { runtime: counting, registry, trigger: choose, reuse });
+    expect(asked).toBe(1);
+    expect(second.node_results.find((r) => r.node_id === 'model')?.messages?.[0]).toMatch(/Reused/);
+    // What the event is for ran, and got the reused value.
+    expect(second.node_results.find((r) => r.node_id === 'shape')?.outputs).toMatchObject({ text: 'hello', len: 'short' });
+  });
+
+  it('runs it again when its input changed', async () => {
+    const reuse = new LastOutputs();
+    asked = 0;
+    await executeGraph(modelThenShape('hello'), { runtime: counting, registry, trigger: choose, reuse });
+    await executeGraph(modelThenShape('goodbye'), { runtime: counting, registry, trigger: choose, reuse });
+    expect(asked).toBe(2);
+  });
+
+  it('never reuses in a whole-graph run, or without somewhere to keep results', async () => {
+    const reuse = new LastOutputs();
+    asked = 0;
+    await executeGraph(modelThenShape('hello'), { runtime: counting, registry, reuse });
+    await executeGraph(modelThenShape('hello'), { runtime: counting, registry, reuse });
+    await executeGraph(modelThenShape('hello'), { runtime: counting, registry, trigger: choose });
+    await executeGraph(modelThenShape('hello'), { runtime: counting, registry, trigger: choose });
+    expect(asked).toBe(4);
   });
 });

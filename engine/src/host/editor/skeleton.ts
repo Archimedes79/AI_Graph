@@ -43,7 +43,7 @@ function jsType(value: unknown): string {
 function note(port: string, sources?: Record<string, string>, sample?: Record<string, unknown>): string {
   const parts: string[] = [];
   const origin = sources?.[port];
-  if (origin) parts.push(`from "${origin}"`);
+  if (origin) parts.push(`from ${origin}`);
   if (sample && port in sample) {
     let rendered = JSON.stringify(sample[port]) ?? String(sample[port]);
     if (rendered.length > EXAMPLE_LIMIT) rendered = `${rendered.slice(0, EXAMPLE_LIMIT)}…`;
@@ -67,7 +67,7 @@ export function identifier(port: string): string {
  * The stub for one element's `run`.
  *
  * *sample* is what the ports actually carried on the last run, when there was
- * one; *sources* maps a port to the label of the node feeding it. Both are
+ * one; *sources* maps a port to the node (and port) feeding it, already quoted. Both are
  * optional — without them this is still the signature, which is still more
  * than a comma-separated list of names.
  */

@@ -76,15 +76,26 @@ export function parseInterval(text: string): number {
  * for.
  */
 export function triggeredNodes(graph: Graph, trigger: Trigger, feedback: Set<string>): Set<string> | null {
+  const downstream = firedNodes(graph, trigger, feedback);
+  if (!downstream) return null;
+  const needed = upstreamOf(graph, downstream, feedback);
+  needed.add(trigger.node_id);
+  return needed;
+}
+
+/**
+ * What one page event is *for*: the nodes its port is wired to, and everything
+ * downstream of them. Null when the port is wired to nothing.
+ *
+ * The rest of what the event runs is context, which a run may reuse; this part
+ * always runs fresh.
+ */
+export function firedNodes(graph: Graph, trigger: Trigger, feedback: Set<string>): Set<string> | null {
   const live = graph.edges.filter((edge) => !feedback.has(edge.id));
   const fired = live.filter((edge) => edge.source_node_id === trigger.node_id
     && (!trigger.port_id || edge.source_port_id === trigger.port_id));
   if (!fired.length) return null;
-
-  const downstream = walk(fired.map((edge) => edge.target_node_id), live, true);
-  const needed = upstreamOf(graph, downstream, feedback);
-  needed.add(trigger.node_id);
-  return needed;
+  return walk(fired.map((edge) => edge.target_node_id), live, true);
 }
 
 /**
