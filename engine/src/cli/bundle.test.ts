@@ -100,6 +100,24 @@ describe('a bundle', () => {
     expect(bundleNeeds(plotter).interface).toBe(true);
     // Hello world is two nodes, no page and no model: Node and nothing else.
     expect(bundleNeeds(hello)).toEqual({ interface: false, ai: false });
+
+    // A model called from inside a node that holds a graph is still a model
+    // the recipient has to configure.
+    const deep = parseGraph({
+      metadata: { name: 'Deep' },
+      nodes: [{
+        id: 'part', node_type: 'subgraph', label: 'Part', inputs: [], outputs: [],
+        config: {
+          subgraph: {
+            metadata: { name: 'Inner' },
+            nodes: [{ id: 'ask', node_type: 'ai', label: 'Ask', inputs: [], outputs: [], config: {} }],
+            edges: [],
+          },
+        },
+      }],
+      edges: [],
+    });
+    expect(bundleNeeds(deep).ai).toBe(true);
   });
 
   it('writes a README that names the model settings only when one is asked', async () => {

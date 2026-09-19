@@ -45,6 +45,14 @@ export function bundleNeeds(graph: Graph): BundleNeeds {
     const asked = element.deployNeeds(node);
     if (asked.needsInterface) needs.interface = true;
     if (asked.asksAi) needs.ai = true;
+
+    // A graph inside a node runs in the bundle like everything else, so what
+    // it needs the recipient has to have: a model it calls is a model they
+    // must configure, wherever in the depth it sits.
+    const held = element.nestedGraph(node);
+    if (!held) continue;
+    const inner = bundleNeeds(held);
+    if (inner.ai) needs.ai = true;
   }
 
   return needs;
@@ -74,9 +82,17 @@ async function dataFiles(graph: Graph, from: string, target: string): Promise<{ 
   const copied: string[] = [];
   const left: string[] = [];
   const wanted = new Set<string>();
-  for (const node of graph.nodes) {
-    for (const path of registry.node(node.node_type)?.referencedPaths(node) ?? []) wanted.add(path);
-  }
+  const collect = (from: Graph): void => {
+    for (const node of from.nodes) {
+      const element = registry.node(node.node_type);
+      for (const path of element?.referencedPaths(node) ?? []) wanted.add(path);
+      const held = element?.nestedGraph(node);
+      // A file an inner node reads is a file the bundle must carry, and its
+      // path is relative to the same project folder.
+      if (held) collect(held);
+    }
+  };
+  collect(graph);
   for (const path of wanted) {
     const tidy = normalize(path);
     const source = resolve(from, tidy);

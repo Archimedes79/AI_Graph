@@ -125,3 +125,82 @@ describe('what check finds in a node\'s examples', () => {
     expect(problemsIn(withExamples('## Half\n```json input\n{\n```\n'))[0].where).toBe('node "say", examples.md');
   });
 });
+
+/**
+ * A graph inside a node is checked by the same function that checks the one
+ * above it, so everything it can get wrong is already covered. What is here is
+ * the boundary between the two, and the few things that only make sense in
+ * there.
+ */
+describe('a graph inside a node', () => {
+  const holder = (inner: unknown, config: Record<string, unknown> = {}) => parseGraph({
+    metadata: { name: 'Outer' },
+    nodes: [
+      { id: 'part', node_type: 'subgraph', label: 'Part', inputs: [], outputs: [], config: { subgraph: inner, ...config } },
+      { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: {} },
+    ],
+    edges: [],
+  });
+
+  const inner = (nodes: unknown[], edges: unknown[] = []) => ({ metadata: { name: 'Inner' }, nodes, edges });
+
+  const said = (problems: { where: string; problem: string }[]) => problems.map((p) => `${p.where}: ${p.problem}`);
+
+  it('reports what is wrong in there, saying which node it is in', () => {
+    const problems = problemsIn(holder(inner([
+      { id: 'broken', node_type: 'code', label: 'Broken', inputs: [], outputs: [port('out', 'output')], config: { code: '' } },
+      { id: 'out', node_type: 'output', label: 'Out', inputs: [port('value', 'input')], outputs: [], config: {} },
+    ])));
+    expect(said(problems)).toContainEqual(expect.stringContaining('node "part" ▸ node "broken": A code node with no config.code'));
+  });
+
+  it('wants something to come out of it, in its own words', () => {
+    const problems = problemsIn(holder(inner([
+      { id: 'lonely', node_type: 'code', label: 'Lonely', inputs: [], outputs: [], config: { code: 'function run() { return {}; }' } },
+    ])));
+    expect(said(problems)).toContainEqual(expect.stringContaining('node "part" ▸ graph: Nothing comes out'));
+  });
+
+  it('refuses two ports of one name, and an output node carrying more than one value', () => {
+    const problems = problemsIn(holder(inner([
+      { id: 'a', node_type: 'input', label: 'Text', inputs: [], outputs: [], config: { input_mode: 'text' } },
+      { id: 'b', node_type: 'input', label: 'Text', inputs: [], outputs: [], config: { input_mode: 'text' } },
+      { id: 'two', node_type: 'output', label: 'Two', inputs: [port('one', 'input'), port('other', 'input')], outputs: [], config: {} },
+    ])));
+    expect(said(problems)).toContainEqual(expect.stringContaining('that is two ports of the same name'));
+    expect(said(problems)).toContainEqual(expect.stringContaining('has 2 inputs'));
+  });
+
+  it('says a page in there would never be shown, and a question in there never asked', () => {
+    const problems = problemsIn(holder(inner([
+      { id: 'page', node_type: 'gui', label: 'Page', inputs: [], outputs: [], config: { gui_widgets: [] } },
+      { id: 'asks', node_type: 'input', label: 'Asks', inputs: [], outputs: [], config: { input_mode: 'file', prompt_at_runtime: true } },
+      { id: 'out', node_type: 'output', label: 'Out', inputs: [port('value', 'input')], outputs: [], config: {} },
+    ])));
+    expect(said(problems)).toContainEqual(expect.stringContaining('a page in here would never be shown'));
+    expect(said(problems)).toContainEqual(expect.stringContaining('only the graph at the top is asked'));
+  });
+
+  it('calls a described but empty part out, because that is a plan and not a graph', () => {
+    const problems = problemsIn(holder(inner([]), { task: 'Summarise the paper.' }));
+    expect(said(problems)).toContainEqual(expect.stringContaining('described and empty'));
+  });
+
+  it('says so when what it holds is not a graph at all', () => {
+    const problems = problemsIn(holder('not a graph'));
+    expect(said(problems)).toContainEqual(expect.stringContaining('cannot be read'));
+  });
+
+  it('is quiet about a part that is right', async () => {
+    const good = holder(inner([
+      { id: 'text', node_type: 'input', label: 'Text', inputs: [], outputs: [], config: { input_mode: 'text', value: 'hi' } },
+      { id: 'out', node_type: 'output', label: 'Short', inputs: [port('value', 'input')], outputs: [], config: {} },
+    ], [{ id: 'i1', source_node_id: 'text', source_port_id: 'output', target_node_id: 'out', target_port_id: 'value' }]));
+    expect(problemsIn(good)).toEqual([]);
+
+    // And on disk, where its folder is a project folder of its own.
+    await writeProject(dir, good);
+    const { problems } = await checkPath(dir);
+    expect(problems).toEqual([]);
+  });
+});
