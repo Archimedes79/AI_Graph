@@ -55,7 +55,17 @@ export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
    * holds and the folder saves, besides.
    */
   override nestedGraph(node: GraphNode): Graph | null {
-    return readGraph(node.config.subgraph);
+    const stored = node.config.subgraph;
+    // Nothing stored is an empty graph, not "no graph": this node holds one
+    // either way, and its folder is where it is kept -- which is how a save
+    // knows to write it, and a read knows to look.
+    if (stored === undefined || stored === null || stored === '') return parseGraph({ nodes: [], edges: [] });
+    return readGraph(stored);
+  }
+
+  override setNestedGraph(node: GraphNode, graph: Graph | null): void {
+    if (graph) node.config.subgraph = graph;
+    else delete node.config.subgraph;
   }
 
   override derivedPorts(node: GraphNode) {

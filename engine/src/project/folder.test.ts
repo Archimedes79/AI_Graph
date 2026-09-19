@@ -63,6 +63,13 @@ afterEach(async () => {
 
 const text = (path: string) => readFile(join(dir, path), 'utf8');
 
+/** A distinct modification time, so a change within the same millisecond still shows. */
+const touch = async (path: string, content: string) => {
+  await writeFile(path, content);
+  const later = new Date(Date.now() + 5_000);
+  await utimes(path, later, later);
+};
+
 describe('a project folder', () => {
   it('keeps each piece of writing in a file named for what it is', async () => {
     await writeProject(dir, sample());
@@ -186,13 +193,6 @@ describe('finding a project', () => {
 });
 
 describe('two editors on one folder', () => {
-  /** A distinct modification time, so a change within the same millisecond still shows. */
-  const touch = async (path: string, content: string) => {
-    await writeFile(path, content);
-    const later = new Date(Date.now() + 5_000);
-    await utimes(path, later, later);
-  };
-
   it('refuses to overwrite a file changed outside since it was read', async () => {
     const graph = sample();
     await writeProject(dir, graph);
@@ -238,5 +238,85 @@ describe('two editors on one folder', () => {
     await writeProject(dir, sample());
     await touch(join(dir, 'nodes/count/output.schema.json'), '{"type": "object"}\n');
     expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', widget_id: '', field: 'output_schema', value: { type: 'object' } }]);
+  });
+});
+
+/**
+ * A node that holds a graph holds a project folder: the same rules one level
+ * down, and no second way of storing a graph.
+ */
+describe('a graph inside a node', () => {
+  const nested = (): Graph => parseGraph({
+    metadata: { name: 'Outer' },
+    nodes: [
+      {
+        id: 'part', node_type: 'subgraph', label: 'The hard part', position: { x: 10, y: 10 },
+        inputs: [], outputs: [],
+        config: {
+          task: 'Summarise a paper.',
+          subgraph: {
+            metadata: { name: 'Inner' },
+            nodes: [
+              {
+                id: 'shorten', node_type: 'code', label: 'Shorten', position: { x: 5, y: 5 },
+                inputs: [port('text', 'input')], outputs: [port('short', 'output')],
+                config: { code: 'function run(i) { return { short: i.text.slice(0, 10) }; }' },
+              },
+            ],
+            edges: [],
+          },
+        },
+      },
+    ],
+    edges: [],
+  });
+
+  it('is a project folder of its own, and is out of the graph.json above it', async () => {
+    await writeProject(dir, nested());
+
+    expect(await text('nodes/part/task.md')).toBe('Summarise a paper.\n');
+    expect(JSON.parse(await text('nodes/part/graph.json')).metadata.name).toBe('Inner');
+    // The inner node's body is a file down there, the same as anywhere else.
+    expect(await text('nodes/part/nodes/shorten/code.js')).toContain('i.text.slice');
+    expect(JSON.parse(await text('nodes/part/layout.json')).shorten).toEqual({ x: 5, y: 5 });
+    // And none of it is repeated above.
+    expect(JSON.parse(await text('graph.json')).nodes[0].config).toEqual({});
+  });
+
+  it('reads back whole, body and all', async () => {
+    await writeProject(dir, nested());
+    const read = await readProject(dir);
+    const inner = read.nodes[0].config.subgraph as Graph;
+    expect(inner.metadata.name).toBe('Inner');
+    expect(inner.nodes[0].config.code).toContain('i.text.slice');
+    expect(inner.nodes[0].position).toEqual({ x: 5, y: 5 });
+  });
+
+  it('can be opened on its own, because it is an ordinary project', async () => {
+    await writeProject(dir, nested());
+    expect(isProjectFolder(join(dir, 'nodes/part'))).toBe(true);
+    const alone = await loadGraph(join(dir, 'nodes/part'));
+    expect(alone.nodes.map((node) => node.id)).toEqual(['shorten']);
+  });
+
+  it('keeps the inner files when the graph above it is saved again', async () => {
+    // `tidy` must not walk into a folder that is somebody else's project: from
+    // up here, an inner code.js looks like a file nothing claims.
+    await writeProject(dir, nested());
+    await writeProject(dir, await readProject(dir));
+    expect(existsSync(join(dir, 'nodes/part/nodes/shorten/code.js'))).toBe(true);
+  });
+
+  it('reports a change anywhere inside it as that graph having changed', async () => {
+    await writeProject(dir, nested());
+    expect(await changesOnDisk(dir)).toEqual([]);
+
+    await touch(join(dir, 'nodes/part/nodes/shorten/code.js'), 'function run() { return { short: "hi" }; }\n');
+    const [change, ...rest] = await changesOnDisk(dir);
+    expect(rest).toEqual([]);
+    expect(change).toMatchObject({ node_id: 'part', widget_id: '', field: 'nested_graph' });
+    expect((change.value as Graph).nodes[0].config.code).toContain('"hi"');
+    // Once, like every other change.
+    expect(await changesOnDisk(dir)).toEqual([]);
   });
 });

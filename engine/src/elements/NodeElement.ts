@@ -44,6 +44,15 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
   }
 
   /**
+   * Put a graph read from its own folder back into this node, or `null` to
+   * take it out because it lives in a file now.
+   *
+   * The other half of `nestedGraph`: the element owns where it keeps it, the
+   * project folder only says what it found.
+   */
+  setNestedGraph(_node: GraphNode, _graph: Graph | null): void {}
+
+  /**
    * This node keeps its value between runs, so an edge into it can close a
    * cycle: the executor leaves such an edge out of the ordering and settles the
    * fresh value afterwards, for the *next* round.
