@@ -7,7 +7,7 @@
 // Each handler takes the request the table promises and returns its response;
 // a refusal is thrown as a `Refusal` with its status. What the handlers do is
 // done elsewhere: running by the executor, files by `files.ts`, the project by
-// `project.ts`, generation by `generate.ts`, settings by `settings.ts`.
+// `project/folder.ts`, generation by `generate.ts`, settings by `settings.ts`.
 
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -26,7 +26,7 @@ import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile } from '../api.ts';
 import * as files from './files.ts';
 import * as settings from './settings.ts';
-import * as project from './project.ts';
+import * as project from '../../project/folder.ts';
 import * as gen from './generate.ts';
 import { zip } from './zip.ts';
 
@@ -69,7 +69,9 @@ export function editorRoutes(): Handlers {
     if (!path) throw new Refusal(400, "Missing required field 'path'");
     const full = resolve(expandHome(path));
     try {
-      return { path: full, graph: await work(full) };
+      const graph = await work(full);
+      const folder = project.projectFolderOf(full);
+      return { path: folder ?? full, graph, project: folder !== null };
     } catch (error) {
       if (error instanceof project.NotFound) throw new Refusal(404, error.message);
       if (error instanceof project.NotAGraph) throw new Refusal(400, error.message);
@@ -111,9 +113,24 @@ export function editorRoutes(): Handlers {
       }
     },
 
-    openGraph: (asked) => onFile(asked.path, 'load', (path) => project.load(path)),
-    saveGraph: (asked) => onFile(asked.path, 'save', (path) => project.save(path, project.asGraph(asked.graph))),
-    reloadGraph: (asked) => onFile(asked.path, 'reload', (path) => project.load(path)),
+    openGraph: (asked) => onFile(asked.path, 'load', (path) => project.loadGraph(path)),
+    saveGraph: (asked) => onFile(asked.path, 'save', async (path) => {
+      const graph = parseGraph(asked.graph);
+      await project.saveGraph(path, graph);
+      return graph;
+    }),
+    reloadGraph: (asked) => onFile(asked.path, 'reload', (path) => project.loadGraph(path)),
+
+    async projectChanges(asked) {
+      const folder = asked.path ? project.projectFolderOf(resolve(expandHome(asked.path))) : null;
+      if (!folder) return { changes: [] };
+      try {
+        return { changes: await project.changesOnDisk(folder) };
+      } catch (error) {
+        // Half-written by another editor, most likely: asked again in a moment.
+        throw new Refusal(409, message(error));
+      }
+    },
 
     generate: (asked) => watched(asked.progress_id, async (calls) => {
       const runtime = nodeRuntime();
@@ -179,11 +196,15 @@ export function editorRoutes(): Handlers {
 
     async openExternal(asked, { loopback }) {
       if (!loopback) throw new Refusal(403, 'Opening files is only offered on this machine.');
-      if (!asked.graph_path || !asked.file) throw new Refusal(400, "Missing 'graph_path' or 'file'.");
+      if (!asked.graph_path || !asked.node_id) throw new Refusal(400, "Missing 'graph_path' or 'node_id'.");
       try {
-        return await files.openExternal(project.nodeDir(resolve(expandHome(asked.graph_path))), asked.file);
+        const folder = project.projectFolderOf(resolve(expandHome(asked.graph_path)));
+        if (!folder) throw new Refusal(400, 'Only a project folder keeps files to open: save the graph as one first.');
+        const file = await project.bodyFileOf(folder, asked.node_id, asked.widget_id ?? '');
+        return await files.openExternal(join(folder, project.NODES_DIR), file);
       } catch (error) {
-        throw new Refusal(error instanceof files.NotFound ? 404 : 400, message(error));
+        if (error instanceof Refusal) throw error;
+        throw new Refusal(error instanceof files.NotFound || error instanceof project.NotFound ? 404 : 400, message(error));
       }
     },
 

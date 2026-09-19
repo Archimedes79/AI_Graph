@@ -1,11 +1,12 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { readdirSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
-import { parseGraph, type Graph } from './graph.ts';
+import type { Graph } from './graph.ts';
+import { loadGraph } from './project/folder.ts';
 import type { Trigger } from './execution/triggers.ts';
 import { executeGraph, memoryFeedbackEdges, topologicalLevels } from './execution/executor.ts';
 import { registry } from './elements/registry.ts';
@@ -32,7 +33,8 @@ import { writeBundle } from './cli/bundle.ts';
  */
 
 const REPO = resolve(__dirname, '..', '..');
-const EXAMPLES = readdirSync(resolve(REPO, 'examples')).filter((name) => name.endsWith('.json')).sort();
+const EXAMPLES = readdirSync(resolve(REPO, 'examples'), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && entry.name !== 'data').map((entry) => entry.name).sort();
 
 /** An endpoint that answers with a summary of what it was sent. */
 function startModel(): Promise<{ url: string; server: Server; asked: string[] }> {
@@ -72,7 +74,7 @@ afterAll(() => { model.server.close(); });
  * name their provider on every node, and a test must not call it.
  */
 async function load(name: string): Promise<Graph> {
-  const graph = parseGraph(JSON.parse(await readFile(resolve(REPO, 'examples', name), 'utf8')));
+  const graph = await loadGraph(resolve(REPO, 'examples', name));
   const rooted = (path: unknown) => (typeof path === 'string' && path && !isAbsolute(path) ? resolve(REPO, path) : path);
   for (const node of graph.nodes) {
     if (node.node_type === 'input' && node.config.input_mode !== 'text') node.config.value = rooted(node.config.value);
@@ -138,7 +140,7 @@ describe.each(EXAMPLES)('%s', (name) => {
   }, 120_000);
 
   it('can be deployed: it runs from its own folder, with the files it starts on', async () => {
-    const graph = parseGraph(JSON.parse(await readFile(resolve(REPO, 'examples', name), 'utf8')));
+    const graph = await loadGraph(resolve(REPO, 'examples', name));
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-example-'));
     try {
       await writeBundle(graph, dir, { dataFrom: REPO });
@@ -155,7 +157,7 @@ describe.each(EXAMPLES)('%s', (name) => {
 describe('what each example is there to show', () => {
   it('chat: a message starts the graph, and the turn is remembered', async () => {
     const before = model.asked.length;
-    const graph = await load('chat.json');
+    const graph = await load('chat');
     const chat = blocksOf(graph, 'page').find((block) => block.id === 'chat') as { value: { messages: unknown[]; pending: string } };
     const trigger = { node_id: 'page', port_id: 'chat_out' };
 
@@ -176,7 +178,7 @@ describe('what each example is there to show', () => {
 
   it('chat: a click on Run with nothing typed asks nobody and changes nothing', async () => {
     const before = model.asked.length;
-    const graph = await load('chat.json');
+    const graph = await load('chat');
     const result = await runGraph(graph);
     expect(model.asked.length).toBe(before);
     expect(result.node_results.find((n) => n.node_id === 'assistant')?.status).toBe('skipped');
@@ -185,7 +187,7 @@ describe('what each example is there to show', () => {
 
   it('file_summarizer: changing the length redoes the summary, from the file as read', async () => {
     const before = model.asked.length;
-    const result = await runGraph(await load('file_summarizer.json'), { node_id: 'page', port_id: 'length_out' });
+    const result = await runGraph(await load('file_summarizer'), { node_id: 'page', port_id: 'length_out' });
     expect(result.node_results.map((n) => n.node_id).sort()).toEqual(['page', 'reader', 'summarizer']);
     expect(String(outputsOf(result, 'reader').info)).toMatch(/^01_the_lighthouse_keeper\.txt\n\d+ words/);
 
@@ -197,7 +199,7 @@ describe('what each example is there to show', () => {
 
   it('folder_summaries: one call per story, one over all of them, and a row for each', async () => {
     const before = model.asked.length;
-    const result = await runGraph(await load('folder_summaries.json'), { node_id: 'page', port_id: 'go_out' });
+    const result = await runGraph(await load('folder_summaries'), { node_id: 'page', port_id: 'go_out' });
     const prompts = model.asked.slice(before);
     expect(prompts).toHaveLength(4);
     // The stories' text, not their filenames; and the last call gets the three
@@ -215,7 +217,7 @@ describe('what each example is there to show', () => {
 
   it('population_plotter: every kind of chart is drawn, and reaches the page across the loop', async () => {
     for (const [kind, mark] of [['Horizontal bars', '<rect'], ['Columns', '<rect'], ['Donut', '<path']] as const) {
-      const graph = await load('population_plotter.json');
+      const graph = await load('population_plotter');
       blocksOf(graph, 'page').find((block) => block.id === 'kind')!.value = kind;
       blocksOf(graph, 'page').find((block) => block.id === 'top')!.value = 6;
 

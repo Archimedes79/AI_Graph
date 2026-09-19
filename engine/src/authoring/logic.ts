@@ -39,8 +39,6 @@ export interface LogicFields {
   body: string;
   /** The config key holding the request that produced it. */
   prompt: string;
-  /** The config key holding the file name, when the body may live in a file. */
-  file?: string;
   /** The request lives on the node itself (its description), not in config. */
   promptOnSubject?: boolean;
 }
@@ -61,30 +59,17 @@ export class Logic {
   readonly body: string;
   /** Which config keys these came from, for the editor and the file layer. */
   readonly fields: LogicFields;
-  /** The file this body is kept in beside the graph; empty means "in the JSON". */
-  readonly file: string;
-  /** For the editor's sentence: "keep <what> in a file". */
-  readonly what: string;
 
   // Fields declared and assigned rather than written as constructor parameter
   // properties: the engine has to survive Node's type stripping, and a
   // parameter property is one of the few TypeScript spellings that emits code
   // rather than only removing types. `strippable.test.ts` holds every file here
   // to that.
-  constructor(
-    kind: LogicKind,
-    prompt: string,
-    body: string,
-    fields: LogicFields,
-    file = '',
-    what = 'this body',
-  ) {
+  constructor(kind: LogicKind, prompt: string, body: string, fields: LogicFields) {
     this.kind = kind;
     this.prompt = prompt;
     this.body = body;
     this.fields = fields;
-    this.file = file;
-    this.what = what;
   }
 
   /**
@@ -128,7 +113,6 @@ export function logicFrom(
   subject: { config: Record<string, unknown>; description?: string },
   kind: LogicKind,
   fields: LogicFields,
-  what: string,
 ): Logic {
   const prompt = fields.promptOnSubject
     ? String(subject.description ?? '')
@@ -138,7 +122,5 @@ export function logicFrom(
     prompt,
     String(subject.config[fields.body] ?? ''),
     fields,
-    fields.file ? String(subject.config[fields.file] ?? '') : '',
-    what,
   );
 }

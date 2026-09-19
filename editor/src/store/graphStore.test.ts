@@ -211,3 +211,60 @@ describe('graphStore: what a run remembered', () => {
     expect((stored(widget.id).value as { messages: unknown[] }).messages).toHaveLength(2);
   });
 });
+
+describe('graphStore, a project open on disk', () => {
+  const codeNode = () => graphNode({
+    id: 'count', node_type: 'code',
+    outputs: [{ id: 'total', name: 'Total', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }],
+    config: { ...blankConfig(), code: 'function run() { return { total: 1 }; }' },
+  });
+  const nodeById = (id: string) => useGraphStore.getState().rfNodes.find((n) => n.id === id)!.data.graphNode;
+
+  it('knows it is a project only while a path says so', () => {
+    useGraphStore.getState().setCurrentFilePath('/work/tool', true);
+    expect(useGraphStore.getState().isProject).toBe(true);
+    loadTestGraph([]);
+    expect(useGraphStore.getState().isProject).toBe(false);
+    useGraphStore.getState().setCurrentFilePath('/work/tool.json');
+    expect(useGraphStore.getState().isProject).toBe(false);
+  });
+
+  it('takes code changed on disk in as one undo step, and a clean graph stays clean', () => {
+    const page = graphNode({ id: 'page', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [{ ...WIDGET_UIS.plot_window.create('Chart'), id: 'chart' }] } });
+    loadTestGraph([codeNode(), page]);
+    useGraphStore.getState().markSaved();
+
+    useGraphStore.getState().takeDiskChanges([
+      { node_id: 'count', widget_id: '', field: 'code', value: 'function run() { return { total: 2 }; }' },
+      { node_id: 'page', widget_id: 'chart', field: 'code', value: 'function run(i) { return i; }' },
+      { node_id: 'gone', widget_id: '', field: 'code', value: 'ignored' },
+    ]);
+    expect(nodeById('count').config.code).toContain('total: 2');
+    expect(nodeById('page').config.gui_widgets[0].code).toContain('return i');
+    expect(useGraphStore.getState().isDirty()).toBe(false);
+
+    useGraphStore.getState().undo();
+    expect(nodeById('count').config.code).toContain('total: 1');
+  });
+
+  it('keeps unsaved edits unsaved when a change comes in from disk', () => {
+    loadTestGraph([codeNode()]);
+    useGraphStore.getState().markSaved();
+    useGraphStore.getState().updateNode('count', { label: 'Renamed here' });
+    useGraphStore.getState().takeDiskChanges([{ node_id: 'count', widget_id: '', field: 'code_prompt', value: 'Count.' }]);
+    expect(useGraphStore.getState().isDirty()).toBe(true);
+    expect(nodeById('count').label).toBe('Renamed here');
+  });
+
+  it('sets a code node\'s output interface from its first successful run, and keeps it after', () => {
+    loadTestGraph([codeNode()]);
+    const ran = (total: unknown) => useGraphStore.getState().setExecutionResult({
+      status: 'success', outputs: {}, error: null,
+      node_results: [{ node_id: 'count', status: 'success', inputs: {}, outputs: { total }, error: null }],
+    });
+    ran(7);
+    expect(nodeById('count').config.output_schema).toEqual({ type: 'object', properties: { total: { type: 'integer' } }, required: ['total'] });
+    ran('seven');
+    expect(nodeById('count').config.output_schema).toMatchObject({ properties: { total: { type: 'integer' } } });
+  });
+});

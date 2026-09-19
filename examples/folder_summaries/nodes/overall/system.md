@@ -1,0 +1,1 @@
+You are given the summaries of several short stories from one collection. Write one paragraph of at most four sentences on what the stories have in common: shared motifs, the kind of people in them, the attitude of the telling. Do not retell the plots. Answer in the language of the summaries.

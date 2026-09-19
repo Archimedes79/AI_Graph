@@ -1,20 +1,20 @@
 {
   "metadata": {
-    "version": "1.0.0",
-    "author": "AI-Graph",
-    "ai_defaults": {
-      "provider": "google",
-      "model": "gemini-flash-lite-latest"
-    },
-    "gui_scheme": "night",
     "name": "File reader & summarizer",
+    "version": "1.0.0",
     "description": "Pick a text file, read it, and have a model summarize it. Choosing a file or pressing Summarize starts the graph at the reader; changing the length re-runs only the summary. Paths are relative to the working directory, so run this from the repository root.",
+    "author": "AI-Graph",
     "tags": [
       "example",
       "gui",
       "ai",
       "triggers"
-    ]
+    ],
+    "ai_defaults": {
+      "provider": "google",
+      "model": "gemini-flash-lite-latest"
+    },
+    "gui_scheme": "night"
   },
   "nodes": [
     {
@@ -22,12 +22,6 @@
       "node_type": "gui",
       "label": "Summarizer",
       "description": "The page this tool shows",
-      "position": {
-        "x": 60,
-        "y": 120
-      },
-      "width": 340,
-      "height": 260,
       "inputs": [
         {
           "id": "summary_in",
@@ -89,91 +83,91 @@
       "config": {
         "gui_widgets": [
           {
+            "h": 1,
             "id": "title",
             "kind": "text",
             "label": "",
-            "tone": "plain",
-            "w": 16,
-            "h": 1,
             "mode": "heading",
-            "value": "File reader & summarizer"
+            "tone": "plain",
+            "value": "File reader & summarizer",
+            "w": 16
           },
           {
+            "h": 1,
             "id": "intro",
             "kind": "text",
             "label": "",
-            "tone": "plain",
-            "w": 16,
-            "h": 1,
             "mode": "caption",
-            "value": "Choose a text file — it is read and summarized straight away. Change the length and it is summarized again."
+            "tone": "plain",
+            "value": "Choose a text file — it is read and summarized straight away. Change the length and it is summarized again.",
+            "w": 16
           },
           {
+            "extensions": ".txt,.md",
+            "h": 2,
             "id": "file",
             "kind": "input_picker",
             "label": "File",
-            "tone": "sunken",
-            "w": 9,
-            "h": 2,
             "mode": "file",
+            "run_on_change": true,
+            "tone": "sunken",
             "value": "examples/data/stories/01_the_lighthouse_keeper.txt",
-            "extensions": ".txt,.md",
-            "run_on_change": true
+            "w": 9
           },
           {
+            "h": 2,
             "id": "length",
             "kind": "select",
             "label": "Length",
-            "tone": "sunken",
-            "w": 4,
-            "h": 2,
             "options": "One sentence\nThree sentences\nFive bullet points",
+            "run_on_change": true,
+            "tone": "sunken",
             "value": "Three sentences",
-            "run_on_change": true
+            "w": 4
           },
           {
+            "h": 2,
             "id": "go",
             "kind": "button",
             "label": "Summarize",
             "tone": "plain",
-            "w": 3,
-            "h": 2
+            "w": 3
           },
           {
+            "h": 1,
             "id": "rule",
             "kind": "divider",
             "label": "",
+            "mode": "horizontal",
             "tone": "plain",
-            "w": 16,
-            "h": 1,
-            "mode": "horizontal"
+            "w": 16
           },
           {
+            "h": 5,
             "id": "summary",
             "kind": "text_io",
             "label": "Summary",
+            "mode": "output",
             "tone": "raised",
-            "w": 10,
-            "h": 5,
-            "mode": "output"
+            "w": 10
           },
           {
+            "h": 5,
             "id": "about",
             "kind": "text_io",
             "label": "About the file",
+            "mode": "output",
             "tone": "raised",
-            "w": 6,
-            "h": 5,
-            "mode": "output"
+            "w": 6
           },
           {
+            "h": 6,
             "id": "content",
             "kind": "text_io",
             "label": "What was read",
+            "mode": "output",
             "tone": "raised",
-            "w": 16,
-            "h": 6,
-            "mode": "output"
+            "w": 16
           }
         ]
       }
@@ -183,10 +177,6 @@
       "node_type": "code",
       "label": "Read file",
       "description": "Reads the chosen file and says what it is",
-      "position": {
-        "x": 840,
-        "y": 40
-      },
       "inputs": [
         {
           "id": "file",
@@ -228,8 +218,6 @@
         }
       ],
       "config": {
-        "code": "/**\n * The chosen file, as text -- and one line saying what it is.\n *\n * @typedef {Object} Inputs\n * @property {string} file  the file's content (read for us: the port is a file path)\n * @property {string} path  the same file's path, for its name\n */\n\n/** @param {Inputs} inputs */\nfunction run(inputs) {\n  const text = String(inputs.file ?? '');\n  const name = String(inputs.path ?? '').split(/[\\\\/]/).pop() || 'no file chosen';\n  const words = text.split(/\\s+/).filter(Boolean).length;\n  const minutes = Math.max(1, Math.round(words / 200));\n  return {\n    text,\n    info: name + '\\n' + words.toLocaleString('en') + ' words · ' + text.length.toLocaleString('en')\n      + ' characters · about ' + minutes + ' min to read',\n  };\n}\n",
-        "code_prompt": "Pass the file's text on, and describe the file in one line: its name, word count, character count and reading time.",
         "batch_mode": "whole_list",
         "read_file_inputs": true
       }
@@ -239,10 +227,6 @@
       "node_type": "ai",
       "label": "Summarize",
       "description": "Summarize the text faithfully, at the length asked for.",
-      "position": {
-        "x": 1140,
-        "y": 180
-      },
       "inputs": [
         {
           "id": "text",
@@ -275,14 +259,12 @@
         }
       ],
       "config": {
-        "ai_provider": "google",
         "ai_model": "gemini-flash-lite-latest",
-        "temperature": 0.3,
-        "system_prompt": "You summarize texts faithfully. Say what the text is about and what it comes to; add nothing that is not in it and do not judge it. Answer in the language of the text. Output the summary only — no preamble, no title.",
-        "prompt_template": "Length of the summary: {{length}}\n\nThe text:\n{{text}}",
-        "output_format": "text",
+        "ai_provider": "google",
         "batch_mode": "whole_list",
-        "read_file_inputs": false
+        "output_format": "text",
+        "read_file_inputs": false,
+        "temperature": 0.3
       }
     }
   ],

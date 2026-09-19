@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseGraph } from '../graph.ts';
+import { loadGraph } from '../project/folder.ts';
 import { bundleNeeds, writeBundle } from './bundle.ts';
 
 /**
@@ -35,7 +36,7 @@ function run(dir: string, args: string[] = []): Promise<{ code: number; out: str
 const MINIMAL = resolve(REPO, 'engine', 'fixtures', 'minimal.json');
 
 async function bundleOf(path: string): Promise<string> {
-  const graph = parseGraph(JSON.parse(await readFile(path, 'utf8')));
+  const graph = await loadGraph(path);
   const dir = await mkdtemp(join(tmpdir(), 'ai-graph-bundle-'));
   await writeBundle(graph, dir, { dataFrom: REPO });
   return dir;
@@ -43,7 +44,7 @@ async function bundleOf(path: string): Promise<string> {
 
 describe('a bundle', () => {
   it('runs the graph from somewhere else entirely', async () => {
-    const dir = await bundleOf(resolve(REPO, 'examples', 'population_plotter.json'));
+    const dir = await bundleOf(resolve(REPO, 'examples', 'population_plotter'));
     try {
       // No `--inputs`: the CSV the picker starts on came along, at the same
       // relative path, so the tool opens on a chart rather than on an error.
@@ -75,9 +76,7 @@ describe('a bundle', () => {
     // The editor's own chunks sit in the same build folder. A bundle that
     // copied the folder would hand the graph editor to someone who was handed
     // a finished tool, so the file list comes out of runtime.html itself.
-    const graph = parseGraph(JSON.parse(
-      await readFile(resolve(REPO, 'examples/population_plotter.json'), 'utf8'),
-    ));
+    const graph = await loadGraph(resolve(REPO, 'examples/population_plotter'));
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-page-bundle-'));
     try {
       const written = await writeBundle(graph, dir, { pageDir: resolve(REPO, 'editor/dist') });
@@ -92,9 +91,7 @@ describe('a bundle', () => {
   }, 120_000);
 
   it('says what has to be installed, and no more than that', async () => {
-    const plotter = parseGraph(JSON.parse(
-      await readFile(resolve(REPO, 'examples/population_plotter.json'), 'utf8'),
-    ));
+    const plotter = await loadGraph(resolve(REPO, 'examples/population_plotter'));
     const hello = parseGraph(JSON.parse(
       await readFile(MINIMAL, 'utf8'),
     ));
@@ -106,7 +103,7 @@ describe('a bundle', () => {
   });
 
   it('writes a README that names the model settings only when one is asked', async () => {
-    const dir = await bundleOf(resolve(REPO, 'examples', 'population_plotter.json'));
+    const dir = await bundleOf(resolve(REPO, 'examples', 'population_plotter'));
     try {
       const readme = await readFile(join(dir, 'README.md'), 'utf8');
       expect(readme).toContain('Node 22 or newer');

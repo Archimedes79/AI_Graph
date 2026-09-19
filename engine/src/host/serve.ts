@@ -13,9 +13,8 @@
 // what exists.
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { parseGraph, type Graph } from '../graph.ts';
 import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
 import { registry } from '../elements/registry.ts';
@@ -30,6 +29,13 @@ import {
 import { RunBoard } from './runs.ts';
 import { nodeFiles, nodeRuntime } from './node.ts';
 import { schedule } from './schedule.ts';
+import { loadGraph, projectFolderOf } from '../project/folder.ts';
+
+/** Where a served tool keeps its last scheduled round: inside a project, beside a file. */
+function lastRunFile(graphPath: string): string {
+  const folder = projectFolderOf(graphPath);
+  return folder ? join(folder, 'graph.last-run.json') : `${graphPath}.last-run.json`;
+}
 
 export interface ServeOptions {
   /**
@@ -65,13 +71,13 @@ export async function serve(options: ServeOptions): Promise<{ server: Server; ur
   // starts from there. A page that runs the graph hands over its copy, so the
   // clock goes on with the file the person picked.
   const held: { graph: Graph | null } = {
-    graph: options.graphPath ? parseGraph(JSON.parse(await readFile(options.graphPath, 'utf8'))) : null,
+    graph: options.graphPath ? await loadGraph(options.graphPath) : null,
   };
   const clock = held.graph
     ? schedule(() => held.graph!, (graph, signal) => {
       applyRuntimeValues(graph, {}, registry);
       return executeGraph(graph, { runtime: nodeRuntime(), registry, signal });
-    }, `${options.graphPath}.last-run.json`)
+    }, lastRunFile(options.graphPath!))
     : null;
 
   const handlers: Handlers = {

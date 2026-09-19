@@ -55,7 +55,6 @@ export type NodeConfig = {
   batch_mode: 'per_item' | 'whole_list';
   catch_errors?: boolean;
   code: string;
-  code_file: string;
   code_prompt: string;
   data_format: 'text' | 'structure';
   data_format_prompt: string;
@@ -71,6 +70,8 @@ export type NodeConfig = {
   output_example?: string;
   /** The message an ai node sends, with `{{port}}` where a port's value goes. Empty: send what arrived. */
   prompt_template?: string;
+  /** A code node's output interface (JSON Schema), set from a run: `output.schema.json` in a project. */
+  output_schema?: unknown;
   /** Tool servers an ai node may call, one per line: a URL, or a name this machine configured. */
   mcp_servers?: string;
   output_label: string;
@@ -94,7 +95,6 @@ export type NodeConfig = {
  */
 export type GuiWidget = {
   code?: string;
-  code_file: string;
   code_prompt: string;
   example_file: string;
   extensions: string;

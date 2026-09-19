@@ -1,4 +1,5 @@
 import { WidgetElement, type Widget } from '../../WidgetElement.ts';
+import type { TextFile } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { logicFrom, Logic } from '../../../authoring/logic.ts';
 import { selectFiles } from '../../fileSelection.ts';
@@ -16,6 +17,12 @@ export interface PickerConfig {
   selectAll: boolean;
 }
 
+/** What this keeps in files of its own in a project folder: see `Element.texts`. */
+const SELECTOR_TEXTS: readonly TextFile[] = [
+  { field: 'selector_code', file: 'select.js' },
+  { field: 'selector_prompt', file: 'task.md' },
+];
+
 /**
  * Choosing a file or a folder.
  *
@@ -24,6 +31,10 @@ export interface PickerConfig {
  * level up, through the same code, because it is the same behaviour.
  */
 export class InputPickerWidgetElement extends WidgetElement<PickerConfig> {
+  override texts(): readonly TextFile[] {
+    return SELECTOR_TEXTS;
+  }
+
   readonly widgetKind = 'input_picker' as const;
 
   config(widget: Widget): PickerConfig {
@@ -39,7 +50,7 @@ export class InputPickerWidgetElement extends WidgetElement<PickerConfig> {
 
   override logic(widget: Widget): Logic | undefined {
     if (!this.config(widget).directory) return undefined;
-    return logicFrom(widget, 'code', SELECTOR_FIELDS, 'this file selector');
+    return logicFrom(widget, 'code', SELECTOR_FIELDS);
   }
 
   /** The same declaration the input node hands out; see `generation.ts`. */

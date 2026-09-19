@@ -32,7 +32,7 @@ interface ToolbarProps {
   onSave: () => void;
   onSaveAs: () => void;
   /** Re-read the node files of the open graph. */
-  onReloadNodeFiles: () => void;
+  onReloadProject: () => void;
   onLoad: () => void;
   onInjectJson: () => void;
   onOpenSettings: () => void;
@@ -51,7 +51,7 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({
-  onNewGraph, onSave, onSaveAs, onReloadNodeFiles, onLoad, onInjectJson, onOpenSettings, confirmDiscard,
+  onNewGraph, onSave, onSaveAs, onReloadProject, onLoad, onInjectJson, onOpenSettings, confirmDiscard,
   currentFilePath, saveStatus, onShowInterface,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
@@ -67,7 +67,7 @@ export default function Toolbar({
   const runGraph = useGraphStore((s) => s.runGraph);
   const stopRun = useGraphStore((s) => s.stopRun);
   const runProgress = useGraphStore((s) => s.runProgress);
-  const hasNodeFiles = useGraphStore((s) => s.rfNodes.some((n) => !!n.data.graphNode.config.code_file));
+  const isProject = useGraphStore((s) => s.isProject);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
   // Subscribe to the stack lengths, not to canUndo/canRedo: selecting a function
@@ -270,12 +270,13 @@ export default function Toolbar({
         <ToolbarButton icon={FolderOpen} label="Open" title="Open a graph file" onClick={onLoad} />
         <ToolbarButton icon={Save} label="Save" title="Save (Ctrl+S)" onClick={onSave} />
         <ToolbarButton icon={SaveAll} title="Save as…" onClick={onSaveAs} />
-        {/* Only meaningful once some node keeps its text in a file. */}
-        {hasNodeFiles && (
+        {/* Code and prompts that change on disk come in by themselves; this
+            is for graph.json itself -- after a git pull, say. */}
+        {isProject && (
           <ToolbarButton
             icon={RefreshCw}
-            title="Reload the node files from disk (they changed outside the editor)"
-            onClick={onReloadNodeFiles}
+            title="Reload the whole project from disk (graph.json changed outside the editor)"
+            onClick={onReloadProject}
           />
         )}
 

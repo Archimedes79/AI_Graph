@@ -360,16 +360,20 @@ describe('save_graph', () => {
     expect(await readFile(join(root, 'notes.json'), 'utf8')).toBe('not even json');
   });
 
-  it('drops a code_file pointer beside a body, so what was saved is what runs', async () => {
-    const both = code('work');
-    both.config.code_file = 'Work.js';
-    await toolsWith().call('save_graph', {
-      path: 'g.json', graph: graphOf([textInput('greeting'), both, output('result')],
+  it('saves into a project the way the editor does: the code to its file, the wiring to graph.json', async () => {
+    await mkdir(join(root, 'proj', 'nodes'), { recursive: true });
+    const saved = await toolsWith().call('save_graph', {
+      path: 'proj/graph.json', graph: graphOf([textInput('greeting'), code('work'), output('result')],
         [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')]),
     });
-    const saved = JSON.parse(await readFile(join(root, 'g.json'), 'utf8'));
-    expect(saved.nodes[1].config.code).toContain('function run');
-    expect(saved.nodes[1].config.code_file).toBe('');
+    expect(saved.isError).toBeUndefined();
+    expect(await readFile(join(root, 'proj', 'nodes', 'work', 'code.js'), 'utf8')).toContain('function run');
+    const wiring = JSON.parse(await readFile(join(root, 'proj', 'graph.json'), 'utf8'));
+    expect(wiring.nodes[1].config).not.toHaveProperty('code');
+    // And what it saved is what it reads back.
+    const ran = await answer(toolsWith(), 'run_graph', { path: 'proj/graph.json' });
+    expect(ran.json.status).toBe('success');
+    expect(ranBody).toContain('function run');
   });
 });
 
@@ -450,13 +454,13 @@ describe('confinement', () => {
     expect(await readFile(join(root, 'ai-settings.json'), 'utf8')).toBe(settings);
   });
 
-  it('does not follow a code_file out of the root', async () => {
-    await writeFile(join(outside, 'body.js'), 'function run() { return { out: "from outside" }; }');
-    const pointing = code('work', '');
-    pointing.config.code_file = join('..', '..', outside.split(/[\\/]/).pop() as string, 'body.js');
-    await writeFile(join(root, 'g.json'), JSON.stringify(graphOf([pointing, output('result')], [edge('e1', 'work.out', 'result.value')])));
+  it('does not follow a project folder linked out of the root', async () => {
+    await writeFile(join(outside, 'code.js'), 'function run() { return { out: "from outside" }; }');
+    await mkdir(join(root, 'proj', 'nodes'), { recursive: true });
+    await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(graphOf([code('work', ''), output('result')], [edge('e1', 'work.out', 'result.value')])));
+    await symlink(outside, join(root, 'proj', 'nodes', 'work'), process.platform === 'win32' ? 'junction' : 'dir');
 
-    const ran = await toolsWith().call('run_graph', { path: 'g.json' });
+    const ran = await toolsWith().call('run_graph', { path: 'proj/graph.json' });
     expect(ran.isError).toBe(true);
     expect(ran.text).toMatch(/outside the folder/);
     expect(ranBody).toBe('');
@@ -516,19 +520,17 @@ describe('run_graph', () => {
     expect(ran.json.nodes[2]).toMatchObject({ id: 'result', status: 'skipped' });
   });
 
-  it('reads a body kept in a file beside the graph, the way the editor saves one', async () => {
-    const external = code('work', '');
-    external.config.code_file = 'Work.js';
-    await writeFile(join(root, 'g.json'), JSON.stringify(graphOf(
-      [textInput('greeting'), external, output('result')],
+  it('reads the code a project keeps in its files, the way the editor saves one', async () => {
+    await mkdir(join(root, 'proj', 'nodes', 'work'), { recursive: true });
+    await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(graphOf(
+      [textInput('greeting'), code('work', ''), output('result')],
       [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')],
     )));
-    await mkdir(join(root, 'g.nodes'));
-    await writeFile(join(root, 'g.nodes', 'Work.js'), 'function run(inputs) { return { out: "from the file" }; }\n');
+    await writeFile(join(root, 'proj', 'nodes', 'work', 'code.js'), 'function run(inputs) { return { out: "from the file" }; }\n');
 
     const tools = toolsWith();
-    expect((await answer(tools, 'validate_graph', { path: 'g.json' })).json.valid).toBe(true);
-    const ran = await answer(tools, 'run_graph', { path: 'g.json' });
+    expect((await answer(tools, 'validate_graph', { path: 'proj/graph.json' })).json.valid).toBe(true);
+    const ran = await answer(tools, 'run_graph', { path: 'proj/graph.json' });
     expect(ran.json.status).toBe('success');
     expect(ranBody).toContain('from the file');
   });

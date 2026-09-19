@@ -5,7 +5,7 @@ import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, widgetFields } from '@/authoring/generation';
 import { widgetLogic } from '@/authoring/logic';
 import { WIDGET_UIS } from '@/elements/registry';
-import KeepInFileOption from '@/elements/fields/KeepInFileOption';
+import { errorText } from '@/api/errorText';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
 import { lastRunWidgetInput } from '@/authoring/generationContext';
 import { useGraphStore } from '@/store/graphStore';
@@ -41,6 +41,8 @@ export default function WidgetEditor({
   widget, nodeId, onChange, onRemove,
 }: WidgetEditorProps) {
   const executionResult = useGraphStore((s) => s.executionResult);
+  const isProject = useGraphStore((s) => s.isProject);
+  const [externalStatus, setExternalStatus] = useState('');
   // Start expanded when there is already a body: collapsed-by-default is right
   // for an empty section and wrong for a full one -- hiding code the user (or
   // the AI) has written is exactly how "where did my code go?" happens.
@@ -304,16 +306,30 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
         </div>
       )}
 
-      {logic && (
+      {/* In a project, a block's code is a file of its own, one folder below its page's. */}
+      {logic && isProject && (
         <div className="mt-3">
-          <KeepInFileOption
-            label={widget.label || widget.id}
-            fileName={widget.code_file ?? ''}
-            extension={logic.extension}
-            what={logic.what}
-            folderHint="<graph>.nodes/<node>/"
-            onChange={(name) => onChange({ code_file: name })}
-          />
+          <button
+            className="text-xs px-3 py-1.5 rounded-lg"
+            style={{ border: `1px solid ${LINE}`, color: MUTED }}
+            title="Saves the project, then opens this block's file — in VS Code when it is installed"
+            onClick={async () => {
+              const state = useGraphStore.getState();
+              if (!state.currentFilePath) return;
+              try {
+                setExternalStatus('Saving, then opening…');
+                await call('saveGraph', { path: state.currentFilePath, graph: state.exportGraph() });
+                state.markSaved();
+                const opened = await call('openExternal', { graph_path: state.currentFilePath, node_id: nodeId, widget_id: widget.id });
+                setExternalStatus(`Opened in ${opened.with}: ${opened.path}. What you save there appears here by itself.`);
+              } catch (error) {
+                setExternalStatus(errorText(error, 'Could not open the file.'));
+              }
+            }}
+          >
+            ↗ Open in my editor
+          </button>
+          {externalStatus && <p className="text-xs mt-1" style={{ color: MUTED }}>{externalStatus}</p>}
         </div>
       )}
     </div>

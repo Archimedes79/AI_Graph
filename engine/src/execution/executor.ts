@@ -28,6 +28,7 @@ import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
 import { readFileInputs } from './fileInputs.ts';
 import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
 import type { LastOutputs } from './reuse.ts';
+import { mismatches } from './interface.ts';
 
 export interface Registry {
   node(type: string): NodeElement<unknown> | undefined;
@@ -313,9 +314,15 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         // says so, rather than a success whose gaps are nulls nobody explains.
         const status = failures.length ? 'partial' : 'success';
         if (failures.length) partial.add(nodeId);
+        // Said, not enforced: the values are what they are and the run goes on,
+        // but a node that broke its interface is named here rather than blamed
+        // three nodes later by whatever read the wrong shape.
+        const iface = element.outputInterface(node);
+        const broken = iface ? mismatches(produced, iface) : [];
         results.push({
           node_id: nodeId, status, inputs, outputs: produced,
           error: failures.length ? `${failures.length} of ${failures.total} items failed: ${failures[0]}` : null,
+          ...(broken.length ? { messages: broken.map((line) => `Does not match its output interface: ${line}`) } : {}),
         });
         runtime.report?.({ type: 'node_done', node_id: nodeId, status });
       } catch (error) {

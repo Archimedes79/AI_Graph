@@ -29,6 +29,19 @@ export interface DeployNeeds {
   needsInterface: boolean;
 }
 
+/**
+ * One piece of an element's writing, as a project folder keeps it: a file of
+ * its own in the element's folder instead of a string inside `graph.json`.
+ */
+export interface TextFile {
+  /** The config key it is stored under. */
+  field: string;
+  /** Its name in the element's folder. */
+  file: string;
+  /** A value kept as JSON rather than as text. */
+  json?: boolean;
+}
+
 /** What a failing authored snippet costs. */
 export type SnippetFailure = 'fatal' | 'cosmetic';
 
@@ -69,6 +82,18 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
    */
   generation(): Generation | undefined {
     return undefined;
+  }
+
+  /**
+   * What this element keeps in files of its own when its graph is a project
+   * folder. Everything else it stores stays in `graph.json`.
+   *
+   * Fixed names rather than ones made from a label: a folder holding
+   * `code.js`, `task.md` and `output.schema.json` says what each file is
+   * before it is opened, and renaming a node renames nothing on disk.
+   */
+  texts(_subject: S): readonly TextFile[] {
+    return [];
   }
 
   /** A failing snippet: fatal by default, cosmetic where nothing downstream depends on it. */
