@@ -1,4 +1,5 @@
 import { NodeElement } from '../../NodeElement.ts';
+import type { TextFile } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
@@ -6,13 +7,19 @@ import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
 
 const DATA_FIELDS: LogicFields = {
-  body: 'data_format_prompt', prompt: 'data_prompt', file: 'code_file',
+  body: 'data_format_prompt', prompt: 'data_prompt',
 };
 
 export interface DataConfig {
   /** What it holds between runs. */
   value: unknown;
 }
+
+/** What this keeps in files of its own in a project folder: see `Element.texts`. */
+const DATA_TEXTS: readonly TextFile[] = [
+  { field: 'data_prompt', file: 'task.md' },
+  { field: 'data_format_prompt', file: 'format.md' },
+];
 
 /**
  * A value that survives a run — the graph's memory.
@@ -23,6 +30,10 @@ export interface DataConfig {
  * a code node adding one.
  */
 export class DataNodeElement extends NodeElement<DataConfig> {
+  override texts(): readonly TextFile[] {
+    return DATA_TEXTS;
+  }
+
   readonly nodeType = 'data' as const;
   override readonly isMemory = true;
   /** It keeps what it is handed, whether or not the edge closes a loop. */
@@ -40,7 +51,7 @@ export class DataNodeElement extends NodeElement<DataConfig> {
    * had forgotten to wire up.
    */
   override logic(node: GraphNode): Logic {
-    return logicFrom(node, 'spec', DATA_FIELDS, 'this format contract');
+    return logicFrom(node, 'spec', DATA_FIELDS);
   }
 
   /** The format contract every neighbour is then generated against. */

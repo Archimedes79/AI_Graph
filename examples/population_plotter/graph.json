@@ -1,0 +1,275 @@
+{
+  "metadata": {
+    "name": "Population plotter",
+    "version": "1.0.0",
+    "description": "Plot a CSV of names and numbers — here, the population of countries — as sorted bars, columns or a donut, with the rows beside it. No model involved: one code node draws the chart as SVG. Every control on the page redraws it at once. Paths are relative to the working directory, so run this from the repository root.",
+    "author": "AI-Graph",
+    "tags": [
+      "example",
+      "gui",
+      "plot",
+      "csv",
+      "triggers"
+    ],
+    "ai_defaults": {
+      "provider": "default",
+      "model": ""
+    },
+    "gui_scheme": "night"
+  },
+  "nodes": [
+    {
+      "id": "page",
+      "node_type": "gui",
+      "label": "Plotter",
+      "description": "The page this tool shows",
+      "inputs": [
+        {
+          "id": "plot_in",
+          "name": "plot",
+          "kind": "input",
+          "data_type": "any",
+          "multi": true,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "table_in",
+          "name": "The rows plotted",
+          "kind": "input",
+          "data_type": "any",
+          "multi": true,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "outputs": [
+        {
+          "id": "file_out",
+          "name": "CSV file",
+          "kind": "output",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "kind_out",
+          "name": "Chart",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "top_out",
+          "name": "How many",
+          "kind": "output",
+          "data_type": "number",
+          "multi": false,
+          "required": false,
+          "description": ""
+        },
+        {
+          "id": "go_out",
+          "name": "Plot",
+          "kind": "output",
+          "data_type": "number",
+          "multi": false,
+          "required": false,
+          "description": ""
+        }
+      ],
+      "config": {
+        "gui_widgets": [
+          {
+            "h": 1,
+            "id": "title",
+            "kind": "text",
+            "label": "",
+            "mode": "heading",
+            "tone": "plain",
+            "value": "Population plotter",
+            "w": 16
+          },
+          {
+            "h": 1,
+            "id": "intro",
+            "kind": "text",
+            "label": "",
+            "mode": "caption",
+            "tone": "plain",
+            "value": "A CSV with names in the first column and numbers in another. Change anything and the chart redraws.",
+            "w": 16
+          },
+          {
+            "extensions": ".csv",
+            "h": 2,
+            "id": "file",
+            "kind": "input_picker",
+            "label": "CSV file",
+            "mode": "file",
+            "run_on_change": true,
+            "tone": "sunken",
+            "value": "examples/data/population.csv",
+            "w": 7
+          },
+          {
+            "h": 2,
+            "id": "kind",
+            "kind": "select",
+            "label": "Chart",
+            "options": "Horizontal bars\nColumns\nDonut",
+            "run_on_change": true,
+            "tone": "sunken",
+            "value": "Horizontal bars",
+            "w": 3
+          },
+          {
+            "h": 2,
+            "id": "top",
+            "kind": "slider",
+            "label": "How many",
+            "max": 15,
+            "min": 3,
+            "run_on_change": true,
+            "step": 1,
+            "tone": "sunken",
+            "value": 8,
+            "w": 4
+          },
+          {
+            "h": 2,
+            "id": "go",
+            "kind": "button",
+            "label": "Plot",
+            "tone": "plain",
+            "w": 2
+          },
+          {
+            "h": 7,
+            "id": "plot",
+            "kind": "plot_window",
+            "label": "",
+            "tone": "plain",
+            "w": 16
+          },
+          {
+            "h": 5,
+            "id": "table",
+            "kind": "table",
+            "label": "The rows plotted",
+            "tone": "plain",
+            "w": 16
+          }
+        ]
+      }
+    },
+    {
+      "id": "chart",
+      "node_type": "code",
+      "label": "Draw chart",
+      "description": "Parses the CSV and draws it",
+      "inputs": [
+        {
+          "id": "csv",
+          "name": "CSV",
+          "kind": "input",
+          "data_type": "file_path",
+          "multi": false,
+          "required": false,
+          "description": "The chosen file; arrives as its content"
+        },
+        {
+          "id": "kind",
+          "name": "Chart",
+          "kind": "input",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "Horizontal bars, Columns or Donut"
+        },
+        {
+          "id": "top",
+          "name": "How many",
+          "kind": "input",
+          "data_type": "any",
+          "multi": false,
+          "required": false,
+          "description": "How many rows to show"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "drawing",
+          "name": "Drawing",
+          "kind": "output",
+          "data_type": "text",
+          "multi": false,
+          "required": false,
+          "description": "A finished SVG document"
+        },
+        {
+          "id": "rows",
+          "name": "Rows",
+          "kind": "output",
+          "data_type": "json",
+          "multi": false,
+          "required": false,
+          "description": "The plotted rows, for a table"
+        }
+      ],
+      "config": {
+        "batch_mode": "whole_list",
+        "output_format": "custom",
+        "output_format_prompt": "drawing: an SVG document as a string; rows: a list of objects with the same keys",
+        "read_file_inputs": true
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source_node_id": "page",
+      "source_port_id": "file_out",
+      "target_node_id": "chart",
+      "target_port_id": "csv"
+    },
+    {
+      "id": "e2",
+      "source_node_id": "page",
+      "source_port_id": "kind_out",
+      "target_node_id": "chart",
+      "target_port_id": "kind"
+    },
+    {
+      "id": "e3",
+      "source_node_id": "page",
+      "source_port_id": "top_out",
+      "target_node_id": "chart",
+      "target_port_id": "top"
+    },
+    {
+      "id": "e4",
+      "source_node_id": "page",
+      "source_port_id": "go_out",
+      "target_node_id": "chart",
+      "target_port_id": "__run"
+    },
+    {
+      "id": "e5",
+      "source_node_id": "chart",
+      "source_port_id": "drawing",
+      "target_node_id": "page",
+      "target_port_id": "plot_in"
+    },
+    {
+      "id": "e6",
+      "source_node_id": "chart",
+      "source_port_id": "rows",
+      "target_node_id": "page",
+      "target_port_id": "table_in"
+    }
+  ]
+}

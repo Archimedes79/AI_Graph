@@ -109,6 +109,13 @@ export default function ResultsPanel() {
                 {nr.error}
               </div>
             )}
+            {/* What the run has to say about a node that did not fail: why it had
+                nothing to do, or that its outputs broke its output interface. */}
+            {(nr.messages ?? []).length > 0 && (
+              <div className="px-3 py-2 text-xs space-y-1" style={{ color: '#fcd34d', background: 'rgba(234,179,8,0.06)' }}>
+                {nr.messages!.map((line, index) => <div key={index}>⚠ {line}</div>)}
+              </div>
+            )}
             {Object.keys(nr.inputs ?? {}).length > 0 && (
               <div className="px-3 py-2" style={{ borderTop: `1px solid ${LINE}` }}>
                 <div className="text-xs font-medium mb-1" style={{ color: DIM }}>Inputs</div>

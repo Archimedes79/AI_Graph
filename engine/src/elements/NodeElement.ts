@@ -2,6 +2,7 @@
 
 import type { GraphNode, NodeType, Port } from '../graph.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
+import type { Schema } from '../execution/interface.ts';
 import { Element } from './Element.ts';
 import type { Runtime } from './Runtime.ts';
 
@@ -98,6 +99,15 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    */
   readsFileInputs(node: GraphNode): boolean {
     return node.config.read_file_inputs === true;
+  }
+
+  /**
+   * What this node's outputs are held to, once someone has kept one: see
+   * `execution/interface.ts`. None by default -- a model's answer is described
+   * to the model instead (an AI node's `output.md`), not checked afterwards.
+   */
+  outputInterface(_node: GraphNode): Schema | undefined {
+    return undefined;
   }
 
   /** Run once, for inputs already collected from the wires. */

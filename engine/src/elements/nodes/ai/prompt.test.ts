@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assemblePrompt, placeholders, promptText, type PromptSettings } from './prompt.ts';
+import { assemblePrompt, formatInstruction, placeholders, promptText, type PromptSettings } from './prompt.ts';
 
 const settings = (over: Partial<PromptSettings> = {}): PromptSettings => ({
   systemPrompt: '', template: '', outputFormat: 'text', outputFormatPrompt: '', outputExample: '', ...over,
@@ -80,5 +80,19 @@ describe('assemblePrompt', () => {
 
   it('lists placeholders once each, in order', () => {
     expect(placeholders('{{b}} {{ a }} {{b}}')).toEqual(['b', 'a']);
+  });
+});
+
+describe('formatInstruction', () => {
+  it('sends the description of the answer (output.md) whatever format is picked', () => {
+    expect(formatInstruction(settings({ outputFormatPrompt: 'One sentence.' }))).toBe('One sentence.');
+    expect(formatInstruction(settings({ outputFormat: 'custom', outputFormatPrompt: 'One sentence.' }))).toBe('One sentence.');
+    expect(formatInstruction(settings({ outputFormat: 'json', outputFormatPrompt: 'Keys: name, count.' })))
+      .toBe('Respond with JSON and nothing else.\n\nKeys: name, count.');
+  });
+
+  it('says nothing for plain text with no description', () => {
+    expect(formatInstruction(settings())).toBe('');
+    expect(formatInstruction(settings({ outputFormatPrompt: '   ' }))).toBe('');
   });
 });

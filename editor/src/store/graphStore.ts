@@ -13,6 +13,8 @@ import { RUN_PORT } from '@engine/execution/triggers.ts';
 import type React from 'react';
 import { applyMemory } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { inferInterface } from '@engine/execution/interface.ts';
+import type { TextChange } from '@engine/host/api.ts';
 
 type RFNode = Node<RFNodeData>;
 
@@ -27,6 +29,8 @@ export interface GraphStore {
   // Absolute server-side path this graph was last loaded from/saved to, or
   // null for an untitled graph -- lets "Save" write back to it directly.
   currentFilePath: string | null;
+  /** The path is a project folder: its code and prompts are files that may change outside. */
+  isProject: boolean;
 
   // Execution state
   executionResult: ExecutionResult | null;
@@ -62,7 +66,7 @@ export interface GraphStore {
 
   // Actions
   setMetadata: (meta: Partial<GraphMetadata>) => void;
-  setCurrentFilePath: (path: string | null) => void;
+  setCurrentFilePath: (path: string | null, isProject?: boolean) => void;
   /** Add a node and return its id, so a caller can immediately fill it in. */
   addNode: (nodeType: NodeType, position: { x: number; y: number }) => string;
   updateNode: (nodeId: string, updates: Partial<GraphNode>) => void;
@@ -111,14 +115,13 @@ export interface GraphStore {
   /** Record the current graph as saved (after a successful write to disk). */
   markSaved: () => void;
   /**
-   * Adopt the `code_file` names a save came back with.
+   * Take in code and prompts that changed in the project folder on disk.
    *
-   * Saving renames a node's file to follow its label, so the name on disk can
-   * differ from the one that was sent. Deliberately not an undo step and
-   * deliberately not `updateNode`: it is bookkeeping about where the file went,
-   * not a change the user made.
+   * One undo step, so a change from another editor can be taken back like any
+   * other. What is on disk is saved by definition: a graph that was clean stays
+   * clean, and one with unsaved edits keeps exactly those.
    */
-  syncNodeFileNames: (graph: Graph) => void;
+  takeDiskChanges: (changes: TextChange[]) => void;
   /**
    * Execute *graph* and put the whole outcome into the store: the result, the
    * text-output windows, the busy flag, and a synthesised error result if the
@@ -315,12 +318,18 @@ function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
   return { rfNodes, rfEdges };
 }
 
+/** Whether this node keeps an output interface: its element has a file for one. */
+export function keepsOutputInterface(node: GraphNode): boolean {
+  return engineRegistry.node(node.node_type)?.texts(node).some((text) => text.field === 'output_schema') ?? false;
+}
+
 export const useGraphStore = create<GraphStore>()(
   immer((set, get) => ({
     rfNodes: [],
     rfEdges: [],
     metadata: defaultMetadata(),
     currentFilePath: null,
+    isProject: false,
     executionResult: null,
     isExecuting: false,
     textOutputWindows: [],
@@ -338,9 +347,10 @@ export const useGraphStore = create<GraphStore>()(
         Object.assign(state.metadata, meta);
       }),
 
-    setCurrentFilePath: (path) =>
+    setCurrentFilePath: (path, isProject = false) =>
       set((state) => {
         state.currentFilePath = path;
+        state.isProject = path !== null && isProject;
       }),
 
     addNode: (nodeType, position) => {
@@ -441,6 +451,18 @@ export const useGraphStore = create<GraphStore>()(
           result.memory,
           (node, portId, value) => engineRegistry.node(node.node_type)?.settleMemory(node, portId, value),
         );
+
+        // A run is where an output interface comes from: nodes are wired, the
+        // graph runs, and what a node actually produced is the first honest
+        // statement of its outputs. Kept once, the first time it succeeds;
+        // after that it is the contract the next runs are held to, and only
+        // "Set from last run" replaces it.
+        for (const rfNode of state.rfNodes) {
+          const node = rfNode.data.graphNode;
+          if (!keepsOutputInterface(node) || node.config.output_schema) continue;
+          const ran = result.node_results.find((r) => r.node_id === node.id && r.status === 'success');
+          if (ran && Object.keys(ran.outputs ?? {}).length) node.config.output_schema = inferInterface(ran.outputs);
+        }
       }),
 
     setIsExecuting: (v) =>
@@ -477,6 +499,7 @@ export const useGraphStore = create<GraphStore>()(
         // (Paste JSON, AI Graph, etc.) doesn't know its file path; the caller
         // sets `currentFilePath` explicitly right after loadGraph when it does.
         state.currentFilePath = null;
+        state.isProject = false;
         // A different document: its predecessor's undo steps would restore
         // nodes belonging to a graph that is no longer open.
         state.past = [];
@@ -582,14 +605,21 @@ export const useGraphStore = create<GraphStore>()(
       return current !== savedSnapshot;
     },
 
-    syncNodeFileNames: (graph) => {
-      const names = new Map(graph.nodes.map((n) => [n.id, n.config?.code_file ?? '']));
+    takeDiskChanges: (changes) => {
+      if (!changes.length) return;
+      const wasClean = !get().isDirty();
+      get().commit();
       set((state) => {
-        for (const rfNode of state.rfNodes) {
-          const name = names.get(rfNode.id);
-          if (name !== undefined) rfNode.data.graphNode.config.code_file = name;
+        for (const change of changes) {
+          const node = state.rfNodes.find((n: RFNode) => n.id === change.node_id)?.data.graphNode;
+          if (!node) continue;
+          const holder: Record<string, unknown> | undefined = change.widget_id
+            ? (node.config.gui_widgets ?? []).find((widget) => widget.id === change.widget_id)
+            : node.config;
+          if (holder) holder[change.field] = change.value;
         }
       });
+      if (wasClean) get().markSaved();
     },
 
     markSaved: () => {

@@ -65,7 +65,7 @@ export interface Generation {
  * copies of a prompt drift.
  */
 export const SELECTOR_FIELDS: LogicFields = {
-  body: 'selector_code', prompt: 'selector_prompt', file: 'code_file',
+  body: 'selector_code', prompt: 'selector_prompt',
 };
 
 export const SELECTOR_GENERATION: Generation = {

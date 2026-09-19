@@ -1,21 +1,21 @@
 {
   "metadata": {
-    "version": "1.0.0",
-    "author": "AI-Graph",
-    "ai_defaults": {
-      "provider": "google",
-      "model": "gemini-flash-lite-latest"
-    },
-    "gui_scheme": "night",
     "name": "Chat",
+    "version": "1.0.0",
     "description": "A chatbot is two nodes: a page with a chat block, and a model. Sending a message starts the graph at the AI node; the answer comes back into the conversation, and the conversation goes out again as history with the next message.",
+    "author": "AI-Graph",
     "tags": [
       "example",
       "chat",
       "gui",
       "ai",
       "triggers"
-    ]
+    ],
+    "ai_defaults": {
+      "provider": "google",
+      "model": "gemini-flash-lite-latest"
+    },
+    "gui_scheme": "night"
   },
   "nodes": [
     {
@@ -23,12 +23,6 @@
       "node_type": "gui",
       "label": "Chat",
       "description": "The page this tool shows",
-      "position": {
-        "x": 60,
-        "y": 140
-      },
-      "width": 340,
-      "height": 220,
       "inputs": [
         {
           "id": "chat_in",
@@ -63,36 +57,36 @@
       "config": {
         "gui_widgets": [
           {
+            "h": 1,
             "id": "title",
             "kind": "text",
             "label": "",
-            "tone": "plain",
-            "w": 16,
-            "h": 1,
             "mode": "heading",
-            "value": "Chat"
+            "tone": "plain",
+            "value": "Chat",
+            "w": 16
           },
           {
+            "h": 1,
             "id": "intro",
             "kind": "text",
             "label": "",
-            "tone": "plain",
-            "w": 16,
-            "h": 1,
             "mode": "caption",
-            "value": "Type a message and press Enter. The model sees the whole conversation each time."
+            "tone": "plain",
+            "value": "Type a message and press Enter. The model sees the whole conversation each time.",
+            "w": 16
           },
           {
+            "h": 8,
             "id": "chat",
             "kind": "chat",
             "label": "Chat",
             "tone": "plain",
-            "w": 16,
-            "h": 8,
             "value": {
               "messages": [],
               "pending": ""
-            }
+            },
+            "w": 16
           }
         ]
       }
@@ -102,10 +96,6 @@
       "node_type": "ai",
       "label": "Assistant",
       "description": "Answer the user's last message as a friendly, concise assistant that remembers the conversation.",
-      "position": {
-        "x": 840,
-        "y": 150
-      },
       "inputs": [
         {
           "id": "history",
@@ -138,14 +128,12 @@
         }
       ],
       "config": {
-        "ai_provider": "google",
         "ai_model": "gemini-flash-lite-latest",
-        "temperature": 0.7,
-        "system_prompt": "You are a friendly, concise assistant in a chat window.\n\nYou are given the conversation so far and the user's newest message. Answer the newest message, using the conversation for context. Answer in the language the user writes in. Use Markdown where it helps (lists, **bold**, `code`), and keep answers short unless asked for detail. Reply with the answer only — do not prefix it with \"Assistant:\".",
-        "prompt_template": "Conversation so far:\n{{history}}\n\nUser: {{message}}",
-        "output_format": "text",
+        "ai_provider": "google",
         "batch_mode": "whole_list",
-        "read_file_inputs": false
+        "output_format": "text",
+        "read_file_inputs": false,
+        "temperature": 0.7
       }
     }
   ],

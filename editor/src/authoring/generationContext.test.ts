@@ -62,6 +62,14 @@ describe('describeNodeOutput', () => {
     expect(describeNodeOutput(node)).toBe('text');
   });
 
+  it('describes a code node by its output interface once a run has set one', () => {
+    const node = NODE_UIS.code.create('c');
+    node.config.output_schema = { type: 'object', properties: { rows: { type: 'array' } } };
+    expect(describeNodeOutput(node)).toBe(
+      'its outputs, keyed by port, follow this JSON Schema: {"type":"object","properties":{"rows":{"type":"array"}}}',
+    );
+  });
+
   it('spells out a custom output format', () => {
     const node = NODE_UIS.code.create('c');
     node.config.output_format = 'custom';

@@ -92,7 +92,6 @@ export abstract class WidgetUi extends Ui<GuiWidget, WidgetPanelProps> {
       selector_prompt: '',
       selector_code: '',
       code_prompt: '',
-      code_file: '',
       example_file: '',
       options: '',
       ...this.initialSettings(),

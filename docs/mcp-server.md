@@ -54,6 +54,12 @@ is authoring, and ships with the editor only.
 | `run_graph` | `path`, `inputs?`, `trigger?` | Runs once. Reports overall status, each node's status and error, and each node's outputs with every value cut to about 600 characters. |
 | `list_graphs` | — | The graphs under the root: path, name, description, node count. Four folders deep, 200 at most. |
 
+A project folder is reached through its `graph.json` (`examples/chat/graph.json`): reading
+it fills in the code and prompts from the files under `nodes/`, and `save_graph` to it
+writes them back there, the way the editor saves — every one of those files held to the
+same folder the server is confined to. Any other `.json` path is one file with everything
+inline.
+
 `validate_graph` finds the mistakes that are silent at run time: an unknown
 `node_type` or block kind; duplicate node, edge or block ids; an edge to a node that
 is not there, or to a port the node does not have — checked against the ports the

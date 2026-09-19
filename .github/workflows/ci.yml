@@ -41,6 +41,11 @@ jobs:
       - name: Tests
         run: npm test
 
+      # What a person would find broken by opening one: an edge to a port that
+      # is not there, a file nothing reads, an interface naming a lost output.
+      - name: Check the examples
+        run: node engine/src/main.ts check $(ls -d examples/*/ | grep -v '^examples/data/$')
+
   # The download for people who do not want a container: one zip holding the
   # engine's source, the built page and the examples. The engine has no runtime
   # dependencies and Node runs its TypeScript unbuilt, so a recipient unzips it

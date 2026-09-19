@@ -55,18 +55,20 @@ import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import type { AiService, Runtime, ToolSpec } from '../../elements/Runtime.ts';
-import { parseGraph, type Graph, type GraphNode } from '../../graph.ts';
-import { ERROR_PORT, executeGraph, memoryFeedbackEdges, topologicalLevels } from '../../execution/executor.ts';
+import { parseGraph, type Graph } from '../../graph.ts';
+import { ERROR_PORT, executeGraph } from '../../execution/executor.ts';
 import { RUN_PORT, type Trigger } from '../../execution/triggers.ts';
 import { registry } from '../../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';
-import { parseWidget } from '../../elements/nodes/gui/GuiNodeElement.ts';
 import { candidatePaths, configuredMcpServers, configuredSettings, SETTINGS_FILENAME } from '../../ai/settings.ts';
 import { nodeRuntime } from '../node.ts';
 import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { generationTarget } from './settings.ts';
-import { apply, authoredItems, nodeDir, parse } from './project.ts';
+import { loadGraph as loadProject, projectFolderOf, writeProject } from '../../project/folder.ts';
+import { names, problemsIn, type Problem } from '../../project/check.ts';
+
+export type { Problem };
 
 // ---------------------------------------------------------------------------
 // Limits
@@ -163,190 +165,6 @@ function mustBeInside(root: string, full: string, given: string): void {
 function graphShaped(raw: unknown): boolean {
   return !!raw && typeof raw === 'object' && !Array.isArray(raw)
     && Array.isArray((raw as { nodes?: unknown }).nodes);
-}
-
-// ---------------------------------------------------------------------------
-// What is wrong with a graph
-// ---------------------------------------------------------------------------
-
-/** One thing to fix: where it is, what it is, and what to do about it. */
-export interface Problem {
-  where: string;
-  problem: string;
-  fix: string;
-}
-
-const names = (ids: Iterable<string>): string => [...ids].map((id) => `"${id}"`).join(', ') || '(none)';
-
-/** The ports *node* really has -- derived where the engine derives them, declared where a person names them. */
-function portsOf(node: GraphNode): { inputs: Set<string>; outputs: Set<string>; derived: boolean } {
-  const element = registry.node(node.node_type);
-  let derived: ReturnType<NonNullable<typeof element>['derivedPorts']> = null;
-  try {
-    derived = element?.derivedPorts(node) ?? null;
-  } catch {
-    // Settings too broken to derive from. The declared ports are the best guess left.
-  }
-  const ids = (ports: unknown): string[] => (Array.isArray(ports) ? ports : [])
-    .map((port) => (port as { id?: unknown })?.id)
-    .filter((id): id is string => typeof id === 'string');
-
-  const inputs = new Set(ids(derived ? derived.inputs : node.inputs));
-  const outputs = new Set(ids(derived ? derived.outputs : node.outputs));
-  // The input every node has and none declares.
-  inputs.add(RUN_PORT);
-  // A node told to catch its own failure grows the port the executor puts it on.
-  if (element?.catchesErrors(node)) outputs.add(ERROR_PORT);
-  return { inputs, outputs, derived: derived !== null };
-}
-
-/** The nodes a cycle is made of: whatever is left once everything with a free end is taken away. */
-function knot(graph: Graph, feedback: Set<string>): string[] {
-  const left = new Set(graph.nodes.map((node) => node.id));
-  for (let changed = true; changed;) {
-    changed = false;
-    const live = graph.edges.filter((edge) => !feedback.has(edge.id)
-      && left.has(edge.source_node_id) && left.has(edge.target_node_id));
-    for (const id of [...left]) {
-      if (live.some((edge) => edge.target_node_id === id) && live.some((edge) => edge.source_node_id === id)) continue;
-      left.delete(id);
-      changed = true;
-    }
-  }
-  return [...left];
-}
-
-/**
- * Everything that would make *graph* parse, open, and then not work.
- *
- * These are the mistakes a model actually makes, and each one is silent at run
- * time: an edge to a port that does not exist delivers nothing and fails
- * nothing; a graph ending in a code node computes the answer and shows nobody.
- * So they are found here, by name, with the repair spelled out -- the reader is
- * a model, and a model fixes what it is told precisely.
- */
-function problemsIn(graph: Graph): Problem[] {
-  const problems: Problem[] = [];
-
-  const seen = new Set<string>();
-  const duplicated = new Set<string>();
-  for (const node of graph.nodes) (seen.has(node.id) ? duplicated : seen).add(node.id);
-  for (const id of duplicated) {
-    problems.push({
-      where: `node "${id}"`,
-      problem: 'More than one node has this id.',
-      fix: 'Give every node its own id, and point each edge at the one it means.',
-    });
-  }
-
-  const byId = new Map<string, GraphNode>();
-  for (const node of graph.nodes) if (!byId.has(node.id)) byId.set(node.id, node);
-
-  for (const node of graph.nodes) {
-    const where = `node "${node.id}"`;
-    const element = registry.node(node.node_type);
-    if (!element) {
-      problems.push({
-        where,
-        problem: `Unknown node_type "${node.node_type}".`,
-        fix: `Use one of: ${registry.nodeTypes().join(', ')}. Anything else -- a merge, a split, a filter -- is a "code" node.`,
-      });
-      continue;
-    }
-
-    if (node.node_type === 'code' && !String(node.config.code ?? '').trim()) {
-      problems.push({
-        where,
-        problem: node.config.code_file
-          ? `config.code is empty and its code_file "${String(node.config.code_file)}" could not be read from beside the graph.`
-          : 'A code node with no config.code: it fails the moment it runs.',
-        fix: 'Put the body in config.code as "function run(inputs) { ... }", returning an object keyed by this node\'s output port ids.',
-      });
-    }
-
-    if (element.hasInterface && Array.isArray(node.config.gui_widgets)) {
-      const blocks = new Set<string>();
-      for (const raw of node.config.gui_widgets) {
-        const block = parseWidget(raw);
-        if (!block.id) {
-          problems.push({ where, problem: `A "${block.kind}" block has no id.`, fix: 'Give every block an id; its ports are named after it ("<id>_in", "<id>_out").' });
-        } else if (blocks.has(block.id)) {
-          problems.push({ where, problem: `More than one block has the id "${block.id}".`, fix: 'Give every block on the page its own id.' });
-        }
-        blocks.add(block.id);
-        if (!registry.widget(block.kind)) {
-          problems.push({
-            where: `${where}, block "${block.id}"`,
-            problem: `Unknown block kind "${block.kind}".`,
-            fix: `Use one of: ${registry.widgetKinds().join(', ')}.`,
-          });
-        }
-      }
-    }
-  }
-
-  const edgeIds = new Set<string>();
-  for (const edge of graph.edges) {
-    const where = `edge "${edge.id}"`;
-    if (edgeIds.has(edge.id)) {
-      problems.push({ where, problem: 'More than one edge has this id.', fix: 'Give every edge its own id.' });
-    }
-    edgeIds.add(edge.id);
-
-    for (const end of ['source', 'target'] as const) {
-      const nodeId = end === 'source' ? edge.source_node_id : edge.target_node_id;
-      const portId = end === 'source' ? edge.source_port_id : edge.target_port_id;
-      const node = byId.get(nodeId);
-      if (!node) {
-        problems.push({
-          where,
-          problem: `Its ${end} is node "${nodeId}", and there is no such node.`,
-          fix: `Point it at one of: ${names(byId.keys())} -- or add the node.`,
-        });
-        continue;
-      }
-      // An unknown node type has been reported already, and has no ports to be wrong about.
-      if (!registry.node(node.node_type)) continue;
-      const ports = portsOf(node);
-      const side = end === 'source' ? ports.outputs : ports.inputs;
-      if (side.has(portId)) continue;
-      const kind = end === 'source' ? 'output' : 'input';
-      problems.push({
-        where,
-        problem: `Its ${end} port "${portId}" is not an ${kind} of node "${nodeId}".`,
-        fix: ports.derived
-          ? `The ports of a${node.node_type === 'input' ? 'n' : ''} ${node.node_type} node are derived from its settings, not from what the document declares. `
-            + `Its ${kind}s are: ${names([...side].filter((id) => id !== RUN_PORT))}. Wire to one of those, or change the settings that produce them.`
-          : `Its ${kind}s are: ${names([...side].filter((id) => id !== RUN_PORT))}. Wire to one of those, or declare "${portId}" in the node's ${kind}s.`,
-      });
-    }
-  }
-
-  // With two nodes sharing an id the ordering cannot be trusted either way, and
-  // the duplicate is the thing to fix first.
-  if (!duplicated.size) {
-    const feedback = memoryFeedbackEdges(graph.nodes, graph.edges, registry);
-    try {
-      topologicalLevels(graph.nodes, graph.edges, feedback);
-    } catch {
-      problems.push({
-        where: `nodes ${names(knot(graph, feedback))}`,
-        problem: 'These nodes feed each other in a circle, so none of them can run first.',
-        fix: 'A loop is only allowed through a node that remembers: a gui block (the page keeps what it shows) closes one. '
-          + 'Route the value back through a gui node, or remove one of the edges.',
-      });
-    }
-  }
-
-  if (!graph.nodes.some((node) => node.node_type === 'output' || registry.node(node.node_type)?.hasInterface)) {
-    problems.push({
-      where: 'graph',
-      problem: 'Nothing a person can see: there is no gui node and no output node, so a run computes its answer and shows nobody.',
-      fix: 'End every branch in an "output" node (config.write_mode "window" plus an output_label, or "file"), or in a "gui" node with a block that displays the value.',
-    });
-  }
-
-  return problems;
 }
 
 // ---------------------------------------------------------------------------
@@ -567,32 +385,28 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
   };
 
   /**
-   * Fill each body kept in a file beside the graph, the way the editor's Open
-   * does: a graph saved from the editor holds `code_file: "Analyse.js"` and an
-   * empty `code`, and running that as it stands is running nothing.
-   *
-   * `code_file` is a string out of the document, so it gets rule 1 like any
-   * other path -- except for the extension, which is the node file's own.
+   * Rule 1 for the files of a project: its code and prompts live in
+   * `nodes/…` beside the `graph.json` that was confined, and a link among them
+   * is a way out of the folder like any other. Their extensions are their own.
    */
-  const fillNodeFiles = async (graph: Graph, graphPath: string): Promise<void> => {
-    for (const { folder, item } of authoredItems(graph, nodeDir(graphPath))) {
-      if (!item.fileName) continue;
-      const file = resolve(folder, item.fileName);
-      realRoot ??= real(root);
-      if (!isUnder(root, file) || !isUnder(await realRoot, await real(file))) {
-        throw new Refused(`"${item.ident}" keeps its body in "${item.fileName}", which is outside the folder this server is confined to.`);
-      }
-      if (!existsSync(file)) continue;
-      const { header, body } = parse(await readFile(file, 'utf8'), item.fileName);
-      apply(item, header, body);
+  const insideRoot = async (path: string): Promise<void> => {
+    realRoot ??= real(root);
+    if (!isUnder(root, path) || !isUnder(await realRoot, await real(path))) {
+      throw new Refused(`"${shown(path)}" leads outside the folder this server is confined to.`);
     }
   };
 
+  /** A graph file, or a project's `graph.json` with its code and prompts read in from their files. */
   const loadGraph = async (given: unknown): Promise<{ graph: Graph; full: string }> => {
     const full = await confine(given, 'path');
     const graph = await readGraphFile(full, String(given));
-    await fillNodeFiles(graph, full);
-    return { graph, full };
+    if (!projectFolderOf(full)) return { graph, full };
+    try {
+      return { graph: await loadProject(full, insideRoot), full };
+    } catch (error) {
+      if (error instanceof Refused) throw error;
+      throw new NotAGraph(`"${String(given)}" could not be read as a project: ${message(error)}`);
+    }
   };
 
   /**
@@ -612,20 +426,17 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       }
     }
 
-    // A body written into the document is the body. Left beside a `code_file`
-    // it would lose to that file the next time the editor opened the graph,
-    // and what was saved would not be what ran.
-    for (const { item } of authoredItems(graph, '')) {
-      if (item.fileName && item.body.trim()) item.fileName = '';
-    }
-
-    const checked = parseGraph(JSON.parse(JSON.stringify(graph)));
-    await fillNodeFiles(checked, full);
-    const problems = problemsIn(checked);
+    const problems = problemsIn(parseGraph(JSON.parse(JSON.stringify(graph))));
     if (problems.length) return { problems };
 
-    await mkdir(dirname(full), { recursive: true });
-    await writeFile(full, `${JSON.stringify(graph, null, 2)}\n`, 'utf8');
+    // Into a project, the way the editor saves one: the code and prompts to
+    // their files, the wiring to `graph.json`. Anywhere else, one file.
+    const folder = projectFolderOf(full);
+    if (folder) await writeProject(folder, graph, insideRoot);
+    else {
+      await mkdir(dirname(full), { recursive: true });
+      await writeFile(full, `${JSON.stringify(graph, null, 2)}\n`, 'utf8');
+    }
     return { saved: shown(full), problems };
   };
 

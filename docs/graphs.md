@@ -98,7 +98,7 @@ anew; a whole-graph ▶ Run reuses nothing.
 how a Send button beside a message box is wired to a model it has nothing to say to,
 only when. Run wires are drawn dashed and amber so they are not mistaken for data.
 
-[examples/file_summarizer.json](../examples/file_summarizer.json) shows all of it on one
+[examples/file_summarizer](../examples/file_summarizer/) shows all of it on one
 page: choosing a file or pressing the button starts at the reader; changing the length
 starts at the summarizer.
 
@@ -165,16 +165,72 @@ function run(inputs) {
 
 The AI can generate this function for you: just describe what the node should do.
 
-**A project can be a graph plus one file per node.** Tick *Keep this in a file beside
-the graph* on a code, AI or Data node and its authored text moves to
-`<graph>.nodes/<Node label>.<ext>`:
+### A project is a folder
 
-| Node | File | Contents |
-|---|---|---|
-| Code | `.js` | the code, with the prompt in a header comment |
-| AI | `.md` | the system prompt, with its description in front matter |
-| Data | `.md` | the format contract neighbours are generated against |
-| Input (directory) | `.js` | the file selector, same contract as a GUI picker's |
+Save a graph under a name — `my_tool` — and it becomes a folder. The wiring is one file,
+and everything a person writes is a file of its own, named for what it is:
+
+```
+my_tool/
+  graph.json              nodes, their settings and ports, the edges
+  layout.json             where each node sits on the canvas
+  nodes/
+    count/                one folder per node, named by its id
+      code.js             the code
+      task.md             what ✨ Generate was asked for
+      output.schema.json  the output interface, set by a run
+    summarize/
+      system.md           the instructions sent to the model
+      message.md          the message template, with {{port}} placeholders
+      output.md           what the answer must look like, sent to the model
+    page/
+      chart/code.js       a block of a page, one folder down
+```
+
+| Node | Files |
+|---|---|
+| Code | `code.js`, `task.md`, `output.schema.json` |
+| AI | `system.md`, `message.md`, `output.md`, `output.example.md` |
+| Data | `format.md` (the contract neighbours are generated against), `task.md` |
+| Input (directory) | `select.js` (the file selector), `task.md` |
+| A chart, table, image or file-picker block | `code.js` / `select.js`, `task.md` |
+
+An empty text has no file. Settings — the model, the temperature, a node's mode — stay in
+`graph.json`, and positions in `layout.json`, so moving a node on the canvas is not a
+change to what the graph does, and an unchanged save changes no file. Renaming a node
+renames nothing on disk: folders are named by id.
+
+The files are what runs. `node engine/src/main.ts my_tool` runs the folder, a served
+tool reads it, the MCP server reads and writes it; `git diff` shows code as code.
+
+**Editing outside.** Open any of these files in your own editor (or let git change
+them): the editor watches the folder and takes what changed in as one undo step, with
+*↻ From disk: …* on the status line. A node open in its dialog with edits of its own
+is not overwritten — the dialog asks whether to take the new version or keep yours.
+Saving refuses to overwrite a file changed outside since it was read. The toolbar's ↻
+reopens the whole project, for when `graph.json` itself changed (a pull, a merge).
+
+**A single `.json` file** still opens, saves (name it `….json`) and runs: everything
+inline, which is what a download, an import and a deploy bundle carry. A graph saved by an
+older version with its code in `<graph>.nodes/` opens too; save it as a folder to keep it.
+
+**Output interfaces.** A code node's outputs are described by a JSON Schema,
+`output.schema.json`. You do not write it first: wire the nodes, run the graph, and the
+first successful run sets it from what the node produced. From then on every run is
+checked against it — a node that breaks its interface says so on its result, *Does not
+match its output interface: output.rows[3].Population is string; the interface says
+integer*, rather than the node three steps later failing on the wrong shape — and the
+nodes after it are generated against it. **Set from last run** in the node's dialog
+replaces it after a deliberate change. An AI node has `output.md` instead: a description
+of the answer that is sent to the model with every request.
+
+**Checking a project.** `node engine/src/main.ts check my_tool other_tool` says what is
+wrong without running anything: edges to ports that do not exist, cycles, a code node
+without code, a message placeholder no input fills, an interface naming an output the
+node does not have, a folder under `nodes/` that belongs to no node, a file there that
+nothing reads (`prompt.md` where an AI node reads `system.md`). It exits with 1 when it
+finds anything, so a CI job fails on a broken graph; this repository checks its examples
+that way.
 
 ### Trying an element out: the same way everywhere
 
@@ -206,18 +262,8 @@ your prompt plus what the graph around it says (the neighbours' declared formats
 the values the node actually received on the last run).
 
 What the element emits is declared in the same panel, under the body: a format contract
-you write for a Code or AI node, a derived summary for a GUI node. There is no separate
-Output tab.
-| GUI | a folder | one file per widget that has code — a plot transform, a file selector |
-
-These are normal files: a language server helps with the JavaScript, and `git diff` reads
-like text instead of an escaped JSON string. The header makes each file stand on its
-own — opening `Analyse.js` tells you which node it is and what it is for. Edit them in
-any editor; the graph reads them back when it opens, and renaming a node renames its
-file.
-
-If a file changed outside while the editor was open, saving refuses rather than
-overwriting it, and the toolbar's ↻ takes the outside changes instead.
+you write for a Code or AI node, the output interface a run set for a Code node, a derived
+summary for a GUI node. There is no separate Output tab.
 
 ### Writing a body: two editors
 
@@ -225,12 +271,11 @@ The box a body is written in is a real editor (CodeMirror): syntax colours, line
 numbers, folding, bracket matching, search with Ctrl+F, Tab that indents. **⤢** opens the
 same document across the whole window; Esc comes back.
 
-For longer work there is your own editor. Tick *Keep this in a file beside the graph*,
-then **↗ Open … in my editor**: the graph is saved, the file is opened — in VS Code when
+For longer work there is your own editor. In a project, **↗ Open in my editor** in a
+node's (or block's) dialog saves the project and opens the node's file — in VS Code when
 its `code` command is installed, otherwise in whatever the system opens that file type
-with — and when you come back to the editor window the file is read again. Only a node's
-own `.js`/`.md` inside the graph's `.nodes` folder can be opened this way, and only
-from the machine the editor runs on.
+with — and what you save there appears in the graph by itself. Only a project's own
+files under `nodes/` can be opened this way, and only from the machine the editor runs on.
 
 **Packages.** A code node runs against the standard library of its language and nothing
 else. There is no install step and nothing is fetched while a graph runs, which is what
@@ -271,7 +316,7 @@ AI node and the node's answer back into its **reply**, and that is a chatbot —
 message starts the graph at the AI node, the answer closes the turn, and the turn goes
 out again as history with the next message. The turn is written down only when the answer
 arrives: a call that fails leaves the conversation as it was, with the message back in the
-box to send again. See [examples/chat.json](../examples/chat.json); its AI
+box to send again. See [examples/chat](../examples/chat/); its AI
 node's message template is the one shown under *AI Nodes* above.
 
 ### Picking files and folders
@@ -323,7 +368,7 @@ nodes are **memory elements**: their output can reflect its own persisted value 
 of being freshly recomputed each round, so a cycle-closing edge into one of them is
 automatically excluded from execution ordering — no manual "deferred" marking needed —
 and settles into the node's stored value once the round finishes, ready for the *next*
-run. See [examples/file_summarizer.json](../examples/file_summarizer.json)
+run. See [examples/file_summarizer](../examples/file_summarizer/)
 for a working file → AI → text window graph, and
 [engine/src/execution/executor.ts](../engine/src/execution/executor.ts) for the underlying algorithm.
 

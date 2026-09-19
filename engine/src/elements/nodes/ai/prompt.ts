@@ -66,17 +66,28 @@ export function placeholders(template: string): string[] {
   return [...new Set([...template.matchAll(PLACEHOLDER)].map((match) => match[1]))];
 }
 
-/** What the node was told to ask for, as a sentence the model can follow. */
+/**
+ * What the node was told to ask for, as sentences the model can follow.
+ *
+ * The description of the answer -- `output.md` in a project -- is sent
+ * whenever it says anything, whatever format is picked: it is what the person
+ * wrote for the model about its output, and a file somebody wrote for the
+ * model that the model never sees is a trap. The format adds its own sentence
+ * in front: JSON, CSV, or the example to imitate.
+ */
 export function formatInstruction(settings: PromptSettings): string {
   const format = settings.outputFormat;
-  if (format === 'custom') return settings.outputFormatPrompt;
+  const described = settings.outputFormatPrompt.trim();
+  let rule = '';
   if (format === 'example' && settings.outputExample.trim()) {
-    return 'Answer in exactly the same format as this example -- the same structure, '
+    rule = 'Answer in exactly the same format as this example -- the same structure, '
       + `the same fields, new content:\n\n${settings.outputExample.trim()}`;
+  } else if (format === 'json') {
+    rule = 'Respond with JSON and nothing else.';
+  } else if (format.startsWith('csv')) {
+    rule = 'Respond with CSV and nothing else.';
   }
-  if (format === 'json') return 'Respond with JSON and nothing else.';
-  if (format.startsWith('csv')) return 'Respond with CSV and nothing else.';
-  return '';
+  return [rule, described].filter(Boolean).join('\n\n');
 }
 
 /**

@@ -3,13 +3,20 @@ import { DisplayWidgetElement } from './DisplayWidgetElement.ts';
 import { type Widget } from '../WidgetElement.ts';
 import { logicFrom, Logic } from '../../authoring/logic.ts';
 import type { LogicFields } from '../../authoring/logic.ts';
+import type { TextFile } from '../Element.ts';
 
 /** The two halves every drawing block keeps, and the one its button writes. */
-export const TRANSFORM_FIELDS: LogicFields = { body: 'code', prompt: 'code_prompt', file: 'code_file' };
+export const TRANSFORM_FIELDS: LogicFields = { body: 'code', prompt: 'code_prompt' };
 
 export interface TransformConfig {
   code: string;
 }
+
+/** What this keeps in files of its own in a project folder: see `Element.texts`. */
+const TRANSFORM_TEXTS: readonly TextFile[] = [
+  { field: 'code', file: 'code.js' },
+  { field: 'code_prompt', file: 'task.md' },
+];
 
 /**
  * A display with an optional transform: whatever arrives is reshaped into what
@@ -20,6 +27,10 @@ export interface TransformConfig {
  * sibling block's output down with it.
  */
 export abstract class TransformingDisplayElement extends DisplayWidgetElement<TransformConfig> {
+  override texts(): readonly TextFile[] {
+    return TRANSFORM_TEXTS;
+  }
+
   config(widget: Widget): TransformConfig {
     return {
       code: String(widget.config.code ?? ''),
@@ -27,6 +38,6 @@ export abstract class TransformingDisplayElement extends DisplayWidgetElement<Tr
   }
 
   override logic(widget: Widget): Logic {
-    return logicFrom(widget, 'code', TRANSFORM_FIELDS, 'this transform');
+    return logicFrom(widget, 'code', TRANSFORM_FIELDS);
   }
 }

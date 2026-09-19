@@ -1,4 +1,5 @@
 import { NodeElement } from '../../NodeElement.ts';
+import type { TextFile } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
@@ -9,7 +10,7 @@ import { assemblePrompt, type PromptSettings } from './prompt.ts';
 
 /** Where an ai node keeps its two halves; used by both declarations below. */
 const PROMPT_FIELDS: LogicFields = {
-  body: 'system_prompt', prompt: 'description', file: 'code_file', promptOnSubject: true,
+  body: 'system_prompt', prompt: 'description', promptOnSubject: true,
 };
 
 export interface AiConfig extends PromptSettings {
@@ -27,6 +28,15 @@ function serverList(raw: unknown): string[] {
   return entries.map((entry) => String(entry).trim()).filter(Boolean);
 }
 
+/** What this keeps in files of its own in a project folder: see `Element.texts`. */
+const AI_TEXTS: readonly TextFile[] = [
+  { field: 'system_prompt', file: 'system.md' },
+  { field: 'prompt_template', file: 'message.md' },
+  // What the model is told its answer must look like.
+  { field: 'output_format_prompt', file: 'output.md' },
+  { field: 'output_example', file: 'output.example.md' },
+];
+
 /**
  * A node that asks a model.
  *
@@ -42,6 +52,10 @@ function serverList(raw: unknown): string[] {
  * property of the graph rather than of asking a model.
  */
 export class AiNodeElement extends NodeElement<AiConfig> {
+  override texts(): readonly TextFile[] {
+    return AI_TEXTS;
+  }
+
   readonly nodeType = 'ai' as const;
 
   config(node: GraphNode): AiConfig {
@@ -68,7 +82,7 @@ export class AiNodeElement extends NodeElement<AiConfig> {
   override logic(node: GraphNode): Logic {
     // The request is the node's own description, not a config field: an ai
     // node's description IS what you asked the model to be.
-    return logicFrom(node, 'prompt', PROMPT_FIELDS, 'this prompt');
+    return logicFrom(node, 'prompt', PROMPT_FIELDS);
   }
 
   /** The one element whose request lives on the node rather than in its config. */
