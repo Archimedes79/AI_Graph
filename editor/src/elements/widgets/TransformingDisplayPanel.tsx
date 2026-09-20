@@ -7,7 +7,7 @@ import { TransformingDisplayGuiBuilder } from './TransformingDisplayGuiBuilder';
  * The settings of a chart, a table or an image: its optional transform.
  *
  * Three panels drew this with only a title and one sentence between them; the
- * words now come from the widget's own ElementGuiBuilder (`transformTitle`, `transformHelp`,
+ * words now come from the widget's own builder (`transformTitle`, `transformHelp`,
  * `intro`), and this is the drawing of all three.
  */
 export default function TransformingDisplayPanel({

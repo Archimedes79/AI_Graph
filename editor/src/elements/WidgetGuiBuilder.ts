@@ -1,4 +1,4 @@
-// A widget's browser half: the mirror of `engine/src/elements/WidgetRunner.ts`.
+// A widget's build-time half, in the browser: the mirror of `engine/src/elements/WidgetRunner.ts`.
 
 import type { ComponentType } from 'react';
 import type { GuiWidget, WidgetKind } from '@/graph';
@@ -9,7 +9,7 @@ import { ElementGuiBuilder } from './ElementGuiBuilder';
 
 /** What the widget editor hands every widget panel. */
 export interface WidgetPanelProps {
-  /** This widget kind's own ElementGuiBuilder. */
+  /** This widget kind's own builder. */
   builder: WidgetGuiBuilder;
   widget: GuiWidget;
   onUpdate: (patch: Partial<GuiWidget>) => void;

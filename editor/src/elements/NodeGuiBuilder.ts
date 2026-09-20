@@ -1,4 +1,4 @@
-// A node's browser half: the mirror of `engine/src/elements/NodeRunner.ts`.
+// A node's build-time half, in the browser: the mirror of `engine/src/elements/NodeRunner.ts`.
 
 import type { ComponentType } from 'react';
 import type { GraphNode, NodeType } from '@/graph';
@@ -7,7 +7,7 @@ import { ElementGuiBuilder } from './ElementGuiBuilder';
 
 /** What the node editor hands every node panel. A panel takes the part it needs. */
 export interface NodePanelProps {
-  /** This node type's own ElementGuiBuilder. */
+  /** This node type's own builder. */
   builder: NodeGuiBuilder;
   node: GraphNode;
   setConfig: (key: string, value: unknown) => void;
