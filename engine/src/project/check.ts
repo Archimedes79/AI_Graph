@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 import type { Graph, GraphNode } from '../graph.ts';
 import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
+import { RUN_PORT } from '../execution/triggers.ts';
 import { names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
@@ -116,6 +117,23 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       problems.push({ where: `${inside}edge "${edge.id}"`, problem: 'More than one edge has this id.', fix: 'Give every edge its own id.' });
     }
     edgeIds.add(edge.id);
+
+    // A ◆ is a gate and only `true` opens it. A wire that once only said "run
+    // after this" -- from a text, a number -- now keeps its node shut for good,
+    // and says nothing while doing so.
+    if (edge.target_port_id !== RUN_PORT) continue;
+    const source = graph.nodes.find((node) => node.id === edge.source_node_id);
+    const element = source && registry.node(source.node_type);
+    if (!source || !element || element.eventPorts(source).includes(edge.source_port_id)) continue;
+    const ports = element.derivedPorts(source, registry)?.outputs ?? source.outputs;
+    const port = ports.find((candidate) => candidate.id === edge.source_port_id);
+    if (port && port.data_type !== 'boolean' && port.data_type !== 'any') {
+      problems.push({
+        where: `${inside}edge "${edge.id}"`,
+        problem: `It ends on "${edge.target_node_id}"'s ◆, which only the value true opens, and "${source.id}.${port.id}" is declared as ${port.data_type}: the node would never run.`,
+        fix: 'Wire an event into the ◆ (a button, a trigger), or a boolean a code node returns. If this port does carry a boolean, set its data_type to "boolean".',
+      });
+    }
   }
 
   // With two nodes sharing an id the ordering cannot be trusted either way, and

@@ -5,6 +5,7 @@ import type { Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
 import { RUN_PORT } from './triggers.ts';
 import { Latch } from './latch.ts';
+import { LastOutputs } from './reuse.ts';
 
 /**
  * The ◆ as a gate, an event as a boolean that is true for one round, and what
@@ -201,5 +202,115 @@ describe('what stood still is not news', () => {
     const second = await executeGraph(graph(), { runtime, registry, trigger: { node_id: 'page', port_id: 'other_out' }, latch });
     expect(result(second, 'answer')).toMatchObject({ held: true });
     expect(second.memory).toEqual([]);
+  });
+});
+
+describe('a node that keeps something of its own', () => {
+  it('is remembered across rounds though settling changes its config', async () => {
+    // reader (gated) -> data node -> summary, which a dropdown starts as well.
+    const latch = new Latch();
+    const graph = graphOf(
+      [
+        node('page', 'gui', { gui_widgets: [
+          { id: 'read', kind: 'button' },
+          { id: 'length', kind: 'select', options: 'short\nlong', value: 'short', run_on_change: true },
+        ] }),
+        node('reader', 'code', { code: 'function run() { return { text: "the file" }; }' }, { out: ['text'] }),
+        node('keep', 'data', { data_value: '' }, { in: ['input'], out: ['output'] }),
+        node('summary', 'code', { code: 'function run(i) { return { out: i.length + ": " + i.text }; }' }, { in: ['text', 'length'], out: ['out'] }),
+      ],
+      [
+        edge('gate', 'page', 'read_out', 'reader', RUN_PORT),
+        edge('a', 'reader', 'text', 'keep', 'input'),
+        edge('b', 'keep', 'output', 'summary', 'text'),
+        edge('c', 'page', 'length_out', 'summary', 'length'),
+      ],
+    );
+    await executeGraph(graph, { runtime, registry, latch, trigger: { node_id: 'page', port_id: 'read_out' } });
+    const second = await executeGraph(graph, { runtime, registry, latch, trigger: { node_id: 'page', port_id: 'length_out' } });
+    expect(result(second, 'reader')).toMatchObject({ held: true });
+    expect(result(second, 'summary')).toMatchObject({ status: 'success', outputs: { out: 'short: the file' } });
+  });
+
+  it('runs when its own event began the round, whatever else feeds it stood still', async () => {
+    // Page B shows what a gated reader made, and holds the button and the box.
+    const latch = new Latch();
+    const pageB = node('pageB', 'gui', { gui_widgets: [
+      { id: 'shown', kind: 'text_io', mode: 'output' },
+      { id: 'ask', kind: 'button' },
+      { id: 'q', kind: 'text_io', mode: 'input', value: 'first question' },
+    ] });
+    const graph = graphOf(
+      [
+        node('pageA', 'gui', { gui_widgets: [{ id: 'read', kind: 'button' }] }),
+        pageB,
+        node('reader', 'code', { code: 'function run() { return { text: "the file" }; }' }, { out: ['text'] }),
+        node('answer', 'code', { code: 'function run(i) { return { out: "answer to " + i.q }; }' }, { in: ['q'], out: ['out'] }),
+      ],
+      [
+        edge('gate', 'pageA', 'read_out', 'reader', RUN_PORT),
+        edge('show', 'reader', 'text', 'pageB', 'shown_in'),
+        edge('q', 'pageB', 'q_out', 'answer', 'q'),
+        edge('go', 'pageB', 'ask_out', 'answer', RUN_PORT),
+      ],
+    );
+    await executeGraph(graph, { runtime, registry, latch, trigger: { node_id: 'pageA', port_id: 'read_out' } });
+    (pageB.config.gui_widgets as { value?: string }[])[2].value = 'second question';
+    const asked = await executeGraph(graph, { runtime, registry, latch, trigger: { node_id: 'pageB', port_id: 'ask_out' } });
+    expect(result(asked, 'pageB')).toMatchObject({ status: 'success', outputs: { ask_out: true, q_out: 'second question' } });
+    expect(result(asked, 'answer')).toMatchObject({ status: 'success', outputs: { out: 'answer to second question' } });
+  });
+});
+
+describe('an event is a moment', () => {
+  it('is never handed back from an earlier round by the reuse cache', async () => {
+    const latch = new Latch();
+    const reuse = new LastOutputs();
+    const graph = graphOf(
+      [
+        node('src', 'code', { code: 'function run() { return { t: "x" }; }' }, { out: ['t'] }),
+        node('pageA', 'gui', { gui_widgets: [{ id: 'kind', kind: 'select', options: 'a\nb', value: 'a', run_on_change: true }] }),
+        node('pageB', 'gui', { gui_widgets: [{ id: 'shown', kind: 'text_io', mode: 'output' }, { id: 'ask', kind: 'button' }] }),
+        node('router', 'code', { code: 'function run(i) { return { saw: i.ask }; }' }, { in: ['ask', 'kind'], out: ['saw'] }),
+      ],
+      [
+        edge('s', 'src', 't', 'pageB', 'shown_in'),
+        edge('a', 'pageB', 'ask_out', 'router', 'ask'),
+        edge('k', 'pageA', 'kind_out', 'router', 'kind'),
+      ],
+    );
+    const pressed = await executeGraph(graph, { runtime, registry, latch, reuse, trigger: { node_id: 'pageB', port_id: 'ask_out' } });
+    expect(result(pressed, 'router')?.outputs).toEqual({ saw: true });
+    const chosen = await executeGraph(graph, { runtime, registry, latch, reuse, trigger: { node_id: 'pageA', port_id: 'kind_out' } });
+    expect(result(chosen, 'router')?.outputs).toEqual({ saw: false });
+  });
+});
+
+describe('a graph inside a node', () => {
+  it('holds nothing: one item\'s last value is not the next one\'s', async () => {
+    const latch = new Latch();
+    const inner = graphOf(
+      [
+        node('open', 'input', { input_mode: 'text' }, { out: ['output'] }),
+        node('made', 'code', { code: 'function run() { return { out: "made" }; }' }, { out: ['out'] }),
+        node('result', 'output', { output_label: 'Result' }, { in: ['value'] }),
+      ],
+      [
+        edge('g', 'open', 'output', 'made', RUN_PORT),
+        edge('o', 'made', 'out', 'result', 'value'),
+      ],
+    );
+    const outer = (open: boolean): Graph => graphOf(
+      [
+        node('flag', 'code', { code: `function run() { return { open: ${open} }; }` }, { out: ['open'] }),
+        node('part', 'subgraph', { subgraph: inner }, { in: ['open'], out: ['result'] }),
+      ],
+      [edge('f', 'flag', 'open', 'part', 'open')],
+    );
+    const first = await executeGraph(outer(true), { runtime, registry, latch });
+    expect(result(first, 'part')?.status).toBe('success');
+    const second = await executeGraph(outer(false), { runtime, registry, latch });
+    const inside = JSON.stringify(result(second, 'part'));
+    expect(inside).not.toContain('"made"');
   });
 });

@@ -152,7 +152,9 @@ export function schedule(
     // that ran to its end, not the half of one the shutdown cut off.
     if (abort.signal.aborted) return;
     if (result) current.result = over(current.result, result);
-    current.error = failure;
+    // An interval nobody could parse stays said: that clock never runs, and a
+    // round of another that went well is not the end of that.
+    current.error = failure ?? problem;
     current.runs += 1;
     current.finished_at = Date.now();
     if (keptAt) keep(keptAt, current);

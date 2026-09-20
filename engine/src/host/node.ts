@@ -9,7 +9,7 @@ import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promise
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { extname, join, resolve, sep } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import type { CodeRunner, FileService, Runtime } from '../elements/Runtime.ts';
 import { aiService } from '../ai/providers.ts';
 import { mcpToolService } from '../ai/mcp.ts';
@@ -82,6 +82,8 @@ const SANDBOX = ['--permission', '--allow-fs-read=*', '--allow-fs-write=*'];
  * and is ignored -- it used to be able to break the result by logging after it.
  */
 const MARK = '\u001eai-graph:';
+/** How long a body that has handed over its result may take to end by itself. */
+const LINGER_MS = 1500;
 
 export const nodeCode: CodeRunner = {
   async run(body, inputs, signal, context) {
@@ -108,15 +110,23 @@ export const nodeCode: CodeRunner = {
       // printing a marked line and waiting for the reply with its number.
       + 'const __stdin = __lines({ input: process.stdin })[Symbol.asyncIterator]();\n'
       + 'const __given = JSON.parse((await __stdin.next()).value);\n'
+      // stdin keeps the process alive only while a question is out. Otherwise a
+      // `run` that never settles would wait for ever, instead of ending the way
+      // Node ends a top-level await nobody resolves.
+      + 'process.stdin.unref?.();\n'
       + 'const __asked = new Map();\nlet __count = 0;\n'
       + '(async () => { for (;;) { const { value, done } = await __stdin.next(); if (done) return; '
       + 'const reply = JSON.parse(value); const waiting = __asked.get(reply.id); __asked.delete(reply.id); '
+      + 'if (!__asked.size) process.stdin.unref?.(); '
       + "if (waiting) ('error' in reply ? waiting.fail(new Error(reply.error)) : waiting.ok(reply.result)); } })();\n"
-      + 'const __ask = (name) => (args) => new Promise((ok, fail) => { const id = ++__count; '
-      + `__asked.set(id, { ok, fail }); process.stdout.write(${JSON.stringify(MARK)} + 'call ' + JSON.stringify({ id, name, args: args ?? null }) + '\\n'); });\n`
+      // A marked line starts on a line of its own, whatever the body printed
+      // before it: `process.stdout.write('50%')` has no newline to end on.
+      + 'const __ask = (name) => (args) => new Promise((ok, fail) => { const id = ++__count; process.stdin.ref?.(); '
+      + `__asked.set(id, { ok, fail }); process.stdout.write('\\n' + ${JSON.stringify(MARK)} + 'call ' + JSON.stringify({ id, name, args: args ?? null }) + '\\n'); });\n`
       + 'const __node = { ...__given.data, ...Object.fromEntries(__given.calls.map((name) => [name, __ask(name)])) };\n\n';
+    // What cannot be written as JSON -- a function -- is "not an object", said below.
     const tail = '\n\nconst __out = await run(__given.inputs, __node);\n'
-      + `process.stdout.write(${JSON.stringify(MARK)} + 'result ' + JSON.stringify(__out ?? null) + '\\n', () => process.stdin.unref?.());\n`;
+      + `process.stdout.write('\\n' + ${JSON.stringify(MARK)} + 'result ' + (JSON.stringify(__out ?? null) ?? 'null') + '\\n', () => process.stdin.unref?.());\n`;
     const wrapper = `${lead}${body}${tail}`;
 
     try {
@@ -205,20 +215,31 @@ function converse(
       const lines = pending.split('\n');
       pending = lines.pop() ?? '';
       for (const line of lines) {
-        if (!line.startsWith(MARK)) continue;
+        if (answered || !line.startsWith(MARK)) continue;
         const rest = line.slice(MARK.length);
-        if (rest.startsWith('call ')) void answer(JSON.parse(rest.slice(5)));
-        if (rest.startsWith('result ')) {
-          result = JSON.parse(rest.slice(7));
-          answered = true;
-          child.stdin.end();
+        try {
+          if (rest.startsWith('call ')) void answer(JSON.parse(rest.slice(5)));
+          if (rest.startsWith('result ')) {
+            result = JSON.parse(rest.slice(7));
+            answered = true;
+            child.stdin.end();
+            // It has said what it made. A timer or a socket the body left open
+            // must not keep the node running after that.
+            setTimeout(() => child.kill(), LINGER_MS).unref();
+          }
+        } catch {
+          // The body wrote the mark itself, with something after it that is not
+          // JSON. Its mistake, and never a reason for this process to fall.
+          fail(new Error('the body wrote a line that only the engine may write.'));
+          child.kill();
         }
       }
     });
     child.stderr.on('data', (chunk) => { err += chunk; });
     child.on('error', (error) => fail(error));
     child.on('close', (code) => {
-      if (code === 0) return fulfil(answered ? result : undefined);
+      if (answered) return fulfil(result);
+      if (code === 0) return fulfil(undefined);
       if (signal?.aborted) return fail(new Error('Stopped.'));
       // The sentence a person needs is the one naming the error. A thrown
       // error puts it at the bottom of the traceback; a syntax error puts it
@@ -253,4 +274,3 @@ export function nodeRuntime(overrides: Partial<Runtime> = {}): Runtime {
   };
 }
 
-export { sep as pathSeparator };

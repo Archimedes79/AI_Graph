@@ -61,6 +61,24 @@ describe('what check finds in a graph', () => {
   });
 });
 
+describe('what check finds on a gate', () => {
+  const gated = (dataType: string): Graph => {
+    const made = graph();
+    made.nodes[0].outputs[0].data_type = dataType as never;
+    made.edges.push({ id: 'gate', source_node_id: 'count', source_port_id: 'total', target_node_id: 'show', target_port_id: '__run' });
+    return made;
+  };
+
+  it('finds a wire into a ◆ that can never carry true', () => {
+    expect(problemsIn(gated('number')).map((p) => p.problem).join(' ')).toMatch(/only the value true opens/);
+  });
+
+  it('is content with a boolean, and with a port that may carry anything', () => {
+    expect(problemsIn(gated('boolean'))).toEqual([]);
+    expect(problemsIn(gated('any'))).toEqual([]);
+  });
+});
+
 describe('what check finds in a project folder', () => {
   it('finds a folder no node owns, and a file nothing reads', async () => {
     await writeProject(dir, graph());

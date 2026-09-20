@@ -115,6 +115,14 @@ export class RunBoard {
     return id;
   }
 
+  /**
+   * The whole graph, to its end, for a caller that waits for the answer. A round
+   * like any other: it takes its turn, and what it makes is what stands.
+   */
+  whole(graph: Graph): Promise<ExecutionResult> {
+    return this.rounds.turn(graph, () => executeGraph(graph, { runtime: nodeRuntime(), registry, latch: this.latch }));
+  }
+
   snapshot(id: string): RunSnapshot | null {
     return this.runs.get(id)?.snapshot() ?? null;
   }

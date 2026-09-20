@@ -246,7 +246,7 @@ function toolRoutes(
     runNow(asked) {
       const graph = parseGraph(asked);
       applyRuntimeValues(graph, {}, registry);
-      return executeGraph(graph, { runtime: nodeRuntime(), registry });
+      return runs.whole(graph);
     },
 
     run(asked) {

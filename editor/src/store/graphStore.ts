@@ -216,7 +216,7 @@ function collectTextOutputWindows(
  *
  * Drawn differently because they *are* different: a run edge delivers nothing,
  * and a canvas where it looks like data invites the question of what the AI
- * node does with a button's press count. Dashed and amber reads as a signal.
+ * node does with a button's `true`. Dashed and amber reads as a signal.
  */
 export function edgeStyle(targetPort: string | null | undefined): React.CSSProperties {
   return targetPort === RUN_PORT
@@ -857,7 +857,14 @@ export const useGraphStore = create<GraphStore>()(
         // being held in a component.
         setExecutionResult(result, fresh);
         get().clearSentValues(fresh);
-        setTextOutputWindows(collectTextOutputWindows(graph, result));
+        // Only what this round made opens a window. A node that stood still, or
+        // was not asked, keeps the window it has -- or keeps it closed, if the
+        // person closed it.
+        const opened = collectTextOutputWindows(graph, fresh);
+        const again = new Set(opened.map((w) => w.nodeId));
+        setTextOutputWindows(previous
+          ? [...get().textOutputWindows.filter((w) => !again.has(w.nodeId)), ...opened]
+          : opened);
       } catch (error) {
         setExecutionResult({
           status: 'error',

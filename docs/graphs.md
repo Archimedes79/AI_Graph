@@ -130,7 +130,8 @@ model it has nothing to say to, only when. Wires into it are drawn dashed and am
 - **Wired**, it runs only in a round that opens it: the event the round began with is wired
   to the node — on its ◆ *or* on a data input, so a dropdown that starts the graph still
   redraws a chart a button can start too — or some node computed `true` onto the ◆ in this
-  round. Several wires are OR-ed. **Only `true` opens**; `"yes"` and `1` do not.
+  round. Several wires are OR-ed. **Only `true` opens**; `"yes"` and `1` do not,
+  and `check` reports a wire into a ◆ from a port declared as text or number.
 - **A run nobody's event started** — ▶ Run, the command line, a graph inside a node —
   counts every event as having happened. "Run everything" runs everything.
 
@@ -156,6 +157,11 @@ canvas marks such a node ‖, and its result says why. Three things follow:
 - Before a gated node has ever run there is nothing to hand on, and what needs it waits —
   a change of length before any file was read does nothing, and says so.
 - A node fed only by nodes that stood still stands still too: nothing new reached it.
+  Except one that keeps something of its own — a page, a data node, a trigger: what is
+  typed into a page is news whatever its wires carry.
+- Nothing is held inside a [subgraph](#subgraph-nodes): the same inner graph may sit in
+  two nodes or run once per item, and one's last value is not another's. A gate in there
+  that stays shut hands on nothing.
 - It is held by the process holding the graph — a served tool, the editor's server — and
   forgotten when that stops. For something to survive a restart, use a data node.
 
@@ -221,7 +227,7 @@ engine's**: it is written though nobody wrote it, kept up to date when the engin
 and the engine makes that one call itself rather than starting a process per item (a test
 holds the two to the same request). **Changed, it is yours** — a loop, a second call, a
 check of the answer — and runs where every body runs: sandboxed, without this machine's
-keys, asking for each call (25 a run at most). The panel shows it under *Advanced → What
+keys, asking for each call (25 each time it runs, at most). The panel shows it under *Advanced → What
 this node runs*, with the way back to the standard.
 
 **Do you have to describe the output format?** No. It only matters when something
@@ -255,7 +261,7 @@ The AI can generate this function for you: just describe what the node should do
 **It may ask a model.** `run` may be `async` and is handed a second argument, `node`:
 `await node.llm({ prompt: '…' })` resolves to the answer as text, from the graph's default
 model. The body runs sandboxed and never sees this machine's keys — the call is made *for*
-it — and may ask at most 25 times a run (`AI_GRAPH_MAX_LLM_CALLS`). Use it when code has to
+it — and may ask at most 25 times each time it runs -- per item, for a node that runs once per item -- (`AI_GRAPH_MAX_LLM_CALLS`). Use it when code has to
 decide what to ask, or ask in a loop; for one question, an AI node is the plainer tool.
 
 ### A project is a folder
@@ -516,7 +522,7 @@ inputs and outputs always reflect exactly what its widgets are capable of.**
 | `text_io` | 1 input + 1 output (text passthrough; precedence depends on its `mode`) |
 | `plot_window` | 1 input only — display-only, no downstream port, like an `output` node with `write_mode="window"` |
 | `select`, `slider` | 1 output (the choice, the number) |
-| `button` | 1 output (its press count). Pressing it starts the graph where it is wired to — usually a node's ◆ run port |
+| `button` | 1 output (a boolean: pressed just now). Pressing it starts the graph where it is wired to — usually a node's ◆ run port |
 | `chat` | 2 outputs (`_out`: the message just sent, `_history`: everything before it) + 1 input (`_in`: the reply) |
 
 Each widget's ports are named `f"{widget.id}_in"` / `f"{widget.id}_out"`, so a widget's

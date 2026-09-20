@@ -5,8 +5,13 @@ import { join } from 'node:path';
 import { parseGraph, type ExecutionResult, type Graph } from '../graph.ts';
 import { schedule } from './schedule.ts';
 
-const graphWith = (triggers: Record<string, unknown>): Graph =>
-  parseGraph({ metadata: { name: 't', triggers }, nodes: [], edges: [] });
+const graphWith = (trigger: { on_start?: boolean; every?: string }): Graph => parseGraph({
+  metadata: { name: 't' },
+  nodes: trigger.on_start || trigger.every
+    ? [{ id: 'start', node_type: 'trigger', config: { trigger_on_start: trigger.on_start === true, trigger_every: trigger.every ?? '' } }]
+    : [],
+  edges: [],
+});
 
 const done = (): ExecutionResult => ({ status: 'success', node_results: [], outputs: {} });
 const wait = (ms: number) => new Promise((wake) => setTimeout(wake, ms));
@@ -112,6 +117,15 @@ describe('schedule', () => {
     const clock = schedule(() => graphWith({ every: 'soon' }), async () => done());
     expect(clock.state()).toMatchObject({ scheduled: false, error: expect.stringMatching(/Not an interval/) });
     clock.stop();
+  });
+});
+
+describe('a clock nobody can read, beside one that works', () => {
+  it('stays said after a round that went well', async () => {
+    const clock = schedule(() => graphWith({ on_start: true, every: 'soon' }), async () => done());
+    await new Promise((wake) => setTimeout(wake, 50));
+    expect(clock.state()).toMatchObject({ runs: 1, error: expect.stringMatching(/Not an interval/) });
+    await clock.stop();
   });
 });
 

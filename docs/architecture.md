@@ -167,7 +167,6 @@ engine/src                               editor/src
   authoring/         how a body is         authoring/          writing a body: ✨ Generate, Try it,
     generation.ts    written, where it       AuthoredBodyEditor  the live transcript, the page-wide
     logic.ts         is kept, who runs it    TryItPanel …        sweep (graphSweep.ts)
-    describe.ts
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
     executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor
     triggers.ts      what starts a run     page/               a gui node's page: GuiPage (drawn by
@@ -248,7 +247,8 @@ other knows, it imports it or replays its result:
    router, and there is no node type for either. A node that stands still keeps what it made
    last (`execution/latch.ts`: meaning, not a cache — see its header for the difference from
    `reuse.ts` and from a data node); one fed only by nodes that stood still stands still
-   too; what stood still is never settled into memory or shown a second time.
+   too, unless it keeps something of its own (a page, a data node, a trigger); an event's
+   `true` is never handed back by `reuse.ts`; nothing is held inside a subgraph; what stood still is never settled into memory or shown a second time.
 3. **Per node.** Collect inputs → idle-skip if a required or (for an AI node) every wired
    input came up empty → read wired files → run once, or once per item → record.
    A failure marks the node and skips its dependents; with `catch_errors` it becomes an
@@ -350,7 +350,7 @@ learns what a code node is.
 - A code body runs in a separate Node process under `--permission`: files yes; child
   processes, addons, workers no. The network is **not** closed (Node has no flag for it).
   It never holds a key: a model call is *asked for* (`node.llm`) and made by the process
-  that started it, at most 25 times a run. An ai node's `run.js` from a folder somebody
+  that started it, at most 25 times each time it runs. An ai node's `run.js` from a folder somebody
   handed you is such a body too — it is never run in the trusted process.
 - A graph can *name* an MCP tool server; only `ai-settings.json` can say which program a
   name starts. A URL is called directly.

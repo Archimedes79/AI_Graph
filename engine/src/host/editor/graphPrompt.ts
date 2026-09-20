@@ -71,7 +71,7 @@ Every other node type names its own ports, and a code node's returned keys must 
  * What starts a run, for a graph that has a page.
  *
  * Without this a generated tool has buttons that do nothing the model
- * intended: it wires a button's press count into a prompt.
+ * intended: it wires a button's value into a prompt.
  */
 const TRIGGERS = `A page can start the graph itself. A "button" block, a "chat" block, and any block with "run_on_change": true (a select, a slider, an input_picker; a text_io sends on Enter) starts the graph AT THE NODES ITS OUTPUT IS WIRED TO, and runs what follows from them plus what they need. Every node also accepts edges into the special target port "__run", its GATE: a node with a wired "__run" runs only in a round that opens it, and keeps its last outputs otherwise. A button's port carries a boolean that is true only in the round its press started, so a button is wired like this: {"source_port_id": "<button id>_out", "target_node_id": "<first node to run>", "target_port_id": "__run"}. Several edges into "__run" are OR-ed. To decide with code what an event starts, give a code node named boolean inputs wired from the buttons, return booleans from it, and wire those outputs into other nodes' "__run": only the value true opens a gate. "__run" is NOT declared in the node's inputs, and what arrives on it is never passed to the node.`;
 

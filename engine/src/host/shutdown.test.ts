@@ -16,9 +16,9 @@ import { parseGraph } from '../graph.ts';
 
 const SLOW = 'async function run() { await new Promise((r) => setTimeout(r, 60000)); return { out: 1 }; }';
 const port = (id: string) => ({ id, name: id });
-const slowGraph = (triggers: Record<string, unknown> = {}) => ({
-  metadata: { name: 'slow', triggers },
-  nodes: [{ id: 'slow', node_type: 'code', inputs: [], outputs: [port('out')], config: { code: SLOW } }],
+const slowGraph = (trigger: { on_start?: boolean } = {}) => ({
+  metadata: { name: 'slow' },
+  nodes: [...(trigger.on_start ? [{ id: 'start', node_type: 'trigger', config: { trigger_on_start: true } }] : []), { id: 'slow', node_type: 'code', inputs: [], outputs: [port('out')], config: { code: SLOW } }],
   edges: [],
 });
 const wait = (ms: number) => new Promise((wake) => setTimeout(wake, ms));
