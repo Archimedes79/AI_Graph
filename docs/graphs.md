@@ -288,6 +288,7 @@ my_tool/
 
 | Node | Files |
 |---|---|
+| The graph | `flow.js` — the wiring said as code: one call per node, in run order, each handed its wires by name. Written on every save, **never read back, never run** |
 | Every node | `interface.json` — **what runs** when the node runs, what goes in, from where, what may open its ◆, what comes out and where it goes. Written on every save and **never read back**: ports are changed in the editor |
 | Code | `code.js`, `task.md`, `output.schema.json`, `examples.md` |
 | AI | `run.js`, `system.md`, `message.md`, `output.md`, `output.example.md`, `output.schema.json`, `examples.md` |
@@ -329,6 +330,44 @@ what must come out. Optional, and nothing uses them to write code (✨ Generate 
 before); they check what was written, whoever wrote it:
 
 ````markdown
+### The whole graph as code: `flow.js`
+
+Beside `graph.json` a project folder holds `flow.js`: the same wiring, said as code. One
+call per node, in the order a whole run takes, each handed what its wires carry — by name:
+
+```js
+async function flow(node) {
+  // Summarizer · gui · engine/src/elements/nodes/gui/GuiNodeElement.ts › execute
+  // starts a round: file_out, length_out, go_out
+  const page = await node.page();
+
+  // Read file · code · nodes/reader/code.js
+  const reader = await node.reader(
+    { file: page.file_out, path: page.file_out },
+    { gate: page.go_out, readFiles: true },
+  );
+
+  // Summarize · ai · nodes/summarizer/run.js
+  const summarizer = await node.summarizer({ text: reader.text, length: page.length_out });
+
+  // Once the round is done.
+  node.page.next({ summary_in: summarizer.output, about_in: reader.info, content_in: reader.text });
+}
+```
+
+Read it top to bottom and you have the run: the page hands on what its blocks hold; the
+reader runs only in a round its ◆ is opened (`gate`), with the file read for it
+(`readFiles`); the model is asked; and what closes the loop reaches the page once the round
+is done (`next`). `each: true` marks a node that runs once per item. The comment over
+each call names what that node runs — a file in this folder, or the engine class.
+
+**It is written on every save and never read or run.** There is one implementation of a
+run, the engine's, and it reads `graph.json`; a second one that happened to be readable
+would be right on the day it was written. So `flow.js` imports nothing and nothing calls
+it — but it is valid JavaScript, so an editor colours it, and a diff of it is the most
+readable account of what a change to the graph did. A graph inside a node has its own, in
+its own folder.
+
 ### What runs, and where
 
 Every node's panel ends with *What this node runs*, and its `interface.json` begins with

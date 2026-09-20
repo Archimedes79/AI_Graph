@@ -76,6 +76,9 @@ Nothing leaves the machine unless the graph itself sends it there.
   the round it started; wired into a node's ◆ it decides whether the node runs, and a
   code node that returns booleans is the filter and the router. What a node made last
   stands until it runs again.
+- **The graph reads as code** — `flow.js` beside `graph.json`: one call per node, in the order
+  a run takes, each handed what its wires carry. Written on every save, never run: the
+  engine stays the one implementation.
 - **Every node's folder says what it is** — `interface.json` (what goes in, from where,
   what comes out), its prompts or code, and for an AI node `run.js`: the call itself, as
   a file you can change.

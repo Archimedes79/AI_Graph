@@ -37,6 +37,7 @@ import { registry, NODES, WIDGETS } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { readLegacyNodeFiles } from './legacy.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
+import { describeFlow, FLOW_FILE } from './flowFile.ts';
 
 export const GRAPH_FILE = 'graph.json';
 export const LAYOUT_FILE = 'layout.json';
@@ -384,6 +385,8 @@ interface Plan {
   /** The folders under `nodes/` that hold a project of their own: `tidy` leaves them to it. */
   nested: Set<string>;
   document: { graph: unknown; layout: unknown };
+  /** `flow.js`: the wiring said as code. Rendered on every save, never read. */
+  flow: string;
 }
 
 /** What writing *graph* into *folder* comes to, this level and every level below it. */
@@ -398,6 +401,10 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
     // same rule that keeps a code node's body out of it.
     registry.node(held.node.node_type)?.setNestedGraph(held.node, null);
   }
+
+  // Before the writing is taken out of the nodes, like the interfaces below:
+  // what a node runs depends on what it holds.
+  const flow = describeFlow(copy);
 
   const files = new Map<string, string | null>();
   // Before the writing is taken out of the nodes: a node's interface quotes the
@@ -437,6 +444,7 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
     files,
     nested,
     document: { graph: { metadata: copy.metadata, nodes, edges: copy.edges }, layout },
+    flow,
   }];
 }
 
@@ -482,7 +490,7 @@ async function commit(plan: Plan, guard?: Guard): Promise<void> {
   // The two documents count as files a save may tidy away, because under
   // `nodes/` they can only be a subgraph's -- and the folder of a subgraph
   // node that is still there is protected by `plan.nested`.
-  const names = new Set([...textFileNames(), GRAPH_FILE, LAYOUT_FILE, INTERFACE_FILE]);
+  const names = new Set([...textFileNames(), GRAPH_FILE, LAYOUT_FILE, INTERFACE_FILE, FLOW_FILE]);
   await tidy(join(plan.folder, NODES_DIR), new Set(plan.files.keys()), names, plan.nested);
 
   await mkdir(plan.folder, { recursive: true });
@@ -492,6 +500,9 @@ async function commit(plan: Plan, guard?: Guard): Promise<void> {
     await writeFile(path, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
     await remember(path);
   }
+  // The same wiring, said as code for whoever reads the folder.
+  await guard?.(join(plan.folder, FLOW_FILE));
+  await writeFile(join(plan.folder, FLOW_FILE), plan.flow, 'utf8');
 }
 
 /**
