@@ -368,8 +368,10 @@ export async function main(argv: string[]): Promise<number> {
   // the flag. `--every` still wins, which is how one run is made of it.
   if (!options.every && existsSync(resolve(options.graphPath))) {
     const graph = await loadGraph(options.graphPath);
-    const { every } = graphTriggers(graph);
-    if (every) options.every = parseInterval(every);
+    // Its shortest interval: on the command line a round is the whole graph,
+    // every trigger counted as fired, so one clock is all there is to keep.
+    const intervals = graphTriggers(graph).filter((trigger) => trigger.every).map((trigger) => parseInterval(trigger.every));
+    if (intervals.length) options.every = Math.min(...intervals);
   }
   return options.every ? runEvery(options) : runOnce(options);
 }

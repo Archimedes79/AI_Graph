@@ -2,12 +2,12 @@
 //
 // Three things can, and they are the same three everywhere a graph runs:
 //
-//   the program starting   -- `metadata.triggers.on_start`
-//   a clock                -- `metadata.triggers.every`
+//   the program starting   -- a trigger node set to fire at start
+//   a clock                -- a trigger node with an interval
 //   something on the page  -- a button pressed, a box submitted, a choice made
 //
-// The first two start the whole graph. The third starts the graph **where the
-// block is wired to**, and that is the part worth a file of its own: a page
+// All three are events, and an event starts the graph **where it is wired
+// to**. That is the part worth a file of its own: a page
 // with a "Summarize" button and a "Plot" button is two tools sharing a window,
 // and pressing one should not run the other's model call.
 //
@@ -49,16 +49,29 @@ export interface Trigger {
   port_id?: string | null;
 }
 
-export interface GraphTriggers {
-  /** Run once when the tool starts, without waiting to be asked. */
+/** The one output of a trigger node: true in the round it started. */
+export const TRIGGER_PORT = 'fired';
+
+/** One trigger node, as whoever keeps the time needs it. */
+export interface GraphTrigger {
+  /** The event it is: what a round it starts is told began it. */
+  event: Trigger;
+  /** Fire once when the tool starts, without waiting to be asked. */
   on_start: boolean;
-  /** Run again this often: `45`, `30s`, `5m`, `2h`, `1d`. Empty means never. */
+  /** Fire again this often: `45`, `30s`, `5m`, `2h`, `1d`. Empty means never. */
   every: string;
 }
 
-export function graphTriggers(graph: Graph): GraphTriggers {
-  const raw = (graph.metadata as { triggers?: Partial<GraphTriggers> }).triggers ?? {};
-  return { on_start: raw.on_start === true, every: String(raw.every ?? '').trim() };
+/**
+ * The graph's trigger nodes. Read from the document rather than asked of the
+ * elements, so that a scheduler needs no registry to know when to run.
+ */
+export function graphTriggers(graph: Graph): GraphTrigger[] {
+  return graph.nodes.filter((node) => node.node_type === 'trigger').map((node) => ({
+    event: { node_id: node.id, port_id: TRIGGER_PORT },
+    on_start: node.config.trigger_on_start !== false,
+    every: String(node.config.trigger_every ?? '').trim(),
+  }));
 }
 
 /**

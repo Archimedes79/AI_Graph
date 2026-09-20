@@ -76,6 +76,9 @@ export type NodeConfig = {
   output_schema?: unknown;
   /** Tool servers an ai node may call, one per line: a URL, or a name this machine configured. */
   mcp_servers?: string;
+  /** A trigger node: fire when the tool starts, and again this often (`5m`). */
+  trigger_on_start?: boolean;
+  trigger_every?: string;
   /** The graph a subgraph node holds: its own project folder on disk. */
   subgraph?: unknown;
   /** What a node is meant to do, written before it is filled in: `task.md` in a project. */

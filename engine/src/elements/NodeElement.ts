@@ -123,6 +123,14 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
     return [];
   }
 
+  /**
+   * Whether this node asks whoever holds the graph to keep a clock for it.
+   * A graph inside a node has nobody to ask: only the outermost one is held.
+   */
+  keepsTime(_node: GraphNode): boolean {
+    return false;
+  }
+
   needsInput(_node: GraphNode): boolean {
     return false;
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
+import { parseGraph, type Graph, type GraphEdge, type GraphNode } from '../graph.ts';
 import { executeGraph, memoryFeedbackEdges } from './executor.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
@@ -125,14 +125,62 @@ describe('a run started by a page event', () => {
 });
 
 describe('graphTriggers', () => {
-  it('is off unless the graph says otherwise', () => {
-    expect(graphTriggers(graphOf([], []))).toEqual({ on_start: false, every: '' });
+  it('is nothing unless the graph holds a trigger node', () => {
+    expect(graphTriggers(graphOf([], []))).toEqual([]);
   });
 
-  it('reads what the graph saved', () => {
-    const graph = graphOf([], []);
-    graph.metadata.triggers = { on_start: true, every: ' 5m ' };
-    expect(graphTriggers(graph)).toEqual({ on_start: true, every: '5m' });
+  it('reads each trigger node as the event it is, and when it fires', () => {
+    const graph = graphOf([
+      node('clock', 'trigger', { trigger_on_start: false, trigger_every: ' 5m ' }),
+      node('start', 'trigger', {}),
+    ], []);
+    expect(graphTriggers(graph)).toEqual([
+      { event: { node_id: 'clock', port_id: 'fired' }, on_start: false, every: '5m' },
+      { event: { node_id: 'start', port_id: 'fired' }, on_start: true, every: '' },
+    ]);
+  });
+
+  it('turns the two settings a graph used to have into a trigger node wired to nothing', () => {
+    const graph = parseGraph({ metadata: { name: 'old', triggers: { on_start: true, every: '30s' } }, nodes: [{ id: 'trigger', node_type: 'code' }], edges: [] });
+    expect((graph.metadata as { triggers?: unknown }).triggers).toBeUndefined();
+    expect(graphTriggers(graph)).toEqual([{ event: { node_id: 'trigger_2', port_id: 'fired' }, on_start: true, every: '30s' }]);
+    // Wired to nothing, it starts everything -- which is what the settings did.
+    expect(triggeredNodes(graph, { node_id: 'trigger_2', port_id: 'fired' }, new Set())).toBeNull();
+    // And only once: a graph saved since keeps the node it was given.
+    expect(parseGraph(JSON.parse(JSON.stringify(graph))).nodes.filter((n) => n.node_type === 'trigger')).toHaveLength(1);
+  });
+
+  it('leaves a graph whose settings were both off without a node', () => {
+    const graph = parseGraph({ metadata: { triggers: { on_start: false, every: '' } }, nodes: [], edges: [] });
+    expect(graph.nodes).toEqual([]);
+  });
+});
+
+describe('a trigger node', () => {
+  /** A clock wired to one of two tools: a round it starts runs that one. */
+  const clocked = (): Graph => graphOf(
+    [node('clock', 'trigger', { trigger_every: '5m' }, { out: ['fired'] }), node('a', 'code', {}, { out: ['o'] }), node('b', 'code', {}, { out: ['o'] })],
+    [edge('t', 'clock', 'fired', 'a', RUN_PORT)],
+  );
+
+  it('starts what it is wired to, and says it fired', async () => {
+    ran.length = 0;
+    const result = await executeGraph(clocked(), { runtime, registry, trigger: { node_id: 'clock', port_id: 'fired' } });
+    expect(ran.sort()).toEqual(['a', 'clock']);
+    expect(result.node_results.find((r) => r.node_id === 'clock')!.outputs).toEqual({ fired: true });
+  });
+
+  it('counts as fired in a run nobody started, like every event', async () => {
+    ran.length = 0;
+    await executeGraph(clocked(), { runtime, registry });
+    expect(ran.sort()).toEqual(['a', 'b', 'clock']);
+  });
+
+  it('is told when it could never fire, or names an interval nobody can read', () => {
+    const element = registry.node('trigger')!;
+    expect(element.problems(node('t', 'trigger', { trigger_on_start: false }), registry, 't')[0].problem).toMatch(/never fires/);
+    expect(element.problems(node('t', 'trigger', { trigger_every: 'soon' }), registry, 't')[0].problem).toMatch(/Not an interval/);
+    expect(element.problems(node('t', 'trigger', { trigger_every: '5m' }), registry, 't')).toEqual([]);
   });
 });
 

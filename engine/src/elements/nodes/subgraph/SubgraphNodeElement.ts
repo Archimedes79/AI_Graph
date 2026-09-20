@@ -118,6 +118,15 @@ export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
       });
     }
 
+    for (const inner of held.nodes) {
+      if (!elements.node(inner.node_type)?.keepsTime(inner)) continue;
+      found.push({
+        where: `${inside}${inner.label || inner.id}`,
+        problem: 'A clock inside a graph that a node holds never ticks: only the outermost graph is held by something that keeps time.',
+        fix: 'Put the trigger in the outer graph and wire it to this node\'s ◆; or give the inner graph a boolean input and wire the outer trigger into that.',
+      });
+    }
+
     // The boundary, as one list of names that must not collide: each of these
     // nodes is a port on this one.
     const named = new Map<string, string>();

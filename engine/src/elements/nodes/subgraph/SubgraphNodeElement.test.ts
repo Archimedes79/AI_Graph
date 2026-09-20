@@ -170,3 +170,40 @@ describe('a node that holds a graph', () => {
     expect(result.error).toMatch(/5 deep/);
   });
 });
+
+describe('events and a graph inside a node', () => {
+  /** Inside: `go` is a boundary input wired to the ◆ of the node that does the work. */
+  const gated = (): unknown => {
+    const held = inner() as { nodes: GraphNode[]; edges: ReturnType<typeof edge>[] };
+    held.nodes.push(node('go', 'input', { input_mode: 'text', value: '' }));
+    held.edges.push(edge('gate', 'go', 'output', 'shout', '__run'));
+    return held;
+  };
+  const outer = () => graph([
+    node('flag', 'code', { code: 'x' }, { outputs: ['output'] }),
+    node('part', 'subgraph', { subgraph: gated() }),
+  ], [edge('e', 'flag', 'output', 'part', 'go')]);
+  const runtimeSaying = (pressed: boolean): Runtime => ({
+    ...shouting,
+    code: { run: async (_body, inputs) => ('value' in inputs ? { output: String(inputs.value).toUpperCase() } : { output: pressed }) },
+  });
+
+  it('takes an event as a boolean input: true opens the ◆ it is wired to in there', async () => {
+    const result = await executeGraph(outer(), { runtime: runtimeSaying(true), registry });
+    expect(result.node_results.find((r) => r.node_id === 'part')?.outputs).toEqual({ loud: 'FROM INSIDE' });
+  });
+
+  it('and false leaves it shut, so the part has nothing to hand on', async () => {
+    const result = await executeGraph(outer(), { runtime: runtimeSaying(false), registry });
+    expect(result.node_results.find((r) => r.node_id === 'part')?.outputs.loud ?? null).toBeNull();
+  });
+
+  it('is told that a clock in there never ticks', () => {
+    const held = inner() as { nodes: GraphNode[] };
+    held.nodes.push(node('clock', 'trigger', { trigger_every: '5m' }));
+    held.nodes.push(node('once', 'trigger', {}));
+    const found = registry.node('subgraph')!.problems(node('part', 'subgraph', { subgraph: held }), registry, 'part');
+    expect(found.map((p) => p.where)).toEqual(['part ▸ clock']);
+    expect(found[0].problem).toMatch(/never ticks/);
+  });
+});
