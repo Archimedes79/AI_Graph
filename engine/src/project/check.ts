@@ -19,6 +19,7 @@ import { ALL_INPUTS, placeholders } from '../elements/nodes/ai/prompt.ts';
 import { mismatches, readInterface } from '../execution/interface.ts';
 import { parseExamples } from '../execution/examples.ts';
 import { INTERFACE_FILE } from './interfaceFile.ts';
+import { FLOW_FILE } from './flowFile.ts';
 import { GRAPH_FILE, LAYOUT_FILE, NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
@@ -259,7 +260,7 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
     const dir = nodeFolder(node.id);
     nested.set(dir, held);
     // Every node's folder is in `expected` already, from the loop above.
-    for (const name of [GRAPH_FILE, LAYOUT_FILE]) expected.get(dir)!.add(name);
+    for (const name of [GRAPH_FILE, LAYOUT_FILE, FLOW_FILE]) expected.get(dir)!.add(name);
   }
 
   const walk = async (relative: string): Promise<void> => {

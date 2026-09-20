@@ -118,6 +118,7 @@ flowchart TD
 | Diagram node | Path | Notes |
 |---|---|---|
 | `Element` | [`engine/src/elements/Element.ts`](../engine/src/elements/Element.ts) | `config()`, `texts()`, `logic()`, `catchesErrors()`, `runSnippet()` ┊ build time: `generation()`, `deployNeeds()`; `WhatRuns`; services in [`Runtime.ts`](../engine/src/elements/Runtime.ts) |
+| `flowFile.ts` | [`engine/src/project/flowFile.ts`](../engine/src/project/flowFile.ts) | `flow.js`: a graph's wiring said as code, written beside `graph.json` on every save; never read, never run |
 | `body.ts` | [`engine/src/elements/body.ts`](../engine/src/elements/body.ts) | `runBody`: the one way an authored body runs — `run(inputs, node)`, sandboxed, with `node.llm` |
 | `times.test.ts` | [`engine/src/elements/times.test.ts`](../engine/src/elements/times.test.ts) · [`editor/…`](../editor/src/elements/times.test.ts) | build time and run time inside one class: the bars, the order, and that no run reaches a build-time member |
 | `NodeElement` | [`engine/src/elements/NodeElement.ts`](../engine/src/elements/NodeElement.ts) | `derivedPorts`, `execute`, `display`, `runtimeRequirements`, `settleMemory`, and what the executor reads ┊ build time: `whatRuns`, `problems`, `referencedPaths` |

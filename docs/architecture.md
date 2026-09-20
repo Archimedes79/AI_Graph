@@ -155,6 +155,12 @@ through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `runs.ts`, `schedu
 `Ui` for anything but its run-time members. What is *not* carried at all stays as it was:
 `host/editor/` never enters a bundle, and a panel is a lazy chunk a tool never fetches.
 
+**The flow, as code.** `project/flowFile.ts` renders `flow.js` beside `graph.json` on every
+save: one call per node in run order, each handed its wires by name, with its gate, its
+fan-out and its file reading said. Rendered, never read and never run — the executor stays
+the one implementation of a run; this is the notation in which a graph is quickest to read,
+and to diff.
+
 **What runs.** `NodeElement.whatRuns(node)` answers the question a node's folder could not:
 which code runs when this node runs. Either a body in the folder (`code.js`, a changed
 `run.js`), run sandboxed — or this kind's `execute`, named by file, with one sentence
