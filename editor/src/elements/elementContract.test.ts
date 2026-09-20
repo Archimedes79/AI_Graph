@@ -1,7 +1,7 @@
 /**
  * What every element's browser half must satisfy.
  *
- * Walks every registered `NodeUi` and `WidgetUi` (`registry.ts`) and asserts
+ * Walks every registered `NodeGuiBuilder` and `WidgetGuiBuilder` (`registry.ts`) and asserts
  * the handful of properties each must have. A new node type or widget kind is
  * held to them by being registered; what it does when a graph runs is the
  * engine's to test, beside the element (`engine/src/elements/`).
@@ -10,18 +10,18 @@ import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/nodeKinds';
 import { BLOCKS } from '@/page/blocks';
 import { guiWidgetPorts } from './nodes/gui/guiWidgets';
-import { NODE_UIS, WIDGET_UIS } from './registry';
+import { NODE_BUILDERS, WIDGET_BUILDERS } from './registry';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { nodeLogic, widgetLogic } from '@/authoring/logic';
 
 /**
  * A widget as the app really creates one, with a fixed id so assertions can name
  * it. This was a hand-written literal -- a second definition of "a new widget"
- * that drifted from `WIDGET_UIS.create` and left optional fields out, which made
+ * that drifted from `WIDGET_BUILDERS.create` and left optional fields out, which made
  * the contract test below pass for the wrong reason.
  */
 function makeWidget(kind: GuiWidget['kind']): GuiWidget {
-  return { ...WIDGET_UIS[kind].create(''), id: 'w1' };
+  return { ...WIDGET_BUILDERS[kind].create(''), id: 'w1' };
 }
 
 /** The blocks that carry no settings at all -- page furniture, not fields. */
@@ -32,7 +32,7 @@ function isLazy(component: unknown): boolean {
   return (component as { $$typeof?: symbol } | undefined)?.$$typeof === Symbol.for('react.lazy');
 }
 
-describe.each(Object.entries(NODE_UIS))('node element: %s', (nodeType, element) => {
+describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, element) => {
   const kind = NODE_KINDS[nodeType as GraphNode['node_type']];
   it('create() produces a valid GraphNode shape', () => {
     const node = kind.create(`${nodeType}-1`);
@@ -40,7 +40,7 @@ describe.each(Object.entries(NODE_UIS))('node element: %s', (nodeType, element) 
     // element) -- create() always stamps its own canonical node_type, so assert
     // it round-trips through the registry to this same element rather than
     // requiring an exact string match.
-    expect(NODE_UIS[node.node_type as GraphNode['node_type']]).toBe(element);
+    expect(NODE_BUILDERS[node.node_type as GraphNode['node_type']]).toBe(element);
     expect(node.id).toBe(`${nodeType}-1`);
     expect(node.config).toBeTruthy();
     expect(Array.isArray(node.inputs)).toBe(true);
@@ -109,7 +109,7 @@ describe.each(Object.entries(NODE_UIS))('node element: %s', (nodeType, element) 
   });
 });
 
-describe.each(Object.entries(WIDGET_UIS))('gui widget element: %s', (widgetKind, element) => {
+describe.each(Object.entries(WIDGET_BUILDERS))('gui widget element: %s', (widgetKind, element) => {
   it('can be added to and removed from a widget list', () => {
     const widget = makeWidget(widgetKind as GuiWidget['kind']);
     const widgets: GuiWidget[] = [widget, { ...widget, id: 'w2' }];

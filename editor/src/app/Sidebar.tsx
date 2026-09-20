@@ -1,5 +1,5 @@
 import type { NodeType } from '@/graph';
-import { NODE_UIS } from '@/elements/registry';
+import { NODE_BUILDERS } from '@/elements/registry';
 import { ACCENT, DIMMER, LINE, SURFACE, TEXT } from '@/ui/theme';
 
 const CATEGORIES: { label: string; types: NodeType[] }[] = [
@@ -65,15 +65,15 @@ export default function Sidebar({ onAddNode }: SidebarProps) {
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover-raise"
               style={{ color: TEXT }}
               onClick={() => onAddNode(type)}
-              title={NODE_UIS[type].hint}
+              title={NODE_BUILDERS[type].hint}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData('application/nodeType', type);
                 e.dataTransfer.effectAllowed = 'copy';
               }}
             >
-              <span className="text-base">{NODE_UIS[type].icon}</span>
-              <span>{NODE_UIS[type].label}</span>
+              <span className="text-base">{NODE_BUILDERS[type].icon}</span>
+              <span>{NODE_BUILDERS[type].label}</span>
             </button>
           ))}
         </div>

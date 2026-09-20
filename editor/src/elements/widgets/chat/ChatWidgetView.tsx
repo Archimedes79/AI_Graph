@@ -26,7 +26,7 @@ function read(value: unknown): ChatValue {
  * could not see. Now every way of running sends what is there.
  *
  * The turn is written into the transcript when the answer arrives (the
- * engine's `ChatWidgetElement.settle`), which also empties `pending`. A run that
+ * engine's `ChatWidgetRunner.settle`), which also empties `pending`. A run that
  * fails leaves it, so the message is still in the box to send again.
  */
 export default function ChatWidgetView({ value, onChange, onTrigger, busy }: WidgetViewProps) {

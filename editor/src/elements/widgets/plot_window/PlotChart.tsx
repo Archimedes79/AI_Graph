@@ -1,5 +1,5 @@
 import { ACCENT, DIM, DIMMER, HOVER, LINE, MUTED, RAISE } from '@/ui/theme';
-import { PLOT_VIEW } from '@engine/elements/widgets/plot_window/PlotWindowWidgetElement.ts';
+import { PLOT_VIEW } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
 
 interface PlotWidgetProps {
   data: unknown;

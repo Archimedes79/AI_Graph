@@ -5,7 +5,7 @@ import { useGenerate } from './useGenerate';
 import GenerationTranscript, { GenerationReport } from './GenerationTranscript';
 import LiveGeneration from './LiveGeneration';
 import { describeDataFormat } from '@/elements/nodes/data/dataFormat';
-import { NODE_UIS } from '@/elements/registry';
+import { NODE_BUILDERS } from '@/elements/registry';
 import { ACCENT_FILL, ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '@/ui/theme';
 
 interface Props {
@@ -88,7 +88,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
           Expected output format
         </label>
         <p className="text-xs mb-2" style={{ color: DIM }}>
-          {NODE_UIS[node.node_type].outputFormatHint}
+          {NODE_BUILDERS[node.node_type].outputFormatHint}
         </p>
         <select
           className="w-full rounded-lg px-2 py-1.5 text-sm"

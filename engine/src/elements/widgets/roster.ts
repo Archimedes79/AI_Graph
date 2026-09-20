@@ -8,32 +8,32 @@
 // This file is the roster — the only place that knows the whole set, which is
 // the role `registry.ts` plays one level up.
 
-import { TextWidgetElement } from './text/TextWidgetElement.ts';
-import { DividerWidgetElement } from './divider/DividerWidgetElement.ts';
-import { SpacerWidgetElement } from './spacer/SpacerWidgetElement.ts';
-import { InputPickerWidgetElement } from './input_picker/InputPickerWidgetElement.ts';
-import { TextIoWidgetElement } from './text_io/TextIoWidgetElement.ts';
-import { PlotWindowWidgetElement } from './plot_window/PlotWindowWidgetElement.ts';
-import { ImageViewWidgetElement } from './image_view/ImageViewWidgetElement.ts';
-import { TableWidgetElement } from './table/TableWidgetElement.ts';
-import { SelectWidgetElement } from './select/SelectWidgetElement.ts';
-import { SliderWidgetElement } from './slider/SliderWidgetElement.ts';
-import { ButtonWidgetElement } from './button/ButtonWidgetElement.ts';
-import { ChatWidgetElement } from './chat/ChatWidgetElement.ts';
+import { TextWidgetRunner } from './text/TextWidgetRunner.ts';
+import { DividerWidgetRunner } from './divider/DividerWidgetRunner.ts';
+import { SpacerWidgetRunner } from './spacer/SpacerWidgetRunner.ts';
+import { InputPickerWidgetRunner } from './input_picker/InputPickerWidgetRunner.ts';
+import { TextIoWidgetRunner } from './text_io/TextIoWidgetRunner.ts';
+import { PlotWindowWidgetRunner } from './plot_window/PlotWindowWidgetRunner.ts';
+import { ImageViewWidgetRunner } from './image_view/ImageViewWidgetRunner.ts';
+import { TableWidgetRunner } from './table/TableWidgetRunner.ts';
+import { SelectWidgetRunner } from './select/SelectWidgetRunner.ts';
+import { SliderWidgetRunner } from './slider/SliderWidgetRunner.ts';
+import { ButtonWidgetRunner } from './button/ButtonWidgetRunner.ts';
+import { ChatWidgetRunner } from './chat/ChatWidgetRunner.ts';
 
-export { InputPickerWidgetElement };
+export { InputPickerWidgetRunner };
 
 export const WIDGETS = [
-  new TextWidgetElement(),
-  new DividerWidgetElement(),
-  new SpacerWidgetElement(),
-  new InputPickerWidgetElement(),
-  new TextIoWidgetElement(),
-  new PlotWindowWidgetElement(),
-  new ImageViewWidgetElement(),
-  new TableWidgetElement(),
-  new SelectWidgetElement(),
-  new SliderWidgetElement(),
-  new ButtonWidgetElement(),
-  new ChatWidgetElement(),
+  new TextWidgetRunner(),
+  new DividerWidgetRunner(),
+  new SpacerWidgetRunner(),
+  new InputPickerWidgetRunner(),
+  new TextIoWidgetRunner(),
+  new PlotWindowWidgetRunner(),
+  new ImageViewWidgetRunner(),
+  new TableWidgetRunner(),
+  new SelectWidgetRunner(),
+  new SliderWidgetRunner(),
+  new ButtonWidgetRunner(),
+  new ChatWidgetRunner(),
 ];

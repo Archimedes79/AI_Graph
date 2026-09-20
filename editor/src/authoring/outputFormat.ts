@@ -6,9 +6,9 @@ import type { GraphNode } from '@/graph';
  * is here rather than in either element.
  *
  * A module of its own, depending on nothing but the graph's types, because an
- * element's `…Ui.ts` imports it: anything that reached the element registry
+ * element's `…GuiBuilder.ts` imports it: anything that reached the element registry
  * from here would make a cycle, and the element read first would be missing
- * from `NODE_UIS`.
+ * from `NODE_BUILDERS`.
  */
 export function outputFormatContext(config: GraphNode['config']): string {
   if (!config.output_format || config.output_format === 'text') return '';

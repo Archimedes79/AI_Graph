@@ -13,7 +13,7 @@ import { RUN_PORT } from '@engine/execution/triggers.ts';
 import type React from 'react';
 import { applyMemory } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeElement.ts';
+import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { inferInterface } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
@@ -607,7 +607,7 @@ export const useGraphStore = create<GraphStore>()(
       if (get().isExecuting) return;
       const node = get().rfNodes.find((n: RFNode) => n.id === nodeId)?.data.graphNode;
       // Whether there is a graph to go into is the same question as whether
-      // this node holds one, so it is asked once. A `NodeUi.opensNestedGraph`
+      // this node holds one, so it is asked once. A `NodeGuiBuilder.opensNestedGraph`
       // beside it said the same thing a line earlier.
       const held = node && engineRegistry.node(node.node_type)?.nestedGraph(node as never) as Graph | null;
       if (!held) return;

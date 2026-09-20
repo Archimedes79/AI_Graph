@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { asDrawing, axisLabel, chartMargins, computeAxisRange, VIEW } from './PlotChart';
-import { PLOT_VIEW, PlotWindowWidgetElement } from '@engine/elements/widgets/plot_window/PlotWindowWidgetElement.ts';
+import { PLOT_VIEW, PlotWindowWidgetRunner } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
 
 describe('computeAxisRange', () => {
   it('includes 0 in the range for all-positive data', () => {
@@ -100,7 +100,7 @@ describe('the frame the model is told about', () => {
    * is where those numbers come from.
    */
   it('tells a body to lay out for the window it is handed', () => {
-    const contract = new PlotWindowWidgetElement().generation().contract ?? '';
+    const contract = new PlotWindowWidgetRunner().generation().contract ?? '';
     expect(contract).toContain('draw(data, window)');
     expect(contract).toContain('window.width');
     expect(contract).toContain('window.height');

@@ -7,7 +7,7 @@ import type { AiRequest, Runtime } from '../../Runtime.ts';
 import { registry } from '../../registry.ts';
 import { nodeCode } from '../../../host/node.ts';
 import { loadGraph, saveGraph } from '../../../project/folder.ts';
-import { AiNodeElement } from './AiNodeElement.ts';
+import { AiNodeRunner } from './AiNodeRunner.ts';
 import { llmCall } from './ask.ts';
 import { AI_RUN, isStandardRun } from './runTemplate.ts';
 
@@ -43,7 +43,7 @@ function recording(reply: (request: AiRequest) => string = () => 'an answer'): R
 }
 
 const INPUTS = { length: 'short', text: 'A long story.' };
-const element = new AiNodeElement();
+const element = new AiNodeRunner();
 
 describe('the standard run.js', () => {
   it('is one call, and the engine making it itself asks exactly what the file would', async () => {

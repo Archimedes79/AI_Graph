@@ -1,6 +1,6 @@
 import { DANGER_TEXT, DIM, FIELD, TEXT } from '@/ui/theme';
 import { parseInterval } from '@engine/execution/triggers.ts';
-import type { NodePanelProps } from '../../NodeUi';
+import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 export default function TriggerNodePanel({ node, setConfig }: NodePanelProps) {
   const every = String(node.config.trigger_every ?? '');

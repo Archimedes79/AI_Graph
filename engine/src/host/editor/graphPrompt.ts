@@ -54,7 +54,7 @@ Never leave a code or ai node as the end of a branch: its result would go nowher
 /**
  * The ports the engine derives rather than reads.
  *
- * These names are not a convention a graph may choose: `InputNodeElement.derivedPorts`
+ * These names are not a convention a graph may choose: `InputNodeRunner.derivedPorts`
  * emits exactly these, and an edge naming anything else is attached to a port
  * that will never carry a value.
  */

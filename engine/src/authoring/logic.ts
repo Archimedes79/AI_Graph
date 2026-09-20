@@ -101,7 +101,7 @@ export class Logic {
    *
    * No failure policy here on purpose: whether a broken body costs the node or
    * only the block that shows it is a property of the *element*, not of the
-   * body, so the element wraps this (see `Element.runSnippet`).
+   * body, so the element wraps this (see `ElementRunner.runSnippet`).
    */
   async run(inputs: Record<string, unknown>, runtime: Runtime, given?: BodyGiven): Promise<Record<string, unknown>> {
     if (this.isEmpty) return inputs;

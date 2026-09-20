@@ -15,7 +15,7 @@
 // `output.schema.json`.
 
 import type { Graph, GraphNode } from '../graph.ts';
-import type { WhatRuns } from '../elements/Element.ts';
+import type { WhatRuns } from '../elements/ElementRunner.ts';
 import { RUN_PORT } from '../execution/triggers.ts';
 
 export const INTERFACE_FILE = 'interface.json';
@@ -38,7 +38,7 @@ export function describeInterface(graph: Graph, node: GraphNode, outputSchema?: 
     label: node.label,
     ...(node.description ? { about: node.description } : {}),
     // What runs when this node runs: a file in this folder, or the engine class
-    // that does the work, and in one sentence what that is (`Element.whatRuns`).
+    // that does the work, and in one sentence what that is (`ElementRunner.whatRuns`).
     ...(runs ? { runs } : {}),
     inputs: node.inputs.map((port) => ({
       port: port.id,

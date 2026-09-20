@@ -1,10 +1,10 @@
 import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, PRIMARY_BUTTON } from '@/ui/theme';
 import { useGraphStore } from '@/store/graphStore';
-import { SubgraphNodeElement } from '@engine/elements/nodes/subgraph/SubgraphNodeElement.ts';
+import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import type { NodePanelProps } from '../../NodeUi';
+import type { NodePanelProps } from '../../NodeGuiBuilder';
 
-const ELEMENT = new SubgraphNodeElement();
+const ELEMENT = new SubgraphNodeRunner();
 
 /**
  * What there is to say about a node that holds a graph, which is not much:

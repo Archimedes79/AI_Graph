@@ -3,7 +3,7 @@ import { useGraphStore } from './graphStore';
 import type { Graph, GraphNode } from '@/graph';
 import { guiWidgetPorts } from '@/elements/nodes/gui/guiWidgets';
 import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
-import { WIDGET_UIS } from '@/elements/registry';
+import { WIDGET_BUILDERS } from '@/elements/registry';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 
 // The same defaults every node type is created with. Copied out field by field
@@ -52,8 +52,8 @@ describe('graphStore.currentFilePath', () => {
 
 describe('graphStore.updateNode edge pruning', () => {
   it('removes edges attached to ports no longer present after an update', () => {
-    const w1 = WIDGET_UIS.input_picker.create('A');
-    const w2 = WIDGET_UIS.input_picker.create('B');
+    const w1 = WIDGET_BUILDERS.input_picker.create('A');
+    const w2 = WIDGET_BUILDERS.input_picker.create('B');
     const guiNode = graphNode({
       id: 'gui1',
       node_type: 'gui',
@@ -107,7 +107,7 @@ describe('graphStore.updateNode edge pruning', () => {
 
 describe('graphStore.loadGraph gui port sync', () => {
   it('regenerates a gui node\'s ports from its widget list even if stale ports were provided', () => {
-    const widget = WIDGET_UIS.text_io.create('Text');
+    const widget = WIDGET_BUILDERS.text_io.create('Text');
     const staleGui = graphNode({
       id: 'gui1',
       node_type: 'gui',
@@ -145,7 +145,7 @@ describe('graphStore: what a run remembered', () => {
   // The store's part is to replay that list into its own long-lived copy of the
   // graph, so the next run starts from it -- and to do nothing else.
   const gui = (kind: 'text_io' | 'chat') => {
-    const widget = WIDGET_UIS[kind].create('Block');
+    const widget = WIDGET_BUILDERS[kind].create('Block');
     const node = graphNode({
       id: 'gui1', node_type: 'gui',
       config: { ...blankConfig(), gui_widgets: [widget] },
@@ -233,7 +233,7 @@ describe('graphStore, a project open on disk', () => {
   });
 
   it('takes code changed on disk in as one undo step, and a clean graph stays clean', () => {
-    const page = graphNode({ id: 'page', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [{ ...WIDGET_UIS.plot_window.create('Chart'), id: 'chart' }] } });
+    const page = graphNode({ id: 'page', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [{ ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' }] } });
     loadTestGraph([codeNode(), page]);
     useGraphStore.getState().markSaved();
 

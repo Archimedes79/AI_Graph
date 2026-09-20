@@ -18,7 +18,7 @@ function displayValue(value: unknown): string {
 
 /**
  * The `gui`/`widget` nodes' Output tab: each widget's output shape is fully
- * determined by its kind (see `WidgetUi.ports`), so there is
+ * determined by its kind (see `WidgetGuiBuilder.ports`), so there is
  * nothing to configure here -- but "what does this widget actually output"
  * is still a real question with an easy answer, so this also shows the
  * widget's current stored value (`widget.value`, the same value its `{id}_out`

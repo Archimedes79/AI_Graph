@@ -191,12 +191,12 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 ```
 AI-Graph/
 ├── engine/src/             # Runs a graph, serves the editor, ships as a bundle. No React.
-│   ├── elements/           #   one folder per element: nodes/<kind>/<Kind>NodeElement.ts, widgets/<kind>/<Kind>WidgetElement.ts
+│   ├── elements/           #   one folder per element: nodes/<kind>/<Kind>NodeRunner.ts, widgets/<kind>/<Kind>WidgetRunner.ts
 │   ├── execution/          #   the executor and what starts a run
 │   ├── authoring/          #   how an element's body is written, kept and run
 │   └── host/  ai/  cli/    #   the server and its contract, model providers, the command line
 ├── editor/src/             # The page: React + ReactFlow, built on the engine
-│   ├── elements/           #   the same folders: <Kind>NodeUi.ts, <Kind>WidgetView.tsx, <Kind>…Panel.tsx
+│   ├── elements/           #   the same folders: <Kind>NodeGuiBuilder.ts, <Kind>WidgetView.tsx, <Kind>…Panel.tsx
 │   ├── authoring/          #   ✨ Generate, Try it, the live transcript
 │   └── app/  canvas/  page/  store/  api/  runtime/  ui/
 ├── examples/               # Example graph JSON files

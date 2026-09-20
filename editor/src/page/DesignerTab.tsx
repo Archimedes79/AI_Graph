@@ -10,7 +10,7 @@ import WidgetEditor from './WidgetEditor';
 import WhatRuns from '@/canvas/WhatRuns';
 import { SCHEMES, type SchemeId } from './scheme';
 import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
-import { WIDGET_UIS } from '@/elements/registry';
+import { WIDGET_BUILDERS } from '@/elements/registry';
 
 /**
  * The graph's interface, on one page, built on the page itself.
@@ -53,11 +53,11 @@ export default function DesignerTab() {
   const addWidget = (kind: WidgetKind, mode?: string, at?: number) => {
     // A widget with ports starts out named after what it is: its ports are
     // named after it, and "widget-1-1789753941087: message" is what an unnamed
-    // chat's port was called. Whether a kind is named at all is its Ui's answer.
+    // chat's port was called. Whether a kind is named at all is its builder's answer.
     const entry = ALL_ENTRIES.find((candidate) => candidate.kind === kind && (candidate.mode ?? '') === (mode ?? ''))
       ?? ALL_ENTRIES.find((candidate) => candidate.kind === kind);
-    const ui = WIDGET_UIS[kind];
-    const widget = ui.create(ui.initialLabel(entry?.label ?? ''), mode);
+    const builder = WIDGET_BUILDERS[kind];
+    const widget = builder.create(builder.initialLabel(entry?.label ?? ''), mode);
     if (guiNodes.length > 0) {
       const next = blocks.map((b) => b.widget);
       next.splice(at ?? next.length, 0, widget);

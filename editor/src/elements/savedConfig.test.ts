@@ -39,7 +39,7 @@ function variants(): GraphNode[] {
   return nodes;
 }
 
-describe('NodeUi.saved', () => {
+describe('NodeGuiBuilder.saved', () => {
   it.each(variants().map((node) => [`${node.node_type} (${node.config.input_mode}/${node.config.write_mode})`, node]))(
     '%s: the engine sees the lean node exactly as the full one',
     (_name, node) => {

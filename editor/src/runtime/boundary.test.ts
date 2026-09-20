@@ -113,8 +113,8 @@ describe('deployment boundary', () => {
    * `elements/times.test.ts` holds that a tool calls nothing build-time; this
    * holds the stronger thing, that a tool never loads the classes at all. Both
    * are wanted: the first is about the code being right, the second about the
-   * bytes being absent, and a member added to a `Ui` tomorrow is caught here
-   * whichever bar it lands under.
+   * bytes being absent, and a member added to a `GuiBuilder` tomorrow is caught
+   * here whichever bar it lands under.
    */
   it.each(['elements/registry.ts', 'elements/widgets/roster.ts'])(
     'does not pull the builder registry %s into a deployed bundle',

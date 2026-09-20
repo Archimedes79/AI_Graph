@@ -15,7 +15,7 @@
 //              and what a data node starts the next round with
 
 async function flow(node) {
-  // Chat · gui · engine/src/elements/nodes/gui/GuiNodeElement.ts › execute
+  // Chat · gui · engine/src/elements/nodes/gui/GuiNodeRunner.ts › execute
   // The page this tool shows
   // starts a round: chat_out
   const page = await node.page();

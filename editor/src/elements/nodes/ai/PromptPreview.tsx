@@ -5,10 +5,10 @@ import NodeTryIt from '@/authoring/NodeTryIt';
 import { clip } from '@/authoring/TryItPanel';
 import { tryValues, useTryValues } from '@/authoring/tryValues';
 import { DANGER_TEXT, DIM, DIMMER, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
-import { AiNodeElement } from '@engine/elements/nodes/ai/AiNodeElement.ts';
+import { AiNodeRunner } from '@engine/elements/nodes/ai/AiNodeRunner.ts';
 import { assemblePrompt, promptText } from '@engine/elements/nodes/ai/prompt.ts';
 
-const ai = new AiNodeElement();
+const ai = new AiNodeRunner();
 
 /**
  * The request this node sends, as the model will read it -- inside the panel

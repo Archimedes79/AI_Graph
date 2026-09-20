@@ -1,28 +1,28 @@
-// Every element's Ui, by the name the file format gives it: the mirror of
+// Every element's GuiBuilder, by the name the file format gives it: the mirror of
 // `engine/src/elements/registry.ts`. The shells ask these and never switch on a
 // node type or a widget kind themselves.
 
 import type { NodeType } from '@/graph';
-import type { NodeUi } from './NodeUi';
-import { InputNodeUi } from './nodes/input/InputNodeUi';
-import { AiNodeUi } from './nodes/ai/AiNodeUi';
-import { CodeNodeUi } from './nodes/code/CodeNodeUi';
-import { DataNodeUi } from './nodes/data/DataNodeUi';
-import { OutputNodeUi } from './nodes/output/OutputNodeUi';
-import { GuiNodeUi } from './nodes/gui/GuiNodeUi';
-import { SubgraphNodeUi } from './nodes/subgraph/SubgraphNodeUi';
-import { TriggerNodeUi } from './nodes/trigger/TriggerNodeUi';
+import type { NodeGuiBuilder } from './NodeGuiBuilder';
+import { InputNodeGuiBuilder } from './nodes/input/InputNodeGuiBuilder';
+import { AiNodeGuiBuilder } from './nodes/ai/AiNodeGuiBuilder';
+import { CodeNodeGuiBuilder } from './nodes/code/CodeNodeGuiBuilder';
+import { DataNodeGuiBuilder } from './nodes/data/DataNodeGuiBuilder';
+import { OutputNodeGuiBuilder } from './nodes/output/OutputNodeGuiBuilder';
+import { GuiNodeGuiBuilder } from './nodes/gui/GuiNodeGuiBuilder';
+import { SubgraphNodeGuiBuilder } from './nodes/subgraph/SubgraphNodeGuiBuilder';
+import { TriggerNodeGuiBuilder } from './nodes/trigger/TriggerNodeGuiBuilder';
 
-/** Every node type's Ui, by type. */
-export const NODE_UIS: Record<NodeType, NodeUi> = {
-  input: new InputNodeUi(),
-  ai: new AiNodeUi(),
-  code: new CodeNodeUi(),
-  data: new DataNodeUi(),
-  output: new OutputNodeUi(),
-  gui: new GuiNodeUi(),
-  subgraph: new SubgraphNodeUi(),
-  trigger: new TriggerNodeUi(),
+/** Every node type's GuiBuilder, by type. */
+export const NODE_BUILDERS: Record<NodeType, NodeGuiBuilder> = {
+  input: new InputNodeGuiBuilder(),
+  ai: new AiNodeGuiBuilder(),
+  code: new CodeNodeGuiBuilder(),
+  data: new DataNodeGuiBuilder(),
+  output: new OutputNodeGuiBuilder(),
+  gui: new GuiNodeGuiBuilder(),
+  subgraph: new SubgraphNodeGuiBuilder(),
+  trigger: new TriggerNodeGuiBuilder(),
 };
 
-export { WIDGET_UIS } from './widgets/roster';
+export { WIDGET_BUILDERS } from './widgets/roster';

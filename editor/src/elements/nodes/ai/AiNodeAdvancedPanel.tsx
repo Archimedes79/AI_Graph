@@ -4,7 +4,7 @@ import ProviderModelSelect from '../../fields/ProviderModelSelect';
 import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 import CodeField from '@/authoring/CodeField';
 import { AI_RUN, LLM_CALLS_PER_RUN, isStandardRun } from '@engine/elements/nodes/ai/runTemplate.ts';
-import type { NodeAdvancedPanelProps } from '../../NodeUi';
+import type { NodeAdvancedPanelProps } from '../../NodeGuiBuilder';
 
 /**
  * The knobs: which model, how freely, pictures or not, one call or one per

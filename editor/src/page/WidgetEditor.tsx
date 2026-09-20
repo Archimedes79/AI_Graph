@@ -5,7 +5,7 @@ import { guiWidgetPorts, widgetFiresRun } from '@/elements/nodes/gui/guiWidgets'
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, widgetFields } from '@/authoring/generation';
 import { widgetLogic } from '@/authoring/logic';
-import { WIDGET_UIS } from '@/elements/registry';
+import { WIDGET_BUILDERS } from '@/elements/registry';
 import { errorText } from '@/api/errorText';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
 import { lastRunWidgetInput } from '@/authoring/generationContext';
@@ -62,7 +62,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
     );
   }
 
-  const element = WIDGET_UIS[widget.kind];
+  const element = WIDGET_BUILDERS[widget.kind];
   const Panel = element.Panel;
   const subject = `${nodeId}::${widget.id}`;
   const View = BLOCKS[widget.kind].View;
@@ -75,7 +75,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
    * guard, success message, contract, both port names, target field -- which is
    * a kind-switch in a shared shell, the thing the element contract exists to
    * prevent. Each widget declares it now
-   * (`WidgetUi.generation`) and this component treats them
+   * (`WidgetGuiBuilder.generation`) and this component treats them
    * all alike.
    */
   const handleGenerate = () => {
@@ -172,7 +172,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
         {/* A panel is its own chunk, loaded when a widget is first opened. */}
         <Suspense fallback={null}>
         <Panel
-          ui={element}
+          builder={element}
           widget={widget}
           generation={element.generation}
           fields={widgetFields(widget, onChange)}

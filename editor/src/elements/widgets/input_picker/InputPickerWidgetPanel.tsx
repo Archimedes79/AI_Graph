@@ -1,6 +1,6 @@
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import { FIELD_ON_SURFACE, LINE, MUTED } from '@/ui/theme';
-import type { WidgetPanelProps } from '../../WidgetUi';
+import type { WidgetPanelProps } from '../../WidgetGuiBuilder';
 
 export default function InputPickerWidgetPanel({
   widget, generation, fields, onUpdate, generating, message, onGenerate,

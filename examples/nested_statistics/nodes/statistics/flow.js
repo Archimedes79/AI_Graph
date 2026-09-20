@@ -14,13 +14,13 @@
 //              and what a data node starts the next round with
 
 async function flow(node) {
-  // Text · input · engine/src/elements/nodes/input/InputNodeElement.ts › execute
+  // Text · input · engine/src/elements/nodes/input/InputNodeRunner.ts › execute
   // Handed in by the node above; on its own run, this value
   const text = await node.text();
 
   // Counts · code · nodes/counts/code.js
   const counts = await node.counts({ text: text.output });
 
-  // Numbers · output · engine/src/elements/nodes/output/OutputNodeElement.ts › execute
+  // Numbers · output · engine/src/elements/nodes/output/OutputNodeRunner.ts › execute
   await node.numbers({ value: counts.output });
 }

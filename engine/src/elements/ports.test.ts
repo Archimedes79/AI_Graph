@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { registry } from './registry.ts';
-import { parseWidget } from './nodes/gui/GuiNodeElement.ts';
+import { parseWidget } from './nodes/gui/GuiNodeRunner.ts';
 
 /**
  * Which ports each block contributes, spelled out.

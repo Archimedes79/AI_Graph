@@ -1,17 +1,17 @@
 // What a node of each type *is*, with nothing set — and what a file keeps of it.
 //
-// Not drawing, and therefore not `NodeUi`. These three facts are asked while a
+// Not drawing, and therefore not `NodeGuiBuilder`. These three facts are asked while a
 // graph is *loaded* and *saved*, which a delivered tool does as much as the
 // editor: `normalizeGraphNode` fills a node read from a file back out from
 // `create`, and `exportGraph` strips it back down with `saved` before it is
 // posted for a run.
 //
-// They lived on `NodeUi` beside the icon, the colour and the settings panel,
+// They lived on `NodeGuiBuilder` beside the icon, the colour and the settings panel,
 // so the store had to reach into the editor's element registry to load a
 // graph — and that registry is the whole builder, panels and ✨ generation
 // contracts included, in a module the delivered page loads too.
 //
-// Their natural home is the engine, beside `NodeElement.config`: what a node
+// Their natural home is the engine, beside `NodeRunner.config`: what a node
 // stores is the element's business, and the engine already owns reading it.
 // What keeps them here for now is `NodeConfig`, the one spelled-out settings
 // shape, which lives in the editor's `graph.ts`. Moving that is the next step
@@ -19,15 +19,15 @@
 
 import type { GraphNode, NodeConfig, NodeType } from '@/graph';
 import { derivedNodePorts } from '@/elements/nodes/gui/guiWidgets';
-import { SubgraphNodeElement } from '@engine/elements/nodes/subgraph/SubgraphNodeElement.ts';
-import { TriggerNodeElement } from '@engine/elements/nodes/trigger/TriggerNodeElement.ts';
+import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
+import { TriggerNodeRunner } from '@engine/elements/nodes/trigger/TriggerNodeRunner.ts';
 import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
 
 /** Kept even at its starting value: the executor reads it whether or not anyone set it. */
 const ALWAYS_SAVED = ['batch_mode'];
 
-const SUBGRAPH = new SubgraphNodeElement();
-const TRIGGER = new TriggerNodeElement();
+const SUBGRAPH = new SubgraphNodeRunner();
+const TRIGGER = new TriggerNodeRunner();
 
 const CODE_STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
 

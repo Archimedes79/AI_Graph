@@ -9,7 +9,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
 import type { GenerateResponse } from '@/api/client';
 import { useGraphStore } from '@/store/graphStore';
-import { WIDGET_UIS, NODE_UIS } from '@/elements/registry';
+import { WIDGET_BUILDERS, NODE_BUILDERS } from '@/elements/registry';
 import { buildGeneration, nodeFields, widgetFields } from './generation';
 import {
   connectedFormatContext, inputSources, lastRunContext, lastRunInputs, lastRunWidgetInput, readFilePorts,
@@ -55,7 +55,7 @@ export function useGraphSweep(): SweepState {
     // it is generated against real values even when the graph has never run.
     const produced = new Map<string, Record<string, unknown>>();
 
-    const guiNodes = new Set(nodesOf().filter((n) => NODE_UIS[n.node_type]?.holdsWidgets).map((n) => n.id));
+    const guiNodes = new Set(nodesOf().filter((n) => NODE_BUILDERS[n.node_type]?.holdsWidgets).map((n) => n.id));
 
     /**
      * One block on a page, generated exactly as its own ✨ button would.
@@ -68,7 +68,7 @@ export function useGraphSweep(): SweepState {
     const unitForWidget = (
       target: SweepTarget & { widget: GuiWidget },
     ): SweepUnit<GenerateResponse> | undefined => {
-      const element = WIDGET_UIS[target.widget.kind as keyof typeof WIDGET_UIS];
+      const element = WIDGET_BUILDERS[target.widget.kind as keyof typeof WIDGET_BUILDERS];
       const spec = element?.generation;
       if (!spec) return undefined;
 
@@ -115,7 +115,7 @@ export function useGraphSweep(): SweepState {
     const unitFor = (target: SweepTarget): SweepUnit<GenerateResponse> | undefined => {
       if (target.widget) return unitForWidget(target as SweepTarget & { widget: GuiWidget });
       const node = target.node;
-      const element = NODE_UIS[node.node_type];
+      const element = NODE_BUILDERS[node.node_type];
       const spec = element?.generation;
       if (!spec) return undefined;
 

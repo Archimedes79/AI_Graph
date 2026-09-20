@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NODE_KINDS } from '@/nodeKinds';
 import { generationOrder, missingExamples, sampleFromPredecessors, sweep, type SweepStep, type SweepUnit } from './graphSweep';
-import { NODE_UIS } from '@/elements/registry';
+import { NODE_BUILDERS } from '@/elements/registry';
 import type { GraphEdge, GraphNode } from '@/graph';
 
 /**
@@ -13,7 +13,7 @@ import type { GraphEdge, GraphNode } from '@/graph';
  */
 
 function node(id: string, type = 'code'): GraphNode {
-  return NODE_KINDS[type as keyof typeof NODE_UIS].create(id);
+  return NODE_KINDS[type as keyof typeof NODE_BUILDERS].create(id);
 }
 
 function edge(from: string, to: string): GraphEdge {

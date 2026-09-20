@@ -1,7 +1,7 @@
 import React from 'react';
 import type { GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
-import { WIDGET_UIS } from '@/elements/registry';
+import { WIDGET_BUILDERS } from '@/elements/registry';
 import { blockValue, GuiBlock, PageGrid, shownOn, type SurfaceBlock } from './GuiPage';
 import { cellsFromDrag, resolveWidgetLayout, GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_CELL } from './layout';
 import QuickInsert from './QuickInsert';
@@ -151,7 +151,7 @@ export default function DesignerSurface({
           const { widget } = placement;
           const incoming = shownOn(executionResult, block.node.id, widget.id);
           const selected = widget.id === selectedId;
-          const typedInPlace = selected && WIDGET_UIS[widget.kind]?.inlineText === true;
+          const typedInPlace = selected && WIDGET_BUILDERS[widget.kind]?.inlineText === true;
 
           return (
             <React.Fragment key={widget.id}>

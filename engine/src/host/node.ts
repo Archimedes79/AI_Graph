@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve } from 'node:path';
-import type { CodeRunner, FileService, Runtime } from '../elements/Runtime.ts';
+import type { CodeService, FileService, Runtime } from '../elements/Runtime.ts';
 import { aiService } from '../ai/providers.ts';
 import { mcpToolService } from '../ai/mcp.ts';
 import { configuredMcpServers, configuredSettings } from '../ai/settings.ts';
@@ -85,7 +85,7 @@ const MARK = '\u001eai-graph:';
 /** How long a body that has handed over its result may take to end by itself. */
 const LINGER_MS = 1500;
 
-export const nodeCode: CodeRunner = {
+export const nodeCode: CodeService = {
   async run(body, inputs, signal, context) {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-'));
     const file = join(dir, 'body.mjs');

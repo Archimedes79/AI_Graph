@@ -14,7 +14,7 @@ import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execut
 import { RUN_PORT } from '../execution/triggers.ts';
 import { names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
-import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
+import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
 import { ALL_INPUTS, placeholders } from '../elements/nodes/ai/prompt.ts';
 import { mismatches, readInterface } from '../execution/interface.ts';
 import { parseExamples } from '../execution/examples.ts';
@@ -180,7 +180,7 @@ function within(problem: Problem, inside: string): Problem {
  * The graph a node holds, checked as a graph -- by the function that checked
  * the one above it, with the node in front of what it found.
  *
- * What is wrong with the *node* is the element's to say (`NodeElement.problems`);
+ * What is wrong with the *node* is the element's to say (`NodeRunner.problems`);
  * what is here is the walking, and how far it may go.
  */
 function nestedProblems(node: GraphNode, where: string, depth: number): Problem[] {
