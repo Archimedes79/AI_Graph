@@ -127,15 +127,29 @@ export default function FileBrowserDialog({
     >
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
+          {/* Worded, not just an arrow. A bare ↑ next to a path field reads as
+              part of the field's decoration, and it was reported as a picker
+              with no way back up the tree -- in the deployed tool it *was*
+              one, because the server sent no parent and the button was drawn
+              permanently disabled. */}
           <button
-            className="px-2 py-1.5 rounded-lg text-sm flex-shrink-0"
+            className="px-2.5 py-1.5 rounded-lg text-sm flex-shrink-0 flex items-center gap-1"
             style={{ ...NEUTRAL_BUTTON, opacity: parent ? 1 : 0.4 }}
             disabled={!parent}
             onClick={() => parent && load(parent)}
-            title="Up one level"
+            title={parent ? `Up to ${parent}` : 'This is the top'}
             aria-label="Up one level"
           >
-            ↑
+            <span aria-hidden="true">↑</span> Up
+          </button>
+          {/* Back to where the tool lives, from wherever you have wandered to. */}
+          <button
+            className="px-2.5 py-1.5 rounded-lg text-sm flex-shrink-0"
+            style={NEUTRAL_BUTTON}
+            onClick={() => load('')}
+            title="Back to this tool's own folder"
+          >
+            ⌂
           </button>
           <input
             className="flex-1 min-w-0 rounded-lg px-2 py-1.5 text-sm font-mono"

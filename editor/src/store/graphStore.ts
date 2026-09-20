@@ -333,6 +333,31 @@ interface NodeCallbacks {
   onPortEdit: (nodeId: string, portId: string) => void;
 }
 
+/** The size a node was given, if it was given one, as ReactFlow lays it out. */
+function sizeStyle(node: GraphNode): { style: { width: number; height: number } } | Record<string, never> {
+  return typeof node.width === 'number' && typeof node.height === 'number'
+    ? { style: { width: node.width, height: node.height } }
+    : {};
+}
+
+/**
+ * The size someone *set* on a canvas node, as opposed to the one it happens to
+ * measure.
+ *
+ * Only the first is worth keeping. A measurement changes with a border, a
+ * font, a longer label, the zoom the canvas was at when it was taken -- so
+ * saving it means the file differs from itself between two openings, and the
+ * editor says "unsaved" about work nobody did.
+ */
+function setSize(rfn: Node<RFNodeData>): Pick<GraphNode, 'width' | 'height'> {
+  const style = rfn.style as { width?: number | string; height?: number | string } | undefined;
+  const asked = (value: number | string | undefined) => (typeof value === 'number' ? value : undefined);
+  return {
+    width: asked(style?.width) ?? rfn.data.graphNode.width,
+    height: asked(style?.height) ?? rfn.data.graphNode.height,
+  };
+}
+
 /**
  * Build the ReactFlow node/edge arrays for a graph. Shared by `loadGraph` and by
  * undo/redo's `applyGraphSnapshot`, so restoring a snapshot can never drift from
@@ -343,8 +368,14 @@ function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
     id: gn.id,
     type: 'graphNode',
     position: { x: gn.position.x, y: gn.position.y },
-    width: gn.width,
-    height: gn.height,
+    // A size goes in `style`, which is what ReactFlow *renders* from and what
+    // its resizer writes (`updateStyle: true`). `width`/`height` on a node are
+    // its measurement: ReactFlow fills them in once the node is drawn and
+    // overwrites whatever was put there. Setting the size there therefore did
+    // nothing at all -- a page saved at 340x300 came back at whatever its
+    // contents happened to measure -- and the measurement then read as an edit
+    // to a graph nobody had touched.
+    ...sizeStyle(gn),
     data: { graphNode: gn, ...callbacks },
   }));
 
@@ -625,19 +656,20 @@ export const useGraphStore = create<GraphStore>()(
     exportGraph: () => {
       const { rfNodes, rfEdges, metadata } = get();
 
-      // As a file keeps it: each node's own settings, not every field every node
-      // starts with -- and a size only where someone can set one. ReactFlow
-      // measures every node once it is drawn and writes that onto it; kept for
-      // a node that sizes itself, the measurement made every graph read as
-      // "unsaved" the moment it was opened.
+      // As a file keeps it: each node's own settings, not every field every
+      // node starts with -- and a size only where someone can set one, and
+      // only the size they set. What ReactFlow measured is never written down
+      // (see `setSize`): a graph must serialise the same way twice running, or
+      // "unsaved" means nothing.
       const nodes: GraphNode[] = rfNodes.map((rfn) => {
         const ui = NODE_UIS[rfn.data.graphNode.node_type];
         const resizable = ui.hasRuntimeWindow === true;
         return ui.saved({
           ...rfn.data.graphNode,
           position: { x: rfn.position.x, y: rfn.position.y },
-          width: resizable ? rfn.width ?? rfn.data.graphNode.width : rfn.data.graphNode.width,
-          height: resizable ? rfn.height ?? rfn.data.graphNode.height : rfn.data.graphNode.height,
+          ...(resizable
+            ? setSize(rfn)
+            : { width: rfn.data.graphNode.width, height: rfn.data.graphNode.height }),
         });
       });
 

@@ -7,6 +7,7 @@ import { cellsFromDrag, resolveWidgetLayout, GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_
 import QuickInsert from './QuickInsert';
 import type { PaletteEntry } from './DesignerPalette';
 import { TEXT_ROLES, textRole } from '@/elements/widgets/text/TextWidgetView';
+import { widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
 
 /**
@@ -224,6 +225,23 @@ export default function DesignerSurface({
                 >
                   ⠿
                 </div>
+
+                {/* Which blocks *start* the tool, seen without opening any of
+                    them. A page is mostly fields that are read when something
+                    else starts a run; the one or two that start it are the
+                    whole shape of how the tool is used, and they were
+                    indistinguishable until you selected each block in turn.
+                    Builder's chrome: the delivered page draws no badge. */}
+                {widgetFiresRun(widget) && (
+                  <span
+                    className="absolute select-none pointer-events-none"
+                    style={{ right: 3, top: 2, fontSize: 10, color: '#fbbf24' }}
+                    title="Using this block starts the graph"
+                    aria-hidden="true"
+                  >
+                    ⚡
+                  </span>
+                )}
 
                 <div
                   className="absolute"

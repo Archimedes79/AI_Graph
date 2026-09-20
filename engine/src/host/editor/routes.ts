@@ -14,7 +14,7 @@ import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseGraph } from '../../graph.ts';
+import { parseGraph, type Graph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExamples } from '../../execution/examples.ts';
@@ -26,6 +26,7 @@ import { nodeRuntime } from '../node.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile } from '../api.ts';
 import * as files from './files.ts';
+import { browse, extensionFilter, NotFound } from '../browse.ts';
 import * as settings from './settings.ts';
 import * as project from '../../project/folder.ts';
 import * as gen from './generate.ts';
@@ -34,7 +35,11 @@ import { zip } from './zip.ts';
 /** The built editor, when this checkout has one: a bundle from the editor carries the same page `--bundle` does. */
 const BUILT_PAGE = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', '..', 'editor', 'dist');
 
-export function editorRoutes(): Handlers {
+/**
+ * @param held the graph this server serves as a tool — see `holdGraph`. The
+ *   editor's own server starts with none; the page puts one there.
+ */
+export function editorRoutes(held: { graph: Graph | null } = { graph: null }): Handlers {
   // Asking what arrives at a node, again and again while writing it, need not
   // ask the model upstream again each time when nothing there has changed.
   const reuse = new LastOutputs();
@@ -107,14 +112,14 @@ export function editorRoutes(): Handlers {
       return { inputs, error: failed ? `${failed.node_id}: ${failed.error}` : null };
     },
 
-    // The editor walks into directories and jumps between drives; a deployed
-    // page only picks a file. Same route, the fuller answer.
+    // The same browser a deployed tool serves (`host/browse.ts`), opening where
+    // the editor was started rather than in a home folder of dot-directories.
     async browse(asked, { loopback }) {
       if (!loopback) throw new Refusal(403, 'Browsing is disabled.');
       try {
-        return await files.browse(asked.path ?? '', files.extensionFilter(asked.extensions ?? ''));
+        return await browse(asked.path ?? '', extensionFilter(asked.extensions ?? ''));
       } catch (error) {
-        throw new Refusal(error instanceof files.NotFound ? 404 : 400, message(error));
+        throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));
       }
     },
 
@@ -183,6 +188,14 @@ export function editorRoutes(): Handlers {
       }
     },
 
+    // What "open it as a tool" costs: one graph, kept. The runtime page then
+    // asks for it over the `graph` route like any deployed page does, so
+    // nothing about the delivered side knows it is being previewed.
+    holdGraph(asked) {
+      held.graph = parseGraph(asked);
+      return { ok: true };
+    },
+
     aiSettings: () => settings.status(),
 
     async saveAiSettings(asked) {
@@ -214,7 +227,7 @@ export function editorRoutes(): Handlers {
         return await files.openExternal(join(folder, project.NODES_DIR), file);
       } catch (error) {
         if (error instanceof Refusal) throw error;
-        throw new Refusal(error instanceof files.NotFound || error instanceof project.NotFound ? 404 : 400, message(error));
+        throw new Refusal(error instanceof NotFound || error instanceof project.NotFound ? 404 : 400, message(error));
       }
     },
 

@@ -34,6 +34,18 @@ export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Po
 }
 
 /**
+ * The block one of a gui node's ports belongs to.
+ *
+ * A gui node's ports are named after the block that contributes them
+ * (`syncGuiNodePorts` below), and this is where that naming is read back --
+ * once, rather than spelled out wherever the canvas wants to know what is
+ * behind a port.
+ */
+export function widgetOfPort(node: GraphNode, portId: string): GuiWidget | undefined {
+  return node.config.gui_widgets.find((w) => `${w.id}_in` === portId || `${w.id}_out` === portId);
+}
+
+/**
  * Whether using this block starts the graph -- the engine's answer, for the
  * same reason the ports are: a page that fires on something the engine would
  * not call an event starts runs nobody wired.

@@ -230,6 +230,9 @@ function readme(
       ? [
         'That opens the tool in your browser: fill in the fields, press Run.',
         '',
+        'It takes port 8000, or the next free one if something else is already',
+        'there, and prints the address it settled on. `--port 9000` picks one.',
+        '',
         'It listens on localhost only, so nothing on your network can reach it.',
         'The page it serves is the page this graph was designed against, copied',
         'rather than rebuilt.',
