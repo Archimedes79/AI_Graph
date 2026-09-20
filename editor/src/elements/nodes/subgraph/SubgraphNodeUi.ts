@@ -34,9 +34,6 @@ export class SubgraphNodeUi extends NodeUi {
 
   override readonly Panel = lazy(() => import('./SubgraphNodePanel'));
 
-  /** Opening this node means going into it, not opening a dialog about it. */
-  override readonly opensNestedGraph = true;
-
   override describeOutput(node: GraphNode): string {
     const ports = ELEMENT.derivedPorts(node as never, engineRegistry)?.outputs ?? [];
     return ports.length

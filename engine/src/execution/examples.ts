@@ -150,7 +150,7 @@ export async function runExamples(
   const { examples, problems } = parseExamples(String(node.config.examples ?? ''));
   const results: ExampleResult[] = problems.map((problem) => ({ title: 'examples.md', status: 'error' as const, details: [problem] }));
   const element = options.registry.node(node.node_type);
-  const asksModel = element?.asksModel === true;
+  const asksModel = element?.asksModel(node) === true;
   const runtime = withGraphDefaults(options.runtime, graph);
 
   for (const example of examples) {

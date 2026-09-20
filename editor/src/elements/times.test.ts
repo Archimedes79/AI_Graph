@@ -70,7 +70,12 @@ describe('a Ui', () => {
   });
 
   it('names as run time what a deployed tool draws with', () => {
-    expect(runTime.sort()).toEqual(['View', 'clearValueAfterRun', 'hasRuntimeWindow', 'ownsValue', 'showsResultWindow']);
+    // `hasRuntimeWindow` is not among them any more, and not because it moved
+    // to the other bar: it said what `NodeElement.hasInterface` already says,
+    // and nothing held the two to each other. The page asks the engine
+    // (`showsPage`). A list spelled out here is the right place to notice a
+    // member leaving, which is why this line is part of the change.
+    expect(runTime.sort()).toEqual(['View', 'clearValueAfterRun', 'ownsValue', 'showsResultWindow']);
   });
 });
 

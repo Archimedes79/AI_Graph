@@ -8,7 +8,6 @@ import { WIDGET_UIS } from '../../widgets/roster';
 export class GuiNodeUi extends NodeUi {
   readonly nodeType = 'gui';
 
-  override readonly hasRuntimeWindow = true;
 
   // ── Build time ────────────────────────────────────────────────────────────
 

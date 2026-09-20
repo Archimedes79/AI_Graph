@@ -1,5 +1,5 @@
 import { useGraphStore } from '@/store/graphStore';
-import { NODE_UIS } from '@/elements/registry';
+import { showsPage } from '@/elements/nodes/gui/guiWidgets';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE } from '@/ui/theme';
 
 export type EditorView = 'graph' | 'design' | 'preview';
@@ -23,7 +23,7 @@ export default function ViewTabs({
   // How many blocks the interface has, so the tab says whether there is one.
   const blockCount = useGraphStore((s) => s.rfNodes
     .map((n) => n.data.graphNode)
-    .filter((n) => NODE_UIS[n.node_type]?.hasRuntimeWindow)
+    .filter((n) => showsPage(n.node_type))
     .reduce((total, n) => total + n.config.gui_widgets.length, 0));
 
   const tabs: { id: EditorView; label: string; hint: string }[] = [

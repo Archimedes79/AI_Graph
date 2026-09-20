@@ -250,8 +250,19 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
     return [];
   }
 
-  /** Running this node asks a model: its examples are skipped by an offline `test`. */
-  readonly asksModel: boolean = false;
+  /**
+   * Running this node asks a model: its examples are skipped by an offline
+   * `test`.
+   *
+   * The same question `deployNeeds` answers for a bundle, so it is asked once
+   * and read twice. Held apart, they disagreed: `deployNeeds` looks at the
+   * body and sees `node.llm(`, this was a constant and said no -- so a bundle
+   * told its recipient to configure a provider while `test --offline` ran that
+   * same body into a model that was never there.
+   */
+  asksModel(node: GraphNode): boolean {
+    return this.deployNeeds(node).asksAi;
+  }
 
   /**
    * Files and folders this node names as its own defaults: the CSV a picker

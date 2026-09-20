@@ -1,13 +1,13 @@
 import React from 'react';
 import type { ExecutionResult, GraphNode, GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
-import { NODE_UIS, WIDGET_UIS } from '@/elements/registry';
+import { WIDGET_UIS } from '@/elements/registry';
 import { useContainerCell } from './useContainerCell';
 import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from './layout';
 import { toneIsBare, toneStyle, type Tone } from './tone';
 import { schemeVars } from './scheme';
 import { DANGER, MUTED } from '@/ui/theme';
-import { widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
+import { showsPage, widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
 import type { RunTrigger } from '@/api/client';
 
 /**
@@ -43,7 +43,7 @@ export function useGuiNodes(): GraphNode[] {
   const rfNodes = useGraphStore((s) => s.rfNodes);
   return rfNodes
     .map((n) => n.data.graphNode as GraphNode)
-    .filter((n) => NODE_UIS[n.node_type]?.hasRuntimeWindow);
+    .filter((n) => showsPage(n.node_type));
 }
 
 /** Every block on the page, with the node that owns it. */
@@ -51,7 +51,7 @@ export function useSurfaceBlocks(): SurfaceBlock[] {
   const rfNodes = useGraphStore((s) => s.rfNodes);
   return rfNodes
     .map((n) => n.data.graphNode as GraphNode)
-    .filter((n) => NODE_UIS[n.node_type]?.hasRuntimeWindow)
+    .filter((n) => showsPage(n.node_type))
     .flatMap((node) => node.config.gui_widgets.map((widget) => ({ node, widget })));
 }
 

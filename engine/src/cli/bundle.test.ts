@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseGraph } from '../graph.ts';
 import { loadGraph } from '../project/folder.ts';
+import { registry } from '../elements/registry.ts';
 import { bundleNeeds, writeBundle } from './bundle.ts';
 
 /**
@@ -118,6 +119,36 @@ describe('a bundle', () => {
       edges: [],
     });
     expect(bundleNeeds(deep).ai).toBe(true);
+  });
+
+  /**
+   * "Does this need a model" has one answer and two readers: a bundle, which
+   * tells its recipient to configure a provider, and an offline `test`, which
+   * skips the examples of a node that would need one.
+   *
+   * They were asked separately -- `deployNeeds` looked at the body, `asksModel`
+   * was a constant -- and for a code node calling the model they disagreed: the
+   * bundle said "configure a provider", the offline test ran that same body
+   * into a model that was never there.
+   */
+  it('gives the bundle and an offline test the same answer about a model', () => {
+    const graphWith = (code: string) => parseGraph({
+      metadata: { name: 'One code node' },
+      nodes: [{ id: 'n', node_type: 'code', label: 'N', inputs: [], outputs: [], config: { code } }],
+      edges: [],
+    });
+    const calls = graphWith('async function run(inputs) { return { out: await node.llm("hi") }; }');
+    const quiet = graphWith('function run(inputs) { return { out: 1 + 1 }; }');
+    const code = registry.node('code')!;
+
+    expect(bundleNeeds(calls).ai).toBe(true);
+    expect(code.asksModel(calls.nodes[0])).toBe(true);
+    expect(bundleNeeds(quiet).ai).toBe(false);
+    expect(code.asksModel(quiet.nodes[0])).toBe(false);
+
+    // An ai node says it once, and both readers get it.
+    const ai = registry.node('ai')!;
+    expect(ai.asksModel({ config: {} } as never)).toBe(true);
   });
 
   it('refuses a graph with nothing in it: a bundle is something handed over', async () => {

@@ -3,7 +3,7 @@ import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, NodeType } from '@/graph';
 import type { RFNodeData } from '@/canvas/nodeData';
-import { derivedNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { derivedNodePorts, showsPage } from '@/elements/nodes/gui/guiWidgets';
 import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { ACCENT } from '@/ui/theme';
@@ -605,8 +605,10 @@ export const useGraphStore = create<GraphStore>()(
       // that happen to match would be given another level's values.
       if (get().isExecuting) return;
       const node = get().rfNodes.find((n: RFNode) => n.id === nodeId)?.data.graphNode;
-      if (!node || !NODE_UIS[node.node_type]?.opensNestedGraph) return;
-      const held = engineRegistry.node(node.node_type)?.nestedGraph(node as never) as Graph | null;
+      // Whether there is a graph to go into is the same question as whether
+      // this node holds one, so it is asked once. A `NodeUi.opensNestedGraph`
+      // beside it said the same thing a line earlier.
+      const held = node && engineRegistry.node(node.node_type)?.nestedGraph(node as never) as Graph | null;
       if (!held) return;
 
       const frame = { nodeId, graph: get().exportGraph(), past: get().past, future: get().future };
@@ -663,7 +665,7 @@ export const useGraphStore = create<GraphStore>()(
       // "unsaved" means nothing.
       const nodes: GraphNode[] = rfNodes.map((rfn) => {
         const ui = NODE_UIS[rfn.data.graphNode.node_type];
-        const resizable = ui.hasRuntimeWindow === true;
+        const resizable = showsPage(rfn.data.graphNode.node_type);
         return ui.saved({
           ...rfn.data.graphNode,
           position: { x: rfn.position.x, y: rfn.position.y },

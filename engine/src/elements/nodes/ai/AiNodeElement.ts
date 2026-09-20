@@ -128,8 +128,6 @@ export class AiNodeElement extends NodeElement<AiConfig> {
       : { by: 'body', where: 'run.js', does: 'Calls run(inputs, node) in run.js, sandboxed; each node.llm(...) in it is a model call made for it by the process that holds the keys.' };
   }
 
-  override readonly asksModel = true;
-
   /** The one element whose request lives on the node rather than in its config. */
   override generation(): Generation {
     return {
@@ -139,6 +137,7 @@ export class AiNodeElement extends NodeElement<AiConfig> {
     };
   }
 
+  /** Always, whatever its body says: asking the model is what this node is. */
   override deployNeeds() {
     return { needsInterface: false, asksAi: true };
   }
