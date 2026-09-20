@@ -48,6 +48,13 @@ export interface TextFile {
   file: string;
   /** A value kept as JSON rather than as text. */
   json?: boolean;
+  /**
+   * What the file says while nobody has written anything of their own. Written
+   * out all the same, so the folder shows what the element does.
+   */
+  standard?: string;
+  /** Every `standard` there has been: a file still holding one is brought up to date on save. */
+  earlier?: readonly string[];
 }
 
 /** What a failing authored snippet costs. */

@@ -23,3 +23,42 @@ describe('the sandbox', () => {
     await expect(nodeCode.run('function run(i) { return { n: i.a + 1 }; }', { a: 1 })).resolves.toEqual({ n: 2 });
   });
 });
+
+describe('a body that asks the process holding the graph', () => {
+  it('is handed its node: plain data, and questions it may ask', async () => {
+    const asked: unknown[] = [];
+    const out = await nodeCode.run(
+      'async function run(inputs, node) { return { sum: await node.add({ a: inputs.a, b: node.offset }), twice: await node.add({ a: 1, b: 1 }) }; }',
+      { a: 2 },
+      undefined,
+      { data: { offset: 40 }, calls: { add: async (args) => { asked.push(args); const { a, b } = args as { a: number; b: number }; return a + b; } } },
+    );
+    expect(out).toEqual({ sum: 42, twice: 2 });
+    expect(asked).toEqual([{ a: 2, b: 40 }, { a: 1, b: 1 }]);
+  });
+
+  it('gets a refusal as an error it can catch, or fail on', async () => {
+    const calls = { llm: async () => { throw new Error('no key configured'); } };
+    const caught = await nodeCode.run(
+      'async function run(i, node) { try { await node.llm({}); } catch (e) { return { said: e.message }; } }', {}, undefined, { calls });
+    expect(caught).toEqual({ said: 'no key configured' });
+    await expect(nodeCode.run('async function run(i, node) { return { v: await node.llm({}) }; }', {}, undefined, { calls }))
+      .rejects.toThrow(/no key configured/);
+  });
+
+  it('has nothing to ask when it was offered nothing', async () => {
+    const out = await nodeCode.run('function run(i, node) { return { has: typeof node.llm, keys: Object.keys(node) }; }', {});
+    expect(out).toEqual({ has: 'undefined', keys: [] });
+  });
+
+  it('may print what it likes: only the marked line is its result', async () => {
+    const out = await nodeCode.run('function run() { console.log("{\\"not\\": \\"this\\"}"); setTimeout(() => console.log("late"), 5); return { ok: true }; }', {});
+    expect(out).toEqual({ ok: true });
+  });
+
+  it('asks several things at once and gets each its own answer', async () => {
+    const calls = { slow: async (args: unknown) => { const n = Number(args); await new Promise((r) => setTimeout(r, 30 - n * 10)); return n * 10; } };
+    const out = await nodeCode.run('async function run(i, node) { return { all: await Promise.all([node.slow(1), node.slow(2)]) }; }', {}, undefined, { calls });
+    expect(out).toEqual({ all: [10, 20] });
+  });
+});

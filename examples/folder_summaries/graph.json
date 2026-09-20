@@ -57,7 +57,7 @@
           "id": "go_out",
           "name": "Summarize all",
           "kind": "output",
-          "data_type": "number",
+          "data_type": "boolean",
           "multi": false,
           "required": false,
           "description": ""

@@ -1,3 +1,4 @@
+import { llmCall, PLAIN_ASK } from '../ai/ask.ts';
 import { NodeElement } from '../../NodeElement.ts';
 import type { TextFile } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
@@ -78,6 +79,14 @@ export class CodeNodeElement extends NodeElement<CodeConfig> {
     // Once, for whatever it was handed. Fanning out and reading wired files
     // into their content are the executor's business (see `batchMode` and
     // `readsFileInputs`), so this stays one call.
-    return logic.run(inputs, runtime.code);
+    //
+    // It may ask a model, as an ai node's `run.js` does: `await node.llm({ prompt })`,
+    // answered by the process that holds the keys, on the graph's default model.
+    return logic.run(inputs, runtime.code, { calls: { llm: llmCall(PLAIN_ASK, runtime) } });
+  }
+
+  /** A body that asks a model needs one where it is deployed. */
+  override deployNeeds(node: GraphNode) {
+    return { needsInterface: false, asksAi: /\bnode\s*\.\s*llm\s*\(/.test(this.config(node).code) };
   }
 }

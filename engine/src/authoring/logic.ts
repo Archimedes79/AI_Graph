@@ -20,7 +20,7 @@
 // it. Nobody names a config key, and nobody needs the element to run the body
 // it was given.
 
-import type { CodeRunner } from '../elements/Runtime.ts';
+import type { BodyContext, CodeRunner } from '../elements/Runtime.ts';
 
 /**
  * What the body *is*, which decides who executes it.
@@ -102,9 +102,9 @@ export class Logic {
    * only the block that shows it is a property of the *element*, not of the
    * body, so the element wraps this (see `Element.runSnippet`).
    */
-  async run(inputs: Record<string, unknown>, code: CodeRunner): Promise<Record<string, unknown>> {
+  async run(inputs: Record<string, unknown>, code: CodeRunner, context?: BodyContext): Promise<Record<string, unknown>> {
     if (this.isEmpty) return inputs;
-    return code.run(this.body, inputs);
+    return code.run(this.body, inputs, undefined, context);
   }
 }
 

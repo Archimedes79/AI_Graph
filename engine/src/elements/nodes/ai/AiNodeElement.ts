@@ -3,23 +3,19 @@ import type { TextFile } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
-import { imageDataUrl, imageMediaType } from '../../../execution/images.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
-import { assemblePrompt, type PromptSettings } from './prompt.ts';
+import { askModel, llmCall, type AskSettings } from './ask.ts';
+import { AI_RUN, AI_RUN_TEMPLATES, isStandardRun } from './runTemplate.ts';
 
 /** Where an ai node keeps its two halves; used by both declarations below. */
 const PROMPT_FIELDS: LogicFields = {
   body: 'system_prompt', prompt: 'description', promptOnSubject: true,
 };
 
-export interface AiConfig extends PromptSettings {
-  provider: string;
-  model: string;
-  temperature: number;
-  sendImages: boolean;
-  /** Tool servers the model may call while answering: URLs, or names this machine configured. */
-  toolServers: string[];
+export interface AiConfig extends AskSettings {
+  /** `run.js` when somebody changed it; empty for the standard one, whatever its age. */
+  runCode: string;
 }
 
 /** One per line, or a list: both are what a person would write. */
@@ -30,6 +26,8 @@ function serverList(raw: unknown): string[] {
 
 /** What this keeps in files of its own in a project folder: see `Element.texts`. */
 const AI_TEXTS: readonly TextFile[] = [
+  // What the node does with the rest of this folder: see `runTemplate.ts`.
+  { field: 'run_code', file: 'run.js', standard: AI_RUN, earlier: AI_RUN_TEMPLATES },
   { field: 'system_prompt', file: 'system.md' },
   { field: 'prompt_template', file: 'message.md' },
   // What the model is told its answer must look like.
@@ -75,13 +73,15 @@ export class AiNodeElement extends NodeElement<AiConfig> {
       outputFormatPrompt: String(c.output_format_prompt ?? ''),
       outputExample: String(c.output_example ?? ''),
       toolServers: serverList(c.mcp_servers),
+      runCode: isStandardRun(String(c.run_code ?? '')) ? '' : String(c.run_code),
     };
   }
 
   /**
-   * The system prompt is what someone writes for an ai node — markdown, not a
-   * script that calls the model. Such a script would be a second copy of what
-   * the provider layer already does, and would drift from it immediately.
+   * The system prompt is what someone writes for an ai node -- markdown. The
+   * script that makes the call is `run.js`, and it is not a second copy of the
+   * provider layer: it asks for the call (`node.llm`) and the provider layer
+   * makes it.
    */
   override logic(node: GraphNode): Logic {
     // The request is the node's own description, not a config field: an ai
@@ -107,84 +107,26 @@ export class AiNodeElement extends NodeElement<AiConfig> {
     return true;
   }
 
+  /**
+   * The standard `run.js` is one call, and is made here rather than by starting
+   * a process to make it: same function, same request (a test holds them to
+   * that), without a process per item of a thousand-row batch. A `run.js`
+   * somebody changed is a body like any other: it runs where bodies run, and
+   * asks for its calls.
+   */
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const settings = this.config(node);
-    const text: Record<string, unknown> = {};
-    const images: string[] = [];
+    const order = node.inputs.map((port) => port.id);
+    if (!settings.runCode) return { output: await askModel(settings, inputs, runtime, order) };
 
-    // Port order, not the order the edges happen to be stored in: the message
-    // a person previews must be the message that is sent.
-    const declared = node.inputs.map((port) => port.id);
-    const order = [...declared.filter((id) => id in inputs), ...Object.keys(inputs).filter((id) => !declared.includes(id))];
-
-    for (const name of order) {
-      const value = inputs[name];
-      if (value === null || value === undefined) continue;
-      if (settings.sendImages) {
-        // An input that *is* an image becomes an image in the request rather
-        // than a path pasted into the prompt. A list is expanded, so a folder
-        // picker wired straight in sends every file.
-        //
-        // Read here, not passed as a path: the provider's machine is not this
-        // one, so a filename would arrive as a filename and the model would
-        // dutifully talk about the filename.
-        const candidates = Array.isArray(value) ? value : [value];
-        const urls: string[] = [];
-        for (const candidate of candidates) {
-          const url = await asImageUrl(candidate, runtime);
-          if (url) urls.push(url);
-        }
-        if (urls.length) {
-          images.push(...urls);
-          continue;
-        }
-      }
-      text[name] = value;
-    }
-
-    const { system, user } = assemblePrompt(settings, text);
-    const request = {
-      prompt: user,
-      system,
-      provider: settings.provider,
-      model: settings.model,
-      temperature: settings.temperature,
-      ...(images.length ? { images } : {}),
-    };
-
-    // A failed call is not caught here: `catch_errors` is read by the executor,
-    // which turns a throw into this node's `error` port for every element
-    // alike. One mechanism, not one per element.
-    if (!settings.toolServers.length) return { output: await runtime.ai.complete(request) };
-
-    // Tools live for one run of this node and no longer: a server started for
-    // a question is stopped when the question is answered, so a graph that ran
-    // leaves nothing running behind it.
-    if (!runtime.tools) throw new Error('This node asks for tool servers, and nothing here can reach one.');
-    const session = await runtime.tools.open(settings.toolServers);
-    try {
-      return { output: await runtime.ai.complete({ ...request, tools: session }) };
-    } finally {
-      await session.close();
-    }
-  }
-}
-
-/**
- * An image, inlined — or null for anything that is just text.
- *
- * A file that looks like an image but cannot be read (missing, too large, not
- * actually one) counts as text: it goes into the prompt as the string it is,
- * which is what someone wiring a filename in would expect, rather than failing
- * the whole node over a picture it was optional to send.
- */
-async function asImageUrl(value: unknown, runtime: Runtime): Promise<string | null> {
-  if (typeof value !== 'string') return null;
-  if (value.startsWith('data:image/')) return value;
-  if (!imageMediaType(value)) return null;
-  try {
-    return await imageDataUrl(value, runtime.files);
-  } catch {
-    return null;
+    return runtime.code.run(settings.runCode, inputs, undefined, {
+      data: {
+        texts: {
+          system: settings.systemPrompt, message: settings.template,
+          output: settings.outputFormatPrompt, output_example: settings.outputExample,
+        },
+      },
+      calls: { llm: llmCall(settings, runtime, order) },
+    });
   }
 }

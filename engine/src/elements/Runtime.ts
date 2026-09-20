@@ -17,10 +17,30 @@ export interface FileService {
   exists(path: string): Promise<boolean>;
 }
 
-/** Running an authored body: `run(inputs) -> outputs`, both plain JSON. */
+/**
+ * What a body is handed besides its inputs: its second argument, `node`.
+ *
+ * A body runs where the keys are not -- a separate process that may read files
+ * and nothing else of this machine's. So what needs the keys is not given to
+ * it; it is *asked for*. `calls` are those questions: each becomes an async
+ * function on `node` that sends its one argument out to the process holding
+ * the graph and resolves to the answer. `data` is plain JSON put on `node` as
+ * it is. Both must survive `JSON.stringify`.
+ */
+export interface BodyContext {
+  data?: Record<string, unknown>;
+  calls?: Record<string, (args: unknown) => Promise<unknown>>;
+}
+
+/** Running an authored body: `run(inputs, node) -> outputs`, inputs and outputs plain JSON. */
 export interface CodeRunner {
   /** `signal` ends the body early: a run that was stopped must not leave one grinding on. */
-  run(body: string, inputs: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>>;
+  run(
+    body: string,
+    inputs: Record<string, unknown>,
+    signal?: AbortSignal,
+    context?: BodyContext,
+  ): Promise<Record<string, unknown>>;
 }
 
 /** One tool a model may call: a name, what it is for, and a JSON schema of its arguments. */
@@ -108,6 +128,8 @@ export interface Runtime {
   tools?: ToolService;
   /** Absent outside a run: only the executor can offer it. */
   subgraph?: SubgraphService;
+  /** How often one run of a body may ask for the model (`node.llm`). Absent: the engine's own limit. */
+  llmCallsPerBody?: number;
   /**
    * Whether this node's port is the event this round began with.
    *

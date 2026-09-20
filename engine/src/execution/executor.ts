@@ -497,7 +497,7 @@ function stoppable(runtime: Runtime, signal: AbortSignal | undefined): Runtime {
   return {
     ...runtime,
     ai: { complete: (request) => runtime.ai.complete({ ...request, signal }) },
-    code: { run: (body, inputs) => runtime.code.run(body, inputs, signal) },
+    code: { run: (body, inputs, _signal, context) => runtime.code.run(body, inputs, signal, context) },
   };
 }
 

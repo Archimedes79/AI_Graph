@@ -107,6 +107,9 @@ export interface ProjectText {
   json: boolean;
   /** The object the field lives on: a node's config, or the block itself. */
   holder: Record<string, unknown>;
+  /** See `TextFile`: what the file says while nobody has written their own, and every text that was. */
+  standard?: string;
+  earlier?: readonly string[];
 }
 
 /** Every piece of writing *graph* can keep in files, whether or not it holds any. */
@@ -127,7 +130,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
     for (const text of registry.node(node.node_type)?.texts(node) ?? []) {
       found.push({
         node_id: node.id, widget_id: '', field: text.field, path: `${folder}/${text.file}`,
-        json: text.json === true, holder: node.config,
+        json: text.json === true, holder: node.config, standard: text.standard, earlier: text.earlier,
       });
     }
     const blocks = Array.isArray(node.config.gui_widgets) ? node.config.gui_widgets as Record<string, unknown>[] : [];
@@ -137,7 +140,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
       for (const text of registry.widget(widget.kind)?.texts(widget) ?? []) {
         found.push({
           node_id: node.id, widget_id: widget.id, field: text.field, path: `${blockFolder}/${text.file}`,
-          json: text.json === true, holder: raw,
+          json: text.json === true, holder: raw, standard: text.standard, earlier: text.earlier,
         });
       }
     }
@@ -199,6 +202,13 @@ function fromFile(content: string, json: boolean, path: string): unknown {
   } catch (error) {
     throw new NotAGraph(`${path} is not valid JSON: ${(error as Error).message}`);
   }
+}
+
+/** Nobody's own: nothing, or a text the element itself once shipped. */
+function isStandard(value: unknown, text: { standard?: string; earlier?: readonly string[] }): boolean {
+  if (isBlank(value)) return true;
+  const plain = (s: string) => s.replace(/\r\n/g, '\n').trim();
+  return typeof value === 'string' && [text.standard ?? '', ...(text.earlier ?? [])].some((known) => plain(known) === plain(value));
 }
 
 /** Nothing written: no file for it. A JSON value that is an empty object says nothing either. */
@@ -303,7 +313,10 @@ export async function readProject(folder: string, guard?: Guard): Promise<Graph>
     const path = join(folder, text.path);
     if (existsSync(path)) {
       await guard?.(path);
-      text.holder[text.field] = fromFile(await readFile(path, 'utf8'), text.json, text.path);
+      const read = fromFile(await readFile(path, 'utf8'), text.json, text.path);
+      // The element's own text is nobody's setting: the node stays as it was
+      // written, and saving writes today's standard back out.
+      if (text.standard === undefined || !isStandard(read, text)) text.holder[text.field] = read;
     }
     await remember(path);
   }
@@ -387,8 +400,9 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
 
   const files = new Map<string, string | null>();
   for (const text of projectTexts(copy)) {
-    const value = text.holder[text.field];
+    const written = text.holder[text.field];
     delete text.holder[text.field];
+    const value = text.standard !== undefined && isStandard(written, text) ? text.standard : written;
     files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, text.json));
   }
 

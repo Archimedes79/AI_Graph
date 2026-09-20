@@ -76,8 +76,15 @@ export const nodeFiles: FileService = {
  */
 const SANDBOX = ['--permission', '--allow-fs-read=*', '--allow-fs-write=*'];
 
+/**
+ * What marks a line on a body's stdout as the wrapper's own: a question for
+ * this process, or the result. Anything else a body prints is its own business
+ * and is ignored -- it used to be able to break the result by logging after it.
+ */
+const MARK = '\u001eai-graph:';
+
 export const nodeCode: CodeRunner = {
-  async run(body, inputs, signal) {
+  async run(body, inputs, signal, context) {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-'));
     const file = join(dir, 'body.mjs');
 
@@ -89,20 +96,36 @@ export const nodeCode: CodeRunner = {
     // so both work: the bridge below defines `require`, and `import` needs
     // nothing.
     const lead = "import { createRequire } from 'node:module';\n"
-      + 'const require = createRequire(import.meta.url);\n\n'
+      + "import { createInterface as __lines } from 'node:readline';\n"
+      + 'const require = createRequire(import.meta.url);\n'
       // The inputs arrive on stdin, not as an argument. A command line has a
       // ceiling -- about 32 KB on Windows -- and a wired file is an input like
       // any other: a 100 KB log failed with `spawn ENAMETOOLONG`, a message
       // about creating processes, for someone who had wired a CSV into a node.
-      + "let __in = '';\nfor await (const __chunk of process.stdin) __in += __chunk;\n\n";
-    const wrapper = `${lead}${body}\n\nconst __out = await run(JSON.parse(__in));\nconsole.log(JSON.stringify(__out));\n`;
+      //
+      // One line in, then one line per answer: a body may ask the process that
+      // started it for what it is not allowed itself (`BodyContext.calls`), by
+      // printing a marked line and waiting for the reply with its number.
+      + 'const __stdin = __lines({ input: process.stdin })[Symbol.asyncIterator]();\n'
+      + 'const __given = JSON.parse((await __stdin.next()).value);\n'
+      + 'const __asked = new Map();\nlet __count = 0;\n'
+      + '(async () => { for (;;) { const { value, done } = await __stdin.next(); if (done) return; '
+      + 'const reply = JSON.parse(value); const waiting = __asked.get(reply.id); __asked.delete(reply.id); '
+      + "if (waiting) ('error' in reply ? waiting.fail(new Error(reply.error)) : waiting.ok(reply.result)); } })();\n"
+      + 'const __ask = (name) => (args) => new Promise((ok, fail) => { const id = ++__count; '
+      + `__asked.set(id, { ok, fail }); process.stdout.write(${JSON.stringify(MARK)} + 'call ' + JSON.stringify({ id, name, args: args ?? null }) + '\\n'); });\n`
+      + 'const __node = { ...__given.data, ...Object.fromEntries(__given.calls.map((name) => [name, __ask(name)])) };\n\n';
+    const tail = '\n\nconst __out = await run(__given.inputs, __node);\n'
+      + `process.stdout.write(${JSON.stringify(MARK)} + 'result ' + JSON.stringify(__out ?? null) + '\\n', () => process.stdin.unref?.());\n`;
+    const wrapper = `${lead}${body}${tail}`;
 
     try {
       await writeFile(file, wrapper, 'utf8');
-      const stdout = await capture(process.execPath, [...SANDBOX, file], JSON.stringify(inputs), signal);
-      const trimmed = stdout.trim();
-      if (!trimmed) throw new Error('the body printed nothing; does it return an object?');
-      return JSON.parse(trimmed.split('\n').pop() as string) as Record<string, unknown>;
+      const given = { inputs, data: context?.data ?? {}, calls: Object.keys(context?.calls ?? {}) };
+      const result = await converse(process.execPath, [...SANDBOX, file], JSON.stringify(given), context?.calls ?? {}, signal);
+      if (result === undefined) throw new Error('the body returned nothing; does it return an object?');
+      if (result === null || typeof result !== 'object') throw new Error('the body must return an object keyed by output port.');
+      return result as Record<string, unknown>;
     } catch (error) {
       throw inBodyLines(error, lead);
     } finally {
@@ -132,10 +155,23 @@ function inBodyLines(error: unknown, lead: string): unknown {
   return error;
 }
 
-function capture(command: string, args: string[], stdin: string, signal?: AbortSignal): Promise<string> {
+/**
+ * Run the body's process and hold up this end of the conversation: hand it its
+ * inputs, answer what it asks, and return what it says its result is.
+ */
+function converse(
+  command: string,
+  args: string[],
+  given: string,
+  calls: Record<string, (args: unknown) => Promise<unknown>>,
+  signal?: AbortSignal,
+): Promise<unknown> {
   return new Promise((fulfil, fail) => {
     if (signal?.aborted) return fail(new Error('Stopped.'));
     const child = spawn(command, args, { windowsHide: true });
+    // Text, decoded across chunk boundaries: a line is split on, and a character must not be.
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
     // Stop means stop: a body in a loop is a process, and a process can be ended.
     const stop = () => { child.kill(); };
     signal?.addEventListener('abort', stop, { once: true });
@@ -143,14 +179,46 @@ function capture(command: string, args: string[], stdin: string, signal?: AbortS
     // A body that exits before reading its input closes the pipe under the
     // write. That is the body's failure, and its exit code reports it.
     child.stdin.on('error', () => {});
-    child.stdin.end(stdin);
-    let out = '';
+    const say = (line: string): void => { if (child.stdin.writable) child.stdin.write(`${line}\n`); };
+    say(given);
+    // Nothing it could ask: nothing more to say, and an open pipe would only
+    // keep a body alive that forgot to return.
+    if (!Object.keys(calls).length) child.stdin.end();
+
+    let result: unknown;
+    let answered = false;
+    let pending = '';
     let err = '';
-    child.stdout.on('data', (chunk) => { out += chunk; });
+
+    const answer = async (asked: { id: number; name: string; args: unknown }): Promise<void> => {
+      const call = calls[asked.name];
+      try {
+        if (!call) throw new Error(`This body may not ask for "${asked.name}".`);
+        say(JSON.stringify({ id: asked.id, result: (await call(asked.args)) ?? null }));
+      } catch (error) {
+        say(JSON.stringify({ id: asked.id, error: error instanceof Error ? error.message : String(error) }));
+      }
+    };
+
+    child.stdout.on('data', (chunk) => {
+      pending += chunk;
+      const lines = pending.split('\n');
+      pending = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith(MARK)) continue;
+        const rest = line.slice(MARK.length);
+        if (rest.startsWith('call ')) void answer(JSON.parse(rest.slice(5)));
+        if (rest.startsWith('result ')) {
+          result = JSON.parse(rest.slice(7));
+          answered = true;
+          child.stdin.end();
+        }
+      }
+    });
     child.stderr.on('data', (chunk) => { err += chunk; });
     child.on('error', (error) => fail(error));
     child.on('close', (code) => {
-      if (code === 0) return fulfil(out);
+      if (code === 0) return fulfil(answered ? result : undefined);
       if (signal?.aborted) return fail(new Error('Stopped.'));
       // The sentence a person needs is the one naming the error. A thrown
       // error puts it at the bottom of the traceback; a syntax error puts it
@@ -180,6 +248,7 @@ export function nodeRuntime(overrides: Partial<Runtime> = {}): Runtime {
     code: nodeCode,
     ai: aiService(configuredSettings()),
     tools: mcpToolService(configuredMcpServers()),
+    ...(Number(process.env.AI_GRAPH_MAX_LLM_CALLS) > 0 ? { llmCallsPerBody: Number(process.env.AI_GRAPH_MAX_LLM_CALLS) } : {}),
     ...overrides,
   };
 }
