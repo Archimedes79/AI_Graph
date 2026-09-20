@@ -53,9 +53,12 @@ describe('a bundle', () => {
       expect(code).toBe(0);
       const result = JSON.parse(out);
       expect(result.status).toBe('success');
-      // Not merely "it started": the chart was drawn, and the page was shown it.
+      // Not merely "it started": the chart has something to draw, and the page
+      // was shown it. A run produces the figure, never the drawing -- nothing
+      // here knows how big the recipient's window will be.
       const page = result.node_results.find((n: { node_id: string }) => n.node_id === 'page');
-      expect(String(page.display.plot).startsWith('<svg')).toBe(true);
+      expect(page.display.plot.kind).toBe('bars');
+      expect(page.display.plot.points.length).toBeGreaterThan(0);
       expect(page.display.table.length).toBeGreaterThan(0);
     } finally {
       await rm(dir, { recursive: true, force: true });

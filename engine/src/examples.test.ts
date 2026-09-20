@@ -243,20 +243,33 @@ describe('what each example is there to show', () => {
     expect(rows.every((row) => row.Summary.startsWith('summary('))).toBe(true);
   }, 120_000);
 
-  it('population_plotter: every kind of chart is drawn, and reaches the page across the loop', async () => {
-    for (const [kind, mark] of [['Horizontal bars', '<rect'], ['Columns', '<rect'], ['Donut', '<path']] as const) {
+  /**
+   * What the node is responsible for, and nothing more.
+   *
+   * This used to assert `<svg` and `<rect`, because the node drew the chart --
+   * against a guessed 720x340 that was then stretched into a block measured at
+   * 1084x470. The node says *what* to plot now and the block draws it, so what
+   * is checked here is the figure: the shape the dropdown asked for, the title,
+   * and the points. Nothing in a run knows how big the chart will be, which is
+   * the reason the split exists.
+   */
+  it('population_plotter: the dropdown picks the shape, and the figure reaches the page across the loop', async () => {
+    for (const [chosen, kind] of [['Horizontal bars', 'bars'], ['Columns', 'columns'], ['Line', 'line'], ['Donut', 'donut']] as const) {
       const graph = await load('population_plotter');
-      blocksOf(graph, 'page').find((block) => block.id === 'kind')!.value = kind;
+      blocksOf(graph, 'page').find((block) => block.id === 'kind')!.value = chosen;
       blocksOf(graph, 'page').find((block) => block.id === 'top')!.value = 6;
 
       const result = await runGraph(graph, { node_id: 'page', port_id: 'kind_out' });
       expect(result.status).toBe('success');
-      // The chart fed back into the page that holds its controls: the memory
+      // The figure fed back into the page that holds its controls: the memory
       // edge, settled and shown in the round that produced it.
-      const drawing = String(shownOn(result, 'page').plot);
-      expect(drawing.startsWith('<svg')).toBe(true);
-      expect(drawing).toContain(mark);
-      expect(drawing).toContain('top 6 of 20');
+      const figure = shownOn(result, 'page').plot as { kind: string; title: string; points: { label: string }[] };
+      expect(figure.kind).toBe(kind);
+      expect(figure.title).toContain('top 6 of 20');
+      expect(figure.points.slice(0, 2).map((point) => point.label)).toEqual(['India', 'China']);
+      // A donut shares out a whole, so what it does not show is one slice more.
+      expect(figure.points).toHaveLength(kind === 'donut' ? 7 : 6);
+      expect(typeof figure).not.toBe('string');
       expect((shownOn(result, 'page').table as { Country: string }[]).slice(0, 2).map((row) => row.Country)).toEqual(['India', 'China']);
     }
   }, 120_000);

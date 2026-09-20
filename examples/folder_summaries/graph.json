@@ -119,7 +119,7 @@
             "id": "table",
             "kind": "table",
             "label": "Each file",
-            "tone": "plain",
+            "tone": "raised",
             "w": 16
           },
           {

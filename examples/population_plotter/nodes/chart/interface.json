@@ -2,8 +2,8 @@
   "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
   "node": "chart",
   "type": "code",
-  "label": "Draw chart",
-  "about": "Parses the CSV and draws it",
+  "label": "What to plot",
+  "about": "Reads the CSV and says what the chart should show",
   "runs": {
     "by": "body",
     "where": "code.js",
@@ -23,7 +23,7 @@
       "port": "kind",
       "name": "Chart",
       "type": "text",
-      "description": "Horizontal bars, Columns or Donut",
+      "description": "Horizontal bars, Columns, Line or Donut",
       "from": [
         "page.kind_out"
       ]
@@ -38,15 +38,12 @@
       ]
     }
   ],
-  "gate": [
-    "page.go_out"
-  ],
   "outputs": [
     {
-      "port": "drawing",
-      "name": "Drawing",
-      "type": "text",
-      "description": "A finished SVG document",
+      "port": "figure",
+      "name": "Figure",
+      "type": "json",
+      "description": "What to plot: {kind, title, points} — the block draws it",
       "to": [
         "page.plot_in"
       ]
@@ -64,8 +61,45 @@
   "output_schema": {
     "type": "object",
     "properties": {
-      "drawing": {
-        "type": "string"
+      "figure": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "bars",
+              "columns",
+              "line",
+              "donut"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "label",
+                "value"
+              ]
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "points"
+        ]
       },
       "rows": {
         "type": "array",
@@ -95,7 +129,7 @@
       }
     },
     "required": [
-      "drawing",
+      "figure",
       "rows"
     ]
   }

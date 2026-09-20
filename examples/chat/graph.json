@@ -80,7 +80,6 @@
             "h": 8,
             "id": "chat",
             "kind": "chat",
-            "label": "Chat",
             "tone": "plain",
             "value": {
               "messages": [],
