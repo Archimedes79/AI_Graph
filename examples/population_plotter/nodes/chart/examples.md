@@ -1,45 +1,31 @@
 # Examples for "What to plot"
 
-## The three largest, largest first
+## The largest first, from the first numeric column
 
 ```json input
-{ "csv": "examples/data/population.csv", "kind": "Horizontal bars", "top": 3 }
+{ "csv": "examples/data/three_countries.csv" }
 ```
 
 ```json expect
 {
   "figure": {
     "kind": "bars",
+    "title": "Population by Country",
     "points": [
-      { "label": "India", "value": 1450000000 },
-      { "label": "China", "value": 1419000000 },
-      { "label": "United States", "value": 345000000 }
-    ]
-  },
-  "rows": [
-    { "#": 1, "Country": "India", "Population": "1,450,000,000" },
-    { "#": 2, "Country": "China", "Population": "1,419,000,000" },
-    { "#": 3, "Country": "United States", "Population": "345,000,000" }
-  ]
-}
-```
-
-## A donut gathers everything it does not show into one slice
-
-```json input
-{ "csv": "examples/data/population.csv", "kind": "Donut", "top": 3 }
-```
-
-```json expect
-{
-  "figure": {
-    "kind": "donut",
-    "points": [
-      { "label": "India", "value": 1450000000 },
-      { "label": "China", "value": 1419000000 },
-      { "label": "United States", "value": 345000000 },
-      { "label": "All others", "value": 2463000000 }
+      { "label": "India", "value": 1450 },
+      { "label": "China", "value": 1419 },
+      { "label": "Indonesia", "value": 283 }
     ]
   }
 }
+```
+
+## Nothing chosen yet is still a figure, so the chart says what to do
+
+```json input
+{ "csv": "" }
+```
+
+```json expect
+{ "figure": { "kind": "bars", "title": "Choose a CSV file to plot.", "points": [] } }
 ```

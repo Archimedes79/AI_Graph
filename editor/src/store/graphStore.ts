@@ -81,6 +81,12 @@ export interface GraphStore {
   setCurrentFilePath: (path: string | null, isProject?: boolean) => void;
   /** Add a node and return its id, so a caller can immediately fill it in. */
   addNode: (nodeType: NodeType, position: { x: number; y: number }) => string;
+  /**
+   * Wire one port to another: what dragging from a handle to a handle does.
+   * Here and not in the canvas, so that a graph can be built -- and a test can
+   * build one -- without a mouse. The same wire twice is one wire.
+   */
+  connect: (wire: { source: string; sourceHandle: string; target: string; targetHandle: string }) => void;
   updateNode: (nodeId: string, updates: Partial<GraphNode>) => void;
   deleteNode: (nodeId: string) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
@@ -459,6 +465,32 @@ export const useGraphStore = create<GraphStore>()(
         state.rfNodes.push(rfNode as any);
       });
       return id;
+    },
+
+    connect: (wire) => {
+      const id = `edge-${wire.source}-${wire.sourceHandle}-${wire.target}-${wire.targetHandle}`;
+      if (get().rfEdges.some((edge: Edge) => edge.id === id)) return;
+      get().commit();
+      set((state) => {
+        state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as any);
+
+        // A wire from a port that carries file paths -- a picker, a folder --
+        // makes the port it ends on one that receives file paths. Nowhere in
+        // the editor can a person say so themselves, and "Read file contents
+        // from paths" reads exactly those ports: without this, a graph wired by
+        // hand summarised the file's *name*.
+        const portOf = (nodeId: string, side: 'inputs' | 'outputs', portId: string) => state.rfNodes
+          .find((node: RFNode) => node.id === nodeId)?.data.graphNode[side].find((port) => port.id === portId);
+        const from = portOf(wire.source, 'outputs', wire.sourceHandle);
+        const to = portOf(wire.target, 'inputs', wire.targetHandle);
+        // Not on a node whose ports follow from its settings (a page, an input): those are recomputed.
+        const target = state.rfNodes.find((node: RFNode) => node.id === wire.target)?.data.graphNode;
+        const own = !!target && derivedNodePorts(target as GraphNode) === null;
+        if (own && from?.data_type === 'file_path' && to && (to.data_type === 'any' || to.data_type === 'text')) {
+          to.data_type = 'file_path';
+          if (from.multi) to.multi = true;
+        }
+      });
     },
 
     updateNode: (nodeId, updates) => {

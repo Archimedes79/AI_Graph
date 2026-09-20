@@ -2,18 +2,17 @@
   "metadata": {
     "name": "Summarize a folder",
     "version": "1.0.0",
-    "description": "Every text file in a folder is summarized on its own — the AI node runs once per file — and a second AI node then says what the files have in common. Paths are relative to the working directory, so run this from the repository root.",
-    "author": "AI-Graph",
+    "description": "Choose a folder and read a summary of every text file in it. One page, one model: the AI node runs once per file, and the page shows the summaries one under the other. Choosing a folder starts it. Paths are relative to the working directory, so run this from the repository root.",
+    "author": "",
     "tags": [
       "example",
-      "gui",
       "ai",
-      "batch",
-      "triggers"
+      "files",
+      "gui"
     ],
     "ai_defaults": {
-      "provider": "google",
-      "model": "gemini-flash-lite-latest"
+      "provider": "default",
+      "model": ""
     },
     "gui_scheme": "night"
   },
@@ -25,17 +24,8 @@
       "description": "The page this tool shows",
       "inputs": [
         {
-          "id": "table_in",
-          "name": "Each file",
-          "kind": "input",
-          "data_type": "any",
-          "multi": true,
-          "required": false,
-          "description": ""
-        },
-        {
-          "id": "overall_in",
-          "name": "What they have in common",
+          "id": "summaries_in",
+          "name": "Summaries",
           "kind": "input",
           "data_type": "any",
           "multi": false,
@@ -50,15 +40,6 @@
           "kind": "output",
           "data_type": "file_path",
           "multi": true,
-          "required": false,
-          "description": ""
-        },
-        {
-          "id": "go_out",
-          "name": "Summarize all",
-          "kind": "output",
-          "data_type": "boolean",
-          "multi": false,
           "required": false,
           "description": ""
         }
@@ -76,57 +57,23 @@
             "w": 16
           },
           {
-            "h": 1,
-            "id": "intro",
-            "kind": "text",
-            "label": "",
-            "mode": "caption",
-            "tone": "plain",
-            "value": "Every .txt file in the folder gets its own two-sentence summary; then one paragraph on what they share.",
-            "w": 16
-          },
-          {
             "extensions": ".txt",
             "h": 2,
             "id": "folder",
             "kind": "input_picker",
             "label": "Folder",
             "mode": "directory",
+            "run_on_change": true,
             "select_all_files": true,
             "tone": "sunken",
             "value": "examples/data/stories",
-            "w": 12
-          },
-          {
-            "h": 2,
-            "id": "go",
-            "kind": "button",
-            "label": "Summarize all",
-            "tone": "plain",
-            "w": 4
-          },
-          {
-            "h": 1,
-            "id": "rule",
-            "kind": "divider",
-            "label": "",
-            "mode": "horizontal",
-            "tone": "plain",
             "w": 16
           },
           {
-            "h": 5,
-            "id": "table",
-            "kind": "table",
-            "label": "Each file",
-            "tone": "raised",
-            "w": 16
-          },
-          {
-            "h": 4,
-            "id": "overall",
+            "h": 10,
+            "id": "summaries",
             "kind": "text_io",
-            "label": "What they have in common",
+            "label": "Summaries",
             "mode": "output",
             "tone": "raised",
             "w": 16
@@ -135,10 +82,10 @@
       }
     },
     {
-      "id": "per_file",
+      "id": "summarize",
       "node_type": "ai",
       "label": "Each file",
-      "description": "Summarize one story in exactly two sentences.",
+      "description": "Summarizes one file; runs once per file in the folder",
       "inputs": [
         {
           "id": "story",
@@ -147,18 +94,18 @@
           "data_type": "file_path",
           "multi": true,
           "required": false,
-          "description": "One file per run; arrives as its content"
+          "description": ""
         }
       ],
       "outputs": [
         {
           "id": "output",
-          "name": "Output",
+          "name": "Summary",
           "kind": "output",
           "data_type": "text",
-          "multi": false,
+          "multi": true,
           "required": false,
-          "description": "What the model answered"
+          "description": ""
         }
       ],
       "config": {
@@ -170,134 +117,22 @@
         "read_file_inputs": true,
         "temperature": 0.3
       }
-    },
-    {
-      "id": "rows",
-      "node_type": "code",
-      "label": "Table rows",
-      "description": "Puts each file name beside its summary",
-      "inputs": [
-        {
-          "id": "files",
-          "name": "Files",
-          "kind": "input",
-          "data_type": "any",
-          "multi": true,
-          "required": false,
-          "description": "Every path in the folder"
-        },
-        {
-          "id": "summaries",
-          "name": "Summaries",
-          "kind": "input",
-          "data_type": "text",
-          "multi": true,
-          "required": false,
-          "description": "One per file, same order"
-        }
-      ],
-      "outputs": [
-        {
-          "id": "rows",
-          "name": "Rows",
-          "kind": "output",
-          "data_type": "json",
-          "multi": false,
-          "required": false,
-          "description": "A list of {File, Summary}"
-        }
-      ],
-      "config": {
-        "batch_mode": "whole_list",
-        "read_file_inputs": false
-      }
-    },
-    {
-      "id": "overall",
-      "node_type": "ai",
-      "label": "In common",
-      "description": "Say what the stories share, from their summaries.",
-      "inputs": [
-        {
-          "id": "summaries",
-          "name": "Summaries",
-          "kind": "input",
-          "data_type": "text",
-          "multi": true,
-          "required": false,
-          "description": "Every summary, as paragraphs"
-        }
-      ],
-      "outputs": [
-        {
-          "id": "output",
-          "name": "Output",
-          "kind": "output",
-          "data_type": "text",
-          "multi": false,
-          "required": false,
-          "description": "What the model answered"
-        }
-      ],
-      "config": {
-        "ai_model": "gemini-flash-lite-latest",
-        "ai_provider": "google",
-        "batch_mode": "whole_list",
-        "output_format": "text",
-        "read_file_inputs": false,
-        "temperature": 0.4
-      }
     }
   ],
   "edges": [
     {
-      "id": "e1",
+      "id": "folder-to-summarize",
       "source_node_id": "page",
       "source_port_id": "folder_out",
-      "target_node_id": "per_file",
+      "target_node_id": "summarize",
       "target_port_id": "story"
     },
     {
-      "id": "e2",
-      "source_node_id": "page",
-      "source_port_id": "go_out",
-      "target_node_id": "per_file",
-      "target_port_id": "__run"
-    },
-    {
-      "id": "e3",
-      "source_node_id": "page",
-      "source_port_id": "folder_out",
-      "target_node_id": "rows",
-      "target_port_id": "files"
-    },
-    {
-      "id": "e4",
-      "source_node_id": "per_file",
-      "source_port_id": "output",
-      "target_node_id": "rows",
-      "target_port_id": "summaries"
-    },
-    {
-      "id": "e5",
-      "source_node_id": "per_file",
-      "source_port_id": "output",
-      "target_node_id": "overall",
-      "target_port_id": "summaries"
-    },
-    {
-      "id": "e6",
-      "source_node_id": "rows",
-      "source_port_id": "rows",
-      "target_node_id": "page",
-      "target_port_id": "table_in"
-    },
-    {
-      "id": "e7",
-      "source_node_id": "overall",
+      "id": "summaries-to-page",
+      "source_node_id": "summarize",
       "source_port_id": "output",
       "target_node_id": "page",
-      "target_port_id": "overall_in"
+      "target_port_id": "summaries_in"
     }
   ]
 }

@@ -11,20 +11,11 @@
   },
   "inputs": [
     {
-      "port": "table_in",
-      "name": "Each file",
-      "type": "any",
-      "list": true,
-      "from": [
-        "rows.rows"
-      ]
-    },
-    {
-      "port": "overall_in",
-      "name": "What they have in common",
+      "port": "summaries_in",
+      "name": "Summaries",
       "type": "any",
       "from": [
-        "overall.output"
+        "summarize.output"
       ]
     }
   ],
@@ -35,16 +26,7 @@
       "type": "file_path",
       "list": true,
       "to": [
-        "per_file.story",
-        "rows.files"
-      ]
-    },
-    {
-      "port": "go_out",
-      "name": "Summarize all",
-      "type": "boolean",
-      "to": [
-        "per_file.◆"
+        "summarize.story"
       ]
     }
   ]

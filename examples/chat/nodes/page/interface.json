@@ -12,7 +12,7 @@
   "inputs": [
     {
       "port": "chat_in",
-      "name": "Chat: reply",
+      "name": "chat: reply",
       "type": "any",
       "description": "The answer to the message just sent. It is added to the conversation.",
       "from": [
@@ -23,7 +23,7 @@
   "outputs": [
     {
       "port": "chat_out",
-      "name": "Chat: message",
+      "name": "chat: message",
       "type": "text",
       "description": "What the person just sent. Sending it starts the graph from whatever this is wired to.",
       "to": [
@@ -32,7 +32,7 @@
     },
     {
       "port": "chat_history",
-      "name": "Chat: history",
+      "name": "chat: history",
       "type": "text",
       "description": "Everything said before this message, one turn per paragraph.",
       "to": [

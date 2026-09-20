@@ -39,8 +39,8 @@ as a tool that runs on their machine: offline, on a local model, with no account
 
 - **Document batch processing** — a directory of files, a Code/AI node that extracts or
   summarises each one, an Output node that writes the results back to disk.
-- **Charts from your own data** — a CSV, a Code node that draws it, a page with a
-  dropdown and a slider that redraw it; see [examples/population_plotter/](examples/population_plotter/).
+- **Charts from your own data** — choose a CSV, see the chart: a page with a file picker
+  and a chart, and one Code node that says what to plot; see [examples/population_plotter/](examples/population_plotter/).
 - **Local-LLM chat or report tool** — an AI node on Ollama/LM Studio fed by a file input,
   paired with a `gui` node's `text_io` widget: a runnable front-end with zero UI code.
 - **A graph as a standalone tool** — once it works in the editor, 🚀 Deploy hands a
@@ -123,12 +123,18 @@ Nothing leaves the machine unless the graph itself sends it there.
 `examples/` holds the graphs, `examples/data/` the files they start on. Open one with
 **Open**, or drop it onto the editor window.
 
+The first three are the **master examples**: each is a page and one node, two or three
+wires, and each can be built by hand in a few minutes. They are also the tests the editor
+is held to — [`masterExamples.test.ts`](editor/src/masterExamples.test.ts) builds each one
+the way a person does (a node dropped, blocks added, a wire dragged), checks that what it
+built *is* the example, and runs it.
+
 | Graph | What it shows | Needs a model |
 |---|---|---|
-| [population_plotter](examples/population_plotter/) | A page that plots a CSV as bars, columns or a donut; dropdown, slider and file picker each redraw it at once | no |
+| [population_plotter](examples/population_plotter/) | Choose a CSV, see the chart: a file picker, a chart, and one code node that says what to plot | no |
+| [folder_summaries](examples/folder_summaries/) | Choose a folder, read a summary of every file in it: one model call per file, one window | yes |
 | [chat](examples/chat/) | A chatbot in two nodes: a chat block and a model, with a message template laying out history and message | yes |
 | [file_summarizer](examples/file_summarizer/) | Read a file and summarize it; each control on the page starts the graph where it is wired to | yes |
-| [folder_summaries](examples/folder_summaries/) | Summarize every file in a folder, one call per file, then what they have in common; results in a table | yes |
 | [paper_review_panel](examples/paper_review_panel/) | Several AI reviewers (scientific, adversarial, claims, references, figures) read a manuscript in parallel; a judge merges their findings into ranked advice | yes |
 
 **Every example is held to the same three things by the test suite**

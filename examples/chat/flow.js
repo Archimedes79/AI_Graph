@@ -21,8 +21,7 @@ async function flow(node) {
   const page = await node.page();
 
   // Assistant · ai · nodes/assistant/run.js
-  // Answer the user's last message as a friendly, concise assistant that remembers the
-  // conversation.
+  // Answers the last message, knowing the conversation so far
   const assistant = await node.assistant({ message: page.chat_out, history: page.chat_history });
 
   // Once the round is done.
