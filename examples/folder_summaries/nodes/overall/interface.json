@@ -1,0 +1,30 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "overall",
+  "type": "ai",
+  "label": "In common",
+  "about": "Say what the stories share, from their summaries.",
+  "inputs": [
+    {
+      "port": "summaries",
+      "name": "Summaries",
+      "type": "text",
+      "list": true,
+      "description": "Every summary, as paragraphs",
+      "from": [
+        "per_file.output"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "output",
+      "name": "Output",
+      "type": "text",
+      "description": "What the model answered",
+      "to": [
+        "page.overall_in"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "page",
+  "type": "gui",
+  "label": "Folder summaries",
+  "about": "The page this tool shows",
+  "inputs": [
+    {
+      "port": "table_in",
+      "name": "Each file",
+      "type": "any",
+      "list": true,
+      "from": [
+        "rows.rows"
+      ]
+    },
+    {
+      "port": "overall_in",
+      "name": "What they have in common",
+      "type": "any",
+      "from": [
+        "overall.output"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "folder_out",
+      "name": "Folder",
+      "type": "file_path",
+      "list": true,
+      "to": [
+        "per_file.story",
+        "rows.files"
+      ]
+    },
+    {
+      "port": "go_out",
+      "name": "Summarize all",
+      "type": "boolean",
+      "to": [
+        "per_file.◆"
+      ]
+    }
+  ]
+}

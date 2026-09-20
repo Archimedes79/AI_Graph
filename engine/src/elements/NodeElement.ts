@@ -2,7 +2,7 @@
 
 import type { Graph, GraphNode, NodeType, Port } from '../graph.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
-import type { Schema } from '../execution/interface.ts';
+import { readInterface, type Schema } from '../execution/interface.ts';
 import type { Problem } from '../execution/wiring.ts';
 import { Element } from './Element.ts';
 import type { Runtime } from './Runtime.ts';
@@ -190,8 +190,10 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    * `execution/interface.ts`. None by default -- a model's answer is described
    * to the model instead (an AI node's `output.md`), not checked afterwards.
    */
-  outputInterface(_node: GraphNode): Schema | undefined {
-    return undefined;
+  outputInterface(node: GraphNode): Schema | undefined {
+    // Kept by whichever element says it keeps one (`output.schema.json` among
+    // its `texts`): set from a run, then every run is checked against it.
+    return this.texts(node).some((text) => text.field === 'output_schema') ? readInterface(node.config.output_schema) : undefined;
   }
 
   /** Run once, for inputs already collected from the wires. */

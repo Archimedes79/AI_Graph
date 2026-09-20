@@ -1,0 +1,66 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "reader",
+  "type": "code",
+  "label": "Read file",
+  "about": "Reads the chosen file and says what it is",
+  "inputs": [
+    {
+      "port": "file",
+      "name": "File",
+      "type": "file_path",
+      "description": "The chosen file; arrives as its content",
+      "from": [
+        "page.file_out"
+      ]
+    },
+    {
+      "port": "path",
+      "name": "Path",
+      "type": "text",
+      "description": "The same file's path, for its name",
+      "from": [
+        "page.file_out"
+      ]
+    }
+  ],
+  "gate": [
+    "page.go_out"
+  ],
+  "outputs": [
+    {
+      "port": "text",
+      "name": "Text",
+      "type": "text",
+      "description": "The file's content",
+      "to": [
+        "summarizer.text",
+        "page.content_in"
+      ]
+    },
+    {
+      "port": "info",
+      "name": "Info",
+      "type": "text",
+      "description": "One line about the file",
+      "to": [
+        "page.about_in"
+      ]
+    }
+  ],
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string"
+      },
+      "info": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "text",
+      "info"
+    ]
+  }
+}

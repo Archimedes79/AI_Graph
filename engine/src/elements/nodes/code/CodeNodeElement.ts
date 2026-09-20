@@ -6,7 +6,6 @@ import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
-import { readInterface, type Schema } from '../../../execution/interface.ts';
 
 /** What a code node stores. Its own fields, and no one else's. */
 const CODE_FIELDS: LogicFields = { body: 'code', prompt: 'code_prompt' };
@@ -45,11 +44,6 @@ export class CodeNodeElement extends NodeElement<CodeConfig> {
     return {
       code: String(c.code ?? ''),
     };
-  }
-
-  /** Kept in `output.schema.json`: set from a run, then every run is checked against it. */
-  override outputInterface(node: GraphNode): Schema | undefined {
-    return readInterface(node.config.output_schema);
   }
 
   override logic(node: GraphNode): Logic {

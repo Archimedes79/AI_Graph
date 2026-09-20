@@ -1,0 +1,97 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "chart",
+  "type": "code",
+  "label": "Draw chart",
+  "about": "Parses the CSV and draws it",
+  "inputs": [
+    {
+      "port": "csv",
+      "name": "CSV",
+      "type": "file_path",
+      "description": "The chosen file; arrives as its content",
+      "from": [
+        "page.file_out"
+      ]
+    },
+    {
+      "port": "kind",
+      "name": "Chart",
+      "type": "text",
+      "description": "Horizontal bars, Columns or Donut",
+      "from": [
+        "page.kind_out"
+      ]
+    },
+    {
+      "port": "top",
+      "name": "How many",
+      "type": "any",
+      "description": "How many rows to show",
+      "from": [
+        "page.top_out"
+      ]
+    }
+  ],
+  "gate": [
+    "page.go_out"
+  ],
+  "outputs": [
+    {
+      "port": "drawing",
+      "name": "Drawing",
+      "type": "text",
+      "description": "A finished SVG document",
+      "to": [
+        "page.plot_in"
+      ]
+    },
+    {
+      "port": "rows",
+      "name": "Rows",
+      "type": "json",
+      "description": "The plotted rows, for a table",
+      "to": [
+        "page.table_in"
+      ]
+    }
+  ],
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "drawing": {
+        "type": "string"
+      },
+      "rows": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "#": {
+              "type": "integer"
+            },
+            "Country": {
+              "type": "string"
+            },
+            "Population": {
+              "type": "string"
+            },
+            "Share of all": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "#",
+            "Country",
+            "Population",
+            "Share of all"
+          ]
+        }
+      }
+    },
+    "required": [
+      "drawing",
+      "rows"
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "adversarial",
+  "type": "ai",
+  "label": "Adversarial",
+  "about": "Adversarial reviewer: to argue against the paper as a hostile but fair referee would.",
+  "inputs": [
+    {
+      "port": "paper",
+      "name": "Paper",
+      "type": "text",
+      "description": "The manuscript as text",
+      "from": [
+        "read.text"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "output",
+      "name": "Findings",
+      "type": "text",
+      "description": "One finding per line",
+      "to": [
+        "judge.adversarial",
+        "page.adversarial_in"
+      ]
+    }
+  ]
+}

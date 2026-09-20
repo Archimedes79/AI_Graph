@@ -1,0 +1,61 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "page",
+  "type": "gui",
+  "label": "Plotter",
+  "about": "The page this tool shows",
+  "inputs": [
+    {
+      "port": "plot_in",
+      "name": "plot",
+      "type": "any",
+      "list": true,
+      "from": [
+        "chart.drawing"
+      ]
+    },
+    {
+      "port": "table_in",
+      "name": "The rows plotted",
+      "type": "any",
+      "list": true,
+      "from": [
+        "chart.rows"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "file_out",
+      "name": "CSV file",
+      "type": "file_path",
+      "to": [
+        "chart.csv"
+      ]
+    },
+    {
+      "port": "kind_out",
+      "name": "Chart",
+      "type": "text",
+      "to": [
+        "chart.kind"
+      ]
+    },
+    {
+      "port": "top_out",
+      "name": "How many",
+      "type": "number",
+      "to": [
+        "chart.top"
+      ]
+    },
+    {
+      "port": "go_out",
+      "name": "Plot",
+      "type": "boolean",
+      "to": [
+        "chart.◆"
+      ]
+    }
+  ]
+}

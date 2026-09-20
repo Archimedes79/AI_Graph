@@ -33,6 +33,9 @@ const AI_TEXTS: readonly TextFile[] = [
   // What the model is told its answer must look like.
   { field: 'output_format_prompt', file: 'output.md' },
   { field: 'output_example', file: 'output.example.md' },
+  // What came out of a run, kept: every later run is held to it. Worth having once
+  // `run.js` returns more than the one answer.
+  { field: 'output_schema', file: 'output.schema.json', json: true },
   // Optional: inputs, and what the answer must meet. See `execution/examples.ts`.
   { field: 'examples', file: 'examples.md' },
 ];

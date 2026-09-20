@@ -1,0 +1,65 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "judge",
+  "type": "ai",
+  "label": "Judge",
+  "about": "Merges the five reviews into one ranked list and a recommendation",
+  "inputs": [
+    {
+      "port": "scientific",
+      "name": "Scientific",
+      "type": "text",
+      "description": "The scientific reviewer's findings",
+      "from": [
+        "scientific.output"
+      ]
+    },
+    {
+      "port": "adversarial",
+      "name": "Adversarial",
+      "type": "text",
+      "description": "The adversarial reviewer's findings",
+      "from": [
+        "adversarial.output"
+      ]
+    },
+    {
+      "port": "claims",
+      "name": "Evidence & claims",
+      "type": "text",
+      "description": "The evidence & claims reviewer's findings",
+      "from": [
+        "claims.output"
+      ]
+    },
+    {
+      "port": "references",
+      "name": "References",
+      "type": "text",
+      "description": "The references reviewer's findings",
+      "from": [
+        "references.output"
+      ]
+    },
+    {
+      "port": "figures",
+      "name": "Figures & tables",
+      "type": "text",
+      "description": "The figures & tables reviewer's findings",
+      "from": [
+        "figures.output"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "output",
+      "name": "Advice",
+      "type": "text",
+      "description": "The consolidated review",
+      "to": [
+        "page.verdict_in"
+      ]
+    }
+  ]
+}

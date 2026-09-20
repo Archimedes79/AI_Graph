@@ -36,6 +36,7 @@ import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry, NODES, WIDGETS } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { readLegacyNodeFiles } from './legacy.ts';
+import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 
 export const GRAPH_FILE = 'graph.json';
 export const LAYOUT_FILE = 'layout.json';
@@ -399,6 +400,13 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   }
 
   const files = new Map<string, string | null>();
+  // Before the writing is taken out of the nodes: a node's interface quotes the
+  // output schema it keeps. Every node gets one, so every node has a folder
+  // that says what goes in and what comes out.
+  for (const node of copy.nodes) {
+    const schema = registry.node(node.node_type)?.outputInterface(node);
+    files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(copy, node, schema), true));
+  }
   for (const text of projectTexts(copy)) {
     const written = text.holder[text.field];
     delete text.holder[text.field];
@@ -441,6 +449,8 @@ async function refuseIfChangedOutside(plans: Plan[]): Promise<void> {
   const root = plans[plans.length - 1].folder;
   for (const plan of plans) {
     for (const [path, content] of plan.files) {
+      // Rendered, not kept: whatever was done to it outside is simply replaced.
+      if (basename(path) === INTERFACE_FILE) continue;
       const known = seen.get(path);
       const now = await signature(path);
       if (known === undefined || known === now || now === ABSENT) continue;
@@ -471,7 +481,7 @@ async function commit(plan: Plan, guard?: Guard): Promise<void> {
   // The two documents count as files a save may tidy away, because under
   // `nodes/` they can only be a subgraph's -- and the folder of a subgraph
   // node that is still there is protected by `plan.nested`.
-  const names = new Set([...textFileNames(), GRAPH_FILE, LAYOUT_FILE]);
+  const names = new Set([...textFileNames(), GRAPH_FILE, LAYOUT_FILE, INTERFACE_FILE]);
   await tidy(join(plan.folder, NODES_DIR), new Set(plan.files.keys()), names, plan.nested);
 
   await mkdir(plan.folder, { recursive: true });

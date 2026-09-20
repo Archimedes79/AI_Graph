@@ -1,0 +1,34 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "per_file",
+  "type": "ai",
+  "label": "Each file",
+  "about": "Summarize one story in exactly two sentences.",
+  "inputs": [
+    {
+      "port": "story",
+      "name": "Story",
+      "type": "file_path",
+      "list": true,
+      "description": "One file per run; arrives as its content",
+      "from": [
+        "page.folder_out"
+      ]
+    }
+  ],
+  "gate": [
+    "page.go_out"
+  ],
+  "outputs": [
+    {
+      "port": "output",
+      "name": "Output",
+      "type": "text",
+      "description": "What the model answered",
+      "to": [
+        "rows.summaries",
+        "overall.summaries"
+      ]
+    }
+  ]
+}
