@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGraphStore } from '@/store/graphStore';
 import { GuiSurfacePage } from '@/page/GuiPage';
+import { useDeliveredRun } from '@/page/useDeliveredRun';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import RequirementsDialog from '@/ui/RequirementsDialog';
+import DeliveredHeader from '@/page/DeliveredHeader';
 import RuntimeAISettings from './RuntimeAISettings';
-import { call, type Requirement, type RunTrigger, type ScheduleState } from '@/api/client';
+import { call, type ScheduleState } from '@/api/client';
 import { errorText } from '@/api/errorText';
-import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
 import { NODE_UIS } from '@/elements/registry';
-import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
+import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
 
 /**
  * The deployed graph's front-end.
@@ -25,21 +26,16 @@ import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, SURFACE,
  */
 export default function RuntimeApp() {
   const loadGraph = useGraphStore((s) => s.loadGraph);
-  const exportGraph = useGraphStore((s) => s.exportGraph);
-  const updateNode = useGraphStore((s) => s.updateNode);
   const rfNodes = useGraphStore((s) => s.rfNodes);
   const metadata = useGraphStore((s) => s.metadata);
-  const isExecuting = useGraphStore((s) => s.isExecuting);
   // A deployed tool looks like the thing that was designed, scheme included.
   useSchemeOnRoot(metadata.gui_scheme);
   const executionResult = useGraphStore((s) => s.executionResult);
-  const runGraph = useGraphStore((s) => s.runGraph);
   const setExecutionResult = useGraphStore((s) => s.setExecutionResult);
 
   const [loadError, setLoadError] = useState('');
   const [ready, setReady] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [pendingRequirements, setPendingRequirements] = useState<Requirement[] | null>(null);
 
   useEffect(() => {
     call('graph')
@@ -52,28 +48,10 @@ export default function RuntimeApp() {
 
   // Anything the graph still needs before it can run (a file to read, a place
   // to write) is asked for in the same window the editor uses -- the deployed
-  // equivalent of the CLI's stdin prompts, but clickable.
-  //
-  // One path for all three ways a run starts -- ▶ Run, the tool's own triggers,
-  // and a block on the page -- because what has to happen first is the same
-  // for each of them. A page event brings the port it fired on, and the run is
-  // then only what that port is wired to.
-  const pendingTrigger = useRef<RunTrigger | null>(null);
-  const handleRun = async (trigger: RunTrigger | null = null) => {
-    const graph = exportGraph();
-    try {
-      const requirements = await call('requirements', graph);
-      if (requirements.length > 0) {
-        pendingTrigger.current = trigger;
-        setPendingRequirements(requirements);
-        return;
-      }
-    } catch {
-      // Requirements are an optimisation; if the check fails, just run and let
-      // the engine report a missing value properly.
-    }
-    await runGraph(graph, trigger);
-  };
+  // equivalent of the CLI's stdin prompts, but clickable. One path for both
+  // ways a run starts here, ▶ Run and a block on the page, and the same one
+  // the editor's preview uses: see `useDeliveredRun`.
+  const delivered = useDeliveredRun();
 
   // The graph's own triggers -- when the tool starts, and on its clock -- run in
   // the server, not here: a page is a window, and a window is not always open.
@@ -105,90 +83,36 @@ export default function RuntimeApp() {
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [ready, setExecutionResult]);
 
-  const handleRequirementsSubmit = async (values: Record<string, string>) => {
-    const graph = exportGraph();
-    for (const requirement of pendingRequirements ?? []) {
-      const key = requirement.widget_id ? `${requirement.node_id}::${requirement.widget_id}` : requirement.node_id;
-      const value = values[key];
-      if (value === undefined) continue;
-      const node = graph.nodes.find((n) => n.id === requirement.node_id);
-      if (!node) continue;
-      if (requirement.widget_id) {
-        const widget = node.config.gui_widgets.find((w) => w.id === requirement.widget_id);
-        if (!widget) continue;
-        widget.value = value;
-        Object.assign(node, syncGuiNodePorts(node));
-      } else {
-        node.config.value = value;
-      }
-      // Write the answer back into the store, not just into the copy about to
-      // run -- same rule the editor's toolbar follows. Without it an operator
-      // running the same tool daily retypes the same paths on every single run.
-      updateNode(node.id, { config: node.config });
-    }
-    setPendingRequirements(null);
-    const trigger = pendingTrigger.current;
-    pendingTrigger.current = null;
-    await runGraph(graph, trigger);
-  };
-
-  const status = executionResult?.status;
-  const statusLabel = isExecuting ? '⏳ Running…' : status === 'success' ? '✅ Done' : status === 'error' ? '❌ Failed' : '';
   // A backend error can be several lines long; it belongs in the body, not
   // squeezed into a header span next to the buttons.
-  const runError = status === 'error' ? executionResult?.error : '';
+  const runError = executionResult?.status === 'error' ? executionResult.error : '';
   const hasWidgets = rfNodes.some(
     (n) => NODE_UIS[n.data.graphNode.node_type]?.hasRuntimeWindow ?? false,
   );
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: SUNKEN }}>
-      <header
-        className="flex items-center gap-3 px-4 py-2 shrink-0"
-        style={{ background: SURFACE, borderBottom: `1px solid ${LINE}` }}
-      >
-        <span className="text-sm font-semibold" style={{ color: TEXT }}>
-          {metadata.name || 'AI-Graph'}
-        </span>
-        {metadata.description && (
-          <span className="text-xs" style={{ color: DIM }}>{metadata.description}</span>
+      <DeliveredHeader
+        onRun={() => { void delivered.run(); }}
+        ready={ready}
+        tools={(
+          <button
+            onClick={() => setShowSettings(true)}
+            className="px-3 py-1.5 text-xs rounded-lg shrink-0"
+            style={NEUTRAL_BUTTON}
+            title="Point this tool at a different AI"
+          >
+            ⚙ AI Settings
+          </button>
         )}
-
-        <div className="flex-1" />
-
-        <button
-          onClick={() => setShowSettings(true)}
-          className="px-3 py-1.5 text-xs rounded-lg"
-          style={NEUTRAL_BUTTON}
-          title="Point this tool at a different AI"
-        >
-          ⚙ AI Settings
-        </button>
-        <button
-          onClick={() => handleRun()}
-          disabled={!ready || isExecuting}
-          className="px-4 py-1.5 text-xs rounded-lg font-semibold"
-          style={{
-            background: !ready || isExecuting ? '#374151' : ACCENT,
-            color: 'white',
-            opacity: !ready || isExecuting ? 0.7 : 1,
-          }}
-        >
-          {isExecuting ? '⏳ Running…' : '▶ Run'}
-        </button>
-        {schedule?.scheduled && (
+        note={schedule?.scheduled && (
           <span className="text-xs whitespace-nowrap" style={{ color: DIM }} title="This tool runs by itself; the clock is in the server, so it keeps running with this page closed.">
             {schedule.running ? '⏱ running…' : schedule.next_at
               ? `⏱ next ${new Date(schedule.next_at).toLocaleTimeString()}`
               : schedule.finished_at ? `⏱ ran ${new Date(schedule.finished_at).toLocaleTimeString()}` : '⏱'}
           </span>
         )}
-        {statusLabel && (
-          <span className="text-xs font-medium whitespace-nowrap" style={{ color: status === 'error' ? DANGER_TEXT : MUTED }}>
-            {statusLabel}
-          </span>
-        )}
-      </header>
+      />
 
       <div className="flex-1 relative overflow-auto">
         {loadError && (
@@ -224,11 +148,11 @@ export default function RuntimeApp() {
           </div>
         )}
 
-        <GuiSurfacePage onRun={(trigger) => { void handleRun(trigger); }} />
+        <GuiSurfacePage onRun={(trigger) => { void delivered.run(trigger); }} />
         <RequirementsDialog
-          requirements={pendingRequirements}
-          onSubmit={handleRequirementsSubmit}
-          onCancel={() => setPendingRequirements(null)}
+          requirements={delivered.requirements}
+          onSubmit={delivered.submit}
+          onCancel={delivered.cancel}
         />
       </div>
 

@@ -58,6 +58,13 @@ There are two, independent kinds of "deploy" in AI-Graph.
 
 ## Deploying a graph
 
+Before any of it: **🚀 Deploy → Open as a tool** opens the graph you are editing as the
+delivered page, in a window of its own — same entry point (`runtime.html`), same routes,
+no editor around it. It answers "what have I actually built" without packing a zip
+first. It is not a deployment: nothing is written, and the window is served by the editor
+you are sitting in. (▶ Run opens the same page in the Preview tab, attached to the
+document, so a run there still lights up the graph canvas.)
+
 From the toolbar, **🚀 Deploy → Download Bundle** gives you a zip holding the vendored
 engine, your graph as `graph.json`, and a `run.sh` / `run.cmd` that starts it. Nothing in
 it is generated: the engine is a verbatim copy of the one the graph was built and tested
@@ -74,7 +81,10 @@ go to stderr, so `./run.sh | jq` works. `--every 5m` schedules it, exactly as ab
 editor has a built editor (`cd editor && npm run build`), the bundle also carries the
 page and serves it: the file pickers, text windows and plots the graph was designed with,
 rendered by the very same components the editor used, copied rather than rebuilt. It
-listens on localhost only. Without a built editor the graph still deploys, just
+listens on localhost only, on port 8000 or the next free one — a tool someone was handed
+must not die because that machine already has something on 8000, which is what it used
+to do, with an unhandled `EADDRINUSE` where the window should have been. The address it
+settled on is printed and opened. Without a built editor the graph still deploys, just
 headless, and the bundle's README says so.
 
 The recipient needs Node, and nothing else — no AI-Graph, no Python, no install step.

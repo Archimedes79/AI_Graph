@@ -3,6 +3,8 @@ import {
   ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2, Wand2,
 } from 'lucide-react';
 import ToolbarButton, { ToolbarSeparator } from '@/ui/ToolbarButton';
+import { NODE_UIS } from '@/elements/registry';
+import { widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
 import { call, downloadBundle, type AICall, type Requirement } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -48,11 +50,19 @@ interface ToolbarProps {
    * places to fill in one field, and the one you were not looking at.
    */
   onShowInterface: () => void;
+  /**
+   * Whether that page is what is on screen right now.
+   *
+   * ▶ Run means "start this", and for a graph with a page starting it is
+   * opening the page. Once it is open there is nothing left to open, so the
+   * same button is the one in the page's own header.
+   */
+  interfaceShown: boolean;
 }
 
 export default function Toolbar({
   onNewGraph, onSave, onSaveAs, onReloadProject, onLoad, onInjectJson, onOpenSettings, confirmDiscard,
-  currentFilePath, saveStatus, onShowInterface,
+  currentFilePath, saveStatus, onShowInterface, interfaceShown,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
   const subgraphStack = useGraphStore((s) => s.subgraphStack);
@@ -95,6 +105,8 @@ export default function Toolbar({
   const [pendingRequirements, setPendingRequirements] = useState<Requirement[] | null>(null);
   const [pendingGraph, setPendingGraph] = useState<Graph | null>(null);
 
+  const [openingTool, setOpeningTool] = useState('');
+
   const [showAiGraph, setShowAiGraph] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -104,7 +116,32 @@ export default function Toolbar({
   // minutes of a spinning button with nothing behind it.
   const [aiCalls, setAiCalls] = useState<AICall[]>([]);
 
+  /** Whether this tool has a page at all: a window to open, or only ▶ Run. */
+  const pageBlocks = rfNodes
+    .map((n) => n.data.graphNode)
+    .filter((node) => NODE_UIS[node.node_type]?.hasRuntimeWindow ?? false)
+    .flatMap((node) => node.config.gui_widgets);
+  const hasPage = pageBlocks.length > 0;
+  /** Whether that page has anything to *use* — a button, a chat, a field told to fire. */
+  const hasEvent = pageBlocks.some(widgetFiresRun);
+
   const handleRun = async () => {
+    // A graph with a page is an application, and starting an application is
+    // opening its window -- not pressing the button its user would have
+    // pressed, on whatever values happen to be on the page.
+    //
+    // So Run shows the page. If there is something on it to use, that is the
+    // whole of it: the tool now sits there waiting, which is what it does. If
+    // there is nothing to use, ▶ Run *is* the tool's only interaction -- the
+    // delivered tool says so in as many words -- and the run goes ahead.
+    //
+    // Once the page is up, this button is the one in its header: the same run,
+    // asked for from the other side of the tab strip.
+    if (hasPage && !interfaceShown) {
+      onShowInterface();
+      if (hasEvent) return;
+    }
+
     const graph = exportGraph();
     try {
       const requirements = await call('requirements', graph);
@@ -112,9 +149,11 @@ export default function Toolbar({
       // A requirement that belongs to a block is one the *page* asks for, and
       // the page is a better place to answer it than a dialog: it has the
       // label, the Browse button and the rest of the form around it. So show
-      // the page instead of asking, and let the next Run go through.
+      // the page instead of asking, and let the next Run go through. Already
+      // looking at the page, that would be a button that does nothing, and the
+      // dialog below asks instead.
       const onThePage = requirements.filter((r) => r.widget_id);
-      if (onThePage.length > 0) {
+      if (onThePage.length > 0 && !interfaceShown) {
         onShowInterface();
         return;
       }
@@ -131,6 +170,34 @@ export default function Toolbar({
       // If the requirements check itself fails, fall back to running directly.
     }
     await runGraph(graph);
+  };
+
+  /**
+   * The tool as it is delivered, in a window of its own.
+   *
+   * ▶ Run runs every node, now, from the top, whether or not the page asked
+   * for it -- which is what you want while building and is not what the thing
+   * you are building does. What a tool *is* -- a page that sits there until
+   * someone uses it, and then runs what that use is wired to -- was until now
+   * only reachable by bundling it and opening the zip somewhere else.
+   *
+   * So the graph is handed to the server and `runtime.html` is opened against
+   * it: the same page, the same entry point and the same routes a bundle
+   * serves, in a window with no editor in it. Nothing is written to disk, and
+   * the window keeps the graph it was given until it is opened again — which
+   * is what a delivered tool does.
+   */
+  const openAsTool = async () => {
+    setOpeningTool('Opening…');
+    try {
+      await call('holdGraph', useGraphStore.getState().rootGraph());
+      // Named, so pressing it again reloads the tool's own window instead of
+      // leaving a trail of them.
+      const opened = window.open('runtime.html', 'ai-graph-tool');
+      setOpeningTool(opened ? '' : 'The browser blocked the window. Allow pop-ups for this page.');
+    } catch (error) {
+      setOpeningTool(errorText(error, 'The tool could not be opened.'));
+    }
   };
 
   const handlePromptSubmit = (values: Record<string, string>) => {
@@ -400,13 +467,20 @@ export default function Toolbar({
         ) : (
           <button
             onClick={handleRun}
-            title="Run this graph"
+            title={!hasPage ? 'Run this graph'
+              : interfaceShown ? 'Run this tool on what is on the page now'
+                : hasEvent ? 'Start this tool: show its page, and let it wait for what its user does'
+                  : 'Start this tool: show its page and run it — there is nothing on it to press'}
             className="h-8 px-3.5 rounded-md text-xs font-semibold flex items-center gap-1.5"
             style={{ background: ACCENT, color: 'white' }}
           >
             <Play size={14} strokeWidth={2.5} aria-hidden="true" />
             Run
           </button>
+        )}
+
+        {openingTool && openingTool !== 'Opening…' && (
+          <span className="text-xs" style={{ color: DANGER_TEXT }}>{openingTool}</span>
         )}
 
         <ToolbarSeparator />
@@ -442,9 +516,25 @@ export default function Toolbar({
           className="fixed z-50"
           style={{ top: 56, right: 16, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 8, minWidth: 200, boxShadow: '0 8px 32px var(--ui-scrim, rgba(0,0,0,0.5))' }}
         >
+          {/* Both ways of handing this over, in the order you would use them:
+              look at it detached, then pack it. ▶ Run opens the same page in
+              the Preview tab, attached to what you are building; this opens it
+              in a window with no editor anywhere near it, which is the last
+              look before the zip. */}
+          {hasPage && (
+            <button
+              className="w-full text-left px-4 py-3 text-sm hover-raise transition-colors"
+              style={{ color: TEXT }}
+              title="A window of its own, served exactly as a bundle serves it. Nothing is written to disk."
+              onClick={() => { setShowDeploy(false); void openAsTool(); }}
+              disabled={openingTool === 'Opening…'}
+            >
+              ⧉ Open as a tool (new window)
+            </button>
+          )}
           <button
-            className="w-full text-left px-4 py-3 text-sm hover-raise transition-colors"
-            style={{ color: TEXT }}
+            className={`w-full text-left px-4 py-3 text-sm hover-raise transition-colors${hasPage ? ' border-t' : ''}`}
+            style={{ color: TEXT, borderColor: LINE }}
             onClick={handleDownloadBundle}
           >
             📦 Download Bundle (zip)

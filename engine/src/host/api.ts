@@ -260,6 +260,14 @@ export const API = {
 
   /** The graph as a deployable zip. */
   bundle: route<Graph, Blob>('POST', '/api/deploy/bundle', 'editor'),
+  /**
+   * Hand this server the graph to serve as a tool, so `runtime.html` can be
+   * opened against it — the deployed page, in its own window, without zipping
+   * anything first. The editor posts its graph with every run; this is the one
+   * case where the server has to keep a copy, because the window that asks for
+   * it is not the editor and has no graph of its own.
+   */
+  holdGraph: route<Graph, { ok: true }>('POST', '/api/runtime/hold', 'editor'),
 
   aiSettings: route<void, SettingsStatus>('GET', '/api/ai/settings', 'editor'),
   saveAiSettings: route<SettingsPatch, SettingsStatus>('POST', '/api/ai/settings', 'editor'),
