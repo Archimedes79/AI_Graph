@@ -167,7 +167,6 @@ engine/src                               editor/src
   authoring/         how a body is         authoring/          writing a body: ✨ Generate, Try it,
     generation.ts    written, where it       AuthoredBodyEditor  the live transcript, the page-wide
     logic.ts         is kept, who runs it    TryItPanel …        sweep (graphSweep.ts)
-    describe.ts
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
     executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor
     triggers.ts      what starts a run     page/               a gui node's page: GuiPage (drawn by
