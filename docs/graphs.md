@@ -668,19 +668,45 @@ for a working file → AI → text window graph, and
 
 ### A chart draws itself
 
-`plot_window` is the one block whose body the **page** runs, not a run:
+**A node says what to plot; the chart draws it.** That line is the whole design, and it
+is not a preference: a node runs when the *graph* runs, and a window changes size when
+someone *drags* it. The two moments have nothing to do with each other, so a node cannot
+know how big the chart it feeds will be. Send it a **figure** — ordinary data — and the
+block lays it out at the size it really is, in the colours of the page:
+
+```json
+{ "kind": "bars" | "columns" | "line" | "donut", "title": "…",
+  "points": [{ "label": "India", "value": 1450000000 }] }
+```
+
+A bare list of numbers or of `{label, value}` is the same thing with the two decisions
+left out. Axes, gridlines, category and value labels, a legend and the total are drawn
+for you, and because `kind` is a *value* it can come down a wire — a dropdown on the page
+switches a chart between bars and a donut with no code anywhere. `bars` are horizontal
+and are the right choice when the categories are names, since a name reads along its bar
+instead of being cropped under a column. See
+[examples/population_plotter](../examples/population_plotter/), where the code node
+parses a CSV and writes no SVG at all.
+
+For anything those four shapes cannot do, `plot_window` is the one block whose body the
+**page** runs, not a run:
 
 ```js
 function draw(data, window) { … }   // window: { width, height, scheme, dark }
 ```
 
-It returns what to show — a list of numbers, a list of `{label, value}`, or a string of
-SVG — and it is called again whenever the data, the block's size or the page's colour
-scheme changes. So a chart is laid out for the pixels it actually has, a resize or a
-change of scheme redraws it with **no run at all**, and `data` being `null` before
-anything has arrived is the same function rather than a state the app owns. Everything a
-chart needs to know it is now told; the fixed frame and the "the scheme may change after
-you are done" caveat existed only because a body running on the server could not be.
+It returns a figure, a list of points, or a string of SVG, and it is called again
+whenever the data, the block's size or the page's colour scheme changes. So a chart is
+laid out for the pixels it actually has, a resize or a change of scheme redraws it with
+**no run at all**, and `data` being `null` before anything has arrived is the same
+function rather than a state the app owns. Everything a chart needs to know it is now
+told; the fixed frame and the "the scheme may change after you are done" caveat existed
+only because a body running on the server could not be.
+
+There is no inner coordinate space left anywhere: the app draws in the block's own
+pixels, exactly as a body is told to. A drawing built for a guessed 720×340 and stretched
+into a block measured at 1084×470 — which is what the plotting example used to do — puts
+its 11px labels on screen at 15px and wastes the difference as letterbox.
 
 It runs in a **worker**: no DOM, no network, no modules — data in, points or a string of
 SVG out. A graph travels, and a body that draws a bar chart has no business with the

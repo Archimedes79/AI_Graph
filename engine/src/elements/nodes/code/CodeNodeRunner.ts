@@ -76,9 +76,33 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
 
   /** Written against the node's own ports: `inputs`/`outputs` are left unset,
    *  which means "whatever this node is actually wired as". */
+  /**
+   * The one thing a node must be told about drawing.
+   *
+   * A node runs when the *graph* runs; a window changes size when someone
+   * *drags* it. The two moments have nothing to do with each other, so a node
+   * cannot know how big the chart it is feeding will be -- and a node asked to
+   * "draw a chart" writes SVG against a guessed width and height, which is
+   * then scaled into whatever the block really is. The flagship plotting
+   * example did exactly this: 175 lines of SVG built for 720x340, stretched
+   * into a block measured at 1084x470.
+   *
+   * So the contract says where the line is. A node produces what to show; the
+   * block it feeds decides how that looks, because the block is the only one
+   * of the two that is there when the window changes.
+   */
   override generation(): Generation {
     return {
       kind: 'code', fields: CODE_FIELDS,
+      contract:
+        'If this node feeds a chart block, return the data to plot, NOT a drawing. A '
+        + 'chart takes either a list of points -- numbers, or {"label": string, "value": '
+        + 'number} -- or an object {"kind": "bars"|"columns"|"line"|"donut", "title": '
+        + 'string, "points": [...]}, and draws it at the real size of the block, in the '
+        + 'colours of the page. Do not build SVG here: this code runs when the graph '
+        + 'runs, so it cannot know how large the block is or which colour scheme it is '
+        + 'in, and a drawing made for a guessed size is stretched to fit. The same goes '
+        + 'for an image block: return a path or a URL, not pixels.',
       guard: 'Please add a code generation prompt first.',
       success: '✅ Code generated!',
     };

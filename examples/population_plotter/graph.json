@@ -2,7 +2,7 @@
   "metadata": {
     "name": "Population plotter",
     "version": "1.0.0",
-    "description": "Plot a CSV of names and numbers — here, the population of countries — as sorted bars, columns or a donut, with the rows beside it. No model involved: one code node draws the chart as SVG. Every control on the page redraws it at once. Paths are relative to the working directory, so run this from the repository root.",
+    "description": "Plot a CSV of names and numbers — here, the population of countries — as sorted bars, columns, a line or a donut, with the rows beside it. No model involved, and no drawing code: the code node works out what to plot and the chart block draws it, at the size the block really is and in the colours of the page. Every control redraws it at once, so there is no button. Paths are relative to the working directory, so run this from the repository root.",
     "author": "AI-Graph",
     "tags": [
       "example",
@@ -70,15 +70,6 @@
           "multi": false,
           "required": false,
           "description": ""
-        },
-        {
-          "id": "go_out",
-          "name": "Plot",
-          "kind": "output",
-          "data_type": "boolean",
-          "multi": false,
-          "required": false,
-          "description": ""
         }
       ],
       "config": {
@@ -100,7 +91,7 @@
             "label": "",
             "mode": "caption",
             "tone": "plain",
-            "value": "A CSV with names in the first column and numbers in another. Change anything and the chart redraws.",
+            "value": "A CSV with names in the first column and numbers in another. Change anything and the chart redraws — there is nothing to press.",
             "w": 16
           },
           {
@@ -113,18 +104,18 @@
             "run_on_change": true,
             "tone": "sunken",
             "value": "examples/data/population.csv",
-            "w": 7
+            "w": 8
           },
           {
             "h": 2,
             "id": "kind",
             "kind": "select",
             "label": "Chart",
-            "options": "Horizontal bars\nColumns\nDonut",
+            "options": "Horizontal bars\nColumns\nLine\nDonut",
             "run_on_change": true,
             "tone": "sunken",
             "value": "Horizontal bars",
-            "w": 3
+            "w": 4
           },
           {
             "h": 2,
@@ -140,14 +131,6 @@
             "w": 4
           },
           {
-            "h": 2,
-            "id": "go",
-            "kind": "button",
-            "label": "Plot",
-            "tone": "plain",
-            "w": 2
-          },
-          {
             "h": 7,
             "id": "plot",
             "kind": "plot_window",
@@ -160,7 +143,7 @@
             "id": "table",
             "kind": "table",
             "label": "The rows plotted",
-            "tone": "plain",
+            "tone": "raised",
             "w": 16
           }
         ]
@@ -169,8 +152,8 @@
     {
       "id": "chart",
       "node_type": "code",
-      "label": "Draw chart",
-      "description": "Parses the CSV and draws it",
+      "label": "What to plot",
+      "description": "Reads the CSV and says what the chart should show",
       "inputs": [
         {
           "id": "csv",
@@ -188,7 +171,7 @@
           "data_type": "text",
           "multi": false,
           "required": false,
-          "description": "Horizontal bars, Columns or Donut"
+          "description": "Horizontal bars, Columns, Line or Donut"
         },
         {
           "id": "top",
@@ -202,13 +185,13 @@
       ],
       "outputs": [
         {
-          "id": "drawing",
-          "name": "Drawing",
+          "id": "figure",
+          "name": "Figure",
           "kind": "output",
-          "data_type": "text",
+          "data_type": "json",
           "multi": false,
           "required": false,
-          "description": "A finished SVG document"
+          "description": "What to plot: {kind, title, points} — the block draws it"
         },
         {
           "id": "rows",
@@ -223,7 +206,7 @@
       "config": {
         "batch_mode": "whole_list",
         "output_format": "custom",
-        "output_format_prompt": "drawing: an SVG document as a string; rows: a list of objects with the same keys",
+        "output_format_prompt": "figure: {kind: \"bars\"|\"columns\"|\"line\"|\"donut\", title: string, points: [{label, value}]}; rows: a list of objects with the same keys",
         "read_file_inputs": true
       }
     }
@@ -251,16 +234,9 @@
       "target_port_id": "top"
     },
     {
-      "id": "e4",
-      "source_node_id": "page",
-      "source_port_id": "go_out",
-      "target_node_id": "chart",
-      "target_port_id": "__run"
-    },
-    {
       "id": "e5",
       "source_node_id": "chart",
-      "source_port_id": "drawing",
+      "source_port_id": "figure",
       "target_node_id": "page",
       "target_port_id": "plot_in"
     },

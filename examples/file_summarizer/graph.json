@@ -99,7 +99,7 @@
             "label": "",
             "mode": "caption",
             "tone": "plain",
-            "value": "Choose a text file — it is read and summarized straight away. Change the length and it is summarized again.",
+            "value": "Choose a text file — it is read and summarized straight away, and again whenever you change the length. The button asks for a fresh wording of the same thing.",
             "w": 16
           },
           {
@@ -129,7 +129,7 @@
             "h": 2,
             "id": "go",
             "kind": "button",
-            "label": "Summarize",
+            "label": "Summarize again",
             "tone": "plain",
             "w": 3
           },

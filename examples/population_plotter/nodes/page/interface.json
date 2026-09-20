@@ -16,7 +16,7 @@
       "type": "any",
       "list": true,
       "from": [
-        "chart.drawing"
+        "chart.figure"
       ]
     },
     {
@@ -52,14 +52,6 @@
       "type": "number",
       "to": [
         "chart.top"
-      ]
-    },
-    {
-      "port": "go_out",
-      "name": "Plot",
-      "type": "boolean",
-      "to": [
-        "chart.◆"
       ]
     }
   ]

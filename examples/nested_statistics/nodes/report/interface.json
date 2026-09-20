@@ -3,6 +3,7 @@
   "node": "report",
   "type": "output",
   "label": "Report",
+  "about": "What came back out of the subgraph, as the run's result",
   "runs": {
     "by": "engine",
     "where": "engine/src/elements/nodes/output/OutputNodeRunner.ts › execute",
