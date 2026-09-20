@@ -18,7 +18,6 @@
 // what the page looks like and which colours follow it (see the contract in
 // `PlotWindowWidgetElement.ts`); what it does with that is its answer, not an error.
 
-import { PLOT_VIEW } from './view.ts';
 
 /** How far outside its box a coordinate may fall before it is called out: strokes and anchors overhang a little. */
 const SLACK = 0.04;
@@ -44,8 +43,9 @@ export function checkDrawing(svg: string): string[] {
 
   const box = /viewBox="\s*(-?[\d.]+)[\s,]+(-?[\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/.exec(svg);
   if (!box) {
-    problems.push(`The <svg> has no viewBox. The block is resizable, so without one the drawing is cut off or tiny: `
-      + `use viewBox="0 0 ${PLOT_VIEW.width} ${PLOT_VIEW.height}" with width="100%" height="100%".`);
+    problems.push('The <svg> has no viewBox. Without one the drawing is cut off or tiny: use '
+      + 'viewBox="0 0 W H" with the window.width and window.height you were handed, and '
+      + 'width="100%" height="100%".');
   }
 
   // The most common failure by far: a label column ("08:00", "Berlin") used as a

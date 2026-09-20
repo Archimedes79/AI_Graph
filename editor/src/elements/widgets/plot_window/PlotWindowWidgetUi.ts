@@ -16,7 +16,7 @@ export class PlotWindowWidgetUi extends TransformingDisplayUi {
   // an empty box was a finished block, which draws nothing.
   readonly transformTitle = 'Plotting code';
 
-  readonly transformHelp = 'The code must return {"value": <plot-ready data>} — a list of numbers or of {"label", "value"} objects, or an SVG drawing. It is run on every value that arrives, so answer for an empty or missing one too (an empty list, or empty axes) rather than throwing: that is the chart before anything has been computed. Leave the code empty only if what arrives is already points.';
+  readonly transformHelp = 'draw(data, window) returns what to show: a list of numbers or of {"label", "value"} objects, or a string of SVG. It runs in the page rather than in a run, so it is handed the real size of this block in pixels and the page’s colour scheme, and it is called again whenever either of them changes. `data` is null before anything has arrived, and drawing that case is the same function. Leave it empty only if what arrives is already points.';
 
   override readonly generation: ElementGeneration<GuiWidget> = {
     ...fromEngine(new PlotWindowWidgetElement().generation()),
@@ -26,7 +26,7 @@ export class PlotWindowWidgetUi extends TransformingDisplayUi {
     // "Optional" on its own was a half-truth: without it the widget is handed
     // whatever arrived, and unless that is already a list of points there is
     // nothing to draw.
-    bodyLabel: 'Plotting code — optional only if the incoming value is already points',
+    bodyLabel: 'draw(data, window) — optional only if the incoming value is already points',
     bodyHeight: 100,
   };
 

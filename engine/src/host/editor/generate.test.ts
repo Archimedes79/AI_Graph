@@ -98,7 +98,7 @@ describe('code', () => {
     expect(probed).toBe(false);
     expect(reply.probe.status).toBe('skipped');
     expect(ai.asked[0].prompt).toContain('inputs["value"]');
-    expect(ai.asked[0].prompt).toContain('Must expose run(inputs)');    // the block's own contract, first
+    expect(ai.asked[0].prompt).toContain('Must expose draw(data, window)');    // the block's own contract, first
   });
 });
 

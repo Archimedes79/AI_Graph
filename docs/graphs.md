@@ -666,14 +666,32 @@ run. See [examples/file_summarizer](../examples/file_summarizer/)
 for a working file → AI → text window graph, and
 [engine/src/execution/executor.ts](../engine/src/execution/executor.ts) for the underlying algorithm.
 
-### Plot window data transforms
+### A chart draws itself
 
-`plot_window` needs a data-transform snippet with the **same contract as a Code node**:
-`run(inputs: dict) -> dict`, receiving `{"value": <raw incoming data>}` and returning
-`{"value": <plot-ready data>}` — a list of numbers, or a list of `{x, y}` /
-`{label, value}` objects. The AI can generate this transform for you, the same way it
-generates Code node bodies — `image_view` takes the same kind of snippet, returning an
-image path instead of points.
+`plot_window` is the one block whose body the **page** runs, not a run:
+
+```js
+function draw(data, window) { … }   // window: { width, height, scheme, dark }
+```
+
+It returns what to show — a list of numbers, a list of `{label, value}`, or a string of
+SVG — and it is called again whenever the data, the block's size or the page's colour
+scheme changes. So a chart is laid out for the pixels it actually has, a resize or a
+change of scheme redraws it with **no run at all**, and `data` being `null` before
+anything has arrived is the same function rather than a state the app owns. Everything a
+chart needs to know it is now told; the fixed frame and the "the scheme may change after
+you are done" caveat existed only because a body running on the server could not be.
+
+It runs in a **worker**: no DOM, no network, no modules — data in, points or a string of
+SVG out. A graph travels, and a body that draws a bar chart has no business with the
+page's origin. A body that will not finish is given four seconds and then destroyed, and
+the block says so where the chart would be. A chart with no body draws whatever arrived.
+
+`run(inputs)` is still accepted, so every chart written before this keeps working.
+
+A **table** or an **image** is different: its transform reshapes data, has no use for the
+window, and still runs once per run where its result can be reused. Same snippet contract
+as a code node: `run(inputs) -> {"value": …}`.
 
 ### Generating whole graphs with AI
 
