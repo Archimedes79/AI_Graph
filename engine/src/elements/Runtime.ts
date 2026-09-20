@@ -6,7 +6,7 @@
 // server (`host/node.ts`), in a browser tab and inside a test with fakes.
 
 import type { ExecutionResult, Graph } from '../graph.ts';
-import type { Elements } from './NodeElement.ts';
+import type { Runners } from './NodeRunner.ts';
 
 /** Reading and writing files, wherever this engine happens to run. */
 export interface FileService {
@@ -33,7 +33,7 @@ export interface BodyContext {
 }
 
 /** Running an authored body: `run(inputs, node) -> outputs`, inputs and outputs plain JSON. */
-export interface CodeRunner {
+export interface CodeService {
   /** `signal` ends the body early: a run that was stopped must not leave one grinding on. */
   run(
     body: string,
@@ -116,13 +116,13 @@ export type ProgressEvent =
 export interface SubgraphService {
   run(graph: Graph, given: Record<string, Record<string, unknown>>): Promise<ExecutionResult>;
   /** The elements of this run, for asking about the nodes inside. */
-  elements: Elements;
+  elements: Runners;
 }
 
 /** Everything an element may reach outside itself. */
 export interface Runtime {
   files: FileService;
-  code: CodeRunner;
+  code: CodeService;
   ai: AiService;
   /** Absent where no tool server can be reached; an element that wants one says so. */
   tools?: ToolService;

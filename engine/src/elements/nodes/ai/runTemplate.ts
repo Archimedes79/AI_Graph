@@ -12,7 +12,7 @@
 // ever shipped is known here; a `run.js` that is one of them means "the
 // standard", is rewritten to the current one when the project is saved, and the
 // engine makes that one call itself rather than starting a process to make it
-// (`AiNodeElement.execute` -- and a test holds the two to the same request).
+// (`AiNodeRunner.execute` -- and a test holds the two to the same request).
 //
 // **Changed, it is the person's.** It runs where every authored body runs: a
 // separate process that may read files and has none of this machine's keys. It

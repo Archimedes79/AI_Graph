@@ -22,7 +22,7 @@
 // Everything else — what a node *does* — belongs to its element.
 
 import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeResult, NodeStatus } from '../graph.ts';
-import type { NodeElement } from '../elements/NodeElement.ts';
+import type { NodeRunner } from '../elements/NodeRunner.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
 import { readFileInputs } from './fileInputs.ts';
@@ -33,7 +33,7 @@ import { mismatches } from './interface.ts';
 import { ERROR_PORT, fatalProblems, unrunnable } from './wiring.ts';
 
 export interface Registry {
-  node(type: string): NodeElement<unknown> | undefined;
+  node(type: string): NodeRunner<unknown> | undefined;
 }
 
 /** Ids of the fewest edges that must be ignored to make the graph acyclic. */
@@ -589,7 +589,7 @@ function isNothing(value: unknown): boolean {
  * say.
  */
 function nothingToDo(
-  element: NodeElement<unknown>,
+  element: NodeRunner<unknown>,
   node: GraphNode,
   inputs: Record<string, unknown>,
   edges: GraphEdge[],
@@ -699,7 +699,7 @@ export function nodeName(node: GraphNode): string {
  * body went looking for one.
  */
 async function readInputs(
-  element: NodeElement,
+  element: NodeRunner,
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,
@@ -751,7 +751,7 @@ function failureOutputs(node: GraphNode, message: string): Record<string, unknow
  * ending the batch: one bad row out of two thousand should cost one row.
  */
 async function runNode(
-  element: NodeElement<unknown>,
+  element: NodeRunner<unknown>,
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,

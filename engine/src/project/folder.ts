@@ -5,7 +5,7 @@
 //       layout.json         where each node sits on the canvas, and its size
 //       nodes/
 //         summarize/        one folder per node that keeps any writing, by id
-//           system.md       what the element keeps in files: `Element.texts`
+//           system.md       what the element keeps in files: `ElementRunner.texts`
 //           output.md
 //         page/
 //           chart/code.js   a block of a page, one level down
@@ -34,7 +34,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry, NODES, WIDGETS } from '../elements/registry.ts';
-import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
+import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
 import { readLegacyNodeFiles } from './legacy.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 import { describeFlow, FLOW_FILE } from './flowFile.ts';

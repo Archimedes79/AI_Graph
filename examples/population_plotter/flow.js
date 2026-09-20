@@ -16,7 +16,7 @@
 //              and what a data node starts the next round with
 
 async function flow(node) {
-  // Plotter · gui · engine/src/elements/nodes/gui/GuiNodeElement.ts › execute
+  // Plotter · gui · engine/src/elements/nodes/gui/GuiNodeRunner.ts › execute
   // The page this tool shows
   // starts a round: file_out, kind_out, top_out, go_out
   const page = await node.page();

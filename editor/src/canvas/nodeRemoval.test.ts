@@ -3,7 +3,7 @@ import type { NodeChange } from 'reactflow';
 import { removalsToApply } from './nodeRemoval';
 import type { GraphNode } from '@/graph';
 import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
-import { WIDGET_UIS } from '@/elements/registry';
+import { WIDGET_BUILDERS } from '@/elements/registry';
 
 function node(id: string, blocks: number): GraphNode {
   return {
@@ -11,7 +11,7 @@ function node(id: string, blocks: number): GraphNode {
     position: { x: 0, y: 0 }, inputs: [], outputs: [],
     config: {
       ...baseNodeConfig(),
-      gui_widgets: Array.from({ length: blocks }, () => WIDGET_UIS.text.create('Block')),
+      gui_widgets: Array.from({ length: blocks }, () => WIDGET_BUILDERS.text.create('Block')),
     },
   };
 }

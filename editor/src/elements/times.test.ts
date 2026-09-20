@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest';
 
 /**
- * Build time and run time in a `Ui`, the mirror of the engine's
+ * Build time and run time in a builder, the mirror of the engine's
  * `elements/times.test.ts`.
  *
- * A `Ui` is one class per kind: what a deployed tool draws with (`View`, a few
- * flags) and what only the editor asks (the palette, `create`, panels, what
- * ✨ Generate is told). The second kind travels into a tool with the class; it
- * must never be *used* there. So the base classes say which is which under
- * three bars, and everything a tool can reach is held to the run-time names.
+ * A builder is one class per kind, and its name now says what the bars below
+ * once had to: `GuiBuilder` is build time, all of it. That was not always so --
+ * it used to also carry what a deployed tool draws with (`View`, a few flags),
+ * and the second kind travels into a tool with the class whether it is used
+ * there or not. So the base classes still say which is which under three bars,
+ * and this file checks that the run-time side of them has stayed empty.
  */
 
 const SOURCES = import.meta.glob('/src/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
@@ -35,7 +36,7 @@ function membersOf(path: string): Map<string, number> {
   return found;
 }
 
-const members = new Map([...membersOf('elements/NodeUi.ts'), ...membersOf('elements/WidgetUi.ts')]);
+const members = new Map([...membersOf('elements/NodeGuiBuilder.ts'), ...membersOf('elements/WidgetGuiBuilder.ts')]);
 const runTime = [...members].filter(([, block]) => block === 1).map(([name]) => name);
 
 function resolveSpec(fromPath: string, spec: string): string | null {
@@ -64,17 +65,17 @@ function reachableFromTheTool(): string[] {
   return [...seen];
 }
 
-describe('a Ui', () => {
+describe('a builder', () => {
   it('puts every member under one of the three bars', () => {
     expect([...members].filter(([, block]) => block < 0).map(([name]) => name)).toEqual([]);
   });
 
-  it('has no run-time members at all: a Ui is the builder, whole', () => {
+  it('has no run-time members at all: a GuiBuilder is the builder, whole', () => {
     // It once had four. Each left for a home that says what it is:
     //
     //   View, ownsValue          page/blocks.ts — what the page draws
     //   showsResultWindow        nodeKinds.ts   — what a node is, loaded and saved
-    //   clearValueAfterRun       WidgetElement  — what a run means for a block
+    //   clearValueAfterRun       WidgetRunner   — what a run means for a block
     //
     // Which is the stronger claim, and the one worth holding: not "a tool may
     // not *call* these", but "a tool never loads this class". The bars below
@@ -86,7 +87,7 @@ describe('a Ui', () => {
 });
 
 describe('a deployed tool', () => {
-  it('asks a Ui for nothing at all', () => {
+  it('asks a builder for nothing at all', () => {
     // No exception any more. There used to be one, for `store/graphStore.ts`,
     // on the grounds that the store is shared with the editor and a tool has
     // no button for adding a node or saving. Half of that was true and the
@@ -99,8 +100,8 @@ describe('a deployed tool', () => {
     // neither drawing nor building — and the store asks that instead.
     const asked: string[] = [];
     for (const path of reachableFromTheTool()) {
-      if (/Ui\.ts$/.test(path)) continue;
-      for (const match of BY_PATH.get(path)!.matchAll(/(?:NODE_UIS|WIDGET_UIS)\[[^\]]+\]\??\.(\w+)/g)) {
+      if (/GuiBuilder\.ts$/.test(path)) continue;
+      for (const match of BY_PATH.get(path)!.matchAll(/(?:NODE_BUILDERS|WIDGET_BUILDERS)\[[^\]]+\]\??\.(\w+)/g)) {
         asked.push(`${path}: ${match[1]}`);
       }
     }

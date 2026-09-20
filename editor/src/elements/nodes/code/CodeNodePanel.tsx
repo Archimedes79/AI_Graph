@@ -1,6 +1,6 @@
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import NodeTryIt from '@/authoring/NodeTryIt';
-import type { NodePanelProps } from '../../NodeUi';
+import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 export default function CodeNodePanel({
   node, generation, fields, generating, message, onGenerate,

@@ -14,14 +14,14 @@
 //              and what a data node starts the next round with
 
 async function flow(node) {
-  // Paragraph · input · engine/src/elements/nodes/input/InputNodeElement.ts › execute
+  // Paragraph · input · engine/src/elements/nodes/input/InputNodeRunner.ts › execute
   // The text to measure
   const paragraph = await node.paragraph();
 
-  // Statistics · subgraph · engine/src/elements/nodes/subgraph/SubgraphNodeElement.ts › execute
+  // Statistics · subgraph · engine/src/elements/nodes/subgraph/SubgraphNodeRunner.ts › execute
   // A graph of its own: open it to see how the counting is done
   const statistics = await node.statistics({ text: paragraph.output });
 
-  // Report · output · engine/src/elements/nodes/output/OutputNodeElement.ts › execute
+  // Report · output · engine/src/elements/nodes/output/OutputNodeRunner.ts › execute
   await node.report({ value: statistics.numbers });
 }

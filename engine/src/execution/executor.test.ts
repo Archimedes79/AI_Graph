@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
 import { collectInputs, executeGraph, memoryFeedbackEdges, topologicalLevels } from './executor.ts';
-import { NodeElement } from '../elements/NodeElement.ts';
+import { NodeRunner } from '../elements/NodeRunner.ts';
 import { type Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
 
@@ -100,7 +100,7 @@ describe('executeGraph', () => {
   });
 
   it('skips what depended on a failure instead of abandoning the run', async () => {
-    class Boom extends NodeElement {
+    class Boom extends NodeRunner {
       readonly nodeType = 'code' as const;
       config() { return {}; }
       async execute(): Promise<Record<string, unknown>> { throw new Error('no'); }
@@ -125,7 +125,7 @@ describe('executeGraph', () => {
 
   it('takes a result that is handed in, and does not run that node', async () => {
     let ran = 0;
-    class Counts extends NodeElement {
+    class Counts extends NodeRunner {
       readonly nodeType = 'code' as const;
       config() { return {}; }
       async execute(_node: GraphNode, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -292,7 +292,7 @@ describe('a node that catches its own failure', () => {
    * that costs. The error port is optional to wire -- unwired, the run simply
    * carries on, and the node still reports what went wrong.
    */
-  class Boom extends NodeElement {
+  class Boom extends NodeRunner {
     readonly nodeType = 'code' as const;
     config() { return {}; }
     async execute(): Promise<Record<string, unknown>> { throw new Error('the body blew up'); }

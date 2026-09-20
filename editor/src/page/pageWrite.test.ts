@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { routePage } from './pageWrite';
 import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
 import type { GraphNode, GuiWidget } from '@/graph';
-import { WIDGET_UIS } from '@/elements/registry';
+import { WIDGET_BUILDERS } from '@/elements/registry';
 
 function guiNode(id: string, widgets: GuiWidget[]): GraphNode {
   return {
@@ -24,7 +24,7 @@ describe('routePage', () => {
     // to no owner, and adding one -- by click or by drag -- silently did
     // nothing. Dead palette, no error, and only while the page was empty.
     const node = guiNode('gui1', []);
-    const added = WIDGET_UIS.text.create('Title', 'heading');
+    const added = WIDGET_BUILDERS.text.create('Title', 'heading');
 
     const writes = routePage([node], [], [added]);
 
@@ -34,8 +34,8 @@ describe('routePage', () => {
   });
 
   it('keeps every block on the node that already stores it', () => {
-    const a = WIDGET_UIS.text.create('A');
-    const b = WIDGET_UIS.text.create('B');
+    const a = WIDGET_BUILDERS.text.create('A');
+    const b = WIDGET_BUILDERS.text.create('B');
     const first = guiNode('gui1', [a]);
     const second = guiNode('gui2', [b]);
     const blocks = [{ node: first, widget: a }, { node: second, widget: b }];
@@ -47,12 +47,12 @@ describe('routePage', () => {
   });
 
   it('inserts a new block on the first node without moving the others', () => {
-    const a = WIDGET_UIS.text.create('A');
-    const b = WIDGET_UIS.text.create('B');
+    const a = WIDGET_BUILDERS.text.create('A');
+    const b = WIDGET_BUILDERS.text.create('B');
     const first = guiNode('gui1', [a]);
     const second = guiNode('gui2', [b]);
     const blocks = [{ node: first, widget: a }, { node: second, widget: b }];
-    const added = WIDGET_UIS.divider.create('');
+    const added = WIDGET_BUILDERS.divider.create('');
 
     const writes = routePage([first, second], blocks, [added, a, b]);
 
@@ -62,7 +62,7 @@ describe('routePage', () => {
   });
 
   it('writes the emptied node when its last block is deleted', () => {
-    const a = WIDGET_UIS.text.create('A');
+    const a = WIDGET_BUILDERS.text.create('A');
     const node = guiNode('gui1', [a]);
 
     const writes = routePage([node], [{ node, widget: a }], []);
@@ -74,6 +74,6 @@ describe('routePage', () => {
   it('drops nothing on the floor when there is no gui node at all', () => {
     // The caller creates one in this case; returning an empty list is how it
     // finds out, and is the only situation where a widget may go unwritten.
-    expect(routePage([], [], [WIDGET_UIS.text.create('A')])).toEqual([]);
+    expect(routePage([], [], [WIDGET_BUILDERS.text.create('A')])).toEqual([]);
   });
 });

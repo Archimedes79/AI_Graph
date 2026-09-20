@@ -70,7 +70,7 @@ flowchart LR
 | `Executor` | [`engine/src/execution/`](../engine/src/execution/): `executor.ts`, `triggers.ts`, `batching.ts`, `reuse.ts`, `interface.ts`, `examples.ts` | order, fan-out, memory, displays, stopping; reuses context a page event only needs; holds outputs to a kept output interface; runs a node's `examples.md` |
 | `Elements + registry` | [`engine/src/elements/`](../engine/src/elements/), and its mirror [`editor/src/elements/`](../editor/src/elements/) | one class per node type and widget kind, mirrored file for file; see [elements](#elements) |
 | `Graph document` | [`engine/src/graph.ts`](../engine/src/graph.ts), [`editor/src/graph.ts`](../editor/src/graph.ts) | the engine's types; the editor adds only the typed `NodeConfig` view |
-| `Project folder + check` | [`engine/src/project/`](../engine/src/project/): [`folder.ts`](../engine/src/project/folder.ts), [`check.ts`](../engine/src/project/check.ts), [`legacy.ts`](../engine/src/project/legacy.ts) | a graph as a folder (`graph.json`, `layout.json`, `nodes/<id>/<file>` per `Element.texts`, and a project folder of its own under a node that holds a graph), read and written for every caller; changes on disk; the one list of problems (`check`, MCP) |
+| `Project folder + check` | [`engine/src/project/`](../engine/src/project/): [`folder.ts`](../engine/src/project/folder.ts), [`check.ts`](../engine/src/project/check.ts), [`legacy.ts`](../engine/src/project/legacy.ts) | a graph as a folder (`graph.json`, `layout.json`, `nodes/<id>/<file>` per `ElementRunner.texts`, and a project folder of its own under a node that holds a graph), read and written for every caller; changes on disk; the one list of problems (`check`, MCP) |
 | `AI providers + MCP` | [`engine/src/ai/`](../engine/src/ai/) | providers, `ai-settings.json`, MCP client |
 
 The page also runs engine code directly — elements for ports and previews, the graph
@@ -81,61 +81,61 @@ built `runtime.html` ([`engine/src/cli/bundle.ts`](../engine/src/cli/bundle.ts))
 ## Elements
 
 What a node or a widget *is*, and how it looks and is edited. Two class hierarchies, one per
-side, mirrored level for level: every engine class ends in `Element`, and its editor
-counterpart swaps that for `Ui`, in the same folder. [`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts)
+side, mirrored level for level: every engine class ends in `Runner`, and its editor
+counterpart swaps that for `GuiBuilder`, in the same folder. [`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts)
 compares the two lineages class by class.
 
 ```mermaid
 flowchart TD
   subgraph engine["engine/src/elements — what it is and does"]
-    Element["Element"]
-    NodeElement["NodeElement"]
-    WidgetElement["WidgetElement"]
-    Nodes["7 × <Kind>NodeElement"]
-    Widgets["<Kind>WidgetElement · StaticWidgetElement · DisplayWidgetElement → TransformingDisplayElement"]
+    ElementRunner["ElementRunner"]
+    NodeRunner["NodeRunner"]
+    WidgetRunner["WidgetRunner"]
+    Nodes["8 × <Kind>NodeRunner"]
+    Widgets["<Kind>WidgetRunner · StaticWidgetRunner · DisplayWidgetRunner → TransformingDisplayRunner"]
   end
   subgraph editor["editor/src/elements — how it looks and is edited"]
-    Ui["Ui"]
-    NodeUi["NodeUi"]
-    WidgetUi["WidgetUi"]
-    NodeUis["7 × <Kind>NodeUi"]
-    WidgetUis["<Kind>WidgetUi · StaticWidgetUi · DisplayWidgetUi → TransformingDisplayUi"]
+    ElementGuiBuilder["ElementGuiBuilder"]
+    NodeGuiBuilder["NodeGuiBuilder"]
+    WidgetGuiBuilder["WidgetGuiBuilder"]
+    NodeBuilders["8 × <Kind>NodeGuiBuilder"]
+    WidgetBuilders["<Kind>WidgetGuiBuilder · StaticWidgetGuiBuilder · DisplayWidgetGuiBuilder → TransformingDisplayGuiBuilder"]
   end
 
-  NodeElement -- extends --> Element
-  WidgetElement -- extends --> Element
-  Nodes -- extend --> NodeElement
-  Widgets -- extend --> WidgetElement
-  NodeUi -- extends --> Ui
-  WidgetUi -- extends --> Ui
-  NodeUis -- extend --> NodeUi
-  WidgetUis -- extend --> WidgetUi
-  Element -. mirrors .- Ui
-  Nodes -. mirrors .- NodeUis
-  Widgets -. mirrors .- WidgetUis
+  NodeRunner -- extends --> ElementRunner
+  WidgetRunner -- extends --> ElementRunner
+  Nodes -- extend --> NodeRunner
+  Widgets -- extend --> WidgetRunner
+  NodeGuiBuilder -- extends --> ElementGuiBuilder
+  WidgetGuiBuilder -- extends --> ElementGuiBuilder
+  NodeBuilders -- extend --> NodeGuiBuilder
+  WidgetBuilders -- extend --> WidgetGuiBuilder
+  ElementRunner -. mirrors .- ElementGuiBuilder
+  Nodes -. mirrors .- NodeBuilders
+  Widgets -. mirrors .- WidgetBuilders
 ```
 
 | Diagram node | Path | Notes |
 |---|---|---|
-| `Element` | [`engine/src/elements/Element.ts`](../engine/src/elements/Element.ts) | `config()`, `texts()`, `logic()`, `catchesErrors()`, `runSnippet()` ┊ build time: `generation()`, `deployNeeds()`; `WhatRuns`; services in [`Runtime.ts`](../engine/src/elements/Runtime.ts) |
+| `ElementRunner` | [`engine/src/elements/ElementRunner.ts`](../engine/src/elements/ElementRunner.ts) | `config()`, `texts()`, `logic()`, `catchesErrors()`, `runSnippet()` ┊ build time: `generation()`, `deployNeeds()`; `WhatRuns`; services in [`Runtime.ts`](../engine/src/elements/Runtime.ts) |
 | `flowFile.ts` | [`engine/src/project/flowFile.ts`](../engine/src/project/flowFile.ts) | `flow.js`: a graph's wiring said as code, written beside `graph.json` on every save; never read, never run |
 | `body.ts` | [`engine/src/elements/body.ts`](../engine/src/elements/body.ts) | `runBody`: the one way an authored body runs — `run(inputs, node)`, sandboxed, with `node.llm` |
 | `times.test.ts` | [`engine/src/elements/times.test.ts`](../engine/src/elements/times.test.ts) · [`editor/…`](../editor/src/elements/times.test.ts) | build time and run time inside one class: the bars, the order, and that no run reaches a build-time member |
-| `NodeElement` | [`engine/src/elements/NodeElement.ts`](../engine/src/elements/NodeElement.ts) | `derivedPorts`, `execute`, `display`, `runtimeRequirements`, `settleMemory`, and what the executor reads ┊ build time: `whatRuns`, `problems`, `referencedPaths` |
-| `WidgetElement` | [`engine/src/elements/WidgetElement.ts`](../engine/src/elements/WidgetElement.ts) | `ports`, `execute`, `firesRun`, `settle`, `displayValue` |
-| `7 × <Kind>NodeElement` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeElement.ts`; listed in [`registry.ts`](../engine/src/elements/registry.ts) |
-| `<Kind>WidgetElement …` | [`engine/src/elements/widgets/`](../engine/src/elements/widgets/) | 12 kinds, with [`StaticWidgetElement`](../engine/src/elements/widgets/StaticWidgetElement.ts), [`DisplayWidgetElement`](../engine/src/elements/widgets/DisplayWidgetElement.ts), [`TransformingDisplayElement`](../engine/src/elements/widgets/TransformingDisplayElement.ts); listed in [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts) |
-| `Ui` | [`editor/src/elements/Ui.ts`](../editor/src/elements/Ui.ts) | `Panel` (lazy), `generation` |
-| `NodeUi` | [`editor/src/elements/NodeUi.ts`](../editor/src/elements/NodeUi.ts) | `create(id)`, `label`, `icon`, `color`, `hint`, `AdvancedPanel`, `describeOutput`; `NodePanelProps` |
-| `WidgetUi` | [`editor/src/elements/WidgetUi.ts`](../editor/src/elements/WidgetUi.ts) | `create(label, mode)`, `label`, `View`, `defaultSpan`, `defaultTone`, `runOnChangeHint`; `WidgetPanelProps` |
-| `7 × <Kind>NodeUi` | [`editor/src/elements/nodes/`](../editor/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeUi.ts` beside `<Kind>NodePanel.tsx`; listed in [`registry.ts`](../editor/src/elements/registry.ts) |
-| `<Kind>WidgetUi …` | [`editor/src/elements/widgets/`](../editor/src/elements/widgets/) | `widgets/<kind>/<Kind>WidgetUi.ts` beside `<Kind>WidgetView.tsx` and, if it has settings, `<Kind>WidgetPanel.tsx`; [`TransformingDisplayUi`](../editor/src/elements/widgets/TransformingDisplayUi.ts) owns the one panel of chart, table and image; listed in [`widgets/roster.ts`](../editor/src/elements/widgets/roster.ts) |
+| `NodeRunner` | [`engine/src/elements/NodeRunner.ts`](../engine/src/elements/NodeRunner.ts) | `derivedPorts`, `execute`, `display`, `runtimeRequirements`, `settleMemory`, and what the executor reads ┊ build time: `whatRuns`, `problems`, `referencedPaths` |
+| `WidgetRunner` | [`engine/src/elements/WidgetRunner.ts`](../engine/src/elements/WidgetRunner.ts) | `ports`, `execute`, `firesRun`, `settle`, `displayValue` |
+| `8 × <Kind>NodeRunner` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeRunner.ts`; listed in [`registry.ts`](../engine/src/elements/registry.ts) |
+| `<Kind>WidgetRunner …` | [`engine/src/elements/widgets/`](../engine/src/elements/widgets/) | 12 kinds, with [`StaticWidgetRunner`](../engine/src/elements/widgets/StaticWidgetRunner.ts), [`DisplayWidgetRunner`](../engine/src/elements/widgets/DisplayWidgetRunner.ts), [`TransformingDisplayRunner`](../engine/src/elements/widgets/TransformingDisplayRunner.ts); listed in [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts) |
+| `ElementGuiBuilder` | [`editor/src/elements/ElementGuiBuilder.ts`](../editor/src/elements/ElementGuiBuilder.ts) | `Panel` (lazy), `generation` |
+| `NodeGuiBuilder` | [`editor/src/elements/NodeGuiBuilder.ts`](../editor/src/elements/NodeGuiBuilder.ts) | `label`, `icon`, `color`, `hint`, `AdvancedPanel`, `describeOutput`; `NodePanelProps` |
+| `WidgetGuiBuilder` | [`editor/src/elements/WidgetGuiBuilder.ts`](../editor/src/elements/WidgetGuiBuilder.ts) | `create(label, mode)`, `label`, `defaultSpan`, `defaultTone`, `runOnChangeHint`; `WidgetPanelProps` |
+| `8 × <Kind>NodeGuiBuilder` | [`editor/src/elements/nodes/`](../editor/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeGuiBuilder.ts` beside `<Kind>NodePanel.tsx`; listed in [`registry.ts`](../editor/src/elements/registry.ts) |
+| `<Kind>WidgetGuiBuilder …` | [`editor/src/elements/widgets/`](../editor/src/elements/widgets/) | `widgets/<kind>/<Kind>WidgetGuiBuilder.ts` beside `<Kind>WidgetView.tsx` and, if it has settings, `<Kind>WidgetPanel.tsx`; [`TransformingDisplayGuiBuilder`](../editor/src/elements/widgets/TransformingDisplayGuiBuilder.ts) owns the one panel of chart, table and image; listed in [`widgets/roster.ts`](../editor/src/elements/widgets/roster.ts) |
 
 Shared by elements, not drawn: [`authoring/generation.ts`](../engine/src/authoring/generation.ts)
 and [`authoring/logic.ts`](../engine/src/authoring/logic.ts) on the engine side;
 [`elements/fields/`](../editor/src/elements/fields/) (settings several panels share),
 [`nodes/baseNodeConfig.ts`](../editor/src/elements/nodes/baseNodeConfig.ts) (every node's starting config; each
-`NodeUi` names the `settings` a saved file keeps) and
+`NodeGuiBuilder` names the `settings` a saved file keeps) and
 [`nodes/gui/guiWidgets.ts`](../editor/src/elements/nodes/gui/guiWidgets.ts) (a page's ports, as
 the engine derives them) on the editor side.
 
@@ -232,7 +232,7 @@ flowchart TD
     Page["Page + designer"]
   end
   subgraph elements["elements/"]
-    Registry["Element UIs"]
+    Registry["Element builders"]
   end
   subgraph authoring["authoring/"]
     Authoring["Authoring"]
@@ -271,7 +271,7 @@ flowchart TD
 | `Graph canvas` | [`editor/src/canvas/GraphCanvas.tsx`](../editor/src/canvas/GraphCanvas.tsx), [`GraphNodeView.tsx`](../editor/src/canvas/GraphNodeView.tsx) | ReactFlow; `nodeData.ts`, `nodeRemoval.ts`, `ConnectorEditor.tsx` |
 | `Node editor` | [`editor/src/canvas/NodeEditor.tsx`](../editor/src/canvas/NodeEditor.tsx) | draws the element's own `Panel` and `AdvancedPanel` |
 | `Page + designer` | [`editor/src/page/`](../editor/src/page/) | `GuiPage.tsx` draws a page (shared with the tool page); `DesignerTab.tsx`, `WidgetEditor.tsx`, `layout.ts`, `scheme.ts`, `tone.ts` |
-| `Element UIs` | [`editor/src/elements/`](../editor/src/elements/) | `registry.ts`, `Ui.ts`, one folder per element — see [elements](#elements) |
+| `Element builders` | [`editor/src/elements/`](../editor/src/elements/) | `registry.ts`, `ElementGuiBuilder.ts`, one folder per element — see [elements](#elements) |
 | `Authoring` | [`editor/src/authoring/`](../editor/src/authoring/) | `AuthoredBodyEditor`, `TryItPanel`, `useGenerate`, `LiveGeneration`, `generation.ts`, the page-wide sweep (`graphSweep.ts`) |
 | `Graph store` | [`editor/src/store/graphStore.ts`](../editor/src/store/graphStore.ts) | the open graph, undo, runs (start → poll `run` → replay `memory`); `settingsStore.ts` |
 | `API client` | [`editor/src/api/client.ts`](../editor/src/api/client.ts) | the contract's client: `call(route, request)`, `ApiError`; `errorText.ts` |

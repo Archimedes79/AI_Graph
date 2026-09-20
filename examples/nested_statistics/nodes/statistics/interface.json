@@ -6,7 +6,7 @@
   "about": "A graph of its own: open it to see how the counting is done",
   "runs": {
     "by": "engine",
-    "where": "engine/src/elements/nodes/subgraph/SubgraphNodeElement.ts › execute",
+    "where": "engine/src/elements/nodes/subgraph/SubgraphNodeRunner.ts › execute",
     "does": "Runs the graph in its folder, whole, with what arrives standing in for its input nodes, and hands on what reaches its output nodes."
   },
   "inputs": [

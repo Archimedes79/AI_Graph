@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { parseGraph } from '../../graph.ts';
 import { registry } from '../../elements/registry.ts';
-import { InputNodeElement } from '../../elements/nodes/input/InputNodeElement.ts';
+import { InputNodeRunner } from '../../elements/nodes/input/InputNodeRunner.ts';
 import type { GraphNode } from '../../graph.ts';
 
 /**
@@ -44,7 +44,7 @@ describe('the graph prompt', () => {
   });
 
   it('names the derived port names the input element actually produces', () => {
-    const element = new InputNodeElement();
+    const element = new InputNodeRunner();
     const node = (mode: string): GraphNode => ({
       id: 'i', node_type: 'input', label: '', description: '', position: { x: 0, y: 0 },
       inputs: [], outputs: [], config: { input_mode: mode },

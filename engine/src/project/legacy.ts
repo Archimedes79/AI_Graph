@@ -12,7 +12,7 @@ import { basename, dirname, extname, join } from 'node:path';
 
 import type { Graph } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
-import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
+import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
 
 /** The body of a legacy node file: its generated header, if it has one, taken off. */
 export function legacyBody(text: string): string {

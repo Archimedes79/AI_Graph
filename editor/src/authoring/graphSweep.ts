@@ -21,7 +21,7 @@ import { memoryFeedbackEdges, topologicalLevels } from '@engine/execution/execut
 import { registry } from '@engine/elements/registry.ts';
 import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
 import { guiWidgetPorts } from '@/elements/nodes/gui/guiWidgets';
-import { NODE_UIS } from '@/elements/registry';
+import { NODE_BUILDERS } from '@/elements/registry';
 
 /** What happened to one node. */
 export type SweepStatus =
@@ -125,7 +125,7 @@ export function generationOrder(nodes: GraphNode[], edges: GraphEdge[]): SweepTa
   const portOwner = new Map<string, string>();
 
   for (const node of nodes) {
-    const widgets = NODE_UIS[node.node_type]?.holdsWidgets && Array.isArray(node.config.gui_widgets)
+    const widgets = NODE_BUILDERS[node.node_type]?.holdsWidgets && Array.isArray(node.config.gui_widgets)
       ? node.config.gui_widgets as GuiWidget[]
       : [];
     const blocks = widgets.filter((widget) => {
@@ -262,8 +262,8 @@ export async function* sweep<T>(
 export function missingExamples(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
   const fed = new Set(edges.map((edge) => edge.target_node_id));
   // Which nodes are sources, and what describes them, is each element's answer
-  // (`NodeUi.missingExample`): an input in file mode, a page's file picker.
-  return nodes.filter((node) => NODE_UIS[node.node_type]?.missingExample(node, fed.has(node.id)) ?? false);
+  // (`NodeGuiBuilder.missingExample`): an input in file mode, a page's file picker.
+  return nodes.filter((node) => NODE_BUILDERS[node.node_type]?.missingExample(node, fed.has(node.id)) ?? false);
 }
 
 /** An edge as ReactFlow holds it: which port feeds which. */

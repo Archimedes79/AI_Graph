@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { generate } from './generate.ts';
 import type { AICall } from '../api.ts';
 import { registry } from '../../elements/registry.ts';
-import type { AiService, CodeRunner } from '../../elements/Runtime.ts';
+import type { AiService, CodeService } from '../../elements/Runtime.ts';
 
 /**
  * A generation is several calls over a minute or more, and until it returns
@@ -11,7 +11,7 @@ import type { AiService, CodeRunner } from '../../elements/Runtime.ts';
  * what turns the wait from a spinner into something a person can judge.
  */
 
-const never: CodeRunner = { run: async () => ({}) };
+const never: CodeService = { run: async () => ({}) };
 const generationFor = (name: string) => registry.node(name)?.generation() ?? registry.widget(name)?.generation();
 const target = { provider: 'p', model: 'm' };
 

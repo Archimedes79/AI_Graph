@@ -18,7 +18,7 @@ import { parseGraph, type Graph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExamples } from '../../execution/examples.ts';
-import { GuiNodeElement, parseWidget } from '../../elements/nodes/gui/GuiNodeElement.ts';
+import { GuiNodeRunner, parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
 import { registry } from '../../elements/registry.ts';
 import { writeBundle } from '../../cli/bundle.ts';
 import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
@@ -97,7 +97,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     async runBlock(asked) {
       try {
-        const shown = await new GuiNodeElement().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
+        const shown = await new GuiNodeRunner().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
         return { status: 'success', shown, error: null };
       } catch (error) {
         return { status: 'error', shown: null, error: message(error) };

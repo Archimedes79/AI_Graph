@@ -1,0 +1,97 @@
+import { NodeRunner } from '../../NodeRunner.ts';
+import type { WhatRuns } from '../../ElementRunner.ts';
+import { type Runtime } from '../../Runtime.ts';
+import { type GraphNode, type Port } from '../../../graph.ts';
+
+/**
+ * The input that says *where* to write rather than *what*: a control input,
+ * and the one port of an output node that is not part of its value.
+ */
+export const WRITE_PATH_PORT = 'path';
+
+/** What this node was actually given to report. */
+export function valuePorts(node: GraphNode): Port[] {
+  return node.inputs.filter((port) => port.id !== WRITE_PATH_PORT);
+}
+
+export interface OutputConfig {
+  /** Where to write, when writing at all. */
+  path: string;
+  mode: 'none' | 'file' | 'directory';
+  /** What this output is called in the run's result. */
+  label: string;
+  promptAtRuntime: boolean;
+}
+
+/**
+ * What the graph produces: everything wired into it, plus a file if asked.
+ *
+ * A passthrough, deliberately — it echoes its inputs so the run's result says
+ * what arrived, rather than inventing a shape of its own. It does not *show*
+ * anything either: showing is what the page is for, and an output node that
+ * opened a window was a second place where results appeared, with its own
+ * layout and no relation to the interface being designed next door.
+ */
+export class OutputNodeRunner extends NodeRunner<OutputConfig> {
+  readonly nodeType = 'output' as const;
+
+  config(node: GraphNode): OutputConfig {
+    const c = node.config;
+    const mode = String(c.write_mode ?? 'none');
+    return {
+      path: String(c.value ?? ''),
+      mode: (['none', 'file', 'directory'].includes(mode) ? mode : 'none') as OutputConfig['mode'],
+      label: String(c.output_label ?? '') || node.id,
+      promptAtRuntime: c.prompt_at_runtime === true,
+    };
+  }
+
+  /** Everything a graph produces leaves through one of these. */
+  override boundaryRole(): 'out' {
+    return 'out';
+  }
+
+  override runtimeRequirements(node: GraphNode) {
+    const settings = this.config(node);
+    if (!settings.promptAtRuntime || settings.mode === 'none') return [];
+    return [{
+      key: node.id,
+      label: node.label || node.id,
+      kind: settings.mode,
+      direction: 'output' as const,
+      current: settings.path,
+    }];
+  }
+
+  override applyRuntimeValue(node: GraphNode, _widgetId: string | null, value: string): void {
+    node.config.value = value;
+  }
+
+  async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
+    const settings = this.config(node);
+    // A wired `path` sets the target at run time and always wins over the
+    // configured one; it is a control input, not a value to report back.
+    const target = inputs[WRITE_PATH_PORT] ? runtime.files.resolve(String(inputs[WRITE_PATH_PORT])) : settings.path;
+    const values: Record<string, unknown> = { ...inputs };
+    delete values[WRITE_PATH_PORT];
+
+    const result: Record<string, unknown> = { ...values };
+    if (settings.mode === 'file' && target) {
+      const present = Object.values(values).filter((v) => v !== null && v !== undefined);
+      const content = present.length === 1 && typeof present[0] === 'string'
+        ? present[0]
+        : present.map((v) => (typeof v === 'string' ? v : JSON.stringify(v))).join('\n');
+      await runtime.files.write(target, content);
+      result.written_path = target;
+    }
+    return result;
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override whatRuns(node: GraphNode): WhatRuns {
+    return this.engineRuns(this.config(node).mode === 'file'
+      ? 'Writes what arrives to its file and hands it on, with "written_path".'
+      : 'Hands on what arrives: the run\'s result, shown in a window or returned to whoever ran the graph.');
+  }
+}

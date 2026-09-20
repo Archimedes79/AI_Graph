@@ -2,7 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import type { RFNodeData } from './nodeData';
 import { useGraphStore } from '@/store/graphStore';
-import { NODE_UIS, WIDGET_UIS } from '@/elements/registry';
+import { NODE_BUILDERS, WIDGET_BUILDERS } from '@/elements/registry';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { delivered } from './executionStatus';
 import { widgetFiresRun, widgetOfPort } from '@/elements/nodes/gui/guiWidgets';
@@ -39,16 +39,16 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
     s.executionResult?.node_results.find((r) => r.node_id === id)
   );
 
-  const ui = NODE_UIS[graphNode.node_type];
-  const bgColor = ui?.color ?? SURFACE;
-  const icon = ui?.icon ?? '⬜';
+  const builder = NODE_BUILDERS[graphNode.node_type];
+  const bgColor = builder?.color ?? SURFACE;
+  const icon = builder?.icon ?? '⬜';
   const status = executionResult ? statusStyles[executionResult.held ? 'held' : executionResult.status] : undefined;
   const statusTitle = executionResult?.held
     ? 'Did not run this round: what it produced in an earlier round stands'
     : executionResult?.status;
   const statusColor = status?.color;
-  const isGuiLike = ui?.holdsWidgets ?? false;
-  const summary = ui?.canvasSummary?.(graphNode);
+  const isGuiLike = builder?.holdsWidgets ?? false;
+  const summary = builder?.canvasSummary?.(graphNode);
 
   const handleEdit = useCallback(() => onEdit(id), [id, onEdit]);
   // The ✕ sits a few pixels from ✏️, deleting is immediate, it silently takes
@@ -202,9 +202,9 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                 // `kind === 'plot_window'` by name, which is a widget-kind
                 // switch inside a shared renderer.
                 const behind = widgetOfPort(graphNode, port.id);
-                const previewWidget = behind && WIDGET_UIS[behind.kind]?.CanvasPreview ? behind : undefined;
+                const previewWidget = behind && WIDGET_BUILDERS[behind.kind]?.CanvasPreview ? behind : undefined;
                 const CanvasPreview = previewWidget
-                  ? WIDGET_UIS[previewWidget.kind].CanvasPreview
+                  ? WIDGET_BUILDERS[previewWidget.kind].CanvasPreview
                   : undefined;
                 return (
                   <React.Fragment key={port.id}>
@@ -375,7 +375,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
         className="px-3 py-1 text-xs"
         style={{ color: DIMMER, background: HEADER, textAlign: 'right' }}
       >
-        {ui?.label}
+        {builder?.label}
       </div>
     </div>
   );

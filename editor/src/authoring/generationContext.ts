@@ -1,7 +1,7 @@
 import type { ExecutionResult, GraphNode } from '@/graph';
-// This module reads the element registry, so no element's `…Ui.ts` may import
+// This module reads the element registry, so no element's `…GuiBuilder.ts` may import
 // it: that would be a cycle through the registry (see `outputFormat.ts`).
-import { NODE_UIS } from '@/elements/registry';
+import { NODE_BUILDERS } from '@/elements/registry';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { filePorts } from '@engine/execution/fileInputs.ts';
 
@@ -27,12 +27,12 @@ const SAMPLE_BUDGET = 1200;
  * What a node emits, in one line.
  *
  * This was a `switch (node.node_type)` -- the last one in shared editor code.
- * Each element answers for itself now (`NodeUi.describeOutput`),
+ * Each element answers for itself now (`NodeGuiBuilder.describeOutput`),
  * so a new node type describes its output in its own file and nothing here
  * changes.
  */
 export function describeNodeOutput(node: GraphNode): string {
-  return NODE_UIS[node.node_type]?.describeOutput?.(node) ?? '';
+  return NODE_BUILDERS[node.node_type]?.describeOutput?.(node) ?? '';
 }
 
 /**
@@ -58,12 +58,12 @@ export function connectedFormatContext(
       if (!source) continue;
       const described = describeNodeOutput(source);
       if (!described) continue;
-      lines.add(NODE_UIS[source.node_type].describeAsSource(source, described));
+      lines.add(NODE_BUILDERS[source.node_type].describeAsSource(source, described));
     }
     if (edge.source === nodeId) {
       const target = nodeById.get(edge.target);
       if (!target) continue;
-      lines.add(NODE_UIS[target.node_type].describeAsTarget(target));
+      lines.add(NODE_BUILDERS[target.node_type].describeAsTarget(target));
     }
   }
   return [...lines].join('\n');

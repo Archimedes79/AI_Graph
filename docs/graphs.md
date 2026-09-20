@@ -337,7 +337,7 @@ call per node, in the order a whole run takes, each handed what its wires carry 
 
 ```js
 async function flow(node) {
-  // Summarizer · gui · engine/src/elements/nodes/gui/GuiNodeElement.ts › execute
+  // Summarizer · gui · engine/src/elements/nodes/gui/GuiNodeRunner.ts › execute
   // starts a round: file_out, length_out, go_out
   const page = await node.page();
 
@@ -384,12 +384,12 @@ the same words under `runs`. There are two answers:
 |---|---|---|
 | Code | `code.js`, sandboxed | Calls `run(inputs, node)` and hands on what it returns. |
 | AI | `run.js` | Unchanged: the engine makes the one model call it describes (`system.md`, `message.md` filled from the inputs). Changed: it runs sandboxed like any body, and each `node.llm(...)` is a call made for it. |
-| Input | `InputNodeElement.execute` | Hands on its text; or reads the file on `path`; or lists the folder — through `selector.js`, sandboxed, if files are chosen by code. |
-| Data | `DataNodeElement.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
-| GUI | `GuiNodeElement.execute` | Hands on what each block holds and shows what arrives; a block's own code runs sandboxed before it is shown. |
-| Output | `OutputNodeElement.execute` | Hands on what arrives as the run's result, or writes it to its file. |
-| Trigger | `TriggerNodeElement.execute` | `fired`: true in a round it began. The clock is kept by whatever holds the graph. |
-| Subgraph | `SubgraphNodeElement.execute` | Runs the graph in its folder, whole, by the engine that runs this one. |
+| Input | `InputNodeRunner.execute` | Hands on its text; or reads the file on `path`; or lists the folder — through `selector.js`, sandboxed, if files are chosen by code. |
+| Data | `DataNodeRunner.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
+| GUI | `GuiNodeRunner.execute` | Hands on what each block holds and shows what arrives; a block's own code runs sandboxed before it is shown. |
+| Output | `OutputNodeRunner.execute` | Hands on what arrives as the run's result, or writes it to its file. |
+| Trigger | `TriggerNodeRunner.execute` | `fired`: true in a round it began. The clock is kept by whatever holds the graph. |
+| Subgraph | `SubgraphNodeRunner.execute` | Runs the graph in its folder, whole, by the engine that runs this one. |
 
 The sentences come from the elements themselves (`whatRuns`), so the panel, the folder and
 this table cannot drift apart without a test noticing the class or method is gone.

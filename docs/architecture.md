@@ -26,53 +26,71 @@ organised around them, and each element is one folder, at the **same relative pa
 both sides**:
 
 ```
-engine/src/elements/                          editor/src/elements/
-  Element.ts                                    Ui.ts
-  NodeElement.ts                                NodeUi.ts
-  WidgetElement.ts                              WidgetUi.ts
-  registry.ts                                   registry.ts
-  Runtime.ts  port.ts  fileSelection.ts         fields/  (settings several panels share)
-  nodes/                                        nodes/
-    ai/     AiNodeElement.ts  prompt.ts           ai/     AiNodeUi.ts  AiNodePanel.tsx
+engine/src/elements/                            editor/src/elements/
+  ElementRunner.ts                                ElementGuiBuilder.ts
+  NodeRunner.ts                                   NodeGuiBuilder.ts
+  WidgetRunner.ts                                 WidgetGuiBuilder.ts
+  registry.ts                                     registry.ts
+  Runtime.ts  port.ts  fileSelection.ts           fields/  (settings several panels share)
+  nodes/                                          nodes/
+    ai/     AiNodeRunner.ts  prompt.ts              ai/   AiNodeGuiBuilder.ts  AiNodePanel.tsx
                                                           AiNodeAdvancedPanel.tsx  PromptPreview.tsx
-    code/   CodeNodeElement.ts                    code/   CodeNodeUi.ts  CodeNodePanel.tsx …
-    data/ gui/ input/ output/                     data/ gui/ input/ output/
-  widgets/                                      widgets/
-    roster.ts                                     roster.ts
-    StaticWidgetElement.ts                        StaticWidgetUi.ts
-    DisplayWidgetElement.ts                       DisplayWidgetUi.ts
-    TransformingDisplayElement.ts                 TransformingDisplayUi.ts  TransformingDisplayPanel.tsx
-    select/ SelectWidgetElement.ts                select/ SelectWidgetUi.ts  SelectWidgetView.tsx
-                                                          SelectWidgetPanel.tsx
-    plot_window/ PlotWindowWidgetElement.ts       plot_window/ PlotWindowWidgetUi.ts
-                 check.ts  view.ts                             PlotWindowWidgetView.tsx  PlotChart.tsx
-    …                                             …  WidgetView.ts
+    code/   CodeNodeRunner.ts                       code/ CodeNodeGuiBuilder.ts  CodeNodePanel.tsx …
+    data/ gui/ input/ output/                       data/ gui/ input/ output/
+  widgets/                                        widgets/
+    roster.ts                                       roster.ts
+    StaticWidgetRunner.ts                           StaticWidgetGuiBuilder.ts
+    DisplayWidgetRunner.ts                          DisplayWidgetGuiBuilder.ts
+    TransformingDisplayRunner.ts                    TransformingDisplayGuiBuilder.ts
+                                                    TransformingDisplayPanel.tsx
+    select/ SelectWidgetRunner.ts                   select/ SelectWidgetGuiBuilder.ts
+                                                            SelectWidgetView.tsx
+                                                            SelectWidgetPanel.tsx
+    plot_window/ PlotWindowWidgetRunner.ts          plot_window/ PlotWindowWidgetGuiBuilder.ts
+                 check.ts  view.ts                              PlotWindowWidgetView.tsx
+                                                                PlotChart.tsx
+    …                                               …  WidgetView.ts
 ```
 
 **Names follow the file format, mechanically, and pair across the wire.** Every element
-class ends in `Element`; its editor half is a class that swaps `Element` for `Ui`, and
-inherits the same way. Node type `ai` is `AiNodeElement` in `nodes/ai/AiNodeElement.ts`
-and `AiNodeUi` in `nodes/ai/AiNodeUi.ts`; widget kind `plot_window` is
-`PlotWindowWidgetElement` and `PlotWindowWidgetUi`. One class per file, and the file is
-named after it.
+class in the engine ends in `Runner`; its editor half is a class that swaps `Runner` for
+`GuiBuilder`, and inherits the same way. Node type `ai` is `AiNodeRunner` in
+`nodes/ai/AiNodeRunner.ts` and `AiNodeGuiBuilder` in `nodes/ai/AiNodeGuiBuilder.ts`;
+widget kind `plot_window` is `PlotWindowWidgetRunner` and `PlotWindowWidgetGuiBuilder`.
+One class per file, and the file is named after it.
+
+**What the two words mean.** Two axes cross in them, and together they are the whole
+reason the split exists.
+
+- `Runner` against `GuiBuilder` is **what the class is for**: running the application, or
+  building it. A graph is an application; it runs with no browser anywhere.
+- `Gui` in the middle is **where the class lives**: the engine owns the graph and runs it,
+  and everything a person clicks is in the browser, which the engine never imports.
+
+So a `Runner` is the application, and a `GuiBuilder` is the tooling around it. That is why
+only one of the two may be missing from a delivered tool, and why it is the builder:
+a deployed graph runs, and nobody edits it. The fourth square of the grid — build-time work
+in the engine, such as `generation()` — has no class of its own; it rides on the `Runner`
+under a `── Build time` bar, which [`times.test.ts`](../engine/src/elements/times.test.ts)
+reads and enforces.
 
 | Engine | Editor |
 |---|---|
-| `Element` | `Ui` |
-| `NodeElement` | `NodeUi` |
-| `WidgetElement` | `WidgetUi` |
-| `StaticWidgetElement`, `DisplayWidgetElement`, `TransformingDisplayElement` | `StaticWidgetUi`, `DisplayWidgetUi`, `TransformingDisplayUi` |
-| `AiNodeElement` | `AiNodeUi` |
-| `SelectWidgetElement` | `SelectWidgetUi` |
+| `ElementRunner` | `ElementGuiBuilder` |
+| `NodeRunner` | `NodeGuiBuilder` |
+| `WidgetRunner` | `WidgetGuiBuilder` |
+| `StaticWidgetRunner`, `DisplayWidgetRunner`, `TransformingDisplayRunner` | `StaticWidgetGuiBuilder`, `DisplayWidgetGuiBuilder`, `TransformingDisplayGuiBuilder` |
+| `AiNodeRunner` | `AiNodeGuiBuilder` |
+| `SelectWidgetRunner` | `SelectWidgetGuiBuilder` |
 
 Each element has a fixed set of **facets**, told apart by suffix:
 
 | Facet | Engine (Node) | Editor (browser) |
 |---|---|---|
-| What it is and does: config, ports, `execute`, `generation` | `<Kind>NodeElement.ts` / `<Kind>WidgetElement.ts` | — |
+| What it is and does: config, ports, `execute`, `generation` | `<Kind>NodeRunner.ts` / `<Kind>WidgetRunner.ts` | — |
 | How it looks on a page — the designer and the deployed tool draw the same component | — | `<Kind>WidgetView.tsx`, listed in `page/blocks.ts` |
 | Its settings | — | `<Kind>NodePanel.tsx` / `<Kind>WidgetPanel.tsx` |
-| What the editor's shells ask of it | — | `<Kind>NodeUi.ts` / `<Kind>WidgetUi.ts` |
+| What the editor's shells ask of it | — | `<Kind>NodeGuiBuilder.ts` / `<Kind>WidgetGuiBuilder.ts` |
 
 A node's look on the canvas is generic (`canvas/GraphNodeView.tsx`), so nodes have no view
 of their own. [`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts) holds the two
@@ -84,40 +102,40 @@ its names, on both sides.
 Behaviour lives in classes. Shared code asks the element and never switches on a type name.
 
 ```
-Element<Subject, Config>          config() · texts() · logic() · catchesErrors() ┊ generation() · deployNeeds()
-├── NodeElement<C>                a node: derivedPorts · execute · display · eventPorts · keepsTime · settleMemory ┊ whatRuns · problems
-│   ├── InputNodeElement   AiNodeElement   CodeNodeElement
-│   ├── DataNodeElement    OutputNodeElement   SubgraphNodeElement
-│   ├── TriggerNodeElement        an event with nobody there: the tool starting, a clock
-│   └── GuiNodeElement            a composite: holds widgets, its ports are theirs
-└── WidgetElement<C>              a widget: ports · execute · firesRun · settle · displayValue
-    ├── InputPickerWidgetElement   TextIoWidgetElement   SelectWidgetElement
-    ├── SliderWidgetElement        ButtonWidgetElement   ChatWidgetElement
-    ├── StaticWidgetElement       no ports: part of the page, not the graph
-    │   └── TextWidgetElement   DividerWidgetElement   SpacerWidgetElement
-    └── DisplayWidgetElement      one input, nothing out
-        └── TransformingDisplayElement   an optional transform before drawing
-            └── PlotWindowWidgetElement   TableWidgetElement   ImageViewWidgetElement
+ElementRunner<Subject, Config>          config() · texts() · logic() · catchesErrors() ┊ generation() · deployNeeds()
+├── NodeRunner<C>                a node: derivedPorts · execute · display · eventPorts · keepsTime · settleMemory ┊ whatRuns · problems
+│   ├── InputNodeRunner   AiNodeRunner   CodeNodeRunner
+│   ├── DataNodeRunner    OutputNodeRunner   SubgraphNodeRunner
+│   ├── TriggerNodeRunner        an event with nobody there: the tool starting, a clock
+│   └── GuiNodeRunner            a composite: holds widgets, its ports are theirs
+└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue
+    ├── InputPickerWidgetRunner   TextIoWidgetRunner   SelectWidgetRunner
+    ├── SliderWidgetRunner        ButtonWidgetRunner   ChatWidgetRunner
+    ├── StaticWidgetRunner       no ports: part of the page, not the graph
+    │   └── TextWidgetRunner   DividerWidgetRunner   SpacerWidgetRunner
+    └── DisplayWidgetRunner      one input, nothing out
+        └── TransformingDisplayRunner   an optional transform before drawing
+            └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
 
-Ui<Subject, PanelProps>           Panel · generation
-├── NodeUi                        label · icon · color · hint · Panel · AdvancedPanel · describeOutput   (builder only)
-│   ├── InputNodeUi   AiNodeUi   CodeNodeUi
-│   ├── DataNodeUi    OutputNodeUi   SubgraphNodeUi   TriggerNodeUi
-│   └── GuiNodeUi
-└── WidgetUi                      create(label, mode) · label · defaultSpan · defaultTone · runOnChangeHint   (builder only)
-    ├── InputPickerWidgetUi   TextIoWidgetUi   SelectWidgetUi
-    ├── SliderWidgetUi        ButtonWidgetUi   ChatWidgetUi
-    ├── StaticWidgetUi            starts unnamed: page furniture has no ports to name
-    │   └── TextWidgetUi   DividerWidgetUi   SpacerWidgetUi
-    └── DisplayWidgetUi           nothing to operate, so nothing starts the graph
-        └── TransformingDisplayUi     one panel for the transform, words from each kind
-            └── PlotWindowWidgetUi   TableWidgetUi   ImageViewWidgetUi
+ElementGuiBuilder<Subject, PanelProps>           Panel · generation
+├── NodeGuiBuilder                        label · icon · color · hint · Panel · AdvancedPanel · describeOutput   (builder only)
+│   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
+│   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
+│   └── GuiNodeGuiBuilder
+└── WidgetGuiBuilder                      create(label, mode) · label · defaultSpan · defaultTone · runOnChangeHint   (builder only)
+    ├── InputPickerWidgetGuiBuilder   TextIoWidgetGuiBuilder   SelectWidgetGuiBuilder
+    ├── SliderWidgetGuiBuilder        ButtonWidgetGuiBuilder   ChatWidgetGuiBuilder
+    ├── StaticWidgetGuiBuilder            starts unnamed: page furniture has no ports to name
+    │   └── TextWidgetGuiBuilder   DividerWidgetGuiBuilder   SpacerWidgetGuiBuilder
+    └── DisplayWidgetGuiBuilder           nothing to operate, so nothing starts the graph
+        └── TransformingDisplayGuiBuilder     one panel for the transform, words from each kind
+            └── PlotWindowWidgetGuiBuilder   TableWidgetGuiBuilder   ImageViewWidgetGuiBuilder
 ```
 
-The browser half is the same tree with `Ui` for `Element`, and
+The browser half is the same tree with `GuiBuilder` for `Runner`, and
 [`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts) compares the two lineages
 class by class. What each kind knows about its own appearance — its name, icon and colour,
-a new widget's size, tone and first values — is a member of its `Ui`, not a table in a
+a new widget's size, tone and first values — is a member of its `GuiBuilder`, not a table in a
 shell. An element is handed its services (`Runtime.ts`: `files`, `code`, `ai`, `tools`)
 rather than reaching for them.
 
@@ -135,7 +153,7 @@ makes a kind easy to add. So on the **engine** side build-time members travel in
 bundle with their class, and are kept apart *inside* it instead. (On the browser side it
 turned out there was nothing to keep apart — see below.)
 
-- Every base class (`Element`, `NodeElement`, `WidgetElement`; `NodeUi`, `WidgetUi`) is
+- Every base class (`ElementRunner`, `NodeRunner`, `WidgetRunner`; `NodeGuiBuilder`, `WidgetGuiBuilder`) is
   laid out under three bars — **What it is · Run time · Build time** — and every kind keeps
   that order, its build-time members under a `── Build time` bar of its own.
 - The bars are load-bearing: `elements/times.test.ts` reads them, on both sides.
@@ -143,15 +161,15 @@ turned out there was nothing to keep apart — see below.)
 | | What it is | Run time | Build time |
 |---|---|---|---|
 | **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
-| `Element` | `config` · `texts` · `logic` | `catchesErrors` · `snippetFailure` · `runSnippet` | `generation` · `deployNeeds` |
-| `NodeElement` | `nodeType` · `derivedPorts` · `nestedGraph` · `boundaryRole` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `asksModel` · `referencedPaths` |
-| `WidgetElement` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | — |
-| `NodeUi` | `nodeType` | — | **everything**: the palette, panels, what ✨ Generate is told |
-| `WidgetUi` | `widgetKind` | — | **everything**: the palette, panels, what ✨ Generate is told |
+| `ElementRunner` | `config` · `texts` · `logic` | `catchesErrors` · `snippetFailure` · `runSnippet` | `generation` · `deployNeeds` |
+| `NodeRunner` | `nodeType` · `derivedPorts` · `nestedGraph` · `boundaryRole` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `asksModel` · `referencedPaths` |
+| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | — |
+| `NodeGuiBuilder` | `nodeType` | — | **everything**: the palette, panels, what ✨ Generate is told |
+| `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, panels, what ✨ Generate is told |
 
 ### …and a third role, which is neither
 
-The two `Ui` rows have no run-time members left, and that is the point: **a `Ui` is the
+The two `GuiBuilder` rows have no run-time members left, and that is the point: **a `GuiBuilder` is the
 builder, whole, and a delivered tool never loads it.**
 
 What used to sit on their run-time side was never really the builder's — it was a third
@@ -159,16 +177,16 @@ role that had nowhere to live:
 
 | Was | Is now | Because |
 |---|---|---|
-| `WidgetUi.View`, `ownsValue` | [`page/blocks.ts`](../editor/src/page/blocks.ts) | what the **page draws** — the one part of a widget a recipient operates |
-| `NodeUi.create`, `settings`, `saved`, `showsResultWindow` | [`nodeKinds.ts`](../editor/src/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
-| `WidgetUi.clearValueAfterRun` | `WidgetElement.clearsValueAfterRun` | what a **run** means for a block, the same family as `settle` |
+| `WidgetGuiBuilder.View`, `ownsValue` | [`page/blocks.ts`](../editor/src/page/blocks.ts) | what the **page draws** — the one part of a widget a recipient operates |
+| `NodeGuiBuilder.create`, `settings`, `saved`, `showsResultWindow` | [`nodeKinds.ts`](../editor/src/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| `WidgetGuiBuilder.clearValueAfterRun` | `WidgetRunner.clearsValueAfterRun` | what a **run** means for a block, the same family as `settle` |
 
 A node's middle role is empty by nature: the canvas is never delivered. A widget's is not,
-because the page is. `nodeKinds.ts` belongs in the engine beside `NodeElement.config`; what
+because the page is. `nodeKinds.ts` belongs in the engine beside `NodeRunner.config`; what
 keeps it in the editor for now is `NodeConfig`, the one spelled-out settings shape, and
 moving that is a step of its own.
 
-This is why `times.test.ts` can now hold that a tool asks a `Ui` for **nothing at all**,
+This is why `times.test.ts` can now hold that a tool asks a `GuiBuilder` for **nothing at all**,
 with no exception for the shared store — and why
 [`runtime/boundary.test.ts`](../editor/src/runtime/boundary.test.ts) can hold the stronger
 thing on top: neither element registry is *reachable* from the tool's entry point. Before
@@ -184,7 +202,7 @@ What the tests hold: every member stands under a bar; the build-time list is spe
 so moving a member across is a decision and not a bar that slipped; **no file a run goes
 through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `runs.ts`, `schedule.ts`,
 `node.ts`) **mentions a build-time member**; and nothing a tool's page can reach asks a
-`Ui` for anything at all. What is *not* carried at all stays as it was:
+`GuiBuilder` for anything at all. What is *not* carried at all stays as it was:
 `host/editor/` never enters a bundle, and a panel is a lazy chunk a tool never fetches.
 
 **The flow, as code.** `project/flowFile.ts` renders `flow.js` beside `graph.json` on every
@@ -193,7 +211,7 @@ fan-out and its file reading said. Rendered, never read and never run — the ex
 the one implementation of a run; this is the notation in which a graph is quickest to read,
 and to diff.
 
-**What runs.** `NodeElement.whatRuns(node)` answers the question a node's folder could not:
+**What runs.** `NodeRunner.whatRuns(node)` answers the question a node's folder could not:
 which code runs when this node runs. Either a body in the folder (`code.js`, a changed
 `run.js`), run sandboxed — or this kind's `execute`, named by file, with one sentence
 saying what it does. The same answer is written into the node's `interface.json`, shown at
@@ -303,8 +321,8 @@ other knows, it imports it or replays its result:
 |---|---|
 | every route, request and response | `host/api.ts` |
 | the graph's types | `graph.ts` |
-| a page node's ports | `GuiNodeElement.derivedPorts` via `elements/nodes/gui/guiWidgets.ts` |
-| whether a widget starts the graph | `WidgetElement.firesRun` |
+| a page node's ports | `GuiNodeRunner.derivedPorts` via `elements/nodes/gui/guiWidgets.ts` |
+| whether a widget starts the graph | `WidgetRunner.firesRun` |
 | the request an AI node will send | `assemblePrompt` (`elements/nodes/ai/prompt.ts`) |
 | what a run remembered | `ExecutionResult.memory`, replayed with `applyMemory` |
 | what a widget shows | `NodeResult.display` |
@@ -318,7 +336,7 @@ other knows, it imports it or replays its result:
 2. **What runs.** Everything — or, for an event (a block on a page, a trigger node), the
    nodes its port is wired to, what follows from them, and what those need upstream
    (`triggers.ts`). An event is a boolean that is true for the round it started
-   (`Runtime.fired`, asked of `NodeElement.eventPorts`); a run no event started counts every
+   (`Runtime.fired`, asked of `NodeRunner.eventPorts`); a run no event started counts every
    event as fired.
    **The ◆ (`__run`) is a gate**: wired, the node runs only when this round opens it — the
    event is wired to the node, or a node computed `true` onto it in this round; OR over
@@ -371,7 +389,7 @@ kind of thing, and `elements/body.ts` (`runBody`) is the only place that runs on
 `async function run(inputs, node)`, in a process of its own, returning an object keyed by
 output port. The element decides *when* and what a failure costs; never *how*.
 
-**A body can ask.** `CodeRunner.run(body, inputs, signal, context)` hands a body a second
+**A body can ask.** `CodeService.run(body, inputs, signal, context)` hands a body a second
 argument, `node`: plain data, and `calls` — questions it may put to the process that holds
 the graph, over its own stdin/stdout (`host/node.ts`). That is how a body asks a model
 without ever holding a key: `node.llm` is answered by `askModel` (`nodes/ai/ask.ts`), the one
@@ -391,7 +409,7 @@ A graph is a folder: `graph.json` holds the structure (nodes, settings, ports, e
 `layout.json` the positions, and every piece of writing is a file of its own under
 `nodes/<node id>/` — `code.js`, `system.md`, `output.schema.json`, and a block's files one
 folder further down. Which fields become which files is element knowledge, so each element
-declares it (`Element.texts`); [`project/folder.ts`](../engine/src/project/folder.ts) reads
+declares it (`ElementRunner.texts`); [`project/folder.ts`](../engine/src/project/folder.ts) reads
 and writes a folder for everyone — editor, CLI, a served tool, the MCP server — and never
 learns what a code node is.
 
@@ -460,8 +478,8 @@ learns what a code node is.
 ## Settled debt, and what is deliberately not there
 
 - **A saved node carries its own settings only.** In memory every node has the full
-  `NodeConfig`, so a panel can read any field with a type. Each `<Kind>NodeUi` names the
-  `settings` it owns; `NodeUi.saved` writes those and any other key someone changed, and
+  `NodeConfig`, so a panel can read any field with a type. Each `<Kind>NodeGuiBuilder` names the
+  `settings` it owns; `NodeGuiBuilder.saved` writes those and any other key someone changed, and
   loading fills the rest back in. [`savedConfig.test.ts`](../editor/src/elements/savedConfig.test.ts)
   asks the engine's element the questions a run asks, for every node type and mode, and
   holds the lean node to the full one's answers.

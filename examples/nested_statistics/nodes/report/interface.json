@@ -5,7 +5,7 @@
   "label": "Report",
   "runs": {
     "by": "engine",
-    "where": "engine/src/elements/nodes/output/OutputNodeElement.ts › execute",
+    "where": "engine/src/elements/nodes/output/OutputNodeRunner.ts › execute",
     "does": "Hands on what arrives: the run's result, shown in a window or returned to whoever ran the graph."
   },
   "inputs": [

@@ -7,7 +7,7 @@
 // producing one the editor never drew.
 import type { GraphNode, GuiWidget, Port } from '@/graph';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeElement.ts';
+import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 
 /**
  * The ports a node has, when they follow from its settings rather than being
@@ -49,7 +49,7 @@ export function widgetOfPort(node: GraphNode, portId: string): GuiWidget | undef
  * Whether this kind of node carries the graph's interface — the engine's
  * answer, not a second flag beside it.
  *
- * The editor kept its own `NodeUi.hasRuntimeWindow` saying the same thing, and
+ * The editor kept its own `NodeGuiBuilder.hasRuntimeWindow` saying the same thing, and
  * nothing checked that the two agreed. The one that decides what the page is
  * *made of* is the engine's: it is what `display` is asked of and what a
  * bundle carries a page for.

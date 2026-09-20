@@ -2,7 +2,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
 import { keepsExamples, keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { derivedNodePorts, syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
-import { NODE_UIS } from '@/elements/registry';
+import { NODE_BUILDERS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, nodeFields } from '@/authoring/generation';
@@ -97,7 +97,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // answers better, and it cost every node a tab bar to get to the one tab that
   // does something. What a node emits was a third tab for two of six types; it
   // is a declaration now (`outputContract`) and sits in Config under the body.
-  const element = NODE_UIS[node.node_type];
+  const element = NODE_BUILDERS[node.node_type];
 
   const save = () => {
     updateNode(nodeId, node);
@@ -292,7 +292,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           {/* Only for elements whose own editor does not already ask what the
               node is for. An ai node's description IS its generation prompt, so
               drawing this above it showed the same box twice. */}
-          {!NODE_UIS[node.node_type]?.ownsDescription && (
+          {!NODE_BUILDERS[node.node_type]?.ownsDescription && (
             <div className="mb-4">
               <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
                 Description (optional)
@@ -315,7 +315,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           <div className="space-y-4">
               {/* A panel is its own chunk, loaded when a node is first opened. */}
               {Panel && <Suspense fallback={null}><Panel
-                ui={element}
+                builder={element}
                 node={node}
                 setConfig={setConfig}
                 setDescription={(value: string) => setNode((prev) => (prev ? { ...prev, description: value } : prev))}

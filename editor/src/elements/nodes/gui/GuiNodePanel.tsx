@@ -1,6 +1,6 @@
-import { WIDGET_UIS } from '../../registry';
+import { WIDGET_BUILDERS } from '../../registry';
 import { DIMMER, LINE, MUTED, TEXT } from '@/ui/theme';
-import type { NodePanelProps } from '../../NodeUi';
+import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 /**
  * A gui node's config panel: what this node contributes to the page, and where
@@ -38,9 +38,9 @@ export default function GuiNodePanel({ node }: NodePanelProps) {
                 className="flex items-center justify-between px-3 py-2 text-sm"
                 style={{ color: TEXT, borderTop: index === 0 ? 'none' : `1px solid ${LINE}` }}
               >
-                <span className="truncate">{widget.label || WIDGET_UIS[widget.kind].label}</span>
+                <span className="truncate">{widget.label || WIDGET_BUILDERS[widget.kind].label}</span>
                 <span className="text-xs flex-shrink-0 ml-3" style={{ color: DIMMER }}>
-                  {WIDGET_UIS[widget.kind].label} · {widget.w}×{widget.h}
+                  {WIDGET_BUILDERS[widget.kind].label} · {widget.w}×{widget.h}
                 </span>
               </li>
             ))}

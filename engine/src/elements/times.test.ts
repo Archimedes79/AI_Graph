@@ -50,7 +50,7 @@ function membersOf(file: string): Member[] {
   });
 }
 
-const BASES = ['Element.ts', 'NodeElement.ts', 'WidgetElement.ts'].map((name) => join(HERE, name));
+const BASES = ['ElementRunner.ts', 'NodeRunner.ts', 'WidgetRunner.ts'].map((name) => join(HERE, name));
 const blockOf = new Map<string, number>();
 for (const file of BASES) for (const member of membersOf(file)) blockOf.set(member.name, member.block);
 const buildTime = [...blockOf].filter(([, block]) => block === 2).map(([name]) => name);
@@ -59,7 +59,7 @@ function kinds(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return kinds(path);
-    return /Element\.ts$/.test(name) ? [path] : [];
+    return /Runner\.ts$/.test(name) ? [path] : [];
   });
 }
 

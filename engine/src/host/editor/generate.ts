@@ -18,7 +18,7 @@
 // show what was sent when the answer is "the model returned nothing".
 
 import { readFile } from 'node:fs/promises';
-import type { AiRequest, AiService, CodeRunner, FileService } from '../../elements/Runtime.ts';
+import type { AiRequest, AiService, CodeService, FileService } from '../../elements/Runtime.ts';
 import type { Generation } from '../../authoring/generation.ts';
 import { readPorts } from '../../execution/fileInputs.ts';
 import { renderSkeleton } from './skeleton.ts';
@@ -219,7 +219,7 @@ function describeInputs(sample: Record<string, unknown>): string {
 }
 
 async function probe(
-  code: CodeRunner, body: string, sample: Record<string, unknown>,
+  code: CodeService, body: string, sample: Record<string, unknown>,
 ): Promise<{ result: Record<string, unknown> | null; error: string }> {
   // Ended, not merely given up on: a generated body in an endless loop is a
   // process, and one per ✨ press left running is how a laptop gets warm.
@@ -272,7 +272,7 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
  * something worse than the first attempt.
  */
 async function generateVerifiedCode(
-  ai: AiService, code: CodeRunner, target: Target, request: GenerateRequest, context: string,
+  ai: AiService, code: CodeService, target: Target, request: GenerateRequest, context: string,
   check?: (outputs: Record<string, unknown>) => string[],
   probeWith?: (body: string) => string,
 ): Promise<{ text: string; explanation: string; probe: ProbeReport }> {
@@ -335,7 +335,7 @@ async function generateVerifiedCode(
 
 export interface GenerateDeps {
   ai: AiService;
-  code: CodeRunner;
+  code: CodeService;
   /** Reads the files a sample names, for a node that is handed their text. Without it the sample stays as sent. */
   files?: FileService;
   /** The element's declaration, or undefined for a name that generates nothing. */

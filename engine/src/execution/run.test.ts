@@ -33,7 +33,7 @@ function runtime(over: Partial<Runtime> = {}): Runtime {
  * ordinary loop.
  *
  * The display is a `table`, not a chart. A chart's body is run by the page when
- * it draws (`WidgetElement.bodyDrawsOnThePage`), so a run hands it what arrived
+ * it draws (`WidgetRunner.bodyDrawsOnThePage`), so a run hands it what arrived
  * and transforms nothing -- which is asserted on its own below. Every other
  * display still has its transform run here, and that is what this exercises.
  */

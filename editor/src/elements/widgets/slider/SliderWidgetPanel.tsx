@@ -1,6 +1,6 @@
 import type { GuiWidget } from '@/graph';
 import { FIELD_ON_SURFACE, MUTED } from '@/ui/theme';
-import type { WidgetPanelProps } from '../../WidgetUi';
+import type { WidgetPanelProps } from '../../WidgetGuiBuilder';
 
 export default function SliderWidgetPanel({ widget, onUpdate }: WidgetPanelProps) {
   const num = (value: unknown, fallback: number) => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);

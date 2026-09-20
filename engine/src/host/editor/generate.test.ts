@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AiRequest, AiService, CodeRunner } from '../../elements/Runtime.ts';
+import type { AiRequest, AiService, CodeService } from '../../elements/Runtime.ts';
 import { registry } from '../../elements/registry.ts';
 import { GenerationFailed, GenerationRefused, generate, generateGraph, withContextFile } from './generate.ts';
 
@@ -27,7 +27,7 @@ function scripted(replies: string[]): AiService & { asked: AiRequest[] } {
   };
 }
 
-const runner = (outcome: (body: string) => Record<string, unknown>): CodeRunner => ({
+const runner = (outcome: (body: string) => Record<string, unknown>): CodeService => ({
   run: async (body) => outcome(body),
 });
 
@@ -119,7 +119,7 @@ describe('a node that is handed a file\'s text, not its path', () => {
   it('shows the model the text and tries the code on it -- it used to try it on the filename and pass', async () => {
     const ai = scripted(['```js\nfunction run(i) { return { rows: 2 }; }\n```']);
     let received: Record<string, unknown> = {};
-    const code: CodeRunner = { run: async (_body, inputs) => { received = inputs; return { rows: 2 }; } };
+    const code: CodeService = { run: async (_body, inputs) => { received = inputs; return { rows: 2 }; } };
     const reply = await generate(request, { ai, code, generationFor, target, files: files({ 'data/people.csv': 'name,age\nAda,36' }) });
     expect(received).toEqual({ csv: 'name,age\nAda,36', top: '5' });
     expect(ai.asked[0].prompt).toContain('e.g. "name,age\\nAda,36"');

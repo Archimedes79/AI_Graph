@@ -58,7 +58,7 @@ describe('flow.js', () => {
     const flow = describeFlow(graph());
     expect(flow).toContain('// Each file · ai · nodes/each-file/run.js · id "each-file"');
     expect(flow).toContain('// Rows · code · nodes/rows/code.js');
-    expect(flow).toContain('// Page · gui · engine/src/elements/nodes/gui/GuiNodeElement.ts › execute');
+    expect(flow).toContain('// Page · gui · engine/src/elements/nodes/gui/GuiNodeRunner.ts › execute');
     expect(flow).toContain('// starts a round: go_out');
     expect(flow).toContain('// Summarize one file.');
   });

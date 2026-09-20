@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGraphStore } from '@/store/graphStore';
-import { NODE_UIS } from '@/elements/registry';
+import { NODE_BUILDERS } from '@/elements/registry';
 import { call } from '@/api/client';
 import Modal from '@/ui/Modal';
 import { errorText } from '@/api/errorText';
@@ -17,7 +17,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
   const updateNode = useGraphStore((state) => state.updateNode);
   const port = graphNode?.inputs.find((item) => item.id === portId) ?? graphNode?.outputs.find((item) => item.id === portId);
   // Which file a wired port's format is detected from is the node's answer: its own path, or a sample.
-  const asksForSample = graphNode ? NODE_UIS[graphNode.node_type]?.asksForFormatSample ?? false : false;
+  const asksForSample = graphNode ? NODE_BUILDERS[graphNode.node_type]?.asksForFormatSample ?? false : false;
   const [format, setFormat] = useState(port?.format ?? '');
   const [samplePath, setSamplePath] = useState(graphNode?.config.value ?? '');
   const [detecting, setDetecting] = useState(false);
