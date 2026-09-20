@@ -7,15 +7,25 @@ import { WIDGET_UIS } from '../../widgets/roster';
 /** A composite: it holds widgets, generates nothing itself, and emits what its widgets emit. */
 export class GuiNodeUi extends NodeUi {
   readonly nodeType = 'gui';
-  readonly label = 'GUI Node';
-  readonly hint = 'Give the graph its own interface, built from widgets';
-  readonly icon = '🖥️';
-  readonly color = 'var(--ui-node-gui, #4a1d3a)';
-  readonly settings: NodeUi['settings'] = ['gui_widgets'];
 
   override readonly hasRuntimeWindow = true;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'GUI Node';
+
+  readonly hint = 'Give the graph its own interface, built from widgets';
+
+  readonly icon = '🖥️';
+
+  readonly color = 'var(--ui-node-gui, #4a1d3a)';
+
+  readonly settings: NodeUi['settings'] = ['gui_widgets'];
+
   override readonly holdsWidgets = true;
+
   override readonly outputContract = 'widgets';
+
   override readonly Panel = lazy(() => import('./GuiNodePanel'));
 
   /**

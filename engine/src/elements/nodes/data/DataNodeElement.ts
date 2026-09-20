@@ -1,5 +1,5 @@
 import { NodeElement } from '../../NodeElement.ts';
-import type { TextFile } from '../../Element.ts';
+import type { TextFile, WhatRuns } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
@@ -30,14 +30,11 @@ const DATA_TEXTS: readonly TextFile[] = [
  * a code node adding one.
  */
 export class DataNodeElement extends NodeElement<DataConfig> {
+  readonly nodeType = 'data' as const;
+
   override texts(): readonly TextFile[] {
     return DATA_TEXTS;
   }
-
-  readonly nodeType = 'data' as const;
-  override readonly isMemory = true;
-  /** It keeps what it is handed, whether or not the edge closes a loop. */
-  override readonly settlesOnArrival = true;
 
   config(node: GraphNode): DataConfig {
     return { value: node.config.data_value ?? '' };
@@ -54,14 +51,10 @@ export class DataNodeElement extends NodeElement<DataConfig> {
     return logicFrom(node, 'spec', DATA_FIELDS);
   }
 
-  /** The format contract every neighbour is then generated against. */
-  override generation(): Generation {
-    return {
-      kind: 'data_format', fields: DATA_FIELDS,
-      guard: 'Please describe the data format first.',
-      success: '✅ Data format generated!',
-    };
-  }
+  override readonly isMemory = true;
+
+  /** It keeps what it is handed, whether or not the edge closes a loop. */
+  override readonly settlesOnArrival = true;
 
   async execute(node: GraphNode, inputs: Record<string, unknown>, _runtime: Runtime) {
     // An update arriving this round wins; otherwise it emits what it kept.
@@ -72,5 +65,20 @@ export class DataNodeElement extends NodeElement<DataConfig> {
 
   override settleMemory(node: GraphNode, _portId: string, value: unknown): void {
     node.config.data_value = value as never;
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override whatRuns(): WhatRuns {
+    return this.engineRuns('Hands on what arrives this round, or else what it kept; what arrives is kept for the next round.');
+  }
+
+  /** The format contract every neighbour is then generated against. */
+  override generation(): Generation {
+    return {
+      kind: 'data_format', fields: DATA_FIELDS,
+      guard: 'Please describe the data format first.',
+      success: '✅ Data format generated!',
+    };
   }
 }

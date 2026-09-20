@@ -4,6 +4,11 @@
   "type": "ai",
   "label": "Figures & tables",
   "about": "Figures & tables reviewer: the figures and tables.",
+  "runs": {
+    "by": "engine",
+    "where": "run.js",
+    "does": "Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as \"output\". Unchanged, run.js is made by the engine itself; a test holds the two to the same request."
+  },
   "inputs": [
     {
       "port": "paper",

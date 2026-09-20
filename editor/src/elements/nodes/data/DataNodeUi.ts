@@ -8,10 +8,17 @@ import { describeDataFormat } from './dataFormat';
 
 export class DataNodeUi extends NodeUi {
   readonly nodeType = 'data';
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
   readonly label = 'Data Node';
+
   readonly hint = 'Remember a value between runs, so a loop can build on its own last result';
+
   readonly icon = '🗃️';
+
   readonly color = 'var(--ui-node-data, #183b3b)';
+
   readonly settings: NodeUi['settings'] = [
     'data_value', 'data_format', 'data_prompt', 'data_format_prompt', 'example_file',
   ];
@@ -19,6 +26,7 @@ export class DataNodeUi extends NodeUi {
   // A data node IS the graph's register: it holds its value between runs,
   // which is what lets a feedback edge into it close a cycle.
   override readonly ownsDescription = true;
+
   override readonly Panel = lazy(() => import('./DataNodePanel'));
 
   override readonly generation: ElementGeneration<GraphNode> = {

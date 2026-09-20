@@ -6,9 +6,15 @@ import TableWidgetView from './TableWidgetView';
 
 export class TableWidgetUi extends TransformingDisplayUi {
   readonly widgetKind = 'table';
-  readonly label = 'Table';
+
   readonly View = TableWidgetView;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Table';
+
   readonly transformTitle = 'Row transform (optional)';
+
   readonly transformHelp = 'The code must return {"value": <rows>} — a list of objects sharing their keys (the keys become the columns), or a list of lists whose first row is the header. Leave empty to show the incoming value as-is.';
 
   override readonly generation: ElementGeneration<GuiWidget> = {

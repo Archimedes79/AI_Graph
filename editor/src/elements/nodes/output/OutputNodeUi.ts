@@ -6,17 +6,24 @@ import { baseNodeConfig } from '../baseNodeConfig';
 /** Ends a branch: shows the result in a window, or writes it to a file or directory. */
 export class OutputNodeUi extends NodeUi {
   readonly nodeType = 'output';
-  readonly label = 'Output';
-  readonly hint = 'Show the result in a window, or write it to a file or directory';
-  readonly icon = '📤';
-  readonly color = 'var(--ui-node-output, #3a2000)';
-  readonly settings: NodeUi['settings'] = ['output_label', 'write_mode', 'value', 'prompt_at_runtime'];
-
-  override readonly Panel = lazy(() => import('./OutputNodePanel'));
 
   override showsResultWindow(node: GraphNode): boolean {
     return node.config.write_mode === 'window';
   }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Output';
+
+  readonly hint = 'Show the result in a window, or write it to a file or directory';
+
+  readonly icon = '📤';
+
+  readonly color = 'var(--ui-node-output, #3a2000)';
+
+  readonly settings: NodeUi['settings'] = ['output_label', 'write_mode', 'value', 'prompt_at_runtime'];
+
+  override readonly Panel = lazy(() => import('./OutputNodePanel'));
 
   create(id: string): GraphNode {
     return {

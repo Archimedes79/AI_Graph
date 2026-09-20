@@ -4,8 +4,13 @@ import DividerWidgetView from './DividerWidgetView';
 /** A rule between sections. */
 export class DividerWidgetUi extends StaticWidgetUi {
   readonly widgetKind = 'divider';
-  readonly label = 'Divider';
+
   readonly View = DividerWidgetView;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Divider';
+
   override readonly defaultMode = 'horizontal';
 
   /**

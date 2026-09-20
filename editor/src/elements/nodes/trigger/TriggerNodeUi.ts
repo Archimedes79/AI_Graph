@@ -14,10 +14,17 @@ const ELEMENT = new TriggerNodeElement();
  */
 export class TriggerNodeUi extends NodeUi {
   readonly nodeType = 'trigger';
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
   readonly label = 'Trigger';
+
   readonly hint = 'Start the graph by itself: when the tool starts, or again every few minutes';
+
   readonly icon = '⏱️';
+
   readonly color = 'var(--ui-node-trigger, #4a3a12)';
+
   readonly settings: NodeUi['settings'] = ['trigger_on_start', 'trigger_every'];
 
   override readonly Panel = lazy(() => import('./TriggerNodePanel'));

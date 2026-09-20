@@ -5,10 +5,17 @@ import TextWidgetView from './TextWidgetView';
 /** Prose on the page, rendered as markdown: a heading, a paragraph, a caption. */
 export class TextWidgetUi extends StaticWidgetUi {
   readonly widgetKind = 'text';
-  readonly label = 'Text';
+
   readonly View = TextWidgetView;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Text';
+
   override readonly Panel = lazy(() => import('./TextWidgetPanel'));
+
   override readonly defaultMode = 'body';
+
   /** Typed where it stands, on the page being built. */
   override readonly inlineText = true;
 

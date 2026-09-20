@@ -7,12 +7,18 @@ import PlotChart from './PlotChart';
 
 export class PlotWindowWidgetUi extends TransformingDisplayUi {
   readonly widgetKind = 'plot_window';
-  readonly label = 'Chart';
+
   readonly View = PlotWindowWidgetView;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Chart';
+
   // Not "(optional)". It is optional in exactly one case -- what arrives is
   // already a list of points -- and calling it optional in general told people
   // an empty box was a finished block, which draws nothing.
   readonly transformTitle = 'Plotting code';
+
   readonly transformHelp = 'The code must return {"value": <plot-ready data>} — a list of numbers or of {"label", "value"} objects, or an SVG drawing. It is run on every value that arrives, so answer for an empty or missing one too (an empty list, or empty axes) rather than throwing: that is the chart before anything has been computed. Leave the code empty only if what arrives is already points.';
 
   override readonly generation: ElementGeneration<GuiWidget> = {

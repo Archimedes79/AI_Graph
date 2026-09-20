@@ -4,6 +4,11 @@
   "type": "ai",
   "label": "Assistant",
   "about": "Answer the user's last message as a friendly, concise assistant that remembers the conversation.",
+  "runs": {
+    "by": "engine",
+    "where": "run.js",
+    "does": "Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as \"output\". Unchanged, run.js is made by the engine itself; a test holds the two to the same request."
+  },
   "inputs": [
     {
       "port": "history",

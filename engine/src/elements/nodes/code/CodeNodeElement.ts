@@ -1,6 +1,5 @@
-import { llmCall, PLAIN_ASK } from '../ai/ask.ts';
 import { NodeElement } from '../../NodeElement.ts';
-import type { TextFile } from '../../Element.ts';
+import type { TextFile, WhatRuns } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
@@ -33,11 +32,11 @@ const CODE_TEXTS: readonly TextFile[] = [
  * else — no interpreter to find, no packages to install, no second sandbox.
  */
 export class CodeNodeElement extends NodeElement<CodeConfig> {
+  readonly nodeType = 'code' as const;
+
   override texts(): readonly TextFile[] {
     return CODE_TEXTS;
   }
-
-  readonly nodeType = 'code' as const;
 
   config(node: GraphNode): CodeConfig {
     const c = node.config;
@@ -48,16 +47,6 @@ export class CodeNodeElement extends NodeElement<CodeConfig> {
 
   override logic(node: GraphNode): Logic {
     return logicFrom(node, 'code', CODE_FIELDS);
-  }
-
-  /** Written against the node's own ports: `inputs`/`outputs` are left unset,
-   *  which means "whatever this node is actually wired as". */
-  override generation(): Generation {
-    return {
-      kind: 'code', fields: CODE_FIELDS,
-      guard: 'Please add a code generation prompt first.',
-      success: '✅ Code generated!',
-    };
   }
 
   async execute(
@@ -76,11 +65,22 @@ export class CodeNodeElement extends NodeElement<CodeConfig> {
     //
     // It may ask a model, as an ai node's `run.js` does: `await node.llm({ prompt })`,
     // answered by the process that holds the keys, on the graph's default model.
-    return logic.run(inputs, runtime.code, { calls: { llm: llmCall(PLAIN_ASK, runtime) } });
+    return logic.run(inputs, runtime);
   }
 
-  /** A body that asks a model needs one where it is deployed. Any mention counts: `node.llm(`, `{ llm }`, `const ask = node.llm`. */
-  override deployNeeds(node: GraphNode) {
-    return { needsInterface: false, asksAi: /\bllm\b/.test(this.config(node).code) };
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override whatRuns(): WhatRuns {
+    return { by: 'body', where: 'code.js', does: 'Calls run(inputs, node) in code.js, sandboxed, and hands on the object it returns, keyed by output port.' };
+  }
+
+  /** Written against the node's own ports: `inputs`/`outputs` are left unset,
+   *  which means "whatever this node is actually wired as". */
+  override generation(): Generation {
+    return {
+      kind: 'code', fields: CODE_FIELDS,
+      guard: 'Please add a code generation prompt first.',
+      success: '✅ Code generated!',
+    };
   }
 }

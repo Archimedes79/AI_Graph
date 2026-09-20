@@ -6,10 +6,17 @@ import ImageViewWidgetView from './ImageViewWidgetView';
 
 export class ImageViewWidgetUi extends TransformingDisplayUi {
   readonly widgetKind = 'image_view';
-  readonly label = 'Image';
+
   readonly View = ImageViewWidgetView;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Image';
+
   readonly transformTitle = 'Path transform (optional)';
+
   readonly transformHelp = 'The code must return {"value": <path>} — one image path, or a list of them.';
+
   override readonly intro = 'Wire a file path (or a list of them, from a directory picker) into this widget and it displays the picture. PNG, JPEG, GIF, WebP, BMP and SVG are recognised. A transform is only needed when the incoming value is not already a path — e.g. picking one field out of a record.';
 
   override readonly generation: ElementGeneration<GuiWidget> = {

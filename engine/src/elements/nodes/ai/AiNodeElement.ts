@@ -1,11 +1,12 @@
 import { NodeElement } from '../../NodeElement.ts';
-import type { TextFile } from '../../Element.ts';
+import type { TextFile, WhatRuns } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
-import { askModel, llmCall, type AskSettings } from './ask.ts';
+import { runBody } from '../../body.ts';
+import { askModel, type AskSettings } from './ask.ts';
 import { AI_RUN, AI_RUN_TEMPLATES, isStandardRun } from './runTemplate.ts';
 
 /** Where an ai node keeps its two halves; used by both declarations below. */
@@ -55,13 +56,11 @@ const AI_TEXTS: readonly TextFile[] = [
  * property of the graph rather than of asking a model.
  */
 export class AiNodeElement extends NodeElement<AiConfig> {
+  readonly nodeType = 'ai' as const;
+
   override texts(): readonly TextFile[] {
     return AI_TEXTS;
   }
-
-  override readonly asksModel = true;
-
-  readonly nodeType = 'ai' as const;
 
   config(node: GraphNode): AiConfig {
     const c = node.config;
@@ -92,19 +91,6 @@ export class AiNodeElement extends NodeElement<AiConfig> {
     return logicFrom(node, 'prompt', PROMPT_FIELDS);
   }
 
-  /** The one element whose request lives on the node rather than in its config. */
-  override generation(): Generation {
-    return {
-      kind: 'prompt', fields: PROMPT_FIELDS,
-      guard: 'Please add a description first.',
-      success: '✅ Prompt generated!',
-    };
-  }
-
-  override deployNeeds() {
-    return { needsInterface: false, asksAi: true };
-  }
-
   /** What is wired in is the question: with all of it empty there is nothing to ask. */
   override needsInput(): boolean {
     return true;
@@ -122,14 +108,38 @@ export class AiNodeElement extends NodeElement<AiConfig> {
     const order = node.inputs.map((port) => port.id);
     if (!settings.runCode) return { output: await askModel(settings, inputs, runtime, order) };
 
-    return runtime.code.run(settings.runCode, inputs, undefined, {
+    return runBody(settings.runCode, inputs, runtime, {
       data: {
         texts: {
           system: settings.systemPrompt, message: settings.template,
           output: settings.outputFormatPrompt, output_example: settings.outputExample,
         },
       },
-      calls: { llm: llmCall(settings, runtime, order) },
+      ask: settings,
+      order,
     });
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override whatRuns(node: GraphNode): WhatRuns {
+    return isStandardRun(this.config(node).runCode)
+      ? { by: 'engine', where: 'run.js', does: 'Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as "output". Unchanged, run.js is made by the engine itself; a test holds the two to the same request.' }
+      : { by: 'body', where: 'run.js', does: 'Calls run(inputs, node) in run.js, sandboxed; each node.llm(...) in it is a model call made for it by the process that holds the keys.' };
+  }
+
+  override readonly asksModel = true;
+
+  /** The one element whose request lives on the node rather than in its config. */
+  override generation(): Generation {
+    return {
+      kind: 'prompt', fields: PROMPT_FIELDS,
+      guard: 'Please add a description first.',
+      success: '✅ Prompt generated!',
+    };
+  }
+
+  override deployNeeds() {
+    return { needsInterface: false, asksAi: true };
   }
 }

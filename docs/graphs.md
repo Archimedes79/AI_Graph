@@ -288,7 +288,7 @@ my_tool/
 
 | Node | Files |
 |---|---|
-| Every node | `interface.json` — what goes in, from where, what may open its ◆, what comes out and where it goes. Written on every save and **never read back**: ports are changed in the editor |
+| Every node | `interface.json` — **what runs** when the node runs, what goes in, from where, what may open its ◆, what comes out and where it goes. Written on every save and **never read back**: ports are changed in the editor |
 | Code | `code.js`, `task.md`, `output.schema.json`, `examples.md` |
 | AI | `run.js`, `system.md`, `message.md`, `output.md`, `output.example.md`, `output.schema.json`, `examples.md` |
 | Data | `format.md` (the contract neighbours are generated against), `task.md` |
@@ -329,6 +329,32 @@ what must come out. Optional, and nothing uses them to write code (✨ Generate 
 before); they check what was written, whoever wrote it:
 
 ````markdown
+### What runs, and where
+
+Every node's panel ends with *What this node runs*, and its `interface.json` begins with
+the same words under `runs`. There are two answers:
+
+- **A body in the node's folder** — JavaScript somebody wrote, or a model did. Always the
+  same shape, `async function run(inputs, node)`, returning an object keyed by output port;
+  always in a sandboxed process of its own; always able to ask a model through
+  `await node.llm(...)` without ever seeing a key.
+- **The engine**, for the kinds whose work is the engine's own. The line names the class
+  and method, so the code is one click away.
+
+| Node | What runs | In one sentence |
+|---|---|---|
+| Code | `code.js`, sandboxed | Calls `run(inputs, node)` and hands on what it returns. |
+| AI | `run.js` | Unchanged: the engine makes the one model call it describes (`system.md`, `message.md` filled from the inputs). Changed: it runs sandboxed like any body, and each `node.llm(...)` is a call made for it. |
+| Input | `InputNodeElement.execute` | Hands on its text; or reads the file on `path`; or lists the folder — through `selector.js`, sandboxed, if files are chosen by code. |
+| Data | `DataNodeElement.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
+| GUI | `GuiNodeElement.execute` | Hands on what each block holds and shows what arrives; a block's own code runs sandboxed before it is shown. |
+| Output | `OutputNodeElement.execute` | Hands on what arrives as the run's result, or writes it to its file. |
+| Trigger | `TriggerNodeElement.execute` | `fired`: true in a round it began. The clock is kept by whatever holds the graph. |
+| Subgraph | `SubgraphNodeElement.execute` | Runs the graph in its folder, whole, by the engine that runs this one. |
+
+The sentences come from the elements themselves (`whatRuns`), so the panel, the folder and
+this table cannot drift apart without a test noticing the class or method is gone.
+
 ## The three largest, largest first
 
 ```json input

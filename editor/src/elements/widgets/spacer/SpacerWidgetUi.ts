@@ -4,8 +4,13 @@ import SpacerWidgetView from './SpacerWidgetView';
 /** Nothing, on purpose: the widget that says "this section ends here". */
 export class SpacerWidgetUi extends StaticWidgetUi {
   readonly widgetKind = 'spacer';
-  readonly label = 'Gap';
+
   readonly View = SpacerWidgetView;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Gap';
+
   override readonly defaultMode = 'horizontal';
 
   /**

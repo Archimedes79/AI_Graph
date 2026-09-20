@@ -4,6 +4,11 @@
   "type": "ai",
   "label": "Summarize",
   "about": "Summarize the text faithfully, at the length asked for.",
+  "runs": {
+    "by": "engine",
+    "where": "run.js",
+    "does": "Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as \"output\". Unchanged, run.js is made by the engine itself; a test holds the two to the same request."
+  },
   "inputs": [
     {
       "port": "text",

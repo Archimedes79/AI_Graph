@@ -10,8 +10,6 @@ import { WidgetElement, type Widget } from '../WidgetElement.ts';
  * is what it used to do to every sibling widget.
  */
 export abstract class DisplayWidgetElement<C = unknown> extends WidgetElement<C> {
-  override readonly snippetFailure: SnippetFailure = 'cosmetic';
-
   ports(widget: Widget): { inputs: Port[]; outputs: Port[] } {
     return {
       inputs: [{
@@ -29,6 +27,8 @@ export abstract class DisplayWidgetElement<C = unknown> extends WidgetElement<C>
       outputs: [],
     };
   }
+
+  override readonly snippetFailure: SnippetFailure = 'cosmetic';
 
   async execute(): Promise<Record<string, unknown>> {
     return {};

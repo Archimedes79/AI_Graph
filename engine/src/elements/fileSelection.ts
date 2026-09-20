@@ -29,7 +29,7 @@ export async function selectFiles(
   });
 
   if (!settings.selectAll && logic && !logic.isEmpty) {
-    const chosen = await logic.run({ files }, runtime.code);
+    const chosen = await logic.run({ files }, runtime);
     if (Array.isArray(chosen.files)) files = chosen.files.map(String);
   }
   return files;

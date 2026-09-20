@@ -4,7 +4,7 @@ import type { Graph, GraphNode, NodeType, Port } from '../graph.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 import { readInterface, type Schema } from '../execution/interface.ts';
 import type { Problem } from '../execution/wiring.ts';
-import { Element } from './Element.ts';
+import { Element, type WhatRuns } from './Element.ts';
 import type { Runtime } from './Runtime.ts';
 
 /**
@@ -17,6 +17,9 @@ export interface Elements {
 }
 
 export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
+  // ── What it is ────────────────────────────────────────────────────────────
+  // Its kind, its ports, the graph it may hold: asked whenever the graph is read.
+
   abstract readonly nodeType: NodeType;
 
   /**
@@ -63,21 +66,6 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
   setNestedGraph(_node: GraphNode, _graph: Graph | null): void {}
 
   /**
-   * What is wrong with this node that only this element can say.
-   *
-   * `check` finds what any node can get wrong -- an edge to a port that is not
-   * there, a cycle, an interface naming a lost output. What is *this kind of
-   * node's* own contract belongs here, in the file that defines it: a node
-   * holding a graph knows what may and may not stand at that graph's edge, and
-   * the project checker should not have to.
-   *
-   * Nothing recursive: `check` walks the graphs, this speaks about one node.
-   */
-  problems(_node: GraphNode, _elements: Elements, _where: string): Problem[] {
-    return [];
-  }
-
-  /**
    * Whether this node is where its graph meets whatever holds it: `'in'` for a
    * value handed down, `'out'` for one handed back up.
    *
@@ -90,6 +78,20 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
   boundaryRole(_node: GraphNode): 'in' | 'out' | null {
     return null;
   }
+
+  /**
+   * What this node's outputs are held to, once someone has kept one: see
+   * `execution/interface.ts`. None by default -- a model's answer is described
+   * to the model instead (an AI node's `output.md`), not checked afterwards.
+   */
+  outputInterface(node: GraphNode): Schema | undefined {
+    // Kept by whichever element says it keeps one (`output.schema.json` among
+    // its `texts`): set from a run, then every run is checked against it.
+    return this.texts(node).some((text) => text.field === 'output_schema') ? readInterface(node.config.output_schema) : undefined;
+  }
+
+  // ── Run time ──────────────────────────────────────────────────────────────
+  // What a run asks. The executor owns the run; these are the questions it puts.
 
   /**
    * This node keeps its value between runs, so an edge into it can close a
@@ -105,12 +107,9 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    */
   readonly settlesOnArrival: boolean = false;
 
-  /**
-   * Whether this node works *on* what is wired into it, so that a round in
-   * which every wire came up empty is a round with nothing to do. An ai node
-   * does: its inputs are the question. A code node does not -- "no file chosen
-   * yet" is a case its body may well want to draw.
-   */
+  /** This node carries the graph's interface. */
+  readonly hasInterface: boolean = false;
+
   /**
    * The output ports of this node that can start a round: a button, a chat's
    * send, a block told that using it starts the graph, a trigger.
@@ -131,25 +130,14 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
     return false;
   }
 
+  /**
+   * Whether this node works *on* what is wired into it, so that a round in
+   * which every wire came up empty is a round with nothing to do. An ai node
+   * does: its inputs are the question. A code node does not -- "no file chosen
+   * yet" is a case its body may well want to draw.
+   */
   needsInput(_node: GraphNode): boolean {
     return false;
-  }
-
-  /** This node carries the graph's interface. */
-  readonly hasInterface: boolean = false;
-
-  /**
-   * What this node shows, per block id, given everything that arrived.
-   *
-   * Asked by the executor once the round has settled, so values that came back
-   * around a loop are here too. Only a node with an interface answers.
-   */
-  async display(
-    _node: GraphNode,
-    _arrived: Record<string, unknown>,
-    _runtime: Runtime,
-  ): Promise<Record<string, unknown>> {
-    return {};
   }
 
   /**
@@ -182,19 +170,19 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
     return node.config.read_file_inputs === true;
   }
 
-  /** Running this node asks a model: its examples are skipped by an offline `test`. */
-  readonly asksModel: boolean = false;
-
   /**
-   * What this node's outputs are held to, once someone has kept one: see
-   * `execution/interface.ts`. None by default -- a model's answer is described
-   * to the model instead (an AI node's `output.md`), not checked afterwards.
+   * What this node needs a person to supply before the graph can run.
+   *
+   * Asked of the element rather than looked up by node type, so a new element
+   * that prompts says so in its own file — and the editor's dialog, a
+   * terminal's prompts and a bundle's `--inputs` all read the same list.
    */
-  outputInterface(node: GraphNode): Schema | undefined {
-    // Kept by whichever element says it keeps one (`output.schema.json` among
-    // its `texts`): set from a run, then every run is checked against it.
-    return this.texts(node).some((text) => text.field === 'output_schema') ? readInterface(node.config.output_schema) : undefined;
+  runtimeRequirements(_node: GraphNode): RuntimeRequirement[] {
+    return [];
   }
+
+  /** Put one supplied value where this element keeps it. */
+  applyRuntimeValue(_node: GraphNode, _widgetId: string | null, _value: string): void {}
 
   /** Run once, for inputs already collected from the wires. */
   abstract execute(
@@ -211,15 +199,59 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
   settleMemory(_node: GraphNode, _portId: string, _value: unknown): void {}
 
   /**
-   * What this node needs a person to supply before the graph can run.
+   * What this node shows, per block id, given everything that arrived.
    *
-   * Asked of the element rather than looked up by node type, so a new element
-   * that prompts says so in its own file — and the editor's dialog, a
-   * terminal's prompts and a bundle's `--inputs` all read the same list.
+   * Asked by the executor once the round has settled, so values that came back
+   * around a loop are here too. Only a node with an interface answers.
    */
-  runtimeRequirements(_node: GraphNode): RuntimeRequirement[] {
+  async display(
+    _node: GraphNode,
+    _arrived: Record<string, unknown>,
+    _runtime: Runtime,
+  ): Promise<Record<string, unknown>> {
+    return {};
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+  // What only building asks: the editor, `check`, `test`, a bundle being made.
+
+  /**
+   * What runs when this node runs: where that code is, and in one sentence what
+   * it does. Every kind says it, so every node's folder and panel can -- the
+   * executing class is otherwise nowhere a person building a graph looks.
+   */
+  whatRuns(_node: GraphNode): WhatRuns {
+    // Every kind in the registry says more than this (`times.test.ts`).
+    return this.engineRuns('');
+  }
+
+  /**
+   * This class's own `execute`, named by where the element-first layout puts
+   * it. Spelled from the node type, never from `constructor.name`: in the
+   * editor's bundle a class is called `Kg`.
+   */
+  protected engineRuns(does: string): WhatRuns {
+    const kind = this.nodeType.charAt(0).toUpperCase() + this.nodeType.slice(1);
+    return { by: 'engine', where: `engine/src/elements/nodes/${this.nodeType}/${kind}NodeElement.ts › execute`, does };
+  }
+
+  /**
+   * What is wrong with this node that only this element can say.
+   *
+   * `check` finds what any node can get wrong -- an edge to a port that is not
+   * there, a cycle, an interface naming a lost output. What is *this kind of
+   * node's* own contract belongs here, in the file that defines it: a node
+   * holding a graph knows what may and may not stand at that graph's edge, and
+   * the project checker should not have to.
+   *
+   * Nothing recursive: `check` walks the graphs, this speaks about one node.
+   */
+  problems(_node: GraphNode, _elements: Elements, _where: string): Problem[] {
     return [];
   }
+
+  /** Running this node asks a model: its examples are skipped by an offline `test`. */
+  readonly asksModel: boolean = false;
 
   /**
    * Files and folders this node names as its own defaults: the CSV a picker
@@ -233,6 +265,4 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
     return [];
   }
 
-  /** Put one supplied value where this element keeps it. */
-  applyRuntimeValue(_node: GraphNode, _widgetId: string | null, _value: string): void {}
 }

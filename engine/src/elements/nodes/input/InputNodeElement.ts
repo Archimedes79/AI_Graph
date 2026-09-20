@@ -1,5 +1,5 @@
 import { NodeElement } from '../../NodeElement.ts';
-import type { TextFile } from '../../Element.ts';
+import type { TextFile, WhatRuns } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type GraphNode } from '../../../graph.ts';
 import { logicFrom, Logic } from '../../../authoring/logic.ts';
@@ -35,11 +35,11 @@ const SELECTOR_TEXTS: readonly TextFile[] = [
  * wrong first if it invents names of its own.
  */
 export class InputNodeElement extends NodeElement<InputConfig> {
+  readonly nodeType = 'input' as const;
+
   override texts(): readonly TextFile[] {
     return SELECTOR_TEXTS;
   }
-
-  readonly nodeType = 'input' as const;
 
   config(node: GraphNode): InputConfig {
     const c = node.config;
@@ -63,11 +63,6 @@ export class InputNodeElement extends NodeElement<InputConfig> {
    */
   override boundaryRole(node: GraphNode): 'in' | null {
     return this.config(node).mode === 'text' ? 'in' : null;
-  }
-
-  override referencedPaths(node: GraphNode): string[] {
-    const settings = this.config(node);
-    return settings.mode !== 'text' && settings.value ? [settings.value] : [];
   }
 
   override derivedPorts(node: GraphNode) {
@@ -107,11 +102,6 @@ export class InputNodeElement extends NodeElement<InputConfig> {
   override logic(node: GraphNode): Logic | undefined {
     if (this.config(node).mode !== 'directory') return undefined;
     return logicFrom(node, 'code', SELECTOR_FIELDS);
-  }
-
-  /** Literally the object the file-picker block returns: one behaviour, two levels. */
-  override generation(): Generation {
-    return SELECTOR_GENERATION;
   }
 
   override runtimeRequirements(node: GraphNode) {
@@ -158,5 +148,27 @@ export class InputNodeElement extends NodeElement<InputConfig> {
     }
     const files = await selectFiles(this.logic(node), settings, raw, runtime);
     return { files, count: files.length, ...(settings.catchErrors ? { error: '' } : {}) };
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override whatRuns(node: GraphNode): WhatRuns {
+    const { mode } = this.config(node);
+    if (mode === 'file') return this.engineRuns('Reads the file whose path arrives on "path" (or the one it names) and hands on its text as "content".');
+    if (mode === 'directory') {
+      return this.engineRuns('Lists the folder whose path arrives on "path" (or the one it names) and hands on the files as "files"'
+        + (this.logic(node)?.isEmpty === false ? ', chosen by selector.js, which runs sandboxed.' : '.'));
+    }
+    return this.engineRuns('Hands on the text it holds, or what the person running the graph was asked for.');
+  }
+
+  override referencedPaths(node: GraphNode): string[] {
+    const settings = this.config(node);
+    return settings.mode !== 'text' && settings.value ? [settings.value] : [];
+  }
+
+  /** Literally the object the file-picker block returns: one behaviour, two levels. */
+  override generation(): Generation {
+    return SELECTOR_GENERATION;
   }
 }

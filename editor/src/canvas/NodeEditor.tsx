@@ -14,6 +14,7 @@ import { nodeLogic } from '@/authoring/logic';
 import { sampleFor } from '@/authoring/tryValues';
 import GenerationTranscript, { GenerationReport } from '@/authoring/GenerationTranscript';
 import WidgetOutputSummary from '@/elements/nodes/gui/WidgetOutputSummary';
+import WhatRuns from './WhatRuns';
 import { connectedOutputDataNodes } from '@/elements/nodes/data/dataFormat';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -360,6 +361,8 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                   </div>
                 </details>
               )}
+
+              <WhatRuns node={node} />
 
               {isProject && nodeLogic(node) && (
                 <div>

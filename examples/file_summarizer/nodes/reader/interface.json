@@ -4,6 +4,11 @@
   "type": "code",
   "label": "Read file",
   "about": "Reads the chosen file and says what it is",
+  "runs": {
+    "by": "body",
+    "where": "code.js",
+    "does": "Calls run(inputs, node) in code.js, sandboxed, and hands on the object it returns, keyed by output port."
+  },
   "inputs": [
     {
       "port": "file",

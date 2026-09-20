@@ -4,6 +4,11 @@
   "type": "code",
   "label": "Table rows",
   "about": "Puts each file name beside its summary",
+  "runs": {
+    "by": "body",
+    "where": "code.js",
+    "does": "Calls run(inputs, node) in code.js, sandboxed, and hands on the object it returns, keyed by output port."
+  },
   "inputs": [
     {
       "port": "files",
