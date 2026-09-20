@@ -1,7 +1,7 @@
 // One way to run a body.
 //
 // A body is JavaScript somebody wrote, or a model did: a code node's `code.js`,
-// an ai node's changed `run.js`, the `selector.js` that picks files, the code a
+// an ai node's changed `run.js`, the `select.js` that picks files, the code a
 // display block shapes its value with. They are one kind of thing and run one
 // way, whichever element they belong to:
 //
@@ -27,6 +27,12 @@ export interface BodyGiven {
   ask?: AskSettings;
   /** The element's input ports, in order: how `node.llm` lists inputs a message does not place. */
   order?: string[];
+  /**
+   * Ends the body. Inside a run the executor sees to that for every body at
+   * once; whoever runs one outside a run -- the probe of generated code -- has
+   * only this.
+   */
+  signal?: AbortSignal;
 }
 
 export function runBody(
@@ -35,7 +41,7 @@ export function runBody(
   runtime: Runtime,
   given: BodyGiven = {},
 ): Promise<Record<string, unknown>> {
-  return runtime.code.run(body, inputs, undefined, {
+  return runtime.code.run(body, inputs, given.signal, {
     data: given.data ?? {},
     calls: { llm: llmCall(given.ask ?? PLAIN_ASK, runtime, given.order) },
   });

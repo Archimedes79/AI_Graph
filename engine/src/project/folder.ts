@@ -38,6 +38,7 @@ import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
 import { readLegacyNodeFiles } from './legacy.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 import { describeFlow, FLOW_FILE } from './flowFile.ts';
+import { folderName } from './names.ts';
 
 export const GRAPH_FILE = 'graph.json';
 export const LAYOUT_FILE = 'layout.json';
@@ -86,11 +87,6 @@ export function projectFolderOf(path: string): string | null {
   if (basename(full) === GRAPH_FILE && existsSync(join(dirname(full), NODES_DIR))) return dirname(full);
   if (basename(full) === GRAPH_FILE && existsSync(join(dirname(full), LAYOUT_FILE))) return dirname(full);
   return null;
-}
-
-/** A folder name from an id: ids come from the file format and may hold anything. */
-function folderName(id: string): string {
-  return id.replace(/[^\p{L}\p{N}_.-]/gu, '_').replace(/^\.+/, '_') || '_';
 }
 
 /** Where a node's writing goes, relative to the project folder. */

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { AiRequest, AiService, CodeService } from '../../elements/Runtime.ts';
 import { registry } from '../../elements/registry.ts';
 import { GenerationFailed, GenerationRefused, generate, generateGraph, withContextFile } from './generate.ts';
+import { nodeCode } from '../node.ts';
 
 /**
  * Writing a body with a model, without a model.
@@ -100,6 +101,22 @@ describe('code', () => {
     expect(ai.asked[0].prompt).toContain('inputs["value"]');
     expect(ai.asked[0].prompt).toContain('Must expose draw(data, window)');    // the block's own contract, first
   });
+});
+
+describe('generated code that asks a model', () => {
+  it('is tried the way a graph runs it: with a node it can ask -- it used to fail on `node.llm is not a function`', async () => {
+    // First reply: the code. Second: what the code's own question is answered with, in the probe.
+    const ai = scripted([
+      '```js\nasync function run(inputs, node) { return { label: (await node.llm({ prompt: "Classify: " + inputs.row })).trim() }; }\n```',
+      ' fruit ',
+    ]);
+    const reply = await generate(
+      { element: 'code', description: 'classify the row with the model', inputs: ['row'], outputs: ['label'], sample_inputs: { row: 'apple' } },
+      { ai, code: nodeCode, generationFor, target },
+    );
+    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1, outputs: { label: 'fruit' } });
+    expect(ai.asked[1].prompt).toContain('Classify: apple');
+  }, 30_000);
 });
 
 describe('a node that is handed a file\'s text, not its path', () => {

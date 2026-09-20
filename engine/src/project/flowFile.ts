@@ -18,6 +18,7 @@ import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
 import { memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
 import { RUN_PORT } from '../execution/triggers.ts';
 import { registry } from '../elements/registry.ts';
+import { folderName } from './names.ts';
 
 export const FLOW_FILE = 'flow.js';
 
@@ -36,7 +37,7 @@ const HEADER = [
 
 const RESERVED = new Set(['node', 'flow', 'await', 'async', 'function', 'const', 'let', 'var', 'return', 'new', 'class', 'default',
   'export', 'import', 'delete', 'in', 'of', 'do', 'if', 'else', 'for', 'while', 'switch', 'case', 'this', 'null', 'true', 'false',
-  'void', 'typeof', 'yield', 'static', 'enum', 'try', 'catch', 'finally', 'throw', 'with', 'super', 'break', 'continue', 'debugger', 'instanceof']);
+  'void', 'typeof', 'yield', 'static', 'enum', 'implements', 'interface', 'package', 'private', 'protected', 'public', 'arguments', 'eval', 'try', 'catch', 'finally', 'throw', 'with', 'super', 'break', 'continue', 'debugger', 'instanceof']);
 
 /** A node id as a JavaScript name: `node-3-1755` has to become something a `const` can be called. */
 function names(nodes: GraphNode[]): Map<string, string> {
@@ -56,10 +57,11 @@ function names(nodes: GraphNode[]): Map<string, string> {
 const isName = (text: string): boolean => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(text);
 const key = (text: string): string => (isName(text) ? text : JSON.stringify(text));
 const member = (object: string, property: string): string => (isName(property) ? `${object}.${property}` : `${object}[${JSON.stringify(property)}]`);
-const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim();
+/** Whatever it is, as one line of text: a graph.json written by hand may hold a number where a name belongs. */
+const oneLine = (text: unknown): string => (typeof text === 'string' ? text : text == null ? '' : JSON.stringify(text) ?? String(text)).replace(/\s+/g, ' ').trim();
 
 /** A sentence as comment lines no wider than a page of code. */
-function wrapped(text: string, indent = ''): string[] {
+function wrapped(text: unknown, indent = ''): string[] {
   const lines: string[] = [];
   let line = '';
   for (const word of oneLine(text).split(' ')) {
@@ -119,8 +121,8 @@ export function describeFlow(graph: Graph): string {
     const runs = element?.whatRuns(node);
     if (index) lines.push('');
     // A body is a file in this project; the engine's own work is named by class.
-    const where = !runs ? '' : runs.where.startsWith('engine/') ? runs.where : `nodes/${node.id}/${runs.where}`;
-    lines.push(`  // ${oneLine(node.label || node.id)} · ${node.node_type}${where ? ` · ${where}` : ''}${name !== node.id ? ` · id "${node.id}"` : ''}`);
+    const where = !runs ? '' : runs.where.startsWith('engine/') ? runs.where : `nodes/${folderName(node.id)}/${runs.where}`;
+    lines.push(`  // ${oneLine(node.label || node.id)} · ${node.node_type}${where ? ` · ${where}` : ''}${name !== node.id ? ` · id ${JSON.stringify(node.id)}` : ''}`);
     if (node.description) lines.push(...wrapped(node.description, '  '));
     const events = element?.eventPorts(node) ?? [];
     if (events.length) lines.push(`  // starts a round: ${events.join(', ')}`);
