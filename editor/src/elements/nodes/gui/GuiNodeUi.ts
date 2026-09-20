@@ -1,7 +1,6 @@
 import { lazy } from 'react';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { NodeUi } from '../../NodeUi';
-import { baseNodeConfig } from '../baseNodeConfig';
 import { WIDGET_UIS } from '../../widgets/roster';
 
 /** A composite: it holds widgets, generates nothing itself, and emits what its widgets emit. */
@@ -18,8 +17,6 @@ export class GuiNodeUi extends NodeUi {
   readonly icon = '🖥️';
 
   readonly color = 'var(--ui-node-gui, #4a1d3a)';
-
-  readonly settings: NodeUi['settings'] = ['gui_widgets'];
 
   override readonly holdsWidgets = true;
 
@@ -40,16 +37,4 @@ export class GuiNodeUi extends NodeUi {
     return 'values from its widgets';
   }
 
-  create(id: string): GraphNode {
-    return {
-      id,
-      node_type: 'gui',
-      label: this.label,
-      description: 'A composed panel of interactive widgets (file/directory pickers, text/chat windows)',
-      position: { x: 0, y: 0 },
-      inputs: [],
-      outputs: [],
-      config: { ...baseNodeConfig(), gui_widgets: [] },
-    };
-  }
 }

@@ -83,6 +83,19 @@ export abstract class WidgetElement<C = unknown> extends Element<Widget, C> {
     stored.value = value;
   }
 
+  /**
+   * Whether what this block holds was a *message* -- said once, and emptied
+   * once a run has delivered it -- rather than a setting someone would have to
+   * retype.
+   *
+   * Here and not in the browser half: what a run means for a block is the
+   * block's own business, the same family as `settle` above. It was the last
+   * reason the one store both hosts share had to ask a `Ui` anything.
+   */
+  clearsValueAfterRun(_widget: Widget): boolean {
+    return false;
+  }
+
   /** Last step before a display-only widget's value reaches the page. */
   async displayValue(_widget: Widget, value: unknown, _runtime: Runtime): Promise<unknown> {
     return value;

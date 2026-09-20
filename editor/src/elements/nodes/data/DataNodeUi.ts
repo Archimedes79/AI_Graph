@@ -3,7 +3,6 @@ import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { DataNodeElement } from '@engine/elements/nodes/data/DataNodeElement.ts';
 import { NodeUi } from '../../NodeUi';
-import { baseNodeConfig } from '../baseNodeConfig';
 import { describeDataFormat } from './dataFormat';
 
 export class DataNodeUi extends NodeUi {
@@ -18,10 +17,6 @@ export class DataNodeUi extends NodeUi {
   readonly icon = '🗃️';
 
   readonly color = 'var(--ui-node-data, #183b3b)';
-
-  readonly settings: NodeUi['settings'] = [
-    'data_value', 'data_format', 'data_prompt', 'data_format_prompt', 'example_file',
-  ];
 
   // A data node IS the graph's register: it holds its value between runs,
   // which is what lets a feedback edge into it close a cycle.
@@ -61,16 +56,4 @@ export class DataNodeUi extends NodeUi {
     return `Target data format required by "${node.label}": ${describeDataFormat(node)}`;
   }
 
-  create(id: string): GraphNode {
-    return {
-      id,
-      node_type: 'data',
-      label: this.label,
-      description: 'Persist data with an explicit format contract',
-      position: { x: 0, y: 0 },
-      inputs: [{ id: 'input', name: 'Update', kind: 'input', data_type: 'any', multi: false, required: false, description: 'Optional new value' }],
-      outputs: [{ id: 'output', name: 'Value', kind: 'output', data_type: 'any', multi: false, required: false, description: 'Persisted value' }],
-      config: { ...baseNodeConfig(), data_format: 'text', data_value: '' },
-    };
-  }
 }

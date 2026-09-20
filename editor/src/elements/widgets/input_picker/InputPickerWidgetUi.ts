@@ -3,12 +3,9 @@ import type { GuiWidget } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { InputPickerWidgetElement } from '@engine/elements/widgets/input_picker/InputPickerWidgetElement.ts';
 import { WidgetUi } from '../../WidgetUi';
-import InputPickerWidgetView from './InputPickerWidgetView';
 
 export class InputPickerWidgetUi extends WidgetUi {
   readonly widgetKind = 'input_picker';
-
-  readonly View = InputPickerWidgetView;
 
   // ── Build time ────────────────────────────────────────────────────────────
 

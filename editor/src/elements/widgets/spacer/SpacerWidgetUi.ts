@@ -1,11 +1,8 @@
 import { StaticWidgetUi } from '../StaticWidgetUi';
-import SpacerWidgetView from './SpacerWidgetView';
 
 /** Nothing, on purpose: the widget that says "this section ends here". */
 export class SpacerWidgetUi extends StaticWidgetUi {
   readonly widgetKind = 'spacer';
-
-  readonly View = SpacerWidgetView;
 
   // ── Build time ────────────────────────────────────────────────────────────
 

@@ -106,4 +106,27 @@ describe('deployment boundary', () => {
     const hit = [...reachable].find((path) => path.replace(/\.tsx?$/, '') === module);
     expect(hit, `${module} is reachable from runtime/main.tsx`).toBeUndefined();
   });
+
+  /**
+   * The builder halves, as a whole rather than member by member.
+   *
+   * `elements/times.test.ts` holds that a tool calls nothing build-time; this
+   * holds the stronger thing, that a tool never loads the classes at all. Both
+   * are wanted: the first is about the code being right, the second about the
+   * bytes being absent, and a member added to a `Ui` tomorrow is caught here
+   * whichever bar it lands under.
+   */
+  it.each(['elements/registry.ts', 'elements/widgets/roster.ts'])(
+    'does not pull the builder registry %s into a deployed bundle',
+    (module) => {
+      expect([...reachable], `${module} is reachable from runtime/main.tsx`).not.toContain(module);
+    },
+  );
+
+  it('draws the page and loads a graph from the halves that are delivered', () => {
+    // The other side of the rule above: absent *because the page gets what it
+    // needs elsewhere*, not because the page stopped working.
+    expect(reachable.has('page/blocks.ts')).toBe(true);
+    expect(reachable.has('nodeKinds.ts')).toBe(true);
+  });
 });

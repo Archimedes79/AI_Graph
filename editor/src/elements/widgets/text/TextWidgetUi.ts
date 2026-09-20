@@ -1,12 +1,9 @@
 import { lazy } from 'react';
 import { StaticWidgetUi } from '../StaticWidgetUi';
-import TextWidgetView from './TextWidgetView';
 
 /** Prose on the page, rendered as markdown: a heading, a paragraph, a caption. */
 export class TextWidgetUi extends StaticWidgetUi {
   readonly widgetKind = 'text';
-
-  readonly View = TextWidgetView;
 
   // ── Build time ────────────────────────────────────────────────────────────
 

@@ -69,26 +69,39 @@ describe('a Ui', () => {
     expect([...members].filter(([, block]) => block < 0).map(([name]) => name)).toEqual([]);
   });
 
-  it('names as run time what a deployed tool draws with', () => {
-    // `hasRuntimeWindow` is not among them any more, and not because it moved
-    // to the other bar: it said what `NodeElement.hasInterface` already says,
-    // and nothing held the two to each other. The page asks the engine
-    // (`showsPage`). A list spelled out here is the right place to notice a
-    // member leaving, which is why this line is part of the change.
-    expect(runTime.sort()).toEqual(['View', 'clearValueAfterRun', 'ownsValue', 'showsResultWindow']);
+  it('has no run-time members at all: a Ui is the builder, whole', () => {
+    // It once had four. Each left for a home that says what it is:
+    //
+    //   View, ownsValue          page/blocks.ts — what the page draws
+    //   showsResultWindow        nodeKinds.ts   — what a node is, loaded and saved
+    //   clearValueAfterRun       WidgetElement  — what a run means for a block
+    //
+    // Which is the stronger claim, and the one worth holding: not "a tool may
+    // not *call* these", but "a tool never loads this class". The bars below
+    // are still what says which is which; there is simply nothing left on the
+    // run-time side of them. `runtime/boundary.test.ts` holds the other half —
+    // that neither registry is reachable from the tool's entry point.
+    expect(runTime.sort()).toEqual([]);
   });
 });
 
 describe('a deployed tool', () => {
-  it('asks a Ui for nothing that is build time', () => {
-    // The store is shared with the editor, whose actions -- adding a node,
-    // saving, opening a graph inside a node -- a tool has no button for.
-    const SHARED_WITH_THE_EDITOR = ['store/graphStore.ts'];
+  it('asks a Ui for nothing at all', () => {
+    // No exception any more. There used to be one, for `store/graphStore.ts`,
+    // on the grounds that the store is shared with the editor and a tool has
+    // no button for adding a node or saving. Half of that was true and the
+    // half that was not is the whole point: `create` runs on every *load* and
+    // `saved` on every run, both of which a delivered tool does. So the one
+    // module both hosts share was the one allowed to reach into the builder,
+    // and reaching in is what put the builder in the bundle.
+    //
+    // Those three facts are `nodeKinds.ts` now — what a node *is*, which is
+    // neither drawing nor building — and the store asks that instead.
     const asked: string[] = [];
     for (const path of reachableFromTheTool()) {
-      if (/Ui\.ts$/.test(path) || SHARED_WITH_THE_EDITOR.includes(path)) continue;
+      if (/Ui\.ts$/.test(path)) continue;
       for (const match of BY_PATH.get(path)!.matchAll(/(?:NODE_UIS|WIDGET_UIS)\[[^\]]+\]\??\.(\w+)/g)) {
-        if (!runTime.includes(match[1])) asked.push(`${path}: ${match[1]}`);
+        asked.push(`${path}: ${match[1]}`);
       }
     }
     expect(asked).toEqual([]);

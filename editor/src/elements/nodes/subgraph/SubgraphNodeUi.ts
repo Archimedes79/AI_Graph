@@ -3,7 +3,6 @@ import type { GraphNode } from '@/graph';
 import { SubgraphNodeElement } from '@engine/elements/nodes/subgraph/SubgraphNodeElement.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { NodeUi } from '../../NodeUi';
-import { baseNodeConfig } from '../baseNodeConfig';
 
 const ELEMENT = new SubgraphNodeElement();
 
@@ -28,8 +27,6 @@ export class SubgraphNodeUi extends NodeUi {
 
   readonly color = 'var(--ui-node-subgraph, #2a2a4a)';
 
-  readonly settings: NodeUi['settings'] = ['subgraph', 'task', 'catch_errors'];
-
   override readonly ownsDescription = true;
 
   override readonly Panel = lazy(() => import('./SubgraphNodePanel'));
@@ -47,20 +44,4 @@ export class SubgraphNodeUi extends NodeUi {
     return task ? task.split('\n')[0] : undefined;
   }
 
-  create(id: string): GraphNode {
-    return {
-      id,
-      node_type: 'subgraph',
-      label: this.label,
-      description: 'A part of the work, built as its own graph',
-      position: { x: 0, y: 0 },
-      // None to start with: a port here is a node in there, and there is
-      // nothing in there yet.
-      inputs: [],
-      outputs: [],
-      // The engine's own idea of an empty graph, rather than a second copy
-      // of what a graph's metadata starts as.
-      config: { ...baseNodeConfig(), subgraph: ELEMENT.nestedGraph({ config: {} } as never), task: '' },
-    };
-  }
 }

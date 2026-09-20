@@ -5,7 +5,6 @@ import { outputFormatContext } from '@/authoring/outputFormat';
 import { CodeNodeElement } from '@engine/elements/nodes/code/CodeNodeElement.ts';
 import { readInterface } from '@engine/execution/interface.ts';
 import { NodeUi } from '../../NodeUi';
-import { baseNodeConfig } from '../baseNodeConfig';
 
 const STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
 
@@ -21,11 +20,6 @@ export class CodeNodeUi extends NodeUi {
   readonly icon = '⚙️';
 
   readonly color = 'var(--ui-node-code, #1a3a2a)';
-
-  readonly settings: NodeUi['settings'] = [
-    'code', 'code_prompt', 'output_schema', 'examples', 'output_format', 'output_format_prompt',
-    'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
-  ];
 
   override readonly ownsDescription = true;
 
@@ -69,16 +63,4 @@ export class CodeNodeUi extends NodeUi {
     return `${format}${detail}`;
   }
 
-  create(id: string): GraphNode {
-    return {
-      id,
-      node_type: 'code',
-      label: this.label,
-      description: 'Execute custom code',
-      position: { x: 0, y: 0 },
-      inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-      outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: 'One result per input item' }],
-      config: { ...baseNodeConfig(), code: STARTER },
-    };
-  }
 }
