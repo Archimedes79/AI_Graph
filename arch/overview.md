@@ -91,15 +91,15 @@ flowchart TD
     ElementRunner["ElementRunner"]
     NodeRunner["NodeRunner"]
     WidgetRunner["WidgetRunner"]
-    Nodes["7 × <Kind>NodeRunner"]
+    Nodes["8 × <Kind>NodeRunner"]
     Widgets["<Kind>WidgetRunner · StaticWidgetRunner · DisplayWidgetRunner → TransformingDisplayRunner"]
   end
   subgraph editor["editor/src/elements — how it looks and is edited"]
     ElementGuiBuilder["ElementGuiBuilder"]
     NodeGuiBuilder["NodeGuiBuilder"]
     WidgetGuiBuilder["WidgetGuiBuilder"]
-    NodeUis["7 × <Kind>NodeGuiBuilder"]
-    WidgetUis["<Kind>WidgetGuiBuilder · StaticWidgetGuiBuilder · DisplayWidgetGuiBuilder → TransformingDisplayGuiBuilder"]
+    NodeBuilders["8 × <Kind>NodeGuiBuilder"]
+    WidgetBuilders["<Kind>WidgetGuiBuilder · StaticWidgetGuiBuilder · DisplayWidgetGuiBuilder → TransformingDisplayGuiBuilder"]
   end
 
   NodeRunner -- extends --> ElementRunner
@@ -108,11 +108,11 @@ flowchart TD
   Widgets -- extend --> WidgetRunner
   NodeGuiBuilder -- extends --> ElementGuiBuilder
   WidgetGuiBuilder -- extends --> ElementGuiBuilder
-  NodeUis -- extend --> NodeGuiBuilder
-  WidgetUis -- extend --> WidgetGuiBuilder
+  NodeBuilders -- extend --> NodeGuiBuilder
+  WidgetBuilders -- extend --> WidgetGuiBuilder
   ElementRunner -. mirrors .- ElementGuiBuilder
-  Nodes -. mirrors .- NodeUis
-  Widgets -. mirrors .- WidgetUis
+  Nodes -. mirrors .- NodeBuilders
+  Widgets -. mirrors .- WidgetBuilders
 ```
 
 | Diagram node | Path | Notes |
@@ -123,12 +123,12 @@ flowchart TD
 | `times.test.ts` | [`engine/src/elements/times.test.ts`](../engine/src/elements/times.test.ts) · [`editor/…`](../editor/src/elements/times.test.ts) | build time and run time inside one class: the bars, the order, and that no run reaches a build-time member |
 | `NodeRunner` | [`engine/src/elements/NodeRunner.ts`](../engine/src/elements/NodeRunner.ts) | `derivedPorts`, `execute`, `display`, `runtimeRequirements`, `settleMemory`, and what the executor reads ┊ build time: `whatRuns`, `problems`, `referencedPaths` |
 | `WidgetRunner` | [`engine/src/elements/WidgetRunner.ts`](../engine/src/elements/WidgetRunner.ts) | `ports`, `execute`, `firesRun`, `settle`, `displayValue` |
-| `7 × <Kind>NodeRunner` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeRunner.ts`; listed in [`registry.ts`](../engine/src/elements/registry.ts) |
+| `8 × <Kind>NodeRunner` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeRunner.ts`; listed in [`registry.ts`](../engine/src/elements/registry.ts) |
 | `<Kind>WidgetRunner …` | [`engine/src/elements/widgets/`](../engine/src/elements/widgets/) | 12 kinds, with [`StaticWidgetRunner`](../engine/src/elements/widgets/StaticWidgetRunner.ts), [`DisplayWidgetRunner`](../engine/src/elements/widgets/DisplayWidgetRunner.ts), [`TransformingDisplayRunner`](../engine/src/elements/widgets/TransformingDisplayRunner.ts); listed in [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts) |
 | `ElementGuiBuilder` | [`editor/src/elements/ElementGuiBuilder.ts`](../editor/src/elements/ElementGuiBuilder.ts) | `Panel` (lazy), `generation` |
-| `NodeGuiBuilder` | [`editor/src/elements/NodeGuiBuilder.ts`](../editor/src/elements/NodeGuiBuilder.ts) | `create(id)`, `label`, `icon`, `color`, `hint`, `AdvancedPanel`, `describeOutput`; `NodePanelProps` |
-| `WidgetGuiBuilder` | [`editor/src/elements/WidgetGuiBuilder.ts`](../editor/src/elements/WidgetGuiBuilder.ts) | `create(label, mode)`, `label`, `View`, `defaultSpan`, `defaultTone`, `runOnChangeHint`; `WidgetPanelProps` |
-| `7 × <Kind>NodeGuiBuilder` | [`editor/src/elements/nodes/`](../editor/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeGuiBuilder.ts` beside `<Kind>NodePanel.tsx`; listed in [`registry.ts`](../editor/src/elements/registry.ts) |
+| `NodeGuiBuilder` | [`editor/src/elements/NodeGuiBuilder.ts`](../editor/src/elements/NodeGuiBuilder.ts) | `label`, `icon`, `color`, `hint`, `AdvancedPanel`, `describeOutput`; `NodePanelProps` |
+| `WidgetGuiBuilder` | [`editor/src/elements/WidgetGuiBuilder.ts`](../editor/src/elements/WidgetGuiBuilder.ts) | `create(label, mode)`, `label`, `defaultSpan`, `defaultTone`, `runOnChangeHint`; `WidgetPanelProps` |
+| `8 × <Kind>NodeGuiBuilder` | [`editor/src/elements/nodes/`](../editor/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeGuiBuilder.ts` beside `<Kind>NodePanel.tsx`; listed in [`registry.ts`](../editor/src/elements/registry.ts) |
 | `<Kind>WidgetGuiBuilder …` | [`editor/src/elements/widgets/`](../editor/src/elements/widgets/) | `widgets/<kind>/<Kind>WidgetGuiBuilder.ts` beside `<Kind>WidgetView.tsx` and, if it has settings, `<Kind>WidgetPanel.tsx`; [`TransformingDisplayGuiBuilder`](../editor/src/elements/widgets/TransformingDisplayGuiBuilder.ts) owns the one panel of chart, table and image; listed in [`widgets/roster.ts`](../editor/src/elements/widgets/roster.ts) |
 
 Shared by elements, not drawn: [`authoring/generation.ts`](../engine/src/authoring/generation.ts)
