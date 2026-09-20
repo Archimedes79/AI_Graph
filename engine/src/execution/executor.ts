@@ -28,6 +28,7 @@ import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
 import { readFileInputs } from './fileInputs.ts';
 import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
 import type { LastOutputs } from './reuse.ts';
+import type { Latch } from './latch.ts';
 import { mismatches } from './interface.ts';
 import { ERROR_PORT, fatalProblems, unrunnable } from './wiring.ts';
 
@@ -220,6 +221,12 @@ export interface RunOptions {
    * input nodes are answered rather than asked.
    */
   given?: Record<string, Record<string, unknown>>;
+  /**
+   * What every node last produced, for the rounds in which its ◆ stays shut.
+   * See `latch.ts`. Absent -- a single run from the command line -- a node
+   * whose gate is shut has nothing to hand on, and what needs it waits.
+   */
+  latch?: Latch;
   /** How many graphs this run is already inside. Set by the executor, for itself. */
   depth?: number;
 }
@@ -256,7 +263,21 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
     && nodeId !== options.trigger?.node_id && !fired?.has(nodeId)
     && edges.some((e) => e.target_node_id === nodeId && e.target_port_id !== RUN_PORT && !feedback.has(e.id));
 
+  // Which event this round is. A run no event started counts every one as
+  // having happened: that is what "run everything" means, and what lets a
+  // graph inside a node, or one node's upstream, run without a page.
+  const fires = (nodeId: string, portId: string): boolean => {
+    const node = byId.get(nodeId);
+    if (!node || !registry.node(node.node_type)?.eventPorts(node).includes(portId)) return false;
+    const event = options.trigger;
+    if (!event) return true;
+    return event.node_id === nodeId && (!event.port_id || event.port_id === portId);
+  };
+
   const outputs = new Map<string, Record<string, unknown>>();
+  // Nodes whose outputs this round are the ones they were left holding: not
+  // run, so not settled into memory again and not a reason for anything to run.
+  const held = new Set<string>();
   const results: NodeResult[] = [];
   const failed = new Set<string>();
   const partial = new Set<string>();
@@ -266,6 +287,32 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
 
   const dependsOn = (nodeId: string, those: Set<string>): boolean =>
     edges.some((e) => e.target_node_id === nodeId && !feedback.has(e.id) && those.has(e.source_node_id));
+
+  /** This node's view of the run: which of *its* ports the round began with. */
+  const atNode = (base: Runtime, nodeId: string): Runtime => ({ ...base, fired: (portId) => fires(nodeId, portId) });
+
+  /**
+   * Why this node stands still this round, or '' when it runs.
+   *
+   * Only what happened *in this round* opens a gate: a boolean a node was left
+   * holding from an earlier one is a moment that has passed.
+   */
+  const standsStill = (nodeId: string): string => {
+    const into = edges.filter((e) => e.target_node_id === nodeId && !feedback.has(e.id));
+    const gates = into.filter((e) => e.target_port_id === RUN_PORT);
+    if (gates.length) {
+      // The event itself opens the node it is wired to, whichever port the wire
+      // ends on: a dropdown told to start the graph is wired into the chart's
+      // `kind`, not into its ◆, and choosing from it must still redraw a chart
+      // that a button can start as well.
+      const open = into.some((e) => fires(e.source_node_id, e.source_port_id))
+        || gates.some((e) => !held.has(e.source_node_id) && outputs.get(e.source_node_id)?.[e.source_port_id] === true);
+      return open ? '' : 'Nothing opened its ◆ this round.';
+    }
+    const data = into.filter((e) => outputs.has(e.source_node_id));
+    if (data.length && data.every((e) => held.has(e.source_node_id))) return 'Nothing new reached it this round.';
+    return '';
+  };
 
   // Answered before anything is asked. Put in before the levels rather than
   // inside them, because a node whose result is already known has nothing the
@@ -309,6 +356,24 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
 
       const inputs = collectInputs(nodeId, edges, outputs, feedback);
 
+      // The ◆ is a gate. Wired, it must be opened by this round: by the event
+      // the round began with, or by a `true` some node computed in it. Shut,
+      // the node does not run and what it last produced stands. The same goes
+      // for a node fed only by nodes that stood still: nothing new reached it.
+      const shut = standsStill(nodeId);
+      if (shut) {
+        const kept = options.latch?.get(graph, node);
+        if (kept) {
+          held.add(nodeId);
+          outputs.set(nodeId, kept);
+          results.push({ node_id: nodeId, status: 'skipped', inputs, outputs: kept, held: true, error: null, messages: [`${shut} What it produced last stands.`] });
+        } else {
+          idle.add(nodeId);
+          results.push({ node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [`${shut} It has produced nothing yet, so what needs it waits.`] });
+        }
+        continue;
+      }
+
       // A wired input the node declared it cannot do without, and nothing on
       // it: the node has nothing to do, and neither has what hangs off it.
       // Sending a model "User:" followed by nothing is not a question.
@@ -340,10 +405,11 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
           continue;
         }
         const { produced, failures } = await runNode(
-          element, node, arrived, withSubgraph(runtime, options, node, depth), signal,
+          element, node, arrived, withSubgraph(atNode(runtime, nodeId), options, node, depth), signal,
         );
         if (signal?.aborted) throw new Error('Stopped.');
         outputs.set(nodeId, produced);
+        if (!failures.length) options.latch?.set(graph, node, produced);
         // Kept only when it went through whole: a partial result is not one to hand back.
         if (key && !failures.length) options.reuse!.set(key, produced);
         // Some items failed and the rest went through: the node is partial and
@@ -398,6 +464,9 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
     }
   }
 
+  // What stood still is not news: a reply held from the last round must not be
+  // added to the conversation a second time, nor a window popped up again.
+  for (const nodeId of held) outputs.delete(nodeId);
   const memory = settleMemory(graph, feedback, outputs, results, registry);
   await showDisplays(graph, results, registry, runtime);
 

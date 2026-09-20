@@ -111,6 +111,18 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    * does: its inputs are the question. A code node does not -- "no file chosen
    * yet" is a case its body may well want to draw.
    */
+  /**
+   * The output ports of this node that can start a round: a button, a chat's
+   * send, a block told that using it starts the graph, a trigger.
+   *
+   * The executor asks so it can say which of them *did*, this round
+   * (`Runtime.fired`), and read a wire from one into a node's ◆ as open or
+   * closed. Most nodes start nothing.
+   */
+  eventPorts(_node: GraphNode): string[] {
+    return [];
+  }
+
   needsInput(_node: GraphNode): boolean {
     return false;
   }

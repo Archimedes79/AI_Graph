@@ -22,14 +22,25 @@
 // A block wired to nothing starts everything, which is what a lone "Go" button
 // on a page means.
 //
-// **The run port.** Every node has one input nobody declares: `__run`. An edge
-// into it carries no value -- it says "start here", and, like any edge, "after
-// that". It is how a button is wired to a node it has no data for: a Send
-// button beside a message box has nothing to say to the model, only when.
+// **The run port is a gate.** Every node has one input nobody declares: `__run`,
+// the ◆. What arrives on it is never handed to the node; it decides whether the
+// node runs this round. Wired, the node runs only when the round opens it: the
+// event the round began with is wired to the node, or a node computed `true`
+// onto the ◆ in this round. Several wires are OR-ed. Unwired, the node runs
+// whenever the round reaches it, as it always did.
+//
+// **An event is a boolean that is true for one round.** A button's port says
+// "pressed just now". So a code node with named boolean inputs knows which of
+// several events this round is, and one that *returns* booleans, wired to other
+// nodes' ◆, is a filter and a router -- there is no node type for either.
+//
+// A node whose gate stays shut keeps what it made last (`latch.ts`), and a run
+// no event started -- ▶ Run, the clock, the command line -- counts every event
+// as having happened, which is what "run everything" means.
 
 import type { Graph, GraphEdge } from '../graph.ts';
 
-/** The input every node has and nobody declares: "start here", carrying nothing. */
+/** The input every node has and nobody declares: the ◆, a gate. What arrives opens it or does not, and is never handed on. */
 export const RUN_PORT = '__run';
 
 /** A page event: the port it fired on. No port means the node as a whole. */

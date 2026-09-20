@@ -108,5 +108,16 @@ export interface Runtime {
   tools?: ToolService;
   /** Absent outside a run: only the executor can offer it. */
   subgraph?: SubgraphService;
+  /**
+   * Whether this node's port is the event this round began with.
+   *
+   * An event is a moment, so what it puts on a wire is a boolean that is true
+   * for the one round it started and false in every other -- a button says
+   * "pressed just now", not how often. A run nobody's event started (▶ Run, the
+   * command line, a graph inside a node) counts every event as having happened,
+   * which is what "run everything" means. Absent outside a run, where an
+   * element should take it to be true for the same reason.
+   */
+  fired?: (portId: string) => boolean;
   report?(event: ProgressEvent): void;
 }

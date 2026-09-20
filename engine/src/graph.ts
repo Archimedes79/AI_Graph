@@ -101,6 +101,11 @@ export interface NodeResult {
   display?: Record<string, unknown>;
   error?: string | null;
   messages?: string[];
+  /**
+   * The node did not run this round -- its ◆ stayed shut, or nothing new
+   * reached it -- and `outputs` is what it was left holding from an earlier one.
+   */
+  held?: boolean;
 }
 
 /** One value a memory node kept from a run: which node, arriving on which port. */

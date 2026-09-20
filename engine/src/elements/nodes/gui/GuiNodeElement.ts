@@ -92,6 +92,13 @@ export class GuiNodeElement extends NodeElement<GuiConfig> {
     return { needsInterface: true, asksAi: false };
   }
 
+  /** A block that starts the graph does so on its `_out` port: what the page names when it fires. */
+  override eventPorts(node: GraphNode): string[] {
+    return this.config(node).widgets
+      .filter((widget) => BY_KIND.get(widget.kind)?.firesRun(widget))
+      .map((widget) => `${widget.id}_out`);
+  }
+
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const produced: Record<string, unknown> = {};
 
