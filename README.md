@@ -69,9 +69,16 @@ Nothing leaves the machine unless the graph itself sends it there.
 
 - **Visual graph editor** — a ReactFlow canvas with undo/redo; drop a graph `.json` on
   the window to open it, the way the files in `examples/` load.
-- **Seven node types** — Input (text/file/directory), AI, Code (JavaScript), Data,
-  GUI, Output, and Subgraph: a node that holds a graph of its own, so a graph grows in
-  depth as well as in width.
+- **Eight node types** — Input (text/file/directory), AI, Code (JavaScript), Data,
+  GUI, Output, Trigger (the tool starting, a clock), and Subgraph: a node that holds a
+  graph of its own, so a graph grows in depth as well as in width.
+- **Events are booleans, and every node has a gate** — a button or a trigger is `true` for
+  the round it started; wired into a node's ◆ it decides whether the node runs, and a
+  code node that returns booleans is the filter and the router. What a node made last
+  stands until it runs again.
+- **Every node's folder says what it is** — `interface.json` (what goes in, from where,
+  what comes out), its prompts or code, and for an AI node `run.js`: the call itself, as
+  a file you can change.
 - **AI generation** — a node's code or system prompt, a plot transform, or an entire
   graph, written from a plain-language description and left visible and editable. Code
   generation starts from a typed skeleton of the node's real ports — the types and

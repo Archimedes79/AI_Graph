@@ -1,0 +1,30 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "scientific",
+  "type": "ai",
+  "label": "Scientific",
+  "about": "Scientific reviewer: scientific soundness.",
+  "inputs": [
+    {
+      "port": "paper",
+      "name": "Paper",
+      "type": "text",
+      "description": "The manuscript as text",
+      "from": [
+        "read.text"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "output",
+      "name": "Findings",
+      "type": "text",
+      "description": "One finding per line",
+      "to": [
+        "judge.scientific",
+        "page.scientific_in"
+      ]
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import type { Graph } from './graph.ts';
 import { loadGraph } from './project/folder.ts';
 import type { Trigger } from './execution/triggers.ts';
 import { executeGraph, memoryFeedbackEdges, topologicalLevels } from './execution/executor.ts';
+import { Latch } from './execution/latch.ts';
 import { registry } from './elements/registry.ts';
 import { nodeFiles, nodeCode } from './host/node.ts';
 import { aiService } from './ai/providers.ts';
@@ -87,10 +88,11 @@ async function load(name: string): Promise<Graph> {
   return graph;
 }
 
-function runGraph(graph: Graph, trigger: Trigger | null = null) {
+function runGraph(graph: Graph, trigger: Trigger | null = null, latch?: Latch) {
   return executeGraph(graph, {
     registry,
     trigger,
+    latch,
     runtime: {
       files: nodeFiles,
       code: nodeCode,
@@ -198,10 +200,23 @@ describe('what each example is there to show', () => {
     expect((blocksOf(graph, 'page')[2].value as { messages: unknown[] }).messages).toEqual([]);
   }, 60_000);
 
-  it('file_summarizer: changing the length redoes the summary, from the file as read', async () => {
+  it('file_summarizer: before anything was read, a change of length has nothing to summarize', async () => {
     const before = model.asked.length;
-    const result = await runGraph(await load('file_summarizer'), { node_id: 'page', port_id: 'length_out' });
+    const result = await runGraph(await load('file_summarizer'), { node_id: 'page', port_id: 'length_out' }, new Latch());
+    expect(model.asked.length).toBe(before);
+    expect(result.status).toBe('success');
+    expect(result.node_results.find((n) => n.node_id === 'summarizer')?.status).toBe('skipped');
+  }, 60_000);
+
+  it('file_summarizer: changing the length redoes the summary, from the file as it was read', async () => {
+    // The reader's ◆ hangs on the button, so a change of length does not read
+    // the file again: what the reader made in the round before stands.
+    const latch = new Latch();
+    await runGraph(await load('file_summarizer'), { node_id: 'page', port_id: 'go_out' }, latch);
+    const before = model.asked.length;
+    const result = await runGraph(await load('file_summarizer'), { node_id: 'page', port_id: 'length_out' }, latch);
     expect(result.node_results.map((n) => n.node_id).sort()).toEqual(['page', 'reader', 'summarizer']);
+    expect(result.node_results.find((n) => n.node_id === 'reader')).toMatchObject({ status: 'skipped', held: true });
     expect(String(outputsOf(result, 'reader').info)).toMatch(/^01_the_lighthouse_keeper\.txt\n\d+ words/);
 
     const asked = model.asked.slice(before);

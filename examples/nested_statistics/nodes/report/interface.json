@@ -1,0 +1,18 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "report",
+  "type": "output",
+  "label": "Report",
+  "inputs": [
+    {
+      "port": "value",
+      "name": "Value",
+      "type": "any",
+      "list": true,
+      "from": [
+        "statistics.numbers"
+      ]
+    }
+  ],
+  "outputs": []
+}

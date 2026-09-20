@@ -1,0 +1,38 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "summarizer",
+  "type": "ai",
+  "label": "Summarize",
+  "about": "Summarize the text faithfully, at the length asked for.",
+  "inputs": [
+    {
+      "port": "text",
+      "name": "Text",
+      "type": "text",
+      "description": "What to summarize",
+      "from": [
+        "reader.text"
+      ]
+    },
+    {
+      "port": "length",
+      "name": "Length",
+      "type": "text",
+      "description": "How long the summary should be",
+      "from": [
+        "page.length_out"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "output",
+      "name": "Output",
+      "type": "text",
+      "description": "What the model answered",
+      "to": [
+        "page.summary_in"
+      ]
+    }
+  ]
+}

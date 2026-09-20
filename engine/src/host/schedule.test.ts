@@ -114,3 +114,43 @@ describe('schedule', () => {
     clock.stop();
   });
 });
+
+describe('trigger nodes', () => {
+  const clocks = (nodes: Record<string, unknown>[]): Graph => parseGraph({
+    metadata: { name: 'clocks' },
+    nodes: nodes.map((config, index) => ({ id: `t${index}`, node_type: 'trigger', config })),
+    edges: [],
+  });
+
+  it('tells each round which trigger began it', async () => {
+    const began: string[] = [];
+    const clock = schedule(() => clocks([{ trigger_on_start: true }, { trigger_on_start: false, trigger_every: '0.05' }]),
+      async (_graph, _signal, event) => { began.push(event.node_id); return done(); });
+    await wait(200);
+    clock.stop();
+    expect(began[0]).toBe('t0');
+    expect(began.filter((id) => id === 't0')).toHaveLength(1);          // at start, once
+    expect(began.filter((id) => id === 't1').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('never runs two rounds at once, however many clocks are due', async () => {
+    let inside = 0;
+    let most = 0;
+    const clock = schedule(() => clocks([{ trigger_every: '0.02', trigger_on_start: true }, { trigger_every: '0.02', trigger_on_start: true }]),
+      async () => { inside += 1; most = Math.max(most, inside); await wait(30); inside -= 1; return done(); });
+    await wait(250);
+    await clock.stop();
+    expect(most).toBe(1);
+  });
+
+  it('keeps what an earlier round showed when a later one touched something else', async () => {
+    const clock = schedule(() => clocks([{ trigger_on_start: true }, { trigger_on_start: true }]),
+      async (_graph, _signal, event) => ({
+        status: 'success', outputs: {},
+        node_results: [{ node_id: `made-by-${event.node_id}`, status: 'success', inputs: {}, outputs: {} }],
+      }));
+    await wait(60);
+    clock.stop();
+    expect(clock.state().result!.node_results.map((r) => r.node_id)).toEqual(['made-by-t0', 'made-by-t1']);
+  });
+});

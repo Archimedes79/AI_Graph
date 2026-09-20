@@ -29,6 +29,8 @@ const statusStyles: Record<string, { color: string; glyph: string }> = {
   error: { color: DANGER, glyph: '!' },
   running: { color: '#f59e0b', glyph: '…' },
   pending: { color: '#6b7280', glyph: '·' },
+  // Did not run this round: its ◆ stayed shut, and what it made before stands.
+  held: { color: '#6b7280', glyph: '‖' },
 };
 
 const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
@@ -40,7 +42,10 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const ui = NODE_UIS[graphNode.node_type];
   const bgColor = ui?.color ?? SURFACE;
   const icon = ui?.icon ?? '⬜';
-  const status = executionResult ? statusStyles[executionResult.status] : undefined;
+  const status = executionResult ? statusStyles[executionResult.held ? 'held' : executionResult.status] : undefined;
+  const statusTitle = executionResult?.held
+    ? 'Did not run this round: what it produced in an earlier round stands'
+    : executionResult?.status;
   const statusColor = status?.color;
   const isGuiLike = ui?.holdsWidgets ?? false;
   const summary = ui?.canvasSummary?.(graphNode);
@@ -122,8 +127,8 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
               className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none"
               style={{ background: status.color, color: SUNKEN }}
               role="img"
-              aria-label={`Last run: ${executionResult?.status}`}
-              title={executionResult?.status}
+              aria-label={`Last run: ${statusTitle}`}
+              title={statusTitle}
             >
               {status.glyph}
             </span>

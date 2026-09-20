@@ -1,0 +1,39 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "assistant",
+  "type": "ai",
+  "label": "Assistant",
+  "about": "Answer the user's last message as a friendly, concise assistant that remembers the conversation.",
+  "inputs": [
+    {
+      "port": "history",
+      "name": "History",
+      "type": "text",
+      "description": "The conversation so far",
+      "from": [
+        "page.chat_history"
+      ]
+    },
+    {
+      "port": "message",
+      "name": "Message",
+      "type": "text",
+      "required": true,
+      "description": "What the user just said",
+      "from": [
+        "page.chat_out"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "output",
+      "name": "Output",
+      "type": "text",
+      "description": "What the model answered",
+      "to": [
+        "page.chat_in"
+      ]
+    }
+  ]
+}

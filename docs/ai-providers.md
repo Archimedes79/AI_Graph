@@ -83,6 +83,11 @@ Start LM Studio's server (`lms server start`, or the *Developer* tab) and load a
 AI-Graph finds it at `http://localhost:1234/v1` with no key. Name the model as LM Studio
 lists it — `google/gemma-4-26b-a4b-qat` — on the node or as the graph's default.
 
+**A body that asks a model.** A code node, and an AI node's own `run.js`, ask through
+`node.llm` — the call is made for them, by the process that holds the keys. One run of a
+body may ask 25 times, so a loop that forgot to end costs a finite amount;
+`AI_GRAPH_MAX_LLM_CALLS` raises or lowers that where the tool runs.
+
 **Models that think before they answer** (most recent local ones) spend the same token
 budget on the thinking. On a laptop that is slow — minutes rather than seconds — and if
 the budget runs out mid-thought the answer is empty. AI-Graph says so once instead of

@@ -14,6 +14,7 @@ import { GuiNodeElement } from './nodes/gui/GuiNodeElement.ts';
 import { InputNodeElement } from './nodes/input/InputNodeElement.ts';
 import { OutputNodeElement } from './nodes/output/OutputNodeElement.ts';
 import { SubgraphNodeElement } from './nodes/subgraph/SubgraphNodeElement.ts';
+import { TriggerNodeElement } from './nodes/trigger/TriggerNodeElement.ts';
 import { WIDGETS } from './widgets/roster.ts';
 
 export const NODES: NodeElement<unknown>[] = [
@@ -26,6 +27,7 @@ export const NODES: NodeElement<unknown>[] = [
   // Last, so that the list a person or a model is shown keeps the order they
   // already know, with the newcomer after it.
   new SubgraphNodeElement(),
+  new TriggerNodeElement(),
 ] as NodeElement<unknown>[];
 
 const NODES_BY_TYPE = new Map<string, NodeElement<unknown>>(

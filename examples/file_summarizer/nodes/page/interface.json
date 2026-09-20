@@ -1,0 +1,60 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "page",
+  "type": "gui",
+  "label": "Summarizer",
+  "about": "The page this tool shows",
+  "inputs": [
+    {
+      "port": "summary_in",
+      "name": "Summary",
+      "type": "any",
+      "from": [
+        "summarizer.output"
+      ]
+    },
+    {
+      "port": "about_in",
+      "name": "About the file",
+      "type": "any",
+      "from": [
+        "reader.info"
+      ]
+    },
+    {
+      "port": "content_in",
+      "name": "What was read",
+      "type": "any",
+      "from": [
+        "reader.text"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "file_out",
+      "name": "File",
+      "type": "file_path",
+      "to": [
+        "reader.file",
+        "reader.path"
+      ]
+    },
+    {
+      "port": "length_out",
+      "name": "Length",
+      "type": "text",
+      "to": [
+        "summarizer.length"
+      ]
+    },
+    {
+      "port": "go_out",
+      "name": "Summarize",
+      "type": "boolean",
+      "to": [
+        "reader.◆"
+      ]
+    }
+  ]
+}

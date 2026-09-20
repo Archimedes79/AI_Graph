@@ -8,7 +8,7 @@ const CATEGORIES: { label: string; types: NodeType[] }[] = [
     // could load one, and there was no way to create one by hand. Every graph
     // that reads a file or a folder headlessly starts with it.
     label: 'Input',
-    types: ['input'],
+    types: ['input', 'trigger'],
   },
   {
     label: 'Processing',

@@ -36,6 +36,7 @@ import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry, NODES, WIDGETS } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { readLegacyNodeFiles } from './legacy.ts';
+import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 
 export const GRAPH_FILE = 'graph.json';
 export const LAYOUT_FILE = 'layout.json';
@@ -107,6 +108,9 @@ export interface ProjectText {
   json: boolean;
   /** The object the field lives on: a node's config, or the block itself. */
   holder: Record<string, unknown>;
+  /** See `TextFile`: what the file says while nobody has written their own, and every text that was. */
+  standard?: string;
+  earlier?: readonly string[];
 }
 
 /** Every piece of writing *graph* can keep in files, whether or not it holds any. */
@@ -127,7 +131,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
     for (const text of registry.node(node.node_type)?.texts(node) ?? []) {
       found.push({
         node_id: node.id, widget_id: '', field: text.field, path: `${folder}/${text.file}`,
-        json: text.json === true, holder: node.config,
+        json: text.json === true, holder: node.config, standard: text.standard, earlier: text.earlier,
       });
     }
     const blocks = Array.isArray(node.config.gui_widgets) ? node.config.gui_widgets as Record<string, unknown>[] : [];
@@ -137,7 +141,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
       for (const text of registry.widget(widget.kind)?.texts(widget) ?? []) {
         found.push({
           node_id: node.id, widget_id: widget.id, field: text.field, path: `${blockFolder}/${text.file}`,
-          json: text.json === true, holder: raw,
+          json: text.json === true, holder: raw, standard: text.standard, earlier: text.earlier,
         });
       }
     }
@@ -199,6 +203,13 @@ function fromFile(content: string, json: boolean, path: string): unknown {
   } catch (error) {
     throw new NotAGraph(`${path} is not valid JSON: ${(error as Error).message}`);
   }
+}
+
+/** Nobody's own: nothing, or a text the element itself once shipped. */
+function isStandard(value: unknown, text: { standard?: string; earlier?: readonly string[] }): boolean {
+  if (isBlank(value)) return true;
+  const plain = (s: string) => s.replace(/\r\n/g, '\n').trim();
+  return typeof value === 'string' && [text.standard ?? '', ...(text.earlier ?? [])].some((known) => plain(known) === plain(value));
 }
 
 /** Nothing written: no file for it. A JSON value that is an empty object says nothing either. */
@@ -303,7 +314,10 @@ export async function readProject(folder: string, guard?: Guard): Promise<Graph>
     const path = join(folder, text.path);
     if (existsSync(path)) {
       await guard?.(path);
-      text.holder[text.field] = fromFile(await readFile(path, 'utf8'), text.json, text.path);
+      const read = fromFile(await readFile(path, 'utf8'), text.json, text.path);
+      // The element's own text is nobody's setting: the node stays as it was
+      // written, and saving writes today's standard back out.
+      if (text.standard === undefined || !isStandard(read, text)) text.holder[text.field] = read;
     }
     await remember(path);
   }
@@ -386,9 +400,17 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   }
 
   const files = new Map<string, string | null>();
+  // Before the writing is taken out of the nodes: a node's interface quotes the
+  // output schema it keeps. Every node gets one, so every node has a folder
+  // that says what goes in and what comes out.
+  for (const node of copy.nodes) {
+    const schema = registry.node(node.node_type)?.outputInterface(node);
+    files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(copy, node, schema), true));
+  }
   for (const text of projectTexts(copy)) {
-    const value = text.holder[text.field];
+    const written = text.holder[text.field];
     delete text.holder[text.field];
+    const value = text.standard !== undefined && isStandard(written, text) ? text.standard : written;
     files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, text.json));
   }
 
@@ -427,6 +449,8 @@ async function refuseIfChangedOutside(plans: Plan[]): Promise<void> {
   const root = plans[plans.length - 1].folder;
   for (const plan of plans) {
     for (const [path, content] of plan.files) {
+      // Rendered, not kept: whatever was done to it outside is simply replaced.
+      if (basename(path) === INTERFACE_FILE) continue;
       const known = seen.get(path);
       const now = await signature(path);
       if (known === undefined || known === now || now === ABSENT) continue;
@@ -457,7 +481,7 @@ async function commit(plan: Plan, guard?: Guard): Promise<void> {
   // The two documents count as files a save may tidy away, because under
   // `nodes/` they can only be a subgraph's -- and the folder of a subgraph
   // node that is still there is protected by `plan.nested`.
-  const names = new Set([...textFileNames(), GRAPH_FILE, LAYOUT_FILE]);
+  const names = new Set([...textFileNames(), GRAPH_FILE, LAYOUT_FILE, INTERFACE_FILE]);
   await tidy(join(plan.folder, NODES_DIR), new Set(plan.files.keys()), names, plan.nested);
 
   await mkdir(plan.folder, { recursive: true });

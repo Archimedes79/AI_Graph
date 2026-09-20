@@ -28,6 +28,8 @@ import {
 } from './http.ts';
 import { browse, extensionFilter, NotFound } from './browse.ts';
 import { RunBoard } from './runs.ts';
+import { Rounds } from './rounds.ts';
+import { Latch } from '../execution/latch.ts';
 import { nodeRuntime } from './node.ts';
 import { schedule } from './schedule.ts';
 import { Lifecycle } from './lifecycle.ts';
@@ -83,17 +85,21 @@ export async function serve(options: ServeOptions): Promise<Served> {
   // settled into it, so the next scheduled round -- and the next page to open --
   // starts from there. A page that runs the graph hands over its copy, so the
   // clock goes on with the file the person picked.
+  // Shared by the clock and the page's runs: both run the same graph, so both
+  // queue for it and both read what its nodes were left holding.
+  const latch = new Latch();
+  const rounds = new Rounds();
   const held: { graph: Graph | null } = {
     graph: options.graphPath ? await loadGraph(options.graphPath) : null,
   };
   const clock = held.graph
-    ? schedule(() => held.graph!, (graph, signal) => {
+    ? schedule(() => held.graph!, (graph, signal, trigger) => {
       applyRuntimeValues(graph, {}, registry);
-      return executeGraph(graph, { runtime: nodeRuntime(), registry, signal });
+      return rounds.turn(graph, () => executeGraph(graph, { runtime: nodeRuntime(), registry, signal, trigger, latch }));
     }, lastRunFile(options.graphPath!))
     : null;
   if (clock) lifecycle.own('the schedule', () => clock.stop());
-  const runs = new RunBoard();
+  const runs = new RunBoard({ latch, rounds });
   lifecycle.own('runs in flight', () => runs.stopAll());
 
   const handlers: Handlers = {

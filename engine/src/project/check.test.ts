@@ -78,7 +78,8 @@ describe('what check finds in a project folder', () => {
 
   it('is content with a folder for a node that keeps no writing yet', async () => {
     await writeProject(dir, graph());
-    await mkdir(join(dir, 'nodes', 'show'));
+    // Every node has a folder since each is given its interface.json; an empty one is as fine.
+    await mkdir(join(dir, 'nodes', 'show'), { recursive: true });
     expect((await checkPath(dir)).problems).toEqual([]);
   });
 

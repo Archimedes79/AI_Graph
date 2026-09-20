@@ -1,0 +1,29 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "statistics",
+  "type": "subgraph",
+  "label": "Statistics",
+  "about": "A graph of its own: open it to see how the counting is done",
+  "inputs": [
+    {
+      "port": "text",
+      "name": "Text",
+      "type": "any",
+      "description": "The text to measure",
+      "from": [
+        "paragraph.output"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "numbers",
+      "name": "Numbers",
+      "type": "any",
+      "description": "What was counted",
+      "to": [
+        "report.value"
+      ]
+    }
+  ]
+}

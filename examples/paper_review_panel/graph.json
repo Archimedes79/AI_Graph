@@ -93,7 +93,7 @@
           "id": "go_out",
           "name": "Review",
           "kind": "output",
-          "data_type": "number",
+          "data_type": "boolean",
           "multi": false,
           "required": false,
           "description": ""

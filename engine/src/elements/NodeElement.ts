@@ -2,7 +2,7 @@
 
 import type { Graph, GraphNode, NodeType, Port } from '../graph.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
-import type { Schema } from '../execution/interface.ts';
+import { readInterface, type Schema } from '../execution/interface.ts';
 import type { Problem } from '../execution/wiring.ts';
 import { Element } from './Element.ts';
 import type { Runtime } from './Runtime.ts';
@@ -111,6 +111,26 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    * does: its inputs are the question. A code node does not -- "no file chosen
    * yet" is a case its body may well want to draw.
    */
+  /**
+   * The output ports of this node that can start a round: a button, a chat's
+   * send, a block told that using it starts the graph, a trigger.
+   *
+   * The executor asks so it can say which of them *did*, this round
+   * (`Runtime.fired`), and read a wire from one into a node's ◆ as open or
+   * closed. Most nodes start nothing.
+   */
+  eventPorts(_node: GraphNode): string[] {
+    return [];
+  }
+
+  /**
+   * Whether this node asks whoever holds the graph to keep a clock for it.
+   * A graph inside a node has nobody to ask: only the outermost one is held.
+   */
+  keepsTime(_node: GraphNode): boolean {
+    return false;
+  }
+
   needsInput(_node: GraphNode): boolean {
     return false;
   }
@@ -170,8 +190,10 @@ export abstract class NodeElement<C = unknown> extends Element<GraphNode, C> {
    * `execution/interface.ts`. None by default -- a model's answer is described
    * to the model instead (an AI node's `output.md`), not checked afterwards.
    */
-  outputInterface(_node: GraphNode): Schema | undefined {
-    return undefined;
+  outputInterface(node: GraphNode): Schema | undefined {
+    // Kept by whichever element says it keeps one (`output.schema.json` among
+    // its `texts`): set from a run, then every run is checked against it.
+    return this.texts(node).some((text) => text.field === 'output_schema') ? readInterface(node.config.output_schema) : undefined;
   }
 
   /** Run once, for inputs already collected from the wires. */

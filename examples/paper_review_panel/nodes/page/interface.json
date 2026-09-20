@@ -1,0 +1,75 @@
+{
+  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
+  "node": "page",
+  "type": "gui",
+  "label": "Review panel",
+  "about": "The page this tool shows",
+  "inputs": [
+    {
+      "port": "verdict_in",
+      "name": "Judge — consolidated advice",
+      "type": "any",
+      "from": [
+        "judge.output"
+      ]
+    },
+    {
+      "port": "scientific_in",
+      "name": "Scientific reviewer",
+      "type": "any",
+      "from": [
+        "scientific.output"
+      ]
+    },
+    {
+      "port": "adversarial_in",
+      "name": "Adversarial reviewer",
+      "type": "any",
+      "from": [
+        "adversarial.output"
+      ]
+    },
+    {
+      "port": "claims_in",
+      "name": "Evidence & claims reviewer",
+      "type": "any",
+      "from": [
+        "claims.output"
+      ]
+    },
+    {
+      "port": "references_in",
+      "name": "References reviewer",
+      "type": "any",
+      "from": [
+        "references.output"
+      ]
+    },
+    {
+      "port": "figures_in",
+      "name": "Figures & tables reviewer",
+      "type": "any",
+      "from": [
+        "figures.output"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "port": "paper_out",
+      "name": "Manuscript",
+      "type": "file_path",
+      "to": [
+        "read.file"
+      ]
+    },
+    {
+      "port": "go_out",
+      "name": "Review",
+      "type": "boolean",
+      "to": [
+        "read.◆"
+      ]
+    }
+  ]
+}

@@ -1,8 +1,9 @@
 import { WidgetElement, type Widget } from '../../WidgetElement.ts';
 import { port } from '../../port.ts';
+import type { Runtime } from '../../Runtime.ts';
 
 export interface ButtonConfig {
-  /** How many times it has been pressed since the graph last read it. */
+  /** How many times it has been pressed: what the page changes to say "again". Not what the graph reads. */
   count: number;
 }
 
@@ -14,8 +15,11 @@ export interface ButtonConfig {
  * the whole graph, which is what a lone "Go" means. See `triggers.ts` for
  * what runs and what is left alone.
  *
- * It still counts its presses and emits the count, for a node that wants to
- * know how often rather than merely when.
+ * What it puts on its wire is whether it was pressed *just now*: true in the
+ * round its press started, false in every round something else started. So it
+ * can be wired to a ◆, which it opens, or to a named input of a code node that
+ * wants to know which of several events this round is. It used to emit a press
+ * count, which nothing could do anything with.
  */
 export class ButtonWidgetElement extends WidgetElement<ButtonConfig> {
   readonly widgetKind = 'button' as const;
@@ -26,7 +30,7 @@ export class ButtonWidgetElement extends WidgetElement<ButtonConfig> {
   }
 
   ports(widget: Widget) {
-    return { inputs: [], outputs: [port(`${widget.id}_out`, widget.label || widget.id, 'output', 'number')] };
+    return { inputs: [], outputs: [port(`${widget.id}_out`, widget.label || widget.id, 'output', 'boolean')] };
   }
 
   /** Pressing it is the event; there is no setting that would make it not one. */
@@ -34,7 +38,8 @@ export class ButtonWidgetElement extends WidgetElement<ButtonConfig> {
     return true;
   }
 
-  async execute(widget: Widget) {
-    return { [`${widget.id}_out`]: this.config(widget).count };
+  async execute(widget: Widget, _inputs: Record<string, unknown>, runtime: Runtime) {
+    const out = `${widget.id}_out`;
+    return { [out]: runtime.fired?.(out) ?? true };
   }
 }

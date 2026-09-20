@@ -8,6 +8,8 @@
 import type { ExecutionResult, Graph } from '../graph.ts';
 import { executeGraph } from '../execution/executor.ts';
 import { LastOutputs } from '../execution/reuse.ts';
+import { Latch } from '../execution/latch.ts';
+import { Rounds } from './rounds.ts';
 import { registry } from '../elements/registry.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import type { RunSnapshot } from './api.ts';
@@ -61,6 +63,14 @@ export class RunBoard {
   private readonly runs = new Map<string, Run>();
   /** Shared by every run on this board: what one page event computed, the next may reuse. */
   private readonly reuse = new LastOutputs();
+  /** What every node was left holding, and whose turn it is: shared with whatever else runs these graphs. */
+  private readonly latch: Latch;
+  private readonly rounds: Rounds;
+
+  constructor(shared: { latch?: Latch; rounds?: Rounds } = {}) {
+    this.latch = shared.latch ?? new Latch();
+    this.rounds = shared.rounds ?? new Rounds();
+  }
 
   /**
    * Start *graph* in the background and hand back the run's id.
@@ -93,7 +103,11 @@ export class RunBoard {
       },
     });
 
-    run.ended = executeGraph(graph, { runtime, registry, trigger, signal: run.stop.signal, reuse: this.reuse })
+    run.currentLabel = 'Waiting for the round before it';
+    run.ended = this.rounds.turn(graph, () => {
+      run.currentLabel = '';
+      return executeGraph(graph, { runtime, registry, trigger, signal: run.stop.signal, reuse: this.reuse, latch: this.latch });
+    })
       .then((result) => { run.result = result; })
       .catch((error: unknown) => { run.error = error instanceof Error ? error.message : String(error); })
       .finally(() => { run.finishedAt = Date.now(); this.forgetOld(); });

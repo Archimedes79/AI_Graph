@@ -17,6 +17,7 @@ import { parseWidget } from '../elements/nodes/gui/GuiNodeElement.ts';
 import { ALL_INPUTS, placeholders } from '../elements/nodes/ai/prompt.ts';
 import { mismatches, readInterface } from '../execution/interface.ts';
 import { parseExamples } from '../execution/examples.ts';
+import { INTERFACE_FILE } from './interfaceFile.ts';
 import { GRAPH_FILE, LAYOUT_FILE, NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
@@ -226,6 +227,8 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
   for (const node of graph.nodes) {
     const nodeDir = nodeFolder(node.id);
     if (!expected.has(nodeDir)) expected.set(nodeDir, new Set());
+    // What goes in and what comes out, written there on every save.
+    expected.get(nodeDir)!.add(INTERFACE_FILE);
   }
 
   // A node that holds a graph holds a project folder: its own graph.json and

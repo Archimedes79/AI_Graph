@@ -70,12 +70,17 @@ export type NodeConfig = {
   output_example?: string;
   /** The message an ai node sends, with `{{port}}` where a port's value goes. Empty: send what arrived. */
   prompt_template?: string;
+  /** An ai node's `run.js` when somebody changed it; absent or empty for the standard one. */
+  run_code?: string;
   /** Inputs and what must come out, as Markdown: `examples.md` in a project. See engine `execution/examples.ts`. */
   examples?: string;
   /** A code node's output interface (JSON Schema), set from a run: `output.schema.json` in a project. */
   output_schema?: unknown;
   /** Tool servers an ai node may call, one per line: a URL, or a name this machine configured. */
   mcp_servers?: string;
+  /** A trigger node: fire when the tool starts, and again this often (`5m`). */
+  trigger_on_start?: boolean;
+  trigger_every?: string;
   /** The graph a subgraph node holds: its own project folder on disk. */
   subgraph?: unknown;
   /** What a node is meant to do, written before it is filled in: `task.md` in a project. */
