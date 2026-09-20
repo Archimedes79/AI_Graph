@@ -4,8 +4,13 @@ import SelectWidgetView from './SelectWidgetView';
 
 export class SelectWidgetUi extends WidgetUi {
   readonly widgetKind = 'select';
-  readonly label = 'Dropdown';
+
   readonly View = SelectWidgetView;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Dropdown';
+
   override readonly Panel = lazy(() => import('./SelectWidgetPanel'));
 
   protected override defaultSpan() {

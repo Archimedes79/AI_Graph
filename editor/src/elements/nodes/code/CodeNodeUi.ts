@@ -11,20 +11,32 @@ const STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" }
 
 export class CodeNodeUi extends NodeUi {
   readonly nodeType = 'code';
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
   readonly label = 'Code Node';
+
   readonly hint = 'Run JavaScript — write it yourself or have the AI generate it';
+
   readonly icon = '⚙️';
+
   readonly color = 'var(--ui-node-code, #1a3a2a)';
+
   readonly settings: NodeUi['settings'] = [
     'code', 'code_prompt', 'output_schema', 'examples', 'output_format', 'output_format_prompt',
     'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
   ];
 
   override readonly ownsDescription = true;
+
   override readonly outputContract = 'format';
+
   override readonly outputFormatHint = 'This declaration is given to ✨ Generate, here and in the neighbours, so the code produces and expects the right shape. It does not check or convert the value at run time.';
+
   override readonly Panel = lazy(() => import('./CodeNodePanel'));
+
   override readonly AdvancedPanel = lazy(() => import('./CodeNodeAdvancedPanel'));
+
   override readonly advancedSummary = 'batching, files, failures';
 
   override readonly generation: ElementGeneration<GraphNode> = {

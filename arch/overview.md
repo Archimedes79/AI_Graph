@@ -117,8 +117,10 @@ flowchart TD
 
 | Diagram node | Path | Notes |
 |---|---|---|
-| `Element` | [`engine/src/elements/Element.ts`](../engine/src/elements/Element.ts) | `config()`, `logic()`, `generation()`, `catchesErrors()`, `deployNeeds()`, `runSnippet()`; services in [`Runtime.ts`](../engine/src/elements/Runtime.ts) |
-| `NodeElement` | [`engine/src/elements/NodeElement.ts`](../engine/src/elements/NodeElement.ts) | `derivedPorts`, `execute`, `display`, `runtimeRequirements`, `settleMemory`, and what the executor reads |
+| `Element` | [`engine/src/elements/Element.ts`](../engine/src/elements/Element.ts) | `config()`, `texts()`, `logic()`, `catchesErrors()`, `runSnippet()` ┊ build time: `generation()`, `deployNeeds()`; `WhatRuns`; services in [`Runtime.ts`](../engine/src/elements/Runtime.ts) |
+| `body.ts` | [`engine/src/elements/body.ts`](../engine/src/elements/body.ts) | `runBody`: the one way an authored body runs — `run(inputs, node)`, sandboxed, with `node.llm` |
+| `times.test.ts` | [`engine/src/elements/times.test.ts`](../engine/src/elements/times.test.ts) · [`editor/…`](../editor/src/elements/times.test.ts) | build time and run time inside one class: the bars, the order, and that no run reaches a build-time member |
+| `NodeElement` | [`engine/src/elements/NodeElement.ts`](../engine/src/elements/NodeElement.ts) | `derivedPorts`, `execute`, `display`, `runtimeRequirements`, `settleMemory`, and what the executor reads ┊ build time: `whatRuns`, `problems`, `referencedPaths` |
 | `WidgetElement` | [`engine/src/elements/WidgetElement.ts`](../engine/src/elements/WidgetElement.ts) | `ports`, `execute`, `firesRun`, `settle`, `displayValue` |
 | `7 × <Kind>NodeElement` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeElement.ts`; listed in [`registry.ts`](../engine/src/elements/registry.ts) |
 | `<Kind>WidgetElement …` | [`engine/src/elements/widgets/`](../engine/src/elements/widgets/) | 12 kinds, with [`StaticWidgetElement`](../engine/src/elements/widgets/StaticWidgetElement.ts), [`DisplayWidgetElement`](../engine/src/elements/widgets/DisplayWidgetElement.ts), [`TransformingDisplayElement`](../engine/src/elements/widgets/TransformingDisplayElement.ts); listed in [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts) |

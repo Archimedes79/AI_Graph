@@ -4,6 +4,11 @@
   "type": "input",
   "label": "Paragraph",
   "about": "The text to measure",
+  "runs": {
+    "by": "engine",
+    "where": "engine/src/elements/nodes/input/InputNodeElement.ts › execute",
+    "does": "Hands on the text it holds, or what the person running the graph was asked for."
+  },
   "inputs": [],
   "outputs": [
     {

@@ -16,8 +16,10 @@ export abstract class TransformingDisplayUi extends DisplayWidgetUi {
 
   /** What the transform is called on the fold that opens it: "Row transform (optional)". */
   abstract readonly transformTitle: string;
+
   /** What the transform must return, said under its body. */
   abstract readonly transformHelp: string;
+
   /** What the widget does, said above everything else -- for a widget whose use is not obvious. */
   readonly intro: string = '';
 }

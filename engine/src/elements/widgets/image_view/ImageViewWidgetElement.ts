@@ -9,22 +9,6 @@ import { TRANSFORM_FIELDS } from '../TransformingDisplayElement.ts';
 export class ImageViewWidgetElement extends TransformingDisplayElement {
   readonly widgetKind = 'image_view' as const;
 
-  /** The same snippet contract as a chart, with a different destination: a path. */
-  override generation(): Generation {
-    return {
-      kind: 'code', fields: TRANSFORM_FIELDS,
-      contract:
-        'Must expose run(inputs) -> object, receiving {"value": <raw incoming value>} '
-        + 'and returning {"value": <an image file path, or a list of them>}. The app loads '
-        + 'and displays the picture itself — do NOT read, decode or draw the image, and do '
-        + 'NOT import third-party libraries: the code runs in a sandbox with only the '
-        + 'standard library available.',
-      inputs: ['value'], outputs: ['value'],
-      guard: 'Please describe how to get an image path out of the incoming value first.',
-      success: '✅ Transform generated!',
-    };
-  }
-
   /**
    * Whatever arrived, turned into something a browser can render.
    *
@@ -48,5 +32,23 @@ export class ImageViewWidgetElement extends TransformingDisplayElement {
     } catch (error) {
       return `⚠ ${error instanceof Error ? error.message : String(error)}`;
     }
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  /** The same snippet contract as a chart, with a different destination: a path. */
+  override generation(): Generation {
+    return {
+      kind: 'code', fields: TRANSFORM_FIELDS,
+      contract:
+        'Must expose run(inputs) -> object, receiving {"value": <raw incoming value>} '
+        + 'and returning {"value": <an image file path, or a list of them>}. The app loads '
+        + 'and displays the picture itself — do NOT read, decode or draw the image, and do '
+        + 'NOT import third-party libraries: the code runs in a sandbox with only the '
+        + 'standard library available.',
+      inputs: ['value'], outputs: ['value'],
+      guard: 'Please describe how to get an image path out of the incoming value first.',
+      success: '✅ Transform generated!',
+    };
   }
 }

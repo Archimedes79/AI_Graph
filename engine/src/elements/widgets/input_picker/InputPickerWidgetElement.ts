@@ -31,11 +31,11 @@ const SELECTOR_TEXTS: readonly TextFile[] = [
  * level up, through the same code, because it is the same behaviour.
  */
 export class InputPickerWidgetElement extends WidgetElement<PickerConfig> {
+  readonly widgetKind = 'input_picker' as const;
+
   override texts(): readonly TextFile[] {
     return SELECTOR_TEXTS;
   }
-
-  readonly widgetKind = 'input_picker' as const;
 
   config(widget: Widget): PickerConfig {
     const c = widget.config;
@@ -51,11 +51,6 @@ export class InputPickerWidgetElement extends WidgetElement<PickerConfig> {
   override logic(widget: Widget): Logic | undefined {
     if (!this.config(widget).directory) return undefined;
     return logicFrom(widget, 'code', SELECTOR_FIELDS);
-  }
-
-  /** The same declaration the input node hands out; see `generation.ts`. */
-  override generation(): Generation {
-    return SELECTOR_GENERATION;
   }
 
   ports(widget: Widget) {
@@ -76,5 +71,12 @@ export class InputPickerWidgetElement extends WidgetElement<PickerConfig> {
     // it and narrowing it with an authored selector is one behaviour, and this
     // block had drifted into a second copy of it.
     return { [out]: await selectFiles(this.logic(widget), settings, settings.path, runtime) };
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  /** The same declaration the input node hands out; see `generation.ts`. */
+  override generation(): Generation {
+    return SELECTOR_GENERATION;
   }
 }

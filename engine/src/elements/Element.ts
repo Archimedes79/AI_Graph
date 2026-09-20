@@ -57,6 +57,22 @@ export interface TextFile {
   earlier?: readonly string[];
 }
 
+/**
+ * What runs when an element runs, said for whoever reads its folder or its
+ * panel: a node's `interface.json` carries it, and the editor shows it.
+ */
+export interface WhatRuns {
+  /**
+   * `engine`: this class's `execute`, in the process that holds the graph.
+   * `body`: a file in the element's own folder, run sandboxed (`elements/body.ts`).
+   */
+  by: 'engine' | 'body';
+  /** The source file and method, or the body's file name in the element's folder. */
+  where: string;
+  /** One sentence: what it does with what arrives. */
+  does: string;
+}
+
 /** What a failing authored snippet costs. */
 export type SnippetFailure = 'fatal' | 'cosmetic';
 
@@ -72,8 +88,23 @@ export type SnippetFailure = 'fatal' | 'cosmetic';
  * in nothing else, which is why they share this base.
  */
 export abstract class Element<S extends { id: string; config: RawConfig }, C> {
+  // ── What it is ────────────────────────────────────────────────────────────
+  // Asked whenever the graph is read: by a run, by the editor, by a project folder.
+
   /** This element's settings, defaulted and migrated. The only reader of `S.config`. */
   abstract config(subject: S): C;
+
+  /**
+   * What this element keeps in files of its own when its graph is a project
+   * folder. Everything else it stores stays in `graph.json`.
+   *
+   * Fixed names rather than ones made from a label: a folder holding
+   * `code.js`, `task.md` and `output.schema.json` says what each file is
+   * before it is opened, and renaming a node renames nothing on disk.
+   */
+  texts(_subject: S): readonly TextFile[] {
+    return [];
+  }
 
   /**
    * What this element does, if a person writes it: the request, the body, and
@@ -87,29 +118,8 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
     return undefined;
   }
 
-  /**
-   * How an AI writes this element's body, or undefined if none does.
-   *
-   * A property of the element, not of one subject: whether the button is
-   * *offered* on a particular node — an input node selects files only in
-   * directory mode — is a question about that node, and the editor asks it by
-   * checking whether `logic()` answered.
-   */
-  generation(): Generation | undefined {
-    return undefined;
-  }
-
-  /**
-   * What this element keeps in files of its own when its graph is a project
-   * folder. Everything else it stores stays in `graph.json`.
-   *
-   * Fixed names rather than ones made from a label: a folder holding
-   * `code.js`, `task.md` and `output.schema.json` says what each file is
-   * before it is opened, and renaming a node renames nothing on disk.
-   */
-  texts(_subject: S): readonly TextFile[] {
-    return [];
-  }
+  // ── Run time ──────────────────────────────────────────────────────────────
+  // What a run asks. A deployed tool needs nothing below this block.
 
   /** A failing snippet: fatal by default, cosmetic where nothing downstream depends on it. */
   readonly snippetFailure: SnippetFailure = 'fatal';
@@ -124,10 +134,6 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
    */
   catchesErrors(subject: S): boolean {
     return subject.config.catch_errors === true;
-  }
-
-  deployNeeds(_subject: S): DeployNeeds {
-    return { needsInterface: false, asksAi: false };
   }
 
   /**
@@ -145,12 +151,42 @@ export abstract class Element<S extends { id: string; config: RawConfig }, C> {
     const logic = this.logic(subject);
     if (!logic) return inputs;
     try {
-      return await logic.run(inputs, runtime.code);
+      return await logic.run(inputs, runtime);
     } catch (error) {
       if (this.snippetFailure !== 'cosmetic') throw error;
       const reason = error instanceof Error ? error.message : String(error);
       return { value: `⚠ ${subject.id}: transform failed:
 ${reason}` };
     }
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+  // What only building asks: the editor, `check`, a bundle being made. It travels
+  // with the class -- one class per kind is worth more than a smaller tool -- but
+  // nothing a run calls may reach it (`elements/times.test.ts` holds that line).
+
+  /**
+   * How an AI writes this element's body, or undefined if none does.
+   *
+   * A property of the element, not of one subject: whether the button is
+   * *offered* on a particular node — an input node selects files only in
+   * directory mode — is a question about that node, and the editor asks it by
+   * checking whether `logic()` answered.
+   */
+  generation(): Generation | undefined {
+    return undefined;
+  }
+
+  /**
+   * What a bundle must carry for this element to run somewhere else.
+   *
+   * Every body may ask a model (`body.ts`), so every body is looked at, and any
+   * mention counts -- `node.llm(`, `{ llm }`, `const ask = node.llm`: a README
+   * that explains the model to someone who turns out not to need it costs less
+   * than a tool that stops at its first question.
+   */
+  deployNeeds(subject: S): DeployNeeds {
+    const logic = this.logic(subject);
+    return { needsInterface: false, asksAi: logic?.kind === 'code' && /\bllm\b/.test(logic.body) };
   }
 }

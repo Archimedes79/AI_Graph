@@ -3,6 +3,11 @@
   "node": "counts",
   "type": "code",
   "label": "Counts",
+  "runs": {
+    "by": "body",
+    "where": "code.js",
+    "does": "Calls run(inputs, node) in code.js, sandboxed, and hands on the object it returns, keyed by output port."
+  },
   "inputs": [
     {
       "port": "text",

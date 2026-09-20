@@ -1,4 +1,5 @@
 import { NodeElement } from '../../NodeElement.ts';
+import type { WhatRuns } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type Widget, type WidgetElement, type WidgetPresentation } from '../../WidgetElement.ts';
 import type { GraphNode, Port, RawConfig } from '../../../graph.ts';
@@ -61,8 +62,6 @@ export interface GuiConfig {
  */
 export class GuiNodeElement extends NodeElement<GuiConfig> {
   readonly nodeType = 'gui' as const;
-  override readonly isMemory = true;
-  override readonly hasInterface = true;
 
   config(node: GraphNode): GuiConfig {
     const raw = node.config.gui_widgets;
@@ -87,10 +86,9 @@ export class GuiNodeElement extends NodeElement<GuiConfig> {
     return { inputs, outputs };
   }
 
-  override deployNeeds() {
-    // A gui node *is* the interface, so a bundle holding one needs the page.
-    return { needsInterface: true, asksAi: false };
-  }
+  override readonly isMemory = true;
+
+  override readonly hasInterface = true;
 
   /** A block that starts the graph does so on its `_out` port: what the page names when it fires. */
   override eventPorts(node: GraphNode): string[] {
@@ -156,18 +154,6 @@ export class GuiNodeElement extends NodeElement<GuiConfig> {
     return element.displayValue(widget, transformed.value ?? value, runtime);
   }
 
-  /** What its pickers start on. */
-  override referencedPaths(node: GraphNode): string[] {
-    const paths: string[] = [];
-    for (const widget of this.config(node).widgets) {
-      const element = BY_KIND.get(widget.kind);
-      if (!(element instanceof InputPickerWidgetElement)) continue;
-      const { path } = element.config(widget);
-      if (path) paths.push(path);
-    }
-    return paths;
-  }
-
   /** A picker with nothing chosen is a question, and its block is who to ask. */
   override runtimeRequirements(node: GraphNode) {
     const asked = [];
@@ -209,5 +195,30 @@ export class GuiNodeElement extends NodeElement<GuiConfig> {
       if (element) element.settle(stored, value);
       else stored.value = value as never;
     }
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override whatRuns(): WhatRuns {
+    return this.engineRuns('Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives; a block with code of its own runs it sandboxed before showing.');
+  }
+
+  override deployNeeds(node: GraphNode) {
+    // A gui node *is* the interface, so a bundle holding one needs the page. A
+    // block's own code may ask a model like any other body.
+    const asksAi = this.config(node).widgets.some((widget) => BY_KIND.get(widget.kind)?.deployNeeds(widget).asksAi === true);
+    return { needsInterface: true, asksAi };
+  }
+
+  /** What its pickers start on. */
+  override referencedPaths(node: GraphNode): string[] {
+    const paths: string[] = [];
+    for (const widget of this.config(node).widgets) {
+      const element = BY_KIND.get(widget.kind);
+      if (!(element instanceof InputPickerWidgetElement)) continue;
+      const { path } = element.config(widget);
+      if (path) paths.push(path);
+    }
+    return paths;
   }
 }

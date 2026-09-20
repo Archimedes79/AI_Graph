@@ -1,4 +1,5 @@
 import { NodeElement } from '../../NodeElement.ts';
+import type { WhatRuns } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type GraphNode, type Port } from '../../../graph.ts';
 
@@ -84,5 +85,13 @@ export class OutputNodeElement extends NodeElement<OutputConfig> {
       result.written_path = target;
     }
     return result;
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override whatRuns(node: GraphNode): WhatRuns {
+    return this.engineRuns(this.config(node).mode === 'file'
+      ? 'Writes what arrives to its file and hands it on, with "written_path".'
+      : 'Hands on what arrives: the run\'s result, shown in a window or returned to whoever ran the graph.');
   }
 }

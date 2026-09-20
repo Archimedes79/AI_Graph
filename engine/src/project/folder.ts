@@ -404,8 +404,9 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   // output schema it keeps. Every node gets one, so every node has a folder
   // that says what goes in and what comes out.
   for (const node of copy.nodes) {
-    const schema = registry.node(node.node_type)?.outputInterface(node);
-    files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(copy, node, schema), true));
+    const element = registry.node(node.node_type);
+    const described = describeInterface(copy, node, element?.outputInterface(node), element?.whatRuns(node));
+    files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(described, true));
   }
   for (const text of projectTexts(copy)) {
     const written = text.holder[text.field];

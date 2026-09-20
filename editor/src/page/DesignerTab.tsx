@@ -7,6 +7,7 @@ import DesignerPalette, { ALL_ENTRIES, type PaletteEntry } from './DesignerPalet
 import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { routePage } from './pageWrite';
 import WidgetEditor from './WidgetEditor';
+import WhatRuns from '@/canvas/WhatRuns';
 import { SCHEMES, type SchemeId } from './scheme';
 import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { WIDGET_UIS } from '@/elements/registry';
@@ -262,6 +263,10 @@ export default function DesignerTab() {
             Belongs to “{ownerOf(selected.id)?.label}”.
           </p>
         )}
+
+        {/* A page has no panel of its own -- this is where it is edited -- so
+            what runs when it runs is said here, as every other node says it. */}
+        {guiNodes[0] && <div className="mt-5"><WhatRuns node={guiNodes[0]} /></div>}
       </aside>
 
       {/* The element under the cursor while it is being dragged. Without it the

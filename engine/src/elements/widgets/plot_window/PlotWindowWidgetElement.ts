@@ -10,6 +10,8 @@ export { PLOT_VIEW } from './view.ts';
 export class PlotWindowWidgetElement extends TransformingDisplayElement {
   readonly widgetKind = 'plot_window' as const;
 
+  // ── Build time ────────────────────────────────────────────────────────────
+
   /**
    * Two ways to answer, and the second is why this is not a fixed chart.
    *

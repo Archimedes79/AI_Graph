@@ -41,12 +41,31 @@ export interface NodePanelProps {
 export type NodeAdvancedPanelProps = Pick<NodePanelProps, 'node' | 'setConfig'>;
 
 export abstract class NodeUi extends Ui<GraphNode, NodePanelProps> {
+  // ── What it is ────────────────────────────────────────────────────────────
+
   abstract readonly nodeType: NodeType;
+
+  // ── Run time ──────────────────────────────────────────────────────────────
+  // What a deployed tool asks of a node: whether it is a page, whether its result opens a window.
+
+  /** This node carries the graph's interface: it gets a live page. */
+  readonly hasRuntimeWindow?: boolean;
+
+  /** Whether this particular node shows its result in a window when the run ends. */
+  showsResultWindow?(node: GraphNode): boolean;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+  // The editor: the palette, a new element, its panels, what ✨ Generate is told.
+  // It travels into a tool with the class, and no tool calls it (`runtime/boundary.test.ts`).
+
   /** What the palette and the node's header call it. */
   abstract readonly label: string;
+
   /** Shown on hover in the palette: what the node is for, in one line. */
   abstract readonly hint: string;
+
   abstract readonly icon: string;
+
   /** The node's tint on the canvas: a scheme variable, with the default scheme's colour as fallback. */
   abstract readonly color: string;
 
@@ -80,34 +99,39 @@ export abstract class NodeUi extends Ui<GraphNode, NodePanelProps> {
    * else, so that opening a node shows what it *does* and not a form.
    */
   readonly AdvancedPanel?: ComponentType<NodeAdvancedPanelProps>;
+
   /** What the folded-away settings are about, in a few words: shown on the fold. */
   readonly advancedSummary?: string;
+
   /**
    * How this node declares its output under its panel: `'format'` is the
    * editable output-format contract (ai, code); `'widgets'` the derived
    * summary a gui node shows. Absent: nothing to declare.
    */
   readonly outputContract?: 'format' | 'widgets';
+
   /**
    * The panel already covers what the node is for -- a prompt box, a code
    * body -- so the shell draws no separate "Description" field above it.
    */
   readonly ownsDescription?: boolean;
-  /** This node carries the graph's interface: it gets a live page. */
-  readonly hasRuntimeWindow?: boolean;
+
   /**
    * This node holds a graph of its own, which the editor can go into. The
    * mirror of `NodeElement.nestedGraph`, and the reason no shell has to know
    * which node type that is.
    */
   readonly opensNestedGraph?: boolean;
+
   /**
    * The node is a composite of widgets (`config.gui_widgets`): drawn with them
    * on the canvas, and generated widget by widget.
    */
   readonly holdsWidgets: boolean = false;
+
   /** What the output-format contract means for this kind of node, said above it. */
   readonly outputFormatHint?: string;
+
   /**
    * Detecting a wired file's format asks for a sample path, rather than
    * reading the node's own value -- a directory input holds a folder, not a file.
@@ -116,8 +140,7 @@ export abstract class NodeUi extends Ui<GraphNode, NodePanelProps> {
 
   /** What this node emits, in one line, for its neighbours' generation context. */
   describeOutput?(node: GraphNode): string;
-  /** Whether this particular node shows its result in a window when the run ends. */
-  showsResultWindow?(node: GraphNode): boolean;
+
   /** A line of what the node holds, shown on the canvas under its ports. Nothing, for most. */
   canvasSummary?(node: GraphNode): string | undefined;
 
@@ -139,4 +162,5 @@ export abstract class NodeUi extends Ui<GraphNode, NodePanelProps> {
   describeAsTarget(node: GraphNode): string {
     return `Output goes to "${node.label}" (${node.node_type} node).`;
   }
+
 }

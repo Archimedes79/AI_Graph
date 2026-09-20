@@ -7,10 +7,17 @@ import InputPickerWidgetView from './InputPickerWidgetView';
 
 export class InputPickerWidgetUi extends WidgetUi {
   readonly widgetKind = 'input_picker';
-  readonly label = 'File or folder';
+
   readonly View = InputPickerWidgetView;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'File or folder';
+
   override readonly Panel = lazy(() => import('./InputPickerWidgetPanel'));
+
   override readonly defaultMode = 'file';
+
   override readonly runOnChangeHint =
     'Picking a file or folder (or Enter in the path box) runs the nodes this picker is wired to.';
 

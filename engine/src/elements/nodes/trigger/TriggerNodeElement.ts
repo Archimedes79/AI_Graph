@@ -1,4 +1,5 @@
 import { NodeElement } from '../../NodeElement.ts';
+import type { WhatRuns } from '../../Element.ts';
 import type { Runtime } from '../../Runtime.ts';
 import type { GraphNode } from '../../../graph.ts';
 import { port } from '../../port.ts';
@@ -53,6 +54,16 @@ export class TriggerNodeElement extends NodeElement<TriggerConfig> {
     return this.config(node).every !== '';
   }
 
+  async execute(_node: GraphNode, _inputs: Record<string, unknown>, runtime: Runtime) {
+    return { [TRIGGER_PORT]: runtime.fired?.(TRIGGER_PORT) ?? true };
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override whatRuns(): WhatRuns {
+    return this.engineRuns('Hands on "fired": true in a round this trigger began, false in any other. The clock itself is kept by whatever holds the graph.');
+  }
+
   override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
     const { onStart, every } = this.config(node);
     if (every) {
@@ -66,9 +77,5 @@ export class TriggerNodeElement extends NodeElement<TriggerConfig> {
       return [{ where, problem: 'This trigger never fires: it is set neither to start with the tool nor to repeat.', fix: 'Tick "when the tool starts", give it an interval, or delete it.' }];
     }
     return [];
-  }
-
-  async execute(_node: GraphNode, _inputs: Record<string, unknown>, runtime: Runtime) {
-    return { [TRIGGER_PORT]: runtime.fired?.(TRIGGER_PORT) ?? true };
   }
 }

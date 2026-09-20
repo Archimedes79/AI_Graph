@@ -84,8 +84,8 @@ its names, on both sides.
 Behaviour lives in classes. Shared code asks the element and never switches on a type name.
 
 ```
-Element<Subject, Config>          config() · generation() · catchesErrors() · deployNeeds()
-├── NodeElement<C>                a node: derivedPorts · execute · display · eventPorts · keepsTime · settleMemory
+Element<Subject, Config>          config() · texts() · logic() · catchesErrors() ┊ generation() · deployNeeds()
+├── NodeElement<C>                a node: derivedPorts · execute · display · eventPorts · keepsTime · settleMemory ┊ whatRuns · problems
 │   ├── InputNodeElement   AiNodeElement   CodeNodeElement
 │   ├── DataNodeElement    OutputNodeElement   SubgraphNodeElement
 │   ├── TriggerNodeElement        an event with nobody there: the tool starting, a clock
@@ -120,6 +120,47 @@ class by class. What each kind knows about its own appearance — its name, icon
 a new widget's size, tone and first values — is a member of its `Ui`, not a table in a
 shell. An element is handed its services (`Runtime.ts`: `files`, `code`, `ai`, `tools`)
 rather than reaching for them.
+
+### Build time and run time, in one class
+
+There are three programs in this repository: the **editor** (building a graph), the
+**page of a tool** (using one), and the **run** (what happens between a press and an
+answer). A tool needs the last two. What it does not need, it must never *call* — and that
+is the line that is kept, not "never carry".
+
+An element is one class per kind, and it holds both what a run asks of it and what only
+building asks. Two classes per kind (or four, with the browser half) were considered and
+turned down: the knowledge is small, it belongs to the kind, and one file per kind is what
+makes a kind easy to add. So build-time members travel into a bundle with their class.
+They are kept apart *inside* it instead:
+
+- Every base class (`Element`, `NodeElement`, `WidgetElement`; `NodeUi`, `WidgetUi`) is
+  laid out under three bars — **What it is · Run time · Build time** — and every kind keeps
+  that order, its build-time members under a `── Build time` bar of its own.
+- The bars are load-bearing: `elements/times.test.ts` reads them, on both sides.
+
+| | What it is | Run time | Build time |
+|---|---|---|---|
+| **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
+| `Element` | `config` · `texts` · `logic` | `catchesErrors` · `snippetFailure` · `runSnippet` | `generation` · `deployNeeds` |
+| `NodeElement` | `nodeType` · `derivedPorts` · `nestedGraph` · `boundaryRole` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `asksModel` · `referencedPaths` |
+| `WidgetElement` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | — |
+| `NodeUi` | `nodeType` | `hasRuntimeWindow` · `showsResultWindow` | everything else: the palette, `create`, `saved`, panels, what ✨ Generate is told |
+| `WidgetUi` | `widgetKind` | `View` · `ownsValue` · `clearValueAfterRun` | everything else |
+
+What the tests hold: every member stands under a bar; the build-time list is spelled out,
+so moving a member across is a decision and not a bar that slipped; **no file a run goes
+through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `runs.ts`, `schedule.ts`,
+`node.ts`) **mentions a build-time member**; and nothing a tool's page can reach asks a
+`Ui` for anything but its run-time members. What is *not* carried at all stays as it was:
+`host/editor/` never enters a bundle, and a panel is a lazy chunk a tool never fetches.
+
+**What runs.** `NodeElement.whatRuns(node)` answers the question a node's folder could not:
+which code runs when this node runs. Either a body in the folder (`code.js`, a changed
+`run.js`), run sandboxed — or this kind's `execute`, named by file, with one sentence
+saying what it does. The same answer is written into the node's `interface.json`, shown at
+the foot of its panel, and listed in [graphs.md](graphs.md#what-runs-and-where); a test
+checks that the file and the method it names exist.
 
 ## Two processes, one contract
 
@@ -286,11 +327,17 @@ what it should do ──✨──▶ body ──▶ Try it: [values] ⟳ from th
                                                  written and checked against (tryValues.ts)
 ```
 
+**One way to run a body.** A code node's `code.js`, an ai node's changed `run.js`, the
+`selector.js` that picks files and the code a display block shapes its value with are one
+kind of thing, and `elements/body.ts` (`runBody`) is the only place that runs one:
+`async function run(inputs, node)`, in a process of its own, returning an object keyed by
+output port. The element decides *when* and what a failure costs; never *how*.
+
 **A body can ask.** `CodeRunner.run(body, inputs, signal, context)` hands a body a second
 argument, `node`: plain data, and `calls` — questions it may put to the process that holds
 the graph, over its own stdin/stdout (`host/node.ts`). That is how a body asks a model
 without ever holding a key: `node.llm` is answered by `askModel` (`nodes/ai/ask.ts`), the one
-way to ask, counted per run. An ai node's `run.js` (`nodes/ai/runTemplate.ts`) is such a
+way to ask, counted per run -- and offered to every body, since they all run the one way. An ai node's `run.js` (`nodes/ai/runTemplate.ts`) is such a
 body; left as the engine shipped it, the engine makes its one call directly.
 
 Generation (`host/editor/generate.ts`) is: write → run once on the sample → ask the
@@ -364,6 +411,9 @@ learns what a code node is.
 - Panels are typed (`NodePanelProps`, `WidgetPanelProps`), not `any`: a shell that stops
   handing a panel what it reads fails to compile.
 - Things that were settable and did nothing are removed rather than documented.
+- Build time and run time are kept apart inside each element class, and the tests read the
+  bars that say which is which ([`times.test.ts`](../engine/src/elements/times.test.ts),
+  [its mirror](../editor/src/elements/times.test.ts)).
 - No code outside `elements/` compares a node type or a widget kind with a name
   ([`shells.test.ts`](../editor/src/elements/shells.test.ts)). What such a comparison would
   decide is a member of the element's class — `holdsWidgets`, `missingExample`,

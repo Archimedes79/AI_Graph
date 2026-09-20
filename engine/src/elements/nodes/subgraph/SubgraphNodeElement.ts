@@ -1,5 +1,5 @@
 import { NodeElement } from '../../NodeElement.ts';
-import type { TextFile } from '../../Element.ts';
+import type { TextFile, WhatRuns } from '../../Element.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
 import { port } from '../../port.ts';
@@ -90,6 +90,54 @@ export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
     return false;
   }
 
+  async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
+    const graph = this.nestedGraph(node);
+    if (!graph) throw new Error('This node holds no graph that can be read.');
+    if (!runtime.subgraph) throw new Error('A graph inside a node can only be run by the engine that runs graphs.');
+    const elements = runtime.subgraph.elements;
+
+    // The graph this node sits in has already had its AI default applied to
+    // the runtime; the inner graph's own default would otherwise override it
+    // from below, which is backwards -- a graph pasted in as a subgraph should
+    // follow the tool it became part of.
+    graph.metadata.ai_defaults = { provider: 'default', model: '' };
+
+    const given: Record<string, Record<string, unknown>> = {};
+    for (const boundary of boundaryInputs(graph, elements)) {
+      // A port nothing is wired to is not answered, and the node inside runs
+      // as it is configured.
+      if (!(boundary.id in inputs)) continue;
+      given[boundary.id] = { output: inputs[boundary.id] };
+    }
+
+    const run = await runtime.subgraph.run(graph, given);
+    // Anything short of a clean run inside is this node's failure.
+    //
+    // From out here this is one node, and "half of it worked" is not something
+    // a port can carry: what it would carry is a null nobody can explain,
+    // while the reason stays in a report nobody is looking at. A `partial` run
+    // counts -- an item of a fan-out that failed, a node that caught its own
+    // failure and passed nothing on. To let the graph above carry on anyway,
+    // tick this node's own catch-errors: then the reason arrives on its error
+    // port, which is the one place a caught failure belongs.
+    if (run.status !== 'success') {
+      throw new Error(`Inside "${node.label || node.id}": ${trouble(run)}`);
+    }
+
+    const produced: Record<string, unknown> = {};
+    for (const boundary of boundaryOutputs(graph, elements)) {
+      const arrived = run.node_results.find((result) => result.node_id === boundary.id)?.inputs ?? {};
+      produced[boundary.id] = handedUp(boundary, arrived);
+    }
+    return produced;
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override whatRuns(): WhatRuns {
+    return this.engineRuns('Runs the graph in its folder, whole, with what arrives standing in for its input nodes, and hands on what reaches its output nodes.');
+  }
+
   /**
    * What this node's own contract says about the graph it holds.
    *
@@ -173,48 +221,6 @@ export class SubgraphNodeElement extends NodeElement<SubgraphConfig> {
       }
     }
     return found;
-  }
-
-  async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
-    const graph = this.nestedGraph(node);
-    if (!graph) throw new Error('This node holds no graph that can be read.');
-    if (!runtime.subgraph) throw new Error('A graph inside a node can only be run by the engine that runs graphs.');
-    const elements = runtime.subgraph.elements;
-
-    // The graph this node sits in has already had its AI default applied to
-    // the runtime; the inner graph's own default would otherwise override it
-    // from below, which is backwards -- a graph pasted in as a subgraph should
-    // follow the tool it became part of.
-    graph.metadata.ai_defaults = { provider: 'default', model: '' };
-
-    const given: Record<string, Record<string, unknown>> = {};
-    for (const boundary of boundaryInputs(graph, elements)) {
-      // A port nothing is wired to is not answered, and the node inside runs
-      // as it is configured.
-      if (!(boundary.id in inputs)) continue;
-      given[boundary.id] = { output: inputs[boundary.id] };
-    }
-
-    const run = await runtime.subgraph.run(graph, given);
-    // Anything short of a clean run inside is this node's failure.
-    //
-    // From out here this is one node, and "half of it worked" is not something
-    // a port can carry: what it would carry is a null nobody can explain,
-    // while the reason stays in a report nobody is looking at. A `partial` run
-    // counts -- an item of a fan-out that failed, a node that caught its own
-    // failure and passed nothing on. To let the graph above carry on anyway,
-    // tick this node's own catch-errors: then the reason arrives on its error
-    // port, which is the one place a caught failure belongs.
-    if (run.status !== 'success') {
-      throw new Error(`Inside "${node.label || node.id}": ${trouble(run)}`);
-    }
-
-    const produced: Record<string, unknown> = {};
-    for (const boundary of boundaryOutputs(graph, elements)) {
-      const arrived = run.node_results.find((result) => result.node_id === boundary.id)?.inputs ?? {};
-      produced[boundary.id] = handedUp(boundary, arrived);
-    }
-    return produced;
   }
 }
 

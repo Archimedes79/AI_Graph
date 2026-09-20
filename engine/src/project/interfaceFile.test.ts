@@ -38,8 +38,13 @@ describe('interface.json', () => {
       outputs: [{ port: 'words', type: 'number', to: ['show.value'] }],
       output_schema: { type: 'object', properties: { words: { type: 'integer' } } },
     });
-    // Every node has one: an output node's folder says what it is shown.
-    expect(JSON.parse(await readFile(join(dir, 'nodes', 'show', 'interface.json'), 'utf8')).inputs[0].from).toEqual(['count.words']);
+    // What runs: the body beside it, for a node that has one ...
+    expect(written.runs).toMatchObject({ by: 'body', where: 'code.js' });
+    // Every node has one: an output node's folder says what it is shown,
+    // ... and names the engine class that does the work, for one that has none.
+    const shown = JSON.parse(await readFile(join(dir, 'nodes', 'show', 'interface.json'), 'utf8'));
+    expect(shown.inputs[0].from).toEqual(['count.words']);
+    expect(shown.runs).toMatchObject({ by: 'engine', where: 'engine/src/elements/nodes/output/OutputNodeElement.ts › execute' });
   });
 
   it('is rendered, never read back: edited outside, it is replaced and nothing is refused', async () => {

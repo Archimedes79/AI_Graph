@@ -29,9 +29,13 @@ export interface WidgetPanelProps {
 let created = 0;
 
 export abstract class WidgetUi extends Ui<GuiWidget, WidgetPanelProps> {
+  // ── What it is ────────────────────────────────────────────────────────────
+
   abstract readonly widgetKind: WidgetKind;
-  /** What the palette and the properties header call it. */
-  abstract readonly label: string;
+
+  // ── Run time ──────────────────────────────────────────────────────────────
+  // What a deployed tool draws a block with.
+
   /**
    * How the widget looks on a page -- the designer and the deployed tool draw
    * this same component. Which ports it contributes is not here: that is the
@@ -39,26 +43,37 @@ export abstract class WidgetUi extends Ui<GuiWidget, WidgetPanelProps> {
    */
   abstract readonly View: ComponentType<WidgetViewProps>;
 
-  /** The mode a new widget of this kind starts in, when the palette names none. */
-  readonly defaultMode: string = '';
-  /**
-   * The widget *is* its text: a heading, a paragraph. Selected on the page
-   * being built, it becomes a box to type in, where the words stand.
-   */
-  readonly inlineText?: boolean;
   /**
    * What the widget shows is its *own* stored value, whatever arrived last run:
    * a conversation, where the reply that arrived is one line of what is shown.
    */
   readonly ownsValue?: boolean;
-  /** Drawn on the canvas under the widget's input port: what last arrived there. */
-  readonly CanvasPreview?: ComponentType<{ data: unknown }>;
-  /** Said under "⚡ Using this starts the graph", for a widget that can be told to. */
-  readonly runOnChangeHint: string =
-    'Choosing a value runs the nodes this widget is wired to, and what follows from them — not the whole graph.';
 
   /** The stored value is a one-shot message, cleared once a run has consumed it. */
   clearValueAfterRun?(widget: GuiWidget): boolean;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+  // The editor: the palette, a new element, its panels, what ✨ Generate is told.
+  // It travels into a tool with the class, and no tool calls it (`runtime/boundary.test.ts`).
+
+  /** What the palette and the properties header call it. */
+  abstract readonly label: string;
+
+  /** The mode a new widget of this kind starts in, when the palette names none. */
+  readonly defaultMode: string = '';
+
+  /**
+   * The widget *is* its text: a heading, a paragraph. Selected on the page
+   * being built, it becomes a box to type in, where the words stand.
+   */
+  readonly inlineText?: boolean;
+
+  /** Drawn on the canvas under the widget's input port: what last arrived there. */
+  readonly CanvasPreview?: ComponentType<{ data: unknown }>;
+
+  /** Said under "⚡ Using this starts the graph", for a widget that can be told to. */
+  readonly runOnChangeHint: string =
+    'Choosing a value runs the nodes this widget is wired to, and what follows from them — not the whole graph.';
 
   /** The widget is a source whose data nothing describes yet: see `NodeUi.missingExample`. */
   missingExample(_widget: GuiWidget): boolean {
@@ -117,4 +132,5 @@ export abstract class WidgetUi extends Ui<GuiWidget, WidgetPanelProps> {
   protected initialSettings(): Partial<GuiWidget> {
     return {};
   }
+
 }

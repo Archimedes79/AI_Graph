@@ -8,10 +8,17 @@ import { baseNodeConfig } from '../baseNodeConfig';
 
 export class AiNodeUi extends NodeUi {
   readonly nodeType = 'ai';
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
   readonly label = 'AI Node';
+
   readonly hint = 'Send a prompt to a local or hosted model and pass on its answer';
+
   readonly icon = '🤖';
+
   readonly color = 'var(--ui-node-ai, #2d1b4e)';
+
   readonly settings: NodeUi['settings'] = [
     'ai_provider', 'ai_model', 'system_prompt', 'temperature', 'prompt_template',
     'output_format', 'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
@@ -21,10 +28,15 @@ export class AiNodeUi extends NodeUi {
   // The description IS this element's generation prompt, drawn by its own
   // panel -- a second Description field above it showed the same box twice.
   override readonly ownsDescription = true;
+
   override readonly outputContract = 'format';
+
   override readonly outputFormatHint = 'Only needed when something downstream has to parse the answer. It becomes a sentence at the end of the instructions, and the neighbours are generated against it. Nothing checks the answer afterwards — a model that ignores it is caught by a Code node, not here.';
+
   override readonly Panel = lazy(() => import('./AiNodePanel'));
+
   override readonly AdvancedPanel = lazy(() => import('./AiNodeAdvancedPanel'));
+
   override readonly advancedSummary = 'model, tools, batching, failures';
 
   override readonly generation: ElementGeneration<GraphNode> = {

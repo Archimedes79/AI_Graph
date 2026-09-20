@@ -4,6 +4,11 @@
   "type": "gui",
   "label": "Plotter",
   "about": "The page this tool shows",
+  "runs": {
+    "by": "engine",
+    "where": "engine/src/elements/nodes/gui/GuiNodeElement.ts › execute",
+    "does": "Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives; a block with code of its own runs it sandboxed before showing."
+  },
   "inputs": [
     {
       "port": "plot_in",

@@ -6,12 +6,8 @@ import { effectiveTextIoMode } from './mode';
 
 export class TextIoWidgetUi extends WidgetUi {
   readonly widgetKind = 'text_io';
-  readonly label = 'Text box';
+
   readonly View = TextIoWidgetView;
-  override readonly Panel = lazy(() => import('./TextIoWidgetPanel'));
-  override readonly defaultMode = 'both';
-  override readonly runOnChangeHint =
-    'Enter sends what was typed (Shift+Enter is a new line), and the box is emptied once it has been delivered.';
 
   /**
    * A box that sends on Enter holds a message, and a message is said once:
@@ -22,6 +18,17 @@ export class TextIoWidgetUi extends WidgetUi {
   override clearValueAfterRun(widget: GuiWidget): boolean {
     return effectiveTextIoMode(widget) !== 'output' && widget.run_on_change === true;
   }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Text box';
+
+  override readonly Panel = lazy(() => import('./TextIoWidgetPanel'));
+
+  override readonly defaultMode = 'both';
+
+  override readonly runOnChangeHint =
+    'Enter sends what was typed (Shift+Enter is a new line), and the box is emptied once it has been delivered.';
 
   /** A box you type into looks like one; a box that only shows text does not. */
   protected override defaultTone(mode: string) {

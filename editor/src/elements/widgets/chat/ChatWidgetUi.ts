@@ -9,9 +9,14 @@ import ChatWidgetView from './ChatWidgetView';
  */
 export class ChatWidgetUi extends WidgetUi {
   readonly widgetKind = 'chat';
-  readonly label = 'Chat';
+
   readonly View = ChatWidgetView;
+
   override readonly ownsValue = true;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Chat';
 
   /** A conversation needs room to be one: the full width, and most of a screen. */
   protected override defaultSpan() {

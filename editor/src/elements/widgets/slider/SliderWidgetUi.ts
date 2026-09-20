@@ -4,9 +4,15 @@ import SliderWidgetView from './SliderWidgetView';
 
 export class SliderWidgetUi extends WidgetUi {
   readonly widgetKind = 'slider';
-  readonly label = 'Slider';
+
   readonly View = SliderWidgetView;
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  readonly label = 'Slider';
+
   override readonly Panel = lazy(() => import('./SliderWidgetPanel'));
+
   override readonly runOnChangeHint =
     'Letting go of the handle (or an arrow key) runs the nodes this slider is wired to — not every value it passes on the way.';
 

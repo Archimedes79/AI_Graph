@@ -8,16 +8,24 @@ import { derivedNodePorts } from '../gui/guiWidgets';
 
 export class InputNodeUi extends NodeUi {
   readonly nodeType = 'input';
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
   readonly label = 'Input';
+
   readonly hint = 'A value from outside the graph: typed text, one file, or a directory listing';
+
   readonly icon = '📥';
+
   readonly color = 'var(--ui-node-input, #1e3a5f)';
+
   readonly settings: NodeUi['settings'] = [
     'input_mode', 'value', 'prompt_at_runtime', 'recursive', 'extensions', 'select_all_files',
     'selector_prompt', 'selector_code', 'example_file', 'output_format_prompt', 'catch_errors',
   ];
 
   override readonly Panel = lazy(() => import('./InputNodePanel'));
+
   override readonly asksForFormatSample = true;
 
   override readonly generation: ElementGeneration<GraphNode> = {

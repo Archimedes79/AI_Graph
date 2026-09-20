@@ -37,10 +37,28 @@ export interface Widget extends WidgetPresentation {
 }
 
 export abstract class WidgetElement<C = unknown> extends Element<Widget, C> {
+  // ── What it is ────────────────────────────────────────────────────────────
+  // Its kind and the ports it gives its page.
+
   abstract readonly widgetKind: WidgetKind;
 
   /** The ports this widget contributes to its gui node. */
   abstract ports(widget: Widget): { inputs: Port[]; outputs: Port[] };
+
+  // ── Run time ──────────────────────────────────────────────────────────────
+  // What the page asks of it while a graph runs.
+
+  /**
+   * Whether this block starts the graph when the person uses it.
+   *
+   * A button always does: that is all a button is. Anything else does when it
+   * was told to (`run_on_change`) -- a dropdown that redraws the chart the
+   * moment it changes, a message box that sends on Enter. What starts is what
+   * the block is wired to, not the whole graph: see `triggers.ts`.
+   */
+  firesRun(widget: Widget): boolean {
+    return widget.config.run_on_change === true;
+  }
 
   /**
    * Compute this widget's output ports: `{port_id: value}`, exactly as a node
@@ -65,20 +83,9 @@ export abstract class WidgetElement<C = unknown> extends Element<Widget, C> {
     stored.value = value;
   }
 
-  /**
-   * Whether this block starts the graph when the person uses it.
-   *
-   * A button always does: that is all a button is. Anything else does when it
-   * was told to (`run_on_change`) -- a dropdown that redraws the chart the
-   * moment it changes, a message box that sends on Enter. What starts is what
-   * the block is wired to, not the whole graph: see `triggers.ts`.
-   */
-  firesRun(widget: Widget): boolean {
-    return widget.config.run_on_change === true;
-  }
-
   /** Last step before a display-only widget's value reaches the page. */
   async displayValue(_widget: Widget, value: unknown, _runtime: Runtime): Promise<unknown> {
     return value;
   }
+
 }

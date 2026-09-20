@@ -6,6 +6,8 @@ import { TRANSFORM_FIELDS } from '../TransformingDisplayElement.ts';
 export class TableWidgetElement extends TransformingDisplayElement {
   readonly widgetKind = 'table' as const;
 
+  // ── Build time ────────────────────────────────────────────────────────────
+
   override generation(): Generation {
     return {
       kind: 'code', fields: TRANSFORM_FIELDS,
