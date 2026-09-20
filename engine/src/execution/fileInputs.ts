@@ -5,16 +5,65 @@
 // any element that asks, which is why an AI node and a code node behave the
 // same here without either implementing it.
 //
-// **Only ports typed `file_path`.** A node that read every string input as a
+// **Only where a path is declared.** A node that read every string input as a
 // filename would break the moment someone wired a sentence into it, and the
 // error would arrive as "no such file: Once upon a time".
+//
+// Declared at *either end of the wire*, though, and that second half was
+// missing for a long time. A code node is created with its input typed `any`
+// and the editor offers no way to change it, so ticking "read file contents
+// from paths" on one did nothing at all: the box was on, the port was not
+// `file_path`, and the body was handed a filename in silence. Meanwhile the
+// picker feeding it declares `file_path` perfectly well. So the question is
+// asked of the wire: if what arrives was declared a path by whoever sends it,
+// reading it is what the person asked for.
 
-import type { GraphNode } from '../graph.ts';
+import type { GraphEdge, GraphNode } from '../graph.ts';
 import type { FileService, Runtime } from '../elements/Runtime.ts';
 
-/** The ports of *node* whose wired value is a path. */
-export function filePorts(node: GraphNode): string[] {
-  return node.inputs.filter((port) => port.data_type === 'file_path').map((port) => port.id);
+/** A port id and the type its far end declares, for every wire into *node*. */
+function declaredBySource(node: GraphNode, graph: FileGraph | undefined): Set<string> {
+  const paths = new Set<string>();
+  if (!graph) return paths;
+  const typeOf = new Map<string, string>();
+  for (const other of graph.nodes) {
+    for (const port of other.outputs) typeOf.set(`${other.id}.${port.id}`, port.data_type);
+  }
+  for (const edge of graph.edges) {
+    if (edge.target_node_id !== node.id) continue;
+    if (typeOf.get(`${edge.source_node_id}.${edge.source_port_id}`) === 'file_path') {
+      paths.add(edge.target_port_id);
+    }
+  }
+  return paths;
+}
+
+/** Only what this needs of a graph, so a caller with two loose lists can ask too. */
+export interface FileGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+/**
+ * The ports of *node* whose wired value is a path — by its own type, or, where
+ * it declares none, by the wire's.
+ *
+ * The target's own word wins, and that is not a detail. A file reader takes the
+ * same picker output twice: `file`, typed `file_path`, to be read, and `path`,
+ * typed `text`, to keep the *name* for the line it prints about the file. Both
+ * come from a `file_path` output. So a rule that asked only the wire read both
+ * and the summary lost its filename -- which is a test in this repo, and it
+ * caught exactly that.
+ *
+ * `any` is the case with nobody's word on it: the type a code node is created
+ * with, and the one the editor cannot change. There the wire decides.
+ */
+export function filePorts(node: GraphNode, graph?: FileGraph): string[] {
+  const fromSource = declaredBySource(node, graph);
+  return node.inputs
+    .filter((port) => port.data_type === 'file_path'
+      || (port.data_type === 'any' && fromSource.has(port.id)))
+    .map((port) => port.id);
 }
 
 /**
@@ -46,6 +95,7 @@ export function readFileInputs(
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,
+  graph?: FileGraph,
 ): Promise<Record<string, unknown>> {
-  return readPorts(inputs, filePorts(node), runtime.files);
+  return readPorts(inputs, filePorts(node, graph), runtime.files);
 }

@@ -25,7 +25,7 @@ import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeRes
 import type { NodeRunner } from '../elements/NodeRunner.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
-import { readFileInputs } from './fileInputs.ts';
+import { readFileInputs, type FileGraph } from './fileInputs.ts';
 import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
 import type { LastOutputs } from './reuse.ts';
 import type { Latch } from './latch.ts';
@@ -403,7 +403,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         // What the run reports having received is what came off the wires --
         // the paths, not the megabytes behind them. Only the element sees the
         // contents.
-        const arrived = await readInputs(element, node, inputs, runtime);
+        const arrived = await readInputs(element, node, inputs, runtime, graph);
         // An event is a moment: `true` handed back from an earlier round would
         // open gates for a press that is over.
         const key = element.eventPorts(node).length ? undefined : options.reuse?.key(node, arrived);
@@ -663,7 +663,7 @@ export async function executeNode(
   }
   const runtime = withGraphDefaults(options.runtime, graph);
   try {
-    const arrived = await readInputs(element, node, inputs, runtime);
+    const arrived = await readInputs(element, node, inputs, runtime, graph);
     const { produced, failures } = await runNode(
       element, node, arrived, withSubgraph(runtime, options, node, options.depth ?? 0),
     );
@@ -703,10 +703,11 @@ async function readInputs(
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,
+  graph?: FileGraph,
 ): Promise<Record<string, unknown>> {
   if (!element.readsFileInputs(node)) return inputs;
   try {
-    return await readFileInputs(node, inputs, runtime);
+    return await readFileInputs(node, inputs, runtime, graph);
   } catch (error) {
     throw new Error(`Reading its input files: ${error instanceof Error ? error.message : String(error)}`);
   }
