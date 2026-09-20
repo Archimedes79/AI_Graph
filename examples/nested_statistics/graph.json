@@ -70,7 +70,7 @@
       "id": "report",
       "node_type": "output",
       "label": "Report",
-      "description": "",
+      "description": "What came back out of the subgraph, as the run's result",
       "inputs": [
         {
           "id": "value",

@@ -23,5 +23,6 @@ async function flow(node) {
   const statistics = await node.statistics({ text: paragraph.output });
 
   // Report · output · engine/src/elements/nodes/output/OutputNodeRunner.ts › execute
+  // What came back out of the subgraph, as the run's result
   await node.report({ value: statistics.numbers });
 }
