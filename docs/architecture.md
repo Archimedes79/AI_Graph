@@ -21,7 +21,7 @@ server serves a deployed tool, with the editor's routes simply not loaded.
 ## Elements first
 
 Everything the tool can do is an **element**: a node type (input, ai, code, data, output,
-gui, subgraph) or a widget kind on a page (text, picker, dropdown, chart, chat, …). The design is
+gui, subgraph, trigger) or a widget kind on a page (text, picker, dropdown, chart, chat, …). The design is
 organised around them, and each element is one folder, at the **same relative path on
 both sides**:
 
@@ -85,9 +85,10 @@ Behaviour lives in classes. Shared code asks the element and never switches on a
 
 ```
 Element<Subject, Config>          config() · generation() · catchesErrors() · deployNeeds()
-├── NodeElement<C>                a node: derivedPorts · execute · display · runtimeRequirements · settleMemory
+├── NodeElement<C>                a node: derivedPorts · execute · display · eventPorts · keepsTime · settleMemory
 │   ├── InputNodeElement   AiNodeElement   CodeNodeElement
-│   ├── DataNodeElement    OutputNodeElement
+│   ├── DataNodeElement    OutputNodeElement   SubgraphNodeElement
+│   ├── TriggerNodeElement        an event with nobody there: the tool starting, a clock
 │   └── GuiNodeElement            a composite: holds widgets, its ports are theirs
 └── WidgetElement<C>              a widget: ports · execute · firesRun · settle · displayValue
     ├── InputPickerWidgetElement   TextIoWidgetElement   SelectWidgetElement
@@ -101,7 +102,7 @@ Element<Subject, Config>          config() · generation() · catchesErrors() ·
 Ui<Subject, PanelProps>           Panel · generation
 ├── NodeUi                        create(id) · label · icon · color · hint · AdvancedPanel · describeOutput
 │   ├── InputNodeUi   AiNodeUi   CodeNodeUi
-│   ├── DataNodeUi    OutputNodeUi
+│   ├── DataNodeUi    OutputNodeUi   SubgraphNodeUi   TriggerNodeUi
 │   └── GuiNodeUi
 └── WidgetUi                      create(label, mode) · label · View · defaultSpan · defaultTone · runOnChangeHint
     ├── InputPickerWidgetUi   TextIoWidgetUi   SelectWidgetUi
@@ -236,9 +237,18 @@ other knows, it imports it or replays its result:
 1. **Order.** Kahn's algorithm gives levels. A loop through a node that remembers (a page,
    a data node) is legal: the fewest edges into memory nodes are left out of the ordering
    (`memoryFeedbackEdges`) and settled after the round.
-2. **What runs.** Everything — or, for a page event, the nodes its port is wired to, what
-   follows from them, and what those need upstream (`triggers.ts`). An edge into the
-   undeclared `__run` port orders a node and carries nothing.
+2. **What runs.** Everything — or, for an event (a block on a page, a trigger node), the
+   nodes its port is wired to, what follows from them, and what those need upstream
+   (`triggers.ts`). An event is a boolean that is true for the round it started
+   (`Runtime.fired`, asked of `NodeElement.eventPorts`); a run no event started counts every
+   event as fired.
+   **The ◆ (`__run`) is a gate**: wired, the node runs only when this round opens it — the
+   event is wired to the node, or a node computed `true` onto it in this round; OR over
+   several wires, only `true` opens. So a code node returning booleans is the filter and the
+   router, and there is no node type for either. A node that stands still keeps what it made
+   last (`execution/latch.ts`: meaning, not a cache — see its header for the difference from
+   `reuse.ts` and from a data node); one fed only by nodes that stood still stands still
+   too; what stood still is never settled into memory or shown a second time.
 3. **Per node.** Collect inputs → idle-skip if a required or (for an AI node) every wired
    input came up empty → read wired files → run once, or once per item → record.
    A failure marks the node and skips its dependents; with `catch_errors` it becomes an
@@ -249,6 +259,7 @@ other knows, it imports it or replays its result:
 5. **Watching and stopping.** `RunBoard` (`host/runs.ts`) starts a run in the background,
    turns the executor's progress events into the `RunSnapshot` the page polls, and aborts
    it on Stop. An `AbortSignal` reaches every model call and every sandboxed body.
+   Rounds of one graph queue (`host/rounds.ts`), the clock's and the page's alike.
 6. **Shutting down.** A server holds a clock, runs in flight, the children those started,
    and a socket. `serve()` writes each into a `Lifecycle` (`host/lifecycle.ts`) as it starts
    it, and `shutdown()` stops them in that order — what makes work before what carries it:
@@ -274,6 +285,13 @@ what it should do ──✨──▶ body ──▶ Try it: [values] ⟳ from th
                             └── verified ────┘   the same values are the sample ✨ is
                                                  written and checked against (tryValues.ts)
 ```
+
+**A body can ask.** `CodeRunner.run(body, inputs, signal, context)` hands a body a second
+argument, `node`: plain data, and `calls` — questions it may put to the process that holds
+the graph, over its own stdin/stdout (`host/node.ts`). That is how a body asks a model
+without ever holding a key: `node.llm` is answered by `askModel` (`nodes/ai/ask.ts`), the one
+way to ask, counted per run. An ai node's `run.js` (`nodes/ai/runTemplate.ts`) is such a
+body; left as the engine shipped it, the engine makes its one call directly.
 
 Generation (`host/editor/generate.ts`) is: write → run once on the sample → ask the
 element's `check` → repair once with the evidence. The sample is what came off the wires,
@@ -318,6 +336,7 @@ learns what a code node is.
 | the graph | a project folder: `graph.json`, `layout.json`, `nodes/<id>/<file>` — or one `.json` with everything inline | the document ([`project/folder.ts`](../engine/src/project/folder.ts)) |
 | a widget's value, a conversation, a data node's value | inside the graph, in the element's own config | `result.memory` → `applyMemory` |
 | a run in flight | `RunBoard` on the server | `RunSnapshot`, polled |
+| what every node made last, for rounds its ◆ stays shut | `Latch`, in the process holding the graph; gone at restart | `NodeResult.held` |
 | the last run | the editor's store / the served page / `schedule.ts` | `ExecutionResult` |
 | keys, endpoints, MCP servers that start programs | `ai-settings.json`, machine-side, never in a graph | — |
 | which model writes code for you | the browser (`store/settingsStore.ts`) | request fields (`ModelChoice`) |
@@ -330,6 +349,9 @@ learns what a code node is.
   its AI settings — no generation, no editing, no writing settings.
 - A code body runs in a separate Node process under `--permission`: files yes; child
   processes, addons, workers no. The network is **not** closed (Node has no flag for it).
+  It never holds a key: a model call is *asked for* (`node.llm`) and made by the process
+  that started it, at most 25 times a run. An ai node's `run.js` from a folder somebody
+  handed you is such a body too — it is never run in the trusted process.
 - A graph can *name* an MCP tool server; only `ai-settings.json` can say which program a
   name starts. A URL is called directly.
 - The MCP **server** (`host/editor/mcpServer.ts`) confines every path to one root, writes
