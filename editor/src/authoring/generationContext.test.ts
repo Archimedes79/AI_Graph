@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest';
+import { NODE_KINDS } from '@/nodeKinds';
 import { connectedFormatContext, lastRunContext, describeNodeOutput, readFilePorts } from './generationContext';
-import { NODE_UIS } from '@/elements/registry';
 import type { ExecutionResult } from '@/graph';
 
 const edge = (source: string, target: string) => ({ source, target });
 
 describe('connectedFormatContext', () => {
   it('still describes data nodes on both sides, in the wording prompts were tuned to', () => {
-    const source = NODE_UIS.data.create('source');
+    const source = NODE_KINDS.data.create('source');
     source.label = 'Input records';
     source.config.data_format = 'structure';
     source.config.data_format_prompt = 'columns: id integer, name text';
-    const processor = NODE_UIS.code.create('processor');
-    const target = NODE_UIS.data.create('target');
+    const processor = NODE_KINDS.code.create('processor');
+    const target = NODE_KINDS.data.create('target');
     target.label = 'Result map';
     target.config.data_format = 'structure';
 
@@ -27,10 +27,10 @@ describe('connectedFormatContext', () => {
   it('describes a non-data upstream node too', () => {
     // The old version considered `data` nodes only, so this -- the commonest
     // wiring there is -- produced no context at all.
-    const input = NODE_UIS.input.create('src');
+    const input = NODE_KINDS.input.create('src');
     input.label = 'Reports folder';
     input.config.input_mode = 'directory';
-    const code = NODE_UIS.code.create('worker');
+    const code = NODE_KINDS.code.create('worker');
 
     const context = connectedFormatContext('worker', [input, code], [edge('src', 'worker')]);
 
@@ -38,24 +38,24 @@ describe('connectedFormatContext', () => {
   });
 
   it('carries an upstream ai node\'s declared output format', () => {
-    const ai = NODE_UIS.ai.create('classifier');
+    const ai = NODE_KINDS.ai.create('classifier');
     ai.label = 'Classifier';
     ai.config.output_format = 'json';
-    const code = NODE_UIS.code.create('worker');
+    const code = NODE_KINDS.code.create('worker');
 
     const context = connectedFormatContext('worker', [ai, code], [edge('classifier', 'worker')]);
     expect(context).toContain('Input from "Classifier" (ai node): json');
   });
 
   it('is empty for an unconnected node rather than noise', () => {
-    const code = NODE_UIS.code.create('lonely');
+    const code = NODE_KINDS.code.create('lonely');
     expect(connectedFormatContext('lonely', [code], [])).toBe('');
   });
 });
 
 describe('describeNodeOutput', () => {
   it('distinguishes the input node modes', () => {
-    const node = NODE_UIS.input.create('i');
+    const node = NODE_KINDS.input.create('i');
     node.config.input_mode = 'file';
     expect(describeNodeOutput(node)).toContain('port "Content" carries the file');
     node.config.input_mode = 'text';
@@ -63,7 +63,7 @@ describe('describeNodeOutput', () => {
   });
 
   it('describes a code node by its output interface once a run has set one', () => {
-    const node = NODE_UIS.code.create('c');
+    const node = NODE_KINDS.code.create('c');
     node.config.output_schema = { type: 'object', properties: { rows: { type: 'array' } } };
     expect(describeNodeOutput(node)).toBe(
       'its outputs, keyed by port, follow this JSON Schema: {"type":"object","properties":{"rows":{"type":"array"}}}',
@@ -71,7 +71,7 @@ describe('describeNodeOutput', () => {
   });
 
   it('spells out a custom output format', () => {
-    const node = NODE_UIS.code.create('c');
+    const node = NODE_KINDS.code.create('c');
     node.config.output_format = 'custom';
     node.config.output_format_prompt = 'one line per finding';
     expect(describeNodeOutput(node)).toBe('custom: one line per finding');
@@ -107,7 +107,7 @@ describe('lastRunContext', () => {
 
 describe('a node that is handed the text of a file', () => {
   const reader = () => {
-    const node = NODE_UIS.code.create('worker');
+    const node = NODE_KINDS.code.create('worker');
     node.inputs = [
       { id: 'csv', name: 'CSV', kind: 'input', data_type: 'file_path', multi: false, required: false },
       { id: 'top', name: 'Top', kind: 'input', data_type: 'text', multi: false, required: false },
@@ -138,8 +138,8 @@ describe('a node that is handed the text of a file', () => {
 describe('duplicate neighbours', () => {
   it('states a shared neighbour once, not once per wire', () => {
     // Two output ports into the same Output node is two edges and one fact.
-    const code = NODE_UIS.code.create('worker');
-    const out = NODE_UIS.output.create('sink');
+    const code = NODE_KINDS.code.create('worker');
+    const out = NODE_KINDS.output.create('sink');
     out.label = 'Result';
 
     const context = connectedFormatContext('worker', [code, out], [

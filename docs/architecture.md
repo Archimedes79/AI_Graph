@@ -70,7 +70,7 @@ Each element has a fixed set of **facets**, told apart by suffix:
 | Facet | Engine (Node) | Editor (browser) |
 |---|---|---|
 | What it is and does: config, ports, `execute`, `generation` | `<Kind>NodeElement.ts` / `<Kind>WidgetElement.ts` | — |
-| How it looks on a page — the designer and the deployed tool draw the same component | — | `<Kind>WidgetView.tsx` |
+| How it looks on a page — the designer and the deployed tool draw the same component | — | `<Kind>WidgetView.tsx`, listed in `page/blocks.ts` |
 | Its settings | — | `<Kind>NodePanel.tsx` / `<Kind>WidgetPanel.tsx` |
 | What the editor's shells ask of it | — | `<Kind>NodeUi.ts` / `<Kind>WidgetUi.ts` |
 
@@ -100,11 +100,11 @@ Element<Subject, Config>          config() · texts() · logic() · catchesError
             └── PlotWindowWidgetElement   TableWidgetElement   ImageViewWidgetElement
 
 Ui<Subject, PanelProps>           Panel · generation
-├── NodeUi                        create(id) · label · icon · color · hint · AdvancedPanel · describeOutput
+├── NodeUi                        label · icon · color · hint · Panel · AdvancedPanel · describeOutput   (builder only)
 │   ├── InputNodeUi   AiNodeUi   CodeNodeUi
 │   ├── DataNodeUi    OutputNodeUi   SubgraphNodeUi   TriggerNodeUi
 │   └── GuiNodeUi
-└── WidgetUi                      create(label, mode) · label · View · defaultSpan · defaultTone · runOnChangeHint
+└── WidgetUi                      create(label, mode) · label · defaultSpan · defaultTone · runOnChangeHint   (builder only)
     ├── InputPickerWidgetUi   TextIoWidgetUi   SelectWidgetUi
     ├── SliderWidgetUi        ButtonWidgetUi   ChatWidgetUi
     ├── StaticWidgetUi            starts unnamed: page furniture has no ports to name
@@ -131,8 +131,9 @@ is the line that is kept, not "never carry".
 An element is one class per kind, and it holds both what a run asks of it and what only
 building asks. Two classes per kind (or four, with the browser half) were considered and
 turned down: the knowledge is small, it belongs to the kind, and one file per kind is what
-makes a kind easy to add. So build-time members travel into a bundle with their class.
-They are kept apart *inside* it instead:
+makes a kind easy to add. So on the **engine** side build-time members travel into a
+bundle with their class, and are kept apart *inside* it instead. (On the browser side it
+turned out there was nothing to keep apart — see below.)
 
 - Every base class (`Element`, `NodeElement`, `WidgetElement`; `NodeUi`, `WidgetUi`) is
   laid out under three bars — **What it is · Run time · Build time** — and every kind keeps
@@ -145,14 +146,45 @@ They are kept apart *inside* it instead:
 | `Element` | `config` · `texts` · `logic` | `catchesErrors` · `snippetFailure` · `runSnippet` | `generation` · `deployNeeds` |
 | `NodeElement` | `nodeType` · `derivedPorts` · `nestedGraph` · `boundaryRole` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `asksModel` · `referencedPaths` |
 | `WidgetElement` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | — |
-| `NodeUi` | `nodeType` | `hasRuntimeWindow` · `showsResultWindow` | everything else: the palette, `create`, `saved`, panels, what ✨ Generate is told |
-| `WidgetUi` | `widgetKind` | `View` · `ownsValue` · `clearValueAfterRun` | everything else |
+| `NodeUi` | `nodeType` | — | **everything**: the palette, panels, what ✨ Generate is told |
+| `WidgetUi` | `widgetKind` | — | **everything**: the palette, panels, what ✨ Generate is told |
+
+### …and a third role, which is neither
+
+The two `Ui` rows have no run-time members left, and that is the point: **a `Ui` is the
+builder, whole, and a delivered tool never loads it.**
+
+What used to sit on their run-time side was never really the builder's — it was a third
+role that had nowhere to live:
+
+| Was | Is now | Because |
+|---|---|---|
+| `WidgetUi.View`, `ownsValue` | [`page/blocks.ts`](../editor/src/page/blocks.ts) | what the **page draws** — the one part of a widget a recipient operates |
+| `NodeUi.create`, `settings`, `saved`, `showsResultWindow` | [`nodeKinds.ts`](../editor/src/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| `WidgetUi.clearValueAfterRun` | `WidgetElement.clearsValueAfterRun` | what a **run** means for a block, the same family as `settle` |
+
+A node's middle role is empty by nature: the canvas is never delivered. A widget's is not,
+because the page is. `nodeKinds.ts` belongs in the engine beside `NodeElement.config`; what
+keeps it in the editor for now is `NodeConfig`, the one spelled-out settings shape, and
+moving that is a step of its own.
+
+This is why `times.test.ts` can now hold that a tool asks a `Ui` for **nothing at all**,
+with no exception for the shared store — and why
+[`runtime/boundary.test.ts`](../editor/src/runtime/boundary.test.ts) can hold the stronger
+thing on top: neither element registry is *reachable* from the tool's entry point. Before
+that, the store was the one module both hosts share and the one allowed to reach into the
+builder, so the builder was in every bundle. Measured on the import graph: what
+`runtime/main.tsx` reaches fell from 80 modules to 45.
+
+Still reachable, and not closed by any of this: the **engine's** element tree, for a
+handful of questions the page asks it — which ports, does this block fire, does this node
+carry the interface. That goes when the graph arrives already resolved over the wire.
 
 What the tests hold: every member stands under a bar; the build-time list is spelled out,
 so moving a member across is a decision and not a bar that slipped; **no file a run goes
 through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `runs.ts`, `schedule.ts`,
 `node.ts`) **mentions a build-time member**; and nothing a tool's page can reach asks a
-`Ui` for anything but its run-time members. What is *not* carried at all stays as it was:
+`Ui` for anything at all. What is *not* carried at all stays as it was:
 `host/editor/` never enters a bundle, and a panel is a lazy chunk a tool never fetches.
 
 **The flow, as code.** `project/flowFile.ts` renders `flow.js` beside `graph.json` on every

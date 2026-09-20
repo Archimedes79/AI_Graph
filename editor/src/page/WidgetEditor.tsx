@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useState } from 'react';
+import { BLOCKS } from './blocks';
 import type { GuiWidget } from '@/graph';
 import { guiWidgetPorts, widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
 import { useGenerate } from '@/authoring/useGenerate';
@@ -64,7 +65,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
   const element = WIDGET_UIS[widget.kind];
   const Panel = element.Panel;
   const subject = `${nodeId}::${widget.id}`;
-  const View = element.View;
+  const View = BLOCKS[widget.kind].View;
   const logic = widgetLogic(widget);
 
   /**

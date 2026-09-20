@@ -2,13 +2,10 @@ import type { GuiWidget } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { PlotWindowWidgetElement } from '@engine/elements/widgets/plot_window/PlotWindowWidgetElement.ts';
 import { TransformingDisplayUi } from '../TransformingDisplayUi';
-import PlotWindowWidgetView from './PlotWindowWidgetView';
 import PlotChart from './PlotChart';
 
 export class PlotWindowWidgetUi extends TransformingDisplayUi {
   readonly widgetKind = 'plot_window';
-
-  readonly View = PlotWindowWidgetView;
 
   // ── Build time ────────────────────────────────────────────────────────────
 

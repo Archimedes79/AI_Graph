@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ExecutionResult, GraphNode, GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
-import { WIDGET_UIS } from '@/elements/registry';
+import { BLOCKS } from './blocks';
 import { useContainerCell } from './useContainerCell';
 import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from './layout';
 import { toneIsBare, toneStyle, type Tone } from './tone';
@@ -69,7 +69,7 @@ export function blockValue(
   overrides?: Record<string, string>,
 ): unknown {
   const own = overrides?.[block.widget.id] ?? block.widget.value ?? '';
-  if (WIDGET_UIS[block.widget.kind]?.ownsValue) return own;
+  if (BLOCKS[block.widget.kind]?.ownsValue) return own;
   return incoming !== undefined && overrides?.[block.widget.id] === undefined ? incoming : own;
 }
 
@@ -157,7 +157,7 @@ export function GuiBlock({
   content?: React.ReactNode;
 }) {
   const { widget } = placement;
-  const View = WIDGET_UIS[widget.kind]?.View;
+  const View = BLOCKS[widget.kind]?.View;
   const look = { border: widget.border, background: widget.background };
   const bare = toneIsBare(widget.tone as Tone, look);
 

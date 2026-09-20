@@ -2,12 +2,9 @@ import type { GuiWidget } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { TableWidgetElement } from '@engine/elements/widgets/table/TableWidgetElement.ts';
 import { TransformingDisplayUi } from '../TransformingDisplayUi';
-import TableWidgetView from './TableWidgetView';
 
 export class TableWidgetUi extends TransformingDisplayUi {
   readonly widgetKind = 'table';
-
-  readonly View = TableWidgetView;
 
   // ── Build time ────────────────────────────────────────────────────────────
 

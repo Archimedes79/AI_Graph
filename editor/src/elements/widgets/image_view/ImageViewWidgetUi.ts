@@ -2,12 +2,9 @@ import type { GuiWidget } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { ImageViewWidgetElement } from '@engine/elements/widgets/image_view/ImageViewWidgetElement.ts';
 import { TransformingDisplayUi } from '../TransformingDisplayUi';
-import ImageViewWidgetView from './ImageViewWidgetView';
 
 export class ImageViewWidgetUi extends TransformingDisplayUi {
   readonly widgetKind = 'image_view';
-
-  readonly View = ImageViewWidgetView;
 
   // ── Build time ────────────────────────────────────────────────────────────
 

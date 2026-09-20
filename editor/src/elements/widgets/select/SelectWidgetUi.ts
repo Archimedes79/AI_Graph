@@ -1,11 +1,8 @@
 import { lazy } from 'react';
 import { WidgetUi } from '../../WidgetUi';
-import SelectWidgetView from './SelectWidgetView';
 
 export class SelectWidgetUi extends WidgetUi {
   readonly widgetKind = 'select';
-
-  readonly View = SelectWidgetView;
 
   // ── Build time ────────────────────────────────────────────────────────────
 

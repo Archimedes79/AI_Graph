@@ -1,11 +1,8 @@
 import { StaticWidgetUi } from '../StaticWidgetUi';
-import DividerWidgetView from './DividerWidgetView';
 
 /** A rule between sections. */
 export class DividerWidgetUi extends StaticWidgetUi {
   readonly widgetKind = 'divider';
-
-  readonly View = DividerWidgetView;
 
   // ── Build time ────────────────────────────────────────────────────────────
 

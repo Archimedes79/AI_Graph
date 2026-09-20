@@ -8,11 +8,12 @@ import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { ACCENT } from '@/ui/theme';
 import { delivered } from '@/canvas/executionStatus';
-import { WIDGET_UIS, NODE_UIS } from '@/elements/registry';
+import { NODE_KINDS, savedNode } from '@/nodeKinds';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 import type React from 'react';
 import { applyMemory } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeElement.ts';
 import { inferInterface } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
@@ -195,7 +196,7 @@ function collectTextOutputWindows(
   result: ExecutionResult,
 ): { nodeId: string; label: string; content: string }[] {
   return graph.nodes
-    .filter((node) => NODE_UIS[node.node_type]?.showsResultWindow?.(node) ?? false)
+    .filter((node) => NODE_KINDS[node.node_type]?.showsResultWindow?.(node) ?? false)
     .map((node) => {
       const nodeResult = result.node_results.find((r) => r.node_id === node.id);
       if (!nodeResult || !delivered(nodeResult.status)) return null;
@@ -240,7 +241,7 @@ function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphM
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
   const nodeType = rawNode.node_type ?? 'input';
   const nodeId = rawNode.id ?? newId(nodeType);
-  const defaults = NODE_UIS[nodeType].create(nodeId);
+  const defaults = NODE_KINDS[nodeType].create(nodeId);
 
   const node: GraphNode = {
     ...defaults,
@@ -442,7 +443,7 @@ export const useGraphStore = create<GraphStore>()(
     addNode: (nodeType, position) => {
       get().commit();
       const id = newId(nodeType);
-      const defaults = NODE_UIS[nodeType].create(id);
+      const defaults = NODE_KINDS[nodeType].create(id);
       const rfNode: Node<RFNodeData> = {
         id,
         type: 'graphNode',
@@ -664,9 +665,8 @@ export const useGraphStore = create<GraphStore>()(
       // (see `setSize`): a graph must serialise the same way twice running, or
       // "unsaved" means nothing.
       const nodes: GraphNode[] = rfNodes.map((rfn) => {
-        const ui = NODE_UIS[rfn.data.graphNode.node_type];
         const resizable = showsPage(rfn.data.graphNode.node_type);
-        return ui.saved({
+        return savedNode({
           ...rfn.data.graphNode,
           position: { x: rfn.position.x, y: rfn.position.y },
           ...(resizable
@@ -890,7 +890,7 @@ export const useGraphStore = create<GraphStore>()(
           const ran = result.node_results.find((r) => r.node_id === graphNode.id);
           if (!ran || !delivered(ran.status) || !Array.isArray(graphNode.config.gui_widgets)) continue;
           for (const widget of graphNode.config.gui_widgets) {
-            if (WIDGET_UIS[widget.kind]?.clearValueAfterRun?.(widget)) widget.value = '';
+            if (engineRegistry.widget(widget.kind)?.clearsValueAfterRun(parseWidget(widget))) widget.value = '';
           }
         }
       }),

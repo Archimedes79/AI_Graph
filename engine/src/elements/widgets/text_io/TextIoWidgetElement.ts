@@ -45,4 +45,13 @@ export class TextIoWidgetElement extends WidgetElement<TextIoConfig> {
     if (Array.isArray(incoming)) return { [`${widget.id}_out`]: incoming.map(String).join('\n') };
     return { [`${widget.id}_out`]: incoming ?? '' };
   }
+  /**
+   * A box that sends on Enter holds a message, and a message is said once:
+   * clear it when a run has delivered it, so the box is ready for the next
+   * one. A box that does not send holds a setting -- a search term, a name --
+   * and emptying that after every run would make the person retype it.
+   */
+  override clearsValueAfterRun(widget: Widget): boolean {
+    return this.config(widget).role !== 'output' && this.firesRun(widget);
+  }
 }

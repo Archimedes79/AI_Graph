@@ -1,5 +1,4 @@
 import { WidgetUi } from '../../WidgetUi';
-import ChatWidgetView from './ChatWidgetView';
 
 /**
  * A conversation. Nothing to set: what it is wired to is the whole of what it
@@ -9,10 +8,6 @@ import ChatWidgetView from './ChatWidgetView';
  */
 export class ChatWidgetUi extends WidgetUi {
   readonly widgetKind = 'chat';
-
-  readonly View = ChatWidgetView;
-
-  override readonly ownsValue = true;
 
   // ── Build time ────────────────────────────────────────────────────────────
 
