@@ -3,11 +3,9 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-  addEdge,
   applyNodeChanges,
   applyEdgeChanges,
   Connection,
-  Edge,
   NodeChange,
   EdgeChange,
   BackgroundVariant,
@@ -15,7 +13,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-import { edgeStyle, useGraphStore } from '@/store/graphStore';
+import { useGraphStore } from '@/store/graphStore';
 import GraphNodeView from './GraphNodeView';
 import { removalsToApply } from './nodeRemoval';
 import type { NodeType } from '@/graph';
@@ -28,20 +26,6 @@ const edgeOptions = {
   animated: false,
   style: { stroke: ACCENT, strokeWidth: 2 },
 };
-
-function getConnectionRejectionReason(
-  params: Connection,
-  rfNodes: ReturnType<typeof useGraphStore.getState>['rfNodes']
-) {
-  if (!params.source || !params.target) return null;
-
-  const sourceNode = rfNodes.find((node) => node.id === params.source);
-  const targetNode = rfNodes.find((node) => node.id === params.target);
-
-  if (!sourceNode || !targetNode) return null;
-
-  return null;
-}
 
 /**
  * @param active Whether the graph tab is the one on screen.
@@ -59,30 +43,18 @@ export default function GraphCanvas({ active = true }: { active?: boolean }) {
   const setRFNodes = useGraphStore((s) => s.setRFNodes);
   const setRFEdges = useGraphStore((s) => s.setRFEdges);
   const addNode = useGraphStore((s) => s.addNode);
+  const connect = useGraphStore((s) => s.connect);
   const commit = useGraphStore((s) => s.commit);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
 
-  const onConnect = useCallback(
-    (params: Connection) => {
-      const rejectionReason = getConnectionRejectionReason(params, rfNodes);
-      if (rejectionReason) {
-        window.alert(rejectionReason);
-        return;
-      }
-
-      const edge: Edge = {
-        ...params,
-        id: `edge-${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}`,
-        type: 'smoothstep',
-        style: edgeStyle(params.targetHandle),
-      } as Edge;
-      commit();
-      setRFEdges(addEdge(edge, rfEdges));
-    },
-    [commit, rfEdges, rfNodes, setRFEdges]
-  );
+  // The wire itself is the store's to make (`connect`): a canvas is one way
+  // to ask for one, and a test is another.
+  const onConnect = useCallback((params: Connection) => {
+    if (!params.source || !params.target || !params.sourceHandle || !params.targetHandle) return;
+    connect({ source: params.source, sourceHandle: params.sourceHandle, target: params.target, targetHandle: params.targetHandle });
+  }, [connect]);
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {

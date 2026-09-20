@@ -39,7 +39,12 @@ export interface WidgetViewProps {
 export function valueToText(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
-  if (Array.isArray(value)) return value.map(valueToText).join('\n');
+  // A list of names reads as lines; a list of paragraphs -- a summary per file --
+  // needs air between them, or three answers read as one.
+  if (Array.isArray(value)) {
+    const items = value.map(valueToText);
+    return items.join(items.some((item) => item.length > 80) ? '\n\n' : '\n');
+  }
   if (typeof value === 'object') return JSON.stringify(value, null, 2);
   return String(value);
 }

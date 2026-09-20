@@ -1,9 +1,7 @@
 // Population plotter
-// Plot a CSV of names and numbers — here, the population of countries — as sorted bars,
-// columns, a line or a donut, with the rows beside it. No model involved, and no drawing
-// code: the code node works out what to plot and the chart block draws it, at the size the
-// block really is and in the colours of the page. Every control redraws it at once, so
-// there is no button. Paths are relative to the working directory, so run this from the
+// Choose a CSV of names and numbers and see it as a chart. One page, one code node: the
+// code says what to plot, the chart block draws it. Choosing a file redraws it -- there is
+// nothing to press. Paths are relative to the working directory, so run this from the
 // repository root.
 //
 // Written by AI-Graph on every save, from graph.json: read it, do not edit it.
@@ -20,16 +18,13 @@
 async function flow(node) {
   // Plotter · gui · engine/src/elements/nodes/gui/GuiNodeRunner.ts › execute
   // The page this tool shows
-  // starts a round: file_out, kind_out, top_out
+  // starts a round: file_out
   const page = await node.page();
 
   // What to plot · code · nodes/chart/code.js
   // Reads the CSV and says what the chart should show
-  const chart = await node.chart(
-    { csv: page.file_out, kind: page.kind_out, top: page.top_out },
-    { readFiles: true },
-  );
+  const chart = await node.chart({ csv: page.file_out }, { readFiles: true });
 
   // Once the round is done.
-  node.page.next({ plot_in: chart.figure, table_in: chart.rows });
+  node.page.next({ plot_in: chart.figure });
 }

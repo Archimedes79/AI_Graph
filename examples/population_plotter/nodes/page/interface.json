@@ -18,15 +18,6 @@
       "from": [
         "chart.figure"
       ]
-    },
-    {
-      "port": "table_in",
-      "name": "The rows plotted",
-      "type": "any",
-      "list": true,
-      "from": [
-        "chart.rows"
-      ]
     }
   ],
   "outputs": [
@@ -36,22 +27,6 @@
       "type": "file_path",
       "to": [
         "chart.csv"
-      ]
-    },
-    {
-      "port": "kind_out",
-      "name": "Chart",
-      "type": "text",
-      "to": [
-        "chart.kind"
-      ]
-    },
-    {
-      "port": "top_out",
-      "name": "How many",
-      "type": "number",
-      "to": [
-        "chart.top"
       ]
     }
   ]
