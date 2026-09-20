@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
 import { keepsExamples, keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { derivedNodePorts, syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import PortsEditor from './PortsEditor';
 import { NODE_BUILDERS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
@@ -99,8 +100,25 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // is a declaration now (`outputContract`) and sits in Config under the body.
   const element = NODE_BUILDERS[node.node_type];
 
+  /**
+   * What each port was called when this dialog opened, by position.
+   *
+   * A port's id is the name a body reads it by, so it is edited here — and an
+   * edge points at the old one. Matching by position is what the list editor
+   * actually does to them: row 2 stayed row 2, whatever it is now called.
+   */
+  const renamedPorts = () => {
+    const was = rfNode?.data.graphNode;
+    const map = (before: Port[] = [], after: Port[] = []) => Object.fromEntries(
+      before
+        .map((port, at) => [port.id, after[at]?.id])
+        .filter(([from, to]) => to && from !== to),
+    ) as Record<string, string>;
+    return { inputs: map(was?.inputs, node!.inputs), outputs: map(was?.outputs, node!.outputs) };
+  };
+
   const save = () => {
-    updateNode(nodeId, node);
+    updateNode(nodeId, node, renamedPorts());
     onClose();
   };
 
@@ -331,6 +349,25 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 contextFile={node.config.example_file ?? ''}
                 onContextFileChange={(path: string) => setConfig('example_file', path)}
               /></Suspense>}
+
+              {/* What this node takes in and hands out, where that is the
+                  person's to say. A gui node's ports follow its blocks and an
+                  input node's follow its mode, and the element is what knows
+                  which -- so the question is asked, never switched on a type. */}
+              {derivedNodePorts(node) === null && (
+                <details className="rounded-lg" open style={{ border: `1px solid ${LINE}` }}>
+                  <summary className="px-3 py-2 text-xs font-medium cursor-pointer select-none" style={{ color: MUTED }}>
+                    Ports — what goes in and comes out
+                  </summary>
+                  <div className="px-3 pb-3 pt-1">
+                    <PortsEditor
+                      inputs={node.inputs}
+                      outputs={node.outputs}
+                      onChange={({ inputs, outputs }) => setNode((prev) => (prev ? { ...prev, inputs, outputs } : prev))}
+                    />
+                  </div>
+                </details>
+              )}
 
               {element.outputContract === 'format' && (
                 <OutputFormatEditor

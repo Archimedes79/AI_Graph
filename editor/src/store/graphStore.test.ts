@@ -500,3 +500,63 @@ describe('a graph inside a node', () => {
     expect(store().rootGraph().nodes.map((n) => n.id)).toEqual(['other']);
   });
 });
+
+describe('graphStore.updateNode: a renamed port keeps its wires', () => {
+  /**
+   * A port's id is the name a body reads it by — `inputs.csv`, `{ figure }` —
+   * so the ports editor edits exactly that. To the pruning above, a rename
+   * looks like "the old port is gone", and renaming `input` to `csv` would
+   * quietly cut the graph in half. The dialog says which id became which.
+   */
+  const wiredPair = () => {
+    const source = graphNode({
+      id: 'page',
+      outputs: [{ id: 'file_out', name: 'File', kind: 'output', data_type: 'file_path', multi: false, required: false, description: '' }],
+    });
+    const code = graphNode({
+      id: 'code',
+      node_type: 'code',
+      inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
+    });
+    loadTestGraph([source, code], [
+      { id: 'e1', source_node_id: 'page', source_port_id: 'file_out', target_node_id: 'code', target_port_id: 'input' },
+    ]);
+    return code;
+  };
+
+  it('moves the wire onto the new id instead of dropping it', () => {
+    const code = wiredPair();
+    useGraphStore.getState().updateNode(
+      'code',
+      { inputs: [{ ...code.inputs[0], id: 'csv', data_type: 'file_path' }], outputs: code.outputs },
+      { inputs: { input: 'csv' }, outputs: {} },
+    );
+    const edges = useGraphStore.getState().rfEdges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('csv');
+  });
+
+  it('still drops a wire whose port was really removed', () => {
+    const code = wiredPair();
+    useGraphStore.getState().updateNode('code', { inputs: [], outputs: code.outputs }, { inputs: {}, outputs: {} });
+    expect(useGraphStore.getState().rfEdges).toHaveLength(0);
+  });
+
+  it('renames an output, which is the other end of the same problem', () => {
+    const code = wiredPair();
+    loadTestGraph(
+      [graphNode({ id: 'code', node_type: 'code', inputs: code.inputs, outputs: code.outputs }),
+        graphNode({ id: 'sink', node_type: 'output', inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }] })],
+      [{ id: 'e1', source_node_id: 'code', source_port_id: 'output', target_node_id: 'sink', target_port_id: 'value' }],
+    );
+    useGraphStore.getState().updateNode(
+      'code',
+      { inputs: code.inputs, outputs: [{ ...code.outputs[0], id: 'figure' }] },
+      { inputs: {}, outputs: { output: 'figure' } },
+    );
+    const edges = useGraphStore.getState().rfEdges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].sourceHandle).toBe('figure');
+  });
+});
