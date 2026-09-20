@@ -150,6 +150,10 @@ export class GuiNodeElement extends NodeElement<GuiConfig> {
   async showBlock(widget: Widget, value: unknown, runtime: Runtime): Promise<unknown> {
     const element = BY_KIND.get(widget.kind);
     if (!element) throw new Error(`Unknown block kind: ${widget.kind}`);
+    // A block the page draws itself is handed what arrived, untouched: its
+    // body wants the size of the block and the page's scheme, and a run knows
+    // neither. See `WidgetElement.bodyDrawsOnThePage`.
+    if (element.bodyDrawsOnThePage) return element.displayValue(widget, value, runtime);
     const transformed = await element.runSnippet(widget, { value }, runtime);
     return element.displayValue(widget, transformed.value ?? value, runtime);
   }

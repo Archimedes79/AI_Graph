@@ -1,14 +1,27 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useGraphStore } from '@/store/graphStore';
+import { scheme as schemeOf } from '@/page/scheme';
 import PlotChart from './PlotChart';
+import { draw, type Drawn } from './draw';
 import type { WidgetViewProps } from '../WidgetView';
 
-/** Runtime `plot_window` widget: charts what flowed into `{id}_in`. Display-only. */
-export default function PlotWindowWidgetView({ value, incoming }: WidgetViewProps) {
+/**
+ * Runtime `plot_window` widget: charts what flowed into `{id}_in`.
+ *
+ * The block's own code runs *here*, when the chart is drawn, and is handed the
+ * size and the scheme — see `draw.ts` for why. So this component redraws on
+ * three things and not only on new data: the value, the measured box, and the
+ * page's scheme. A resize or a switch of scheme is a redraw with no run.
+ */
+export default function PlotWindowWidgetView({ widget, value, incoming }: WidgetViewProps) {
   // Display-only: the port value is the whole point, the stored value is only
   // a fallback for before the first run.
   const data = incoming !== undefined ? incoming : value;
+  const code = String(widget.code ?? '');
+  const scheme = useGraphStore((s) => s.metadata.gui_scheme);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 320, height: 180 });
+  const [drawn, setDrawn] = useState<Drawn>({ value: data });
 
   /**
    * Measure before the first paint, and again whenever the box changes.
@@ -25,7 +38,9 @@ export default function PlotWindowWidgetView({ value, incoming }: WidgetViewProp
       if (!el) return;
       const box = el.getBoundingClientRect();
       if (box.width < 1 || box.height < 1) return;
-      setSize({ width: Math.round(box.width), height: Math.round(box.height) });
+      setSize((was) => (Math.round(box.width) === was.width && Math.round(box.height) === was.height
+        ? was
+        : { width: Math.round(box.width), height: Math.round(box.height) }));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
@@ -42,13 +57,34 @@ export default function PlotWindowWidgetView({ value, incoming }: WidgetViewProp
     if (!el) return;
     const box = el.getBoundingClientRect();
     if (box.width >= 1 && box.height >= 1) {
-      setSize({ width: Math.round(box.width), height: Math.round(box.height) });
+      setSize((was) => (Math.round(box.width) === was.width && Math.round(box.height) === was.height
+        ? was
+        : { width: Math.round(box.width), height: Math.round(box.height) }));
     }
   }, [data]);
 
+  /**
+   * Run the body. Dropped rather than raced if another run starts first: a
+   * drag across a resize handle fires this many times, and the answer wanted
+   * is the last one, not whichever worker happened to finish last.
+   */
+  useEffect(() => {
+    let current = true;
+    const about = {
+      width: size.width,
+      height: size.height,
+      scheme,
+      dark: schemeOf(scheme).light !== true,
+    };
+    void draw(code, data ?? null, about).then((answer) => { if (current) setDrawn(answer); });
+    return () => { current = false; };
+  }, [code, data, size.width, size.height, scheme]);
+
   return (
     <div ref={containerRef} className="w-full h-full flex items-center justify-center" style={{ minHeight: 60 }}>
-      <PlotChart data={data} width={size.width} height={size.height} />
+      {drawn.error
+        ? <PlotChart data={`⚠ ${drawn.error}`} width={size.width} height={size.height} />
+        : <PlotChart data={drawn.value} width={size.width} height={size.height} />}
     </div>
   );
 }

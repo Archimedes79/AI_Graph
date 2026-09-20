@@ -51,6 +51,20 @@ export interface Generation {
    * so it says so here -- and the generator stays ignorant of SVG.
    */
   check?: (outputs: Record<string, unknown>) => string[];
+  /**
+   * The body as the *probe* must run it, for an element whose body is not
+   * called the way the sandbox calls one.
+   *
+   * The sandbox has one shape -- `run(inputs, node)` -- and that is right: it
+   * is how a graph runs a body. A chart's body is not run by a graph, though;
+   * it is run by the page, as `draw(data, window)`, because what it needs is
+   * the size of the block and the page's scheme. The probe still wants to
+   * execute it once before anyone sees it, so the element says here how to
+   * make it runnable: a wrapper, and a window standing in for the real one.
+   *
+   * Absent for every other element, which means "as it is".
+   */
+  probeWith?: (body: string) => string;
   /** Shown when the request field is still empty. */
   guard: string;
   /** Shown when the generated text arrives. */

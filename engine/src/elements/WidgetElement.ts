@@ -49,6 +49,20 @@ export abstract class WidgetElement<C = unknown> extends Element<Widget, C> {
   // What the page asks of it while a graph runs.
 
   /**
+   * Whether the *page* runs this block's body, when it draws it, rather than a
+   * run running it once and storing what came back.
+   *
+   * True for a chart. What a chart's body most needs to be told is how big the
+   * block is and which scheme the page is in, and neither exists while a graph
+   * runs -- so it is run where they do, and a resize or a change of scheme
+   * redraws without a run. A run then hands the page what arrived, untouched.
+   *
+   * False for everything else: a table's or an image's transform reshapes data
+   * and has no use for the window, so it stays where a run can memoise it.
+   */
+  readonly bodyDrawsOnThePage: boolean = false;
+
+  /**
    * Whether this block starts the graph when the person uses it.
    *
    * A button always does: that is all a button is. Anything else does when it

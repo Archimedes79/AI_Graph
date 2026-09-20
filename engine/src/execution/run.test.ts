@@ -28,7 +28,15 @@ function runtime(over: Partial<Runtime> = {}): Runtime {
   };
 }
 
-/** A page with a number field and a display, and a code node between them: the ordinary loop. */
+/**
+ * A page with a number field and a display, and a code node between them: the
+ * ordinary loop.
+ *
+ * The display is a `table`, not a chart. A chart's body is run by the page when
+ * it draws (`WidgetElement.bodyDrawsOnThePage`), so a run hands it what arrived
+ * and transforms nothing -- which is asserted on its own below. Every other
+ * display still has its transform run here, and that is what this exercises.
+ */
 function loop(): Graph {
   return parseGraph({
     nodes: [
@@ -36,7 +44,7 @@ function loop(): Graph {
         id: 'page', node_type: 'gui',
         config: { gui_widgets: [
           { id: 'n', kind: 'slider', min: 0, max: 100, value: 21 },
-          { id: 'shown', kind: 'plot_window', code: '/* SHOUT */ function run(i) { return i; }' },
+          { id: 'shown', kind: 'table', code: '/* SHOUT */ function run(i) { return i; }' },
         ] },
       },
       { id: 'double', node_type: 'code', inputs: [port('n')], outputs: [port('out')], config: { code: '/* DOUBLE */' } },
@@ -63,6 +71,31 @@ describe('what a page shows', () => {
     const result = await executeGraph(loop(), { runtime: runtime(), registry });
     const page = result.node_results.find((r) => r.node_id === 'page')!;
     expect(page.inputs.shown_in).not.toEqual(page.display!.shown);
+  });
+
+  /**
+   * A chart is the one display a run does not transform.
+   *
+   * Its body wants the block's size and the page's colour scheme, and a run
+   * knows neither -- so it is run by the page, on every redraw, and what a run
+   * puts on the screen is what arrived. The body here would be loud about
+   * having run; the point is that it did not.
+   */
+  it('hands a chart what arrived, because the page runs its body when it draws', async () => {
+    const graph = parseGraph({
+      nodes: [
+        { id: 'n', node_type: 'input', config: { input_mode: 'text', value: '7' }, outputs: [port('output')] },
+        {
+          id: 'page', node_type: 'gui',
+          config: { gui_widgets: [{ id: 'chart', kind: 'plot_window', code: '/* SHOUT */ function run(i) { return i; }' }] },
+        },
+      ],
+      edges: [{ id: 'e', source_node_id: 'n', source_port_id: 'output', target_node_id: 'page', target_port_id: 'chart_in' }],
+    });
+    const result = await executeGraph(graph, { runtime: runtime(), registry });
+    const page = result.node_results.find((r) => r.node_id === 'page')!;
+    expect(page.inputs.chart_in).toBe('7');
+    expect(page.display).toEqual({ chart: '7' });
   });
 });
 

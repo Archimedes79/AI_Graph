@@ -92,12 +92,21 @@ describe('the frame the model is told about', () => {
     expect(margins.bottom).toBe(PLOT_VIEW.margin.bottom);
   });
 
-  it('is spelled out for the model in the same numbers', () => {
+  /**
+   * The frame above is the app's own, for the points it draws itself. A body
+   * that writes its own SVG is no longer taught it: it is handed the block's
+   * real size and lays out for that, so a chart is drawn at the size it is
+   * rather than scaled into a fixed box. What the contract must therefore say
+   * is where those numbers come from.
+   */
+  it('tells a body to lay out for the window it is handed', () => {
     const contract = new PlotWindowWidgetElement().generation().contract ?? '';
-    expect(contract).toContain(`viewBox="0 0 ${PLOT_VIEW.width} ${PLOT_VIEW.height}"`);
-    expect(contract).toContain(String(PLOT_VIEW.margin.left));
-    expect(contract).toContain(String(PLOT_VIEW.height - PLOT_VIEW.margin.bottom));
-    // The reason the numbers are there at all.
-    expect(contract).toContain('Leave the frame free');
+    expect(contract).toContain('draw(data, window)');
+    expect(contract).toContain('window.width');
+    expect(contract).toContain('window.height');
+    // And that the empty case is the same function, not a state the app owns.
+    expect(contract).toMatch(/null before anything/);
+    // The old fixed frame is gone from it: teaching both would be two answers.
+    expect(contract).not.toContain(`viewBox="0 0 ${PLOT_VIEW.width} ${PLOT_VIEW.height}"`);
   });
 });

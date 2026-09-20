@@ -274,6 +274,7 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
 async function generateVerifiedCode(
   ai: AiService, code: CodeRunner, target: Target, request: GenerateRequest, context: string,
   check?: (outputs: Record<string, unknown>) => string[],
+  probeWith?: (body: string) => string,
 ): Promise<{ text: string; explanation: string; probe: ProbeReport }> {
   const outputs = request.outputs ?? [];
   const sample = request.sample_inputs;
@@ -288,7 +289,10 @@ async function generateVerifiedCode(
    * NaN for every coordinate; only the element that draws it knows to look.
    */
   const judge = async (body: string) => {
-    const ran = await probe(code, body, sample);
+    // Some bodies are not run the way the sandbox runs one -- a chart's is
+    // run by the page. The element says how to make it runnable; everyone
+    // else is run as written.
+    const ran = await probe(code, probeWith ? probeWith(body) : body, sample);
     const missing = ran.result ? outputs.filter((port) => !(port in ran.result!)) : [];
     const problems = ran.result && !missing.length && check ? check(ran.result) : [];
     // How far it got: not at all, wrong keys, a flawed result, a good one.
@@ -408,7 +412,7 @@ export async function generate(asked: GenerateRequest, deps: GenerateDeps): Prom
   try {
     switch (kind) {
       case 'code': {
-        const { text, explanation, probe: report } = await generateVerifiedCode(ai, deps.code, deps.target, shaped, context, spec?.check);
+        const { text, explanation, probe: report } = await generateVerifiedCode(ai, deps.code, deps.target, shaped, context, spec?.check, spec?.probeWith);
         return { result: text, explanation, probe: report, calls };
       }
       case 'prompt':
