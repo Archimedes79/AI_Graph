@@ -48,8 +48,6 @@ export abstract class NodeUi extends Ui<GraphNode, NodePanelProps> {
   // ── Run time ──────────────────────────────────────────────────────────────
   // What a deployed tool asks of a node: whether it is a page, whether its result opens a window.
 
-  /** This node carries the graph's interface: it gets a live page. */
-  readonly hasRuntimeWindow?: boolean;
 
   /** Whether this particular node shows its result in a window when the run ends. */
   showsResultWindow?(node: GraphNode): boolean;
@@ -116,12 +114,6 @@ export abstract class NodeUi extends Ui<GraphNode, NodePanelProps> {
    */
   readonly ownsDescription?: boolean;
 
-  /**
-   * This node holds a graph of its own, which the editor can go into. The
-   * mirror of `NodeElement.nestedGraph`, and the reason no shell has to know
-   * which node type that is.
-   */
-  readonly opensNestedGraph?: boolean;
 
   /**
    * The node is a composite of widgets (`config.gui_widgets`): drawn with them

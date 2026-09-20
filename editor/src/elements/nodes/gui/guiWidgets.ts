@@ -46,6 +46,19 @@ export function widgetOfPort(node: GraphNode, portId: string): GuiWidget | undef
 }
 
 /**
+ * Whether this kind of node carries the graph's interface — the engine's
+ * answer, not a second flag beside it.
+ *
+ * The editor kept its own `NodeUi.hasRuntimeWindow` saying the same thing, and
+ * nothing checked that the two agreed. The one that decides what the page is
+ * *made of* is the engine's: it is what `display` is asked of and what a
+ * bundle carries a page for.
+ */
+export function showsPage(nodeType: string): boolean {
+  return engineRegistry.node(nodeType)?.hasInterface === true;
+}
+
+/**
  * Whether using this block starts the graph -- the engine's answer, for the
  * same reason the ports are: a page that fires on something the engine would
  * not call an event starts runs nobody wired.

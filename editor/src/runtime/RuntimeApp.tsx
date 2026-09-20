@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { showsPage } from '@/elements/nodes/gui/guiWidgets';
 import { mergeResults, useGraphStore } from '@/store/graphStore';
 import { GuiSurfacePage } from '@/page/GuiPage';
 import { useDeliveredRun } from '@/page/useDeliveredRun';
@@ -8,7 +9,6 @@ import DeliveredHeader from '@/page/DeliveredHeader';
 import RuntimeAISettings from './RuntimeAISettings';
 import { call, type ScheduleState } from '@/api/client';
 import { errorText } from '@/api/errorText';
-import { NODE_UIS } from '@/elements/registry';
 import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
 
 /**
@@ -91,7 +91,7 @@ export default function RuntimeApp() {
   // squeezed into a header span next to the buttons.
   const runError = executionResult?.status === 'error' ? executionResult.error : '';
   const hasWidgets = rfNodes.some(
-    (n) => NODE_UIS[n.data.graphNode.node_type]?.hasRuntimeWindow ?? false,
+    (n) => showsPage(n.data.graphNode.node_type),
   );
 
   return (

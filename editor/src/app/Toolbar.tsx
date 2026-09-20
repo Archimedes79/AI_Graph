@@ -3,8 +3,7 @@ import {
   ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2, Wand2,
 } from 'lucide-react';
 import ToolbarButton, { ToolbarSeparator } from '@/ui/ToolbarButton';
-import { NODE_UIS } from '@/elements/registry';
-import { widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
+import { showsPage, widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
 import { call, downloadBundle, type AICall, type Requirement } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -119,7 +118,7 @@ export default function Toolbar({
   /** Whether this tool has a page at all: a window to open, or only ▶ Run. */
   const pageBlocks = rfNodes
     .map((n) => n.data.graphNode)
-    .filter((node) => NODE_UIS[node.node_type]?.hasRuntimeWindow ?? false)
+    .filter((node) => showsPage(node.node_type))
     .flatMap((node) => node.config.gui_widgets);
   const hasPage = pageBlocks.length > 0;
   /** Whether that page has anything to *use* — a button, a chat, a field told to fire. */

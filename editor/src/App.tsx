@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { showsPage } from '@/elements/nodes/gui/guiWidgets';
 import { ReactFlowProvider } from 'reactflow';
 
 import Toolbar from '@/app/Toolbar';
@@ -17,7 +18,6 @@ import Modal from '@/ui/Modal';
 import FileBrowserDialog from '@/ui/FileBrowserDialog';
 
 import { useGraphStore } from '@/store/graphStore';
-import { NODE_UIS } from '@/elements/registry';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { NodeType, Graph } from '@/graph';
@@ -78,7 +78,7 @@ export default function App() {
   // and a Preview tab that shows nothing useful is a dialog worth not opening.
   const editingGuiNode = useGraphStore((s) => {
     const node = s.rfNodes.find((n) => n.id === s.editingNodeId)?.data.graphNode;
-    return !!node && !!NODE_UIS[node.node_type]?.hasRuntimeWindow;
+    return !!node && showsPage(node.node_type);
   });
   useEffect(() => {
     if (!editingGuiNode) return;
