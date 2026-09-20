@@ -384,10 +384,10 @@ what it should do ──✨──▶ body ──▶ Try it: [values] ⟳ from th
 ```
 
 **One way to run a body.** A code node's `code.js`, an ai node's changed `run.js`, the
-`selector.js` that picks files and the code a display block shapes its value with are one
+`select.js` that picks files and the code a display block shapes its value with are one
 kind of thing, and `elements/body.ts` (`runBody`) is the only place that runs one:
 `async function run(inputs, node)`, in a process of its own, returning an object keyed by
-output port. The element decides *when* and what a failure costs; never *how*.
+output port. The element decides *when* and what a failure costs; never *how*. The probe that tries generated code on a sample runs it the same way, so code that asks a model is tried with a node it can ask.
 
 **A body can ask.** `CodeService.run(body, inputs, signal, context)` hands a body a second
 argument, `node`: plain data, and `calls` — questions it may put to the process that holds
