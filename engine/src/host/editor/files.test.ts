@@ -3,13 +3,13 @@ import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { browse, deleteAttachment, detectFormat, extensionFilter, findProjects, saveAttachment } from './files.ts';
+import { deleteAttachment, detectFormat, findProjects, saveAttachment } from './files.ts';
 
 /**
- * What the editor's file picker and attachment box get from the machine.
+ * What the editor's attachment box and project search get from the machine.
  *
- * The shapes are the ones `browseDirectory` / `uploadAttachment` in the editor's
- * client already read; this replaces the Python that used to answer them.
+ * Browsing is not here: it is the same picker a deployed tool serves, and it
+ * is tested in `host/browse.test.ts` beside the code.
  */
 
 async function sandbox() {
@@ -21,32 +21,6 @@ async function sandbox() {
   return dir;
 }
 
-describe('browsing', () => {
-  it('lists directories first, then files, both by name', async () => {
-    const dir = await sandbox();
-    const page = await browse(dir);
-    expect(page.path).toBe(dir);
-    expect(page.entries.map((e) => `${e.is_dir ? 'd' : 'f'}:${e.name}`))
-      .toEqual(['d:sub', 'f:a.md', 'f:b.txt', 'f:blob.bin']);
-    expect(page.parent).toBeTruthy();
-    expect(page.roots.length).toBeGreaterThan(0);
-  });
-
-  it('keeps directories when a filter narrows the files', async () => {
-    const dir = await sandbox();
-    const page = await browse(dir, extensionFilter('md'));
-    expect(page.entries.map((e) => e.name)).toEqual(['sub', 'a.md']);
-  });
-
-  it('shows the folder of a file, when handed a file', async () => {
-    const dir = await sandbox();
-    expect((await browse(join(dir, 'a.md'))).path).toBe(dir);
-  });
-
-  it('says so when there is nothing there', async () => {
-    await expect(browse(join(tmpdir(), 'no-such-dir-anywhere'))).rejects.toThrow(/not found/i);
-  });
-});
 
 describe('attachments', () => {
   it('keeps a file under a unique name and can remove it again', async () => {

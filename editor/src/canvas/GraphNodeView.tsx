@@ -5,7 +5,22 @@ import { useGraphStore } from '@/store/graphStore';
 import { NODE_UIS, WIDGET_UIS } from '@/elements/registry';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { delivered } from './executionStatus';
+import { widgetFiresRun, widgetOfPort } from '@/elements/nodes/gui/guiWidgets';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
+
+/**
+ * How an event looks, wherever one appears: the amber diamond of the run port.
+ *
+ * A page has two sorts of output and they used to be drawn with the same green
+ * dot -- a button, which *starts* the graph and carries no value worth having,
+ * and a field, whose value is read when something else starts it. Which one a
+ * block is decides what the whole tool does when someone uses it, so it is
+ * worth a shape of its own, and the shape it gets is the one already meaning
+ * "a run begins here" on the top of every other node.
+ */
+const EVENT_PORT: React.CSSProperties = {
+  background: '#f59e0b', border: '2px solid #78350f', borderRadius: 2, transform: 'rotate(45deg)',
+};
 
 // Colour AND a glyph: a red/green 8px dot is unreadable both to a screen
 // reader and to a colour-blind user scanning a canvas for the failed node.
@@ -141,27 +156,37 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
             {/* Left column: source (output) ports — handles on the left edge */}
             <div className="flex flex-col gap-1">
               <span className="text-xs font-semibold mb-0.5" style={{ color: DIMMER }}>→ OUT</span>
-              {graphNode.outputs.map((port) => (
-                <div key={port.id} className="relative flex items-center gap-1.5" style={{ marginLeft: -12 }}>
-                  <Handle
-                    type="source"
-                    position={Position.Left}
-                    id={port.id}
-                    style={{
-                      background: port.multi ? '#a78bfa' : SUCCESS,
-                      border: '2px solid #14532d',
-                      width: 10, height: 10,
-                      position: 'relative', transform: 'none', top: 'auto', left: 'auto',
-                      flexShrink: 0,
-                    }}
-                    title={port.description || port.name}
-                    onClick={(e) => { e.stopPropagation(); data.onPortEdit(id, port.id); }}
-                  />
-                  <span className="text-xs truncate" style={{ color: '#86efac' }}>
-                    {port.name}{port.multi && <span title="Multi"> ∞</span>}
-                  </span>
-                </div>
-              ))}
+              {graphNode.outputs.map((port) => {
+                // A block that starts the graph is an event, not a value that
+                // happens to be read: drawn as one, and said in words beside it.
+                const block = widgetOfPort(graphNode, port.id);
+                const fires = block ? widgetFiresRun(block) : false;
+                return (
+                  <div key={port.id} className="relative flex items-center gap-1.5" style={{ marginLeft: -12 }}>
+                    <Handle
+                      type="source"
+                      position={Position.Left}
+                      id={port.id}
+                      style={{
+                        background: port.multi ? '#a78bfa' : SUCCESS,
+                        border: '2px solid #14532d',
+                        width: 10, height: 10,
+                        position: 'relative', transform: 'none', top: 'auto', left: 'auto',
+                        flexShrink: 0,
+                        ...(fires ? EVENT_PORT : {}),
+                      }}
+                      title={fires
+                        ? `${port.description || port.name} — using this block starts the graph, from whatever this is wired to.`
+                        : (port.description || port.name)}
+                      onClick={(e) => { e.stopPropagation(); data.onPortEdit(id, port.id); }}
+                    />
+                    <span className="text-xs truncate" style={{ color: fires ? '#fbbf24' : '#86efac' }}>
+                      {fires && <span title="Using this block starts the graph">⚡ </span>}
+                      {port.name}{port.multi && <span title="Multi"> ∞</span>}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
             {/* Right column: target (input) ports — handles on the right edge */}
             <div className="flex flex-col gap-1 items-end">
@@ -171,9 +196,8 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                 // element's answer, not this component's: it used to look for
                 // `kind === 'plot_window'` by name, which is a widget-kind
                 // switch inside a shared renderer.
-                const previewWidget = graphNode.config.gui_widgets.find(
-                  (w) => `${w.id}_in` === port.id && WIDGET_UIS[w.kind]?.CanvasPreview
-                );
+                const behind = widgetOfPort(graphNode, port.id);
+                const previewWidget = behind && WIDGET_UIS[behind.kind]?.CanvasPreview ? behind : undefined;
                 const CanvasPreview = previewWidget
                   ? WIDGET_UIS[previewWidget.kind].CanvasPreview
                   : undefined;

@@ -31,7 +31,7 @@ import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
 import { writeBundle } from './bundle.ts';
-import { serve } from '../host/serve.ts';
+import { portTaken, serve } from '../host/serve.ts';
 import { untilStopped } from '../host/lifecycle.ts';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -64,6 +64,11 @@ export interface CliOptions {
 // The interval spelling lives with the triggers now: a graph can name its own
 // clock, and the page that serves it reads the same `5m` this flag does.
 export { parseInterval };
+
+/** Where a served tool looks first. Nothing addresses it from outside, so this is a habit, not a contract. */
+const DEFAULT_PORT = 8000;
+/** How many in a row to try before a busy machine is the user's problem to sort out. */
+const PORTS_TRIED = 10;
 
 export function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = { graphPath: '', inputs: {} };
@@ -203,6 +208,11 @@ export async function makeBundle(options: CliOptions): Promise<number> {
  * and its absence is not an error: a graph with no interface, or a bundle
  * written without a build at hand, still serves its few endpoints, which is
  * enough for anything driving it over HTTP.
+ *
+ * Without `--port` it takes the first free port from 8000 up. A tool someone
+ * was handed is started by double-clicking it, and "the port I chose happens
+ * to be taken on your machine" is not a thing its recipient should ever have
+ * to know about, let alone read a Node stack trace about.
  */
 export async function runServer(options: CliOptions): Promise<number> {
   // No graph file is a legitimate way to run this. The editor starts it beside
@@ -213,13 +223,47 @@ export async function runServer(options: CliOptions): Promise<number> {
   const folder = projectFolderOf(options.graphPath);
   const pageDir = folder ? join(folder, 'page') : resolve(dirname(resolve(options.graphPath)), 'page');
 
-  const { url, shutdown } = await serve({
+  const start = (port: number) => serve({
     ...(hasGraph ? { graphPath: options.graphPath } : {}),
     pageDir: existsSync(join(pageDir, 'runtime.html')) ? pageDir : undefined,
-    port: options.port ?? 8000,
+    port,
     ...(options.editor ? { editor: { dist: resolve(options.editor) } } : {}),
     ...(options.host ? { host: options.host } : {}),
   });
+
+  // A tool someone was handed must not die because a port is busy. The
+  // default is 8000 because it has to be something, not because it matters:
+  // nothing addresses this server from outside, the URL is printed and
+  // opened, so the next free port does just as well. A port asked for by name
+  // is different -- it was asked for -- and a busy one is said in a sentence
+  // rather than as an unhandled 'error' event over a stack trace, which is
+  // what a recipient running a bundle on a machine with anything on 8000 saw.
+  const { url, shutdown } = await (async () => {
+    if (options.port !== undefined) {
+      try {
+        return await start(options.port);
+      } catch (error) {
+        if (!portTaken(error)) throw error;
+        throw new Error(
+          `Port ${options.port} is already in use: something else on this machine is listening there.`
+          + ' Start it on another one, for example --port 8010.',
+        );
+      }
+    }
+    for (let port = DEFAULT_PORT; port < DEFAULT_PORT + PORTS_TRIED; port += 1) {
+      try {
+        return await start(port);
+      } catch (error) {
+        if (!portTaken(error)) throw error;
+      }
+    }
+    // Rather than a silent 0: a machine with ten busy ports in a row is one
+    // where "it picked another" would be a guess nobody can check.
+    throw new Error(
+      `Ports ${DEFAULT_PORT} to ${DEFAULT_PORT + PORTS_TRIED - 1} are all in use.`
+      + ' Free one, or say which to use with --port.',
+    );
+  })();
   process.stderr.write(`Serving on ${url}\n`);
   // Only the editor: a deployed tool is configured by whoever runs it, and its
   // terminal is a log rather than something a person is sitting in front of.

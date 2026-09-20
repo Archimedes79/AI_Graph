@@ -105,8 +105,13 @@ export default function TryItPanel({
 
   return (
     <div className="rounded-lg" style={{ border: `1px solid ${LINE}` }}>
-      <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${LINE}` }}>
-        <span className="text-xs font-medium flex-1" style={{ color: MUTED }}>{title}</span>
+      {/* Wrapping, because this panel is drawn both in a wide dialog (a node)
+          and in the page's narrow side column (a block). Unwrapped, the title
+          there was squeezed into one word per line beside two buttons that
+          would not give way. Given a basis of its own, it takes the whole row
+          and the buttons drop below it. */}
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${LINE}` }}>
+        <span className="text-xs font-medium" style={{ color: MUTED, flex: '1 1 9rem' }}>{title}</span>
         {onFetch && (
           <button
             onClick={fetch}
@@ -130,21 +135,47 @@ export default function TryItPanel({
       </div>
 
       <div className="px-3 py-2 space-y-2">
+        {/* What the boxes below are. Without a line saying so they read as
+            settings of the element -- a second value it keeps -- rather than
+            what they are: a sample to run it on, kept in this browser and
+            nowhere else. */}
+        {ports.length > 0 && (
+          <p className="text-xs" style={{ color: DIMMER }}>
+            A sample to try this on, while you write it. It is not part of the graph and is not saved
+            with it — nothing downstream runs, and nothing here reaches the finished tool.
+            {onFetch && ' ⟳ fills it with what the graph would really deliver here.'}
+          </p>
+        )}
+        {/* The port's name above its box, not in a column beside it. Beside
+            it, three fixed columns split a 290px side panel into a truncated
+            name, a 52px "last run" and a field too narrow for one row of the
+            JSON that actually arrives. Above it, the field has the full width
+            at every size. */}
         {ports.map((port) => (
-          <div key={port.id} className="flex items-start gap-2">
-            <code className="text-xs mt-1.5 flex-shrink-0 truncate" style={{ color: ACCENT_TEXT, width: 96 }} title={port.name || port.id}>
-              {port.id}
-            </code>
+          <div key={port.id}>
+            <div className="flex items-baseline gap-2 mb-0.5">
+              <code className="text-xs truncate" style={{ color: ACCENT_TEXT }} title={`Port “${port.id}”`}>
+                {port.name || port.id}
+              </code>
+              <span className="flex-1" />
+              {source[port.id] && (
+                <span className="text-xs flex-shrink-0" style={{ color: DIMMER }} title="Where this value came from">
+                  {source[port.id]}
+                </span>
+              )}
+            </div>
             <textarea
-              className="flex-1 min-w-0 rounded px-2 py-1 text-xs font-mono resize-y"
-              style={{ ...FIELD, minHeight: 28, height: 28 }}
+              className="w-full rounded px-2 py-1 font-mono resize-y"
+              // Three lines, not one: what arrives here is a row of JSON far
+              // more often than it is a word, and a 28px box showed about six
+              // characters of it.
+              style={{ ...FIELD, fontSize: 12, lineHeight: 1.5, minHeight: 66 }}
               value={typed?.[port.id] ?? clip(asText(values[port.id]), 300)}
               onChange={(e) => setTyped(subject, port.id, e.target.value)}
               placeholder="a value to try it with — text, or JSON for a list or an object"
               aria-label={`Test value for ${port.id}`}
               spellCheck={false}
             />
-            <span className="text-xs mt-1.5 flex-shrink-0" style={{ color: DIMMER, width: 52 }}>{source[port.id] ?? ''}</span>
           </div>
         ))}
         {ports.length === 0 && <p className="text-xs" style={{ color: DIMMER }}>This element has no inputs; it can be tried as it is.</p>}

@@ -51,6 +51,26 @@ keeps the last result, and a page opened later shows that result and when the ne
 due. On the command line the graph's own clock applies without a flag, and `--every`
 overrides it. In the editor neither fires — there you press ▶ Run.
 
+**▶ Run starts the tool.** For a graph with a page that means opening the page — the
+**Preview** tab, which carries the tool's own header and its own ▶ Run — and then
+leaving it alone, exactly as starting an application does: the window appears, and
+nothing happens until someone uses it. Only when the page has nothing to press does
+▶ Run also run at once, because then running *is* the tool's whole interaction, which is
+what a deployed tool with no interface tells its user in as many words. Once the page is
+up, ▶ Run in the toolbar is the ▶ Run in its header: go, on what is on the page now.
+
+A graph with no page has only that second meaning, and ▶ Run runs it.
+
+**🚀 Deploy → Open as a tool** is the same tool *detached*: the graph is handed to the
+server and `runtime.html` opens in a window of its own — the delivered page, the
+delivered entry point, the delivered routes, with no editor around it at all. It sits
+under Deploy rather than beside Run because it answers a deploy question, not a run
+one — what am I about to hand over — next to the zip that hands it over. The
+difference from the Preview tab is what it is attached to: a run there happens in that
+window's own copy of the graph, so the editor's canvas learns nothing from it. Use the
+Preview tab while building, and this to see what you are about to hand over. Nothing is
+written to disk, and the window keeps the graph it was handed until it is opened again.
+
 **A node with nothing to do is left alone.** If a port marked *required* is wired and
 brought nothing — or, for an AI node, *every* wired input came up empty — the node is
 skipped, what hangs off it is skipped, and the run is still a success. ▶ Run on a chat
@@ -466,6 +486,11 @@ out like a canvas:
 - The panel on the right shows what the selected block *is* — its label, its own
   settings, whether using it starts the graph. How it looks, its exact size and what a
   failure costs are folded away under *Look, size & failures*.
+
+A block that **starts** the graph is marked `⚡` on the designer canvas, and its port on
+the graph canvas is the amber diamond `◆` the run port wears — the same shape wherever a
+run begins. Every other output is a value: read when something else starts a run, and
+starting nothing by itself.
 
 Blocks are live while you design — a button pressed here runs the graph, a chat sends —
 and the **Preview** tab is the delivered page itself. `x`/`y`/`w`/`h` are presentational only — they never affect ports,

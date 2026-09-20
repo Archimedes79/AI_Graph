@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GraphNode } from '@/graph';
-import { syncGuiNodePorts, guiWidgetPorts } from './guiWidgets';
+import { syncGuiNodePorts, guiWidgetPorts, widgetFiresRun, widgetOfPort } from './guiWidgets';
 import { DEFAULT_WIDGET_SPAN } from '@/page/layout';
 import { baseNodeConfig } from '../baseNodeConfig';
 import { WIDGET_UIS } from '@/elements/registry';
@@ -169,5 +169,35 @@ describe('a new widget: its size and tone, from its Ui', () => {
       expect(ports.inputs).toEqual([]);
       expect(ports.outputs).toEqual([]);
     }
+  });
+});
+
+/**
+ * What the canvas asks to tell an event apart from a value: which block a port
+ * belongs to, and whether using that block starts the graph. A button and a
+ * text field both hand a value out of the same node, and drawing them the same
+ * hid the one difference that decides what the tool does when someone uses it.
+ */
+describe('which block a port belongs to', () => {
+  it('finds it from either end, and nothing for a port of no block', () => {
+    let node = blankGuiNode();
+    const button = WIDGET_UIS.button.create('Go');
+    const field = WIDGET_UIS.text_io.create('Ask', 'input');
+    const plot = WIDGET_UIS.plot_window.create('Chart');
+    node.config.gui_widgets = [button, field, plot];
+    node = syncGuiNodePorts(node);
+
+    expect(widgetOfPort(node, `${button.id}_out`)?.id).toBe(button.id);
+    expect(widgetOfPort(node, `${plot.id}_in`)?.id).toBe(plot.id);
+    expect(widgetOfPort(node, 'nothing_out')).toBeUndefined();
+  });
+
+  it('says which of them start the graph', () => {
+    const button = WIDGET_UIS.button.create('Go');
+    const field = WIDGET_UIS.text_io.create('Ask', 'input');
+    // A button is an event by its nature; a field is one only when it is told to be.
+    expect(widgetFiresRun(button)).toBe(true);
+    expect(widgetFiresRun(field)).toBe(false);
+    expect(widgetFiresRun({ ...field, run_on_change: true })).toBe(true);
   });
 });

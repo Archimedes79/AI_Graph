@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Server } from 'node:http';
-import { serve } from './serve.ts';
+import { portTaken, serve } from './serve.ts';
 import { API, pathFor } from './api.ts';
 
 /**
@@ -106,6 +106,29 @@ describe('what a deployed tool serves', () => {
   });
 });
 
+describe('a port that is already taken', () => {
+  /**
+   * A bundle is started by double-clicking it on a machine whose ports are
+   * none of its author's business. Node's default for a `listen` that fails is
+   * an unhandled 'error' event: a stack trace, no window, and nothing a
+   * recipient can act on — which is exactly what happened to someone who had
+   * something else on 8000.
+   */
+  it('is this call failing, not the process dying', async () => {
+    const first = await serve({ graphPath: MINIMAL, port: 0 });
+    started.push(first.server);
+    const port = Number(new URL(first.url).port);
+
+    const second = serve({ graphPath: MINIMAL, port });
+    await expect(second).rejects.toMatchObject({ code: 'EADDRINUSE' });
+    // And it is recognisable as *that* failure, which is what lets the caller
+    // try the next port instead of giving up.
+    const error = await second.catch((e: unknown) => e);
+    expect(portTaken(error)).toBe(true);
+    expect(portTaken(new Error('something else'))).toBe(false);
+  });
+});
+
 describe('the page it serves', () => {
   it('serves the built page, and the same page for a deep link', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-page-'));
@@ -163,6 +186,37 @@ describe('the engine as the front door of the editor', () => {
     expect(Array.isArray(requirements)).toBe(true);
     const settings = await asJson(await fetch(`${url}/api/ai/settings`));
     expect(settings.credentials).toBeTruthy();
+  });
+
+  /**
+   * "Open as tool": the editor hands over the graph it is editing, and the
+   * runtime page then asks for it over the ordinary `graph` route. Before it
+   * is handed over there is nothing to serve, and saying so is what tells the
+   * window it was opened by hand rather than by the button.
+   */
+  it('serves the graph the editor hands it, as a tool would', async () => {
+    const url = await editor();
+    expect((await fetch(`${url}/api/runtime/graph`)).status).toBe(404);
+
+    const graph = JSON.parse(await readFile(MINIMAL, 'utf8'));
+    graph.metadata.name = 'Handed over';
+    const held = await fetch(`${url}/api/runtime/hold`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
+    });
+    expect(held.status).toBe(200);
+
+    const served = await asJson(await fetch(`${url}/api/runtime/graph`));
+    expect((served.metadata as { name: string }).name).toBe('Handed over');
+  });
+
+  it('will not let a deployed tool be handed a different graph', async () => {
+    // The route is the editor's. A tool serving what someone posted to it is
+    // a tool that does what its visitor says, not what it ships.
+    const { url } = await serveGraph();
+    const response = await fetch(`${url}/api/runtime/hold`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    expect(response.status).toBe(404);
   });
 
   // That the editor serves every route is not tested by calling them -- some

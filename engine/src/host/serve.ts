@@ -14,7 +14,7 @@
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { parseGraph, type Graph } from '../graph.ts';
 import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
 import { registry } from '../elements/registry.ts';
@@ -26,8 +26,9 @@ import { API, matchRoute, type RouteName } from './api.ts';
 import {
   Download, Refusal, message, readBytes, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
 } from './http.ts';
+import { browse, extensionFilter, NotFound } from './browse.ts';
 import { RunBoard } from './runs.ts';
-import { nodeFiles, nodeRuntime } from './node.ts';
+import { nodeRuntime } from './node.ts';
 import { schedule } from './schedule.ts';
 import { Lifecycle } from './lifecycle.ts';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
@@ -96,10 +97,18 @@ export async function serve(options: ServeOptions): Promise<Served> {
   lifecycle.own('runs in flight', () => runs.stopAll());
 
   const handlers: Handlers = {
-    ...toolRoutes(held, clock, runs, options.graphPath !== undefined),
+    // A tool's picker opens where its graph is — a bundle's own folder, which
+    // is also what its paths are relative to. The editor's opens where the
+    // editor was started, which is the same idea one level up.
+    ...toolRoutes(held, clock, runs, options.graphPath !== undefined, options.graphPath
+      ? (projectFolderOf(options.graphPath) ?? dirname(resolve(options.graphPath)))
+      : process.cwd()),
     // Loaded, not imported: a bundle carries this file without the `editor/`
     // folder beside it, and a static import would stop every deployed tool.
-    ...(options.editor ? (await import('./editor/routes.ts')).editorRoutes() : {}),
+    // `held` goes in so the editor can hand this server the graph it is
+    // editing and then open `runtime.html` against it: the delivered page, in
+    // its own window, served by the same route a bundle serves.
+    ...(options.editor ? (await import('./editor/routes.ts')).editorRoutes(held) : {}),
   };
   const missing = (Object.keys(API) as RouteName[])
     .filter((name) => (options.editor || API[name].for === 'tool') && !handlers[name]);
@@ -151,9 +160,25 @@ export async function serve(options: ServeOptions): Promise<Served> {
     server.closeIdleConnections();
     setTimeout(() => server.closeAllConnections(), 1000).unref();
   }));
-  await new Promise<void>((listening) => server.listen(options.port ?? 0, host, listening));
+  // A port that cannot be listened on is this call failing, not the process
+  // dying: without the `error` handler the event is unhandled and Node prints
+  // a stack trace over whatever the caller was about to say. What was already
+  // started -- the clock, above all -- is stopped before the failure leaves.
+  await new Promise<void>((listening, failed) => {
+    const gaveUp = (error: Error) => { void lifecycle.shutdown().then(() => failed(error), () => failed(error)); };
+    server.once('error', gaveUp);
+    server.listen(options.port ?? 0, host, () => {
+      server.off('error', gaveUp);
+      listening();
+    });
+  });
   const port = (server.address() as { port: number }).port;
   return { server, url: `http://${host}:${port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
+}
+
+/** Whether a failure to start is "something else is already on that port". */
+export function portTaken(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === 'EADDRINUSE';
 }
 
 /** The `tool` rows: what any server answers, a deployed tool's included. */
@@ -162,6 +187,8 @@ function toolRoutes(
   clock: ReturnType<typeof schedule> | null,
   runs: RunBoard,
   ships: boolean,
+  /** Where this tool's file picker opens: the folder its graph sits in. */
+  toolRoot: string,
 ): Handlers {
   return {
     graph() {
@@ -224,19 +251,20 @@ function toolRoutes(
 
     stopRun: (asked) => ({ cancelled: runs.stop(asked.id) }),
 
-    // A deployed page only picks a file, and lists nothing it would not need to.
+    // The same picker the editor has. It used to list the starting directory's
+    // files and nothing else -- no folders, no parent, no drives -- which left
+    // whoever was handed the tool able to choose a file in one directory and
+    // with the way up drawn as a permanently disabled button. Loopback only,
+    // as before: it is the person at the keyboard, browsing their own machine.
     async browse(asked, { loopback }) {
       if (!loopback) throw new Refusal(403, 'Browsing is disabled.');
-      const target = resolve(asked.path || '.');
-      const suffixes = (asked.extensions ?? '').split(',').map((e) => e.trim()).filter(Boolean)
-        .map((e) => (e.startsWith('.') ? e : `.${e}`));
-      const listed = await nodeFiles.list(target, { extensions: suffixes.length ? suffixes : undefined });
-      return {
-        path: target,
-        parent: null,
-        entries: listed.map((file) => ({ name: basename(file), path: file, is_dir: false })),
-        roots: [],
-      };
+      try {
+        // Empty path means the tool's own folder -- where its graph and the
+        // data beside it live -- rather than wherever it happened to be started.
+        return await browse(asked.path ?? '', extensionFilter(asked.extensions ?? ''), toolRoot);
+      } catch (error) {
+        throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));
+      }
     },
   };
 }

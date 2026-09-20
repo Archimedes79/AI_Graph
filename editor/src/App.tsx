@@ -432,6 +432,7 @@ export default function App() {
           confirmDiscard={confirmDiscard}
           currentFilePath={currentFilePath}
           onShowInterface={() => setView('preview')}
+          interfaceShown={view === 'preview'}
           saveStatus={saveStatus}
         />
 

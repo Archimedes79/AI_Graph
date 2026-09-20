@@ -129,8 +129,10 @@ describe('graphStore width/height persistence', () => {
     const node = graphNode({ id: 'n1', width: 320, height: 240 });
     loadTestGraph([node]);
 
-    expect(useGraphStore.getState().rfNodes[0].width).toBe(320);
-    expect(useGraphStore.getState().rfNodes[0].height).toBe(240);
+    // On `style`: that is what ReactFlow lays the node out from. A node's own
+    // `width`/`height` are where it reports what it measured, so a size put
+    // there is ignored and then overwritten.
+    expect(useGraphStore.getState().rfNodes[0].style).toMatchObject({ width: 320, height: 240 });
 
     const exported = useGraphStore.getState().exportGraph();
     expect(exported.nodes[0].width).toBe(320);
@@ -271,16 +273,50 @@ describe('graphStore, a project open on disk', () => {
 });
 
 describe('graphStore, a graph just opened', () => {
-  it('stays saved when the canvas measures its nodes, and a page keeps the size it was given', () => {
+  const store = () => useGraphStore.getState();
+  /** What ReactFlow does once a node is drawn: it reports what the node measured. */
+  const measured = (id: string, width: number, height: number) =>
+    store().setRFNodes(store().rfNodes.map((n) => (n.id === id ? { ...n, width, height } : n)));
+  /** What its resizer does when someone drags a corner: `updateStyle: true`, so the style changes. */
+  const resized = (id: string, width: number, height: number) =>
+    store().setRFNodes(store().rfNodes.map(
+      (n) => (n.id === id ? { ...n, width, height, style: { ...n.style, width, height } } : n),
+    ));
+
+  const openWithPage = () => {
     const page = graphNode({ id: 'page', node_type: 'gui', width: 340, height: 300, config: { ...blankConfig(), gui_widgets: [] } });
     loadTestGraph([graphNode({ id: 'count', node_type: 'code' }), page]);
-    // What ReactFlow does once the nodes are drawn: every node gets its measured size.
-    useGraphStore.getState().setRFNodes(useGraphStore.getState().rfNodes.map((n) => ({ ...n, width: 212, height: 96 })));
-    const exported = useGraphStore.getState().exportGraph();
+  };
+
+  it('gives the canvas the size a page was saved with', () => {
+    // In `style`, because that is what ReactFlow renders from. Put on the node
+    // itself it was ignored and then overwritten by the measurement, so a page
+    // saved at 340x300 opened at whatever its contents came to.
+    openWithPage();
+    expect(store().rfNodes.find((n) => n.id === 'page')!.style).toMatchObject({ width: 340, height: 300 });
+    expect(store().rfNodes.find((n) => n.id === 'count')!.style).toBeUndefined();
+  });
+
+  it('stays saved when the canvas measures its nodes', () => {
+    // The bug this is here for: every project read as "unsaved" the moment it
+    // was opened, because the measurement was written back into the graph. It
+    // is not cosmetic -- `takeDiskChanges` refuses a nested subgraph from disk
+    // unless the document is clean, so that path was dead from the first frame.
+    openWithPage();
+    measured('page', 675, 366);
+    measured('count', 212, 96);
+    expect(store().isDirty()).toBe(false);
+    const exported = store().exportGraph();
     expect(exported.nodes.find((n) => n.id === 'count')!.width).toBeUndefined();
-    expect(useGraphStore.getState().isDirty()).toBe(true);   // the page was resized to 212 x 96
-    useGraphStore.getState().setRFNodes(useGraphStore.getState().rfNodes.map((n) => (n.id === 'page' ? { ...n, width: 340, height: 300 } : n)));
-    expect(useGraphStore.getState().isDirty()).toBe(false);
+    expect(exported.nodes.find((n) => n.id === 'page')).toMatchObject({ width: 340, height: 300 });
+  });
+
+  it('keeps a size someone actually dragged', () => {
+    openWithPage();
+    measured('page', 675, 366);
+    resized('page', 480, 260);
+    expect(store().isDirty()).toBe(true);
+    expect(store().exportGraph().nodes.find((n) => n.id === 'page')).toMatchObject({ width: 480, height: 260 });
   });
 });
 
