@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useGraphStore } from '@/store/graphStore';
+import { mergeResults, useGraphStore } from '@/store/graphStore';
 import { GuiSurfacePage } from '@/page/GuiPage';
 import { useDeliveredRun } from '@/page/useDeliveredRun';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
@@ -71,7 +71,11 @@ export default function RuntimeApp() {
         setSchedule(state);
         if (state.result && state.runs !== seenRound.current && !useGraphStore.getState().isExecuting) {
           seenRound.current = state.runs;
-          setExecutionResult(state.result);
+          // Laid over what the page shows, not in place of it: a clock's round
+          // runs what its trigger is wired to, and the summary somebody asked
+          // for a minute ago is not part of that.
+          const shown = useGraphStore.getState().executionResult;
+          setExecutionResult(shown ? mergeResults(shown, state.result) : state.result, state.result);
         }
         // Nothing scheduled: asked once, and that is the end of it.
         if (state.scheduled) timer = setTimeout(look, 2000);

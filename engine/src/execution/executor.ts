@@ -291,6 +291,13 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   /** This node's view of the run: which of *its* ports the round began with. */
   const atNode = (base: Runtime, nodeId: string): Runtime => ({ ...base, fired: (portId) => fires(nodeId, portId) });
 
+  /** Its outputs come from what it holds, not only from what reaches it. */
+  const keepsItsOwn = (nodeId: string): boolean => {
+    const node = byId.get(nodeId);
+    const element = node && registry.node(node.node_type);
+    return !!node && !!element && (element.isMemory || element.hasInterface || element.eventPorts(node).length > 0);
+  };
+
   /**
    * Why this node stands still this round, or '' when it runs.
    *
@@ -309,6 +316,10 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         || gates.some((e) => !held.has(e.source_node_id) && outputs.get(e.source_node_id)?.[e.source_port_id] === true);
       return open ? '' : 'Nothing opened its ◆ this round.';
     }
+    // A node that keeps something of its own -- a page and what is typed into
+    // it, a data node, a trigger -- is news by itself: the press that began the
+    // round is on the page, whatever the wires into the page carry.
+    if (keepsItsOwn(nodeId)) return '';
     const data = into.filter((e) => outputs.has(e.source_node_id));
     if (data.length && data.every((e) => held.has(e.source_node_id))) return 'Nothing new reached it this round.';
     return '';
@@ -362,7 +373,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
       // for a node fed only by nodes that stood still: nothing new reached it.
       const shut = standsStill(nodeId);
       if (shut) {
-        const kept = options.latch?.get(graph, node);
+        const kept = options.latch?.get(graph, node, keepsItsOwn(nodeId));
         if (kept) {
           held.add(nodeId);
           outputs.set(nodeId, kept);
@@ -393,7 +404,9 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         // the paths, not the megabytes behind them. Only the element sees the
         // contents.
         const arrived = await readInputs(element, node, inputs, runtime);
-        const key = options.reuse?.key(node, arrived);
+        // An event is a moment: `true` handed back from an earlier round would
+        // open gates for a press that is over.
+        const key = element.eventPorts(node).length ? undefined : options.reuse?.key(node, arrived);
         const kept = key && context(nodeId) ? options.reuse!.get(key) : undefined;
         if (kept) {
           outputs.set(nodeId, kept);
@@ -409,7 +422,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         );
         if (signal?.aborted) throw new Error('Stopped.');
         outputs.set(nodeId, produced);
-        if (!failures.length) options.latch?.set(graph, node, produced);
+        if (!failures.length) options.latch?.set(graph, node, produced, keepsItsOwn(nodeId));
         // Kept only when it went through whole: a partial result is not one to hand back.
         if (key && !failures.length) options.reuse!.set(key, produced);
         // Some items failed and the rest went through: the node is partial and
@@ -546,6 +559,9 @@ function withSubgraph(runtime: Runtime, options: RunOptions, node: GraphNode, de
           // asked at the level they were asked at, and mean nothing here.
           trigger: null,
           only: undefined,
+          // Nothing is held in there: the same inner graph may sit in two
+          // nodes, or run once per item, and one's last value is not another's.
+          latch: undefined,
           reuse: undefined,
         });
       },
@@ -846,7 +862,9 @@ async function showDisplays(
   for (const result of results) {
     const node = graph.nodes.find((n) => n.id === result.node_id);
     const element = node && registry.node(node.node_type);
-    if (!node || !element?.hasInterface || result.status === 'error') continue;
+    // What stood still is shown as it was: the editor and the page keep the
+    // display they have, and a block's transform is not run for nothing.
+    if (!node || !element?.hasInterface || result.status === 'error' || result.held) continue;
     result.display = await element.display(node, result.inputs, runtime);
   }
 }

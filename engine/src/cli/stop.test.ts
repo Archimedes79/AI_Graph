@@ -29,8 +29,8 @@ describe('a served tool that is told to stop', () => {
     const dir = await mkdtemp(join(tmpdir(), 'stop-'));
     const graphPath = join(dir, 'graph.json');
     await writeFile(graphPath, JSON.stringify({
-      metadata: { name: 'slow', triggers: { on_start: true } },
-      nodes: [{ id: 'slow', node_type: 'code', inputs: [], outputs: [{ id: 'out', name: 'out' }], config: { code: SLOW } }],
+      metadata: { name: 'slow' },
+      nodes: [{ id: 'start', node_type: 'trigger', config: { trigger_on_start: true } }, { id: 'slow', node_type: 'code', inputs: [], outputs: [{ id: 'out', name: 'out' }], config: { code: SLOW } }],
       edges: [],
     }));
     const kept = `${graphPath}.last-run.json`;

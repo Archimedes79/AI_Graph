@@ -79,8 +79,8 @@ export class CodeNodeElement extends NodeElement<CodeConfig> {
     return logic.run(inputs, runtime.code, { calls: { llm: llmCall(PLAIN_ASK, runtime) } });
   }
 
-  /** A body that asks a model needs one where it is deployed. */
+  /** A body that asks a model needs one where it is deployed. Any mention counts: `node.llm(`, `{ llm }`, `const ask = node.llm`. */
   override deployNeeds(node: GraphNode) {
-    return { needsInterface: false, asksAi: /\bnode\s*\.\s*llm\s*\(/.test(this.config(node).code) };
+    return { needsInterface: false, asksAi: /\bllm\b/.test(this.config(node).code) };
   }
 }

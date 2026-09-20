@@ -19,7 +19,10 @@
 // the event that opens the gate.
 //
 // Kept per node *as written*: edit a node's code and what the old code made is
-// not what the new one holds.
+// not what the new one holds. A node that keeps something of its own -- a data
+// node, a page -- is the exception: its config changes with every round that
+// settles into it, so "as written" would forget it each time. It is known by
+// where it is.
 
 import { createHash } from 'node:crypto';
 import type { Graph, GraphNode } from '../graph.ts';
@@ -30,17 +33,21 @@ const LIMIT = 512;
 export class Latch {
   private readonly kept = new Map<string, Record<string, unknown>>();
 
-  private key(graph: Graph, node: GraphNode): string {
-    const written = [graph.metadata?.name ?? '', node.id, node.node_type, node.config, node.inputs, node.outputs];
+  private key(graph: Graph, node: GraphNode, keepsItsOwn: boolean): string {
+    const written = [graph.metadata?.name ?? '', node.id, node.node_type, keepsItsOwn ? null : node.config, node.inputs, node.outputs];
     return createHash('sha256').update(JSON.stringify(written)).digest('hex');
   }
 
-  get(graph: Graph, node: GraphNode): Record<string, unknown> | undefined {
-    return this.kept.get(this.key(graph, node));
+  get(graph: Graph, node: GraphNode, keepsItsOwn = false): Record<string, unknown> | undefined {
+    const key = this.key(graph, node, keepsItsOwn);
+    const found = this.kept.get(key);
+    // Read is used: a node that only ever stands still must not be the first to go.
+    if (found) { this.kept.delete(key); this.kept.set(key, found); }
+    return found;
   }
 
-  set(graph: Graph, node: GraphNode, outputs: Record<string, unknown>): void {
-    const key = this.key(graph, node);
+  set(graph: Graph, node: GraphNode, outputs: Record<string, unknown>, keepsItsOwn = false): void {
+    const key = this.key(graph, node, keepsItsOwn);
     this.kept.delete(key);
     this.kept.set(key, outputs);
     if (this.kept.size > LIMIT) this.kept.delete(this.kept.keys().next().value!);

@@ -62,3 +62,37 @@ describe('a body that asks the process holding the graph', () => {
     expect(out).toEqual({ all: [10, 20] });
   });
 });
+
+describe('a body that does not keep to the protocol', () => {
+  it('may leave a line unfinished before its result', async () => {
+    const out = await nodeCode.run('function run() { process.stdout.write("progress 100%"); return { ok: 1 }; }', {});
+    expect(out).toEqual({ ok: 1 });
+  });
+
+  it('may leave a line unfinished before it asks', async () => {
+    const body = 'async function run(i, node) { process.stdout.write("asking..."); return { a: await node.llm({ prompt: "x" }) }; }';
+    const out = await nodeCode.run(body, {}, undefined, { calls: { llm: async () => 'hi' } });
+    expect(out).toEqual({ a: 'hi' });
+  });
+
+  it('is told that a function is not a result, and this process stays up', async () => {
+    await expect(nodeCode.run('function run() { return () => 1; }', {})).rejects.toThrow(/must return an object/);
+  });
+
+  it('fails, and only itself, when it writes the engine\'s mark', async () => {
+    const body = 'function run() { console.log("\\u001eai-graph:result {not json"); return { ok: 1 }; }';
+    await expect(nodeCode.run(body, {})).rejects.toThrow(/only the engine may write/);
+  });
+
+  it('is not waited for once it has said what it made', async () => {
+    const started = Date.now();
+    const out = await nodeCode.run('function run() { setInterval(() => {}, 1000); return { ok: 1 }; }', {});
+    expect(out).toEqual({ ok: 1 });
+    expect(Date.now() - started).toBeLessThan(10_000);
+  });
+
+  it('ends when its run never settles, though it could have asked', async () => {
+    const body = 'function run() { return new Promise(() => {}); }';
+    await expect(nodeCode.run(body, {}, undefined, { calls: { llm: async () => 'x' } })).rejects.toThrow();
+  });
+});
