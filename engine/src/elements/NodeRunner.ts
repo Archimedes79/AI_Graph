@@ -66,6 +66,24 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   setNestedGraph(_node: GraphNode, _graph: Graph | null): void {}
 
   /**
+   * The blocks this node holds, as the records it keeps them in: a page's
+   * widgets, each with elements of its own and a folder of its own in a project.
+   * None for a node that holds none.
+   *
+   * The element owns where they are kept; the project folder only asks, so it
+   * never learns what a page is.
+   */
+  blocks(_node: GraphNode): Record<string, unknown>[] {
+    return [];
+  }
+
+  /** Put blocks back, in the place `blocks` read them from. */
+  setBlocks(_node: GraphNode, _blocks: Record<string, unknown>[]): void {}
+
+  /** What a run of the graph returns: the outputs of every node that says so, by their labels. */
+  readonly isResult: boolean = false;
+
+  /**
    * Whether this node is where its graph meets whatever holds it: `'in'` for a
    * value handed down, `'out'` for one handed back up.
    *
@@ -77,6 +95,15 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
    */
   boundaryRole(_node: GraphNode): 'in' | 'out' | null {
     return null;
+  }
+
+  /**
+   * The inputs of this node that carry what it reports, in the order it declares
+   * them. All of them, unless one is a control: an output node's `path` says
+   * where to write, not what.
+   */
+  valuePorts(node: GraphNode): Port[] {
+    return node.inputs;
   }
 
   /**
@@ -214,6 +241,20 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
   // ── Build time ────────────────────────────────────────────────────────────
   // What only building asks: the editor, `check`, `test`, a bundle being made.
+
+  /**
+   * What someone writing a graph for this kind must know about its settings:
+   * which keys hold what it does, and what goes wrong if they are put anywhere
+   * else. A sentence or a paragraph, without a heading -- the prompt that
+   * designs a whole graph (`host/editor/graphPrompt.ts`) collects one from
+   * every kind, so a new kind is described in its own file.
+   *
+   * None means a generated graph is not meant to use this kind, and it is left
+   * out of what the model is told exists.
+   */
+  graphAuthorNote(): string | undefined {
+    return undefined;
+  }
 
   /**
    * What runs when this node runs: where that code is, and in one sentence what

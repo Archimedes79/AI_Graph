@@ -30,7 +30,7 @@ export interface PaletteEntry {
 
 interface PaletteGroup { label: string; entries: PaletteEntry[]; folded?: boolean }
 
-export const PALETTE: PaletteGroup[] = [
+const PALETTE: PaletteGroup[] = [
   {
     label: 'Words',
     entries: [

@@ -38,7 +38,7 @@ export function clip(text: string, limit = 600): string {
   return `${text.slice(0, limit * 0.7)}\n  … ${text.length - limit} more characters …\n${text.slice(-limit * 0.3)}`;
 }
 
-export function asText(value: unknown): string {
+function asText(value: unknown): string {
   if (value === null || value === undefined) return '';
   return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }

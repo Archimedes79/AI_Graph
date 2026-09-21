@@ -312,8 +312,7 @@ Saving refuses to overwrite a file changed outside since it was read. The toolba
 reopens the whole project, for when `graph.json` itself changed (a pull, a merge).
 
 **A single `.json` file** still opens, saves (name it `….json`) and runs: everything
-inline, which is what a download, an import and a deploy bundle carry. A graph saved by an
-older version with its code in `<graph>.nodes/` opens too; save it as a folder to keep it.
+inline, which is what a download, an import and a deploy bundle carry.
 
 **Output interfaces.** A code node's outputs are described by a JSON Schema,
 `output.schema.json`. You do not write it first: wire the nodes, run the graph, and the

@@ -18,10 +18,10 @@
 // and a separate one.
 
 import type { GraphNode, NodeConfig, NodeType } from '@/graph';
-import { derivedNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { derivedNodePorts } from './guiWidgets';
 import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
 import { TriggerNodeRunner } from '@engine/elements/nodes/trigger/TriggerNodeRunner.ts';
-import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
+import { baseNodeConfig } from './baseNodeConfig';
 
 /** Kept even at its starting value: the executor reads it whether or not anyone set it. */
 const ALWAYS_SAVED = ['batch_mode'];

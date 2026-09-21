@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { WidgetViewProps } from '../WidgetView';
 import { valueToText } from '../WidgetView';
-import FileBrowserDialog from '@/ui/FileBrowserDialog';
+import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 import { DANGER_SOFT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 /** Runtime input_picker widget: unified file or directory picker. */

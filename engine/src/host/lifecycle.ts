@@ -17,7 +17,7 @@
 // order, the patience and the promise that stopping happens once.
 
 /** How long stopping may take before the process ends anyway. */
-export const GRACE_MS = 8000;
+const GRACE_MS = 8000;
 
 interface Owned {
   name: string;

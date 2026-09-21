@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useGraphStore } from '@/store/graphStore';
 import type { Requirement } from '@/api/client';
-import Modal from './Modal';
+import Modal from '@/ui/Modal';
 import FileBrowserDialog from './FileBrowserDialog';
-import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, SURFACE, TEXT } from './theme';
+import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
 interface GraphWindowsProps {
   requirements: Requirement[] | null;

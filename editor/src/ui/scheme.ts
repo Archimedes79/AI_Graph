@@ -152,7 +152,7 @@ export const SCHEMES: Scheme[] = [
 const PLOT_ON_DARK = ['#22c55e', '#f59e0b', '#ec4899', '#06b6d4', '#a78bfa', '#84cc16', '#fb923c'];
 const PLOT_ON_LIGHT = ['#15803d', '#b45309', '#be185d', '#0e7490', '#6d28d9', '#4d7c0f', '#c2410c'];
 
-export function plotColours(id: string | undefined): string[] {
+function plotColours(id: string | undefined): string[] {
   const s = scheme(id);
   return [s.accent, ...(s.light ? PLOT_ON_LIGHT : PLOT_ON_DARK)];
 }

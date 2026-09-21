@@ -9,6 +9,18 @@
 // because input and gui ports are derived by the engine rather than taken from
 // the document. So the facts below are the ones a graph is *wrong* without.
 
+import { registry } from '../../elements/registry.ts';
+
+/**
+ * The kinds a generated graph may use, each with what its own class says about
+ * its settings (`NodeRunner.graphAuthorNote`). A kind that says nothing is left
+ * out -- a subgraph is built by hand -- and a new one appears here by being written.
+ */
+const AUTHORED = registry.nodeTypes()
+  .map((type) => [type, registry.node(type)?.graphAuthorNote()] as const)
+  .filter((entry): entry is readonly [string, string] => !!entry[1]);
+const NODE_TYPES = AUTHORED.map(([type]) => type).join(', ');
+
 const SHAPE = `You are an expert at authoring Graph DSL documents for a visual node-based AI workflow tool. When asked to design a graph, output ONLY a fenced \`\`\`json code block containing a complete Graph DSL document, followed by a brief explanation outside the block. Do not add extra prose before the code block.
 
 The JSON document must have this exact shape:
@@ -26,18 +38,13 @@ The JSON document must have this exact shape:
   "edges": [{"id": str, "source_node_id": str, "source_port_id": str, "target_node_id": str, "target_port_id": str}, ...]
 }
 
-Valid node_type values: input, data, ai, code, output, gui, trigger. An "input" node's config.input_mode selects text, file, or directory input. A "data" node is persisted graph memory with one optional input port named "input" and one output port named "output". Define data nodes before code or ai nodes when a workflow has known intermediate contracts. Set config.data_format to text or structure; put the precise schema, field names, types, nesting, and constraints in config.data_format_prompt; and initialize config.data_value when useful. Connected code and ai nodes must honor those source and target contracts. There is no dedicated merge/split node type: fan-in (multiple edges into one multi input port) and fan-out (one output wired to many inputs) are pure edge wiring, and any merge/split-style aggregation (concat/sum/count/json_list a set of inputs, or splitting text into a list) should be written as a "code" node. For a display-only output, use node_type "output" with config.write_mode = "window" (shows the result in a text window). Every node must declare its own inputs and outputs port arrays, even if empty, and every port id must be unique within its node. Edges must reference existing node ids and port ids declared on those nodes.`;
+Valid node_type values: ${NODE_TYPES}. An "input" node's config.input_mode selects text, file, or directory input. A "data" node is persisted graph memory with one optional input port named "input" and one output port named "output". Define data nodes before code or ai nodes when a workflow has known intermediate contracts. Set config.data_format to text or structure; put the precise schema, field names, types, nesting, and constraints in config.data_format_prompt; and initialize config.data_value when useful. Connected code and ai nodes must honor those source and target contracts. There is no dedicated merge/split node type: fan-in (multiple edges into one multi input port) and fan-out (one output wired to many inputs) are pure edge wiring, and any merge/split-style aggregation (concat/sum/count/json_list a set of inputs, or splitting text into a list) should be written as a "code" node. For a display-only output, use node_type "output" with config.write_mode = "window" (shows the result in a text window). Every node must declare its own inputs and outputs port arrays, even if empty, and every port id must be unique within its node. Edges must reference existing node ids and port ids declared on those nodes.`;
 
-/** Where each node type keeps the thing it actually does. */
+/** Where each node type keeps the thing it actually does: one line from every kind, and what only two of them share. */
+const FILE_WORK = `- code and ai, working on FILES: an input port with data_type "file_path" receives a path, or a list of paths from a directory input's "files". Set config.read_file_inputs = true and the node is handed each file's TEXT instead of its path. Set config.batch_mode = "per_item" and mark that port "multi": true, and the node runs ONCE PER FILE, its results collected into a list; with batch_mode = "whole_list" it runs once and gets the whole list. So "do X to every file in a folder" is: directory input --files--> one code or ai node (file_path port, multi, read_file_inputs, per_item). Never chain a second input node to read the files, and never read files yourself in code.`;
+
 const CONFIG_KEYS = `Where each node type keeps what it does. Put it anywhere else and the node will run and produce nothing:
-- code: config.code holds JavaScript as "function run(inputs) { ... }", returning an object whose keys are exactly this node's output port ids. config.code_prompt is the request it was written from. Use only what Node has built in; there is no package manager. The function may be async and is handed a second argument, node: "await node.llm({ prompt: '...' })" asks the graph's model a question and resolves to its answer as text -- use it when code has to decide what to ask, or ask in a loop; for one question, use an ai node instead.
-- ai: the node's own "description" field says what it is for, and config.system_prompt is the standing instruction. Everything wired into it is sent as the message; with more than one input, lay them out in config.prompt_template using {{port_id}} placeholders, for example "Conversation so far: {{history}} User: {{message}}" with line breaks between the parts. The reply arrives on the node's single output port, "output".
-- code and ai, working on FILES: an input port with data_type "file_path" receives a path, or a list of paths from a directory input's "files". Set config.read_file_inputs = true and the node is handed each file's TEXT instead of its path. Set config.batch_mode = "per_item" and mark that port "multi": true, and the node runs ONCE PER FILE, its results collected into a list; with batch_mode = "whole_list" it runs once and gets the whole list. So "do X to every file in a folder" is: directory input --files--> one code or ai node (file_path port, multi, read_file_inputs, per_item). Never chain a second input node to read the files, and never read files yourself in code.
-- input: config.value is the text, the file path or the folder path; config.input_mode is text, file or directory.
-- data: config.data_value is what it remembers between runs.
-- trigger: config.trigger_on_start (true or false) and config.trigger_every ("" for never, or "30s", "5m", "2h", "1d"). It starts the graph by itself -- when the tool starts, and on that clock -- at the nodes its output is wired to; wired to nothing it starts the whole graph. Use one when a graph should run with nobody pressing anything.
-- output: config.write_mode is none, file, directory or window; config.output_label names the window.
-- gui: config.gui_widgets is the list of blocks on the page.`;
+${[...AUTHORED.map(([type, note]) => `- ${type}: ${note}`), FILE_WORK].join('\n')}`;
 
 /**
  * The rule a graph is useless without.

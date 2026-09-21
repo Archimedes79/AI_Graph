@@ -78,7 +78,7 @@ export function widgetFiresRun(widget: GuiWidget): boolean {
  * `gui_widgets` holds exactly one widget -- same derivation.
  */
 export function syncGuiNodePorts(node: GraphNode): GraphNode {
-  if (node.node_type !== 'gui') return node;
+  if (!engineRegistry.node(node.node_type)?.hasInterface) return node;
 
   const inputs: Port[] = [];
   const outputs: Port[] = [];

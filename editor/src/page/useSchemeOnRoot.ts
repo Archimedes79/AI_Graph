@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { schemeVars } from './scheme';
+import { schemeVars } from '@/ui/scheme';
 
 /**
  * Put the active scheme on the document root.

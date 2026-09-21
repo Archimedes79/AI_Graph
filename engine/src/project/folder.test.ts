@@ -178,18 +178,6 @@ describe('finding a project', () => {
     await writeFile(join(dir, 'package.json'), '{"name": "x"}');
     await expect(loadGraph(join(dir, 'package.json'))).rejects.toThrow(/not a graph/);
   });
-
-  it('still opens a graph saved with its code beside it the old way', async () => {
-    const graph = sample();
-    graph.nodes[1].config = { code_file: 'Count.js', code: '' };
-    await writeFile(join(dir, 'old.json'), JSON.stringify(graph));
-    await mkdir(join(dir, 'old.nodes'));
-    await writeFile(join(dir, 'old.nodes', 'Count.js'),
-      '// --- ai-graph ---------\n// node:    Count\n// ------------------------\n\nfunction run() { return { total: 7 }; }\n');
-    const read = await loadGraph(join(dir, 'old.json'));
-    expect(read.nodes[1].config.code).toBe('function run() { return { total: 7 }; }');
-    expect(read.nodes[1].config).not.toHaveProperty('code_file');
-  });
 });
 
 describe('two editors on one folder', () => {

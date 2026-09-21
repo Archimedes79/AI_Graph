@@ -161,7 +161,7 @@ function shapeOf(value: unknown): string {
  * what a generator downstream needs to write against; the example after it is
  * for the reader. Measured, not promised: the verify pass ran the code.
  */
-export function measuredContract(probe: ProbeReport | undefined): string {
+function measuredContract(probe: ProbeReport | undefined): string {
   const outputs = probe?.outputs;
   if (outputs && Object.keys(outputs).length) {
     const shape = Object.entries(outputs).map(([key, value]) => `${key}: ${shapeOf(value)}`).join(', ');

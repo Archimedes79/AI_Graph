@@ -4,7 +4,7 @@ import { type Runtime } from '../../Runtime.ts';
 import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
 import { port } from '../../port.ts';
 import type { Problem } from '../../../execution/wiring.ts';
-import { boundaryInputs, boundaryOutputs, boundaryPorts, handedUp, valuePorts, type Runners } from './boundary.ts';
+import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedUp, type Runners } from './boundary.ts';
 
 export interface SubgraphConfig {
   /** The graph this node holds. An empty one for a node nobody has filled in yet. */
@@ -127,7 +127,7 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
     const produced: Record<string, unknown> = {};
     for (const boundary of boundaryOutputs(graph, elements)) {
       const arrived = run.node_results.find((result) => result.node_id === boundary.id)?.inputs ?? {};
-      produced[boundary.id] = handedUp(boundary, arrived);
+      produced[boundary.id] = handedUp(boundary, arrived, elements);
     }
     return produced;
   }
@@ -192,13 +192,13 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
     }
 
     for (const boundary of boundaryOutputs(held, elements)) {
-      const carried = valuePorts(boundary);
-      if (carried.length === 1) continue;
+      const values = carried(boundary, elements);
+      if (values.length === 1) continue;
       found.push({
         where: `${inside}node "${boundary.id}"`,
-        problem: `An output node inside a graph is one port of the node above, carrying one value; this one has ${carried.length}.`,
-        fix: carried.length
-          ? `It carries ${carried.map((p) => `"${p.id}"`).join(', ')}. Leave it one, and give the others their own output node.`
+        problem: `An output node inside a graph is one port of the node above, carrying one value; this one has ${values.length}.`,
+        fix: values.length
+          ? `It carries ${values.map((p) => `"${p.id}"`).join(', ')}. Leave it one, and give the others their own output node.`
           : 'Give it an input to carry, or delete it.',
       });
     }

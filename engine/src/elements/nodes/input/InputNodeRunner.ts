@@ -154,6 +154,10 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  override graphAuthorNote(): string {
+    return `config.value is the text, the file path or the folder path; config.input_mode is text, file or directory.`;
+  }
+
   override whatRuns(node: GraphNode): WhatRuns {
     const { mode, selectAll } = this.config(node);
     if (mode === 'file') return this.engineRuns('Reads the file whose path arrives on "path" (or the one it names) and hands on its text as "content".');

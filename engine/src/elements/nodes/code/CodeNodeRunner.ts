@@ -5,6 +5,7 @@ import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
+import type { Problem } from '../../../execution/wiring.ts';
 
 /** What a code node stores. Its own fields, and no one else's. */
 const CODE_FIELDS: LogicFields = { body: 'code', prompt: 'code_prompt' };
@@ -70,12 +71,23 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  override graphAuthorNote(): string {
+    return `config.code holds JavaScript as "function run(inputs) { ... }", returning an object whose keys are exactly this node's output port ids. config.code_prompt is the request it was written from. Use only what Node has built in; there is no package manager. The function may be async and is handed a second argument, node: "await node.llm({ prompt: '...' })" asks the graph's model a question and resolves to its answer as text -- use it when code has to decide what to ask, or ask in a loop; for one question, use an ai node instead.`;
+  }
+
   override whatRuns(): WhatRuns {
     return { by: 'body', where: 'code.js', does: 'Calls run(inputs, node) in code.js, sandboxed, and hands on the object it returns, keyed by output port.' };
   }
 
-  /** Written against the node's own ports: `inputs`/`outputs` are left unset,
-   *  which means "whatever this node is actually wired as". */
+  override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
+    if (String(node.config.code ?? '').trim()) return [];
+    return [{
+      where,
+      problem: 'A code node with no config.code: it fails the moment it runs.',
+      fix: `Put the body in config.code as "function run(inputs) { ... }", returning an object keyed by this node's output port ids.`,
+    }];
+  }
+
   /**
    * The one thing a node must be told about drawing.
    *
@@ -90,6 +102,9 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
    * So the contract says where the line is. A node produces what to show; the
    * block it feeds decides how that looks, because the block is the only one
    * of the two that is there when the window changes.
+   *
+   * Written against the node's own ports: `inputs`/`outputs` are left unset,
+   * which means "whatever this node is actually wired as".
    */
   override generation(): Generation {
     return {

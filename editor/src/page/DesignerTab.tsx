@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { GraphNode, GuiWidget, WidgetKind } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
-import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { syncGuiNodePorts } from '@/document/guiWidgets';
 import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { ALL_ENTRIES, type PaletteEntry } from './DesignerPalette';
 import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { routePage } from './pageWrite';
 import WidgetEditor from './WidgetEditor';
-import WhatRuns from '@/canvas/WhatRuns';
-import { SCHEMES, type SchemeId } from './scheme';
+import WhatRuns from '@/elements/fields/WhatRuns';
+import { SCHEMES, type SchemeId } from '@/ui/scheme';
 import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 

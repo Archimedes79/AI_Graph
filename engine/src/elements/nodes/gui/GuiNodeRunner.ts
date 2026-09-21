@@ -4,6 +4,7 @@ import { type Runtime } from '../../Runtime.ts';
 import { type Widget, type WidgetRunner, type WidgetPresentation } from '../../WidgetRunner.ts';
 import type { GraphNode, Port, RawConfig } from '../../../graph.ts';
 import { port } from '../../port.ts';
+import type { Problem } from '../../../execution/wiring.ts';
 import { InputPickerWidgetRunner, WIDGETS } from '../../widgets/roster.ts';
 
 const BY_KIND = new Map(WIDGETS.map((e) => [e.widgetKind, e as WidgetRunner<unknown>]));
@@ -84,6 +85,15 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
       if (element.catchesErrors(widget)) outputs.push(errorPort(widget));
     }
     return { inputs, outputs };
+  }
+
+  override blocks(node: GraphNode): Record<string, unknown>[] {
+    const raw = node.config.gui_widgets;
+    return Array.isArray(raw) ? raw as Record<string, unknown>[] : [];
+  }
+
+  override setBlocks(node: GraphNode, blocks: Record<string, unknown>[]): void {
+    node.config.gui_widgets = blocks;
   }
 
   override readonly isMemory = true;
@@ -202,6 +212,32 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
   }
 
   // ── Build time ────────────────────────────────────────────────────────────
+
+  /** A block's ports are named after its id, so an id that is missing or shared is two blocks on one port. */
+  override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
+    const found: Problem[] = [];
+    const seen = new Set<string>();
+    for (const block of this.config(node).widgets) {
+      if (!block.id) {
+        found.push({ where, problem: `A "${block.kind}" block has no id.`, fix: 'Give every block an id; its ports are named after it ("<id>_in", "<id>_out").' });
+      } else if (seen.has(block.id)) {
+        found.push({ where, problem: `More than one block has the id "${block.id}".`, fix: 'Give every block on the page its own id.' });
+      }
+      seen.add(block.id);
+      if (!BY_KIND.has(block.kind)) {
+        found.push({
+          where: `${where}, block "${block.id}"`,
+          problem: `Unknown block kind "${block.kind}".`,
+          fix: `Use one of: ${[...BY_KIND.keys()].join(', ')}.`,
+        });
+      }
+    }
+    return found;
+  }
+
+  override graphAuthorNote(): string {
+    return `config.gui_widgets is the list of blocks on the page.`;
+  }
 
   override whatRuns(): WhatRuns {
     return this.engineRuns('Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives; a block with code of its own runs it sandboxed before showing.');

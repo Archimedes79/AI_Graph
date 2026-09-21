@@ -8,7 +8,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { LINE } from '@/ui/theme';
 import { useGraphStore } from '@/store/graphStore';
-import { scheme } from '@/page/scheme';
+import { scheme } from '@/ui/scheme';
 import type { CodeLanguage } from './CodeField';
 
 // CodeMirror, and nothing else: this is the one module that imports it, and it

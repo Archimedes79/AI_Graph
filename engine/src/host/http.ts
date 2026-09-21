@@ -74,7 +74,7 @@ export function sendDownload(response: ServerResponse, download: Download): void
  * growing until the machine is out of memory. Generous rather than tight: the
  * biggest honest body here is a file someone attached to a node.
  */
-export const MAX_BODY_BYTES = 128 * 1024 * 1024;
+const MAX_BODY_BYTES = 128 * 1024 * 1024;
 
 /** The request body as it came: an upload is bytes, not JSON. */
 export function readBytes(request: IncomingMessage, limit = MAX_BODY_BYTES): Promise<Buffer> {

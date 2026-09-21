@@ -1,11 +1,11 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
-import type { RFNodeData } from './nodeData';
+import type { RFNodeData } from '@/store/nodeData';
 import { useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from '@/elements/registry';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
-import { delivered } from './executionStatus';
-import { widgetFiresRun, widgetOfPort } from '@/elements/nodes/gui/guiWidgets';
+import { delivered } from '@/store/executionStatus';
+import { widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 
 /**

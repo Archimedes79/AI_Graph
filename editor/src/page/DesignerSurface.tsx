@@ -3,11 +3,11 @@ import type { GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { blockValue, GuiBlock, PageGrid, shownOn, type SurfaceBlock } from './GuiPage';
-import { cellsFromDrag, resolveWidgetLayout, GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_CELL } from './layout';
+import { cellsFromDrag, resolveWidgetLayout, GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_CELL } from '@/document/layout';
 import QuickInsert from './QuickInsert';
 import type { PaletteEntry } from './DesignerPalette';
 import { TEXT_ROLES, textRole } from '@/elements/widgets/text/TextWidgetView';
-import { widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
+import { widgetFiresRun } from '@/document/guiWidgets';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
 
 /**

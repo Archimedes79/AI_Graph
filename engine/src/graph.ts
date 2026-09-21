@@ -72,8 +72,6 @@ export interface GraphMetadata {
   author: string;
   tags: string[];
   ai_defaults: { provider: string; model: string };
-  created_at?: string | null;
-  updated_at?: string | null;
   gui_scheme: string;
 }
 
@@ -168,44 +166,11 @@ export function parseGraph(raw: unknown): Graph {
   const nodes = Array.isArray(source.nodes) ? source.nodes : [];
   const edges = Array.isArray(source.edges) ? source.edges : [];
 
-  return triggersAsNodes({
+  return {
     metadata: { ...DEFAULT_METADATA, ...(source.metadata as object ?? {}) },
     nodes: nodes.map(parseNode),
     edges: edges.map(parseEdge),
-  });
-}
-
-/**
- * A graph saved when "run at start" and "again every" were two settings.
- *
- * They are a trigger node now, and here is where an old graph gets one: every
- * way of opening a graph comes through `parseGraph`, so nothing downstream has
- * to know there were ever two ways to say it. Wired to nothing, the node starts
- * the whole graph -- which is what the settings did.
- */
-function triggersAsNodes(graph: Graph): Graph {
-  const metadata = graph.metadata as Graph['metadata'] & { triggers?: { on_start?: boolean; every?: string } };
-  const old = metadata.triggers;
-  if (!old) return graph;
-  delete metadata.triggers;
-  const every = String(old.every ?? '').trim();
-  if (old.on_start !== true && !every) return graph;
-  if (graph.nodes.some((node) => node.node_type === 'trigger')) return graph;
-
-  const taken = new Set(graph.nodes.map((node) => node.id));
-  let id = 'trigger';
-  for (let n = 2; taken.has(id); n += 1) id = `trigger_${n}`;
-  const left = Math.min(0, ...graph.nodes.map((node) => node.position.x));
-  const top = Math.min(0, ...graph.nodes.map((node) => node.position.y));
-  graph.nodes.push({
-    id, node_type: 'trigger', label: 'Start', description: 'What starts this graph by itself',
-    position: { x: left - 280, y: top },
-    inputs: [],
-    outputs: [{ id: 'fired', name: 'Fired', kind: 'output', data_type: 'boolean', multi: false, required: false, description: '' }],
-    config: { trigger_on_start: old.on_start === true, trigger_every: every },
-    width: null, height: null,
-  });
-  return graph;
+  };
 }
 
 function parseNode(raw: unknown): GraphNode {

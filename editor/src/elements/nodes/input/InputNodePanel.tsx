@@ -1,5 +1,5 @@
 import React from 'react';
-import FileBrowserDialog from '@/ui/FileBrowserDialog';
+import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import ContextFileAttachment from '@/authoring/ContextFileAttachment';
 import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
