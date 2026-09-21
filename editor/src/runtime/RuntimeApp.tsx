@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { showsPage } from '@/elements/nodes/gui/guiWidgets';
+import { showsPage } from '@/document/guiWidgets';
 import { mergeResults, useGraphStore } from '@/store/graphStore';
 import { GuiSurfacePage } from '@/page/GuiPage';
 import { useDeliveredRun } from '@/page/useDeliveredRun';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
-import RequirementsDialog from '@/ui/RequirementsDialog';
+import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import DeliveredHeader from '@/page/DeliveredHeader';
 import RuntimeAISettings from './RuntimeAISettings';
 import { call, type ScheduleState } from '@/api/client';

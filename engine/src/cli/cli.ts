@@ -142,7 +142,7 @@ async function answer(
   return resolved;
 }
 
-export async function runOnce(options: CliOptions): Promise<number> {
+async function runOnce(options: CliOptions): Promise<number> {
   const graph = await loadGraph(options.graphPath);
   applyRuntimeValues(graph, await answer(runtimeRequirements(graph, registry), options.inputs), registry);
 
@@ -168,7 +168,7 @@ export async function runOnce(options: CliOptions): Promise<number> {
  * starts: a graph that takes longer than its interval would otherwise pile
  * runs on top of each other until something gives.
  */
-export async function runEvery(options: CliOptions): Promise<number> {
+async function runEvery(options: CliOptions): Promise<number> {
   const seconds = options.every ?? 0;
   let code = 0;
   for (let round = 0; options.limit === undefined || round < options.limit; round += 1) {
@@ -182,7 +182,7 @@ export async function runEvery(options: CliOptions): Promise<number> {
 }
 
 /** Write the graph and the engine somewhere someone else can run them. */
-export async function makeBundle(options: CliOptions): Promise<number> {
+async function makeBundle(options: CliOptions): Promise<number> {
   const graph = await loadGraph(options.graphPath);
   // The built page, when this checkout has one. A bundle without it still
   // runs on the terminal; with it, the recipient gets the tool they were
@@ -214,7 +214,7 @@ export async function makeBundle(options: CliOptions): Promise<number> {
  * to be taken on your machine" is not a thing its recipient should ever have
  * to know about, let alone read a Node stack trace about.
  */
-export async function runServer(options: CliOptions): Promise<number> {
+async function runServer(options: CliOptions): Promise<number> {
   // No graph file is a legitimate way to run this. The editor starts it beside
   // itself purely to execute, and posts the graph being edited with every
   // request; a bundle is the other case, and there the graph is right here.
@@ -305,7 +305,7 @@ async function open(url: string): Promise<void> {
  * `editor/` folder, and a bundle leaves every one of those behind. A static
  * import would make each bundle fail on a file it was never meant to have.
  */
-export async function runMcp(options: CliOptions): Promise<number> {
+async function runMcp(options: CliOptions): Promise<number> {
   let server: typeof import('../host/editor/mcpServer.ts');
   try {
     server = await import('../host/editor/mcpServer.ts');
@@ -322,7 +322,7 @@ export async function runMcp(options: CliOptions): Promise<number> {
  * The result on stdout, one problem per paragraph; exit code 1 when there is
  * any, so a CI job fails on a broken graph before anyone opens it.
  */
-export async function runCheck(paths: string[]): Promise<number> {
+async function runCheck(paths: string[]): Promise<number> {
   let failed = 0;
   for (const path of paths.length ? paths : ['.']) {
     const { problems, graph } = await checkPath(path);
@@ -342,7 +342,7 @@ export async function runCheck(paths: string[]): Promise<number> {
  * `--node`. `--offline` asks no model: an AI node's examples and every judged
  * expectation are skipped, which is how CI runs them. Exit code 1 when one fails.
  */
-export async function runTests(argv: string[]): Promise<number> {
+async function runTests(argv: string[]): Promise<number> {
   const offline = argv.includes('--offline');
   const only = argv.includes('--node') ? argv[argv.indexOf('--node') + 1] : '';
   const paths = argv.filter((arg, index) => !arg.startsWith('--') && argv[index - 1] !== '--node');
@@ -385,7 +385,7 @@ function everyGraphIn(graph: Graph, inside = ''): { graph: Graph; inside: string
  * JSON, or -- without them -- on what the nodes feeding it produce, which are
  * run for that and nothing else.
  */
-export async function runNodeCommand([path, nodeId, given]: string[]): Promise<number> {
+async function runNodeCommand([path, nodeId, given]: string[]): Promise<number> {
   if (!path || !nodeId) throw new Error('Usage: run-node <graph or project> <node id> [\'{"port": value}\']');
   const graph = await loadGraph(path);
   applyRuntimeValues(graph, {}, registry);

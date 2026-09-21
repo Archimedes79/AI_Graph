@@ -127,6 +127,6 @@ describe('deployment boundary', () => {
     // The other side of the rule above: absent *because the page gets what it
     // needs elsewhere*, not because the page stopped working.
     expect(reachable.has('page/blocks.ts')).toBe(true);
-    expect(reachable.has('nodeKinds.ts')).toBe(true);
+    expect(reachable.has('document/nodeKinds.ts')).toBe(true);
   });
 });

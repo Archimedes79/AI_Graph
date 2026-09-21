@@ -32,7 +32,7 @@ export const names = (ids: Iterable<string>): string => [...ids].map((id) => `"$
 export const ERROR_PORT = 'error';
 
 /** The ports *node* really has -- derived where the engine derives them, declared where a person names them. */
-export function portsOf(node: GraphNode, registry: Registry): { inputs: Set<string>; outputs: Set<string>; derived: boolean } {
+function portsOf(node: GraphNode, registry: Registry): { inputs: Set<string>; outputs: Set<string>; derived: boolean } {
   const element = registry.node(node.node_type);
   let derived: ReturnType<NonNullable<typeof element>['derivedPorts']> = null;
   try {
@@ -106,7 +106,7 @@ export function wiringProblems(graph: Graph, registry: Registry): Problem[] {
         where,
         problem: `Its ${end} port "${portId}" is not an ${kind} of node "${nodeId}".`,
         fix: ports.derived
-          ? `The ports of a${node.node_type === 'input' ? 'n' : ''} ${node.node_type} node are derived from its settings, not from what the document declares. `
+          ? `The ports of ${/^[aeiou]/.test(node.node_type) ? 'an' : 'a'} ${node.node_type} node are derived from its settings, not from what the document declares. `
             + `Its ${kind}s are: ${listed}. Wire to one of those, or change the settings that produce them.`
           : `Its ${kind}s are: ${listed}. Wire to one of those, or declare "${portId}" in the node's ${kind}s.`,
       });

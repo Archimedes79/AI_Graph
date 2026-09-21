@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { GraphNode } from '@/graph';
 import { syncGuiNodePorts, guiWidgetPorts, widgetFiresRun, widgetOfPort } from './guiWidgets';
-import { DEFAULT_WIDGET_SPAN } from '@/page/layout';
-import { baseNodeConfig } from '../baseNodeConfig';
+import { DEFAULT_WIDGET_SPAN } from './layout';
+import { baseNodeConfig } from './baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 
 function blankGuiNode(): GraphNode {

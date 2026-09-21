@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { useGraphStore } from './graphStore';
 import type { Graph, GraphNode } from '@/graph';
-import { guiWidgetPorts } from '@/elements/nodes/gui/guiWidgets';
-import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
+import { guiWidgetPorts } from '@/document/guiWidgets';
+import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 

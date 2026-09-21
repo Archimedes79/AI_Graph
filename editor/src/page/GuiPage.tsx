@@ -3,11 +3,11 @@ import type { ExecutionResult, GraphNode, GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { BLOCKS } from './blocks';
 import { useContainerCell } from './useContainerCell';
-import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from './layout';
-import { toneIsBare, toneStyle, type Tone } from './tone';
-import { schemeVars } from './scheme';
+import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from '@/document/layout';
+import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
+import { schemeVars } from '@/ui/scheme';
 import { DANGER, MUTED } from '@/ui/theme';
-import { showsPage, widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
+import { showsPage, widgetFiresRun } from '@/document/guiWidgets';
 import type { RunTrigger } from '@/api/client';
 
 /**
@@ -196,7 +196,7 @@ export function GuiBlock({
 }
 
 /** The page itself: what a deployed tool renders, and what the preview shows. */
-export default function GuiPage({
+function GuiPage({
   blocks, onWidgetValue, onWidgetTrigger,
 }: {
   blocks: SurfaceBlock[];
@@ -228,10 +228,6 @@ export default function GuiPage({
   );
 }
 
-/**
- * The page wired to the graph: what a deployed tool serves, and what the
- * editor's preview tab shows. One component, so a preview cannot flatter.
- */
 /**
  * What using a block does: keep its value, and start the graph if it is a
  * block that starts it.
@@ -279,6 +275,10 @@ export function usePageEvents(onRun?: (trigger: RunTrigger) => void) {
   return { setWidgetValue, fire };
 }
 
+/**
+ * The page wired to the graph: what a deployed tool serves, and what the
+ * editor's preview tab shows. One component, so a preview cannot flatter.
+ */
 export function GuiSurfacePage({ onRun }: {
   /**
    * Start a run for a page event. The host supplies it because the host is who

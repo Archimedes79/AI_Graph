@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
 import { keepsExamples, keepsOutputInterface, useGraphStore } from '@/store/graphStore';
-import { derivedNodePorts, syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { derivedNodePorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import { NODE_BUILDERS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
@@ -14,7 +14,7 @@ import { nodeLogic } from '@/authoring/logic';
 import { sampleFor } from '@/authoring/tryValues';
 import GenerationTranscript, { GenerationReport } from '@/authoring/GenerationTranscript';
 import WidgetOutputSummary from '@/elements/nodes/gui/WidgetOutputSummary';
-import WhatRuns from './WhatRuns';
+import WhatRuns from '@/elements/fields/WhatRuns';
 import { connectedOutputDataNodes } from '@/elements/nodes/data/dataFormat';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';

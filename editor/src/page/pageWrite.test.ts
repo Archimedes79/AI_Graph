@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { routePage } from './pageWrite';
-import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
+import { baseNodeConfig } from '@/document/baseNodeConfig';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 

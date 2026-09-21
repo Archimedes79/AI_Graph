@@ -9,7 +9,7 @@
  * holds the lean node to the full node's answers.
  */
 import { describe, it, expect } from 'vitest';
-import { NODE_KINDS, savedNode } from '@/nodeKinds';
+import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
 import { registry } from '@engine/elements/registry.ts';
 import type { GraphNode as EngineNode } from '@engine/graph.ts';
 import type { GraphNode, NodeConfig } from '@/graph';

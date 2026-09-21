@@ -37,26 +37,23 @@ export function boundaryOutputs(graph: Graph, elements: Runners): GraphNode[] {
   return withRole(graph, elements, 'out');
 }
 
+/** What a boundary node carries: whatever its element says is its value. */
+export function carried(node: GraphNode, elements: Runners): Port[] {
+  return elements.node(node.node_type)?.valuePorts(node) ?? node.inputs;
+}
+
 /**
  * What a boundary node hands up: the one thing wired into it.
  *
  * `path` is left out -- on an output node it says where to write, not what.
  */
-export function handedUp(node: GraphNode, arrived: Record<string, unknown>): unknown {
-  const wanted = valuePorts(node)[0]?.id;
+export function handedUp(node: GraphNode, arrived: Record<string, unknown>, elements: Runners): unknown {
+  const wanted = carried(node, elements)[0]?.id;
   // Explicitly null rather than missing: a node that produced nothing must
   // still fill its port, or `reconcileOutputs` reads the empty record as the
   // single output it was supposed to be.
   return wanted ? arrived[wanted] ?? null : null;
 }
-
-/** The inputs of a boundary node that carry a value, in the order it declares them. */
-export function valuePorts(node: GraphNode): Port[] {
-  return node.inputs.filter((candidate) => candidate.id !== WRITE_PATH_PORT);
-}
-
-/** The input that says *where* to write rather than *what*. */
-const WRITE_PATH_PORT = 'path';
 
 /** The holding node's ports, as the graph inside it describes them. */
 export function boundaryPorts(graph: Graph, elements: Runners): { inputs: Port[]; outputs: Port[] } {
@@ -71,6 +68,6 @@ export function boundaryPorts(graph: Graph, elements: Runners): { inputs: Port[]
     // its port says it collects, and a port that lied about it would stop the
     // node after this one from fanning out over what it is handed.
     outputs: boundaryOutputs(graph, elements)
-      .map((node) => port(node.id, named(node), 'output', 'any', valuePorts(node)[0]?.multi === true, node.description)),
+      .map((node) => port(node.id, named(node), 'output', 'any', carried(node, elements)[0]?.multi === true, node.description)),
   };
 }

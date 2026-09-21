@@ -74,7 +74,7 @@ describe('the base classes', () => {
   it('name as build time what only building asks', () => {
     // Said here in full, so that making something build time -- or taking it
     // out -- is a decision somebody made, not a bar that moved.
-    expect(buildTime.sort()).toEqual(['asksModel', 'deployNeeds', 'engineRuns', 'generation', 'problems', 'referencedPaths', 'whatRuns']);
+    expect(buildTime.sort()).toEqual(['asksModel', 'deployNeeds', 'engineRuns', 'generation', 'graphAuthorNote', 'problems', 'referencedPaths', 'whatRuns']);
   });
 });
 

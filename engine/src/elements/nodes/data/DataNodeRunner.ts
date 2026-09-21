@@ -69,6 +69,10 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  override graphAuthorNote(): string {
+    return `config.data_value is what it remembers between runs.`;
+  }
+
   override whatRuns(): WhatRuns {
     return this.engineRuns('Hands on what arrives this round, or else what it kept; what arrives is kept for the next round.');
   }

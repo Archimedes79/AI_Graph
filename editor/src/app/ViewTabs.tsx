@@ -1,5 +1,5 @@
 import { useGraphStore } from '@/store/graphStore';
-import { showsPage } from '@/elements/nodes/gui/guiWidgets';
+import { showsPage } from '@/document/guiWidgets';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE } from '@/ui/theme';
 
 export type EditorView = 'graph' | 'design' | 'preview';

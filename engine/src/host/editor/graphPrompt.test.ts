@@ -56,11 +56,17 @@ describe('the graph prompt', () => {
     }
   });
 
-  it('names every node type the registry knows', () => {
-    for (const type of ['input', 'data', 'ai', 'code', 'output', 'gui']) {
-      expect(registry.node(type), `${type} should exist`).toBeDefined();
-      expect(GRAPH_SYSTEM).toContain(type);
+  it('names every node type the registry knows, except the ones that say a graph is not built with them', () => {
+    const silent: string[] = [];
+    for (const type of registry.nodeTypes()) {
+      const note = registry.node(type)!.graphAuthorNote();
+      if (!note) { silent.push(type); continue; }
+      expect(GRAPH_SYSTEM, `${type} is listed as valid`).toMatch(new RegExp(`Valid node_type values: [^.]*\\b${type}\\b`));
+      expect(GRAPH_SYSTEM, `${type} says where its settings are`).toContain(`- ${type}: ${note}`);
     }
+    // Deliberate, and pinned: a subgraph is a graph inside a node, built by hand. A new kind
+    // that forgot its note would show up here instead of quietly missing from the prompt.
+    expect(silent).toEqual(['subgraph']);
   });
 });
 

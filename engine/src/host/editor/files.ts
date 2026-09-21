@@ -16,8 +16,7 @@ import { platform } from 'node:os';
 import { isProjectFolder } from '../../project/folder.ts';
 // One "there is nothing there" for everything on this side of the wire, so a
 // route that turns it into a 404 needs one check rather than a list.
-export { NotFound } from '../browse.ts';
-import { NotFound } from '../browse.ts';
+import { NotFound } from '../../errors.ts';
 
 /**
  * Project folders named *name* under *root*, a few levels down.

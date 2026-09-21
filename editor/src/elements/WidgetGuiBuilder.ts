@@ -3,8 +3,8 @@
 import type { ComponentType } from 'react';
 import type { GuiWidget, WidgetKind } from '@/graph';
 import type { ElementGeneration, FieldAccess } from '@/authoring/generation';
-import { DEFAULT_WIDGET_SPAN } from '@/page/layout';
-import type { Tone } from '@/page/tone';
+import { DEFAULT_WIDGET_SPAN } from '@/document/layout';
+import type { Tone } from '@/ui/tone';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
 
 /** What the widget editor hands every widget panel. */

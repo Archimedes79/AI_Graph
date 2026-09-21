@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useGraphStore } from '@/store/graphStore';
-import { scheme as schemeOf } from '@/page/scheme';
+import { scheme as schemeOf } from '@/ui/scheme';
 import PlotChart from './PlotChart';
 import { draw, type Drawn } from './draw';
 import type { WidgetViewProps } from '../WidgetView';

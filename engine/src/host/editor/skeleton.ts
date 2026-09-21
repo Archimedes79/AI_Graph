@@ -58,7 +58,7 @@ function note(port: string, sources?: Record<string, string>, sample?: Record<st
  * Port ids come from the wiring and may contain characters an identifier
  * cannot (a block's ports are `<widgetId>_in`, and widget ids carry dashes).
  */
-export function identifier(port: string): string {
+function identifier(port: string): string {
   const cleaned = port.replace(/[^A-Za-z0-9_]/g, '_');
   return !cleaned || /^\d/.test(cleaned) ? `_${cleaned}` : cleaned;
 }

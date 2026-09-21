@@ -60,6 +60,10 @@ export class TriggerNodeRunner extends NodeRunner<TriggerConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  override graphAuthorNote(): string {
+    return `config.trigger_on_start (true or false) and config.trigger_every ("" for never, or "30s", "5m", "2h", "1d"). It starts the graph by itself -- when the tool starts, and on that clock -- at the nodes its output is wired to; wired to nothing it starts the whole graph. Use one when a graph should run with nobody pressing anything.`;
+  }
+
   override whatRuns(): WhatRuns {
     return this.engineRuns('Hands on "fired": true in a round this trigger began, false in any other. The clock itself is kept by whatever holds the graph.');
   }

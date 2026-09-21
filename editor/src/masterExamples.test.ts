@@ -2,7 +2,7 @@ import { beforeEach, describe, it, expect } from 'vitest';
 import { useGraphStore } from '@/store/graphStore';
 import type { Graph, GraphNode, GuiWidget, NodeType, WidgetKind } from '@/graph';
 import { WIDGET_BUILDERS } from '@/elements/registry';
-import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { syncGuiNodePorts } from '@/document/guiWidgets';
 import { executeGraph } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
 import { problemsIn } from '@engine/project/check.ts';

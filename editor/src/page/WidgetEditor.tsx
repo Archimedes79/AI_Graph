@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { BLOCKS } from './blocks';
 import type { GuiWidget } from '@/graph';
-import { guiWidgetPorts, widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
+import { guiWidgetPorts, widgetFiresRun } from '@/document/guiWidgets';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, widgetFields } from '@/authoring/generation';
 import { widgetLogic } from '@/authoring/logic';
@@ -10,12 +10,12 @@ import { errorText } from '@/api/errorText';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
 import { lastRunWidgetInput } from '@/authoring/generationContext';
 import { useGraphStore } from '@/store/graphStore';
-import { GUI_GRID_COLUMNS } from './layout';
-import { describeScheme, schemeVars } from './scheme';
+import { GUI_GRID_COLUMNS } from '@/document/layout';
+import { describeScheme, schemeVars } from '@/ui/scheme';
 import TryItPanel from '@/authoring/TryItPanel';
 import { sampleFor } from '@/authoring/tryValues';
 import { call } from '@/api/client';
-import { TONES, TONE_LABELS, type Tone } from './tone';
+import { TONES, TONE_LABELS, type Tone } from '@/ui/tone';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, WELL } from '@/ui/theme';
 
 interface WidgetEditorProps {

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import Modal from './Modal';
+import Modal from '@/ui/Modal';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import {
   ACCENT_TEXT, DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT,
-} from './theme';
+} from '@/ui/theme';
 
 export interface BrowseEntry {
   name: string;

@@ -54,7 +54,7 @@ export const ACCENT_TEXT = 'var(--ui-accent-text, #a5b4fc)';
 /** The accent at low opacity: tinted notes, the `accent` tone's fill. */
 export const ACCENT_FILL = 'var(--ui-accent-fill, rgba(99,102,241,0.10))';
 /** Text on top of the accent itself — a button's label. */
-export const ON_ACCENT = 'var(--ui-on-accent, #ffffff)';
+const ON_ACCENT = 'var(--ui-on-accent, #ffffff)';
 
 export const SUCCESS = 'var(--ui-success, #22c55e)';
 export const DANGER = 'var(--ui-danger, #ef4444)';

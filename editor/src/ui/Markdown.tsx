@@ -62,7 +62,7 @@ function cells(line: string): string[] {
   return line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim());
 }
 
-export function Markdown({ source }: { source: string }): React.ReactElement {
+function Markdown({ source }: { source: string }): React.ReactElement {
   const lines = (source ?? '').split('\n');
   const blocks: React.ReactNode[] = [];
   let index = 0;
