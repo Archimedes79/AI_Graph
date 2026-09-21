@@ -21,7 +21,7 @@ const graph = () => parseGraph({
     ] }, inputs: [], outputs: [] },
     { id: 'each-file', node_type: 'ai', label: 'Each file', description: 'Summarize one file.',
       config: { batch_mode: 'per_item', read_file_inputs: true, prompt_template: '{{story}}' },
-      inputs: [port('story', 'input')], outputs: [port('output', 'output')] },
+      inputs: [{ ...port('story', 'input', 'file_path'), multi: true }], outputs: [{ ...port('output', 'output'), multi: true }] },
     { id: 'rows', node_type: 'code', label: 'Rows', config: { code: 'function run(i) { return { rows: [] }; }' },
       inputs: [port('files', 'input'), port('summaries', 'input')], outputs: [port('rows', 'output')] },
   ],

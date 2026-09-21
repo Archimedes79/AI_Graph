@@ -680,8 +680,8 @@ block lays it out at the size it really is, in the colours of the page:
 
 A bare list of numbers or of `{label, value}` is the same thing with the two decisions
 left out. Axes, gridlines, category and value labels, a legend and the total are drawn
-for you, and because `kind` is a *value* it can come down a wire — a dropdown on the page
-switches a chart between bars and a donut with no code anywhere. `bars` are horizontal
+for you, and because `kind` is a *value* it can come down a wire — a dropdown on a page
+can switch a chart between bars and a donut with no code anywhere. `bars` are horizontal
 and are the right choice when the categories are names, since a name reads along its bar
 instead of being cropped under a column. See
 [examples/population_plotter](../examples/population_plotter/), where the code node

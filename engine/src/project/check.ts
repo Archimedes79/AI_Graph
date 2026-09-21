@@ -63,6 +63,39 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       continue;
     }
 
+    // "Hand me the file's content" is carried out port by port, for the ports
+    // that say they carry a path. Ticked on a node with no such port it does
+    // nothing at all, silently: the node is handed the file's *name*, and a
+    // model summarises that with a straight face.
+    if (element.readsFileInputs(node) && !node.inputs.some((port) => port.data_type === 'file_path')) {
+      problems.push({
+        where,
+        problem: 'It is set to read wired files into their content, but none of its inputs is a file path -- so it is handed the path as text.',
+        fix: 'Set the data_type of the input that receives the file (or the list of files) to "file_path", or turn read_file_inputs off.',
+      });
+    }
+
+    // The same trap, one setting over: "once per item" fans out over the inputs
+    // declared as lists. With none, the node runs once, on the whole list, and
+    // nothing says it was asked to do otherwise.
+    // Only where a list really arrives: "once per item" is what every node is
+    // created with, and on a node no list reaches it means nothing.
+    const listArrives = graph.edges.some((edge) => {
+      if (edge.target_node_id !== node.id) return false;
+      const source = graph.nodes.find((candidate) => candidate.id === edge.source_node_id);
+      const ports = source && (registry.node(source.node_type)?.derivedPorts(source, registry)?.outputs ?? source.outputs);
+      return ports?.find((port) => port.id === edge.source_port_id)?.multi === true;
+    });
+    // And only on a node whose ports are its own to declare: a page's follow from its blocks.
+    const ownPorts = element.derivedPorts(node, registry) === null;
+    if (ownPorts && listArrives && element.batchMode(node) === 'per_item' && !node.inputs.some((port) => port.multi)) {
+      problems.push({
+        where,
+        problem: 'It is set to run once per item, but none of its inputs is declared as a list -- so it runs once, on everything at once.',
+        fix: 'Set "multi": true on the input the list arrives on (and on the output that collects the results), or set batch_mode to "whole_list".',
+      });
+    }
+
     problems.push(...interfaceProblems(node, where));
     problems.push(...exampleProblems(graph, node, where));
     problems.push(...nestedProblems(node, where, depth));
