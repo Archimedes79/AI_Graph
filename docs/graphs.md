@@ -623,7 +623,7 @@ So a part can run once per item of a list, again until an answer passes a check,
 one run's outputs into the next — at most 100 times a run. The body runs sandboxed, like
 every body; each `node.graph` is run for it by the engine, with the keys where they are.
 
-### What it does not do yet
+### Rules at the boundary
 
 **Events.** From outside, the node has a ◆ like any other. To start something *inside* on an
 event, give the inner graph a text input, wire a boolean into it from outside — a button, a
@@ -633,9 +633,13 @@ reported, because nothing in there keeps time.
 
 A page belongs to the graph at the top, so a `gui` node inside is reported as a mistake.
 A list crosses a port as one value — to run the graph once per item, give it a `run.js`
-that calls `node.graph` per item, as above. A memory (`data`) node in there does not keep its
-value between runs of the graph above. A node in there that asks for a value when the run
-starts is never asked — only the top graph is.
+that calls `node.graph` per item, as above.
+
+### What it does not do yet
+
+A memory (`data`) node in there does not keep its value between runs of the graph above,
+and a node in there that asks for a value when the run starts is never asked — only the top
+graph is.
 
 ---
 
