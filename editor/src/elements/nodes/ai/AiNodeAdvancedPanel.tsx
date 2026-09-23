@@ -1,8 +1,8 @@
 import type { AIProvider } from '@/graph';
 import BatchAndFileInputOptions from '../../fields/BatchAndFileInputOptions';
 import ProviderModelSelect from '../../fields/ProviderModelSelect';
-import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
-import CodeField from '@/authoring/CodeField';
+import { DIMMER, FIELD, MUTED } from '@/ui/theme';
+import RunCode from '@/authoring/RunCode';
 import { AI_RUN, LLM_CALLS_PER_RUN, isStandardRun } from '@engine/elements/nodes/ai/runTemplate.ts';
 import type { NodeAdvancedPanelProps } from '../../NodeGuiBuilder';
 
@@ -86,40 +86,12 @@ export default function AiNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPan
 
       <BatchAndFileInputOptions node={node} setConfig={setConfig} subject="prompt" />
 
-      <RunCode code={String(node.config.run_code ?? '')} onChange={(code) => setConfig('run_code', code)} />
-    </>
-  );
-}
-
-/**
- * `run.js`: what this node does when it runs, as the project folder keeps it.
- *
- * Shown whether or not anyone wrote it, because "how do these prompts reach the
- * model" is a question the folder should answer. Left as it is, it is the
- * engine's and follows the engine; changed, it is a body like a code node's --
- * sandboxed, without this machine's keys, asking for its calls.
- */
-function RunCode({ code, onChange }: { code: string; onChange: (code: string) => void }) {
-  const own = !isStandardRun(code);
-  return (
-    <div>
-      <div className="flex items-baseline justify-between mb-1">
-        <label className="block text-xs font-medium" style={{ color: MUTED }}>
-          What this node runs <span style={{ color: DIMMER }}>— run.js{own ? ', changed by you' : ', the standard'}</span>
-        </label>
-        {own && (
-          <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} onClick={() => onChange('')}>
-            Back to the standard
-          </button>
-        )}
-      </div>
-      <CodeField value={own ? code : AI_RUN} onChange={onChange} language="javascript" minHeight={150} title="run.js" />
-      <p className="text-xs mt-1" style={{ color: DIMMER }}>
+      <RunCode code={String(node.config.run_code ?? '')} standard={AI_RUN} isStandard={isStandardRun} onChange={(code) => setConfig('run_code', code)}>
         One call to the model, with <code>system.md</code> and <code>message.md</code>. Change it for a loop, a
         second call or a check of the answer: <code>await node.llm(&#123; prompt &#125;)</code> asks for a call, at
         most {LLM_CALLS_PER_RUN} times a run. Your version runs sandboxed and never sees this machine's keys.
-        {own && ' "Try it" shows what your version asks, found by running it with made-up answers.'}
-      </p>
-    </div>
+        {!isStandardRun(String(node.config.run_code ?? '')) && ' "Try it" shows what your version asks, found by running it with made-up answers.'}
+      </RunCode>
+    </>
   );
 }

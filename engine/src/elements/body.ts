@@ -10,14 +10,15 @@
 // - `inputs` is what arrived, keyed by port.
 // - `node` is what the element hands its body: plain data (an ai node's
 //   `node.texts`), and `node.llm(...)`, a question put to the process that
-//   holds the graph. Every body may ask; none ever holds a key.
+//   holds the graph. Every body may ask; none ever holds a key. A subgraph
+//   node's body may also ask `node.graph(...)`: run the graph it holds.
 // - It runs in a process of its own (`host/node.ts`: no child processes, no
 //   addons, no workers), and what it returns is the element's output.
 //
 // The element decides *when* its body runs and what happens to a failure; this
 // is the only place that decides *how*.
 
-import type { Runtime } from './Runtime.ts';
+import type { BodyContext, Runtime } from './Runtime.ts';
 import { PLAIN_ASK, llmCall, type AskSettings } from './nodes/ai/ask.ts';
 
 export interface BodyGiven {
@@ -33,6 +34,8 @@ export interface BodyGiven {
    * only this.
    */
   signal?: AbortSignal;
+  /** Questions besides `node.llm` that this element's body may ask: a subgraph's `node.graph`. */
+  calls?: BodyContext['calls'];
 }
 
 export function runBody(
@@ -43,6 +46,6 @@ export function runBody(
 ): Promise<Record<string, unknown>> {
   return runtime.code.run(body, inputs, given.signal, {
     data: given.data ?? {},
-    calls: { llm: llmCall(given.ask ?? PLAIN_ASK, runtime, given.order) },
+    calls: { llm: llmCall(given.ask ?? PLAIN_ASK, runtime, given.order), ...given.calls },
   });
 }

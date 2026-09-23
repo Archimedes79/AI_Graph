@@ -31,6 +31,10 @@ export class SubgraphNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly Panel = lazy(() => import('./SubgraphNodePanel'));
 
+  override readonly AdvancedPanel = lazy(() => import('./SubgraphNodeAdvancedPanel'));
+
+  override readonly advancedSummary = 'run.js';
+
   override describeOutput(node: GraphNode): string {
     const ports = ELEMENT.derivedPorts(node as never, engineRegistry)?.outputs ?? [];
     return ports.length

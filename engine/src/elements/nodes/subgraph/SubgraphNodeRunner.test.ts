@@ -3,6 +3,8 @@ import { executeGraph } from '../../../execution/executor.ts';
 import { registry } from '../../registry.ts';
 import { parseGraph, type Graph, type GraphNode } from '../../../graph.ts';
 import type { Runtime } from '../../Runtime.ts';
+import { nodeCode } from '../../../host/node.ts';
+import { SUBGRAPH_RUN } from './runTemplate.ts';
 
 /**
  * A graph inside a node, run by the engine that runs graphs.
@@ -205,5 +207,40 @@ describe('events and a graph inside a node', () => {
     const found = registry.node('subgraph')!.problems(node('part', 'subgraph', { subgraph: held }), registry, 'part');
     expect(found.map((p) => p.where)).toEqual(['part ▸ clock']);
     expect(found[0].problem).toMatch(/never ticks/);
+  });
+});
+
+describe('a run.js of its own', () => {
+  // The inner code node shouts; the outer body is real JavaScript, run where
+  // bodies run, so node.graph goes through the same channel node.llm does.
+  const running: Runtime = {
+    ...shouting,
+    code: {
+      run: (body, inputs, signal, context) => body === 'x'
+        ? shouting.code.run(body, inputs, signal, context)
+        : nodeCode.run(body, inputs, signal, context),
+    },
+  };
+  const outer = (runCode: string) => graph(
+    [holder({ run_code: runCode }), node('list', 'input', { input_mode: 'text', value: 'x' }), node('show', 'output', {}, { inputs: ['value'] })],
+    [edge('in', 'list', 'output', 'part', 'subject'), edge('out', 'part', 'loud', 'show', 'value')],
+  );
+
+  it('runs the graph as often as it asks, and hands on what it returns', async () => {
+    const perWord = `async function run(inputs, node) {
+      const words = ['owl', 'wren'];
+      const loud = [];
+      for (const word of words) loud.push((await node.graph({ subject: word })).loud);
+      return { loud: loud.join(' ') };
+    }`;
+    const result = await executeGraph(outer(perWord), { runtime: running, registry });
+    expect(result.status).toBe('success');
+    expect(result.node_results.find((r) => r.node_id === 'show')?.inputs.value).toBe('OWL WREN');
+  });
+
+  it('is the standard -- one run, made by the engine -- while it says what the standard says', async () => {
+    const element = registry.node('subgraph')!;
+    expect(element.whatRuns(holder({ run_code: SUBGRAPH_RUN }))).toMatchObject({ by: 'engine' });
+    expect(element.whatRuns(holder({ run_code: 'async function run(i, node) { return node.graph(i); }' }))).toMatchObject({ by: 'body', where: 'run.js' });
   });
 });

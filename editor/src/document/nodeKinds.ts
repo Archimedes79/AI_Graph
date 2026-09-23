@@ -169,7 +169,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
   },
 
   subgraph: {
-    settings: ['subgraph', 'task', 'catch_errors'],
+    settings: ['subgraph', 'task', 'catch_errors', 'run_code'],
     create: (id) => ({
       id,
       node_type: 'subgraph',

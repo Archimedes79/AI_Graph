@@ -570,6 +570,7 @@ nested_statistics/
   nodes/
     statistics/
       task.md              what this part is for
+      run.js               how the graph is run: once, unless you change it
       graph.json           the graph it holds
       layout.json
       nodes/
@@ -603,6 +604,25 @@ To let the graph above carry on regardless, tick **Catch a failed run instead of
 subgraph node itself. The reason then arrives on its `error` port, which is where a caught failure
 belongs, and everything wired to that port gets to react.
 
+### Running it more than once: run.js
+
+Like an ai node, a subgraph node keeps a `run.js` in its folder that says what it does, and
+left as it is that is one run of the graph inside. Change it (Advanced ▸ run.js) and it is
+yours: `await node.graph({ subject: word })` runs the graph with those values standing in
+for its input nodes and resolves to what reached its output nodes, keyed the same way.
+
+```js
+async function run(inputs, node) {
+  const loud = [];
+  for (const word of inputs.subject) loud.push((await node.graph({ subject: word })).loud);
+  return { loud };
+}
+```
+
+So a part can run once per item of a list, again until an answer passes a check, or feed
+one run's outputs into the next — at most 100 times a run. The body runs sandboxed, like
+every body; each `node.graph` is run for it by the engine, with the keys where they are.
+
 ### What it does not do yet
 
 **Events.** From outside, the node has a ◆ like any other. To start something *inside* on an
@@ -612,7 +632,8 @@ shut. A Trigger node inside counts as fired whenever the part runs; one with an 
 reported, because nothing in there keeps time.
 
 A page belongs to the graph at the top, so a `gui` node inside is reported as a mistake.
-Ports carry single values, not lists. A memory (`data`) node in there does not keep its
+A list crosses a port as one value — to run the graph once per item, give it a `run.js`
+that calls `node.graph` per item, as above. A memory (`data`) node in there does not keep its
 value between runs of the graph above. A node in there that asks for a value when the run
 starts is never asked — only the top graph is.
 
