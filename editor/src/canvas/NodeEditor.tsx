@@ -7,12 +7,13 @@ import { NODE_BUILDERS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, nodeFields, previewGeneration, type GenerationRequest } from '@/authoring/generation';
-import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs, outputTargets, readFilePorts } from '@/authoring/generationContext';
+import { connectedFormatContext, inputSources, lastRunContext, outputTargets, readFilePorts } from '@/authoring/generationContext';
+import { nodeFacts } from '@/authoring/nodeFacts';
+import { inferInterface } from '@engine/execution/interface.ts';
 import OutputFormatEditor from '@/authoring/OutputFormatEditor';
 import OutputInterface from '@/authoring/OutputInterface';
 import NodeExamples from '@/authoring/NodeExamples';
 import { nodeLogic } from '@/authoring/logic';
-import { sampleFor } from '@/authoring/tryValues';
 import GenerationTranscript, { GenerationReport, SentPart } from '@/authoring/GenerationTranscript';
 import WidgetOutputSummary from '@/elements/nodes/gui/WidgetOutputSummary';
 import WhatRuns from './WhatRuns';
@@ -216,25 +217,16 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       generation,
       subject: node,
       fields,
-      ports: { inputs: node.inputs.map((p) => p.id), outputs: node.outputs.map((p) => p.id) },
-      exampleFile: node.config.example_file,
-      graphContext: surroundingContext(),
-      // The same values `lastRunContext` renders as prose, raw: the backend runs
-      // the generated function against them and repairs it once if it fails.
-      sampleInputs: sampleFor(node.id, node.inputs.map((port) => port.id), lastRunInputs(node.id, executionResult)),
-      inputSources: inputSources(node.id, graphNodes, graphEdges),
-      readFilePorts: readFilePorts(node),
-      // What the person said about the node in the dialog's other steps: each
-      // port in words, the shape a run kept, the examples it is checked on,
-      // and an ai node's message. All of it used to stay in the dialog.
-      portNotes: {
-        inputs: Object.fromEntries(node.inputs.map((port) => [port.id, port.description ?? ''])),
-        outputs: Object.fromEntries(node.outputs.map((port) => [port.id, port.description ?? ''])),
-      },
-      outputSchema: node.config.output_schema,
-      examples: node.config.examples,
-      messageTemplate: node.config.prompt_template,
-      recordMeasuredOutput: true,
+      // What the node says about itself -- ports, samples, wiring, format,
+      // shape, examples -- as facts the engine writes one brief from.
+      ...nodeFacts(node, graphNodes, graphEdges, executionResult),
+      // A node laid out in steps says everything in those facts. The others
+      // (a data node's format, an input's file selector) are still told
+      // their neighbours in sentences.
+      graphContext: element.stepped ? undefined : surroundingContext(),
+      recordShape: keepsOutputInterface(node)
+        ? (outputs) => { if (!draft.current?.config.output_schema) setConfig('output_schema', inferInterface(outputs)); }
+        : undefined,
     });
   const handleGenerate = () => {
     const request = generationRequest();
@@ -310,6 +302,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       node={node}
       setConfig={setConfig}
       connectedDataNodes={connectedOutputDataNodes(node.id, graphNodes, graphEdges)}
+      executionResult={executionResult}
     >
       {keepsOutputInterface(node) && (
         <OutputInterface node={node} setConfig={setConfig} executionResult={executionResult} />

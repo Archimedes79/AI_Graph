@@ -1,7 +1,7 @@
 import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
-import { outputFormatContext } from '@/authoring/outputFormat';
+import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { AiNodeRunner } from '@engine/elements/nodes/ai/AiNodeRunner.ts';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 
@@ -26,7 +26,7 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly outputFormatLabel = 'Answer format';
 
-  override readonly outputFormatHint = 'Only needed when something downstream has to parse the answer. It becomes a sentence at the end of the instructions, and the neighbours are generated against it. Nothing checks the answer afterwards — a model that ignores it is caught by a Code node, not here.';
+  override readonly outputFormatHint = 'Only needed when something reads the answer. Sent to the model after its instructions on every run, and to ✨ Generate here and in the nodes this one feeds.';
 
   override readonly Panel = lazy(() => import('./AiNodePanel'));
 
@@ -43,17 +43,9 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
     exampleLabel: 'Sample of what arrives (optional file) — ✨ Generate is shown it',
     mono: true,
     bodyHeight: 120,
-    // Not `outputFormatContext`: that tells a *function* what to return. Here
-    // the format is appended to the system prompt by the run itself
-    // (`assemblePrompt`), so the instructions being written are told it is
-    // taken care of -- a model told "must return JSON" writes that into the
-    // prompt a second time, in its own words, beside the engine's.
-    context: (node) => {
-      const format = outputFormatContext(node.config);
-      return format
-        ? `The answer format is added after these instructions at run time, by itself -- do not restate it, and do not contradict it. For reference: ${format.replace(/^The function must return output/, 'the answer comes')}`
-        : '';
-    },
+    // Nothing of its own to add: the answer format, the message and the
+    // ports reach ✨ as the node's facts (`nodeFacts`), in the brief the
+    // engine writes -- not as sentences written here.
   };
 
   override readonly stepped = true;
@@ -69,13 +61,6 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
   }
 
   override describeOutput(node: GraphNode): string {
-    const format = node.config.output_format;
-    if (!format || format === 'text') return 'text';
-    const detail = format === 'custom' && node.config.output_format_prompt
-      ? `: ${node.config.output_format_prompt}`
-      : format === 'example' && node.config.output_example
-        ? `: shaped like ${String(node.config.output_example).slice(0, 400)}` : '';
-    return `${format}${detail}`;
+    return describeDeclaredOutput(node.config);
   }
-
 }

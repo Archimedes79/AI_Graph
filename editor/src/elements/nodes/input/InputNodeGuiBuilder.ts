@@ -43,6 +43,13 @@ export class InputNodeGuiBuilder extends NodeGuiBuilder {
       && !String(node.config.output_format_prompt ?? '').trim();
   }
 
+  /** Text typed into it is what it hands on: a sample before any run. */
+  override restingValue(node: GraphNode, port: string): unknown {
+    const text = node.config.value;
+    return String(node.config.input_mode ?? 'text') === 'text' && port === 'output' && typeof text === 'string' && text.trim()
+      ? text : undefined;
+  }
+
   override describeOutput(node: GraphNode): string {
     const mode = node.config.input_mode ?? 'text';
     // Per port, because a file input offers two things and code written for

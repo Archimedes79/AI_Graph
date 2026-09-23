@@ -72,6 +72,19 @@ export function tryValues(
   return { values, source };
 }
 
+/** Where the sample `sampleFor` hands back came from, in words for the model. */
+export function sampleOrigin(
+  subject: string,
+  ports: string[],
+  observed: Record<string, unknown> | undefined,
+): string {
+  const { source } = tryValues(subject, ports, observed ?? {});
+  const kinds = new Set(Object.values(source));
+  if (kinds.size === 1 && kinds.has('last run')) return 'the last run';
+  if (kinds.size === 1 && kinds.has('graph')) return 'what the graph hands this node now';
+  return 'the values in "Try it"';
+}
+
 /**
  * The sample a generation is written and verified against: whatever the "try
  * it" panel currently holds -- typed, fetched from the graph, or the last

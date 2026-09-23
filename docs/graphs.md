@@ -182,7 +182,7 @@ stands in the dialog:
 
 ```
 Instructions (system)   what you wrote, or had ✨ Generate write from "What this node should do"
-                        + one sentence for the output format, when you declared one
+                        + the answer format and example, when you gave them
 Message (user)          what arrived on the wires, laid out by the message template
 ```
 
@@ -232,11 +232,14 @@ keys, asking for each call (25 each time it runs, at most). The panel shows it u
 this node runs*, with the way back to the standard.
 
 **Do you have to describe the output format?** No. It only matters when something
-downstream has to *parse* the answer, and then there are two ways: say it (*JSON*, *CSV*,
-or a description of your own, which ✨ can write), or show it — press ▶ Test, and if the
-answer has the shape you want, **Keep this as the format to follow**. The node is then
-told to answer in that same structure with new content (`output_format: "example"`), and
-its neighbours are generated against it. Nothing checks the answer afterwards; a model
+downstream has to *parse* the answer, and then there are two ways, and both are sent
+whenever they say anything: say it in words under *Answer format* (“a JSON list of
+{title, score}”), or show it — press ▶ Test, and if the answer has the shape you want,
+**Keep this as the format to follow** (or *Use the last result* under the format). The
+node is then told to answer in that same structure with new content, and its neighbours
+are generated against it. (There used to be a menu of formats — JSON, CSV, custom,
+example — and only *custom* sent your words; a graph that picked JSON still says so, in
+front of them.) Nothing checks the answer afterwards; a model
 that ignores the format is caught by a Code node, not by this setting.
 
 Everything else — model, temperature, tools, vision, batching, failures — has a default
@@ -271,12 +274,36 @@ The AI can generate this function for you: just describe what the node should do
 5  Try it               run the node alone on sample values; its examples
 ```
 
-✨ Generate is told all of steps 1–3, not only step 1: each port's description sits
-beside that port in the skeleton it completes (`@property {*} csv  // one row per
-customer, from "Customers" (port "Content")`), each output's description beside its
-key, the kept shape and the first examples after it. **What ✨ sends** beside the button
-shows that request word for word, without sending it. A new node's description starts
-empty: what ✨ writes from is what you wrote, never a placeholder.
+**What ✨ Generate is told** is the same for a code node and an AI node: one brief, built
+from steps 1–3, each fact said once and everything long cut to a budget (about 8 000
+characters at most), so a small local model still has room to answer:
+
+```
+<what it should do>
+
+## What comes in
+- `csv` (text): one row per customer
+  from "Customers" (port "Content"), which hands on: the file's text
+  sample, from the last run: "name,email\nAnna,anna@…"        ≤ 700 characters each
+## What goes out
+- `rows`: one object per customer
+  to "Table" (port "Rows"), which wants rows: a list of objects with the same keys…
+Format: <the format, in your words>
+An example of what it returns: <the example, if you kept one>
+The shape it returned so far … keep it: { rows: list of { name: text, email: text } }
+## Examples -- the result is checked against these          the first 3
+## Also                                                      an attached sample file, first 2 000 characters
+## The function   (code)  the typed signature to complete    /   (AI) "write the system prompt…"
+```
+
+The **sample** is the last run's value on that port; before any run, the values in *Try
+it*, else what the wired node holds (an Input's text, a Data node's value), else the first
+example's inputs. Code is then run on that sample; when the sample is an example, what it
+must return is checked too, and a body that falls short is sent back once to be repaired.
+**What ✨ sends** beside the button shows the request word for word, without sending it.
+After ✨ has run the code, what it returned becomes the node's kept shape when it has
+none yet — your format text is never overwritten. A new node's description starts empty:
+what ✨ writes from is what you wrote, never a placeholder.
 
 **It may ask a model.** `run` may be `async` and is handed a second argument, `node`:
 `await node.llm({ prompt: '…' })` resolves to the answer as text, from the graph's default

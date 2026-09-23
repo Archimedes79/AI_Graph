@@ -62,6 +62,16 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
     return `Source data format from "${node.label}": ${emits}`;
   }
 
+  /** What it stores is what it hands on, until something new arrives. */
+  override restingValue(node: GraphNode): unknown {
+    const value = node.config.data_value;
+    return value === '' || value === null || value === undefined ? undefined : value;
+  }
+
+  override wantsOn(node: GraphNode): string {
+    return `what it stores: ${describeDataFormat(node)}`;
+  }
+
   override describeAsTarget(node: GraphNode): string {
     return `Target data format required by "${node.label}": ${describeDataFormat(node)}`;
   }

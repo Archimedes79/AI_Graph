@@ -84,6 +84,11 @@ describe('assemblePrompt', () => {
 });
 
 describe('formatInstruction', () => {
+  it('follows a kept example whatever format is picked -- it was kept to be followed', () => {
+    expect(formatInstruction(settings({ outputFormat: 'custom', outputExample: '{"a": 1}', outputFormatPrompt: 'Short.' })))
+      .toBe('Answer in exactly the same format as this example -- the same structure, the same fields, new content:\n\n{"a": 1}\n\nShort.');
+  });
+
   it('sends the description of the answer (output.md) whatever format is picked', () => {
     expect(formatInstruction(settings({ outputFormatPrompt: 'One sentence.' }))).toBe('One sentence.');
     expect(formatInstruction(settings({ outputFormat: 'custom', outputFormatPrompt: 'One sentence.' }))).toBe('One sentence.');

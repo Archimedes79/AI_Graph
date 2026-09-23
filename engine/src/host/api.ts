@@ -130,6 +130,26 @@ export interface GenerateRequest {
   examples?: string;
   /** An ai node's message layout (`message.md`): how what is wired in reaches the model. */
   message_template?: string;
+  /** Each input port's declared type, in words: `text`, `a list of file paths`. */
+  input_types?: Record<string, string>;
+  /**
+   * Where each output port goes, by port id, and what the node there wants of
+   * it -- `"Sizes" chart on "Dashboard" -- wants: the data to plot…`. The
+   * other half of `input_sources`.
+   */
+  output_targets?: Record<string, string>;
+  /**
+   * What the output looks like, in the person's words (`output.md`). Sent
+   * whenever it says anything, whatever else is set: the one declaration of
+   * the output a person writes.
+   */
+  output_format?: string;
+  /** An answer or result to imitate (`output.example.md`), when one was kept. */
+  output_example?: string;
+  /** Where `sample_inputs` came from, for the model: `the last run`, `the values typed into "Try it"`. */
+  sample_origin?: string;
+  /** How a list on an input arrives: one item per run (`per_item`) or whole (`whole_list`). */
+  batch_mode?: 'per_item' | 'whole_list';
   /**
    * Build the request and hand it back without sending it: what ✨ *would*
    * send, through the same code that sends it, so the preview cannot differ.

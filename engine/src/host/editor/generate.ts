@@ -22,7 +22,8 @@ import type { AiRequest, AiService, CodeService, FileService } from '../../eleme
 import type { Generation } from '../../authoring/generation.ts';
 import { readPorts } from '../../execution/fileInputs.ts';
 import { renderSkeleton } from './skeleton.ts';
-import { parseExamples } from '../../execution/examples.ts';
+import { BUDGET, clip, exampleSample, renderBrief, type Sample } from './brief.ts';
+import { unmet } from '../../execution/examples.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { detectFormat } from './files.ts';
 import type { AICall, GenerateRequest, GenerateResponse, ProbeReport, Target } from '../api.ts';
@@ -85,12 +86,12 @@ function parsedPreview(content: string, format: string): string {
       const [head, ...rows] = content.split(/\r?\n/).filter((line) => line.trim());
       if (!head) return '';
       const columns = head.split(',');
-      const records = rows.slice(0, 8).map((row) => Object.fromEntries(row.split(',').map((cell, i) => [columns[i] ?? String(i), cell])));
+      const records = rows.slice(0, 5).map((row) => Object.fromEntries(row.split(',').map((cell, i) => [columns[i] ?? String(i), cell])));
       return JSON.stringify(records, null, 2);
     }
     if (format === 'json') {
       const parsed = JSON.parse(content);
-      return JSON.stringify(Array.isArray(parsed) ? parsed.slice(0, 8) : parsed, null, 2);
+      return JSON.stringify(Array.isArray(parsed) ? parsed.slice(0, 5) : parsed, null, 2);
     }
   } catch {
     return '';
@@ -109,72 +110,13 @@ export async function withContextFile(context: string, path?: string): Promise<s
   } catch (error) {
     throw new GenerationRefused(`Could not read context file: ${error instanceof Error ? error.message : String(error)}`);
   }
-  let block = `Context file (${path}, format=${format}):\n${content}`;
+  // Cut to a budget: a sample file is attached to show what arrives, and the
+  // first rows of a 40 MB CSV show that as well as all of it -- which would
+  // not fit in a local model's window at all.
+  let block = `Sample file (${path}, format=${format}):\n${clip(content, BUDGET.file)}`;
   const preview = parsedPreview(content, format);
-  if (preview) block += `\n\nParsed preview (up to 8 records/items):\n${preview}`;
+  if (preview) block += `\n\nParsed, the first records:\n${clip(preview, BUDGET.file / 2)}`;
   return context ? `${context}\n\n${block}` : block;
-}
-
-// ---------------------------------------------------------------------------
-// What the node says about itself
-// ---------------------------------------------------------------------------
-//
-// A node already holds the three things a body is written against -- what
-// comes in, what must come out, and examples of both -- and until these
-// existed none of it reached the model: the port descriptions, the kept output
-// shape and `examples.md` were used to check a body, never to write one. So a
-// table's column names lived only in the schema and the examples, and pressing
-// ✨ again could rename them with every check still passing.
-
-/** How many examples go into a request: enough to show the pattern, not a test suite. */
-const EXAMPLES_SHOWN = 3;
-
-/** The node's examples, for the model: for these inputs, this must come out. */
-export function examplesBlock(text: string | undefined): string {
-  if (!text?.trim()) return '';
-  const { examples } = parseExamples(text);
-  if (!examples.length) return '';
-  const shown = examples.slice(0, EXAMPLES_SHOWN).map((example) => {
-    const lines = [`- ${example.title}`, `  inputs: ${JSON.stringify(example.inputs)}`];
-    if (example.expect) lines.push(`  must return (at least): ${JSON.stringify(example.expect)}`);
-    if (example.judge) lines.push(`  the answer must: ${example.judge}`);
-    return lines.join('\n');
-  });
-  return `Examples this node is checked against -- the result must satisfy them:\n${shown.join('\n')}`;
-}
-
-/** The kept output shape, for the model, when the node has one. */
-function schemaBlock(schema: unknown): string {
-  if (!schema || typeof schema !== 'object') return '';
-  return 'The returned object must keep this shape -- a JSON Schema, keyed by output port. The nodes '
-    + `after this one were built against it:\n${JSON.stringify(schema, null, 2)}`;
-}
-
-/**
- * For a system prompt: what the model it is written for will actually be sent.
- *
- * A prompt engineer asked for "a system prompt that summarizes a story" was
- * told neither that the story arrives as the whole user message, once per
- * file, nor what reads the answer. Those are facts of the node, and they are
- * here, in the same words the node's dialog shows.
- */
-function promptBlock(request: GenerateRequest): string {
-  const lines: string[] = [];
-  const inputs = request.inputs ?? [];
-  if (inputs.length) {
-    lines.push('The model this system prompt is for is sent, as its user message, everything wired into the node:');
-    for (const port of inputs) {
-      const said = [request.input_notes?.[port], request.input_sources?.[port] ? `from ${request.input_sources[port]}` : '']
-        .map((part) => (part ?? '').trim()).filter(Boolean).join('; ');
-      lines.push(`- ${port}${said ? `: ${said}` : ''}`);
-    }
-    lines.push(request.message_template?.trim()
-      ? `The message is laid out like this, {{name}} standing for that input's value:\n${request.message_template.trim()}`
-      : 'They are sent one after another as they arrive, with nothing around them.');
-  }
-  const answer = Object.values(request.output_notes ?? {}).map((note) => note.trim()).filter(Boolean);
-  if (answer.length) lines.push(`The answer is: ${answer.join('; ')}`);
-  return lines.join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -191,32 +133,32 @@ function firstCodeBlock(text: string): string {
   return /```(?:\w+)?\n([\s\S]*?)```/.exec(text)?.[1].trim() ?? '';
 }
 
-/** Ask for code that maps *inputs* to *outputs*, handed the skeleton to complete. */
+/**
+ * Ask for code that maps *inputs* to *outputs*: the task, the brief, whatever
+ * else the element or the caller adds, then the skeleton to complete.
+ * *evidence* is a failed attempt and what went wrong with it, for the repair.
+ */
 async function generateCode(
-  ai: AiService, target: Target, request: GenerateRequest, context: string,
+  ai: AiService, target: Target, request: GenerateRequest, context: string, sample?: Sample, evidence = '',
 ): Promise<{ text: string; explanation: string }> {
   const inputs = request.inputs ?? [];
   const outputs = request.outputs ?? [];
-  const parts = ['Write a JavaScript function that does the following:', request.description];
-  if (context) parts.push(`\nContext:\n${context}`);
+  const parts = ['Write a JavaScript function for one node of a graph. The node should:', request.description];
+  const brief = renderBrief(request, 'code', sample);
+  if (brief) parts.push(`\n${brief}`);
+  if (context) parts.push(`\n## Also\n${context}`);
+  if (evidence) parts.push(`\n${evidence}`);
+  parts.push('\n## The function');
   if (inputs.length || outputs.length) {
-    // The signature rather than a list of port names: the skeleton states the
-    // types and the shapes, with the values the ports actually carried last
-    // run when the caller supplied a sample.
-    parts.push('\nComplete this function. Keep the signature and the returned keys exactly as they are:\n\n'
-      + renderSkeleton(inputs, outputs, request.sample_inputs ?? undefined, request.input_sources,
-        { inputs: request.input_notes, outputs: request.output_notes }));
+    parts.push('Complete this function. Keep the signature and the returned keys exactly as they are:\n\n'
+      + renderSkeleton(inputs, outputs, sample?.values, request.input_types));
   }
-  const shape = schemaBlock(request.output_schema);
-  if (shape) parts.push(`\n${shape}`);
-  const examples = examplesBlock(request.examples);
-  if (examples) parts.push(`\n${examples}`);
   if (outputs.length) {
-    parts.push(`\nThe returned object's keys must be exactly: ${JSON.stringify(outputs)}. Downstream nodes look `
+    parts.push(`The returned object's keys must be exactly: ${JSON.stringify(outputs)}. Downstream nodes look `
       + 'values up by these exact strings - do not rename, abbreviate, reorder, or invent additional keys, '
       + 'and include every one of them.');
   }
-  parts.push('\nUse only what Node has built in. There is no package manager and no `npm install`: `require` '
+  parts.push('Use only what Node has built in. There is no package manager and no `npm install`: `require` '
     + "and `import` of anything outside Node's own standard library will fail at run time.");
   const raw = await ai.complete({ prompt: parts.join('\n'), system: CODE_SYSTEM, temperature: 0.2, ...target });
   const code = firstCodeBlock(raw);
@@ -226,10 +168,8 @@ async function generateCode(
 
 /** One piece of text wrapped in `<tag>…</tag>`, and the explanation after it. */
 async function generateTagged(
-  ai: AiService, target: Target, system: string, tag: string, description: string, context: string, temperature = 0.3,
+  ai: AiService, target: Target, system: string, tag: string, prompt: string, temperature = 0.3,
 ): Promise<{ text: string; explanation: string }> {
-  let prompt = `Task description: ${description}`;
-  if (context) prompt += `\n\nAdditional context: ${context}`;
   const raw = await ai.complete({ prompt, system, temperature, ...target });
   const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(raw);
   if (match) return { text: match[1].trim(), explanation: raw.slice(match.index + match[0].length).trim() };
@@ -351,14 +291,21 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
  */
 async function generateVerifiedCode(
   ai: AiService, code: CodeService, target: Target, request: GenerateRequest, context: string,
+  given: Sample | undefined,
   check?: (outputs: Record<string, unknown>) => string[],
   probeWith?: (body: string) => string,
 ): Promise<{ text: string; explanation: string; probe: ProbeReport }> {
   const outputs = request.outputs ?? [];
-  const sample = request.sample_inputs;
-  const first = await generateCode(ai, target, request, context);
+  const sample = given?.values;
+  const first = await generateCode(ai, target, request, context, given);
   const report: ProbeReport = { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' };
   if (!sample || !Object.keys(sample).length) return { ...first, probe: report };
+  // A sample that is an example says what must come out of it, and that is
+  // checked too -- an example is a test, and a body that returns the right
+  // keys with the wrong contents has not passed it. Only when nothing in it
+  // is a list: a node run once per item returns one item's result, not the
+  // list the example expects of the whole node.
+  const expect = given?.expect && !Object.values(sample).some(Array.isArray) ? given.expect : undefined;
 
   /**
    * Run it, then ask three questions in order: did it run, did it return the
@@ -372,7 +319,9 @@ async function generateVerifiedCode(
     // else is run as written.
     const ran = await probe(code, probeWith ? probeWith(body) : body, sample);
     const missing = ran.result ? outputs.filter((port) => !(port in ran.result!)) : [];
-    const problems = ran.result && !missing.length && check ? check(ran.result) : [];
+    const problems = ran.result && !missing.length
+      ? [...(check ? check(ran.result) : []), ...(expect ? unmet(expect, ran.result).map((gap) => `for ${given!.origin}, ${gap}`) : [])]
+      : [];
     // How far it got: not at all, wrong keys, a flawed result, a good one.
     const reached = !ran.result ? 0 : missing.length ? 1 : problems.length ? 2 : 3;
     return { ...ran, missing, problems, reached };
@@ -386,13 +335,10 @@ async function generateVerifiedCode(
   const attempt = await judge(first.text);
   if (attempt.reached === 3) return { ...first, probe: reportOf(attempt, 'ok') };
 
-  const evidence = [
-    context,
-    repairPrompt(first.text, sample, attempt.error, attempt.missing, outputs, attempt.problems),
-  ].filter(Boolean).join('\n\n');
+  const evidence = repairPrompt(first.text, sample, attempt.error, attempt.missing, outputs, attempt.problems);
   let second: { text: string; explanation: string };
   try {
-    second = await generateCode(ai, target, request, evidence);
+    second = await generateCode(ai, target, request, context, given, evidence);
   } catch {
     // The repair pass is a bonus, never a reason to fail the request.
     return { ...first, probe: reportOf(attempt, 'failed') };
@@ -466,7 +412,12 @@ async function asReceived(request: GenerateRequest, files?: FileService): Promis
 }
 
 export async function generate(asked: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
-  const request = await asReceived(asked, deps.files);
+  // Real data when the graph has run; the first example's inputs when it has
+  // not -- an example is the person saying what arrives. Either is read as a
+  // run would read it (`asReceived`), shown in the brief and tried the code on.
+  const ran = asked.sample_inputs && Object.keys(asked.sample_inputs).length;
+  const exampled = ran ? undefined : exampleSample(asked.examples);
+  const request = await asReceived(exampled ? { ...asked, sample_inputs: exampled.values } : asked, deps.files);
   const calls: AICall[] = deps.calls ?? [];
   // A preview runs every step a generation does up to the model, and stops
   // there: the request it hands back is the request, not a second rendering
@@ -490,20 +441,36 @@ export async function generate(asked: GenerateRequest, deps: GenerateDeps): Prom
     }
     : request;
 
+  const values = shaped.sample_inputs;
+  const sample: Sample | undefined = values && Object.keys(values).length
+    ? { values, origin: exampled?.origin ?? request.sample_origin ?? 'the last run', expect: exampled?.expect }
+    : undefined;
+
   try {
     switch (kind) {
       case 'code': {
-        const { text, explanation, probe: report } = await generateVerifiedCode(ai, deps.code, deps.target, shaped, context, spec?.check, spec?.probeWith);
+        const { text, explanation, probe: report } = await generateVerifiedCode(ai, deps.code, deps.target, shaped, context, sample, spec?.check, spec?.probeWith);
         return { result: text, explanation, probe: report, calls };
       }
-      case 'prompt':
+      case 'prompt': {
+        // The same brief a code node's body is written from: a system prompt
+        // is written for a model that is sent these inputs, and whose answer
+        // goes where the outputs go.
+        const prompt = [
+          `Task: ${request.description}`,
+          renderBrief(request, 'prompt', sample),
+          context ? `## Also\n${context}` : '',
+          'Write the system prompt for the model this node calls. It is sent what is described above, '
+          + 'every time the node runs, and its answer goes where the outputs go.',
+        ].filter(Boolean).join('\n\n');
+        const { text, explanation } = await generateTagged(ai, deps.target, PROMPT_SYSTEM, 'system_prompt', prompt);
+        return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' }, calls };
+      }
       case 'output_format':
       case 'data_format': {
-        const system = kind === 'prompt' ? PROMPT_SYSTEM : kind === 'output_format' ? OUTPUT_FORMAT_SYSTEM : DATA_FORMAT_SYSTEM;
-        const tag = kind === 'prompt' ? 'system_prompt' : kind;
-        const own = kind === 'prompt' ? [promptBlock(request), examplesBlock(request.examples)] : [];
-        const told = [...own, context].filter(Boolean).join('\n\n');
-        const { text, explanation } = await generateTagged(ai, deps.target, system, tag, request.description, told);
+        const system = kind === 'output_format' ? OUTPUT_FORMAT_SYSTEM : DATA_FORMAT_SYSTEM;
+        const prompt = `Task description: ${request.description}${context ? `\n\nAdditional context: ${context}` : ''}`;
+        const { text, explanation } = await generateTagged(ai, deps.target, system, kind, prompt);
         return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' }, calls };
       }
       default:

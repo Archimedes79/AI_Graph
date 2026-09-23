@@ -57,6 +57,11 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
     return wants ? `${where} It wants ${wants}` : where;
   }
 
+  override wantsOn(node: GraphNode, port: string): string | undefined {
+    const widget = widgetOfPort(node, port);
+    return widget ? engineRegistry.widget(widget.kind)?.receives(widget as never) : super.wantsOn(node, port);
+  }
+
   override describeOutput(): string {
     return 'values from its widgets';
   }

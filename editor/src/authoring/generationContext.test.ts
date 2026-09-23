@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/nodeKinds';
 import { connectedFormatContext, lastRunContext, describeNodeOutput, outputTargets, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
+import { nodeFacts } from './nodeFacts';
 
 const edge = (source: string, target: string) => ({ source, target });
 
@@ -44,7 +45,7 @@ describe('connectedFormatContext', () => {
     const code = NODE_KINDS.code.create('worker');
 
     const context = connectedFormatContext('worker', [ai, code], [edge('classifier', 'worker')]);
-    expect(context).toContain('Input from "Classifier" (ai node): json');
+    expect(context).toContain('Input from "Classifier" (ai node): JSON');
   });
 
   it('is empty for an unconnected node rather than noise', () => {
@@ -66,7 +67,7 @@ describe('describeNodeOutput', () => {
     const node = NODE_KINDS.code.create('c');
     node.config.output_schema = { type: 'object', properties: { rows: { type: 'array' } } };
     expect(describeNodeOutput(node)).toBe(
-      'its outputs, keyed by port, follow this JSON Schema: {"type":"object","properties":{"rows":{"type":"array"}}}',
+      'returns { rows: list of anything }',
     );
   });
 
@@ -74,7 +75,7 @@ describe('describeNodeOutput', () => {
     const node = NODE_KINDS.code.create('c');
     node.config.output_format = 'custom';
     node.config.output_format_prompt = 'one line per finding';
-    expect(describeNodeOutput(node)).toBe('custom: one line per finding');
+    expect(describeNodeOutput(node)).toBe('one line per finding');
   });
 });
 
@@ -185,5 +186,35 @@ describe('a new node', () => {
   it('starts with no description, so ✨ on a fresh ai or code node has nothing to invent code for', () => {
     expect(NODE_KINDS.ai.create('a').description).toBe('');
     expect(NODE_KINDS.code.create('c').description).toBe('');
+  });
+});
+
+describe('what ✨ is told about a node, as facts', () => {
+  it('says what each wire carries and what the node at the other end wants', () => {
+    const input = NODE_KINDS.input.create('src');
+    input.label = 'Notes';
+    const code = NODE_KINDS.code.create('worker');
+    const page = NODE_KINDS.gui.create('page');
+    page.label = 'Dashboard';
+    page.config.gui_widgets = [{ id: 'w1', kind: 'table', label: 'Findings' } as never];
+    const edges = [
+      { id: 'a', source: 'src', target: 'worker', sourceHandle: input.outputs[0].id, targetHandle: 'input' },
+      { id: 'b', source: 'worker', target: 'page', sourceHandle: 'output', targetHandle: 'w1_in' },
+    ];
+    const facts = nodeFacts(code, [input, code, page], edges as never, null);
+    expect(facts.inputSources?.input).toMatch(/^"Notes" \(port "[^"]+"\), which hands on: /);
+    expect(facts.outputTargets?.output).toContain('which wants rows: a list of objects');
+    expect(facts.inputTypes).toEqual({ input: 'any' });
+    expect(facts.batchMode).toBe('per_item');
+  });
+
+  it('sends the format in words whatever was picked, with an older picked format in front', () => {
+    const code = NODE_KINDS.code.create('worker');
+    code.config.output_format = 'json';
+    code.config.output_format_prompt = 'a list of {title, score}';
+    code.config.output_example = '[{"title": "a", "score": 1}]';
+    const facts = nodeFacts(code, [code], [], null);
+    expect(facts.outputFormat).toBe('JSON. a list of {title, score}');
+    expect(facts.outputExample).toBe('[{"title": "a", "score": 1}]');
   });
 });

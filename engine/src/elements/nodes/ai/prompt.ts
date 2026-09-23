@@ -73,13 +73,17 @@ export function placeholders(template: string): string[] {
  * whenever it says anything, whatever format is picked: it is what the person
  * wrote for the model about its output, and a file somebody wrote for the
  * model that the model never sees is a trap. The format adds its own sentence
- * in front: JSON, CSV, or the example to imitate.
+ * in front: JSON, CSV, or the example to imitate -- which, like the
+ * description, is sent whenever there is one.
  */
 export function formatInstruction(settings: PromptSettings): string {
   const format = settings.outputFormat;
   const described = settings.outputFormatPrompt.trim();
   let rule = '';
-  if (format === 'example' && settings.outputExample.trim()) {
+  // An example is followed whenever one was kept, whatever the format says:
+  // it was kept to be followed, and sent only under one setting it was a
+  // file the model never saw.
+  if (settings.outputExample.trim()) {
     rule = 'Answer in exactly the same format as this example -- the same structure, '
       + `the same fields, new content:\n\n${settings.outputExample.trim()}`;
   } else if (format === 'json') {

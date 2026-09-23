@@ -8,11 +8,13 @@
 import { useCallback, useRef, useState } from 'react';
 import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
 import type { GenerateResponse } from '@/api/client';
-import { useGraphStore } from '@/store/graphStore';
+import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
+import { inferInterface } from '@engine/execution/interface.ts';
+import { nodeFacts } from './nodeFacts';
 import { WIDGET_BUILDERS, NODE_BUILDERS } from '@/elements/registry';
 import { buildGeneration, nodeFields, widgetFields } from './generation';
 import {
-  connectedFormatContext, inputSources, lastRunContext, lastRunInputs, lastRunWidgetInput, readFilePorts,
+  connectedFormatContext, lastRunContext, lastRunWidgetInput, readFilePorts,
 } from './generationContext';
 import { missingExamples, sampleFromPredecessors, sweep, type SweepTarget, type SweepUnit } from './graphSweep';
 
@@ -139,27 +141,30 @@ export function useGraphSweep(): SweepState {
         (value) => useGraphStore.getState().updateNode(current.id, { description: value }),
       );
 
+      const facts = nodeFacts(current, nodesOf(), rfEdges(), live().executionResult);
+      const predecessors = facts.sampleInputs ? undefined : sampleFromPredecessors(target, rfEdges(), produced, guiNodes);
       const unit = buildGeneration({
         element: node.node_type,
         generation: spec,
         subject: current,
         fields,
-        ports: {
-          inputs: current.inputs.map((port) => port.id),
-          outputs: current.outputs.map((port) => port.id),
-        },
-        exampleFile: current.config.example_file,
-        graphContext: [
+        // The same facts the node's dialog sends: a sweep must not tell the
+        // model less than the ✨ button on the node would.
+        ...facts,
+        // Before a run, what the nodes before it produced in this sweep.
+        ...(predecessors ? { sampleInputs: predecessors, sampleOrigin: 'what the nodes before it just returned' } : {}),
+        graphContext: NODE_BUILDERS[current.node_type]?.stepped ? undefined : [
           connectedFormatContext(current.id, nodesOf(), rfEdges()),
           lastRunContext(current.id, live().executionResult, readFilePorts(current)),
         ].filter(Boolean).join('\n\n'),
-        sampleInputs: lastRunInputs(current.id, live().executionResult)
-          ?? sampleFromPredecessors(target, rfEdges(), produced, guiNodes),
-        inputSources: inputSources(current.id, nodesOf(), rfEdges()),
-        readFilePorts: readFilePorts(current),
-        // What it turns out to return is written down as this node's contract,
-        // which is what the next node is then generated against.
-        recordMeasuredOutput: true,
+        // What it turns out to return is kept as this node's shape, which is
+        // what the next node is then generated against.
+        recordShape: keepsOutputInterface(current)
+          ? (outputs) => {
+            const now = nodesOf().find((n) => n.id === current.id);
+            if (now && !now.config.output_schema) setConfig('output_schema', inferInterface(outputs));
+          }
+          : undefined,
       });
       return {
         ...unit,

@@ -150,6 +150,25 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   }
 
   /**
+   * What this node hands on from one output port without running anything --
+   * a typed text, a stored value -- or undefined. A node wired to it is shown
+   * this as its sample before the graph has ever run, rather than nothing.
+   */
+  restingValue(_node: GraphNode, _port: string): unknown {
+    return undefined;
+  }
+
+  /**
+   * What this node wants on one of its input ports, in words, for a node
+   * wired into it: its ✨ is told, beside the output that feeds it. The
+   * port's own description by default; a node whose port wants something
+   * more particular -- a chart block, a data node's format -- says that.
+   */
+  wantsOn(node: GraphNode, port: string): string | undefined {
+    return node.inputs.find((p) => p.id === port)?.description?.trim() || undefined;
+  }
+
+  /**
    * How a neighbour's generation is told this node receives its output.
    * `port`: the input port the wire lands on, for a node whose ports differ
    * in what they want -- a page's blocks do.

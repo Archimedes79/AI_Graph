@@ -195,6 +195,7 @@ export function outputTargets(
   nodeId: string,
   nodes: GraphNode[],
   edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+  withWants = false,
 ): Record<string, string> {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byPort: Record<string, string[]> = {};
@@ -203,9 +204,40 @@ export function outputTargets(
     const target = byId.get(edge.target);
     if (!target) continue;
     const port = target.inputs.find((p) => p.id === edge.targetHandle)?.name;
-    (byPort[edge.sourceHandle ?? 'output'] ??= []).push(port ? `"${target.label}" (port "${port}")` : `"${target.label}"`);
+    let said = port ? `"${target.label}" (port "${port}")` : `"${target.label}"`;
+    // For ✨: what the node there wants, said by that node (a chart: points).
+    const wants = withWants && edge.targetHandle ? NODE_BUILDERS[target.node_type]?.wantsOn(target, edge.targetHandle) : undefined;
+    if (wants) said += `, which wants ${wants}`;
+    (byPort[edge.sourceHandle ?? 'output'] ??= []).push(said);
   }
   return Object.fromEntries(
     Object.entries(byPort).map(([port, targets]) => [port, [...new Set(targets)].join(' + ')]),
+  );
+}
+
+/**
+ * `inputSources`, each followed by what that node says it hands on: for ✨,
+ * which is told the wire and the declaration behind it in one line.
+ */
+export function inputOrigins(
+  nodeId: string,
+  nodes: GraphNode[],
+  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+): Record<string, string> {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const byPort: Record<string, string[]> = {};
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue;
+    const source = byId.get(edge.source);
+    if (!source) continue;
+    const port = source.outputs.find((p) => p.id === edge.sourceHandle);
+    let said = port ? `"${source.label}" (port "${port.name}")` : `"${source.label}"`;
+    // The port's own words first, then what the node declares of its output.
+    const emits = [...new Set([port?.description?.trim(), describeNodeOutput(source)].filter(Boolean))].join('; ');
+    if (emits) said += `, which hands on: ${emits}`;
+    (byPort[edge.targetHandle ?? 'input'] ??= []).push(said);
+  }
+  return Object.fromEntries(
+    Object.entries(byPort).map(([port, origins]) => [port, [...new Set(origins)].join(' + ')]),
   );
 }

@@ -143,34 +143,6 @@ function probeMessage(probe: ProbeReport | undefined, fallback: string): string 
   }
 }
 
-/** The JSON type of a value, the way a contract names it. */
-function shapeOf(value: unknown): string {
-  if (value === null || value === undefined) return 'null';
-  if (Array.isArray(value)) return `${value.length ? shapeOf(value[0]) : 'unknown'}[]`;
-  if (typeof value === 'object') {
-    const keys = Object.keys(value as object).slice(0, 8);
-    return `{ ${keys.map((k) => `${k}: ${shapeOf((value as Record<string, unknown>)[k])}`).join(', ')} }`;
-  }
-  return typeof value;
-}
-
-/**
- * What a generated body returned, as the contract the next node is written to.
- *
- * Structure first -- each key and the type of what it held -- because that is
- * what a generator downstream needs to write against; the example after it is
- * for the reader. Measured, not promised: the verify pass ran the code.
- */
-export function measuredContract(probe: ProbeReport | undefined): string {
-  const outputs = probe?.outputs;
-  if (outputs && Object.keys(outputs).length) {
-    const shape = Object.entries(outputs).map(([key, value]) => `${key}: ${shapeOf(value)}`).join(', ');
-    return `Returns { ${shape} }. Observed when generated: ${probe!.output_preview}`;
-  }
-  const preview = probe?.output_preview?.trim();
-  return preview ? `Returns, as observed when this was generated: ${preview}` : '';
-}
-
 export interface GenerationRequest<S> {
   /** NodeType or WidgetKind -- the server resolves the rest from it. */
   element: string;
@@ -205,17 +177,30 @@ export interface GenerationRequest<S> {
   examples?: string;
   /** An ai node's message template: how its inputs are laid out for the model. */
   messageTemplate?: string;
+  /** Where `sampleInputs` came from, in words: the last run, or values typed into "Try it". */
+  sampleOrigin?: string;
+  /** Each input's declared type as the body sees it: `text`, `list of text`. */
+  inputTypes?: Record<string, string>;
+  /** How a list input arrives: one item per run, or whole. */
+  batchMode?: 'per_item' | 'whole_list';
+  /** Where each output goes, and what the node there wants of it. */
+  outputTargets?: Record<string, string>;
+  /** The output format, in the person's words (`output.md`) -- sent whenever it says anything. */
+  outputFormat?: string;
+  /** A result to imitate (`output.example.md`). */
+  outputExample?: string;
   /**
-   * Write down what the generated body actually returned.
+   * Keep what the generated body actually returned, as the node's output
+   * shape, when it has none yet.
    *
-   * The backend already ran it against real data before handing it over, so the
-   * probe's preview is a measurement rather than a promise — and it is exactly
-   * what the *next* node has to be generated against. Only for a node: a block
-   * inside a page has no output contract of its own, and only when the node
-   * states none, because a contract somebody wrote by hand is not something a
-   * generation gets to overwrite.
+   * The backend ran it on a sample before handing it over, so this is a
+   * measurement -- and exactly what the *next* node is generated against. It
+   * used to be written into the node's format description as a sentence,
+   * over the one field that is the person's own words; the shape is where a
+   * measurement belongs (`output.schema.json`), and a run would put it there
+   * anyway. Only for a node: a block inside a page has no output of its own.
    */
-  recordMeasuredOutput?: boolean;
+  recordShape?: (outputs: Record<string, unknown>) => void;
 }
 
 /**
@@ -253,6 +238,12 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
     output_schema: request.outputSchema ?? undefined,
     examples: request.examples?.trim() || undefined,
     message_template: request.messageTemplate?.trim() || undefined,
+    sample_origin: request.sampleInputs ? request.sampleOrigin : undefined,
+    input_types: request.inputTypes,
+    batch_mode: request.batchMode,
+    output_targets: request.outputTargets && Object.keys(request.outputTargets).length ? request.outputTargets : undefined,
+    output_format: request.outputFormat?.trim() || undefined,
+    output_example: request.outputExample?.trim() || undefined,
     ...genAI(),
   };
 }
@@ -284,12 +275,8 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
     apply: (result) => {
       fields.set(spec.targetField, result.result);
 
-      if (!request.recordMeasuredOutput) return;
-      if (fields.get('output_format_prompt').trim()) return;
-      const contract = measuredContract(result.probe);
-      if (!contract) return;
-      fields.set('output_format_prompt', contract);
-      fields.set('output_format', 'custom');
+      const outputs = result.probe?.outputs;
+      if (request.recordShape && outputs && Object.keys(outputs).length) request.recordShape(outputs);
     },
   };
 }

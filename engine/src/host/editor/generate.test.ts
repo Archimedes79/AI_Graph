@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AiRequest, AiService, CodeService } from '../../elements/Runtime.ts';
@@ -115,16 +116,47 @@ describe('what the node says about itself reaches the model', () => {
     examples: '## Two files\n\n```json input\n{"files": ["a.txt"], "summaries": ["One."]}\n```\n\n```json expect\n{"rows": [{"File": "a.txt", "Summary": "One."}]}\n```\n',
   };
 
-  it('puts the ports\' descriptions beside them, and the shape and the examples after', async () => {
+  it('says each input once -- what it holds, where from, a sample -- and the output, shape and examples after', async () => {
     const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
-    await generate(rows, { ai, code: runner(() => ({})), generationFor, target });
+    await generate(rows, { ai, code: runner(() => ({ rows: [{ File: 'a.txt', Summary: 'One.' }] })), generationFor, target });
     const prompt = ai.asked[0].prompt;
-    expect(prompt).toContain('@property {*} files  // Every path in the folder');
-    expect(prompt).toContain('"rows": null,  // A list of {File, Summary}');
-    expect(prompt).toContain('must keep this shape');
-    expect(prompt).toContain('"required": [');
-    expect(prompt).toContain('- Two files');
-    expect(prompt).toContain('must return (at least): {"rows":[{"File":"a.txt","Summary":"One."}]}');
+    expect(prompt).toContain('## What comes in\n- `files`: Every path in the folder');
+    // No run yet: the example's inputs are the sample, and say so.
+    expect(prompt).toContain('sample, from the example "Two files": a list of 1: ["a.txt"]');
+    expect(prompt).toContain('## What goes out\n- `rows`: A list of {File, Summary}');
+    expect(prompt).toContain('keep it: { rows: list of anything }');
+    expect(prompt).toContain('must return, at least: {"rows":[{"File":"a.txt","Summary":"One."}]}');
+    // Said once: the skeleton is the signature, typed from the sample, with no second copy of the notes.
+    expect(prompt).toContain('@property {string[]} files\n');
+    expect(prompt.split('Every path in the folder')).toHaveLength(2);
+  });
+
+  it('sends the output format and an example whatever else is set, cut to a budget', async () => {
+    const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
+    await generate({
+      ...rows, examples: undefined, output_format: 'A list of {File, Summary}, largest first.',
+      output_example: '[{"File": "b.txt", "Summary": "Two."}]',
+      sample_inputs: { files: ['x'.repeat(5000)], summaries: ['y'] },
+    }, { ai, code: runner(() => ({ rows: [] })), generationFor, target });
+    const prompt = ai.asked[0].prompt;
+    expect(prompt).toContain('Format: A list of {File, Summary}, largest first.');
+    expect(prompt).toContain('the same structure, new content:\n[{"File": "b.txt"');
+    expect(prompt).toContain('sample, from the last run: a list of 1: ["xxx');
+    expect(prompt).toContain('more characters not shown');
+    expect(prompt.length).toBeLessThan(6000);
+  });
+
+  it('holds the code to the example it was tried on, and repairs it when it falls short', async () => {
+    const ai = scripted([
+      '```js\nfunction run() { return { rows: [] }; }\n```',
+      '```js\nfunction run() { return { rows: [{ File: "a.txt", Summary: "One." }] }; }\n```',
+    ]);
+    const single = { ...rows, examples: '## One file\n\n```json input\n{"files": "a.txt", "summaries": "One."}\n```\n\n```json expect\n{"rows": [{"File": "a.txt"}]}\n```\n' };
+    const code: CodeService = { run: async (body) => (body.includes('a.txt') ? { rows: [{ File: 'a.txt', Summary: 'One.' }] } : { rows: [] }) };
+    const reply = await generate(single, { ai, code, generationFor, target });
+    expect(ai.asked).toHaveLength(2);
+    expect(ai.asked[1].prompt).toContain('for the example "One file", output.rows has 0 items; expected 1');
+    expect(reply.probe.status).toBe('repaired');
   });
 
   it('no longer tells every code node about charts -- only a chart downstream says so', async () => {
@@ -135,20 +167,25 @@ describe('what the node says about itself reaches the model', () => {
     expect(registry.widget('table')?.receives({} as never)).toContain('column header');
   });
 
-  it('tells a prompt what its model will be sent, laid out as the message says', async () => {
+  it('tells a prompt what its model will be sent, laid out as the message says, from the same brief', async () => {
     const ai = scripted(['<system_prompt>Summarize.</system_prompt>']);
     await generate({
       element: 'ai', description: 'Summarize one story in two sentences.',
-      inputs: ['story'], input_notes: { story: 'One file per run; arrives as its content' },
+      inputs: ['story'], outputs: ['output'], input_notes: { story: 'One file per run; arrives as its content' },
       input_sources: { story: '"Folder summaries" (port "Folder")' },
       message_template: 'Story:\n{{story}}',
       output_notes: { output: 'What the model answered' },
+      output_format: 'Two sentences, no heading.',
+      sample_inputs: { story: 'Once upon a time.' },
     }, { ai, code: runner(() => ({})), generationFor, target });
     const prompt = ai.asked[0].prompt;
-    expect(prompt).toContain('- story: One file per run; arrives as its content; from "Folder summaries" (port "Folder")');
-    expect(prompt).toContain('laid out like this');
+    expect(prompt).toContain('## What the model is sent\n- `story`: One file per run; arrives as its content\n  from "Folder summaries" (port "Folder")');
+    expect(prompt).toContain('sample, from the last run: "Once upon a time."');
+    expect(prompt).toContain('laid out in the message like this');
     expect(prompt).toContain('Story:\n{{story}}');
-    expect(prompt).toContain('The answer is: What the model answered');
+    expect(prompt).toContain('- `output`: What the model answered');
+    expect(prompt).toContain('Format: Two sentences, no heading.');
+    expect(prompt).toContain('need not repeat it');
   });
 });
 
@@ -197,7 +234,7 @@ describe('a node that is handed a file\'s text, not its path', () => {
     const code: CodeService = { run: async (_body, inputs) => { received = inputs; return { rows: 2 }; } };
     const reply = await generate(request, { ai, code, generationFor, target, files: files({ 'data/people.csv': 'name,age\nAda,36' }) });
     expect(received).toEqual({ csv: 'name,age\nAda,36', top: '5' });
-    expect(ai.asked[0].prompt).toContain('e.g. "name,age\\nAda,36"');
+    expect(ai.asked[0].prompt).toContain('sample, from the last run: "name,age\\nAda,36"');
     expect(ai.asked[0].prompt).toContain('from "Page" (port "CSV file"): the text of the file, already read');
     expect(ai.asked[0].prompt).not.toContain('data/people.csv');
     expect(reply.probe.status).toBe('ok');
@@ -261,6 +298,14 @@ describe('a sample file in the context', () => {
 
   it('refuses a file it cannot read, by name', async () => {
     await expect(withContextFile('', join(tmpdir(), 'nope.csv'))).rejects.toThrow(/Could not read context file/);
+  });
+
+  it('cuts a large sample file to a budget -- the first rows show its shape as well as all of it', async () => {
+    const file = join(tmpdir(), `big-${Date.now()}.csv`);
+    writeFileSync(file, `a,b\n${'1,2\n'.repeat(20000)}`);
+    const context = await withContextFile('', file);
+    expect(context.length).toBeLessThan(4000);
+    expect(context).toContain('more characters not shown');
   });
 });
 

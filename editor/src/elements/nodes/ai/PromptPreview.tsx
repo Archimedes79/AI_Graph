@@ -60,7 +60,7 @@ export default function PromptPreview({ node, setConfig }: {
               <button
                 className="text-xs px-2 py-0.5 rounded mt-1"
                 style={NEUTRAL_BUTTON}
-                onClick={() => { setConfig('output_example', answer); setConfig('output_format', 'example'); }}
+                onClick={() => setConfig('output_example', answer)}
                 title="Tell the model to answer in this same shape from now on"
               >
                 Keep this as the format to follow
