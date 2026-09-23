@@ -3,7 +3,7 @@ import {
   ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2, Wand2,
 } from 'lucide-react';
 import ToolbarButton, { ToolbarSeparator } from '@/ui/ToolbarButton';
-import { showsPage, widgetFiresRun } from '@/elements/nodes/gui/guiWidgets';
+import { showsPage, widgetFiresRun } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
 import { call, downloadBundle, type AICall, type Requirement } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -11,7 +11,7 @@ import type { Graph } from '@/graph';
 import { applyRuntimeValues } from '@engine/execution/runtimeValues.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { genAI } from '@/store/settingsStore';
-import RequirementsDialog from '@/ui/RequirementsDialog';
+import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
 import LiveGeneration from '@/authoring/LiveGeneration';

@@ -197,7 +197,7 @@ describe('what each example is there to show', () => {
     const result = await runGraph(graph);
     expect(model.asked.length).toBe(before);
     expect(result.node_results.find((n) => n.node_id === 'assistant')?.status).toBe('skipped');
-    expect((blocksOf(graph, 'page')[2].value as { messages: unknown[] }).messages).toEqual([]);
+    expect((blocksOf(graph, 'page').find((block) => block.id === 'chat')!.value as { messages: unknown[] }).messages).toEqual([]);
   }, 60_000);
 
   it('file_summarizer: before anything was read, a change of length has nothing to summarize', async () => {
@@ -225,52 +225,41 @@ describe('what each example is there to show', () => {
     expect(String(shownOn(result, 'page').summary)).toMatch(/^summary\(/);
   }, 60_000);
 
-  it('folder_summaries: one call per story, one over all of them, and a row for each', async () => {
+  it('folder_summaries: choosing a folder asks once per file, with the file\'s text, and the page shows the summaries', async () => {
     const before = model.asked.length;
-    const result = await runGraph(await load('folder_summaries'), { node_id: 'page', port_id: 'go_out' });
+    const result = await runGraph(await load('folder_summaries'), { node_id: 'page', port_id: 'folder_out' });
+    expect(result.status).toBe('success');
     const prompts = model.asked.slice(before);
-    expect(prompts).toHaveLength(4);
-    // The stories' text, not their filenames; and the last call gets the three
-    // summaries as paragraphs rather than as a serialised list.
-    expect(Math.max(...prompts.slice(0, 3).map((p) => p.length))).toBeGreaterThan(500);
-    expect(prompts[3]).not.toContain('[');
-    expect(prompts[3].split('\n\n')).toHaveLength(3);
-
-    const rows = shownOn(result, 'page').table as { File: string; Summary: string }[];
-    expect(rows.map((row) => row.File)).toEqual([
-      '01_the_lighthouse_keeper.txt', '02_the_map_with_a_gap.txt', '03_the_second_key.txt',
-    ]);
-    expect(rows.every((row) => row.Summary.startsWith('summary('))).toBe(true);
+    expect(prompts).toHaveLength(3);
+    // The stories' text, not their filenames.
+    expect(Math.min(...prompts.map((prompt) => prompt.length))).toBeGreaterThan(500);
+    // One summary per file reaches the one window, across the loop, in the round that made them.
+    const shown = shownOn(result, 'page').summaries;
+    const summaries = Array.isArray(shown) ? shown : String(shown).split('\n').filter(Boolean);
+    expect(summaries).toHaveLength(3);
+    expect(summaries.every((summary) => String(summary).startsWith('summary('))).toBe(true);
   }, 120_000);
 
   /**
-   * What the node is responsible for, and nothing more.
-   *
-   * This used to assert `<svg` and `<rect`, because the node drew the chart --
-   * against a guessed 720x340 that was then stretched into a block measured at
-   * 1084x470. The node says *what* to plot now and the block draws it, so what
-   * is checked here is the figure: the shape the dropdown asked for, the title,
-   * and the points. Nothing in a run knows how big the chart will be, which is
-   * the reason the split exists.
+   * What the node is responsible for, and nothing more: it says *what* to plot
+   * and the chart block draws it, so what is checked here is the figure.
+   * Nothing in a run knows how big the chart will be.
    */
-  it('population_plotter: the dropdown picks the shape, and the figure reaches the page across the loop', async () => {
-    for (const [chosen, kind] of [['Horizontal bars', 'bars'], ['Columns', 'columns'], ['Line', 'line'], ['Donut', 'donut']] as const) {
-      const graph = await load('population_plotter');
-      blocksOf(graph, 'page').find((block) => block.id === 'kind')!.value = chosen;
-      blocksOf(graph, 'page').find((block) => block.id === 'top')!.value = 6;
+  it('population_plotter: choosing a file is all it takes -- the figure reaches the page across the loop', async () => {
+    const graph = await load('population_plotter');
+    const result = await runGraph(graph, { node_id: 'page', port_id: 'file_out' });
+    expect(result.status).toBe('success');
+    const figure = shownOn(result, 'page').plot as { kind: string; title: string; points: { label: string; value: number }[] };
+    expect(figure).toMatchObject({ kind: 'bars', title: 'Population by Country' });
+    expect(figure.points).toHaveLength(20);
+    expect(figure.points.slice(0, 2).map((point) => point.label)).toEqual(['India', 'China']);
+  }, 120_000);
 
-      const result = await runGraph(graph, { node_id: 'page', port_id: 'kind_out' });
-      expect(result.status).toBe('success');
-      // The figure fed back into the page that holds its controls: the memory
-      // edge, settled and shown in the round that produced it.
-      const figure = shownOn(result, 'page').plot as { kind: string; title: string; points: { label: string }[] };
-      expect(figure.kind).toBe(kind);
-      expect(figure.title).toContain('top 6 of 20');
-      expect(figure.points.slice(0, 2).map((point) => point.label)).toEqual(['India', 'China']);
-      // A donut shares out a whole, so what it does not show is one slice more.
-      expect(figure.points).toHaveLength(kind === 'donut' ? 7 : 6);
-      expect(typeof figure).not.toBe('string');
-      expect((shownOn(result, 'page').table as { Country: string }[]).slice(0, 2).map((row) => row.Country)).toEqual(['India', 'China']);
-    }
+  it('population_plotter: with no file chosen the chart says so, instead of the run failing', async () => {
+    const graph = await load('population_plotter');
+    blocksOf(graph, 'page').find((block) => block.id === 'file')!.value = '';
+    const result = await runGraph(graph);
+    expect(result.status).toBe('success');
+    expect(shownOn(result, 'page').plot).toMatchObject({ title: 'Choose a CSV file to plot.', points: [] });
   }, 120_000);
 });

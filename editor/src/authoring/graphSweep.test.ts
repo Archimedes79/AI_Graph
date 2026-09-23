@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NODE_KINDS } from '@/nodeKinds';
+import { NODE_KINDS } from '@/document/nodeKinds';
 import { generationOrder, missingExamples, sampleFromPredecessors, sweep, type SweepStep, type SweepUnit } from './graphSweep';
 import { NODE_BUILDERS } from '@/elements/registry';
 import type { GraphEdge, GraphNode } from '@/graph';

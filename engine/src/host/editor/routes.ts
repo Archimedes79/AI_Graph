@@ -26,7 +26,8 @@ import { nodeRuntime } from '../node.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile } from '../api.ts';
 import * as files from './files.ts';
-import { browse, extensionFilter, NotFound } from '../browse.ts';
+import { browse, extensionFilter } from '../browse.ts';
+import { NotAGraph, NotFound } from '../../errors.ts';
 import * as settings from './settings.ts';
 import * as project from '../../project/folder.ts';
 import * as gen from './generate.ts';
@@ -79,8 +80,8 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       const folder = project.projectFolderOf(full);
       return { path: folder ?? full, graph, project: folder !== null };
     } catch (error) {
-      if (error instanceof project.NotFound) throw new Refusal(404, error.message);
-      if (error instanceof project.NotAGraph) throw new Refusal(400, error.message);
+      if (error instanceof NotFound) throw new Refusal(404, error.message);
+      if (error instanceof NotAGraph) throw new Refusal(400, error.message);
       if (error instanceof project.FileChanged) throw new Refusal(409, error.message);
       throw new Refusal(400, `Could not ${action} graph file: ${message(error)}`);
     }
@@ -227,7 +228,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
         return await files.openExternal(join(folder, project.NODES_DIR), file);
       } catch (error) {
         if (error instanceof Refusal) throw error;
-        throw new Refusal(error instanceof NotFound || error instanceof project.NotFound ? 404 : 400, message(error));
+        throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));
       }
     },
 

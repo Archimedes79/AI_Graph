@@ -1,7 +1,7 @@
 import { GuiSurfacePage, useSurfaceBlocks } from './GuiPage';
 import { useDeliveredRun } from './useDeliveredRun';
 import DeliveredHeader from './DeliveredHeader';
-import RequirementsDialog from '@/ui/RequirementsDialog';
+import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { DIMMER, LINE, MUTED, SUNKEN } from '@/ui/theme';
 
 /**

@@ -20,7 +20,7 @@
 import { memoryFeedbackEdges, topologicalLevels } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
 import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
-import { guiWidgetPorts } from '@/elements/nodes/gui/guiWidgets';
+import { guiWidgetPorts } from '@/document/guiWidgets';
 import { NODE_BUILDERS } from '@/elements/registry';
 
 /** What happened to one node. */
@@ -79,7 +79,7 @@ export interface SweepDeps<T = unknown> {
 }
 
 /** The key a block's outputs are filed under, so an edge can find them again. */
-export function targetKey(nodeId: string, widgetId?: string): string {
+function targetKey(nodeId: string, widgetId?: string): string {
   return widgetId ? `${nodeId}::${widgetId}` : nodeId;
 }
 

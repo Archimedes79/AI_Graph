@@ -1,12 +1,12 @@
 import type { GraphNode } from '@/graph';
-import { guiWidgetPorts } from './guiWidgets';
+import { guiWidgetPorts } from '@/document/guiWidgets';
 import { ACCENT_TEXT, DIM, MUTED, SUNKEN, TEXT, WELL } from '@/ui/theme';
 
 interface Props {
   node: GraphNode;
 }
 
-function displayValue(value: unknown): string {
+function oneLine(value: unknown): string {
   if (value === undefined || value === null || value === '') return '(empty)';
   if (typeof value === 'string') return value;
   try {
@@ -65,7 +65,7 @@ export default function WidgetOutputSummary({ node }: Props) {
                   className="mt-1.5 px-2 py-1 rounded font-mono whitespace-pre-wrap break-words"
                   style={{ background: SUNKEN, color: TEXT, maxHeight: 96, overflowY: 'auto' }}
                 >
-                  {displayValue(widget.value)}
+                  {oneLine(widget.value)}
                 </div>
               </>
             )}

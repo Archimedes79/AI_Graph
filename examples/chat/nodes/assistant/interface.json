@@ -3,7 +3,7 @@
   "node": "assistant",
   "type": "ai",
   "label": "Assistant",
-  "about": "Answer the user's last message as a friendly, concise assistant that remembers the conversation.",
+  "about": "Answers the last message, knowing the conversation so far",
   "runs": {
     "by": "engine",
     "where": "run.js",
@@ -14,7 +14,6 @@
       "port": "history",
       "name": "History",
       "type": "text",
-      "description": "The conversation so far",
       "from": [
         "page.chat_history"
       ]
@@ -24,7 +23,6 @@
       "name": "Message",
       "type": "text",
       "required": true,
-      "description": "What the user just said",
       "from": [
         "page.chat_out"
       ]
@@ -33,9 +31,8 @@
   "outputs": [
     {
       "port": "output",
-      "name": "Output",
+      "name": "Reply",
       "type": "text",
-      "description": "What the model answered",
       "to": [
         "page.chat_in"
       ]

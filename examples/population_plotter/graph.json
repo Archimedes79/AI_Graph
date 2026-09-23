@@ -2,14 +2,13 @@
   "metadata": {
     "name": "Population plotter",
     "version": "1.0.0",
-    "description": "Plot a CSV of names and numbers — here, the population of countries — as sorted bars, columns, a line or a donut, with the rows beside it. No model involved, and no drawing code: the code node works out what to plot and the chart block draws it, at the size the block really is and in the colours of the page. Every control redraws it at once, so there is no button. Paths are relative to the working directory, so run this from the repository root.",
-    "author": "AI-Graph",
+    "description": "Choose a CSV of names and numbers and see it as a chart. One page, one code node: the code says what to plot, the chart block draws it. Choosing a file redraws it -- there is nothing to press. Paths are relative to the working directory, so run this from the repository root.",
+    "author": "",
     "tags": [
       "example",
-      "gui",
       "plot",
       "csv",
-      "triggers"
+      "gui"
     ],
     "ai_defaults": {
       "provider": "default",
@@ -32,15 +31,6 @@
           "multi": true,
           "required": false,
           "description": ""
-        },
-        {
-          "id": "table_in",
-          "name": "The rows plotted",
-          "kind": "input",
-          "data_type": "any",
-          "multi": true,
-          "required": false,
-          "description": ""
         }
       ],
       "outputs": [
@@ -49,24 +39,6 @@
           "name": "CSV file",
           "kind": "output",
           "data_type": "file_path",
-          "multi": false,
-          "required": false,
-          "description": ""
-        },
-        {
-          "id": "kind_out",
-          "name": "Chart",
-          "kind": "output",
-          "data_type": "text",
-          "multi": false,
-          "required": false,
-          "description": ""
-        },
-        {
-          "id": "top_out",
-          "name": "How many",
-          "kind": "output",
-          "data_type": "number",
           "multi": false,
           "required": false,
           "description": ""
@@ -85,16 +57,6 @@
             "w": 16
           },
           {
-            "h": 1,
-            "id": "intro",
-            "kind": "text",
-            "label": "",
-            "mode": "caption",
-            "tone": "plain",
-            "value": "A CSV with names in the first column and numbers in another. Change anything and the chart redraws — there is nothing to press.",
-            "w": 16
-          },
-          {
             "extensions": ".csv",
             "h": 2,
             "id": "file",
@@ -104,46 +66,14 @@
             "run_on_change": true,
             "tone": "sunken",
             "value": "examples/data/population.csv",
-            "w": 8
+            "w": 16
           },
           {
-            "h": 2,
-            "id": "kind",
-            "kind": "select",
-            "label": "Chart",
-            "options": "Horizontal bars\nColumns\nLine\nDonut",
-            "run_on_change": true,
-            "tone": "sunken",
-            "value": "Horizontal bars",
-            "w": 4
-          },
-          {
-            "h": 2,
-            "id": "top",
-            "kind": "slider",
-            "label": "How many",
-            "max": 15,
-            "min": 3,
-            "run_on_change": true,
-            "step": 1,
-            "tone": "sunken",
-            "value": 8,
-            "w": 4
-          },
-          {
-            "h": 7,
+            "h": 9,
             "id": "plot",
             "kind": "plot_window",
             "label": "",
             "tone": "plain",
-            "w": 16
-          },
-          {
-            "h": 5,
-            "id": "table",
-            "kind": "table",
-            "label": "The rows plotted",
-            "tone": "raised",
             "w": 16
           }
         ]
@@ -162,25 +92,7 @@
           "data_type": "file_path",
           "multi": false,
           "required": false,
-          "description": "The chosen file; arrives as its content"
-        },
-        {
-          "id": "kind",
-          "name": "Chart",
-          "kind": "input",
-          "data_type": "text",
-          "multi": false,
-          "required": false,
-          "description": "Horizontal bars, Columns, Line or Donut"
-        },
-        {
-          "id": "top",
-          "name": "How many",
-          "kind": "input",
-          "data_type": "any",
-          "multi": false,
-          "required": false,
-          "description": "How many rows to show"
+          "description": ""
         }
       ],
       "outputs": [
@@ -191,61 +103,29 @@
           "data_type": "json",
           "multi": false,
           "required": false,
-          "description": "What to plot: {kind, title, points} — the block draws it"
-        },
-        {
-          "id": "rows",
-          "name": "Rows",
-          "kind": "output",
-          "data_type": "json",
-          "multi": false,
-          "required": false,
-          "description": "The plotted rows, for a table"
+          "description": ""
         }
       ],
       "config": {
         "batch_mode": "whole_list",
-        "output_format": "custom",
-        "output_format_prompt": "figure: {kind: \"bars\"|\"columns\"|\"line\"|\"donut\", title: string, points: [{label, value}]}; rows: a list of objects with the same keys",
         "read_file_inputs": true
       }
     }
   ],
   "edges": [
     {
-      "id": "e1",
+      "id": "file-to-chart",
       "source_node_id": "page",
       "source_port_id": "file_out",
       "target_node_id": "chart",
       "target_port_id": "csv"
     },
     {
-      "id": "e2",
-      "source_node_id": "page",
-      "source_port_id": "kind_out",
-      "target_node_id": "chart",
-      "target_port_id": "kind"
-    },
-    {
-      "id": "e3",
-      "source_node_id": "page",
-      "source_port_id": "top_out",
-      "target_node_id": "chart",
-      "target_port_id": "top"
-    },
-    {
-      "id": "e5",
+      "id": "chart-to-plot",
       "source_node_id": "chart",
       "source_port_id": "figure",
       "target_node_id": "page",
       "target_port_id": "plot_in"
-    },
-    {
-      "id": "e6",
-      "source_node_id": "chart",
-      "source_port_id": "rows",
-      "target_node_id": "page",
-      "target_port_id": "table_in"
     }
   ]
 }

@@ -7,9 +7,9 @@
  * engine's to test, beside the element (`engine/src/elements/`).
  */
 import { describe, it, expect } from 'vitest';
-import { NODE_KINDS } from '@/nodeKinds';
+import { NODE_KINDS } from '@/document/nodeKinds';
 import { BLOCKS } from '@/page/blocks';
-import { guiWidgetPorts } from './nodes/gui/guiWidgets';
+import { guiWidgetPorts } from '@/document/guiWidgets';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from './registry';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { nodeLogic, widgetLogic } from '@/authoring/logic';

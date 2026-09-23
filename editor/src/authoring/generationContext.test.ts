@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NODE_KINDS } from '@/nodeKinds';
+import { NODE_KINDS } from '@/document/nodeKinds';
 import { connectedFormatContext, lastRunContext, describeNodeOutput, outputTargets, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
 import { nodeFacts } from './nodeFacts';

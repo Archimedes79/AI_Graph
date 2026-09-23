@@ -8,5 +8,4 @@ export interface RFNodeData {
   onDelete: (nodeId: string) => void;
   onPortEdit: (nodeId: string, portId: string) => void;
   executionStatus?: ExecutionStatus;
-  executionOutput?: Record<string, unknown>;
 }

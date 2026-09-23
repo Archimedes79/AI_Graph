@@ -21,7 +21,7 @@ const graph = () => parseGraph({
     ] }, inputs: [], outputs: [] },
     { id: 'each-file', node_type: 'ai', label: 'Each file', description: 'Summarize one file.',
       config: { batch_mode: 'per_item', read_file_inputs: true, prompt_template: '{{story}}' },
-      inputs: [port('story', 'input')], outputs: [port('output', 'output')] },
+      inputs: [{ ...port('story', 'input', 'file_path'), multi: true }], outputs: [{ ...port('output', 'output'), multi: true }] },
     { id: 'rows', node_type: 'code', label: 'Rows', config: { code: 'function run(i) { return { rows: [] }; }' },
       inputs: [port('files', 'input'), port('summaries', 'input')], outputs: [port('rows', 'output')] },
   ],
@@ -77,9 +77,31 @@ describe('flow.js', () => {
       ],
     });
     const flow = describeFlow(odd);
-    expect(() => new Function(`${flow}; return flow;`)).not.toThrow();
+    expect(() => new Function(`'use strict'; ${flow}; return flow;`)).not.toThrow();
     expect(flow).toContain('const _class = await node._class({ "my-port": _1st.output });');
     expect(flow).toContain('await node.class_({ value: _class["out put"] });');
+  });
+
+  it('never fails a save: whatever a hand-written graph.json holds where a name belongs is said as text', () => {
+    const odd = graph();
+    (odd.metadata as unknown as Record<string, unknown>).name = ['a', 'list'];
+    (odd.metadata as unknown as Record<string, unknown>).description = 2024;
+    expect(() => describeFlow(odd)).not.toThrow();
+    expect(describeFlow(odd).split('\n').slice(0, 2)).toEqual(['// ["a","list"]', '// 2024']);
+  });
+
+  it('names a node\'s folder as the folder layer does, and is JavaScript for a strict reader too', () => {
+    const strict = parseGraph({
+      metadata: { name: 'Strict' },
+      nodes: [
+        { id: 'interface', node_type: 'input', config: { input_mode: 'text' }, inputs: [], outputs: [] },
+        { id: 'my node', node_type: 'code', config: { code: 'function run(i) { return i; }' }, inputs: [port('value', 'input')], outputs: [] },
+      ],
+      edges: [{ id: 'a', source_node_id: 'interface', source_port_id: 'output', target_node_id: 'my node', target_port_id: 'value' }],
+    });
+    const flow = describeFlow(strict);
+    expect(flow).toContain('· nodes/my_node/code.js · id "my node"');
+    expect(() => new Function(`'use strict'; ${flow}; return flow;`)).not.toThrow();
   });
 
   it('breaks a call that would not fit a line, one wire a line', () => {

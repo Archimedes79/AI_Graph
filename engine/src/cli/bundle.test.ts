@@ -59,7 +59,6 @@ describe('a bundle', () => {
       const page = result.node_results.find((n: { node_id: string }) => n.node_id === 'page');
       expect(page.display.plot.kind).toBe('bars');
       expect(page.display.plot.points.length).toBeGreaterThan(0);
-      expect(page.display.table.length).toBeGreaterThan(0);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

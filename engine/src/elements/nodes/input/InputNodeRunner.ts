@@ -20,8 +20,10 @@ export interface InputConfig {
 }
 
 /** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
+/** The body that chooses files: named once, so what is said about it names the file that exists. */
+const SELECTOR_FILE = 'select.js';
 const SELECTOR_TEXTS: readonly TextFile[] = [
-  { field: 'selector_code', file: 'select.js' },
+  { field: 'selector_code', file: SELECTOR_FILE },
   { field: 'selector_prompt', file: 'task.md' },
 ];
 
@@ -152,12 +154,16 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  override graphAuthorNote(): string {
+    return `config.value is the text, the file path or the folder path; config.input_mode is text, file or directory.`;
+  }
+
   override whatRuns(node: GraphNode): WhatRuns {
-    const { mode } = this.config(node);
+    const { mode, selectAll } = this.config(node);
     if (mode === 'file') return this.engineRuns('Reads the file whose path arrives on "path" (or the one it names) and hands on its text as "content".');
     if (mode === 'directory') {
       return this.engineRuns('Lists the folder whose path arrives on "path" (or the one it names) and hands on the files as "files"'
-        + (this.logic(node)?.isEmpty === false ? ', chosen by selector.js, which runs sandboxed.' : '.'));
+        + (!selectAll && this.logic(node)?.isEmpty === false ? `, chosen by ${SELECTOR_FILE}, which runs sandboxed.` : '.'));
     }
     return this.engineRuns('Hands on the text it holds, or what the person running the graph was asked for.');
   }

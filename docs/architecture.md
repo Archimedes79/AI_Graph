@@ -103,7 +103,7 @@ Behaviour lives in classes. Shared code asks the element and never switches on a
 
 ```
 ElementRunner<Subject, Config>          config() · texts() · logic() · catchesErrors() ┊ generation() · deployNeeds()
-├── NodeRunner<C>                a node: derivedPorts · execute · display · eventPorts · keepsTime · settleMemory ┊ whatRuns · problems
+├── NodeRunner<C>                a node: derivedPorts · execute · display · eventPorts · keepsTime · settleMemory ┊ whatRuns · problems · graphAuthorNote
 │   ├── InputNodeRunner   AiNodeRunner   CodeNodeRunner
 │   ├── DataNodeRunner    OutputNodeRunner   SubgraphNodeRunner
 │   ├── TriggerNodeRunner        an event with nobody there: the tool starting, a clock
@@ -162,7 +162,7 @@ turned out there was nothing to keep apart — see below.)
 |---|---|---|---|
 | **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
 | `ElementRunner` | `config` · `texts` · `logic` | `catchesErrors` · `snippetFailure` · `runSnippet` | `generation` · `deployNeeds` |
-| `NodeRunner` | `nodeType` · `derivedPorts` · `nestedGraph` · `boundaryRole` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `asksModel` · `referencedPaths` |
+| `NodeRunner` | `nodeType` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `boundaryRole` · `valuePorts` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
 | `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | — |
 | `NodeGuiBuilder` | `nodeType` | — | **everything**: the palette, panels, what ✨ Generate is told |
 | `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, panels, what ✨ Generate is told |
@@ -178,7 +178,7 @@ role that had nowhere to live:
 | Was | Is now | Because |
 |---|---|---|
 | `WidgetGuiBuilder.View`, `ownsValue` | [`page/blocks.ts`](../editor/src/page/blocks.ts) | what the **page draws** — the one part of a widget a recipient operates |
-| `NodeGuiBuilder.create`, `settings`, `saved`, `showsResultWindow` | [`nodeKinds.ts`](../editor/src/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| `NodeGuiBuilder.create`, `settings`, `saved`, `showsResultWindow` | [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
 | `WidgetGuiBuilder.clearValueAfterRun` | `WidgetRunner.clearsValueAfterRun` | what a **run** means for a block, the same family as `settle` |
 
 A node's middle role is empty by nature: the canvas is never delivered. A widget's is not,
@@ -260,6 +260,8 @@ built from that table, and mirror each other:
 engine/src                               editor/src
   main.ts            the entry point       main.tsx  App.tsx   the editor's entry and shell
   graph.ts           the document          graph.ts            the document, as the editor holds it
+  errors.ts          NotFound · NotAGraph  document/           what a graph is to the editor: nodeKinds,
+                                             guiWidgets (a page's ports), layout (the grid)
   elements/          see above             elements/           see above
   authoring/         how a body is         authoring/          writing a body: ✨ Generate, Try it,
     generation.ts    written, where it       AuthoredBodyEditor  the live transcript, the page-wide
@@ -273,19 +275,27 @@ engine/src                               editor/src
   project/           a graph on disk
     folder.ts        read · write · watch
     check.ts         what is wrong
-    legacy.ts        the old .nodes/ layout
   host/              Node and HTTP         api/client.ts       the contract's client
     api.ts           the contract          app/                toolbar, sidebar, dialogs, results
     serve.ts  http.ts  runs.ts             store/              the open graph, runs, undo
     schedule.ts  node.ts                   runtime/            the deployed tool's page
     lifecycle.ts     what is stopped, in order
-    editor/          never bundled         ui/                 theme, Modal, Markdown, dialogs
+    editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal
+                                           dialogs/            FileBrowserDialog, RequirementsDialog
   ai/                providers · MCP · settings
   cli/               cli.ts  bundle.ts
 ```
 
 Within `editor/src` an import inside one area (`canvas/`, `page/`, …) is relative; one that
 crosses areas goes through `@/`, and one into the engine through `@engine/`.
+
+**The editor has layers, and an area imports only from a lower one.** From the bottom:
+`ui` (look, knowing no graph) · `graph` · `document` and `api` · `store` · `dialogs` ·
+`elements` and `authoring` · `page` and `canvas` · `app` · `App` and `runtime` · `main`.
+[`layers.test.ts`](../editor/src/layers.test.ts) reads the imports and fails on one that goes
+up, or sideways between two areas of one rank. The single sideways pair is
+`elements` ↔ `authoring`, on purpose: a panel is made of authoring editors, and an authoring
+editor asks the registry what a node is. Panels are lazy chunks, so there is no static cycle.
 
 ## Five rules
 
@@ -321,7 +331,7 @@ other knows, it imports it or replays its result:
 |---|---|
 | every route, request and response | `host/api.ts` |
 | the graph's types | `graph.ts` |
-| a page node's ports | `GuiNodeRunner.derivedPorts` via `elements/nodes/gui/guiWidgets.ts` |
+| a page node's ports | `GuiNodeRunner.derivedPorts` via `document/guiWidgets.ts` |
 | whether a widget starts the graph | `WidgetRunner.firesRun` |
 | the request an AI node will send | `assemblePrompt` (`elements/nodes/ai/prompt.ts`) |
 | what a run remembered | `ExecutionResult.memory`, replayed with `applyMemory` |
@@ -383,11 +393,21 @@ what it should do ──✨──▶ body ──▶ Try it: [values] ⟳ from th
                                                  written and checked against (tryValues.ts)
 ```
 
-**One way to run a body.** A code node's `code.js`, an ai node's changed `run.js`, the
-`selector.js` that picks files and the code a display block shapes its value with are one
-kind of thing, and `elements/body.ts` (`runBody`) is the only place that runs one:
-`async function run(inputs, node)`, in a process of its own, returning an object keyed by
-output port. The element decides *when* and what a failure costs; never *how*.
+**One way to run a body — on Node.** A code node's `code.js`, an ai node's changed `run.js`,
+the `select.js` that picks files and the code a table or an image block shapes its value
+with are one kind of thing, and `elements/body.ts` (`runBody`) is the only place in the
+engine that runs one: `async function run(inputs, node)`, in a process of its own, returning
+an object keyed by output port. The element decides *when* and what a failure costs; never *how*. The probe that tries generated code on a sample runs it the same way, so code that asks a model is tried with a node it can ask.
+
+**The one body that runs in the page: a chart's.** A chart's body is not a transform of a
+value but `function draw(data, window)`, and what it needs — the block's size in pixels and
+the page's colour scheme — exists only where the block is drawn, so it runs there, again on
+every change of data, size or scheme, with no run. It runs in a browser **Web Worker**
+(no DOM, no network, no modules; destroyed after four seconds), in
+[`plot_window/draw.ts`](../editor/src/elements/widgets/plot_window/draw.ts), and its SVG still
+goes through `asDrawing`. The engine is told to leave it alone: `WidgetRunner.bodyDrawsOnThePage`
+makes `GuiNodeRunner.showBlock` hand the value through untouched. A node says *what* to plot
+(`{kind, title, points}`, ordinary data on a wire); the block draws it.
 
 **A body can ask.** `CodeService.run(body, inputs, signal, context)` hands a body a second
 argument, `node`: plain data, and `calls` — questions it may put to the process that holds
@@ -430,7 +450,10 @@ learns what a code node is.
   node dialog and the MCP server's `test_graph`; nothing generates from it. `check` holds
   an example's inputs to the output interface of the node wired into that port.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
-  problems: the CLI prints it and CI fails on it, the MCP server returns it before saving.
+  problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
+  what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
+  message template asking for an input that is not there, a page with two blocks of one id — is
+  that element's `problems()`.
 
 ## Where state lives
 
@@ -470,12 +493,24 @@ learns what a code node is.
 - Build time and run time are kept apart inside each element class, and the tests read the
   bars that say which is which ([`times.test.ts`](../engine/src/elements/times.test.ts),
   [its mirror](../editor/src/elements/times.test.ts)).
-- No code outside `elements/` compares a node type or a widget kind with a name
-  ([`shells.test.ts`](../editor/src/elements/shells.test.ts)). What such a comparison would
-  decide is a member of the element's class — `holdsWidgets`, `missingExample`,
-  `describeAsSource`, `canvasSummary`, `outputFormatHint` — so a new kind answers for itself.
+- No code outside `elements/` compares a node type or a widget kind with a name, in the editor
+  ([`shells.test.ts`](../editor/src/elements/shells.test.ts)) or in the engine
+  ([`shells.test.ts`](../engine/src/shells.test.ts); `execution/triggers.ts` alone reads the document
+  without asking). What such a comparison would decide is a member of the element's class —
+  `holdsWidgets`, `missingExample`, `isResult`, `problems`, `blocks`, `graphAuthorNote` — so a new
+  kind answers for itself. The prompt that designs a whole graph is assembled from the kinds' own
+  `graphAuthorNote`; a kind without one (a subgraph) is not offered to the model.
+- The editor's layers are held by [`layers.test.ts`](../editor/src/layers.test.ts), see above.
+- What two layers both say, one file says: `errors.ts` holds `NotFound` and `NotAGraph` for the
+  project folder, the directory listing and the server that turns them into a status.
 
 ## Settled debt, and what is deliberately not there
+
+- **Open, and measured:** where the code does not yet keep the rules above — the engine's
+  half of "no shell names a kind", one prompt that lists every kind by hand, the page's block
+  list read by string key, the editor's undeclared layer order, and the shells that grew into
+  one function — is in [review-2026-09-20.md](review-2026-09-20.md), with numbers and an order to
+  do it in. There are no import cycles through values, and none between the engine and the editor.
 
 - **A saved node carries its own settings only.** In memory every node has the full
   `NodeConfig`, so a panel can read any field with a type. Each `<Kind>NodeGuiBuilder` names the

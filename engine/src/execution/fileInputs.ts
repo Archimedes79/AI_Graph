@@ -84,9 +84,11 @@ export async function readPorts(
       resolved[key] = value;
       continue;
     }
-    resolved[key] = Array.isArray(value)
-      ? await Promise.all(value.map((path) => files.read(String(path))))
-      : await files.read(String(value));
+    // No path is no file, and no file has no content: a picker nobody has used
+    // yet hands on "", and the node is there to say "choose a file" -- it used
+    // to be told `ENOENT: open ''` instead, before it ran at all.
+    const read = (path: unknown): Promise<string> | string => (String(path ?? '').trim() ? files.read(String(path)) : '');
+    resolved[key] = Array.isArray(value) ? await Promise.all(value.map(read)) : await read(value);
   }
   return resolved;
 }

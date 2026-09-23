@@ -63,6 +63,7 @@ import { RUN_PORT, type Trigger } from '../../execution/triggers.ts';
 import { registry } from '../../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';
 import { candidatePaths, configuredMcpServers, configuredSettings, SETTINGS_FILENAME } from '../../ai/settings.ts';
+import { message } from '../http.ts';
 import { nodeRuntime } from '../node.ts';
 import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
@@ -107,7 +108,7 @@ class Refused extends Error {}
  * `validate_graph` reports this one as a finding: "is this a graph?" was the
  * question, and "no, because" is an answer to it, not a failure to answer.
  */
-class NotAGraph extends Refused {}
+class BadDocument extends Refused {}
 
 const fold = (path: string): string => (process.platform === 'win32' ? path.toLowerCase() : path);
 
@@ -330,7 +331,6 @@ const briefAll = (values: Record<string, unknown> | undefined): Record<string, u
 const KEY_SHAPED = /\b(sk-[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/g;
 
 const json = (value: unknown): string => JSON.stringify(value, null, 2);
-const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /**
  * The six tools, over one folder.
@@ -371,7 +371,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
   /** A graph argument, bounded and parsed. */
   const graphFrom = (raw: unknown, argument: string): Graph => {
     if (!graphShaped(raw)) {
-      throw new NotAGraph(`"${argument}" must be a graph document: an object with a "nodes" array and an "edges" array. authoring_guide shows the shape.`);
+      throw new BadDocument(`"${argument}" must be a graph document: an object with a "nodes" array and an "edges" array. authoring_guide shows the shape.`);
     }
     if (JSON.stringify(raw).length > MAX_GRAPH_BYTES) {
       throw new Refused(`"${argument}" is larger than ${MAX_GRAPH_BYTES / 1024 / 1024} MB. A graph holds wiring and code, not data: keep the data in a file and read it with an input node.`);
@@ -380,20 +380,20 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
     try {
       graph = parseGraph(raw);
     } catch (error) {
-      throw new NotAGraph(`"${argument}" is not a graph: ${message(error)}`);
+      throw new BadDocument(`"${argument}" is not a graph: ${message(error)}`);
     }
     // `parseGraph` is forgiving about shape on purpose; the code below it is
     // not, and "Cannot read properties of null" is not something a model can fix.
     for (const node of graph.nodes) {
       if (!Array.isArray(node.inputs) || !Array.isArray(node.outputs)) {
-        throw new NotAGraph(`Node "${node.id}" in "${argument}": "inputs" and "outputs" must be arrays of ports, even when empty.`);
+        throw new BadDocument(`Node "${node.id}" in "${argument}": "inputs" and "outputs" must be arrays of ports, even when empty.`);
       }
       if (!node.config || typeof node.config !== 'object' || Array.isArray(node.config)) {
-        throw new NotAGraph(`Node "${node.id}" in "${argument}": "config" must be an object.`);
+        throw new BadDocument(`Node "${node.id}" in "${argument}": "config" must be an object.`);
       }
       const blocks = node.config.gui_widgets;
       if (Array.isArray(blocks) && blocks.some((block) => !block || typeof block !== 'object' || Array.isArray(block))) {
-        throw new NotAGraph(`Node "${node.id}" in "${argument}": every entry of config.gui_widgets must be a block object.`);
+        throw new BadDocument(`Node "${node.id}" in "${argument}": every entry of config.gui_widgets must be a block object.`);
       }
     }
     return graph;
@@ -413,9 +413,9 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
     try {
       raw = JSON.parse(text);
     } catch (error) {
-      throw new NotAGraph(`"${given}" is not valid JSON: ${message(error)}`);
+      throw new BadDocument(`"${given}" is not valid JSON: ${message(error)}`);
     }
-    if (!graphShaped(raw)) throw new NotAGraph(`"${given}" is JSON but not a graph: it has no "nodes" array.`);
+    if (!graphShaped(raw)) throw new BadDocument(`"${given}" is JSON but not a graph: it has no "nodes" array.`);
     return graphFrom(raw, given);
   };
 
@@ -440,7 +440,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       return { graph: await loadProject(full, insideRoot), full };
     } catch (error) {
       if (error instanceof Refused) throw error;
-      throw new NotAGraph(`"${String(given)}" could not be read as a project: ${message(error)}`);
+      throw new BadDocument(`"${String(given)}" could not be read as a project: ${message(error)}`);
     }
   };
 

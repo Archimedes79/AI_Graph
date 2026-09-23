@@ -21,8 +21,7 @@ import { dirname, extname, join, resolve } from 'node:path';
 
 import type { BrowseEntry, BrowsePage } from './api.ts';
 import { isProjectFolder } from '../project/folder.ts';
-
-export class NotFound extends Error {}
+import { NotFound } from '../errors.ts';
 
 /** `.md, txt` -> ['.md', '.txt']; empty means "everything". */
 export function extensionFilter(raw: string): string[] {
@@ -31,7 +30,7 @@ export function extensionFilter(raw: string): string[] {
 }
 
 /** Where a browser can jump to: home, plus the drives that exist on Windows and `/` elsewhere. */
-export function filesystemRoots(): string[] {
+function filesystemRoots(): string[] {
   const roots = [homedir()];
   if (platform() === 'win32') {
     for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {

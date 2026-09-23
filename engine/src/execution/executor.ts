@@ -878,7 +878,7 @@ function finalOutputs(
 ): Record<string, unknown> {
   const final: Record<string, unknown> = {};
   for (const node of nodes) {
-    if (registry.node(node.node_type)?.nodeType !== 'output') continue;
+    if (!registry.node(node.node_type)?.isResult) continue;
     const produced = outputs.get(node.id);
     if (!produced) continue;
     const label = String(node.config.output_label ?? '') || node.id;

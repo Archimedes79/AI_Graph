@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { showsPage } from '@/elements/nodes/gui/guiWidgets';
+import { showsPage } from '@/document/guiWidgets';
 import { ReactFlowProvider } from 'reactflow';
 
 import Toolbar from '@/app/Toolbar';
@@ -15,7 +15,7 @@ import ResultsPanel from '@/app/ResultsPanel';
 
 import SettingsDialog from '@/app/SettingsDialog';
 import Modal from '@/ui/Modal';
-import FileBrowserDialog from '@/ui/FileBrowserDialog';
+import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 
 import { useGraphStore } from '@/store/graphStore';
 import { call } from '@/api/client';

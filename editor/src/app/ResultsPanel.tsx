@@ -1,6 +1,6 @@
 import { useGraphStore } from '@/store/graphStore';
 import { ACCENT, ACCENT_TEXT, DANGER_TEXT, DIM, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
-import { delivered, statusTone } from '@/canvas/executionStatus';
+import { delivered, statusTone } from '@/store/executionStatus';
 
 export default function ResultsPanel() {
   const result = useGraphStore((s) => s.executionResult);

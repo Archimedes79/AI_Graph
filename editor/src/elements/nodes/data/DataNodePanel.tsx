@@ -4,7 +4,7 @@ import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import { DANGER_SOFT, FIELD, LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
-function displayValue(value: unknown): string {
+function asEditableText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '';
   return JSON.stringify(value, null, 2);
@@ -14,11 +14,11 @@ export default function DataNodePanel({
   node, setConfig, generation, fields, generating, message, onGenerate,
   applyDataFormat, contextFile, onContextFileChange,
 }: NodePanelProps) {
-  const [content, setContent] = useState(() => displayValue(node.config.data_value));
+  const [content, setContent] = useState(() => asEditableText(node.config.data_value));
   const [contentError, setContentError] = useState('');
   const structured = node.config.data_format !== 'text';
 
-  useEffect(() => setContent(displayValue(node.config.data_value)), [node.config.data_value]);
+  useEffect(() => setContent(asEditableText(node.config.data_value)), [node.config.data_value]);
 
   const updateContent = (value: string) => {
     setContent(value);

@@ -3,17 +3,16 @@
     "name": "Chat",
     "version": "1.0.0",
     "description": "A chatbot is two nodes: a page with a chat block, and a model. Sending a message starts the graph at the AI node; the answer comes back into the conversation, and the conversation goes out again as history with the next message.",
-    "author": "AI-Graph",
+    "author": "",
     "tags": [
       "example",
-      "chat",
-      "gui",
       "ai",
-      "triggers"
+      "chat",
+      "gui"
     ],
     "ai_defaults": {
-      "provider": "google",
-      "model": "gemini-flash-lite-latest"
+      "provider": "default",
+      "model": ""
     },
     "gui_scheme": "night"
   },
@@ -26,7 +25,7 @@
       "inputs": [
         {
           "id": "chat_in",
-          "name": "Chat: reply",
+          "name": "chat: reply",
           "kind": "input",
           "data_type": "any",
           "multi": false,
@@ -37,7 +36,7 @@
       "outputs": [
         {
           "id": "chat_out",
-          "name": "Chat: message",
+          "name": "chat: message",
           "kind": "output",
           "data_type": "text",
           "multi": false,
@@ -46,7 +45,7 @@
         },
         {
           "id": "chat_history",
-          "name": "Chat: history",
+          "name": "chat: history",
           "kind": "output",
           "data_type": "text",
           "multi": false,
@@ -67,17 +66,7 @@
             "w": 16
           },
           {
-            "h": 1,
-            "id": "intro",
-            "kind": "text",
-            "label": "",
-            "mode": "caption",
-            "tone": "plain",
-            "value": "Type a message and press Enter. The model sees the whole conversation each time.",
-            "w": 16
-          },
-          {
-            "h": 8,
+            "h": 10,
             "id": "chat",
             "kind": "chat",
             "tone": "plain",
@@ -94,7 +83,7 @@
       "id": "assistant",
       "node_type": "ai",
       "label": "Assistant",
-      "description": "Answer the user's last message as a friendly, concise assistant that remembers the conversation.",
+      "description": "Answers the last message, knowing the conversation so far",
       "inputs": [
         {
           "id": "history",
@@ -103,7 +92,7 @@
           "data_type": "text",
           "multi": false,
           "required": false,
-          "description": "The conversation so far"
+          "description": ""
         },
         {
           "id": "message",
@@ -112,18 +101,18 @@
           "data_type": "text",
           "multi": false,
           "required": true,
-          "description": "What the user just said"
+          "description": ""
         }
       ],
       "outputs": [
         {
           "id": "output",
-          "name": "Output",
+          "name": "Reply",
           "kind": "output",
           "data_type": "text",
           "multi": false,
           "required": false,
-          "description": "What the model answered"
+          "description": ""
         }
       ],
       "config": {
@@ -131,28 +120,27 @@
         "ai_provider": "google",
         "batch_mode": "whole_list",
         "output_format": "text",
-        "read_file_inputs": false,
         "temperature": 0.7
       }
     }
   ],
   "edges": [
     {
-      "id": "e1",
+      "id": "message-to-assistant",
       "source_node_id": "page",
       "source_port_id": "chat_out",
       "target_node_id": "assistant",
       "target_port_id": "message"
     },
     {
-      "id": "e2",
+      "id": "history-to-assistant",
       "source_node_id": "page",
       "source_port_id": "chat_history",
       "target_node_id": "assistant",
       "target_port_id": "history"
     },
     {
-      "id": "e3",
+      "id": "reply-to-chat",
       "source_node_id": "assistant",
       "source_port_id": "output",
       "target_node_id": "page",

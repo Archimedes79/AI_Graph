@@ -69,7 +69,8 @@ describe('openExternal', () => {
   });
 
   it('says the graph must be saved when the file is not there yet', async () => {
-    const { openExternal, NotFound } = await import('./files.ts');
+    const { openExternal } = await import('./files.ts');
+    const { NotFound } = await import('../../errors.ts');
     const dir = await sandbox();
     await expect(openExternal(dir, 'Analyse.js')).rejects.toBeInstanceOf(NotFound);
   });

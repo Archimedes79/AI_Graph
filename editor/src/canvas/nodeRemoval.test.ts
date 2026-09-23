@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { NodeChange } from 'reactflow';
 import { removalsToApply } from './nodeRemoval';
 import type { GraphNode } from '@/graph';
-import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
+import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 
 function node(id: string, blocks: number): GraphNode {

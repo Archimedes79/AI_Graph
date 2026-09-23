@@ -5,8 +5,10 @@ import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
+import { names, type Problem } from '../../../execution/wiring.ts';
 import { runBody } from '../../body.ts';
 import { askModel, type AskSettings } from './ask.ts';
+import { ALL_INPUTS, placeholders } from './prompt.ts';
 import { AI_RUN, AI_RUN_TEMPLATES, isStandardRun } from './runTemplate.ts';
 
 /** Where an ai node keeps its two halves; used by both declarations below. */
@@ -122,10 +124,28 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  override graphAuthorNote(): string {
+    return `the node's own "description" field says what it is for, and config.system_prompt is the standing instruction. Everything wired into it is sent as the message; with more than one input, lay them out in config.prompt_template using {{port_id}} placeholders, for example "Conversation so far: {{history}} User: {{message}}" with line breaks between the parts. The reply arrives on the node's single output port, "output".`;
+  }
+
   override whatRuns(node: GraphNode): WhatRuns {
     return isStandardRun(this.config(node).runCode)
       ? { by: 'engine', where: 'run.js', does: 'Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as "output". Unchanged, run.js is made by the engine itself; a test holds the two to the same request.' }
       : { by: 'body', where: 'run.js', does: 'Calls run(inputs, node) in run.js, sandboxed; each node.llm(...) in it is a model call made for it by the process that holds the keys.' };
+  }
+
+  /** A placeholder nobody fills is sent to the model as the literal "{{name}}". */
+  override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
+    const template = String(node.config.prompt_template ?? '');
+    if (!template.trim()) return [];
+    const inputs = new Set(node.inputs.map((port) => port.id));
+    return placeholders(template)
+      .filter((name) => name !== ALL_INPUTS && !inputs.has(name))
+      .map((name) => ({
+        where,
+        problem: `Its message template asks for {{${name}}}, and it has no input "${name}".`,
+        fix: `Use one of its inputs: ${names(inputs)} -- or add an input with that id.`,
+      }));
   }
 
   /** The one element whose request lives on the node rather than in its config. */

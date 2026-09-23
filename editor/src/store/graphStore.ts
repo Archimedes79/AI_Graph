@@ -2,13 +2,13 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, NodeType } from '@/graph';
-import type { RFNodeData } from '@/canvas/nodeData';
-import { derivedNodePorts, showsPage } from '@/elements/nodes/gui/guiWidgets';
+import type { RFNodeData } from './nodeData';
+import { derivedNodePorts, showsPage } from '@/document/guiWidgets';
 import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { ACCENT } from '@/ui/theme';
-import { delivered } from '@/canvas/executionStatus';
-import { NODE_KINDS, savedNode } from '@/nodeKinds';
+import { delivered } from './executionStatus';
+import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 import type React from 'react';
 import { applyMemory } from '@engine/graph.ts';
@@ -90,6 +90,12 @@ export interface GraphStore {
     updates: Partial<GraphNode>,
     renamed?: { inputs: Record<string, string>; outputs: Record<string, string> },
   ) => void;
+  /**
+   * Wire one port to another: what dragging from a handle to a handle does.
+   * Here and not in the canvas, so that a graph can be built -- and a test can
+   * build one -- without a mouse. The same wire twice is one wire.
+   */
+  connect: (wire: { source: string; sourceHandle: string; target: string; targetHandle: string }) => void;
   deleteNode: (nodeId: string) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
   setRFEdges: (edges: Edge[]) => void;
@@ -467,6 +473,36 @@ export const useGraphStore = create<GraphStore>()(
         state.rfNodes.push(rfNode as any);
       });
       return id;
+    },
+
+    connect: (wire) => {
+      const id = `edge-${wire.source}-${wire.sourceHandle}-${wire.target}-${wire.targetHandle}`;
+      if (get().rfEdges.some((edge: Edge) => edge.id === id)) return;
+      get().commit();
+      set((state) => {
+        state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as any);
+
+        // A wire from a port that carries file paths -- a picker, a folder --
+        // makes the port it ends on one that receives file paths. Nowhere in
+        // the editor can a person say so themselves, and "Read file contents
+        // from paths" reads exactly those ports: without this, a graph wired by
+        // hand summarised the file's *name*.
+        const portOf = (nodeId: string, side: 'inputs' | 'outputs', portId: string) => state.rfNodes
+          .find((node: RFNode) => node.id === nodeId)?.data.graphNode[side].find((port) => port.id === portId);
+        const from = portOf(wire.source, 'outputs', wire.sourceHandle);
+        const to = portOf(wire.target, 'inputs', wire.targetHandle);
+        // Not on a node whose ports follow from its settings (a page, an input): those are recomputed.
+        const target = state.rfNodes.find((node: RFNode) => node.id === wire.target)?.data.graphNode;
+        const own = !!target && derivedNodePorts(target as GraphNode) === null;
+        // Only a port with nobody's word on it. A port typed `text` said what it
+        // wants -- a file reader takes the same picker twice, one to read and one
+        // to keep the name -- and the engine reads it the same way
+        // (`execution/fileInputs.ts`: the target's own type wins).
+        if (own && from?.data_type === 'file_path' && to && to.data_type === 'any') {
+          to.data_type = 'file_path';
+          if (from.multi) to.multi = true;
+        }
+      });
     },
 
     updateNode: (nodeId, updates, renamed) => {

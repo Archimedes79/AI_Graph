@@ -61,6 +61,37 @@ describe('what check finds in a graph', () => {
   });
 });
 
+describe('what check finds in a setting that would silently do nothing', () => {
+  /** A folder picker wired into an ai node that is to summarise each file. */
+  const folder = (story: Record<string, unknown>, config: Record<string, unknown>): Graph => parseGraph({
+    metadata: { name: 'Folder' },
+    nodes: [
+      { id: 'page', node_type: 'gui', inputs: [], outputs: [], config: { gui_widgets: [
+        { id: 'folder', kind: 'input_picker', mode: 'directory' }, { id: 'shown', kind: 'text_io', mode: 'output' },
+      ] } },
+      { id: 'each', node_type: 'ai', inputs: [{ ...port('story', 'input'), ...story }], outputs: [port('output', 'output')],
+        config: { system_prompt: 'Summarise.', prompt_template: '{{story}}', ...config } },
+    ],
+    edges: [
+      { id: 'a', source_node_id: 'page', source_port_id: 'folder_out', target_node_id: 'each', target_port_id: 'story' },
+      { id: 'b', source_node_id: 'each', source_port_id: 'output', target_node_id: 'page', target_port_id: 'shown_in' },
+    ],
+  });
+  const said = (graph: Graph) => problemsIn(graph).map((found) => found.problem).join(' ');
+
+  it('finds "read the files" on a node none of whose inputs carries a path: it would be handed the file\'s name', () => {
+    expect(said(folder({ multi: true }, { read_file_inputs: true, batch_mode: 'per_item' }))).toMatch(/none of its inputs is a file path/);
+    expect(said(folder({ multi: true, data_type: 'file_path' }, { read_file_inputs: true, batch_mode: 'per_item' }))).toBe('');
+  });
+
+  it('finds "once per item" where a list arrives and no input is declared as one: it would run once, on all of it', () => {
+    expect(said(folder({ data_type: 'file_path' }, { read_file_inputs: true, batch_mode: 'per_item' }))).toMatch(/none of its inputs is declared as a list/);
+    // Not where no list arrives, and not on a page, whose ports follow from its blocks.
+    expect(said(folder({ data_type: 'file_path' }, { read_file_inputs: true, batch_mode: 'whole_list' }))).toBe('');
+    expect(problemsIn(graph())).toEqual([]);
+  });
+});
+
 describe('what check finds on a gate', () => {
   const gated = (dataType: string): Graph => {
     const made = graph();

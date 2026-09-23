@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseGraph, type Graph, type GraphEdge, type GraphNode } from '../graph.ts';
+import { type Graph, type GraphEdge, type GraphNode } from '../graph.ts';
 import { executeGraph, memoryFeedbackEdges } from './executor.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
@@ -138,21 +138,6 @@ describe('graphTriggers', () => {
       { event: { node_id: 'clock', port_id: 'fired' }, on_start: false, every: '5m' },
       { event: { node_id: 'start', port_id: 'fired' }, on_start: true, every: '' },
     ]);
-  });
-
-  it('turns the two settings a graph used to have into a trigger node wired to nothing', () => {
-    const graph = parseGraph({ metadata: { name: 'old', triggers: { on_start: true, every: '30s' } }, nodes: [{ id: 'trigger', node_type: 'code' }], edges: [] });
-    expect((graph.metadata as { triggers?: unknown }).triggers).toBeUndefined();
-    expect(graphTriggers(graph)).toEqual([{ event: { node_id: 'trigger_2', port_id: 'fired' }, on_start: true, every: '30s' }]);
-    // Wired to nothing, it starts everything -- which is what the settings did.
-    expect(triggeredNodes(graph, { node_id: 'trigger_2', port_id: 'fired' }, new Set())).toBeNull();
-    // And only once: a graph saved since keeps the node it was given.
-    expect(parseGraph(JSON.parse(JSON.stringify(graph))).nodes.filter((n) => n.node_type === 'trigger')).toHaveLength(1);
-  });
-
-  it('leaves a graph whose settings were both off without a node', () => {
-    const graph = parseGraph({ metadata: { triggers: { on_start: false, every: '' } }, nodes: [], edges: [] });
-    expect(graph.nodes).toEqual([]);
   });
 });
 

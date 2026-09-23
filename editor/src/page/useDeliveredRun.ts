@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useGraphStore } from '@/store/graphStore';
-import { syncGuiNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { syncGuiNodePorts } from '@/document/guiWidgets';
 import { call, type Requirement, type RunTrigger } from '@/api/client';
 
 /**

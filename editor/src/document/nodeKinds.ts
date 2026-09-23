@@ -18,10 +18,10 @@
 // and a separate one.
 
 import type { GraphNode, NodeConfig, NodeType } from '@/graph';
-import { derivedNodePorts } from '@/elements/nodes/gui/guiWidgets';
+import { derivedNodePorts } from './guiWidgets';
 import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
 import { TriggerNodeRunner } from '@engine/elements/nodes/trigger/TriggerNodeRunner.ts';
-import { baseNodeConfig } from '@/elements/nodes/baseNodeConfig';
+import { baseNodeConfig } from './baseNodeConfig';
 
 /** Kept even at its starting value: the executor reads it whether or not anyone set it. */
 const ALWAYS_SAVED = ['batch_mode'];
@@ -92,7 +92,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       // A second input is one click on the node when it is wanted, and the
       // message template is where it then gets its place.
       inputs: [
-        { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'text', multi: true, required: false, description: 'What to ask. A list asks once per item.' },
+        // `any`, not `text`: nobody has said what this carries yet, and that is the
+        // difference that decides whether a wired file is read (`execution/fileInputs.ts`).
+        // Created `text`, an AI node wired to a folder picker was handed the file
+        // *names* -- the box ticked, the rule looking at a word nobody had said.
+        { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'any', multi: true, required: false, description: 'What to ask. A list asks once per item.' },
       ],
       outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: true, required: false, description: 'The answer. One per item when the prompt was a list.' }],
       config: { ...baseNodeConfig(), system_prompt: 'You are a helpful assistant.' },

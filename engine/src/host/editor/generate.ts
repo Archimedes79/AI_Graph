@@ -18,7 +18,9 @@
 // show what was sent when the answer is "the model returned nothing".
 
 import { readFile } from 'node:fs/promises';
-import type { AiRequest, AiService, CodeService, FileService } from '../../elements/Runtime.ts';
+import type { AiRequest, AiService, CodeService, FileService, Runtime } from '../../elements/Runtime.ts';
+import { runBody } from '../../elements/body.ts';
+import { PLAIN_ASK } from '../../elements/nodes/ai/ask.ts';
 import type { Generation } from '../../authoring/generation.ts';
 import { readPorts } from '../../execution/fileInputs.ts';
 import { renderSkeleton } from './skeleton.ts';
@@ -127,7 +129,13 @@ const CODE_SYSTEM =
   'You are an expert software engineer. When asked to generate code, output ONLY valid code '
   + 'inside a markdown code block, followed by a brief explanation outside the block. Do not add '
   + 'extra prose before the code block. The returned object\'s keys must exactly match the '
-  + 'requested output names - downstream nodes look up values by these exact keys.';
+  + 'requested output names - downstream nodes look up values by these exact keys. '
+  // Every body may ask (`elements/body.ts`), and a generator that is not told so
+  // writes a word list where a question was wanted -- or guesses at an API.
+  + 'When the task needs the judgement of a model -- classifying, summarising, extracting meaning -- declare '
+  + 'the function as "async function run(inputs, node)" and ask with '
+  + '"await node.llm({ prompt: "..." })", which resolves to the answer as text; never call a model API '
+  + 'yourself and never use a key. For everything else, plain code.';
 
 function firstCodeBlock(text: string): string {
   return /```(?:\w+)?\n([\s\S]*?)```/.exec(text)?.[1].trim() ?? '';
@@ -150,7 +158,7 @@ async function generateCode(
   if (evidence) parts.push(`\n${evidence}`);
   parts.push('\n## The function');
   if (inputs.length || outputs.length) {
-    parts.push('Complete this function. Keep the signature and the returned keys exactly as they are:\n\n'
+    parts.push('Complete this function. Keep its name, its `inputs` and the returned keys exactly as they are:\n\n'
       + renderSkeleton(inputs, outputs, sample?.values, request.input_types));
   }
   if (outputs.length) {
@@ -236,8 +244,12 @@ function describeInputs(sample: Record<string, unknown>): string {
   }).join('\n');
 }
 
+/** A probe with no way to read files: what it asks a model cannot name one. */
+const refuse = async (): Promise<never> => { throw new Error('No files here: this body is being tried on a sample.'); };
+const NO_FILES: FileService = { resolve: (path) => path, exists: async () => false, read: refuse, write: refuse, list: refuse };
+
 async function probe(
-  code: CodeService, body: string, sample: Record<string, unknown>,
+  runtime: Runtime, target: Target, body: string, sample: Record<string, unknown>,
 ): Promise<{ result: Record<string, unknown> | null; error: string }> {
   // Ended, not merely given up on: a generated body in an endless loop is a
   // process, and one per ✨ press left running is how a laptop gets warm.
@@ -245,7 +257,12 @@ async function probe(
   const clock = setTimeout(() => stop.abort(), PROBE_TIMEOUT_MS);
   clock.unref();
   try {
-    const result = await code.run(body, { ...sample }, stop.signal);
+    // Run as a graph runs it (`elements/body.ts`): generated code that asks a
+    // model through `node.llm` is tried with a `node` that can be asked.
+    // What it asks is answered by the model that wrote it: there is no graph
+    // here whose default could be meant, and that one is known to answer.
+    const ask = { ...PLAIN_ASK, provider: target.provider, model: target.model };
+    const result = await runBody(body, { ...sample }, runtime, { signal: stop.signal, ask });
     if (!result || typeof result !== 'object' || Array.isArray(result)) {
       return { result: null, error: `run() returned ${Array.isArray(result) ? 'an array' : typeof result}, but it must return an object.` };
     }
@@ -290,7 +307,7 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
  * something worse than the first attempt.
  */
 async function generateVerifiedCode(
-  ai: AiService, code: CodeService, target: Target, request: GenerateRequest, context: string,
+  ai: AiService, runtime: Runtime, target: Target, request: GenerateRequest, context: string,
   given: Sample | undefined,
   check?: (outputs: Record<string, unknown>) => string[],
   probeWith?: (body: string) => string,
@@ -317,7 +334,7 @@ async function generateVerifiedCode(
     // Some bodies are not run the way the sandbox runs one -- a chart's is
     // run by the page. The element says how to make it runnable; everyone
     // else is run as written.
-    const ran = await probe(code, probeWith ? probeWith(body) : body, sample);
+    const ran = await probe(runtime, target, probeWith ? probeWith(body) : body, sample);
     const missing = ran.result ? outputs.filter((port) => !(port in ran.result!)) : [];
     const problems = ran.result && !missing.length
       ? [...(check ? check(ran.result) : []), ...(expect ? unmet(expect, ran.result).map((gap) => `for ${given!.origin}, ${gap}`) : [])]
@@ -449,7 +466,7 @@ export async function generate(asked: GenerateRequest, deps: GenerateDeps): Prom
   try {
     switch (kind) {
       case 'code': {
-        const { text, explanation, probe: report } = await generateVerifiedCode(ai, deps.code, deps.target, shaped, context, sample, spec?.check, spec?.probeWith);
+        const { text, explanation, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, shaped, context, sample, spec?.check, spec?.probeWith);
         return { result: text, explanation, probe: report, calls };
       }
       case 'prompt': {

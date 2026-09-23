@@ -3,7 +3,7 @@ import type { GraphNode, GuiWidget } from '@/graph';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 import { WIDGET_BUILDERS } from '../../widgets/roster';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import { widgetOfPort } from './guiWidgets';
+import { widgetOfPort } from '@/document/guiWidgets';
 
 /**
  * A composite: it holds widgets, generates nothing itself, and emits what its widgets emit.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NODE_KINDS } from '@/nodeKinds';
+import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { generateRequest, nodeFields } from './generation';
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { cellSize, GUI_MAX_CELL } from './layout';
+import { cellSize, GUI_MAX_CELL } from '@/document/layout';
 
 /**
  * The current square-cell size for whatever element this ref is on.

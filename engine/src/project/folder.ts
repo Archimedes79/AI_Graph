@@ -35,16 +35,15 @@ import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry, NODES, WIDGETS } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
-import { readLegacyNodeFiles } from './legacy.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 import { describeFlow, FLOW_FILE } from './flowFile.ts';
+import { folderName } from './names.ts';
+import { NotAGraph, NotFound } from '../errors.ts';
 
 export const GRAPH_FILE = 'graph.json';
 export const LAYOUT_FILE = 'layout.json';
 export const NODES_DIR = 'nodes';
 
-export class NotFound extends Error {}
-export class NotAGraph extends Error {}
 export class FileChanged extends Error {
   readonly fileName: string;
   constructor(fileName: string) {
@@ -86,11 +85,6 @@ export function projectFolderOf(path: string): string | null {
   if (basename(full) === GRAPH_FILE && existsSync(join(dirname(full), NODES_DIR))) return dirname(full);
   if (basename(full) === GRAPH_FILE && existsSync(join(dirname(full), LAYOUT_FILE))) return dirname(full);
   return null;
-}
-
-/** A folder name from an id: ids come from the file format and may hold anything. */
-function folderName(id: string): string {
-  return id.replace(/[^\p{L}\p{N}_.-]/gu, '_').replace(/^\.+/, '_') || '_';
 }
 
 /** Where a node's writing goes, relative to the project folder. */
@@ -135,8 +129,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
         json: text.json === true, holder: node.config, standard: text.standard, earlier: text.earlier,
       });
     }
-    const blocks = Array.isArray(node.config.gui_widgets) ? node.config.gui_widgets as Record<string, unknown>[] : [];
-    for (const raw of blocks) {
+    for (const raw of registry.node(node.node_type)?.blocks(node) ?? []) {
       const widget = parseWidget(raw);
       const blockFolder = claim(`${folder}/${folderName(widget.id)}`, `${node.id}/${widget.id}`);
       for (const text of registry.widget(widget.kind)?.texts(widget) ?? []) {
@@ -343,9 +336,7 @@ export async function loadGraph(path: string, guard?: Guard): Promise<Graph> {
   if (!existsSync(full)) throw new NotFound(`Nothing at ${full}`);
   if (statSync(full).isDirectory()) throw new NotAGraph(`${full} is a folder without a ${GRAPH_FILE}: not a project.`);
   await guard?.(full);
-  const graph = asGraph(await readJson(full, 'graph'), full);
-  await readLegacyNodeFiles(graph, full);
-  return graph;
+  return asGraph(await readJson(full, 'graph'), full);
 }
 
 // ---------------------------------------------------------------------------
@@ -430,12 +421,12 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
       ...(node.width ? { width: Math.round(node.width) } : {}),
       ...(node.height ? { height: Math.round(node.height) } : {}),
     };
-    const { position: _position, width: _width, height: _height, ...rest } = node;
-    const config = sorted(rest.config as Record<string, unknown>);
-    if (Array.isArray(config.gui_widgets)) {
-      config.gui_widgets = (config.gui_widgets as Record<string, unknown>[]).map((block) => sorted(block));
-    }
-    return { ...rest, config };
+    const keys = { ...node, config: sorted(node.config as Record<string, unknown>) };
+    const element = registry.node(keys.node_type);
+    const held = element?.blocks(keys) ?? [];
+    if (held.length) element!.setBlocks(keys, held.map((block) => sorted(block)));
+    const { position: _position, width: _width, height: _height, ...saved } = keys;
+    return saved;
   });
 
   // Deepest first, so a level is only written once everything it holds is.
@@ -565,7 +556,7 @@ export async function bodyFileOf(folder: string, nodeId: string, widgetId = ''):
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node) throw new NotFound(`No node "${nodeId}" in ${graphPath}. Save the graph first.`);
   const raw = widgetId
-    ? (Array.isArray(node.config.gui_widgets) ? node.config.gui_widgets as Record<string, unknown>[] : []).find((w) => w.id === widgetId)
+    ? registry.node(node.node_type)?.blocks(node).find((w) => w.id === widgetId)
     : undefined;
   const logic = raw ? registry.widget(parseWidget(raw).kind)?.logic(parseWidget(raw)) : registry.node(node.node_type)?.logic(node);
   const texts = projectTexts(graph).filter((text) => text.node_id === nodeId && text.widget_id === widgetId);

@@ -7,12 +7,7 @@ import { type GraphNode, type Port } from '../../../graph.ts';
  * The input that says *where* to write rather than *what*: a control input,
  * and the one port of an output node that is not part of its value.
  */
-export const WRITE_PATH_PORT = 'path';
-
-/** What this node was actually given to report. */
-export function valuePorts(node: GraphNode): Port[] {
-  return node.inputs.filter((port) => port.id !== WRITE_PATH_PORT);
-}
+const WRITE_PATH_PORT = 'path';
 
 export interface OutputConfig {
   /** Where to write, when writing at all. */
@@ -47,8 +42,14 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
   }
 
   /** Everything a graph produces leaves through one of these. */
+  override readonly isResult = true;
+
   override boundaryRole(): 'out' {
     return 'out';
+  }
+
+  override valuePorts(node: GraphNode): Port[] {
+    return node.inputs.filter((port) => port.id !== WRITE_PATH_PORT);
   }
 
   override runtimeRequirements(node: GraphNode) {
@@ -88,6 +89,10 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
   }
 
   // ── Build time ────────────────────────────────────────────────────────────
+
+  override graphAuthorNote(): string {
+    return `config.write_mode is none, file, directory or window; config.output_label names the window.`;
+  }
 
   override whatRuns(node: GraphNode): WhatRuns {
     return this.engineRuns(this.config(node).mode === 'file'

@@ -359,8 +359,7 @@ Saving refuses to overwrite a file changed outside since it was read. The toolba
 reopens the whole project, for when `graph.json` itself changed (a pull, a merge).
 
 **A single `.json` file** still opens, saves (name it `….json`) and runs: everything
-inline, which is what a download, an import and a deploy bundle carry. A graph saved by an
-older version with its code in `<graph>.nodes/` opens too; save it as a folder to keep it.
+inline, which is what a download, an import and a deploy bundle carry.
 
 **Output interfaces.** A code node's outputs are described by a JSON Schema,
 `output.schema.json`. You do not write it first: wire the nodes, run the graph, and the
@@ -431,7 +430,7 @@ the same words under `runs`. There are two answers:
 |---|---|---|
 | Code | `code.js`, sandboxed | Calls `run(inputs, node)` and hands on what it returns. |
 | AI | `run.js` | Unchanged: the engine makes the one model call it describes (`system.md`, `message.md` filled from the inputs). Changed: it runs sandboxed like any body, and each `node.llm(...)` is a call made for it. |
-| Input | `InputNodeRunner.execute` | Hands on its text; or reads the file on `path`; or lists the folder — through `selector.js`, sandboxed, if files are chosen by code. |
+| Input | `InputNodeRunner.execute` | Hands on its text; or reads the file on `path`; or lists the folder — through `select.js`, sandboxed, if files are chosen by code. |
 | Data | `DataNodeRunner.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
 | GUI | `GuiNodeRunner.execute` | Hands on what each block holds and shows what arrives; a block's own code runs sandboxed before it is shown. |
 | Output | `OutputNodeRunner.execute` | Hands on what arrives as the run's result, or writes it to its file. |
@@ -728,8 +727,8 @@ block lays it out at the size it really is, in the colours of the page:
 
 A bare list of numbers or of `{label, value}` is the same thing with the two decisions
 left out. Axes, gridlines, category and value labels, a legend and the total are drawn
-for you, and because `kind` is a *value* it can come down a wire — a dropdown on the page
-switches a chart between bars and a donut with no code anywhere. `bars` are horizontal
+for you, and because `kind` is a *value* it can come down a wire — a dropdown on a page
+can switch a chart between bars and a donut with no code anywhere. `bars` are horizontal
 and are the right choice when the categories are names, since a name reads along its bar
 instead of being cropped under a column. See
 [examples/population_plotter](../examples/population_plotter/), where the code node
