@@ -7,7 +7,28 @@
 
 import { deflateRawSync } from 'node:zlib';
 
-export interface ZipEntry { path: string; content: Buffer }
+export interface ZipEntry {
+  path: string;
+  content: Buffer;
+  /**
+   * Unix permissions, e.g. 0o755. Omitted, the entry is written the way it
+   * always was -- as made on MS-DOS, no permissions -- and every unzip tool
+   * extracts it as a plain, non-executable file. Given, the entry says it was
+   * made on Unix and carries the mode, which is what makes a `run.sh` runnable
+   * straight out of the archive.
+   */
+  mode?: number;
+}
+
+/** "Version made by": 2.0, on MS-DOS -- or on Unix (3) when the entry has a mode. */
+function madeBy(entry: ZipEntry): number {
+  return entry.mode === undefined ? 20 : (3 << 8) | 20;
+}
+
+/** External attributes: a regular file (0o100000) with the entry's mode, in the high half. */
+function externalAttributes(entry: ZipEntry): number {
+  return entry.mode === undefined ? 0 : ((0o100000 | entry.mode) << 16) >>> 0;
+}
 
 const crcTable = new Uint32Array(256).map((_, n) => {
   let c = n;
@@ -49,7 +70,8 @@ export function zip(entries: ZipEntry[], now = new Date()): Buffer {
     ]);
     const local = Buffer.concat([u32(0x04034b50), common, u16(0), name, packed]);
     central.push(Buffer.concat([
-      u32(0x02014b50), u16(20), common, u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), name,
+      u32(0x02014b50), u16(madeBy(entry)), common, u16(0), u16(0), u16(0), u16(0),
+      u32(externalAttributes(entry)), u32(offset), name,
     ]));
     locals.push(local);
     offset += local.length;

@@ -10,12 +10,13 @@
 // authored body is JavaScript, so the interpreter that runs the engine runs
 // them too.
 
-import { copyFile, cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Graph } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
+import { runCmd, runSh, zipMode } from './launchers.ts';
 
 /** `engine/src`: the tree a bundle copies. This file sits in its `cli/`. */
 const ENGINE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -198,12 +199,15 @@ export async function writeBundle(
   const data = await dataFiles(graph, options.dataFrom ?? process.cwd(), target);
   written.push(...data.copied);
 
-  // From its own folder, wherever it was started from: the graph's paths are
-  // relative to the bundle, and a double-click starts in whatever folder the
-  // shell felt like.
+  // The same pair the downloadable package ships (see launchers.ts): from its
+  // own folder, with Node checked before it is needed and a window that stays
+  // open long enough to read a failure.
   const command = servesPage ? 'engine/main.ts graph.json --serve' : 'engine/main.ts graph.json';
-  await put('run.cmd', ['@echo off', 'cd /d "%~dp0"', `node ${command.replace(/\//g, '\\')} %*`, ''].join('\r\n'));
-  await put('run.sh', ['#!/bin/sh', 'cd "$(dirname "$0")" || exit 1', `exec node ${command} "$@"`, ''].join('\n'));
+  await put('run.cmd', runCmd({ command }));
+  await put('run.sh', runSh({ command }));
+  // A no-op on Windows; on a Mac or Linux box it is the difference between
+  // `./run.sh` and "Permission denied".
+  await chmod(resolve(target, 'run.sh'), zipMode('run.sh')!);
   await put('README.md', readme(name, needs, servesPage, data));
 
   return written;

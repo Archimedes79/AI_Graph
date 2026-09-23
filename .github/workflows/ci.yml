@@ -67,6 +67,35 @@ jobs:
       - name: Start, restart and stop the editor
         run: node --test scripts/launcher.test.mjs
 
+  # The download, unzipped and started the way a person starts it -- on
+  # Windows too, where run.cmd is the only way in. v0.2.0's zip was intact and
+  # still "did not start": its run.cmd assumed a new enough Node, always asked
+  # for port 8000, and closed its window before the error could be read, and
+  # its run.sh came out of the archive without an executable bit. Nothing else
+  # here unzips anything, so nothing else could have noticed.
+  package-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the editor
+        run: npm run build
+
+      - name: Unzip it and start it
+        run: node --test scripts/package.test.mjs
+
   # The download for people who do not want a container: one zip holding the
   # engine's source, the built page and the examples. The engine has no runtime
   # dependencies and Node runs its TypeScript unbuilt, so a recipient unzips it
@@ -75,7 +104,7 @@ jobs:
   # On a vX.Y.Z tag only: a release is a thing people link to, so it gets a
   # version rather than moving under them.
   package:
-    needs: test
+    needs: [test, package-test]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -95,6 +124,8 @@ jobs:
         run: npm run build
 
       - name: Package
+        env:
+          AI_GRAPH_VERSION: ${{ github.ref_name }}
         run: node scripts/package.mjs "ai-graph-${{ github.ref_name }}.zip"
 
       # `gh` is on the runner already, so the release needs no third-party
@@ -107,6 +138,58 @@ jobs:
             "ai-graph-${{ github.ref_name }}.zip" \
             --title "AI-Graph ${{ github.ref_name }}" \
             --generate-notes
+
+  # The same zip, for whoever wants what main is today rather than the last
+  # version: rebuilt on every green push to main and published as the pre-release
+  # `latest`, so its download address never changes. The versioned releases
+  # above are untouched -- a link to v0.2.0 still means v0.2.0, and `latest` is
+  # never marked as the repository's latest release.
+  #
+  # A newer push cancels this run (see `concurrency` at the top), possibly
+  # between moving the tag and swapping the file. That newer run is by
+  # definition on its way and finishes the job, so the two are never apart for
+  # longer than one run takes.
+  latest:
+    needs: [test, package-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the editor
+        run: npm run build
+
+      - name: Package
+        env:
+          AI_GRAPH_VERSION: latest (main @ ${{ github.sha }})
+        run: node scripts/package.mjs ai-graph-latest.zip
+
+      # The tag is moved with the job's own token, and a push made with that
+      # token starts no workflow -- so this cannot trigger itself.
+      - name: Publish as the latest pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          notes="What main was at ${GITHUB_SHA::7}, built $(date -u +'%Y-%m-%d %H:%M UTC'). Rebuilt on every push to main -- VERSION inside the zip says which commit. For a version that stays put, take a vX.Y.Z release."
+          git tag -f latest "$GITHUB_SHA"
+          git push -f origin refs/tags/latest
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest ai-graph-latest.zip --clobber
+            gh release edit latest --prerelease --latest=false --title "AI-Graph latest (main)" --notes "$notes"
+          else
+            gh release create latest ai-graph-latest.zip --verify-tag --prerelease --latest=false \
+              --title "AI-Graph latest (main)" --notes "$notes"
+          fi
 
   # Publishes the same one-process image docs/install.md and docker-compose.yml
   # describe -- built here, not by hand, so what a `docker pull` gets is what

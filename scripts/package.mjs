@@ -12,7 +12,9 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { zip } from '../engine/src/host/editor/zip.ts';
+import { NODE_MAJOR, runCmd, runSh, zipMode } from '../engine/src/cli/launchers.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -33,18 +35,29 @@ async function walk(dir, keep = () => true) {
   return found;
 }
 
-const RUN_SH = `#!/bin/sh
-# AI-Graph. Needs Node 24 or newer, and nothing else.
-exec node engine/src/main.ts --editor editor/dist --port "\${PORT:-8000}" "$@"
-`;
+// The same launchers every deploy bundle gets (engine/src/cli/launchers.ts):
+// they check for Node before it is needed, start from their own folder, and
+// keep a Windows window open long enough to read a failure. No port is passed
+// unless PORT is set, so the engine takes the first free one from 8000 --
+// the version before always passed 8000, and died on a machine that already
+// had an editor running there.
+const LAUNCHER = { command: 'engine/src/main.ts --editor editor/dist', portFromEnv: true };
 
-const RUN_CMD = [
-  '@echo off',
-  'rem AI-Graph. Needs Node 24 or newer, and nothing else.',
-  'if "%PORT%"=="" set PORT=8000',
-  'node engine\\src\\main.ts --editor editor\\dist --port %PORT% %*',
-  '',
-].join('\r\n');
+/**
+ * What this zip was built from, in a file beside the README.
+ *
+ * A downloaded folder otherwise has no way to say how old it is, and "is this
+ * the current code?" was a question nobody could answer from the outside. CI
+ * names the build (a tag, or `latest`); a local build asks git.
+ */
+function version() {
+  const git = (...args) => {
+    try { return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return ''; }
+  };
+  const commit = process.env.GITHUB_SHA || git('rev-parse', 'HEAD') || 'unknown';
+  const name = process.env.AI_GRAPH_VERSION || git('describe', '--tags', '--always', '--dirty') || 'unknown';
+  return `AI-Graph ${name}\ncommit ${commit}\nbuilt ${new Date().toISOString()}\n`;
+}
 
 const README = `# AI-Graph
 
@@ -53,18 +66,27 @@ Unzip, then:
     ./run.sh          (macOS, Linux)
     run.cmd           (Windows -- type the extension, or double-click)
 
-The editor opens at http://127.0.0.1:8000. Set PORT to use another one.
+The editor opens in your browser, on http://127.0.0.1:8000 or, if something is
+already there, the next free port -- the address is printed either way. Set
+PORT to insist on one.
+
+VERSION says which build this is and which commit it was made from.
 
 ## What this needs
 
-Node 24 or newer. That is the whole list: the engine is TypeScript that Node
+Node ${NODE_MAJOR} or newer. That is the whole list: the engine is TypeScript that Node
 runs directly, it has no dependencies, and the page in editor/dist is already
 built. Nothing is installed, and nothing is installed while a graph runs.
 
     node --version
 
+run.sh and run.cmd check this before starting and say so if it is missing or
+too old; on Windows the window stays open until you have read it.
+
 ## What is in here
 
+    run.sh, run.cmd   start it
+    VERSION     what this was built from
     engine/     the engine and the editor's server, as source
     editor/dist the editor's page, built
     examples/   project folders to open from the editor's Open dialog
@@ -92,9 +114,15 @@ const entries = [];
 for (const path of files) {
   entries.push({ path: `${top}/${path}`, content: await readFile(join(ROOT, path)) });
 }
-entries.push({ path: `${top}/run.sh`, content: Buffer.from(RUN_SH, 'utf8') });
-entries.push({ path: `${top}/run.cmd`, content: Buffer.from(RUN_CMD, 'utf8') });
-entries.push({ path: `${top}/README.md`, content: Buffer.from(README, 'utf8') });
+const extra = {
+  'run.sh': runSh(LAUNCHER),
+  'run.cmd': runCmd(LAUNCHER),
+  'README.md': README,
+  'VERSION': version(),
+};
+for (const [name, text] of Object.entries(extra)) {
+  entries.push({ path: `${top}/${name}`, content: Buffer.from(text, 'utf8'), mode: zipMode(name) });
+}
 
 await mkdir(dirname(out), { recursive: true });
 await writeFile(out, zip(entries));
