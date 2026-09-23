@@ -120,6 +120,33 @@ describe('what check finds on a gate', () => {
   });
 });
 
+describe('what check finds on a wire', () => {
+  // count.total goes into say.total; count's interface says what came out.
+  const wired = (given: unknown, dataType: string, multi = false): Graph => {
+    const made = graph({ schema: { type: 'object', properties: { total: given } } });
+    Object.assign(made.nodes[1].inputs[0], { data_type: dataType, multi });
+    return made;
+  };
+  const said = (made: Graph) => problemsIn(made).map((p) => `${p.where}: ${p.problem}`).join(' ');
+
+  it('finds a list going into a port that takes a number', () => {
+    expect(said(wired({ type: 'object' }, 'number'))).toMatch(/edge "e1".*gives object, and the port takes number/);
+  });
+
+  it('judges a list by its items where the port is not itself a list', () => {
+    expect(said(wired({ type: 'array', items: { type: 'integer' } }, 'number', true))).toBe('');
+    expect(said(wired({ type: 'array', items: { type: 'string' } }, 'number', true))).toMatch(/gives string/);
+    expect(said(wired({ type: 'array', items: { type: 'integer' } }, 'list'))).toBe('');
+  });
+
+  it('says nothing where one end has said nothing: no run yet, or a port that takes anything', () => {
+    expect(problemsIn(graph())).toEqual([]);
+    expect(said(wired({ type: 'object' }, 'any'))).toBe('');
+    expect(said(wired({ type: 'object' }, 'text'))).toBe('');
+    expect(said(wired({}, 'number'))).toBe('');
+  });
+});
+
 describe('what check finds in a project folder', () => {
   it('finds a folder no node owns, and a file nothing reads', async () => {
     await writeProject(dir, graph());

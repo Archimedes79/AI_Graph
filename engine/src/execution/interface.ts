@@ -133,6 +133,36 @@ export function readInterface(stored: unknown): Schema | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Schema : undefined;
 }
 
+/** The JSON types a port of each declared type takes. Absent: it takes anything (text, json, any, binary). */
+const TAKES: Partial<Record<string, string[]>> = {
+  number: ['number', 'integer'],
+  boolean: ['boolean'],
+  list: ['array'],
+  file_path: ['string'],
+  image: ['string'],
+};
+
+/**
+ * Why what *schema* describes cannot go into a port declared as *dataType*, or
+ * '' when it can -- or when either side says too little to tell.
+ *
+ * A list into a port that is not itself a list is judged by its items: that is
+ * a port collecting several values, or a node running once per item.
+ */
+export function portMisfit(schema: Schema, dataType: string, multi: boolean): string {
+  const takes = TAKES[dataType];
+  if (!takes || !schema.type) return '';
+  let given = [schema.type].flat().filter((type) => type !== 'null');
+  if (given.includes('array') && dataType !== 'list') {
+    if (!multi && given.length > 1) return '';
+    const items = schema.items;
+    if (!items?.type) return '';
+    given = [items.type].flat().filter((type) => type !== 'null');
+  }
+  if (!given.length || given.some((type) => takes.includes(type))) return '';
+  return `it gives ${given.join(' or ')}, and the port takes ${dataType}`;
+}
+
 /** A schema as a one-line outline -- `{ rows: list of { File: text } }` -- for reading, not checking. */
 export function schemaOutline(schema: unknown, depth = 0): string {
   if (!schema || typeof schema !== 'object' || depth > 4) return 'anything';

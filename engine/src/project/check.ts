@@ -9,12 +9,12 @@ import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Graph, GraphNode } from '../graph.ts';
+import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
 import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
 import { RUN_PORT } from '../execution/triggers.ts';
 import { names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
-import { mismatches, readInterface } from '../execution/interface.ts';
+import { mismatches, portMisfit, readInterface } from '../execution/interface.ts';
 import { filePorts } from '../execution/fileInputs.ts';
 import { parseExamples } from '../execution/examples.ts';
 import { INTERFACE_FILE } from './interfaceFile.ts';
@@ -110,6 +110,9 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       problems.push({ where: `${inside}edge "${edge.id}"`, problem: 'More than one edge has this id.', fix: 'Give every edge its own id.' });
     }
     edgeIds.add(edge.id);
+
+    const misfit = wireMisfit(graph, edge);
+    if (misfit) problems.push({ where: `${inside}edge "${edge.id}"`, ...misfit });
 
     // A ◆ is a gate and only `true` opens it. A wire that once only said "run
     // after this" -- from a text, a number -- now keeps its node shut for good,
@@ -310,6 +313,30 @@ export async function checkPath(path: string): Promise<{ problems: Problem[]; gr
 }
 
 /**
+ * A wire whose two ends disagree about what travels on it.
+ *
+ * Only where both ends have said something: the output interface a run left
+ * on the node it starts from -- what really came out -- and a declared type on
+ * the port it ends on. A wire from a node that has never run, or into a port
+ * that takes anything, has nothing to disagree about.
+ */
+function wireMisfit(graph: Graph, edge: GraphEdge): Omit<Problem, 'where'> | undefined {
+  const producer = graph.nodes.find((node) => node.id === edge.source_node_id);
+  const consumer = graph.nodes.find((node) => node.id === edge.target_node_id);
+  if (!producer || !consumer) return undefined;
+  const given = registry.node(producer.node_type)?.outputInterface(producer)?.properties?.[edge.source_port_id];
+  const inputs = registry.node(consumer.node_type)?.derivedPorts(consumer, registry)?.inputs ?? consumer.inputs;
+  const port = inputs.find((candidate) => candidate.id === edge.target_port_id);
+  if (!given || !port) return undefined;
+  const misfit = portMisfit(given, port.data_type, port.multi);
+  if (!misfit) return undefined;
+  return {
+    problem: `It carries "${producer.id}.${edge.source_port_id}" into "${consumer.id}.${port.id}", and the two disagree: ${misfit}.`,
+    fix: `Change the data_type of "${consumer.id}.${port.id}", or what "${producer.id}" returns there -- then run it again to set its interface.`,
+  };
+}
+
+/**
  * A node's examples, held to the node and to its neighbours.
  *
  * To the node: every input an example gives, and every output it expects,
@@ -329,7 +356,8 @@ function exampleProblems(graph: Graph, node: GraphNode, where: string): Problem[
   const outputs = new Set(node.outputs.map((port) => port.id));
   // A port whose path is read into text arrives as the text; the producer's interface describes the path.
   const readsFiles = registry.node(node.node_type)?.readsFileInputs(node) === true;
-  const filePorts = new Set(node.inputs.filter((port) => port.data_type === 'file_path').map((port) => port.id));
+  // The same rule the run uses: a port typed any with a path wired in is read too.
+  const read = new Set(filePorts(node, graph, registry));
 
   for (const example of examples) {
     const at = `${where}, example "${example.title}"`;
@@ -338,7 +366,7 @@ function exampleProblems(graph: Graph, node: GraphNode, where: string): Problem[
         found.push({ where: at, problem: `It gives an input "${port}", which the node does not have.`, fix: `Its inputs are ${names(inputs)}.` });
         continue;
       }
-      if (readsFiles && filePorts.has(port)) continue;
+      if (readsFiles && read.has(port)) continue;
       for (const edge of graph.edges.filter((e) => e.target_node_id === node.id && e.target_port_id === port)) {
         const producer = graph.nodes.find((candidate) => candidate.id === edge.source_node_id);
         const iface = producer && registry.node(producer.node_type)?.outputInterface(producer);
