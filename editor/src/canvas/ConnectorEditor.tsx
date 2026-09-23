@@ -43,7 +43,7 @@ export default function ConnectorEditor({ nodeId, portId, onClose }: ConnectorEd
     try {
       const result = await call('detectFormat', { path });
       setFormat(result.format);
-    } catch (e: any) {
+    } catch (e) {
       setDetectError(errorText(e, 'Detection failed'));
     } finally {
       setDetecting(false);

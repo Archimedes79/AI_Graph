@@ -32,6 +32,11 @@ jobs:
       - name: Types
         run: npm run typecheck
 
+      # The editor only: what the compiler does not see, above all the rules of
+      # hooks. The engine has no linter; its types and tests are the check.
+      - name: Lint
+        run: npm run lint
+
       # Before the tests: the bundle test asserts that a bundle carries the
       # built page, so the page has to exist by then -- and a checkout that
       # cannot build has no page to carry.

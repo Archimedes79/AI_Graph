@@ -161,7 +161,7 @@ describe('graphStore: what a run remembered', () => {
     useGraphStore.getState().setExecutionResult({
       status: 'success', node_results: [],
       memory: [{ node_id: 'data1', port_id: 'input', value: 'new value' }],
-    } as any);
+    } as never);
     expect(useGraphStore.getState().rfNodes[0].data.graphNode.config.data_value).toBe('new value');
   });
 
@@ -171,7 +171,7 @@ describe('graphStore: what a run remembered', () => {
     useGraphStore.getState().setExecutionResult({
       status: 'success', node_results: [],
       memory: [{ node_id: 'gui1', port_id: `${widget.id}_in`, value: [{ x: 1, y: 2 }] }],
-    } as any);
+    } as never);
     // Structured values stay structured: a chart's points are not text.
     expect(stored(widget.id).value).toEqual([{ x: 1, y: 2 }]);
   });
@@ -183,7 +183,7 @@ describe('graphStore: what a run remembered', () => {
     useGraphStore.getState().setExecutionResult({
       status: 'success', node_results: [],
       memory: [{ node_id: 'gui1', port_id: `${widget.id}_in`, value: 'hi there' }],
-    } as any);
+    } as never);
     expect(stored(widget.id).value).toEqual({
       messages: [{ role: 'user', text: 'hello' }, { role: 'assistant', text: 'hi there' }],
       pending: '',
@@ -196,7 +196,7 @@ describe('graphStore: what a run remembered', () => {
     useGraphStore.getState().setExecutionResult({
       status: 'success',
       node_results: [{ node_id: 'gui1', status: 'success', inputs: { [`${widget.id}_in`]: 'hello' }, outputs: {} }],
-    } as any);
+    } as never);
     expect(stored(widget.id).value).toBe('');
   });
 
@@ -210,7 +210,7 @@ describe('graphStore: what a run remembered', () => {
     const write = (value: string) => ({ node_id: 'gui1', port_id: `${widget.id}_in`, value });
     const shown = { status: 'success', node_results: [], memory: [write('first answer'), write('second answer')] };
     const ran = { status: 'success', node_results: [], memory: [write('second answer')] };
-    useGraphStore.getState().setExecutionResult(shown as any, ran as any);
+    useGraphStore.getState().setExecutionResult(shown as never, ran as never);
     expect((stored(widget.id).value as { messages: unknown[] }).messages).toHaveLength(2);
   });
 });

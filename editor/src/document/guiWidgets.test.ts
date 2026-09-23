@@ -84,7 +84,7 @@ describe('syncGuiNodePorts', () => {
   });
 
   it('keeps port ids stable across re-syncs (edge-preserving)', () => {
-    let node = blankGuiNode();
+    const node = blankGuiNode();
     const widget = WIDGET_BUILDERS.text_io.create('Text');
     node.config.gui_widgets = [widget];
 

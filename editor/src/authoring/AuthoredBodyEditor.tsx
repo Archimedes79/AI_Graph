@@ -9,6 +9,7 @@ import { ACCENT_FILL, ACCENT_TEXT, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } fro
 
 interface Props {
   /** How the element's body is written. Absent: the element authors nothing, and nothing is drawn. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a node's or a widget's
   generation: ElementGeneration<any> | undefined;
   /** Reading and writing the element's own fields -- see `nodeFields`/`widgetFields`. */
   fields: FieldAccess;

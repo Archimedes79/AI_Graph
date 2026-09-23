@@ -193,7 +193,7 @@ export default function PlotChart({ data, width = 220, height = 90 }: PlotWidget
       <div
         className="w-full h-full flex items-center justify-center overflow-hidden"
         style={{ background: RAISE, borderRadius: 4 }}
-        // eslint-disable-next-line react/no-danger -- stripped by asDrawing above
+        // Set as HTML on purpose: stripped by asDrawing above
         dangerouslySetInnerHTML={{ __html: drawing }}
       />
     );

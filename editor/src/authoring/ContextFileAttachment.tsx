@@ -28,7 +28,7 @@ export default function ContextFileAttachment({ label, path, onChange }: Context
     try {
       const result = await call('attach', { name: file.name, bytes: file });
       onChange(result.path);
-    } catch (e: any) {
+    } catch (e) {
       setError(errorText(e, 'Upload failed'));
     } finally {
       setBusy(false);

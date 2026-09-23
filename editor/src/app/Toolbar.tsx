@@ -277,7 +277,7 @@ export default function Toolbar({
     try {
       const result = await call('generateGraph', { description: aiDescription, progress_id: progressId, ...genAI() });
       setAiResult(result);
-    } catch (e: any) {
+    } catch (e) {
       setAiError(errorText(e, 'Failed to generate graph.'));
     } finally {
       window.clearInterval(watching);

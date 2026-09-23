@@ -470,7 +470,7 @@ export const useGraphStore = create<GraphStore>()(
         },
       };
       set((state) => {
-        state.rfNodes.push(rfNode as any);
+        state.rfNodes.push(rfNode as never);
       });
       return id;
     },
@@ -480,7 +480,7 @@ export const useGraphStore = create<GraphStore>()(
       if (get().rfEdges.some((edge: Edge) => edge.id === id)) return;
       get().commit();
       set((state) => {
-        state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as any);
+        state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as never);
 
         // A wire from a port that carries file paths -- a picker, a folder --
         // makes the port it ends on one that receives file paths. The port
@@ -557,7 +557,7 @@ export const useGraphStore = create<GraphStore>()(
 
     setRFNodes: (nodes) =>
       set((state) => {
-        state.rfNodes = nodes as any;
+        state.rfNodes = nodes as never;
       }),
 
     setRFEdges: (edges) =>
@@ -637,7 +637,7 @@ export const useGraphStore = create<GraphStore>()(
 
       set((state) => {
         state.metadata = normalizedGraph.metadata;
-        state.rfNodes = rfNodes as any;
+        state.rfNodes = rfNodes as never;
         state.rfEdges = rfEdges;
         state.executionResult = null;
         // Whoever loaded a graph without going through the file-path flow
@@ -799,7 +799,7 @@ export const useGraphStore = create<GraphStore>()(
       });
       set((state) => {
         state.metadata = graph.metadata;
-        state.rfNodes = rfNodes as any;
+        state.rfNodes = rfNodes as never;
         state.rfEdges = rfEdges;
         // Everything that names a node of the graph that was here. Left
         // standing, each points at something that may not exist any more: a

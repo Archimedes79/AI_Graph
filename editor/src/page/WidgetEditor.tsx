@@ -52,6 +52,9 @@ export default function WidgetEditor({
 
   useEffect(() => {
     setExpanded(!!((widget?.code ?? '').trim() || (widget?.selector_code ?? '').trim()));
+    // Only when another widget is shown: collapsing a body while someone types
+    // into it would be the opposite of the point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [widget?.id]);
 
   if (!widget) {

@@ -43,6 +43,7 @@ export function fromEngine(generation: Generation | undefined): Pick<ElementGene
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- a node's and a widget's, held side by side
 export interface ElementGeneration<S = any> {
   /**
    * Field holding the user's request. `'description'` means the node's own

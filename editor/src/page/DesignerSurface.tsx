@@ -375,7 +375,6 @@ function InPlaceText({ widget, cell, rows, onText, onRows }: {
     element.focus();
     element.setSelectionRange(element.value.length, element.value.length);
     // Once, on entering the block: focus follows selection, not every keystroke.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [widget.id]);
 
   const fit = (element: HTMLTextAreaElement) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { GraphNode, GuiWidget, WidgetKind } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { syncGuiNodePorts } from '@/document/guiWidgets';
@@ -74,6 +74,10 @@ export default function DesignerTab() {
     }
     setSelectedId(widget.id);
   };
+  // The drop below is wired once per drag, and must add to the page as it is
+  // when the mouse comes up, not as it was when the drag began.
+  const addWidgetNow = useRef(addWidget);
+  addWidgetNow.current = addWidget;
 
   /**
    * Dragging a new element out of the palette and onto the page.
@@ -122,7 +126,7 @@ export default function DesignerTab() {
       setDragEntry(null);
       setDragPoint(null);
       setDropIndex(null);
-      if (index !== null) addWidget(dragEntry.kind, dragEntry.mode, index);
+      if (index !== null) addWidgetNow.current(dragEntry.kind, dragEntry.mode, index);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
