@@ -132,6 +132,18 @@ test('the zip holds what a person runs', () => {
   if (!windows) assert.ok(statSync(join(folder, 'run.sh')).mode & 0o111, 'run.sh is executable once unzipped');
 });
 
+test('it runs the graphs it ships with, a graph inside a node included', () => {
+  // Serving the page is half of it; the other half is that the engine in the
+  // zip runs a graph, without a model and without anything installed.
+  const ran = spawnSync(process.execPath, [join('engine', 'src', 'main.ts'), join('examples', 'nested_statistics')], {
+    cwd: folder, encoding: 'utf8', env: environment(),
+  });
+  assert.equal(ran.status, 0, ran.stderr);
+  const result = JSON.parse(ran.stdout.slice(ran.stdout.indexOf('{')));
+  assert.equal(result.status, 'success', ran.stdout);
+  assert.deepEqual(result.outputs.Statistics.value, { words: 32, sentences: 2, longest: 'directions' });
+});
+
 test('it starts from its own folder and serves the editor', async () => {
   const run = launch();
   const url = await run.served;
