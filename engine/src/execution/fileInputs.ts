@@ -24,14 +24,19 @@
 
 import type { GraphEdge, GraphNode } from '../graph.ts';
 import type { FileService, Runtime } from '../elements/Runtime.ts';
+import type { Runners } from '../elements/NodeRunner.ts';
 
 /** A port id and the type its far end declares, for every wire into *node*. */
-function declaredBySource(node: GraphNode, graph: FileGraph | undefined): Set<string> {
+function declaredBySource(node: GraphNode, graph: FileGraph | undefined, elements?: Runners): Set<string> {
   const paths = new Set<string>();
   if (!graph) return paths;
   const typeOf = new Map<string, string>();
   for (const other of graph.nodes) {
-    for (const port of other.outputs) typeOf.set(`${other.id}.${port.id}`, port.data_type);
+    // A page's ports follow from its blocks, so a file need not spell them out.
+    // Asked of the element where it has an opinion, which is the same answer
+    // the canvas draws and the wiring is checked against.
+    const outputs = elements ? (elements.node(other.node_type)?.derivedPorts(other, elements)?.outputs ?? other.outputs) : other.outputs;
+    for (const port of outputs) typeOf.set(`${other.id}.${port.id}`, port.data_type);
   }
   for (const edge of graph.edges) {
     if (edge.target_node_id !== node.id) continue;
@@ -62,8 +67,8 @@ export interface FileGraph {
  * `any` is the case with nobody's word on it: the type a code node is created
  * with, and the one the editor cannot change. There the wire decides.
  */
-export function filePorts(node: GraphNode, graph?: FileGraph): string[] {
-  const fromSource = declaredBySource(node, graph);
+export function filePorts(node: GraphNode, graph?: FileGraph, elements?: Runners): string[] {
+  const fromSource = declaredBySource(node, graph, elements);
   return node.inputs
     .filter((port) => port.data_type === 'file_path'
       || (port.data_type === 'any' && fromSource.has(port.id)))
@@ -102,6 +107,7 @@ export function readFileInputs(
   inputs: Record<string, unknown>,
   runtime: Runtime,
   graph?: FileGraph,
+  elements?: Runners,
 ): Promise<Record<string, unknown>> {
-  return readPorts(inputs, filePorts(node, graph), runtime.files);
+  return readPorts(inputs, filePorts(node, graph, elements), runtime.files);
 }

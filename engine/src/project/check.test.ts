@@ -79,9 +79,19 @@ describe('what check finds in a setting that would silently do nothing', () => {
   });
   const said = (graph: Graph) => problemsIn(graph).map((found) => found.problem).join(' ');
 
-  it('finds "read the files" on a node none of whose inputs carries a path: it would be handed the file\'s name', () => {
-    expect(said(folder({ multi: true }, { read_file_inputs: true, batch_mode: 'per_item' }))).toMatch(/none of its inputs is a file path/);
+  it('finds "read the files" where no port will hold one: the box is ticked and the node gets the file\'s name', () => {
+    // `text` is a word somebody said: it wants the name, so the wire does not
+    // override it -- and then nothing at all is read.
+    expect(said(folder({ multi: true, data_type: 'text' }, { read_file_inputs: true, batch_mode: 'per_item' })))
+      .toMatch(/none of its inputs is a file path/);
     expect(said(folder({ multi: true, data_type: 'file_path' }, { read_file_inputs: true, batch_mode: 'per_item' }))).toBe('');
+  });
+
+  it('says nothing where the wire holds the path: a port typed `any` is read, so warning about it would be a lie', () => {
+    // Exactly what the run does (`execution/fileInputs.ts`), asked the same way
+    // here -- including a page's ports, which follow from its blocks and which
+    // a graph.json need not spell out.
+    expect(said(folder({ multi: true, data_type: 'any' }, { read_file_inputs: true, batch_mode: 'per_item' }))).toBe('');
   });
 
   it('finds "once per item" where a list arrives and no input is declared as one: it would run once, on all of it', () => {

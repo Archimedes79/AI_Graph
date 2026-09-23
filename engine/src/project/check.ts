@@ -15,6 +15,7 @@ import { RUN_PORT } from '../execution/triggers.ts';
 import { names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
 import { mismatches, readInterface } from '../execution/interface.ts';
+import { filePorts } from '../execution/fileInputs.ts';
 import { parseExamples } from '../execution/examples.ts';
 import { INTERFACE_FILE } from './interfaceFile.ts';
 import { FLOW_FILE } from './flowFile.ts';
@@ -64,10 +65,12 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
     }
 
     // "Hand me the file's content" is carried out port by port, for the ports
-    // that say they carry a path. Ticked on a node with no such port it does
-    // nothing at all, silently: the node is handed the file's *name*, and a
-    // model summarises that with a straight face.
-    if (element.readsFileInputs(node) && !node.inputs.some((port) => port.data_type === 'file_path')) {
+    // that hold a path. Where no port does, it does nothing at all, silently:
+    // the node is handed the file's *name*, and a model summarises that with a
+    // straight face. Asked of `filePorts` and handed the graph, so this asks
+    // exactly what the run will ask -- a port typed `any` with a picker wired
+    // into it holds a path, and warning about it would be a lie.
+    if (element.readsFileInputs(node) && !filePorts(node, graph, registry).length) {
       problems.push({
         where,
         problem: 'It is set to read wired files into their content, but none of its inputs is a file path -- so it is handed the path as text.',
