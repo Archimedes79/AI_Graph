@@ -21,6 +21,7 @@ import { runExamples } from '../../execution/examples.ts';
 import { GuiNodeRunner, parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
 import { registry } from '../../elements/registry.ts';
 import { writeBundle } from '../../cli/bundle.ts';
+import { zipMode } from '../../cli/launchers.ts';
 import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
 import { nodeRuntime } from '../node.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
@@ -178,7 +179,8 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
         await writeBundle(graph, work, { pageDir });
         const entries = [];
         for (const file of await allFiles(work)) {
-          entries.push({ path: file.slice(work.length + 1), content: await readFile(file) });
+          const path = file.slice(work.length + 1);
+          entries.push({ path, content: await readFile(file), mode: zipMode(path) });
         }
         const name = (graph.metadata.name || 'graph').replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '') || 'graph';
         return new Download(zip(entries), `${name}_bundle.zip`, 'application/zip');

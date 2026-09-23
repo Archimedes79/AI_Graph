@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -88,6 +88,10 @@ describe('a bundle', () => {
       expect(page.some((p) => p.endsWith('.js'))).toBe(true);
       // run.sh serves, because there is something to serve.
       expect(await readFile(join(dir, 'run.sh'), 'utf8')).toContain('--serve');
+      // The recipient's first command is ./run.sh; on Windows there is no bit to set.
+      if (process.platform !== 'win32') expect((await stat(join(dir, 'run.sh'))).mode & 0o111).not.toBe(0);
+      // The same launcher the downloadable package ships, Node check included.
+      expect(await readFile(join(dir, 'run.cmd'), 'utf8')).toContain('where node');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -72,18 +72,34 @@ first.
 
 ## The download, without a checkout
 
-Every `vX.Y.Z` tag publishes a zip on the repository's releases page: the engine's
-source, the editor's built page and the examples. The engine has no runtime
-dependencies and Node runs its TypeScript unbuilt, so there is nothing to install and
-nothing to build:
+The [releases page](https://github.com/Archimedes79/AI_Graph/releases) has two kinds of
+zip, both holding the engine's source, the editor's built page and the examples:
+
+| Release | Zip | What it is |
+|---|---|---|
+| `vX.Y.Z` | `ai-graph-vX.Y.Z.zip` | A version. Published when that tag is pushed, and never changes afterwards. |
+| `latest` (pre-release) | `ai-graph-latest.zip` | Whatever `main` is. Rebuilt on every green push to `main`, at an address that stays the same. |
+
+Take the `ai-graph-….zip` asset. The *Source code (zip)* GitHub adds to every release is
+the bare repository — no built page and no `run.cmd` — and needs the checkout route above.
+
+The engine has no runtime dependencies and Node runs its TypeScript unbuilt, so there is
+nothing to install and nothing to build:
 
 ```bash
-unzip ai-graph-v0.1.0.zip && cd ai-graph-v0.1.0
-./run.sh          # run.cmd on Windows
+unzip ai-graph-latest.zip && cd ai-graph-latest
+./run.sh          # run.cmd on Windows -- double-clicking it works
 ```
 
-Node 24 or newer is the whole requirement. `npm run package` builds the same zip from
-a checkout.
+Node 24 or newer is the whole requirement, and `run.sh` / `run.cmd` check it before
+starting: a missing or older Node is named in a sentence, and on Windows the window stays
+open until it has been read. The editor opens in the browser on port 8000, or the next
+free one if something — another editor, say — is already there; `PORT=8123` insists on
+one. `VERSION` in the folder says which build it is and which commit it came from.
+
+`npm run package` builds the same zip from a checkout, and `node --test
+scripts/package.test.mjs` unzips it and starts it the way a person would, which CI does on
+Linux and on Windows before anything is published.
 
 ## In a container
 

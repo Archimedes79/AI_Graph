@@ -109,6 +109,10 @@ to the same relative place, so a tool handed to someone opens on its example dat
 than on "no such file". Only relative paths inside the project are carried; an absolute
 path, or anything over 50 MB, is listed in the bundle's README as the recipient's to bring.
 The launchers `cd` into the bundle first, so those relative paths mean the same there.
+They are the same pair the downloadable editor ships (`engine/src/cli/launchers.ts`): they
+check for Node 24 before starting and say so when it is missing or too old, `run.sh` comes
+out of the zip executable, and a double-clicked `run.cmd` that fails keeps its window open
+until the reason has been read.
 
 A bundle's server also keeps the graph's own clock (*⚙ Settings → What starts this graph*):
 `on start` and `every 5m` run with nobody watching, and the page shows the latest result.

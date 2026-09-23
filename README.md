@@ -169,7 +169,10 @@ start.cmd          # Windows, cmd -- double-clicking it works too
 ```
 
 That installs on first use, builds the page, and opens the editor. Node 24 or newer,
-nothing else. By hand it is `npm ci`, `npm run build`, `npm start`. The editor opens at <http://127.0.0.1:8000>. `npm run
+nothing else. **Without git:** download `ai-graph-latest.zip` (always the current `main`)
+or a versioned `ai-graph-vX.Y.Z.zip` from the
+[releases page](https://github.com/Archimedes79/AI_Graph/releases), unzip, and run
+`run.cmd` / `./run.sh`. By hand it is `npm ci`, `npm run build`, `npm start`. The editor opens at <http://127.0.0.1:8000>. `npm run
 dev` is the same with live reload; `docker compose up --build` the same in a container
 beside Ollama. Details in [docs/install.md](docs/install.md).
 
