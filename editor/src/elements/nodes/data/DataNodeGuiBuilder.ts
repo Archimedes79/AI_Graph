@@ -24,6 +24,10 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly Panel = lazy(() => import('./DataNodePanel'));
 
+  // The same five steps as an ai or code node: what it holds, what comes in
+  // and out, its format, and -- in place of trying it -- what it holds now.
+  override readonly stepped = true;
+
   // The node reads "input" and hands on "output" by those names: what each
   // carries can be said, but not what it is called.
   override readonly portEditing = { inputs: 'describe', outputs: 'describe' } as const;
@@ -31,14 +35,14 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
   override portHint(side: 'inputs' | 'outputs'): string {
     return side === 'inputs'
       ? 'Optional. What arrives here replaces the stored value, and is kept for the next run.'
-      : 'The stored value -- what arrived last, or the stored content above until something does.';
+      : 'What it holds -- what arrived last, or what step 5 says until something does.';
   }
 
   override readonly generation: ElementGeneration<GraphNode> = {
     ...fromEngine(new DataNodeRunner().generation()),
-    promptLabel: 'Format generation prompt',
+    promptLabel: 'What it holds',
     promptPlaceholder: 'Describe the records, fields, types, constraints, and examples this node stores.',
-    bodyLabel: 'Defined data format',
+    bodyLabel: 'Format',
     bodyPlaceholder: 'Field names, types, dimensions, constraints, and a representative example.',
     mono: true,
     bodyHeight: 140,

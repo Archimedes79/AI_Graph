@@ -153,7 +153,7 @@ export function useGraphSweep(): SweepState {
         ...facts,
         // Before a run, what the nodes before it produced in this sweep.
         ...(predecessors ? { sampleInputs: predecessors, sampleOrigin: 'what the nodes before it just returned' } : {}),
-        graphContext: NODE_BUILDERS[current.node_type]?.stepped ? undefined : [
+        graphContext: NODE_BUILDERS[current.node_type]?.outputContract === 'format' ? undefined : [
           connectedFormatContext(current.id, nodesOf(), rfEdges()),
           lastRunContext(current.id, live().executionResult, readFilePorts(current)),
         ].filter(Boolean).join('\n\n'),

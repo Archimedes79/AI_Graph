@@ -99,7 +99,8 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    * The dialog is laid out as the steps of building the node -- what it should
    * do, what comes in, what comes out, how, and trying it -- with the ports
    * inside those steps rather than in a list of their own. For the nodes whose
-   * body is written against its ports: ai and code.
+   * body is written against its ports -- ai and code -- and for a data node,
+   * whose format is written against what it takes and hands on.
    */
   readonly stepped: boolean = false;
 

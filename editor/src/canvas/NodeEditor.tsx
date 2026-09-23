@@ -220,10 +220,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // What the node says about itself -- ports, samples, wiring, format,
       // shape, examples -- as facts the engine writes one brief from.
       ...nodeFacts(node, graphNodes, graphEdges, executionResult),
-      // A node laid out in steps says everything in those facts. The others
-      // (a data node's format, an input's file selector) are still told
-      // their neighbours in sentences.
-      graphContext: element.stepped ? undefined : surroundingContext(),
+      // A node whose body is written against its ports -- ai and code -- says
+      // everything in those facts. The others (a data node's format, an
+      // input's file selector) are still told their neighbours in sentences.
+      graphContext: element.outputContract === 'format' ? undefined : surroundingContext(),
       recordShape: keepsOutputInterface(node)
         ? (outputs) => { if (!draft.current?.config.output_schema) setConfig('output_schema', inferInterface(outputs)); }
         : undefined,
@@ -428,10 +428,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 steps={steps}
               /></Suspense>}
 
-              {/* What this node takes in and hands out, where that is the
-                  person's to say. A gui node's ports follow its blocks and an
-                  input node's follow its mode, and the element is what knows
-                  which -- so the question is asked, never switched on a type. */}
               {/* What this node takes in and hands out, where that is the
                   person's to say. A gui node's ports follow its blocks and an
                   input node's follow its mode, and the element is what knows

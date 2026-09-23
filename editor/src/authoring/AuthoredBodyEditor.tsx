@@ -33,8 +33,14 @@ interface Props {
    * in "What comes in" beside the 📎 sample and `children`; `outputs` in
    * "What comes out"; `preview` beside ✨, for showing what it will send,
    * and `sent` under that row, where what it would send is shown.
+   * `ask` and `body` word steps 1 and 4 for a node that is not code -- a data
+   * node is asked what it holds, and its step 4 is a format, with `beforeBody`
+   * above it.
    */
-  steps?: { inputs: React.ReactNode; outputs: React.ReactNode; preview?: React.ReactNode; sent?: React.ReactNode; bodyHint?: string };
+  steps?: {
+    inputs: React.ReactNode; outputs: React.ReactNode; preview?: React.ReactNode; sent?: React.ReactNode; bodyHint?: string;
+    ask?: { title: string; hint: string }; body?: string; beforeBody?: React.ReactNode;
+  };
 }
 
 /**
@@ -146,7 +152,7 @@ export default function AuthoredBodyEditor({
   if (steps) {
     return (
       <>
-        <Step n={1} title="What should it do?" hint="In your own words. ✨ Generate writes step 4 from this and steps 2 and 3.">
+        <Step n={1} title={steps.ask?.title ?? 'What should it do?'} hint={steps.ask?.hint ?? 'In your own words. ✨ Generate writes step 4 from this and steps 2 and 3.'}>
           {request}
         </Step>
         <Step n={2} title="What comes in" hint="What each input holds. Wires are drawn on the canvas, from another node's output dot to this node's input dot.">
@@ -158,7 +164,8 @@ export default function AuthoredBodyEditor({
           {steps.outputs}
         </Step>
         {!bodyHidden && (
-          <Step n={4} title="How it does it" hint={steps.bodyHint}>
+          <Step n={4} title={steps.body ?? 'How it does it'} hint={steps.bodyHint}>
+            {steps.beforeBody}
             {body}
           </Step>
         )}
