@@ -257,6 +257,14 @@ function route<Req, Res>(method: Method, path: string, audience: 'tool' | 'edito
 type RunGraph = Graph & { trigger?: RunTrigger | null };
 type OnNode = Graph & { node_id: string };
 
+/** One request a node would send, as the model would read it. */
+export interface SentRequest {
+  system: string;
+  prompt: string;
+  /** How many images go with it. */
+  images: number;
+}
+
 export const API = {
   // -- what a deployed tool serves ------------------------------------------
   /** The graph this tool ships. */
@@ -278,6 +286,8 @@ export const API = {
   // -- what only the editor serves ------------------------------------------
   /** One node on the inputs given: ▶ Test in a node's editor. */
   runNode: route<OnNode & { inputs: Record<string, unknown> }, NodeResult>('POST', '/api/execute/node', 'editor'),
+  /** What one node would ask a model on the inputs given -- its run, with every answer made up and nothing sent. */
+  nodeRequests: route<OnNode & { inputs: Record<string, unknown> }, { requests: SentRequest[]; error: string | null }>('POST', '/api/execute/node/requests', 'editor'),
   /** One value through one block's transform, as the page would show it. */
   runBlock: route<{ widget: unknown; value: unknown }, BlockResult>('POST', '/api/execute/block', 'editor'),
   /** What would arrive at a node: what feeds it is run, the node is not. */

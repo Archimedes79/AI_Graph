@@ -25,7 +25,7 @@ import { zipMode } from '../../cli/launchers.ts';
 import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
 import { nodeRuntime } from '../node.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
-import type { AICall, GraphFile } from '../api.ts';
+import type { AICall, GraphFile, SentRequest } from '../api.ts';
 import * as files from './files.ts';
 import { browse, extensionFilter } from '../browse.ts';
 import { NotAGraph, NotFound } from '../../errors.ts';
@@ -92,6 +92,24 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
     runNode: (asked) => executeNode(
       parseGraph(asked), String(asked.node_id ?? ''), asked.inputs ?? {}, { runtime: nodeRuntime(), registry },
     ),
+
+    // The node's own run -- its run.js, if someone changed it -- with a model
+    // that answers every question with a stand-in and remembers the question.
+    // Tool servers are opened for nothing: the stand-in never calls a tool.
+    async nodeRequests(asked) {
+      const requests: SentRequest[] = [];
+      const runtime = nodeRuntime({
+        ai: {
+          complete: async (request) => {
+            requests.push({ system: request.system ?? '', prompt: request.prompt, images: request.images?.length ?? 0 });
+            return `⟨the model's answer to question ${requests.length}⟩`;
+          },
+        },
+        tools: { open: async () => ({ specs: [], call: async () => '', close: async () => {} }) },
+      });
+      const result = await executeNode(parseGraph(asked), String(asked.node_id ?? ''), asked.inputs ?? {}, { runtime, registry });
+      return { requests, error: result.status === 'error' ? result.error ?? 'It failed.' : null };
+    },
 
     testNode: async (asked) => ({
       results: await runExamples(parseGraph(asked), String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry }),

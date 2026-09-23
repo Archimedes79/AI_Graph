@@ -118,7 +118,7 @@ function RunCode({ code, onChange }: { code: string; onChange: (code: string) =>
         One call to the model, with <code>system.md</code> and <code>message.md</code>. Change it for a loop, a
         second call or a check of the answer: <code>await node.llm(&#123; prompt &#125;)</code> asks for a call, at
         most {LLM_CALLS_PER_RUN} times a run. Your version runs sandboxed and never sees this machine's keys.
-        {own && ' The preview of what the model receives shows the standard call, not what your code makes of it.'}
+        {own && ' "Try it" shows what your version asks, found by running it with made-up answers.'}
       </p>
     </div>
   );
