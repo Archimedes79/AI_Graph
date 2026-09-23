@@ -123,6 +123,11 @@ export default function GenerationTranscript() {
  * for. Empty parts are dropped, so a generation with no system prompt does not
  * show a labelled empty box.
  */
+/** One side of an exchange, for anything that shows a request: the preview beside ✨ too. */
+export function SentPart({ label, text }: { label: string; text: string }) {
+  return <Part label={label} text={text} />;
+}
+
 function Part({ label, text, tone }: { label: string; text: string; tone?: string }) {
   if (!text.trim()) return null;
   return (

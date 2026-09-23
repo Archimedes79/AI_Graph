@@ -64,6 +64,28 @@ export default function GraphCanvas({ active = true }: { active?: boolean }) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
 
+  // A node added by clicking the palette goes to the right of the others,
+  // which on a wide graph is off the screen: it was there, and looked as if
+  // nothing had happened. When one node appears outside the view, the view
+  // widens to show it -- only then, so a view someone set is left alone.
+  const seen = useRef(rfNodes.length);
+  React.useEffect(() => {
+    const before = seen.current;
+    seen.current = rfNodes.length;
+    if (!rfInstance || !reactFlowWrapper.current || rfNodes.length !== before + 1) return;
+    const added = rfNodes[rfNodes.length - 1];
+    const { x, y, zoom } = rfInstance.getViewport();
+    const bounds = reactFlowWrapper.current.getBoundingClientRect();
+    const left = added.position.x * zoom + x;
+    const top = added.position.y * zoom + y;
+    const width = (added.width ?? 240) * zoom;
+    const height = (added.height ?? 120) * zoom;
+    if (left >= 0 && top >= 0 && left + width <= bounds.width && top + height <= bounds.height) return;
+    // After it is drawn: a node not yet measured is left out of the fit. Not
+    // cancelled when the nodes change again -- measuring it is such a change.
+    window.setTimeout(() => rfInstance.fitView({ padding: 0.2, duration: 300, maxZoom: 1 }), 80);
+  }, [rfNodes, rfInstance]);
+
   const onConnect = useCallback(
     (params: Connection) => {
       const rejectionReason = getConnectionRejectionReason(params, rfNodes);

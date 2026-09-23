@@ -29,6 +29,12 @@ const ALWAYS_SAVED = ['batch_mode'];
 const SUBGRAPH = new SubgraphNodeRunner();
 const TRIGGER = new TriggerNodeRunner();
 
+// A new node's description starts empty. It used to be the type's blurb --
+// "Send a prompt to an AI model" -- which, on an ai or code node, is the
+// request ✨ Generate writes the body from: pressing ✨ on a fresh node wrote
+// code for the blurb. What the type is for is the field's placeholder instead
+// (`NodeGuiBuilder.hint`).
+
 const CODE_STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
 
 export interface NodeKind {
@@ -59,7 +65,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
         id,
         node_type: 'input',
         label: 'Input',
-        description: 'A text value, file, or directory',
+        description: '',
         position: { x: 0, y: 0 },
         inputs: [],
         outputs: [],
@@ -79,7 +85,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       id,
       node_type: 'ai',
       label: 'AI Node',
-      description: 'Send a prompt to an AI model',
+      description: '',
       position: { x: 0, y: 0 },
       // One input, one output. There used to be a second, "Context", on every
       // new node: a port most nodes never wire, that looked like it had to be.
@@ -102,7 +108,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       id,
       node_type: 'code',
       label: 'Code Node',
-      description: 'Execute custom code',
+      description: '',
       position: { x: 0, y: 0 },
       inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
       outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: 'One result per input item' }],
@@ -116,7 +122,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       id,
       node_type: 'data',
       label: 'Data Node',
-      description: 'Persist data with an explicit format contract',
+      description: '',
       position: { x: 0, y: 0 },
       inputs: [{ id: 'input', name: 'Update', kind: 'input', data_type: 'any', multi: false, required: false, description: 'Optional new value' }],
       outputs: [{ id: 'output', name: 'Value', kind: 'output', data_type: 'any', multi: false, required: false, description: 'Persisted value' }],
@@ -131,11 +137,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       id,
       node_type: 'output',
       label: 'Output',
-      description: 'Graph output node',
+      description: '',
       position: { x: 0, y: 0 },
       inputs: [
         { id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' },
-        { id: 'path', name: 'Path', kind: 'input', data_type: 'file_path', multi: false, required: false, description: 'Optional wired file/directory path, overriding the config value below.' },
+        { id: 'path', name: 'Path', kind: 'input', data_type: 'file_path', multi: false, required: false, description: 'Optional: a wired file or folder path, used instead of the one set above.' },
       ],
       outputs: [],
       // A window, not nowhere: an output that shows nothing until someone finds
@@ -150,7 +156,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       id,
       node_type: 'gui',
       label: 'GUI Node',
-      description: 'A composed panel of interactive widgets (file/directory pickers, text/chat windows)',
+      description: '',
       position: { x: 0, y: 0 },
       inputs: [],
       outputs: [],
@@ -164,7 +170,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       id,
       node_type: 'subgraph',
       label: 'Subgraph',
-      description: 'A part of the work, built as its own graph',
+      description: '',
       position: { x: 0, y: 0 },
       // None to start with: a port here is a node in there, and there is
       // nothing in there yet.
@@ -182,7 +188,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       id,
       node_type: 'trigger',
       label: 'Start',
-      description: 'What starts this graph by itself',
+      description: '',
       position: { x: 0, y: 0 },
       inputs: [],
       outputs: TRIGGER.derivedPorts().outputs as GraphNode['outputs'],

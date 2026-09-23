@@ -1,5 +1,5 @@
 import type { GraphNode, GuiWidget } from '@/graph';
-import { call, type GenerateResponse, type ProbeReport } from '@/api/client';
+import { call, type AICall, type GenerateRequest, type GenerateResponse, type ProbeReport } from '@/api/client';
 import { genAI } from '@/store/settingsStore';
 import type { GenerateOptions } from './useGenerate';
 import type { Generation } from '@engine/authoring/generation.ts';
@@ -194,6 +194,18 @@ export interface GenerationRequest<S> {
   /** Ports whose sample is a path the running node gets the text of (`readFilePorts`). */
   readFilePorts?: string[];
   /**
+   * What the person wrote about each port, by port id: the one place a port's
+   * meaning is said in words, and so the first thing the model should read
+   * about it. Empty descriptions are left out.
+   */
+  portNotes?: { inputs?: Record<string, string>; outputs?: Record<string, string> };
+  /** The output interface this node keeps (`output.schema.json`): the shape a body must go on returning. */
+  outputSchema?: unknown;
+  /** The node's examples (`examples.md`): what it is checked against, so what it is written to satisfy. */
+  examples?: string;
+  /** An ai node's message template: how its inputs are laid out for the model. */
+  messageTemplate?: string;
+  /**
    * Write down what the generated body actually returned.
    *
    * The backend already ran it against real data before handing it over, so the
@@ -213,10 +225,51 @@ export interface GenerationRequest<S> {
  * code path -- as they already execute, author files and declare ports through
  * one.
  */
-export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
+/** Only the entries that say something: an empty description is not a note. */
+function said(notes: Record<string, string> | undefined): Record<string, string> | undefined {
+  const kept = Object.entries(notes ?? {}).filter(([, text]) => text?.trim());
+  return kept.length ? Object.fromEntries(kept) : undefined;
+}
+
+/**
+ * The request ✨ Generate sends, exactly -- built in one place, so "show what
+ * ✨ sends" (`preview`) and the real button cannot describe two different
+ * requests.
+ */
+export function generateRequest<S>(request: GenerationRequest<S>): GenerateRequest {
   const { generation: spec, subject, fields } = request;
+  return {
+    element: request.element,
+    description: fields.get(spec.promptField).trim(),
+    context: [spec.context?.(subject), request.graphContext].filter(Boolean).join('\n\n'),
+    context_file: request.exampleFile || undefined,
+    inputs: request.ports?.inputs,
+    outputs: request.ports?.outputs,
+    sample_inputs: request.sampleInputs,
+    input_sources: request.inputSources,
+    read_file_ports: request.readFilePorts?.length ? request.readFilePorts : undefined,
+    input_notes: said(request.portNotes?.inputs),
+    output_notes: said(request.portNotes?.outputs),
+    output_schema: request.outputSchema ?? undefined,
+    examples: request.examples?.trim() || undefined,
+    message_template: request.messageTemplate?.trim() || undefined,
+    ...genAI(),
+  };
+}
+
+/**
+ * What ✨ Generate would send, without sending it: the server builds the same
+ * request and stops at the first model call (`preview`). The answer is that
+ * call -- system and prompt, as the model would read them.
+ */
+export async function previewGeneration<S>(request: GenerationRequest<S>): Promise<AICall[]> {
+  const response = await call('generate', { ...generateRequest(request), preview: true });
+  return response.calls ?? [];
+}
+
+export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
+  const { generation: spec, fields } = request;
   const prompt = fields.get(spec.promptField).trim();
-  const context = [spec.context?.(subject), request.graphContext].filter(Boolean).join('\n\n');
 
   return {
     guard: () => (prompt ? undefined : (spec.guard ?? 'Please add a prompt first.')),
@@ -224,16 +277,7 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
     success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!'),
     failure: 'Generation failed',
     run: (progressId?: string) => call('generate', {
-      element: request.element,
-      description: prompt,
-      context,
-      context_file: request.exampleFile || undefined,
-      inputs: request.ports?.inputs,
-      outputs: request.ports?.outputs,
-      sample_inputs: request.sampleInputs,
-      input_sources: request.inputSources,
-      read_file_ports: request.readFilePorts?.length ? request.readFilePorts : undefined,
-      ...genAI(),
+      ...generateRequest(request),
       // Only a single ✨ button passes one; a sweep runs unattended.
       ...(progressId ? { progress_id: progressId } : {}),
     }),

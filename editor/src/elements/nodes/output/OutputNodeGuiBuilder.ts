@@ -17,4 +17,13 @@ export class OutputNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly Panel = lazy(() => import('./OutputNodePanel'));
 
+  // It ends a branch: nothing comes out of it. "path" is read by name.
+  override readonly portEditing = { inputs: 'edit', outputs: 'none' } as const;
+
+  override portHint(side: 'inputs' | 'outputs'): string | undefined {
+    return side === 'inputs'
+      ? 'Every input but “path” is shown or written. A wired “path” overrides the one set above.'
+      : undefined;
+  }
+
 }

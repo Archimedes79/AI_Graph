@@ -13,7 +13,18 @@ interface NodeExamplesProps {
   executionResult: ExecutionResult | null;
 }
 
-const TEMPLATE = '## What this example shows\n\n```json input\n{ "input": "…" }\n```\n\n```json expect\n{ "output": "…" }\n```\n';
+/**
+ * An example to start from, keyed by *this* node's ports. It was always
+ * `input` and `output`, which a node with `csv` and `rows` would have to
+ * rename before the example checked anything.
+ */
+function template(node: GraphNode): string {
+  const keyed = (ids: string[], fallback: string) =>
+    `{ ${(ids.length ? ids : [fallback]).map((id) => `"${id}": "…"`).join(', ')} }`;
+  const inputs = keyed(node.inputs.map((port) => port.id), 'input');
+  const outputs = keyed(node.outputs.filter((port) => port.id !== 'error').map((port) => port.id), 'output');
+  return `## What this example shows\n\n\`\`\`json input\n${inputs}\n\`\`\`\n\n\`\`\`json expect\n${outputs}\n\`\`\`\n`;
+}
 
 const MARK: Record<ExampleResult['status'], { sign: string; color: string }> = {
   pass: { sign: '✓', color: SUCCESS },
@@ -64,7 +75,7 @@ export default function NodeExamples({ node, setConfig, executionResult }: NodeE
   return (
     <details className="rounded-lg" open={!!text.trim()} style={{ border: `1px solid ${LINE}` }}>
       <summary className="px-3 py-2 text-xs font-medium cursor-pointer select-none" style={{ color: MUTED }}>
-        Examples — inputs and what must come out (optional)
+        Examples — inputs, and what must come out (optional; ✨ Generate writes to satisfy them)
       </summary>
       <div className="px-3 pb-3 pt-1 space-y-2">
         <div className="flex items-center gap-2 justify-end">
@@ -95,7 +106,7 @@ export default function NodeExamples({ node, setConfig, executionResult }: NodeE
           value={text}
           onChange={(next) => setConfig('examples', next)}
           language="markdown"
-          placeholder={TEMPLATE}
+          placeholder={template(node)}
           minHeight={120}
           title={`${node.label} — examples`}
         />

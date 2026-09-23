@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, MUTED } from '@/ui/theme';
 import PromptPreview from './PromptPreview';
+import Step from '@/authoring/Step';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 /**
@@ -14,7 +15,7 @@ import type { NodePanelProps } from '../../NodeGuiBuilder';
  */
 export default function AiNodePanel({
   node, setConfig, generation, fields, generating, message, onGenerate,
-  contextFile, onContextFileChange,
+  contextFile, onContextFileChange, steps,
 }: NodePanelProps) {
   const template = useRef<HTMLTextAreaElement | null>(null);
 
@@ -32,23 +33,16 @@ export default function AiNodePanel({
     });
   };
 
-  return (
-    <>
-      <AuthoredBodyEditor
-        generation={generation}
-        fields={fields}
-        exampleFile={contextFile}
-        onExampleFileChange={onContextFileChange}
-        generating={generating}
-        message={message}
-        onGenerate={onGenerate}
-        title={node.label}
-      />
+  // What an empty message means, spelled out: this node's inputs, one after
+  // another (`assemblePrompt`). The placeholder used to be a chat template
+  // from some other graph, with ports this node does not have.
+  const laidOut = node.inputs.map((port) => `{{${port.id}}}`).join('\n\n');
 
+  const messageBox = (
       <div>
         <div className="flex items-center justify-between mb-1 gap-3 flex-wrap">
           <label className="text-xs font-medium" style={{ color: MUTED }}>
-            Message <span style={{ color: DIMMER }}>— how the inputs are laid out. Empty: they are sent as they arrive.</span>
+            Message <span style={{ color: DIMMER }}>— how the inputs are laid out for the model. Left empty, they are sent one after another, as shown greyed out.</span>
           </label>
           <div className="flex items-center gap-1 flex-wrap">
             {node.inputs.map((port) => (
@@ -70,12 +64,35 @@ export default function AiNodePanel({
           style={{ ...FIELD, minHeight: 96 }}
           value={String(node.config.prompt_template ?? '')}
           onChange={(e) => setConfig('prompt_template', e.target.value)}
-          placeholder={'Conversation so far:\n{{history}}\n\nUser: {{message}}'}
+          placeholder={laidOut || 'Add an input above, then place it here as {{name}}.'}
           spellCheck={false}
+          aria-label="Message template"
         />
       </div>
+  );
 
-      <PromptPreview node={node} setConfig={setConfig} />
+  return (
+    <>
+      <AuthoredBodyEditor
+        generation={generation}
+        fields={fields}
+        exampleFile={contextFile}
+        onExampleFileChange={onContextFileChange}
+        generating={generating}
+        message={message}
+        onGenerate={onGenerate}
+        title={node.label}
+        steps={steps && {
+          ...steps,
+          bodyHint: 'The instructions the model gets with every request. ✨ Generate writes them from steps 1 to 3; the answer format from step 3 is added after them by itself.',
+        }}
+      >
+        {messageBox}
+      </AuthoredBodyEditor>
+
+      {steps
+        ? <Step n={5} title="Try it" hint="Exactly what the model will receive, and its answer on sample values."><PromptPreview node={node} setConfig={setConfig} /></Step>
+        : <PromptPreview node={node} setConfig={setConfig} />}
     </>
   );
 }

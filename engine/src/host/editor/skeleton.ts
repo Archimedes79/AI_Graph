@@ -39,9 +39,21 @@ function jsType(value: unknown): string {
   return '*';
 }
 
-/** The trailing comment for one input line: where it comes from, and a peek. */
-function note(port: string, sources?: Record<string, string>, sample?: Record<string, unknown>): string {
+/** What each port is, in the words the person gave it: see `GenerateRequest.input_notes`. */
+export interface PortNotes {
+  inputs?: Record<string, string>;
+  outputs?: Record<string, string>;
+}
+
+/** One line of a description, for a comment: newlines would end the comment early. */
+function oneLine(text: string | undefined): string {
+  return (text ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** The trailing comment for one input line: what it is, where it comes from, and a peek. */
+function note(port: string, sources?: Record<string, string>, sample?: Record<string, unknown>, described?: string): string {
   const parts: string[] = [];
+  if (oneLine(described)) parts.push(oneLine(described));
   const origin = sources?.[port];
   if (origin) parts.push(`from ${origin}`);
   if (sample && port in sample) {
@@ -76,20 +88,32 @@ export function renderSkeleton(
   outputs: string[],
   sample?: Record<string, unknown>,
   sources?: Record<string, string>,
+  notes: PortNotes = {},
 ): string {
   const lines: string[] = [];
   if (inputs.length) {
     lines.push('/**', ' * @typedef {Object} Inputs');
     for (const port of inputs) {
       const kind = sample && port in sample ? jsType(sample[port]) : '*';
-      lines.push(` * @property {${kind}} ${port}${note(port, sources, sample)}`);
+      lines.push(` * @property {${kind}} ${port}${note(port, sources, sample, notes.inputs?.[port])}`);
     }
     lines.push(' */', '', '/** @param {Inputs} inputs */');
   }
   lines.push('function run(inputs) {');
   for (const port of inputs) lines.push(`  const ${identifier(port)} = inputs["${port}"];`);
   if (inputs.length) lines.push('');
-  lines.push(outputs.length ? `  return {${outputs.map((port) => `"${port}": null`).join(', ')}};` : '  return {};');
+  // One line while nothing is said about the outputs; one per output once
+  // something is, so that what each key must hold sits beside the key.
+  if (outputs.some((port) => oneLine(notes.outputs?.[port]))) {
+    lines.push('  return {');
+    for (const port of outputs) {
+      const said = oneLine(notes.outputs?.[port]);
+      lines.push(`    "${port}": null,${said ? `  // ${said}` : ''}`);
+    }
+    lines.push('  };');
+  } else {
+    lines.push(outputs.length ? `  return {${outputs.map((port) => `"${port}": null`).join(', ')}};` : '  return {};');
+  }
   lines.push('}');
   return `${lines.join('\n')}\n`;
 }

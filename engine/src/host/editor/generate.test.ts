@@ -102,6 +102,81 @@ describe('code', () => {
   });
 });
 
+describe('what the node says about itself reaches the model', () => {
+  // The port descriptions, the kept output shape and the examples were used to
+  // check a body and never to write one; pressing ✨ again could rename a
+  // table's columns with every check still passing.
+  const rows = {
+    element: 'code', description: 'One table row per file.',
+    inputs: ['files', 'summaries'], outputs: ['rows'],
+    input_notes: { files: 'Every path in the folder', summaries: 'One per file, same order' },
+    output_notes: { rows: 'A list of {File, Summary}' },
+    output_schema: { type: 'object', properties: { rows: { type: 'array' } }, required: ['rows'] },
+    examples: '## Two files\n\n```json input\n{"files": ["a.txt"], "summaries": ["One."]}\n```\n\n```json expect\n{"rows": [{"File": "a.txt", "Summary": "One."}]}\n```\n',
+  };
+
+  it('puts the ports\' descriptions beside them, and the shape and the examples after', async () => {
+    const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
+    await generate(rows, { ai, code: runner(() => ({})), generationFor, target });
+    const prompt = ai.asked[0].prompt;
+    expect(prompt).toContain('@property {*} files  // Every path in the folder');
+    expect(prompt).toContain('"rows": null,  // A list of {File, Summary}');
+    expect(prompt).toContain('must keep this shape');
+    expect(prompt).toContain('"required": [');
+    expect(prompt).toContain('- Two files');
+    expect(prompt).toContain('must return (at least): {"rows":[{"File":"a.txt","Summary":"One."}]}');
+  });
+
+  it('no longer tells every code node about charts -- only a chart downstream says so', async () => {
+    const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
+    await generate(rows, { ai, code: runner(() => ({})), generationFor, target });
+    expect(ai.asked[0].prompt).not.toContain('chart');
+    expect(registry.widget('plot_window')?.receives({} as never)).toContain('NOT a drawing');
+    expect(registry.widget('table')?.receives({} as never)).toContain('column header');
+  });
+
+  it('tells a prompt what its model will be sent, laid out as the message says', async () => {
+    const ai = scripted(['<system_prompt>Summarize.</system_prompt>']);
+    await generate({
+      element: 'ai', description: 'Summarize one story in two sentences.',
+      inputs: ['story'], input_notes: { story: 'One file per run; arrives as its content' },
+      input_sources: { story: '"Folder summaries" (port "Folder")' },
+      message_template: 'Story:\n{{story}}',
+      output_notes: { output: 'What the model answered' },
+    }, { ai, code: runner(() => ({})), generationFor, target });
+    const prompt = ai.asked[0].prompt;
+    expect(prompt).toContain('- story: One file per run; arrives as its content; from "Folder summaries" (port "Folder")');
+    expect(prompt).toContain('laid out like this');
+    expect(prompt).toContain('Story:\n{{story}}');
+    expect(prompt).toContain('The answer is: What the model answered');
+  });
+});
+
+describe('a preview', () => {
+  it('builds the request exactly as ✨ would, and does not send it', async () => {
+    const ai = scripted([]);  // asked anything, it fails the test
+    const reply = await generate(
+      { element: 'code', description: 'add', inputs: ['a'], outputs: ['out'], preview: true },
+      { ai, code: runner(() => { throw new Error('nothing may run'); }), generationFor, target },
+    );
+    expect(ai.asked).toHaveLength(0);
+    expect(reply.preview).toBe(true);
+    expect(reply.calls).toHaveLength(1);
+    expect(reply.calls[0].error).toBeNull();
+    expect(reply.calls[0].prompt).toContain('const a = inputs["a"];');
+    expect(reply.calls[0].system).toContain('expert software engineer');
+  });
+
+  it('is the same request the real call sends', async () => {
+    const asked = { element: 'ai', description: 'Be brief.', inputs: ['prompt'] };
+    const preview = await generate({ ...asked, preview: true }, { ai: scripted([]), code: runner(() => ({})), generationFor, target });
+    const ai = scripted(['<system_prompt>x</system_prompt>']);
+    await generate(asked, { ai, code: runner(() => ({})), generationFor, target });
+    expect(preview.calls[0].prompt).toBe(ai.asked[0].prompt);
+    expect(preview.calls[0].system).toBe(ai.asked[0].system);
+  });
+});
+
 describe('a node that is handed a file\'s text, not its path', () => {
   const files = (known: Record<string, string>) => ({
     read: async (path: string) => {

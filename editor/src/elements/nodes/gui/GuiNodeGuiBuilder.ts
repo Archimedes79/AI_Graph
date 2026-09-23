@@ -2,6 +2,8 @@ import { lazy } from 'react';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 import { WIDGET_BUILDERS } from '../../widgets/roster';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { widgetOfPort } from './guiWidgets';
 
 /**
  * A composite: it holds widgets, generates nothing itself, and emits what its widgets emit.
@@ -40,6 +42,19 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
   override missingExample(node: GraphNode): boolean {
     const widgets: GuiWidget[] = Array.isArray(node.config.gui_widgets) ? node.config.gui_widgets : [];
     return widgets.some((widget) => WIDGET_BUILDERS[widget.kind]?.missingExample(widget));
+  }
+
+  /**
+   * Which block the wire lands on, and what that block wants: a chart takes
+   * points to plot, a table rows whose keys become columns. The block says so
+   * itself (`WidgetRunner.receives`); the node only finds which block it is.
+   */
+  override describeAsTarget(node: GraphNode, port?: string): string {
+    const widget = port ? widgetOfPort(node, port) : undefined;
+    if (!widget) return super.describeAsTarget(node, port);
+    const wants = engineRegistry.widget(widget.kind)?.receives(widget as never);
+    const where = `Output goes to the "${widget.label || widget.kind}" block (${widget.kind}) on the page "${node.label}".`;
+    return wants ? `${where} It wants ${wants}` : where;
   }
 
   override describeOutput(): string {

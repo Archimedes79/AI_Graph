@@ -187,7 +187,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                     />
                     <span className="text-xs truncate" style={{ color: fires ? '#fbbf24' : '#86efac' }}>
                       {fires && <span title="Using this block starts the graph">⚡ </span>}
-                      {port.name}{port.multi && <span title="Multi"> ∞</span>}
+                      {port.name}{port.multi && <span title="A list: takes or hands on several values"> ∞</span>}
                     </span>
                   </div>
                 );
@@ -210,7 +210,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                   <React.Fragment key={port.id}>
                     <div className="relative flex items-center gap-1.5" style={{ marginRight: -12 }}>
                       <span className="text-xs truncate" style={{ color: MUTED }}>
-                        {port.name}{port.multi && <span title="Multi"> ∞</span>}
+                        {port.name}{port.multi && <span title="A list: takes or hands on several values"> ∞</span>}
                       </span>
                       <Handle
                         type="target"
@@ -288,7 +288,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                 />
                 <span className="text-xs" style={{ color: MUTED }}>
                   {port.name}
-                  {port.multi && <span title="Multi-input"> ∞</span>}
+                  {port.multi && <span title="Takes a list: several values, or one from each wired node"> ∞</span>}
                 </span>
               </div>
             </React.Fragment>
@@ -342,7 +342,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
           <div key={port.id} className="relative flex items-center justify-end gap-1.5" style={{ marginRight: -12 }}>
             <span className="text-xs" style={{ color: MUTED }}>
               {port.name}
-              {port.multi && <span title="Multi-output"> ∞</span>}
+              {port.multi && <span title="Hands on a list: the next node runs once per item, unless it takes the whole list"> ∞</span>}
             </span>
             <Handle
               type="source"

@@ -1,6 +1,6 @@
 // A node's build-time half, in the browser: the mirror of `engine/src/elements/NodeRunner.ts`.
 
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { GraphNode, NodeType } from '@/graph';
 import type { ElementGeneration, FieldAccess } from '@/authoring/generation';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
@@ -28,7 +28,15 @@ export interface NodePanelProps {
   /** An example file whose content is sent along when the body is generated. */
   contextFile: string;
   onContextFileChange: (path: string) => void;
+  /**
+   * The shell's port lists and the "what ✨ sends" button, for a panel laid
+   * out in steps (`stepped`): it places them in "What comes in", "What comes
+   * out" and beside ✨ -- see `AuthoredBodyEditor`.
+   */
+  steps?: { inputs: ReactNode; outputs: ReactNode; preview?: ReactNode; sent?: ReactNode };
 }
+
+export type PortEditing = 'edit' | 'describe' | 'none';
 
 /** The folded-away settings most people never touch. */
 export type NodeAdvancedPanelProps = Pick<NodePanelProps, 'node' | 'setConfig'>;
@@ -87,6 +95,31 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    */
   readonly holdsWidgets: boolean = false;
 
+  /**
+   * The dialog is laid out as the steps of building the node -- what it should
+   * do, what comes in, what comes out, how, and trying it -- with the ports
+   * inside those steps rather than in a list of their own. For the nodes whose
+   * body is written against its ports: ai and code.
+   */
+  readonly stepped: boolean = false;
+
+  /**
+   * How much of each side's ports is the person's to change.
+   * `edit`: add, remove, rename, type. `describe`: the ports are fixed -- the
+   * node reads them by name -- but what each one carries can be said.
+   * `none`: the side is not shown; the node has no such ports.
+   * Only asked where the ports are not derived (`derivedNodePorts`).
+   */
+  readonly portEditing: { inputs: PortEditing; outputs: PortEditing } = { inputs: 'edit', outputs: 'edit' };
+
+  /** One line under each side of the port list: how the node's body sees them. */
+  portHint(_side: 'inputs' | 'outputs', _node: GraphNode): string | undefined {
+    return undefined;
+  }
+
+  /** What the output-format choice is called for this kind of node: an ai node's is its answer's. */
+  readonly outputFormatLabel: string = 'Output format';
+
   /** What the output-format contract means for this kind of node, said above it. */
   readonly outputFormatHint?: string;
 
@@ -116,8 +149,12 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
     return `Input from "${node.label}" (${node.node_type} node): ${emits}`;
   }
 
-  /** How a neighbour's generation is told this node receives its output. */
-  describeAsTarget(node: GraphNode): string {
+  /**
+   * How a neighbour's generation is told this node receives its output.
+   * `port`: the input port the wire lands on, for a node whose ports differ
+   * in what they want -- a page's blocks do.
+   */
+  describeAsTarget(node: GraphNode, _port?: string): string {
     return `Output goes to "${node.label}" (${node.node_type} node).`;
   }
 

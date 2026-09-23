@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/nodeKinds';
-import { connectedFormatContext, lastRunContext, describeNodeOutput, readFilePorts } from './generationContext';
+import { connectedFormatContext, lastRunContext, describeNodeOutput, outputTargets, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
 
 const edge = (source: string, target: string) => ({ source, target });
@@ -147,5 +147,43 @@ describe('duplicate neighbours', () => {
     ]);
 
     expect(context).toBe('Output goes to "Result" (output node).');
+  });
+});
+
+describe('what a node is wired to, as the dialog and ✨ say it', () => {
+  it('names where each output goes, node and port', () => {
+    const code = NODE_KINDS.code.create('worker');
+    const out = NODE_KINDS.output.create('shown');
+    out.label = 'Report';
+    const targets = outputTargets('worker', [code, out], [
+      { source: 'worker', target: 'shown', sourceHandle: 'output', targetHandle: 'value' },
+    ]);
+    expect(targets).toEqual({ output: '"Report" (port "Value")' });
+  });
+
+  it('tells a node feeding a chart block what the chart wants -- the block says it', () => {
+    const code = NODE_KINDS.code.create('worker');
+    const page = NODE_KINDS.gui.create('page');
+    page.label = 'Dashboard';
+    page.config.gui_widgets = [{ id: 'w1', kind: 'plot_window', label: 'Sizes' } as never];
+    const context = connectedFormatContext('worker', [code, page], [
+      { source: 'worker', target: 'page', targetHandle: 'w1_in' },
+    ]);
+    expect(context).toContain('the "Sizes" block (plot_window) on the page "Dashboard"');
+    expect(context).toContain('NOT a drawing');
+  });
+
+  it('says a read file arrives as text for any node, not only as a function signature', () => {
+    const result = { node_results: [{ node_id: 'n', inputs: { doc: 'a.txt' } }] } as unknown as ExecutionResult;
+    const text = lastRunContext('n', result, ['doc']);
+    expect(text).toContain('the text of one file, already read');
+    expect(text).not.toContain('signature');
+  });
+});
+
+describe('a new node', () => {
+  it('starts with no description, so ✨ on a fresh ai or code node has nothing to invent code for', () => {
+    expect(NODE_KINDS.ai.create('a').description).toBe('');
+    expect(NODE_KINDS.code.create('c').description).toBe('');
   });
 });

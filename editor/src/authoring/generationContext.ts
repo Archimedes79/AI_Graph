@@ -45,7 +45,7 @@ export function describeNodeOutput(node: GraphNode): string {
 export function connectedFormatContext(
   nodeId: string,
   nodes: GraphNode[],
-  edges: Array<{ source: string; target: string }>,
+  edges: Array<{ source: string; target: string; targetHandle?: string | null }>,
 ): string {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   // A Set, because two ports wired to the same neighbour are two edges but one
@@ -63,7 +63,7 @@ export function connectedFormatContext(
     if (edge.source === nodeId) {
       const target = nodeById.get(edge.target);
       if (!target) continue;
-      lines.add(NODE_BUILDERS[target.node_type].describeAsTarget(target));
+      lines.add(NODE_BUILDERS[target.node_type].describeAsTarget(target, edge.targetHandle ?? undefined));
     }
   }
   return [...lines].join('\n');
@@ -144,7 +144,7 @@ export function lastRunContext(nodeId: string, result: ExecutionResult | null, a
   const lines = Object.entries(inputs).map(([port, value]) => {
     if (asFiles.includes(port)) {
       const what = Array.isArray(value) ? `a list of ${value.length} texts, one per file` : 'the text of one file';
-      return `- ${port}: ${what}, already read -- never a path. See the function's signature for how it starts.`;
+      return `- ${port}: ${what}, already read -- the node is handed the text, never a path.`;
     }
     const shape = Array.isArray(value) ? `list of ${value.length}` : typeof value;
     return `- ${port} (${shape}):\n${preview(value)}`;
@@ -182,5 +182,30 @@ export function inputSources(
   }
   return Object.fromEntries(
     Object.entries(byPort).map(([port, origins]) => [port, [...new Set(origins)].join(' + ')]),
+  );
+}
+
+/**
+ * Where each of *nodeId*'s output ports goes, by port id: `"Chart" (port
+ * "Points")`. The other half of `inputSources`, for the dialog: a port says
+ * what it is connected to, so "how does this reach that" is answered where the
+ * port is named rather than by squinting at the canvas.
+ */
+export function outputTargets(
+  nodeId: string,
+  nodes: GraphNode[],
+  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+): Record<string, string> {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const byPort: Record<string, string[]> = {};
+  for (const edge of edges) {
+    if (edge.source !== nodeId) continue;
+    const target = byId.get(edge.target);
+    if (!target) continue;
+    const port = target.inputs.find((p) => p.id === edge.targetHandle)?.name;
+    (byPort[edge.sourceHandle ?? 'output'] ??= []).push(port ? `"${target.label}" (port "${port}")` : `"${target.label}"`);
+  }
+  return Object.fromEntries(
+    Object.entries(byPort).map(([port, targets]) => [port, [...new Set(targets)].join(' + ')]),
   );
 }

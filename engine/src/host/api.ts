@@ -113,6 +113,28 @@ export interface GenerateRequest {
    * so these are read, as a run reads them, before the sample is shown or used.
    */
   read_file_ports?: string[];
+  /**
+   * What each port is, in the words the person gave it (`Port.description`),
+   * keyed by port id. The ports' names say what to call a value; these say
+   * what it is -- "One summary per file, same order" -- which no name carries.
+   */
+  input_notes?: Record<string, string>;
+  output_notes?: Record<string, string>;
+  /**
+   * The shape this node's outputs have been held to since a run produced them
+   * (`output_schema`). Sent so that a body written again keeps the shape the
+   * next nodes were built against, instead of only its top-level key names.
+   */
+  output_schema?: unknown;
+  /** The node's examples (`examples.md`): inputs with what must come out. */
+  examples?: string;
+  /** An ai node's message layout (`message.md`): how what is wired in reaches the model. */
+  message_template?: string;
+  /**
+   * Build the request and hand it back without sending it: what ✨ *would*
+   * send, through the same code that sends it, so the preview cannot differ.
+   */
+  preview?: boolean;
 }
 
 /** One request to a model, as it happened: for looking at when an answer is wrong or missing. */
@@ -149,6 +171,8 @@ export interface GenerateResponse {
   probe: ProbeReport;
   /** Every model call this generation made, in order. */
   calls: AICall[];
+  /** Set when the request asked for a preview: `calls` holds the one request, unsent. */
+  preview?: boolean;
 }
 
 /** The settings dialog's view of `ai-settings.json`: whether a key is set, never the key. */

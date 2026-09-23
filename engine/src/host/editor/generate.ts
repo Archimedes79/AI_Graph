@@ -22,11 +22,22 @@ import type { AiRequest, AiService, CodeService, FileService } from '../../eleme
 import type { Generation } from '../../authoring/generation.ts';
 import { readPorts } from '../../execution/fileInputs.ts';
 import { renderSkeleton } from './skeleton.ts';
+import { parseExamples } from '../../execution/examples.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { detectFormat } from './files.ts';
 import type { AICall, GenerateRequest, GenerateResponse, ProbeReport, Target } from '../api.ts';
 
 export class GenerationRefused extends Error {}
+
+/** Thrown by the preview "model" at the first request: everything up to it was real. */
+class PreviewReached extends Error {}
+
+/** A model that never answers: the request is recorded and the generation stops there. */
+const PREVIEW_AI: AiService = {
+  async complete(): Promise<string> {
+    throw new PreviewReached('preview');
+  },
+};
 
 // ---------------------------------------------------------------------------
 // The transcript
@@ -105,6 +116,68 @@ export async function withContextFile(context: string, path?: string): Promise<s
 }
 
 // ---------------------------------------------------------------------------
+// What the node says about itself
+// ---------------------------------------------------------------------------
+//
+// A node already holds the three things a body is written against -- what
+// comes in, what must come out, and examples of both -- and until these
+// existed none of it reached the model: the port descriptions, the kept output
+// shape and `examples.md` were used to check a body, never to write one. So a
+// table's column names lived only in the schema and the examples, and pressing
+// ✨ again could rename them with every check still passing.
+
+/** How many examples go into a request: enough to show the pattern, not a test suite. */
+const EXAMPLES_SHOWN = 3;
+
+/** The node's examples, for the model: for these inputs, this must come out. */
+export function examplesBlock(text: string | undefined): string {
+  if (!text?.trim()) return '';
+  const { examples } = parseExamples(text);
+  if (!examples.length) return '';
+  const shown = examples.slice(0, EXAMPLES_SHOWN).map((example) => {
+    const lines = [`- ${example.title}`, `  inputs: ${JSON.stringify(example.inputs)}`];
+    if (example.expect) lines.push(`  must return (at least): ${JSON.stringify(example.expect)}`);
+    if (example.judge) lines.push(`  the answer must: ${example.judge}`);
+    return lines.join('\n');
+  });
+  return `Examples this node is checked against -- the result must satisfy them:\n${shown.join('\n')}`;
+}
+
+/** The kept output shape, for the model, when the node has one. */
+function schemaBlock(schema: unknown): string {
+  if (!schema || typeof schema !== 'object') return '';
+  return 'The returned object must keep this shape -- a JSON Schema, keyed by output port. The nodes '
+    + `after this one were built against it:\n${JSON.stringify(schema, null, 2)}`;
+}
+
+/**
+ * For a system prompt: what the model it is written for will actually be sent.
+ *
+ * A prompt engineer asked for "a system prompt that summarizes a story" was
+ * told neither that the story arrives as the whole user message, once per
+ * file, nor what reads the answer. Those are facts of the node, and they are
+ * here, in the same words the node's dialog shows.
+ */
+function promptBlock(request: GenerateRequest): string {
+  const lines: string[] = [];
+  const inputs = request.inputs ?? [];
+  if (inputs.length) {
+    lines.push('The model this system prompt is for is sent, as its user message, everything wired into the node:');
+    for (const port of inputs) {
+      const said = [request.input_notes?.[port], request.input_sources?.[port] ? `from ${request.input_sources[port]}` : '']
+        .map((part) => (part ?? '').trim()).filter(Boolean).join('; ');
+      lines.push(`- ${port}${said ? `: ${said}` : ''}`);
+    }
+    lines.push(request.message_template?.trim()
+      ? `The message is laid out like this, {{name}} standing for that input's value:\n${request.message_template.trim()}`
+      : 'They are sent one after another as they arrive, with nothing around them.');
+  }
+  const answer = Object.values(request.output_notes ?? {}).map((note) => note.trim()).filter(Boolean);
+  if (answer.length) lines.push(`The answer is: ${answer.join('; ')}`);
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // The four bodies
 // ---------------------------------------------------------------------------
 
@@ -131,8 +204,13 @@ async function generateCode(
     // types and the shapes, with the values the ports actually carried last
     // run when the caller supplied a sample.
     parts.push('\nComplete this function. Keep the signature and the returned keys exactly as they are:\n\n'
-      + renderSkeleton(inputs, outputs, request.sample_inputs ?? undefined, request.input_sources));
+      + renderSkeleton(inputs, outputs, request.sample_inputs ?? undefined, request.input_sources,
+        { inputs: request.input_notes, outputs: request.output_notes }));
   }
+  const shape = schemaBlock(request.output_schema);
+  if (shape) parts.push(`\n${shape}`);
+  const examples = examplesBlock(request.examples);
+  if (examples) parts.push(`\n${examples}`);
   if (outputs.length) {
     parts.push(`\nThe returned object's keys must be exactly: ${JSON.stringify(outputs)}. Downstream nodes look `
       + 'values up by these exact strings - do not rename, abbreviate, reorder, or invent additional keys, '
@@ -390,7 +468,10 @@ async function asReceived(request: GenerateRequest, files?: FileService): Promis
 export async function generate(asked: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
   const request = await asReceived(asked, deps.files);
   const calls: AICall[] = deps.calls ?? [];
-  const ai = recording(deps.ai, calls);
+  // A preview runs every step a generation does up to the model, and stops
+  // there: the request it hands back is the request, not a second rendering
+  // of it that could differ.
+  const ai = recording(request.preview ? PREVIEW_AI : deps.ai, calls);
   const spec = request.element ? deps.generationFor(request.element) : undefined;
   if (request.element && !spec) throw new GenerationRefused(`'${request.element}' is not an element that generates anything`);
   const kind = spec?.kind ?? request.kind ?? '';
@@ -420,13 +501,21 @@ export async function generate(asked: GenerateRequest, deps: GenerateDeps): Prom
       case 'data_format': {
         const system = kind === 'prompt' ? PROMPT_SYSTEM : kind === 'output_format' ? OUTPUT_FORMAT_SYSTEM : DATA_FORMAT_SYSTEM;
         const tag = kind === 'prompt' ? 'system_prompt' : kind;
-        const { text, explanation } = await generateTagged(ai, deps.target, system, tag, request.description, context);
+        const own = kind === 'prompt' ? [promptBlock(request), examplesBlock(request.examples)] : [];
+        const told = [...own, context].filter(Boolean).join('\n\n');
+        const { text, explanation } = await generateTagged(ai, deps.target, system, tag, request.description, told);
         return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' }, calls };
       }
       default:
         throw new GenerationRefused(`Unknown generation kind '${kind}'`);
     }
   } catch (error) {
+    if (error instanceof PreviewReached) {
+      // Recorded as a failure by `recording`; it is not one.
+      const last = calls.at(-1);
+      if (last) last.error = null;
+      return { result: '', explanation: '', probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' }, calls, preview: true };
+    }
     if (error instanceof GenerationRefused) throw error;
     // The failing generation is the one whose transcript is worth reading.
     throw new GenerationFailed(error instanceof Error ? error.message : String(error), calls);

@@ -1,3 +1,4 @@
+import type React from 'react';
 import type { GraphNode } from '@/graph';
 import { call } from '@/api/client';
 import { genAI } from '@/store/settingsStore';
@@ -6,13 +7,15 @@ import GenerationTranscript, { GenerationReport } from './GenerationTranscript';
 import LiveGeneration from './LiveGeneration';
 import { describeDataFormat } from '@/elements/nodes/data/dataFormat';
 import { NODE_BUILDERS } from '@/elements/registry';
-import { ACCENT_FILL, ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '@/ui/theme';
+import { ACCENT_TEXT, DIM, DIMMER, FIELD, FIELD_ON_SURFACE, MUTED, SUCCESS } from '@/ui/theme';
 
 interface Props {
   node: GraphNode;
   setConfig: (key: string, value: unknown) => void;
   /** Data node(s) directly wired to this node's output, if any (see connectedOutputDataNodes). */
   connectedDataNodes?: GraphNode[];
+  /** Drawn under the format: the shape a run kept (`OutputInterface`), the same question answered by measuring. */
+  children?: React.ReactNode;
 }
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -24,7 +27,7 @@ const FORMAT_LABELS: Record<string, string> = {
   example: 'Like an example (from a test run)',
 };
 
-export default function OutputFormatEditor({ node, setConfig, connectedDataNodes = [] }: Props) {
+export default function OutputFormatEditor({ node, setConfig, connectedDataNodes = [], children }: Props) {
   const format = node.config.output_format ?? 'text';
   const runGenerate = useGenerate();
   const generating = runGenerate.busy;
@@ -85,7 +88,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
       ))}
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-          Expected output format
+          {NODE_BUILDERS[node.node_type].outputFormatLabel}
         </label>
         <p className="text-xs mb-2" style={{ color: DIM }}>
           {NODE_BUILDERS[node.node_type].outputFormatHint}
@@ -94,6 +97,7 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
           className="w-full rounded-lg px-2 py-1.5 text-sm"
           style={FIELD_ON_SURFACE}
           value={format}
+          aria-label={NODE_BUILDERS[node.node_type].outputFormatLabel}
           onChange={(e) => setConfig('output_format', e.target.value)}
         >
           {Object.entries(FORMAT_LABELS).map(([v, label]) => (
@@ -187,18 +191,10 @@ export default function OutputFormatEditor({ node, setConfig, connectedDataNodes
         </div>
       )}
 
-      {format !== 'text' && format !== 'example' && (
-        <div
-          className="text-xs rounded-lg px-3 py-2"
-          style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}
-        >
-          <strong>Note:</strong> When generating code for this node, the AI will be instructed to produce{' '}
-          <strong>{FORMAT_LABELS[format] ?? format}</strong>.
-          {node.config.output_format_prompt?.trim() && (
-            <> Format spec: "{node.config.output_format_prompt}"</>
-          )}
-        </div>
-      )}
+      {/* There was a note here repeating the choice above as a sentence --
+          "the AI will be instructed to produce JSON" -- which said "code"
+          on an ai node too. The select says it. */}
+      {children}
     </div>
   );
 }
