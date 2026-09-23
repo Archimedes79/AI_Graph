@@ -10,13 +10,17 @@
 // error would arrive as "no such file: Once upon a time".
 //
 // Declared at *either end of the wire*, though, and that second half was
-// missing for a long time. A code node is created with its input typed `any`
-// and the editor offers no way to change it, so ticking "read file contents
-// from paths" on one did nothing at all: the box was on, the port was not
+// missing for a long time. A node is created with its input typed `any` --
+// nobody has said what it carries yet -- so ticking "read file contents from
+// paths" on one did nothing at all: the box was on, the port was not
 // `file_path`, and the body was handed a filename in silence. Meanwhile the
 // picker feeding it declares `file_path` perfectly well. So the question is
 // asked of the wire: if what arrives was declared a path by whoever sends it,
 // reading it is what the person asked for.
+//
+// The editor says it as well, when the wire is drawn, and its port editor lets
+// anyone say it by hand. Neither makes this redundant: a graph written by hand,
+// by the MCP server, or before either existed is read correctly all the same.
 
 import type { GraphEdge, GraphNode } from '../graph.ts';
 import type { FileService, Runtime } from '../elements/Runtime.ts';

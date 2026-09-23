@@ -214,7 +214,7 @@ describe('chat: a page with a chat block, and a model', () => {
 });
 
 describe('a wire from a picker', () => {
-  it('makes the input it ends on one that receives file paths -- no dialog can, and "read file contents" reads only those', () => {
+  it('makes the input it ends on one that receives file paths, so nobody has to say it twice', () => {
     const page = drop('gui', 60);
     const file = addBlock(page, 'input_picker', 'file', { label: 'File' });
     const code = drop('code', 560);
