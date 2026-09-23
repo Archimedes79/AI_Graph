@@ -24,6 +24,16 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly Panel = lazy(() => import('./DataNodePanel'));
 
+  // The node reads "input" and hands on "output" by those names: what each
+  // carries can be said, but not what it is called.
+  override readonly portEditing = { inputs: 'describe', outputs: 'describe' } as const;
+
+  override portHint(side: 'inputs' | 'outputs'): string {
+    return side === 'inputs'
+      ? 'Optional. What arrives here replaces the stored value, and is kept for the next run.'
+      : 'The stored value -- what arrived last, or the stored content above until something does.';
+  }
+
   override readonly generation: ElementGeneration<GraphNode> = {
     ...fromEngine(new DataNodeRunner().generation()),
     promptLabel: 'Format generation prompt',
@@ -50,6 +60,16 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
   // contract a user writes deliberately, and existing prompts were tuned to it.
   override describeAsSource(node: GraphNode, emits: string): string {
     return `Source data format from "${node.label}": ${emits}`;
+  }
+
+  /** What it stores is what it hands on, until something new arrives. */
+  override restingValue(node: GraphNode): unknown {
+    const value = node.config.data_value;
+    return value === '' || value === null || value === undefined ? undefined : value;
+  }
+
+  override wantsOn(node: GraphNode): string {
+    return `what it stores: ${describeDataFormat(node)}`;
   }
 
   override describeAsTarget(node: GraphNode): string {

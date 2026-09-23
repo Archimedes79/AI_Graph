@@ -6,13 +6,14 @@
 // guess badly from it. The same is true for a person: a code node opened for
 // the first time showed an empty textarea.
 //
-// So both get the same thing instead: the function signature, with one
-// commented line per port saying what actually arrives there.
+// So both get the same thing instead: the function signature, typed. What
+// arrives on each port, and from where, is said in the brief above it
+// (`brief.ts`), once.
 //
 //     /**
 //      * @typedef {Object} Inputs
-//      * @property {string} text     // from "Reader"
-//      * @property {string[]} files  // from "Ordner"
+//      * @property {string} text
+//      * @property {string[]} files
 //      */
 //
 //     /** @param {Inputs} inputs */
@@ -27,9 +28,6 @@
 // **Rendered, never parsed back.** Ports are derived from the wiring; a text
 // file allowed to rename one would silently detach edges.
 
-/** How many characters of a sample value to show. Enough for the shape, not a directory listing. */
-const EXAMPLE_LIMIT = 60;
-
 function jsType(value: unknown): string {
   if (typeof value === 'boolean') return 'boolean';
   if (typeof value === 'number') return 'number';
@@ -39,17 +37,13 @@ function jsType(value: unknown): string {
   return '*';
 }
 
-/** The trailing comment for one input line: where it comes from, and a peek. */
-function note(port: string, sources?: Record<string, string>, sample?: Record<string, unknown>): string {
-  const parts: string[] = [];
-  const origin = sources?.[port];
-  if (origin) parts.push(`from ${origin}`);
-  if (sample && port in sample) {
-    let rendered = JSON.stringify(sample[port]) ?? String(sample[port]);
-    if (rendered.length > EXAMPLE_LIMIT) rendered = `${rendered.slice(0, EXAMPLE_LIMIT)}…`;
-    parts.push(`e.g. ${rendered}`);
-  }
-  return parts.length ? `  // ${parts.join(', ')}` : '';
+/** A declared port type (`text`, `list of file_path`) as a JSDoc type. */
+function declaredType(declared: string | undefined): string {
+  if (!declared) return '*';
+  const list = declared.startsWith('list of ');
+  const base = list ? declared.slice('list of '.length) : declared;
+  const js = ({ text: 'string', file_path: 'string', number: 'number', boolean: 'boolean', json: 'Object', image: 'string' } as Record<string, string>)[base] ?? '*';
+  return list ? `${js}[]` : js;
 }
 
 /**
@@ -64,25 +58,28 @@ function identifier(port: string): string {
 }
 
 /**
- * The stub for one element's `run`.
+ * The stub for one element's `run`: the signature, typed, and nothing else.
  *
- * *sample* is what the ports actually carried on the last run, when there was
- * one; *sources* maps a port to the node (and port) feeding it, already quoted. Both are
- * optional — without them this is still the signature, which is still more
- * than a comma-separated list of names.
+ * What each port holds, where it comes from and a sample of it are said once,
+ * in the brief above the stub (`brief.ts`). They used to be said here too, as
+ * comments, beside a second copy in the context -- the same wire twice, in two
+ * wordings, and the sample three times.
+ *
+ * *sample* decides a type when it has the port -- what arrived is surer than
+ * what was declared -- and *types*, the declared one, otherwise.
  */
 export function renderSkeleton(
   inputs: string[],
   outputs: string[],
   sample?: Record<string, unknown>,
-  sources?: Record<string, string>,
+  types: Record<string, string> = {},
 ): string {
   const lines: string[] = [];
   if (inputs.length) {
     lines.push('/**', ' * @typedef {Object} Inputs');
     for (const port of inputs) {
-      const kind = sample && port in sample ? jsType(sample[port]) : '*';
-      lines.push(` * @property {${kind}} ${port}${note(port, sources, sample)}`);
+      const kind = sample && port in sample ? jsType(sample[port]) : declaredType(types[port]);
+      lines.push(` * @property {${kind}} ${port}`);
     }
     lines.push(' */', '', '/** @param {Inputs} inputs */');
   }

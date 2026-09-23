@@ -36,6 +36,10 @@ export class ImageViewWidgetRunner extends TransformingDisplayRunner {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  override receives(): string {
+    return 'an image file path or URL, or a list of them -- not the picture\'s bytes.';
+  }
+
   /** The same snippet contract as a chart, with a different destination: a path. */
   override generation(): Generation {
     return {

@@ -1,7 +1,7 @@
 import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
-import { outputFormatContext } from '@/authoring/outputFormat';
+import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { AiNodeRunner } from '@engine/elements/nodes/ai/AiNodeRunner.ts';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 
@@ -24,7 +24,9 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly outputContract = 'format';
 
-  override readonly outputFormatHint = 'Only needed when something downstream has to parse the answer. It becomes a sentence at the end of the instructions, and the neighbours are generated against it. Nothing checks the answer afterwards — a model that ignores it is caught by a Code node, not here.';
+  override readonly outputFormatLabel = 'Answer format';
+
+  override readonly outputFormatHint = 'Only needed when something reads the answer. Sent to the model after its instructions on every run, and to ✨ Generate here and in the nodes this one feeds.';
 
   override readonly Panel = lazy(() => import('./AiNodePanel'));
 
@@ -38,19 +40,27 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
     promptPlaceholder: 'Describe what this node should do — ✨ Generate turns it into the system prompt below.',
     bodyLabel: 'System prompt',
     bodyPlaceholder: 'You are a helpful assistant…',
+    exampleLabel: 'Sample of what arrives (optional file) — ✨ Generate is shown it',
     mono: true,
     bodyHeight: 120,
-    context: (node) => outputFormatContext(node.config),
+    // Nothing of its own to add: the answer format, the message and the
+    // ports reach ✨ as the node's facts (`nodeFacts`), in the brief the
+    // engine writes -- not as sentences written here.
   };
 
-  override describeOutput(node: GraphNode): string {
-    const format = node.config.output_format;
-    if (!format || format === 'text') return 'text';
-    const detail = format === 'custom' && node.config.output_format_prompt
-      ? `: ${node.config.output_format_prompt}`
-      : format === 'example' && node.config.output_example
-        ? `: shaped like ${String(node.config.output_example).slice(0, 400)}` : '';
-    return `${format}${detail}`;
+  override readonly stepped = true;
+
+  // The answer arrives on "output": the run hands on what the model said under
+  // that one name, so the port can be described but not renamed or added to.
+  override readonly portEditing = { inputs: 'edit', outputs: 'describe' } as const;
+
+  override portHint(side: 'inputs' | 'outputs'): string {
+    return side === 'inputs'
+      ? 'Each input is put into the message below where its {{name}} stands -- or, with no message, sent one after another.'
+      : 'The model\'s answer. Its shape is set under “Answer format”.';
   }
 
+  override describeOutput(node: GraphNode): string {
+    return describeDeclaredOutput(node.config);
+  }
 }

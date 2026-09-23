@@ -132,3 +132,16 @@ export function readInterface(stored: unknown): Schema | undefined {
   }
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Schema : undefined;
 }
+
+/** A schema as a one-line outline -- `{ rows: list of { File: text } }` -- for reading, not checking. */
+export function schemaOutline(schema: unknown, depth = 0): string {
+  if (!schema || typeof schema !== 'object' || depth > 4) return 'anything';
+  const part = schema as { type?: string | string[]; items?: unknown; properties?: Record<string, unknown> };
+  const type = Array.isArray(part.type) ? part.type.join(' or ') : part.type;
+  if (type === 'array') return `list of ${schemaOutline(part.items, depth + 1)}`;
+  if (part.properties && typeof part.properties === 'object') {
+    return `{ ${Object.entries(part.properties).map(([key, value]) => `${key}: ${schemaOutline(value, depth + 1)}`).join(', ')} }`;
+  }
+  const words: Record<string, string> = { string: 'text', integer: 'whole number', number: 'number', boolean: 'yes/no', null: 'nothing' };
+  return (type && words[type]) ?? type ?? 'anything';
+}

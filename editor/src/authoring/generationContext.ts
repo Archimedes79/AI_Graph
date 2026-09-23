@@ -45,7 +45,7 @@ export function describeNodeOutput(node: GraphNode): string {
 export function connectedFormatContext(
   nodeId: string,
   nodes: GraphNode[],
-  edges: Array<{ source: string; target: string }>,
+  edges: Array<{ source: string; target: string; targetHandle?: string | null }>,
 ): string {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   // A Set, because two ports wired to the same neighbour are two edges but one
@@ -63,7 +63,7 @@ export function connectedFormatContext(
     if (edge.source === nodeId) {
       const target = nodeById.get(edge.target);
       if (!target) continue;
-      lines.add(NODE_BUILDERS[target.node_type].describeAsTarget(target));
+      lines.add(NODE_BUILDERS[target.node_type].describeAsTarget(target, edge.targetHandle ?? undefined));
     }
   }
   return [...lines].join('\n');
@@ -144,7 +144,7 @@ export function lastRunContext(nodeId: string, result: ExecutionResult | null, a
   const lines = Object.entries(inputs).map(([port, value]) => {
     if (asFiles.includes(port)) {
       const what = Array.isArray(value) ? `a list of ${value.length} texts, one per file` : 'the text of one file';
-      return `- ${port}: ${what}, already read -- never a path. See the function's signature for how it starts.`;
+      return `- ${port}: ${what}, already read -- the node is handed the text, never a path.`;
     }
     const shape = Array.isArray(value) ? `list of ${value.length}` : typeof value;
     return `- ${port} (${shape}):\n${preview(value)}`;
@@ -179,6 +179,63 @@ export function inputSources(
     if (!source) continue;
     const port = source.outputs.find((p) => p.id === edge.sourceHandle)?.name;
     (byPort[edge.targetHandle ?? 'input'] ??= []).push(port ? `"${source.label}" (port "${port}")` : `"${source.label}"`);
+  }
+  return Object.fromEntries(
+    Object.entries(byPort).map(([port, origins]) => [port, [...new Set(origins)].join(' + ')]),
+  );
+}
+
+/**
+ * Where each of *nodeId*'s output ports goes, by port id: `"Chart" (port
+ * "Points")`. The other half of `inputSources`, for the dialog: a port says
+ * what it is connected to, so "how does this reach that" is answered where the
+ * port is named rather than by squinting at the canvas.
+ */
+export function outputTargets(
+  nodeId: string,
+  nodes: GraphNode[],
+  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+  withWants = false,
+): Record<string, string> {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const byPort: Record<string, string[]> = {};
+  for (const edge of edges) {
+    if (edge.source !== nodeId) continue;
+    const target = byId.get(edge.target);
+    if (!target) continue;
+    const port = target.inputs.find((p) => p.id === edge.targetHandle)?.name;
+    let said = port ? `"${target.label}" (port "${port}")` : `"${target.label}"`;
+    // For ✨: what the node there wants, said by that node (a chart: points).
+    const wants = withWants && edge.targetHandle ? NODE_BUILDERS[target.node_type]?.wantsOn(target, edge.targetHandle) : undefined;
+    if (wants) said += `, which wants ${wants}`;
+    (byPort[edge.sourceHandle ?? 'output'] ??= []).push(said);
+  }
+  return Object.fromEntries(
+    Object.entries(byPort).map(([port, targets]) => [port, [...new Set(targets)].join(' + ')]),
+  );
+}
+
+/**
+ * `inputSources`, each followed by what that node says it hands on: for ✨,
+ * which is told the wire and the declaration behind it in one line.
+ */
+export function inputOrigins(
+  nodeId: string,
+  nodes: GraphNode[],
+  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+): Record<string, string> {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const byPort: Record<string, string[]> = {};
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue;
+    const source = byId.get(edge.source);
+    if (!source) continue;
+    const port = source.outputs.find((p) => p.id === edge.sourceHandle);
+    let said = port ? `"${source.label}" (port "${port.name}")` : `"${source.label}"`;
+    // The port's own words first, then what the node declares of its output.
+    const emits = [...new Set([port?.description?.trim(), describeNodeOutput(source)].filter(Boolean))].join('; ');
+    if (emits) said += `, which hands on: ${emits}`;
+    (byPort[edge.targetHandle ?? 'input'] ??= []).push(said);
   }
   return Object.fromEntries(
     Object.entries(byPort).map(([port, origins]) => [port, [...new Set(origins)].join(' + ')]),

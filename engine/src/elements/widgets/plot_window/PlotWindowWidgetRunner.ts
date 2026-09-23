@@ -24,6 +24,13 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  override receives(): string {
+    return 'the data to plot, NOT a drawing: a list of points -- numbers, or {"label": string, '
+      + '"value": number} -- or an object {"kind": "bars"|"columns"|"line"|"donut", "title": string, '
+      + '"points": [...]}. The chart draws it at the block\'s real size and in the page\'s colours, '
+      + 'neither of which exists while the graph runs, so SVG built here would be stretched to fit.';
+  }
+
   /**
    * Two ways to answer, and the second is why this is not a fixed chart.
    *

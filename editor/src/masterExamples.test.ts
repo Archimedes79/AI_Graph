@@ -6,6 +6,7 @@ import { syncGuiNodePorts } from '@/document/guiWidgets';
 import { executeGraph } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
 import { problemsIn } from '@engine/project/check.ts';
+import { filePorts } from '@engine/execution/fileInputs.ts';
 import { parseGraph } from '@engine/graph.ts';
 import type { Runtime } from '@engine/elements/Runtime.ts';
 
@@ -213,7 +214,7 @@ describe('chat: a page with a chat block, and a model', () => {
 });
 
 describe('a wire from a picker', () => {
-  it('makes the input it ends on one that receives file paths -- no dialog can, and "read file contents" reads only those', () => {
+  it('makes the input it ends on one that receives file paths, so nobody has to say it twice', () => {
     const page = drop('gui', 60);
     const file = addBlock(page, 'input_picker', 'file', { label: 'File' });
     const code = drop('code', 560);
@@ -223,5 +224,21 @@ describe('a wire from a picker', () => {
     // The same wire twice is one wire.
     wire(page, `${file}_out`, code, nodeOf(code).inputs[0].id);
     expect(store().rfEdges).toHaveLength(1);
+  });
+
+  /**
+   * Every kind a person wires a file into starts out saying nothing about what
+   * it carries, and that is what lets the file be read -- in the editor, by the
+   * wire above, and in the engine, for a graph the editor never touched
+   * (`execution/fileInputs.ts`). An AI node was created `text` instead, so it
+   * alone was handed the file's *name* with "read file contents" ticked.
+   */
+  it.each(['code', 'ai'] as const)('%s: a new node says nothing about what its input carries, so a file reaches it whole', (kind) => {
+    const page = drop('gui', 60);
+    const file = addBlock(page, 'input_picker', 'file', { label: 'File' });
+    const node = drop(kind, 560);
+    expect(nodeOf(node).inputs[0].data_type).toBe('any');
+    wire(page, `${file}_out`, node, nodeOf(node).inputs[0].id);
+    expect(filePorts(nodeOf(node), store().exportGraph())).toEqual([nodeOf(node).inputs[0].id]);
   });
 });

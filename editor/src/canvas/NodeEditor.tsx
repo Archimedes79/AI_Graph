@@ -2,21 +2,23 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
 import { keepsExamples, keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { derivedNodePorts, syncGuiNodePorts } from '@/document/guiWidgets';
+import PortsEditor from './PortsEditor';
 import { NODE_BUILDERS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
-import { buildGeneration, nodeFields } from '@/authoring/generation';
-import { connectedFormatContext, inputSources, lastRunContext, lastRunInputs, readFilePorts } from '@/authoring/generationContext';
+import { buildGeneration, nodeFields, previewGeneration, type GenerationRequest } from '@/authoring/generation';
+import { connectedFormatContext, inputSources, lastRunContext, outputTargets, readFilePorts } from '@/authoring/generationContext';
+import { nodeFacts } from '@/authoring/nodeFacts';
+import { inferInterface } from '@engine/execution/interface.ts';
 import OutputFormatEditor from '@/authoring/OutputFormatEditor';
 import OutputInterface from '@/authoring/OutputInterface';
 import NodeExamples from '@/authoring/NodeExamples';
 import { nodeLogic } from '@/authoring/logic';
-import { sampleFor } from '@/authoring/tryValues';
-import GenerationTranscript, { GenerationReport } from '@/authoring/GenerationTranscript';
+import GenerationTranscript, { GenerationReport, SentPart } from '@/authoring/GenerationTranscript';
 import WidgetOutputSummary from '@/elements/nodes/gui/WidgetOutputSummary';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import { connectedOutputDataNodes } from '@/elements/nodes/data/dataFormat';
-import { call } from '@/api/client';
+import { call, type AICall } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, TEXT } from '@/ui/theme';
 
@@ -55,6 +57,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const draft = useRef<GraphNode | null>(null);
   draft.current = node;
   const [newer, setNewer] = useState<GraphNode | null>(null);
+  // What ✨ Generate would send, when asked: shown, not sent.
+  const [sends, setSends] = useState<AICall[] | null>(null);
+  const [sendsNote, setSendsNote] = useState('');
   // One state machine for all four ✨ Generate buttons in this editor.
   const generate = useGenerate();
   const generating = generate.busy;
@@ -99,8 +104,25 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // is a declaration now (`outputContract`) and sits in Config under the body.
   const element = NODE_BUILDERS[node.node_type];
 
+  /**
+   * What each port was called when this dialog opened, by position.
+   *
+   * A port's id is the name a body reads it by, so it is edited here — and an
+   * edge points at the old one. Matching by position is what the list editor
+   * actually does to them: row 2 stayed row 2, whatever it is now called.
+   */
+  const renamedPorts = () => {
+    const was = rfNode?.data.graphNode;
+    const map = (before: Port[] = [], after: Port[] = []) => Object.fromEntries(
+      before
+        .map((port, at) => [port.id, after[at]?.id])
+        .filter(([from, to]) => to && from !== to),
+    ) as Record<string, string>;
+    return { inputs: map(was?.inputs, node!.inputs), outputs: map(was?.outputs, node!.outputs) };
+  };
+
   const save = () => {
-    updateNode(nodeId, node);
+    updateNode(nodeId, node, renamedPorts());
     onClose();
   };
 
@@ -189,23 +211,38 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const generation = element.generation;
   const canGenerate = !!generation && (generation.available?.(node) ?? true);
   const fields = nodeFields(node, setConfig, setDescription);
-  const handleGenerate = () => {
-    if (!generation) return;
-    generate.run(buildGeneration({
+  /** Everything ✨ Generate is told, in one request: the button and its preview send the same. */
+  const generationRequest = (): GenerationRequest<GraphNode> | undefined => generation && ({
       element: node.node_type,
       generation,
       subject: node,
       fields,
-      ports: { inputs: node.inputs.map((p) => p.id), outputs: node.outputs.map((p) => p.id) },
-      exampleFile: node.config.example_file,
-      graphContext: surroundingContext(),
-      // The same values `lastRunContext` renders as prose, raw: the backend runs
-      // the generated function against them and repairs it once if it fails.
-      sampleInputs: sampleFor(node.id, node.inputs.map((port) => port.id), lastRunInputs(node.id, executionResult)),
-      inputSources: inputSources(node.id, graphNodes, graphEdges),
-      readFilePorts: readFilePorts(node),
-      recordMeasuredOutput: true,
-    }));
+      // What the node says about itself -- ports, samples, wiring, format,
+      // shape, examples -- as facts the engine writes one brief from.
+      ...nodeFacts(node, graphNodes, graphEdges, executionResult),
+      // A node laid out in steps says everything in those facts. The others
+      // (a data node's format, an input's file selector) are still told
+      // their neighbours in sentences.
+      graphContext: element.stepped ? undefined : surroundingContext(),
+      recordShape: keepsOutputInterface(node)
+        ? (outputs) => { if (!draft.current?.config.output_schema) setConfig('output_schema', inferInterface(outputs)); }
+        : undefined,
+    });
+  const handleGenerate = () => {
+    const request = generationRequest();
+    if (request) generate.run(buildGeneration(request));
+  };
+  const showSends = async () => {
+    const request = generationRequest();
+    if (!request) return;
+    if (sends) { setSends(null); return; }
+    setSendsNote('Building the request…');
+    try {
+      setSends(await previewGeneration(request));
+      setSendsNote('');
+    } catch (error) {
+      setSendsNote(errorText(error, 'Could not build the request.'));
+    }
   };
 
   const applyDataFormat = (format: GraphNode['config']['data_format']) => {
@@ -241,6 +278,64 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       return ports ? { ...next, inputs: ports.inputs, outputs: ports.outputs } : next;
     });
   };
+
+  // What each port is wired to, in words, shown under the port.
+  const wiring = {
+    inputs: inputSources(node.id, graphNodes, graphEdges),
+    outputs: outputTargets(node.id, graphNodes, graphEdges),
+  };
+  const setPorts = ({ inputs, outputs }: { inputs: Port[]; outputs: Port[] }) =>
+    setNode((prev) => (prev ? { ...prev, inputs, outputs } : prev));
+  const ports = (side: 'inputs' | 'outputs' | 'both') => (
+    <PortsEditor
+      inputs={node.inputs}
+      outputs={node.outputs}
+      onChange={setPorts}
+      side={side}
+      editing={element.portEditing}
+      hints={{ inputs: element.portHint('inputs', node), outputs: element.portHint('outputs', node) }}
+      wiring={wiring}
+    />
+  );
+  const outputFormat = element.outputContract === 'format' && (
+    <OutputFormatEditor
+      node={node}
+      setConfig={setConfig}
+      connectedDataNodes={connectedOutputDataNodes(node.id, graphNodes, graphEdges)}
+      executionResult={executionResult}
+    >
+      {keepsOutputInterface(node) && (
+        <OutputInterface node={node} setConfig={setConfig} executionResult={executionResult} />
+      )}
+    </OutputFormatEditor>
+  );
+  // The dialog as the steps of building the node, for an element that asks
+  // for it: its ports inside "what comes in" and "what comes out", the format
+  // and the kept shape with the outputs, and "what ✨ sends" beside ✨.
+  const steps = element.stepped && derivedNodePorts(node) === null ? {
+    inputs: ports('inputs'),
+    outputs: <>{ports('outputs')}{outputFormat}</>,
+    preview: (
+      <button onClick={showSends} className="text-xs px-2 py-1 rounded" style={NEUTRAL_BUTTON}
+        title="Show the request ✨ Generate would send -- everything the model is told -- without sending it">
+        {sends ? 'Hide what ✨ sends' : 'What ✨ sends'}
+      </button>
+    ),
+    sent: (sends || sendsNote) ? (
+      <div className="mb-2 space-y-2 text-xs" aria-label="What Generate sends">
+        {sendsNote && <p style={{ color: MUTED }}>{sendsNote}</p>}
+        {sends?.[0] && (
+          <>
+            <p style={{ color: MUTED }}>
+              The first request ✨ Generate sends, word for word.
+            </p>
+            <SentPart label="System" text={sends[0].system} />
+            <SentPart label="Prompt" text={sends[0].prompt} />
+          </>
+        )}
+      </div>
+    ) : undefined,
+  } : undefined;
 
   return (
     <Modal
@@ -302,7 +397,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 style={{ ...FIELD, minHeight: 64 }}
                 value={node.description}
                 onChange={(e) => setNode((prev) => prev ? { ...prev, description: e.target.value } : prev)}
-                placeholder="Document what this node does…"
+                placeholder={element.hint}
               />
             </div>
           )}
@@ -330,17 +425,31 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 applyWidgets={applyWidgets}
                 contextFile={node.config.example_file ?? ''}
                 onContextFileChange={(path: string) => setConfig('example_file', path)}
+                steps={steps}
               /></Suspense>}
 
-              {element.outputContract === 'format' && (
-                <OutputFormatEditor
-                  node={node}
-                  setConfig={setConfig}
-                  connectedDataNodes={connectedOutputDataNodes(node.id, graphNodes, graphEdges)}
-                />
+              {/* What this node takes in and hands out, where that is the
+                  person's to say. A gui node's ports follow its blocks and an
+                  input node's follow its mode, and the element is what knows
+                  which -- so the question is asked, never switched on a type. */}
+              {/* What this node takes in and hands out, where that is the
+                  person's to say. A gui node's ports follow its blocks and an
+                  input node's follow its mode, and the element is what knows
+                  which -- so the question is asked, never switched on a type. */}
+              {!steps && derivedNodePorts(node) === null && (
+                <details className="rounded-lg" open style={{ border: `1px solid ${LINE}` }}>
+                  <summary className="px-3 py-2 text-xs font-medium cursor-pointer select-none" style={{ color: MUTED }}>
+                    {element.portEditing.outputs === 'none' ? 'Ports — what comes in' : 'Ports — what goes in and comes out'}
+                  </summary>
+                  <div className="px-3 pb-3 pt-1">
+                    {ports('both')}
+                  </div>
+                </details>
               )}
+
+              {!steps && outputFormat}
               {element.outputContract === 'widgets' && <WidgetOutputSummary node={node} />}
-              {keepsOutputInterface(node) && (
+              {!steps && !outputFormat && keepsOutputInterface(node) && (
                 <OutputInterface node={node} setConfig={setConfig} executionResult={executionResult} />
               )}
               {keepsExamples(node) && (
@@ -358,11 +467,12 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                     <Suspense fallback={null}>
                       <element.AdvancedPanel node={node} setConfig={setConfig} />
                     </Suspense>
+                    <WhatRuns node={node} />
                   </div>
                 </details>
               )}
-
-              <WhatRuns node={node} />
+              {/* Where the work is done, technically: for the curious, so folded. */}
+              {!element.AdvancedPanel && <WhatRuns node={node} folded />}
 
               {isProject && nodeLogic(node) && (
                 <div>

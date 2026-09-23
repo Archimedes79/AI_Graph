@@ -82,12 +82,20 @@ export interface GraphStore {
   /** Add a node and return its id, so a caller can immediately fill it in. */
   addNode: (nodeType: NodeType, position: { x: number; y: number }) => string;
   /**
+   * `renamed` maps a port's old id to its new one, per side, so the wires
+   * follow the rename instead of being pruned as "a port that vanished".
+   */
+  updateNode: (
+    nodeId: string,
+    updates: Partial<GraphNode>,
+    renamed?: { inputs: Record<string, string>; outputs: Record<string, string> },
+  ) => void;
+  /**
    * Wire one port to another: what dragging from a handle to a handle does.
    * Here and not in the canvas, so that a graph can be built -- and a test can
    * build one -- without a mouse. The same wire twice is one wire.
    */
   connect: (wire: { source: string; sourceHandle: string; target: string; targetHandle: string }) => void;
-  updateNode: (nodeId: string, updates: Partial<GraphNode>) => void;
   deleteNode: (nodeId: string) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
   setRFEdges: (edges: Edge[]) => void;
@@ -475,10 +483,10 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as any);
 
         // A wire from a port that carries file paths -- a picker, a folder --
-        // makes the port it ends on one that receives file paths. Nowhere in
-        // the editor can a person say so themselves, and "Read file contents
-        // from paths" reads exactly those ports: without this, a graph wired by
-        // hand summarised the file's *name*.
+        // makes the port it ends on one that receives file paths. The port
+        // editor can say it too; this is so that nobody has to, because the
+        // wire already said it and a graph wired without it summarised the
+        // file's *name*.
         const portOf = (nodeId: string, side: 'inputs' | 'outputs', portId: string) => state.rfNodes
           .find((node: RFNode) => node.id === nodeId)?.data.graphNode[side].find((port) => port.id === portId);
         const from = portOf(wire.source, 'outputs', wire.sourceHandle);
@@ -486,14 +494,18 @@ export const useGraphStore = create<GraphStore>()(
         // Not on a node whose ports follow from its settings (a page, an input): those are recomputed.
         const target = state.rfNodes.find((node: RFNode) => node.id === wire.target)?.data.graphNode;
         const own = !!target && derivedNodePorts(target as GraphNode) === null;
-        if (own && from?.data_type === 'file_path' && to && (to.data_type === 'any' || to.data_type === 'text')) {
+        // Only a port with nobody's word on it. A port typed `text` said what it
+        // wants -- a file reader takes the same picker twice, one to read and one
+        // to keep the name -- and the engine reads it the same way
+        // (`execution/fileInputs.ts`: the target's own type wins).
+        if (own && from?.data_type === 'file_path' && to && to.data_type === 'any') {
           to.data_type = 'file_path';
           if (from.multi) to.multi = true;
         }
       });
     },
 
-    updateNode: (nodeId, updates) => {
+    updateNode: (nodeId, updates, renamed) => {
       get().commit();
       set((state) => {
         const idx = state.rfNodes.findIndex((n: RFNode) => n.id === nodeId);
@@ -501,6 +513,20 @@ export const useGraphStore = create<GraphStore>()(
           const existing = state.rfNodes[idx].data.graphNode;
           const updated = { ...existing, ...updates } as GraphNode;
           state.rfNodes[idx].data.graphNode = updated;
+
+          // A port that was renamed keeps its wires. Without this the rename
+          // would look like "the old port is gone" to the pruning below, and
+          // renaming `input` to `csv` would quietly cut the graph in half.
+          if (renamed) {
+            for (const edge of state.rfEdges as Edge[]) {
+              if (edge.target === nodeId && edge.targetHandle && renamed.inputs[edge.targetHandle]) {
+                edge.targetHandle = renamed.inputs[edge.targetHandle];
+              }
+              if (edge.source === nodeId && edge.sourceHandle && renamed.outputs[edge.sourceHandle]) {
+                edge.sourceHandle = renamed.outputs[edge.sourceHandle];
+              }
+            }
+          }
 
           // Ports may have shrunk (e.g. a removed GUI widget) -- prune any
           // edges that now dangle off a port id that no longer exists,

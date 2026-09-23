@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import type { GraphNode } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { call } from '@/api/client';
-import { connectedFormatContext, lastRunContext, lastRunInputs, readFilePorts } from './generationContext';
+import { lastRunInputs } from './generationContext';
 import TryItPanel, { type TryResult } from './TryItPanel';
 
 /**
@@ -21,8 +21,6 @@ export default function NodeTryIt({ node, title, children, renderResult, testLab
 }) {
   const executionResult = useGraphStore((s) => s.executionResult);
   const exportGraph = useGraphStore((s) => s.exportGraph);
-  const rfEdges = useGraphStore((s) => s.rfEdges);
-  const rfNodes = useGraphStore((s) => s.rfNodes);
   const observed = useMemo(() => lastRunInputs(node.id, executionResult) ?? {}, [node.id, executionResult]);
 
   const graphWithDraft = () => {
@@ -30,11 +28,6 @@ export default function NodeTryIt({ node, title, children, renderResult, testLab
     graph.nodes = graph.nodes.map((n) => (n.id === node.id ? node : n));
     return graph;
   };
-
-  const context = [
-    connectedFormatContext(node.id, rfNodes.map((n) => n.data.graphNode), rfEdges),
-    lastRunContext(node.id, executionResult, readFilePorts(node)),
-  ].filter(Boolean).join('\n\n');
 
   return (
     <TryItPanel
@@ -45,7 +38,6 @@ export default function NodeTryIt({ node, title, children, renderResult, testLab
       onFetch={() => call('nodeInputs', { ...graphWithDraft(), node_id: node.id })}
       onTest={(values) => call('runNode', { ...graphWithDraft(), node_id: node.id, inputs: values })}
       renderResult={renderResult}
-      context={context}
       testLabel={testLabel}
     >
       {children}

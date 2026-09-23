@@ -115,4 +115,19 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
     return value;
   }
 
+  // ── Build time ────────────────────────────────────────────────────────────
+  // What building a neighbour asks of it.
+
+  /**
+   * What a node wired into this block should hand it, in a sentence for that
+   * node's ✨ Generate -- or nothing, for a block that takes whatever comes.
+   *
+   * Said by the block because it is a fact about the block: a chart takes
+   * points, a table takes rows whose keys become its columns. It used to be
+   * said by the code node, to every body it wrote, whatever that body fed.
+   */
+  receives(_widget: Widget): string | undefined {
+    return undefined;
+  }
+
 }

@@ -1,5 +1,5 @@
 import type { GraphNode, GuiWidget } from '@/graph';
-import { call, type GenerateResponse, type ProbeReport } from '@/api/client';
+import { call, type AICall, type GenerateRequest, type GenerateResponse, type ProbeReport } from '@/api/client';
 import { genAI } from '@/store/settingsStore';
 import type { GenerateOptions } from './useGenerate';
 import type { Generation } from '@engine/authoring/generation.ts';
@@ -143,34 +143,6 @@ function probeMessage(probe: ProbeReport | undefined, fallback: string): string 
   }
 }
 
-/** The JSON type of a value, the way a contract names it. */
-function shapeOf(value: unknown): string {
-  if (value === null || value === undefined) return 'null';
-  if (Array.isArray(value)) return `${value.length ? shapeOf(value[0]) : 'unknown'}[]`;
-  if (typeof value === 'object') {
-    const keys = Object.keys(value as object).slice(0, 8);
-    return `{ ${keys.map((k) => `${k}: ${shapeOf((value as Record<string, unknown>)[k])}`).join(', ')} }`;
-  }
-  return typeof value;
-}
-
-/**
- * What a generated body returned, as the contract the next node is written to.
- *
- * Structure first -- each key and the type of what it held -- because that is
- * what a generator downstream needs to write against; the example after it is
- * for the reader. Measured, not promised: the verify pass ran the code.
- */
-function measuredContract(probe: ProbeReport | undefined): string {
-  const outputs = probe?.outputs;
-  if (outputs && Object.keys(outputs).length) {
-    const shape = Object.entries(outputs).map(([key, value]) => `${key}: ${shapeOf(value)}`).join(', ');
-    return `Returns { ${shape} }. Observed when generated: ${probe!.output_preview}`;
-  }
-  const preview = probe?.output_preview?.trim();
-  return preview ? `Returns, as observed when this was generated: ${preview}` : '';
-}
-
 export interface GenerationRequest<S> {
   /** NodeType or WidgetKind -- the server resolves the rest from it. */
   element: string;
@@ -194,16 +166,41 @@ export interface GenerationRequest<S> {
   /** Ports whose sample is a path the running node gets the text of (`readFilePorts`). */
   readFilePorts?: string[];
   /**
-   * Write down what the generated body actually returned.
-   *
-   * The backend already ran it against real data before handing it over, so the
-   * probe's preview is a measurement rather than a promise — and it is exactly
-   * what the *next* node has to be generated against. Only for a node: a block
-   * inside a page has no output contract of its own, and only when the node
-   * states none, because a contract somebody wrote by hand is not something a
-   * generation gets to overwrite.
+   * What the person wrote about each port, by port id: the one place a port's
+   * meaning is said in words, and so the first thing the model should read
+   * about it. Empty descriptions are left out.
    */
-  recordMeasuredOutput?: boolean;
+  portNotes?: { inputs?: Record<string, string>; outputs?: Record<string, string> };
+  /** The output interface this node keeps (`output.schema.json`): the shape a body must go on returning. */
+  outputSchema?: unknown;
+  /** The node's examples (`examples.md`): what it is checked against, so what it is written to satisfy. */
+  examples?: string;
+  /** An ai node's message template: how its inputs are laid out for the model. */
+  messageTemplate?: string;
+  /** Where `sampleInputs` came from, in words: the last run, or values typed into "Try it". */
+  sampleOrigin?: string;
+  /** Each input's declared type as the body sees it: `text`, `list of text`. */
+  inputTypes?: Record<string, string>;
+  /** How a list input arrives: one item per run, or whole. */
+  batchMode?: 'per_item' | 'whole_list';
+  /** Where each output goes, and what the node there wants of it. */
+  outputTargets?: Record<string, string>;
+  /** The output format, in the person's words (`output.md`) -- sent whenever it says anything. */
+  outputFormat?: string;
+  /** A result to imitate (`output.example.md`). */
+  outputExample?: string;
+  /**
+   * Keep what the generated body actually returned, as the node's output
+   * shape, when it has none yet.
+   *
+   * The backend ran it on a sample before handing it over, so this is a
+   * measurement -- and exactly what the *next* node is generated against. It
+   * used to be written into the node's format description as a sentence,
+   * over the one field that is the person's own words; the shape is where a
+   * measurement belongs (`output.schema.json`), and a run would put it there
+   * anyway. Only for a node: a block inside a page has no output of its own.
+   */
+  recordShape?: (outputs: Record<string, unknown>) => void;
 }
 
 /**
@@ -213,10 +210,57 @@ export interface GenerationRequest<S> {
  * code path -- as they already execute, author files and declare ports through
  * one.
  */
-export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
+/** Only the entries that say something: an empty description is not a note. */
+function said(notes: Record<string, string> | undefined): Record<string, string> | undefined {
+  const kept = Object.entries(notes ?? {}).filter(([, text]) => text?.trim());
+  return kept.length ? Object.fromEntries(kept) : undefined;
+}
+
+/**
+ * The request ✨ Generate sends, exactly -- built in one place, so "show what
+ * ✨ sends" (`preview`) and the real button cannot describe two different
+ * requests.
+ */
+export function generateRequest<S>(request: GenerationRequest<S>): GenerateRequest {
   const { generation: spec, subject, fields } = request;
+  return {
+    element: request.element,
+    description: fields.get(spec.promptField).trim(),
+    context: [spec.context?.(subject), request.graphContext].filter(Boolean).join('\n\n'),
+    context_file: request.exampleFile || undefined,
+    inputs: request.ports?.inputs,
+    outputs: request.ports?.outputs,
+    sample_inputs: request.sampleInputs,
+    input_sources: request.inputSources,
+    read_file_ports: request.readFilePorts?.length ? request.readFilePorts : undefined,
+    input_notes: said(request.portNotes?.inputs),
+    output_notes: said(request.portNotes?.outputs),
+    output_schema: request.outputSchema ?? undefined,
+    examples: request.examples?.trim() || undefined,
+    message_template: request.messageTemplate?.trim() || undefined,
+    sample_origin: request.sampleInputs ? request.sampleOrigin : undefined,
+    input_types: request.inputTypes,
+    batch_mode: request.batchMode,
+    output_targets: request.outputTargets && Object.keys(request.outputTargets).length ? request.outputTargets : undefined,
+    output_format: request.outputFormat?.trim() || undefined,
+    output_example: request.outputExample?.trim() || undefined,
+    ...genAI(),
+  };
+}
+
+/**
+ * What ✨ Generate would send, without sending it: the server builds the same
+ * request and stops at the first model call (`preview`). The answer is that
+ * call -- system and prompt, as the model would read them.
+ */
+export async function previewGeneration<S>(request: GenerationRequest<S>): Promise<AICall[]> {
+  const response = await call('generate', { ...generateRequest(request), preview: true });
+  return response.calls ?? [];
+}
+
+export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
+  const { generation: spec, fields } = request;
   const prompt = fields.get(spec.promptField).trim();
-  const context = [spec.context?.(subject), request.graphContext].filter(Boolean).join('\n\n');
 
   return {
     guard: () => (prompt ? undefined : (spec.guard ?? 'Please add a prompt first.')),
@@ -224,28 +268,15 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
     success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!'),
     failure: 'Generation failed',
     run: (progressId?: string) => call('generate', {
-      element: request.element,
-      description: prompt,
-      context,
-      context_file: request.exampleFile || undefined,
-      inputs: request.ports?.inputs,
-      outputs: request.ports?.outputs,
-      sample_inputs: request.sampleInputs,
-      input_sources: request.inputSources,
-      read_file_ports: request.readFilePorts?.length ? request.readFilePorts : undefined,
-      ...genAI(),
+      ...generateRequest(request),
       // Only a single ✨ button passes one; a sweep runs unattended.
       ...(progressId ? { progress_id: progressId } : {}),
     }),
     apply: (result) => {
       fields.set(spec.targetField, result.result);
 
-      if (!request.recordMeasuredOutput) return;
-      if (fields.get('output_format_prompt').trim()) return;
-      const contract = measuredContract(result.probe);
-      if (!contract) return;
-      fields.set('output_format_prompt', contract);
-      fields.set('output_format', 'custom');
+      const outputs = result.probe?.outputs;
+      if (request.recordShape && outputs && Object.keys(outputs).length) request.recordShape(outputs);
     },
   };
 }

@@ -33,20 +33,25 @@ export default function InputPickerWidgetPanel({
           placeholder={mode === 'directory' ? '/path/to/directory' : '/path/to/file'}
         />
       </div>
+      {/* Both modes. This sat inside the directory branch, so a picker set to
+          one file could not be told which kinds it accepts -- while the block
+          itself used the setting either way and the page printed "Allowed: .csv"
+          underneath it. The only way to a .csv-only picker was editing the
+          graph's JSON by hand, which is how the shipped plotter got one. */}
+      <div>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
+          File types (e.g. .md, .txt)
+        </label>
+        <input
+          className="w-full rounded-lg px-2 py-1.5 text-sm"
+          style={FIELD_ON_SURFACE}
+          value={widget.extensions ?? ''}
+          onChange={(e) => onUpdate({ extensions: e.target.value })}
+          placeholder="Leave empty for all file types"
+        />
+      </div>
       {mode === 'directory' && (
         <>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-              File types (e.g. .md, .txt)
-            </label>
-            <input
-              className="w-full rounded-lg px-2 py-1.5 text-sm"
-              style={FIELD_ON_SURFACE}
-              value={widget.extensions ?? ''}
-              onChange={(e) => onUpdate({ extensions: e.target.value })}
-              placeholder="Leave empty for all file types"
-            />
-          </div>
           <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
             <input
               type="checkbox"

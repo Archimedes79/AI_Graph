@@ -113,6 +113,48 @@ export interface GenerateRequest {
    * so these are read, as a run reads them, before the sample is shown or used.
    */
   read_file_ports?: string[];
+  /**
+   * What each port is, in the words the person gave it (`Port.description`),
+   * keyed by port id. The ports' names say what to call a value; these say
+   * what it is -- "One summary per file, same order" -- which no name carries.
+   */
+  input_notes?: Record<string, string>;
+  output_notes?: Record<string, string>;
+  /**
+   * The shape this node's outputs have been held to since a run produced them
+   * (`output_schema`). Sent so that a body written again keeps the shape the
+   * next nodes were built against, instead of only its top-level key names.
+   */
+  output_schema?: unknown;
+  /** The node's examples (`examples.md`): inputs with what must come out. */
+  examples?: string;
+  /** An ai node's message layout (`message.md`): how what is wired in reaches the model. */
+  message_template?: string;
+  /** Each input port's declared type, in words: `text`, `a list of file paths`. */
+  input_types?: Record<string, string>;
+  /**
+   * Where each output port goes, by port id, and what the node there wants of
+   * it -- `"Sizes" chart on "Dashboard" -- wants: the data to plot…`. The
+   * other half of `input_sources`.
+   */
+  output_targets?: Record<string, string>;
+  /**
+   * What the output looks like, in the person's words (`output.md`). Sent
+   * whenever it says anything, whatever else is set: the one declaration of
+   * the output a person writes.
+   */
+  output_format?: string;
+  /** An answer or result to imitate (`output.example.md`), when one was kept. */
+  output_example?: string;
+  /** Where `sample_inputs` came from, for the model: `the last run`, `the values typed into "Try it"`. */
+  sample_origin?: string;
+  /** How a list on an input arrives: one item per run (`per_item`) or whole (`whole_list`). */
+  batch_mode?: 'per_item' | 'whole_list';
+  /**
+   * Build the request and hand it back without sending it: what ✨ *would*
+   * send, through the same code that sends it, so the preview cannot differ.
+   */
+  preview?: boolean;
 }
 
 /** One request to a model, as it happened: for looking at when an answer is wrong or missing. */
@@ -149,6 +191,8 @@ export interface GenerateResponse {
   probe: ProbeReport;
   /** Every model call this generation made, in order. */
   calls: AICall[];
+  /** Set when the request asked for a preview: `calls` holds the one request, unsent. */
+  preview?: boolean;
 }
 
 /** The settings dialog's view of `ai-settings.json`: whether a key is set, never the key. */

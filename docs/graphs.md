@@ -182,7 +182,7 @@ stands in the dialog:
 
 ```
 Instructions (system)   what you wrote, or had ✨ Generate write from "What this node should do"
-                        + one sentence for the output format, when you declared one
+                        + the answer format and example, when you gave them
 Message (user)          what arrived on the wires, laid out by the message template
 ```
 
@@ -195,7 +195,8 @@ Conversation so far:
 User: {{message}}
 ```
 
-- Empty template: every input is sent as it arrives, joined by blank lines. **A node
+- Empty template: every input is sent as it arrives, joined by blank lines — the box
+  shows that as its greyed-out placeholder, `{{prompt}}` for a new node. **A node
   nobody has written anything for still forwards its input** — dropping an AI node on the
   canvas and wiring it is enough.
 - `{{input}}` stands for every input not named elsewhere.
@@ -231,11 +232,14 @@ keys, asking for each call (25 each time it runs, at most). The panel shows it u
 this node runs*, with the way back to the standard.
 
 **Do you have to describe the output format?** No. It only matters when something
-downstream has to *parse* the answer, and then there are two ways: say it (*JSON*, *CSV*,
-or a description of your own, which ✨ can write), or show it — press ▶ Test, and if the
-answer has the shape you want, **Keep this as the format to follow**. The node is then
-told to answer in that same structure with new content (`output_format: "example"`), and
-its neighbours are generated against it. Nothing checks the answer afterwards; a model
+downstream has to *parse* the answer, and then there are two ways, and both are sent
+whenever they say anything: say it in words under *Answer format* (“a JSON list of
+{title, score}”), or show it — press ▶ Test, and if the answer has the shape you want,
+**Keep this as the format to follow** (or *Use the last result* under the format). The
+node is then told to answer in that same structure with new content, and its neighbours
+are generated against it. (There used to be a menu of formats — JSON, CSV, custom,
+example — and only *custom* sent your words; a graph that picked JSON still says so, in
+front of them.) Nothing checks the answer afterwards; a model
 that ignores the format is caught by a Code node, not by this setting.
 
 Everything else — model, temperature, tools, vision, batching, failures — has a default
@@ -257,6 +261,49 @@ function run(inputs) {
 ```
 
 The AI can generate this function for you: just describe what the node should do.
+
+**The node's dialog is the order the work is done in**, the same for an AI node:
+
+```
+1  What should it do?   a sentence or two, in your words
+2  What comes in        each input: its name, what it holds (a description), where it is wired from
+                        + an optional sample file; an AI node's message template
+3  What comes out       each output: what it hands on, where it is wired to
+                        + the result format, and the shape a run kept (output.schema.json)
+4  How it does it       the code (or an AI node's system prompt), with ✨ Generate
+5  Try it               run the node alone on sample values; its examples
+```
+
+**What ✨ Generate is told** is the same for a code node and an AI node: one brief, built
+from steps 1–3, each fact said once and everything long cut to a budget (about 8 000
+characters at most), so a small local model still has room to answer:
+
+```
+<what it should do>
+
+## What comes in
+- `csv` (text): one row per customer
+  from "Customers" (port "Content"), which hands on: the file's text
+  sample, from the last run: "name,email\nAnna,anna@…"        ≤ 700 characters each
+## What goes out
+- `rows`: one object per customer
+  to "Table" (port "Rows"), which wants rows: a list of objects with the same keys…
+Format: <the format, in your words>
+An example of what it returns: <the example, if you kept one>
+The shape it returned so far … keep it: { rows: list of { name: text, email: text } }
+## Examples -- the result is checked against these          the first 3
+## Also                                                      an attached sample file, first 2 000 characters
+## The function   (code)  the typed signature to complete    /   (AI) "write the system prompt…"
+```
+
+The **sample** is the last run's value on that port; before any run, the values in *Try
+it*, else what the wired node holds (an Input's text, a Data node's value), else the first
+example's inputs. Code is then run on that sample; when the sample is an example, what it
+must return is checked too, and a body that falls short is sent back once to be repaired.
+**What ✨ sends** beside the button shows the request word for word, without sending it.
+After ✨ has run the code, what it returned becomes the node's kept shape when it has
+none yet — your format text is never overwritten. A new node's description starts empty:
+what ✨ writes from is what you wrote, never a placeholder.
 
 **It may ask a model.** `run` may be `async` and is handed a second argument, `node`:
 `await node.llm({ prompt: '…' })` resolves to the answer as text, from the graph's default
@@ -320,13 +367,13 @@ first successful run sets it from what the node produced. From then on every run
 checked against it — a node that breaks its interface says so on its result, *Does not
 match its output interface: output.rows[3].Population is string; the interface says
 integer*, rather than the node three steps later failing on the wrong shape — and the
-nodes after it are generated against it. **Set from last run** in the node's dialog
-replaces it after a deliberate change. An AI node has `output.md` instead: a description
+nodes after it are generated against it. **Set from last run** (under *Shape kept from a
+run*, in the node's dialog) replaces it after a deliberate change. An AI node has `output.md` instead: a description
 of the answer that is sent to the model with every request.
 
 **Examples: a node's own tests.** A code or AI node can keep `examples.md` — inputs, and
-what must come out. Optional, and nothing uses them to write code (✨ Generate works as
-before); they check what was written, whoever wrote it:
+what must come out. Optional; they check what was written, whoever wrote it, and ✨
+Generate is shown the first few, so what it writes is written to pass them:
 
 ````markdown
 ### The whole graph as code: `flow.js`

@@ -129,16 +129,17 @@ export default function Toolbar({
     // opening its window -- not pressing the button its user would have
     // pressed, on whatever values happen to be on the page.
     //
-    // So Run shows the page. If there is something on it to use, that is the
-    // whole of it: the tool now sits there waiting, which is what it does. If
-    // there is nothing to use, ▶ Run *is* the tool's only interaction -- the
-    // delivered tool says so in as many words -- and the run goes ahead.
+    // So for a graph with a page this button *only* opens it, and never
+    // computes. Computing is the page's: a block wired to start the graph, or
+    // the ▶ Run in its header, which is the one a recipient gets too.
     //
-    // Once the page is up, this button is the one in its header: the same run,
-    // asked for from the other side of the tab strip.
-    if (hasPage && !interfaceShown) {
+    // It used to run as well, and then the page's own ▶ Run appeared beside
+    // it -- two controls with the same tooltip, the second one reachable only
+    // by pressing the first. The button is hidden once the page is up, so
+    // there is exactly one way to run at any moment.
+    if (hasPage) {
       onShowInterface();
-      if (hasEvent) return;
+      return;
     }
 
     const graph = exportGraph();
@@ -463,18 +464,17 @@ export default function Toolbar({
             <Square size={14} strokeWidth={2.5} aria-hidden="true" />
             Stop
           </button>
-        ) : (
+        ) : hasPage && interfaceShown ? null : (
           <button
             onClick={handleRun}
-            title={!hasPage ? 'Run this graph'
-              : interfaceShown ? 'Run this tool on what is on the page now'
-                : hasEvent ? 'Start this tool: show its page, and let it wait for what its user does'
-                  : 'Start this tool: show its page and run it — there is nothing on it to press'}
+            title={!hasPage ? 'Run this graph — it has no page, so this is its only start'
+              : hasEvent ? 'Show this tool\'s page. It runs when its user does something on it.'
+                : 'Show this tool\'s page. Nothing on it starts the graph yet, so its ▶ Run is the only way in — give a block "⚡ starts the graph", or add a button or a trigger node.'}
             className="h-8 px-3.5 rounded-md text-xs font-semibold flex items-center gap-1.5"
             style={{ background: ACCENT, color: 'white' }}
           >
             <Play size={14} strokeWidth={2.5} aria-hidden="true" />
-            Run
+            {hasPage ? 'Start' : 'Run'}
           </button>
         )}
 
@@ -484,7 +484,16 @@ export default function Toolbar({
 
         <ToolbarSeparator />
 
-        <ToolbarButton icon={Settings} title="Code generation AI and this graph's runtime AI default" onClick={onOpenSettings} />
+        {/* Labelled, and the title names what is inside. An API key lives in
+            here, under "Keys and addresses", and a tooltip that spoke only of
+            "code generation AI and this graph's runtime AI default" was a sign
+            pointing away from the thing people come looking for. */}
+        <ToolbarButton
+          icon={Settings}
+          label="Settings"
+          title="API keys and server addresses, the AI that writes code for you, this graph's runtime AI, and what starts the graph"
+          onClick={onOpenSettings}
+        />
 
         {/* Deploy dropdown */}
         <div className="relative">
