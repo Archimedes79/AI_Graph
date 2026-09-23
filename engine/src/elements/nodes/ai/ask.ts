@@ -68,6 +68,9 @@ export async function askModel(
   }
 
   const { system, user } = assemblePrompt(settings, text);
+  if (!user && !images.length) {
+    throw new Error('Nothing to ask: this node has no instructions, and nothing wired into it brought anything.');
+  }
   const request = {
     prompt: user,
     system,

@@ -182,7 +182,7 @@ describe('stopping', () => {
   it('hands the signal to every model call', async () => {
     const seen: (AbortSignal | undefined)[] = [];
     const stop = new AbortController();
-    const graph = parseGraph({ nodes: [{ id: 'ai', node_type: 'ai', outputs: [port('output')], config: { ai_model: 'm' } }], edges: [] });
+    const graph = parseGraph({ nodes: [{ id: 'ai', node_type: 'ai', outputs: [port('output')], config: { ai_model: 'm', system_prompt: 'Say hello.' } }], edges: [] });
     await executeGraph(graph, {
       registry, signal: stop.signal,
       runtime: runtime({ ai: { complete: async (request) => { seen.push(request.signal); return 'x'; } } }),

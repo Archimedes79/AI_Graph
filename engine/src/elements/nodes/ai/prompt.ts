@@ -125,5 +125,10 @@ export function assemblePrompt(settings: PromptSettings, inputs: Record<string, 
 
   const instruction = formatInstruction(settings);
   const system = [settings.systemPrompt.trim(), instruction].filter(Boolean).join('\n\n');
+  // A node with nothing wired in is its instructions and nothing else -- "write
+  // a haiku about autumn". Those are the question, then, and go as the message:
+  // a request with an empty message is refused by some providers and answered
+  // with a guess by others.
+  if (!user && system) return { system: '', user: system, unknown: [...new Set(unknown)], appended };
   return { system, user, unknown: [...new Set(unknown)], appended };
 }

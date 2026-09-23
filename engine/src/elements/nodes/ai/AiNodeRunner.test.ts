@@ -65,6 +65,21 @@ describe('what an AI node sends', () => {
     expect(asked[0].system).toBe('be brief');
   });
 
+  it('sends its instructions as the message when nothing is wired in', async () => {
+    // It used to send them as the system prompt beside an empty message, which
+    // some providers refuse and the rest answer with a guess.
+    const { runtime, asked } = recording();
+    await element.execute(aiNode({ system_prompt: 'Write a haiku about autumn.' }), {}, runtime);
+    expect(asked[0].prompt).toBe('Write a haiku about autumn.');
+    expect(asked[0].system).toBe('');
+  });
+
+  it('asks nothing when it has neither instructions nor anything wired in', async () => {
+    const { runtime, asked } = recording();
+    await expect(element.execute(aiNode({ system_prompt: '' }), {}, runtime)).rejects.toThrow(/Nothing to ask/);
+    expect(asked).toEqual([]);
+  });
+
   it('sends a list as paragraphs, not as a serialised list', async () => {
     const { runtime, asked } = recording();
     await element.execute(aiNode(), { summaries: ['first', 'second'] }, runtime);

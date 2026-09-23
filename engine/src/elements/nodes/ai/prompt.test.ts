@@ -62,13 +62,13 @@ describe('assemblePrompt', () => {
   });
 
   it('adds the declared format to the instructions', () => {
-    expect(assemblePrompt(settings({ systemPrompt: 'Be brief.', outputFormat: 'json' }), {}).system)
+    expect(assemblePrompt(settings({ systemPrompt: 'Be brief.', outputFormat: 'json' }), { text: 'hi' }).system)
       .toBe('Be brief.\n\nRespond with JSON and nothing else.');
   });
 
   it('can ask for an answer shaped like one it gave before', () => {
     const { system } = assemblePrompt(
-      settings({ outputFormat: 'example', outputExample: '{"title": "x", "score": 3}' }), {},
+      settings({ outputFormat: 'example', outputExample: '{"title": "x", "score": 3}' }), { text: 'hi' },
     );
     expect(system).toContain('same format as this example');
     expect(system).toContain('{"title": "x", "score": 3}');
