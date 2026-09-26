@@ -40,7 +40,13 @@ export class ImageViewWidgetRunner extends TransformingDisplayRunner {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  override receives(): string {
+  /**
+   * A path -- unless the block has a transform of its own, which takes
+   * whatever it was written to read and finds the path itself. A block handed
+   * over without its settings (`config`) counts as one without a transform.
+   */
+  override receives(widget: Widget): string | undefined {
+    if (String(widget.config?.code ?? '').trim()) return undefined;
     return 'an image file path or URL, or a list of them -- not the picture\'s bytes.';
   }
 

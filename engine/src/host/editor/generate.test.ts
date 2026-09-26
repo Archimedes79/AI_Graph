@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AiRequest, AiService, CodeService } from '../../elements/Runtime.ts';
 import { registry } from '../../elements/registry.ts';
+import { parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
 import { GenerationFailed, GenerationRefused, generate, generateGraph, withContextFile } from './generate.ts';
 import { nodeCode } from '../node.ts';
 
@@ -182,6 +183,16 @@ describe('what the node says about itself reaches the model', () => {
     expect(ai.asked[0].prompt).not.toContain('chart');
     expect(registry.widget('plot_window')?.receives({} as never)).toContain('NOT a drawing');
     expect(registry.widget('table')?.receives({} as never)).toContain('column header');
+  });
+
+  it('tells the node upstream to pre-shape nothing when the block reshapes what arrives itself', () => {
+    // A chart whose draw() reads rows was still said to want points, so the
+    // node feeding it was written to hand it points, which its draw() read as rows.
+    for (const kind of ['plot_window', 'table', 'image_view'] as const) {
+      const element = registry.widget(kind)!;
+      expect(element.receives(parseWidget({ id: 'b', kind, code: '' }))).toBeTruthy();
+      expect(element.receives(parseWidget({ id: 'b', kind, code: 'function draw(rows) { return rows.map((r) => r.temp); }' }))).toBeUndefined();
+    }
   });
 
   it('tells a prompt what its model will be sent, laid out as the message says, from the same brief', async () => {
