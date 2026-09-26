@@ -11,9 +11,10 @@ import { GenerationReport } from '@/authoring/GenerationTranscript';
 import { lastRunWidgetInput } from '@/authoring/generationContext';
 import { useGraphStore } from '@/store/graphStore';
 import { GUI_GRID_COLUMNS } from '@/document/layout';
-import { describeScheme, schemeVars } from '@/ui/scheme';
+import { schemeVars } from '@/ui/scheme';
 import TryItPanel from '@/authoring/TryItPanel';
-import { sampleFor } from '@/authoring/tryValues';
+import { sampleFor, sampleOrigin } from '@/authoring/tryValues';
+import { blockFacts } from '@/authoring/blockFacts';
 import { call } from '@/api/client';
 import { TONES, TONE_LABELS, type Tone } from '@/ui/tone';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, WELL } from '@/ui/theme';
@@ -84,6 +85,13 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
   const handleGenerate = () => {
     const spec = element.generation;
     if (!spec) return;
+    const state = useGraphStore.getState();
+    // What the sweep sends too (`blockFacts`): what feeds the block, the page's
+    // scheme, and the sample with where it came from.
+    const facts = blockFacts(nodeId, widget, state.rfNodes.map((item) => item.data.graphNode), state.rfEdges, executionResult, state.metadata.gui_scheme);
+    // Values typed or fetched in Try it below are what the block is being
+    // tried on, so they are what it is written against -- and said to be.
+    const tried = sampleFor(subject, ['value'], undefined);
     return generate.run(buildGeneration({
       element: widget.kind,
       generation: spec,
@@ -94,14 +102,8 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
         // section the user would have to know to open.
         setExpanded(true);
       }),
-      exampleFile: (widget.example_file ?? '').trim(),
-      // What a block draws is seen on this page, in this scheme -- and the model
-      // writing it cannot see either. Said, not enforced: see `describeScheme`.
-      graphContext: describeScheme(useGraphStore.getState().metadata.gui_scheme),
-      // The real thing that reached this block last run. A chart transform
-      // written against actual rows beats one written against a description of
-      // them, and the verify pass can then run it for real.
-      sampleInputs: sampleFor(subject, ['value'], lastRunWidgetInput(nodeId, widget.id, executionResult)),
+      ...facts,
+      ...(tried ? { sampleInputs: tried, sampleOrigin: sampleOrigin(subject, ['value'], undefined) } : {}),
     }), widget.id);
   };
 
@@ -291,7 +293,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
             title="Try it: what arrives, and what this block shows"
             ports={[{ id: 'value', name: 'what arrives' }]}
             observed={lastRunWidgetInput(nodeId, widget.id, executionResult) ?? {}}
-            context={describeScheme(useGraphStore.getState().metadata.gui_scheme)}
+            context={blockFacts(nodeId, widget, useGraphStore.getState().rfNodes.map((item) => item.data.graphNode), useGraphStore.getState().rfEdges, executionResult, useGraphStore.getState().metadata.gui_scheme).graphContext}
             onFetch={async () => {
               const got = await call('nodeInputs', { ...useGraphStore.getState().exportGraph(), node_id: nodeId });
               const arrived = got.inputs[`${widget.id}_in`];
