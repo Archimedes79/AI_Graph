@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InputNodeRunner } from './InputNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
 import { parseGraph, type Graph, type GraphNode } from '../../../graph.ts';
-import { forgetSeen, writeProject } from '../../../project/folder.ts';
+import { forgetSeen, readProject, writeProject } from '../../../project/folder.ts';
 
 /**
  * A read that fails: a missing file, an unreadable folder.
@@ -147,6 +147,32 @@ describe('the selector', () => {
       // Not lost: a node switched back to directory mode still has its selector.
       const saved = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8'));
       expect(saved.nodes[0].config.selector_code).toBe(starter);
+    });
+
+    it('reads the selector a save from before kept in its files, and keeps it in the graph from then on', async () => {
+      // Before, a save took the selector out of the graph and into its files
+      // in every mode. A node that had listed a folder, then been switched to
+      // text, held what somebody wrote for it only there.
+      const own = 'function run(inputs) {\n  return { files: (inputs.files ?? []).filter((f) => f.endsWith(".md")) };\n}';
+      const folder = join(dir, 'nodes', 'source');
+      await mkdir(folder, { recursive: true });
+      await writeFile(join(dir, 'graph.json'), JSON.stringify({
+        metadata: { name: 'old' },
+        nodes: [{ id: 'source', node_type: 'input', label: 'Source', position: { x: 0, y: 0 }, inputs: [], outputs: [], config: { input_mode: 'text', value: 'data' } }],
+        edges: [],
+      }));
+      // As a save wrote them: the text, and a newline to end the file.
+      await writeFile(join(folder, 'select.js'), `${own}\n`);
+      await writeFile(join(folder, 'task.md'), 'Only the notes.\n');
+
+      const graph = await readProject(dir);
+      expect(graph.nodes[0].config.selector_code).toBe(own);
+      expect(graph.nodes[0].config.selector_prompt).toBe('Only the notes.');
+
+      await writeProject(dir, graph);
+      expect(existsSync(join(folder, 'select.js'))).toBe(false);
+      const saved = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8'));
+      expect(saved.nodes[0].config).toMatchObject({ selector_code: own, selector_prompt: 'Only the notes.' });
     });
   });
 });
