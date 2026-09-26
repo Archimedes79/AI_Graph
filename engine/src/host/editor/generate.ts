@@ -277,22 +277,17 @@ const DATA_FORMAT_SYSTEM =
 // ---------------------------------------------------------------------------
 
 /**
- * The node as the executor fans it out, for the executor's own rules
- * (`batchItems`, `mergeBatchOutputs`): only its ports, which is all they read.
+ * The node's inputs as the executor fans them out, for its own rule
+ * (`batchItems`): only the ports, which is all it reads.
  *
  * A run fans out over the inputs declared multi. The request does not carry
  * that flag; it carries what the body is handed on each port (`input_types`).
  * A port it is handed a list on takes lists -- whole, or one list per item --
  * so a list arriving on any other port is one the body is handed an item of.
- * Every output counts as multi, as the one a code or ai node is created with:
- * a list one call returns adds its entries to what the node hands on.
  */
 function fannedOut(request: GenerateRequest, sample: Record<string, unknown>): GraphNode {
   const takesLists = (id: string) => String(request.input_types?.[id] ?? '').startsWith('list of');
-  return {
-    inputs: Object.keys(sample).map((id) => port(id, id, 'input', 'any', !takesLists(id))),
-    outputs: (request.outputs ?? []).map((id) => port(id, id, 'output', 'any', true)),
-  } as GraphNode;
+  return { inputs: Object.keys(sample).map((id) => port(id, id, 'input', 'any', !takesLists(id))) } as GraphNode;
 }
 
 /**
@@ -325,7 +320,8 @@ function oneItem(request: GenerateRequest): { values: Record<string, unknown> | 
  * checked against. Kept as one call's shape, a correct per-item node was
  * told on each run that it "does not match its output interface". The items
  * the probe did not run are answers that add nothing; a batch of one is not
- * a fan-out, and stays as it came.
+ * a fan-out, and stays as it came. Every output counts as multi, as the one a
+ * code or ai node is created with: a list one call returns adds its entries.
  */
 function handedOn(result: Record<string, unknown>, items: number): Record<string, unknown> {
   if (items <= 1) return result;
@@ -517,17 +513,6 @@ export interface GenerateDeps {
 }
 
 /**
- * Generate one element's authored text, whatever the element is.
- *
- * The element's own contract goes first in the context: it says what the
- * running engine will do with this snippet, which nothing else can imply. A
- * sub-snippet whose ports the element fixes (a selector's `files`, a
- * transform's `value`) is generated against those -- and probed against a
- * sample only when the sample is keyed by those same ports. The node's own
- * sample is keyed by ports the snippet does not have; the block editor sends
- * one shaped as the snippet sees it (`{value: …}`), and that one is used.
- */
-/**
  * The request with its sample as the body will meet it.
  *
  * A sample is what came off the wires, and for a node that reads its file
@@ -551,6 +536,19 @@ async function asReceived(request: GenerateRequest, files?: FileService): Promis
   }
 }
 
+/**
+ * Generate one element's authored text, whatever the element is.
+ *
+ * The element's own contract goes first in the context: it says what the
+ * running engine will do with this snippet, which nothing else can imply --
+ * or, for a body the element calls itself, where the function goes
+ * (`framedByElement`). A sub-snippet whose ports the element fixes (a
+ * selector's `files`, a transform's `value`) is generated against those --
+ * and probed against a sample only when the sample is keyed by those same
+ * ports. The node's own sample is keyed by ports the snippet does not have;
+ * the block editor sends one shaped as the snippet sees it (`{value: …}`),
+ * and that one is used.
+ */
 export async function generate(asked: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
   // Real data when the graph has run; the first example's inputs when it has
   // not -- an example is the person saying what arrives. Either is read as a
