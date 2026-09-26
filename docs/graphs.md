@@ -568,7 +568,7 @@ nested_statistics/
         counts/examples.md
 ```
 
-`check` descends into it and says where it was (`node "statistics" ▸ edge "e3"`), `test`
+`check` descends into it and says where it was (`node "statistics" ▸ edge "text.output -> counts.text"`), `test`
 runs the examples of the nodes in there, and a bundle carries the whole depth: a model
 called from inside is a model the recipient is told to configure.
 

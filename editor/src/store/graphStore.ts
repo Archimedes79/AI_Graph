@@ -18,6 +18,7 @@ import { inferInterface } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 import { freeId } from '@/document/ids';
+import { wireOf } from '@engine/project/flow.ts';
 
 type RFNode = Node<RFNodeData>;
 
@@ -477,8 +478,15 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     connect: (wire) => {
-      const id = `edge-${wire.source}-${wire.sourceHandle}-${wire.target}-${wire.targetHandle}`;
-      if (get().rfEdges.some((edge: Edge) => edge.id === id)) return;
+      // Named the way flow.json writes a wire, and known by its two ends: a wire
+      // read from an older file keeps the id it was saved with.
+      const id = wireOf({
+        id: '', source_node_id: wire.source, source_port_id: wire.sourceHandle ?? '',
+        target_node_id: wire.target, target_port_id: wire.targetHandle ?? '',
+      });
+      const joins = (edge: Edge): boolean => edge.source === wire.source && edge.target === wire.target
+        && (edge.sourceHandle ?? '') === (wire.sourceHandle ?? '') && (edge.targetHandle ?? '') === (wire.targetHandle ?? '');
+      if (get().rfEdges.some(joins)) return;
       get().commit();
       set((state) => {
         state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as never);
