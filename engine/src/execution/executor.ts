@@ -903,6 +903,11 @@ async function showDisplays(
  * replace the other. The first keeps its label; one that comes later under a
  * label already taken is told apart by its id, so a graph whose labels differ
  * gets exactly the keys it always got.
+ *
+ * "First" in the graph, whether or not it produced anything this run: a round
+ * started by a page event, or one where the first stood still, would
+ * otherwise hand the second's value on under the first's key -- and whoever
+ * lays rounds over each other (a schedule) would lose the first's once more.
  */
 function finalOutputs(
   nodes: GraphNode[],
@@ -910,12 +915,14 @@ function finalOutputs(
   registry: Registry,
 ): Record<string, unknown> {
   const final: Record<string, unknown> = {};
+  const taken = new Set<string>();
   for (const node of nodes) {
     if (!registry.node(node.node_type)?.isResult) continue;
-    const produced = outputs.get(node.id);
-    if (!produced) continue;
     const label = String(node.config.output_label ?? '') || node.id;
-    final[label in final ? `${label} (${node.id})` : label] = produced;
+    const key = taken.has(label) ? `${label} (${node.id})` : label;
+    taken.add(key);
+    const produced = outputs.get(node.id);
+    if (produced) final[key] = produced;
   }
   return final;
 }

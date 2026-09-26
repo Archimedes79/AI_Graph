@@ -228,6 +228,31 @@ describe('executeGraph', () => {
       Named: { value: 'alpha' },
     });
   });
+
+  it('keys an output the same whether or not the one before it ran', async () => {
+    // A round that runs only part of the graph -- a page event, a trigger --
+    // must not hand the second's value on under the first's key: rounds laid
+    // over each other would lose the first's value once more.
+    const result = await executeGraph(
+      graph([
+        node('a', 'input', { input_mode: 'text', value: 'alpha' }),
+        node('b', 'input', { input_mode: 'text', value: 'beta' }),
+        node('first', 'output', { output_label: 'Result' }),
+        node('second', 'output', { output_label: 'Result' }),
+        node('clash', 'output', { output_label: 'Result (second)' }),
+      ], [
+        edge('e1', 'a', 'output', 'first', 'value'),
+        edge('e2', 'b', 'output', 'second', 'value'),
+        edge('e3', 'b', 'output', 'clash', 'value'),
+      ]),
+      { runtime: nowhere, registry, only: new Set(['b', 'second', 'clash']) },
+    );
+    // And a label that happens to be another's key is told apart the same way.
+    expect(result.outputs).toEqual({
+      'Result (second)': { value: 'beta' },
+      'Result (second) (clash)': { value: 'beta' },
+    });
+  });
 });
 
 describe('the AI default a graph carries', () => {
