@@ -871,7 +871,15 @@ async function showDisplays(
   }
 }
 
-/** What the run produced, keyed the way the graph's output nodes asked. */
+/**
+ * What the run produced, keyed the way the graph's output nodes asked.
+ *
+ * Two output nodes may well be given one label -- every new one starts as
+ * "Result" -- and a run's result is not a place where one of them may quietly
+ * replace the other. The first keeps its label; one that comes later under a
+ * label already taken is told apart by its id, so a graph whose labels differ
+ * gets exactly the keys it always got.
+ */
 function finalOutputs(
   nodes: GraphNode[],
   outputs: Map<string, Record<string, unknown>>,
@@ -883,7 +891,7 @@ function finalOutputs(
     const produced = outputs.get(node.id);
     if (!produced) continue;
     const label = String(node.config.output_label ?? '') || node.id;
-    final[label] = produced;
+    final[label in final ? `${label} (${node.id})` : label] = produced;
   }
   return final;
 }

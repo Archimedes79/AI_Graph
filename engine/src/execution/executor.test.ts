@@ -203,6 +203,31 @@ describe('executeGraph', () => {
 
     expect(store.config.data_value).toBe('fresh');
   });
+
+  it('keeps every output in the result when two share a label', async () => {
+    // Every new output node is called "Result". Two of them used to leave the
+    // run's result with one value, the other gone without a word.
+    const result = await executeGraph(
+      graph([
+        node('a', 'input', { input_mode: 'text', value: 'alpha' }),
+        node('b', 'input', { input_mode: 'text', value: 'beta' }),
+        node('first', 'output', { output_label: 'Result' }),
+        node('second', 'output', { output_label: 'Result' }),
+        node('named', 'output', { output_label: 'Named' }),
+      ], [
+        edge('e1', 'a', 'output', 'first', 'value'),
+        edge('e2', 'b', 'output', 'second', 'value'),
+        edge('e3', 'a', 'output', 'named', 'value'),
+      ]),
+      { runtime: nowhere, registry },
+    );
+    // The first keeps its label, and labels nobody shares are left as they were.
+    expect(result.outputs).toEqual({
+      Result: { value: 'alpha' },
+      'Result (second)': { value: 'beta' },
+      Named: { value: 'alpha' },
+    });
+  });
 });
 
 describe('the AI default a graph carries', () => {
