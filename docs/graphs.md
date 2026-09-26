@@ -341,7 +341,8 @@ my_tool/
 | AI | `run.js`, `system.md`, `message.md`, `output.md`, `output.example.md`, `output.schema.json`, `examples.md` |
 | Data | `format.md` (the contract neighbours are generated against), `task.md` |
 | Input (directory) | `select.js` (the file selector), `task.md` |
-| A chart, table, image or file-picker block | `code.js` / `select.js`, `task.md` |
+| A chart, table or image block | `code.js`, `task.md`, `example.json` (the one example input it is written and tried against; never read by a run) |
+| A file-picker block | `select.js`, `task.md` |
 
 An empty text has no file — except `run.js`, below. Settings — the model, the temperature, a node's mode — stay in
 `graph.json`, and positions in `layout.json`, so moving a node on the canvas is not a

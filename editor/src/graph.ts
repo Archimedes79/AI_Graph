@@ -113,6 +113,11 @@ export type GuiWidget = {
   /** A chart's, a table's or an image's transform. */
   code?: string;
   code_prompt?: string;
+  /**
+   * The one example input a transform is written and tried against: the text
+   * of `{"value": …}`, as it is handed the value (`example.json`).
+   */
+  example?: string;
   /** An example file an older version of the block editor attached; step 1 offers to take it in. */
   example_file?: string;
   /** `input_picker`: the file types a folder's listing keeps. */

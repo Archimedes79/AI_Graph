@@ -84,6 +84,17 @@ describe('a project folder', () => {
     expect(await text('nodes/page/chart/task.md')).toBe('Bars.\n');
   });
 
+  it('keeps a block\'s example input in a file of its own, as it was typed', async () => {
+    const graph = sample();
+    const example = '{\n  "value": [{ "city": "Oslo", "people": 700000 }]\n}';
+    graph.nodes[3].config.gui_widgets = [{ id: 'rows', kind: 'table', label: 'Rows', code: '', code_prompt: '', example }];
+    await writeProject(dir, graph);
+    expect(await text('nodes/page/rows/example.json')).toBe(`${example}\n`);
+    expect(JSON.parse(await text('graph.json')).nodes.find((n: { id: string }) => n.id === 'page').config.gui_widgets[0]).toEqual({ id: 'rows', kind: 'table', label: 'Rows' });
+    const read = await readProject(dir);
+    expect((read.nodes.find((n) => n.id === 'page')!.config.gui_widgets as Record<string, unknown>[])[0].example).toBe(example);
+  });
+
   it('leaves the writing and the positions out of graph.json, and the settings in', async () => {
     await writeProject(dir, sample());
     const wiring = JSON.parse(await text('graph.json'));

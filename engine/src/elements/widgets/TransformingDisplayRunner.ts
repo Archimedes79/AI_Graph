@@ -12,10 +12,17 @@ export interface TransformConfig {
   code: string;
 }
 
-/** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
+/**
+ * What this keeps in files of its own in a project folder: see `ElementRunner.texts`.
+ *
+ * `example` is the one example input the block is written and tried against
+ * in the editor -- `{"value": …}`, as the transform is handed it -- kept as
+ * it was typed. A run never reads it.
+ */
 const TRANSFORM_TEXTS: readonly TextFile[] = [
   { field: 'code', file: 'code.js' },
   { field: 'code_prompt', file: 'task.md' },
+  { field: 'example', file: 'example.json' },
 ];
 
 /**
