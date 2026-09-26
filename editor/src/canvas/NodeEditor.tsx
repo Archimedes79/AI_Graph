@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
 import { keepsExamples, keepsOutputInterface, useGraphStore } from '@/store/graphStore';
+import { portRenames, trackPorts, untracked } from '@/store/portRenames';
 import { derivedNodePorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import PortsEditor from './PortsEditor';
 import { NODE_BUILDERS } from '@/elements/registry';
@@ -75,7 +76,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     if (incoming === baseline.current) return;
     if (!draft.current || JSON.stringify(draft.current) === baseline.current) {
       baseline.current = incoming;
-      setNode(JSON.parse(incoming));
+      setNode(trackPorts(JSON.parse(incoming)));
       setNewer(null);
     } else {
       setNewer(JSON.parse(incoming));
@@ -85,7 +86,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const takeNewer = () => {
     if (!newer) return;
     baseline.current = JSON.stringify(newer);
-    setNode(newer);
+    setNode(trackPorts(newer));
     setNewer(null);
   };
   const keepMine = () => {
@@ -105,24 +106,21 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const element = NODE_BUILDERS[node.node_type];
 
   /**
-   * What each port was called when this dialog opened, by position.
+   * The draft into the store, its wires following its ports.
    *
    * A port's id is the name a body reads it by, so it is edited here — and an
-   * edge points at the old one. Matching by position is what the list editor
-   * actually does to them: row 2 stayed row 2, whatever it is now called.
+   * edge points at the old one. Each port of the draft remembers the id it had
+   * when the dialog opened (`trackPorts`), so a renamed port takes its wires
+   * along and a removed one takes them away. It used to be worked out by
+   * position, which read removing a port as renaming it to the one that slid
+   * into its row, and handed that port the removed one's wire.
    */
-  const renamedPorts = () => {
-    const was = rfNode?.data.graphNode;
-    const map = (before: Port[] = [], after: Port[] = []) => Object.fromEntries(
-      before
-        .map((port, at) => [port.id, after[at]?.id])
-        .filter(([from, to]) => to && from !== to),
-    ) as Record<string, string>;
-    return { inputs: map(was?.inputs, node!.inputs), outputs: map(was?.outputs, node!.outputs) };
+  const storeDraft = () => {
+    updateNode(nodeId, untracked(node!), portRenames(rfNode?.data.graphNode, node!));
   };
 
   const save = () => {
-    updateNode(nodeId, node, renamedPorts());
+    storeDraft();
     onClose();
   };
 
@@ -146,7 +144,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     if (!state.currentFilePath || !state.isProject) return;
     try {
       setExternalStatus('Saving, then opening…');
-      updateNode(nodeId, node!);
+      storeDraft();
+      // What is stored now is what the ports are called: a later Save must
+      // follow them from here, not from when the dialog opened.
+      setNode(trackPorts(node!));
       baseline.current = JSON.stringify(node);
       const after = useGraphStore.getState();
       await call('saveGraph', { path: state.currentFilePath, graph: after.rootGraph() });

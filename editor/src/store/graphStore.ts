@@ -3,6 +3,7 @@ import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, NodeType } from '@/graph';
 import type { RFNodeData } from './nodeData';
+import type { PortRenames } from './portRenames';
 import { derivedNodePorts, showsPage } from '@/document/guiWidgets';
 import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -83,12 +84,14 @@ export interface GraphStore {
   addNode: (nodeType: NodeType, position: { x: number; y: number }) => string;
   /**
    * `renamed` maps a port's old id to its new one, per side, so the wires
-   * follow the rename instead of being pruned as "a port that vanished".
+   * follow the rename instead of being pruned as "a port that vanished" --
+   * and to null for a port that was removed, whose wires go even when another
+   * port has been given its name since (`portRenames`).
    */
   updateNode: (
     nodeId: string,
     updates: Partial<GraphNode>,
-    renamed?: { inputs: Record<string, string>; outputs: Record<string, string> },
+    renamed?: PortRenames,
   ) => void;
   /**
    * Wire one port to another: what dragging from a handle to a handle does.
@@ -516,16 +519,21 @@ export const useGraphStore = create<GraphStore>()(
 
           // A port that was renamed keeps its wires. Without this the rename
           // would look like "the old port is gone" to the pruning below, and
-          // renaming `input` to `csv` would quietly cut the graph in half.
+          // renaming `input` to `csv` would quietly cut the graph in half. A
+          // port that was removed loses them here, by name, because the
+          // pruning below cannot tell it from a new port given the same name.
           if (renamed) {
+            const fate = (map: Record<string, string | null>, handle: string | null | undefined) =>
+              (handle && Object.prototype.hasOwnProperty.call(map, handle) ? map[handle] : undefined);
+            const cut = new Set<Edge>();
             for (const edge of state.rfEdges as Edge[]) {
-              if (edge.target === nodeId && edge.targetHandle && renamed.inputs[edge.targetHandle]) {
-                edge.targetHandle = renamed.inputs[edge.targetHandle];
-              }
-              if (edge.source === nodeId && edge.sourceHandle && renamed.outputs[edge.sourceHandle]) {
-                edge.sourceHandle = renamed.outputs[edge.sourceHandle];
-              }
+              const into = edge.target === nodeId ? fate(renamed.inputs, edge.targetHandle) : undefined;
+              const from = edge.source === nodeId ? fate(renamed.outputs, edge.sourceHandle) : undefined;
+              if (into === null || from === null) { cut.add(edge); continue; }
+              if (into) edge.targetHandle = into;
+              if (from) edge.sourceHandle = from;
             }
+            if (cut.size) state.rfEdges = state.rfEdges.filter((edge: Edge) => !cut.has(edge));
           }
 
           // Ports may have shrunk (e.g. a removed GUI widget) -- prune any
