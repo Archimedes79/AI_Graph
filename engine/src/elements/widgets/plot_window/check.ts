@@ -79,24 +79,48 @@ export function checkDrawing(svg: string): string[] {
   return problems;
 }
 
-/** What is wrong with what a chart transform returned. */
+/** The first point that cannot be charted, as a sentence; none when every one can. */
+function checkPoints(points: unknown[]): string[] {
+  const bad = points.findIndex((item) => {
+    if (typeof item === 'number') return !Number.isFinite(item);
+    const point = item as { value?: unknown; y?: unknown } | null;
+    const number = point?.value ?? point?.y;
+    return typeof number !== 'number' || !Number.isFinite(number);
+  });
+  return bad === -1 ? [] : [
+    `Point ${bad} is ${JSON.stringify(points[bad]).slice(0, 80)}, which cannot be charted: every point must be a finite number, `
+    + 'or {"label": string, "value": number}. Convert with Number() and drop rows where that is not a number.',
+  ];
+}
+
+const ANSWERS = 'Return a list of points, a {"kind", "title", "points"} figure, or an SVG document as a string.';
+
+/**
+ * What is wrong with what a chart's body returned.
+ *
+ * Every answer the chart draws is a good one (`PlotChart.toFigure` in the
+ * editor): a bare list of points, the `{kind, title, points}` figure the
+ * contract says to prefer -- or either as JSON text -- and SVG. The figure was
+ * refused here, so a body that did exactly what it was asked failed its
+ * probe, and the repair told it to stop.
+ */
 export function checkPlot(outputs: Record<string, unknown>): string[] {
-  const value = outputs.value;
+  let value = outputs.value;
   if (typeof value === 'string') {
     if (/^\s*<svg[\s>]/i.test(value)) return checkDrawing(value);
-    return ['"value" is a string but not an SVG document. Return either a list of points, or a string that starts with "<svg".'];
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [`"value" is a string but not an SVG document. ${ANSWERS}`];
+    }
+    if (!value || typeof value !== 'object') return [`"value" is a string but not an SVG document. ${ANSWERS}`];
   }
-  if (Array.isArray(value)) {
-    const bad = value.findIndex((item) => {
-      if (typeof item === 'number') return !Number.isFinite(item);
-      const point = item as { value?: unknown; y?: unknown } | null;
-      const number = point?.value ?? point?.y;
-      return typeof number !== 'number' || !Number.isFinite(number);
-    });
-    return bad === -1 ? [] : [
-      `Point ${bad} is ${JSON.stringify(value[bad]).slice(0, 80)}, which cannot be charted: every point must be a finite number, `
-      + 'or {"label": string, "value": number}. Convert with Number() and drop rows where that is not a number.',
-    ];
+  if (Array.isArray(value)) return checkPoints(value);
+  if (value && typeof value === 'object') {
+    const figure = value as { points?: unknown; values?: unknown; data?: unknown };
+    const points = figure.points ?? figure.values ?? figure.data;
+    if (Array.isArray(points)) return checkPoints(points);
+    return [`"value" is an object without a "points" list. ${ANSWERS}`];
   }
-  return [`"value" is ${value === null ? 'null' : typeof value}. Return a list of points, or an SVG document as a string.`];
+  return [`"value" is ${value === null ? 'null' : typeof value}. ${ANSWERS}`];
 }
