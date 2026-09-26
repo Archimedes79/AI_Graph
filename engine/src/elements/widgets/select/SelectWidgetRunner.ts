@@ -31,8 +31,16 @@ export class SelectWidgetRunner extends WidgetRunner<SelectConfig> {
     return { value, options };
   }
 
+  /**
+   * Its one output, said in words: the choices it can hand on. A node wired to
+   * a dropdown is written by ✨ against its port's description, and "text" is
+   * all an empty one says -- so code compared the choice with values the
+   * dropdown never offers.
+   */
   ports(widget: Widget) {
-    return { inputs: [], outputs: [port(`${widget.id}_out`, widget.label || widget.id, 'output', 'text')] };
+    const { options } = this.config(widget);
+    const said = options.length ? `one of: ${options.join(', ')}` : '';
+    return { inputs: [], outputs: [port(`${widget.id}_out`, widget.label || widget.id, 'output', 'text', false, said)] };
   }
 
   async execute(widget: Widget) {

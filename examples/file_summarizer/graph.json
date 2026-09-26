@@ -68,7 +68,7 @@
           "data_type": "text",
           "multi": false,
           "required": false,
-          "description": ""
+          "description": "one of: One sentence, Three sentences, Five bullet points"
         },
         {
           "id": "go_out",

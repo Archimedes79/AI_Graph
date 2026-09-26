@@ -49,6 +49,7 @@
       "port": "length_out",
       "name": "Length",
       "type": "text",
+      "description": "one of: One sentence, Three sentences, Five bullet points",
       "to": [
         "summarizer.length"
       ]

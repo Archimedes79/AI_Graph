@@ -32,8 +32,15 @@ export class SliderWidgetRunner extends WidgetRunner<SliderConfig> {
     return { value: clamp(Number.isFinite(stored) ? stored : min, min, max), min, max, step };
   }
 
+  /**
+   * Its one output, said in words: the range it moves in. A node wired to a
+   * slider is written by ✨ against its port's description, and "number" alone
+   * left it to guess whether 0.5 or 5000 can arrive.
+   */
   ports(widget: Widget) {
-    return { inputs: [], outputs: [port(`${widget.id}_out`, widget.label || widget.id, 'output', 'number')] };
+    const { min, max, step } = this.config(widget);
+    const said = `a number from ${min} to ${max} in steps of ${step}`;
+    return { inputs: [], outputs: [port(`${widget.id}_out`, widget.label || widget.id, 'output', 'number', false, said)] };
   }
 
   async execute(widget: Widget) {
