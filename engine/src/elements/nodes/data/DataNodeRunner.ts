@@ -36,8 +36,14 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
     return DATA_TEXTS;
   }
 
+  /**
+   * Holding nothing is said in the node's own kind: empty text for a text
+   * node, and null for a structure. A cleared structure used to hand on "",
+   * which `inputs.input ?? []` lets through as a string, and which was not the
+   * nothing the neighbour's ✨ had been shown.
+   */
   config(node: GraphNode): DataConfig {
-    return { value: node.config.data_value ?? '' };
+    return { value: node.config.data_value ?? (node.config.data_format === 'structure' ? null : '') };
   }
 
   /**
