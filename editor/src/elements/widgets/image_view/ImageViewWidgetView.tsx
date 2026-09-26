@@ -2,6 +2,18 @@ import type { WidgetViewProps } from '../WidgetView';
 import { DIMMER, LINE, MUTED, SUNKEN } from '@/ui/theme';
 
 /**
+ * What to say about a value that arrived and is not a path: a record with the
+ * path somewhere inside it, most often. It used to be dropped, and the block
+ * said nothing had arrived -- "wire a file path into it" -- when one had been
+ * wired, and a value had come.
+ */
+function notAPath(block: string, value: unknown): string {
+  const seen = JSON.stringify(value) ?? String(value);
+  return `⚠ ${block} shows an image file path or URL, and what arrived is ${seen.length > 120 ? `${seen.slice(0, 120)}…` : seen}. `
+    + 'A transform can pick the path out of it.';
+}
+
+/**
  * Runtime image_view widget: display-only.
  *
  * The backend hands this widget a `data:` URL (or a list of them) rather than a
@@ -11,9 +23,12 @@ import { DIMMER, LINE, MUTED, SUNKEN } from '@/ui/theme';
  */
 export default function ImageViewWidgetView({ widget, value, incoming }: WidgetViewProps) {
   const shown = incoming ?? value;
-  const items = (Array.isArray(shown) ? shown : [shown]).filter(
-    (item): item is string => typeof item === 'string' && item.length > 0,
+  // Nothing arrived: nothing, or an empty path. Anything else did arrive, and
+  // is either something to draw or something to say.
+  const arrived = (Array.isArray(shown) ? shown : [shown]).filter(
+    (item) => item !== null && item !== undefined && item !== '',
   );
+  const items = arrived.map((item) => (typeof item === 'string' ? item : notAPath(widget.label || widget.id, item)));
 
   const images = items.filter((item) => item.startsWith('data:') || item.startsWith('http'));
   const problems = items.filter((item) => !item.startsWith('data:') && !item.startsWith('http'));
