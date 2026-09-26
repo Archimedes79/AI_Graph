@@ -311,6 +311,7 @@ describe('a node run once per item', () => {
     }, { ai, code, generationFor, target });
     expect(tried).toEqual({ text: 'alpha', stop: ['a', 'the'] });
     expect(ai.asked[0].prompt).toContain('sample, from the last run, its one item: "alpha"');
+    expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: ['ALPHA'] } });
   });
 
   it('hands on a list even for one item, as a run of the node\'s list output does -- it kept the bare answer', async () => {
