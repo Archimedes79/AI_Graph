@@ -7,6 +7,7 @@ import DesignerPalette, { ALL_ENTRIES, type PaletteEntry } from './DesignerPalet
 import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { routePage } from './pageWrite';
 import { liveTypedValues } from './typedValues';
+import PageHeading from './PageHeading';
 import WidgetEditor from './WidgetEditor';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import { SCHEMES, type SchemeId } from '@/ui/scheme';
@@ -213,27 +214,30 @@ export default function DesignerTab() {
     <div className="flex-1 flex overflow-hidden" style={{ background: SUNKEN }}>
       <DesignerPalette onAdd={addWidget} onDragStart={(entry) => setDragEntry(entry)} />
 
-      <div
-        data-gui-dropzone
-        className="flex-1 overflow-auto px-8 py-6"
-        style={dragEntry ? { outline: `2px dashed ${ACCENT}`, outlineOffset: -6 } : undefined}
-      >
-        <DesignerSurface
-          dropIndex={dragEntry ? dropIndex : null}
-          blocks={blocks}
-          onChange={applyWidgets}
-          onWidgetValue={setWidgetValue}
-          onWidgetTrigger={(block, value) => {
-            if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
-            events.fire(block, value);
-          }}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          overrides={overrides}
-          insertAt={insertAt}
-          onInsertAt={setInsertAt}
-          onInsert={(entry, index) => { setInsertAt(null); addWidget(entry.kind, entry.mode, index); }}
-        />
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <PageHeading nodes={guiNodes} onChange={(nodeId, words) => updateNode(nodeId, words)} />
+        <div
+          data-gui-dropzone
+          className="flex-1 overflow-auto px-8 py-6"
+          style={dragEntry ? { outline: `2px dashed ${ACCENT}`, outlineOffset: -6 } : undefined}
+        >
+          <DesignerSurface
+            dropIndex={dragEntry ? dropIndex : null}
+            blocks={blocks}
+            onChange={applyWidgets}
+            onWidgetValue={setWidgetValue}
+            onWidgetTrigger={(block, value) => {
+              if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
+              events.fire(block, value);
+            }}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            overrides={overrides}
+            insertAt={insertAt}
+            onInsertAt={setInsertAt}
+            onInsert={(entry, index) => { setInsertAt(null); addWidget(entry.kind, entry.mode, index); }}
+          />
+        </div>
       </div>
 
       <aside
