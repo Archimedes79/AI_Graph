@@ -261,6 +261,25 @@ describe('the AI default a graph carries', () => {
     expect(calls).toEqual([{ provider: 'openai', model: 'gpt-4o-mini' }]);
   });
 
+  it('lends its model only to a node that calls the provider the model belongs to', async () => {
+    // A node pinned to OpenAI with its model left empty used to be sent the
+    // graph's qwen -- to OpenAI, which can only refuse it. Empty, the provider
+    // layer decides; the same provider named twice still gets the model.
+    const other = listening();
+    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'openai', ai_model: '' }), { runtime: other.runtime, registry });
+    expect(other.calls).toEqual([{ provider: 'openai', model: '' }]);
+
+    const same = listening();
+    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'lmstudio', ai_model: '' }), { runtime: same.runtime, registry });
+    expect(same.calls).toEqual([{ provider: 'lmstudio', model: 'qwen' }]);
+
+    // A graph that names only a model means the machine's provider, which
+    // is not necessarily the one this node named.
+    const unnamed = listening();
+    await executeGraph(graphWith({ provider: 'default', model: 'qwen' }, { ai_provider: 'openai', ai_model: '' }), { runtime: unnamed.runtime, registry });
+    expect(unnamed.calls).toEqual([{ provider: 'openai', model: '' }]);
+  });
+
   it('changes nothing when the graph names nothing', async () => {
     const { runtime, calls } = listening();
     await executeGraph(graphWith({ provider: 'default', model: '' }, { ai_provider: 'default' }), { runtime, registry });

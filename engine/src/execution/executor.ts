@@ -94,6 +94,11 @@ export function memoryFeedbackEdges(
  * or an environment variable still wins, which is how one graph is moved to a
  * different provider without editing it -- and above the provider layer's own
  * fallback. A graph that names nothing changes nothing.
+ *
+ * A model belongs to its provider. A node that names its own provider and no
+ * model is lent the graph's model only when the graph names that same
+ * provider: the graph's Gemini model sent to OpenAI is a request that can only
+ * fail. Otherwise the model stays empty, and the provider layer decides.
  */
 export function withGraphDefaults(runtime: Runtime, graph: Graph): Runtime {
   const wanted = graph.metadata?.ai_defaults;
@@ -103,11 +108,14 @@ export function withGraphDefaults(runtime: Runtime, graph: Graph): Runtime {
   return {
     ...runtime,
     ai: {
-      complete: (request) => runtime.ai.complete({
-        ...request,
-        provider: request.provider && request.provider !== 'default' ? request.provider : (provider || request.provider),
-        model: request.model || model,
-      }),
+      complete: (request) => {
+        const pinned = request.provider && request.provider !== 'default' ? request.provider : '';
+        return runtime.ai.complete({
+          ...request,
+          provider: pinned || provider || request.provider,
+          model: request.model || (!pinned || pinned === provider ? model : ''),
+        });
+      },
     },
   };
 }
