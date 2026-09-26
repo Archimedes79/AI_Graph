@@ -13,7 +13,10 @@ export default function SliderWidgetView({ widget, value, onChange, onTrigger }:
   // number it is rather than falling back to the minimum and snapping the
   // handle home after every drag.
   const parsed = typeof value === 'string' && value.trim() ? Number(value) : value;
-  const current = typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : min;
+  // Inside the range, as the run clamps it (`SliderWidgetRunner.config`): a
+  // value left from before the range was narrowed would otherwise stand
+  // beside the handle while the graph is handed the edge of the range.
+  const current = Math.min(max, Math.max(min, typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : min));
 
   return (
     <div className="flex items-center gap-3">
