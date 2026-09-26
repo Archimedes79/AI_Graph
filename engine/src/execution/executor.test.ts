@@ -289,15 +289,18 @@ describe('the AI default a graph carries', () => {
 
 describe('a batch with failing items', () => {
   /** A per_item code node fed a list of three, whose runner fails on the word "bad". */
-  function graphOf(items: string[]): Graph {
+  function graphOf(items: string[], catches = false): Graph {
     return {
       metadata: { name: 'g', version: '1', ai_defaults: { provider: 'default', model: '' } } as Graph['metadata'],
       nodes: [
         { ...node('a', 'data', { data_value: items, data_format: 'structure' }), outputs: [{ id: 'output', name: 'O', kind: 'output', data_type: 'json', multi: true, required: false, description: '' }] },
         {
-          ...node('work', 'code', { code: 'function run(i) { return i; }', batch_mode: 'per_item' }),
+          ...node('work', 'code', { code: 'function run(i) { return i; }', batch_mode: 'per_item', ...(catches ? { catch_errors: true } : {}) }),
           inputs: [{ id: 'items', name: 'Items', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-          outputs: [{ id: 'out', name: 'Out', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
+          outputs: [
+            { id: 'out', name: 'Out', kind: 'output', data_type: 'any', multi: true, required: false, description: '' },
+            ...(catches ? [{ id: 'error', name: 'Error', kind: 'output' as const, data_type: 'text' as const, multi: false, required: false, description: '' }] : []),
+          ],
         },
       ],
       edges: [edge('e', 'a', 'output', 'work', 'items')],
@@ -307,8 +310,26 @@ describe('a batch with failing items', () => {
     ...nowhere,
     code: { run: async (_body, inputs) => { if (String(inputs.items).includes('bad')) throw new Error('boom'); return { out: inputs.items }; } },
   };
-  const workResult = async (items: string[]) =>
-    (await executeGraph(graphOf(items), { runtime: picky, registry })).node_results.find((r) => r.node_id === 'work')!;
+  const workResult = async (items: string[], catches = false) =>
+    (await executeGraph(graphOf(items, catches), { runtime: picky, registry })).node_results.find((r) => r.node_id === 'work')!;
+
+  it('puts the reason on the error port of a node that catches its failures, once for the node', async () => {
+    // It used to carry [null]: a list with a null for the failed item, which
+    // says nothing, and is not empty -- so what was wired to it ran on nothing.
+    const work = await workResult(['ok', 'bad'], true);
+    expect(work.status).toBe('partial');
+    expect(work.outputs.out).toEqual(['ok', null]);
+    expect(typeof work.outputs.error).toBe('string');
+    expect(work.outputs.error).toBe(work.error);
+    expect(work.outputs.error).toContain('1 of 2 items failed');
+    expect(work.outputs.error).toContain('boom');
+  });
+
+  it('leaves the error port of a node that catches its failures empty when nothing failed', async () => {
+    const work = await workResult(['ok', 'ok'], true);
+    expect(work.status).toBe('success');
+    expect(work.outputs.error).toBeUndefined();
+  });
 
   it('is partial, counted, with the first failure quoted, and the rest intact', async () => {
     const work = await workResult(['ok', 'bad', 'ok']);

@@ -444,7 +444,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         const broken = iface ? mismatches(produced, iface) : [];
         results.push({
           node_id: nodeId, status, inputs, outputs: produced,
-          error: failures.length ? `${failures.length} of ${failures.total} items failed: ${failures[0]}` : null,
+          error: failures.length ? itemFailures(failures) : null,
           ...(broken.length ? { messages: broken.map((line) => `Does not match its output interface: ${line}`) } : {}),
         });
         runtime.report?.({ type: 'node_done', node_id: nodeId, status });
@@ -677,7 +677,7 @@ export async function executeNode(
     );
     return {
       node_id: nodeId, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
-      error: failures.length ? `${failures.length} of ${failures.total} items failed: ${failures[0]}` : null,
+      error: failures.length ? itemFailures(failures) : null,
     };
   } catch (error) {
     return {
@@ -753,12 +753,23 @@ function failureOutputs(node: GraphNode, message: string): Record<string, unknow
   return produced;
 }
 
+/** A fan-out that lost some items, in one sentence: how many, and the first reason. */
+function itemFailures(failures: string[] & { total: number }): string {
+  return `${failures.length} of ${failures.total} items failed: ${failures[0]}`;
+}
+
 /**
  * Run one node, fanning out if it asked to.
  *
  * A failing item contributes null on every declared port, keeping the results
  * index-aligned with their inputs, and its message is reported rather than
  * ending the batch: one bad row out of two thousand should cost one row.
+ *
+ * Except on the `error` port of a node that catches its failures. That port
+ * promises the reason, and a list with a null per failed item is no reason --
+ * it is a list nobody can read, and a non-empty one, so whatever is wired to
+ * the port runs on it. It carries the same sentence the node's result does,
+ * once for the node, the way a whole-node failure puts one message there.
  */
 async function runNode(
   element: NodeRunner<unknown>,
@@ -775,6 +786,7 @@ async function runNode(
   const items = batchItems(node, inputs);
   const produced: Record<string, unknown>[] = new Array(items.length);
   const failures = Object.assign([] as string[], { total: items.length });
+  const catches = element.catchesErrors(node);
   let next = 0;
   let done = 0;
 
@@ -787,7 +799,9 @@ async function runNode(
       } catch (error) {
         // One bad item must not take the other 499 down with it -- but it is
         // not nothing either: it is counted, and the first is quoted.
-        produced[index] = Object.fromEntries(node.outputs.map((p) => [p.id, null]));
+        produced[index] = Object.fromEntries(node.outputs
+          .filter((p) => !(catches && p.id === ERROR_PORT))
+          .map((p) => [p.id, null]));
         const message = error instanceof Error ? error.message : String(error);
         failures.push(`item ${index + 1}: ${message}`);
         runtime.report?.({ type: 'activity', node_id: node.id, message: `item ${index + 1}: ${message}` });
@@ -801,7 +815,9 @@ async function runNode(
   // Every item failed: that is the node failing, with its own message, not a
   // success made of nulls.
   if (items.length && failures.length === items.length) throw new Error(failures[0].replace(/^item 1: /, ''));
-  return { produced: mergeBatchOutputs(node, produced), failures };
+  const merged = mergeBatchOutputs(node, produced);
+  if (catches && failures.length) merged[ERROR_PORT] = itemFailures(failures);
+  return { produced: merged, failures };
 }
 
 /**
