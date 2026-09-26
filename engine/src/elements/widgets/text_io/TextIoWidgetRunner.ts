@@ -46,10 +46,10 @@ export class TextIoWidgetRunner extends WidgetRunner<TextIoConfig> {
     const incoming = inputs[`${widget.id}_in`];
     if (role === 'input') return { [`${widget.id}_out`]: value };
 
-    // "both": what the user typed wins; an empty box falls back to what arrived.
-    if (value) return { [`${widget.id}_out`]: value };
-    if (Array.isArray(incoming)) return { [`${widget.id}_out`]: incoming.map(String).join('\n') };
-    return { [`${widget.id}_out`]: incoming ?? '' };
+    // "both": what the user typed wins; an empty box falls back to what
+    // arrived -- as the text it shows, because the port says text and a node
+    // wired to it was told so.
+    return { [`${widget.id}_out`]: value || asText(incoming) };
   }
 
   /**

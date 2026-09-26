@@ -109,3 +109,28 @@ describe('what a text box keeps from a loop', () => {
     expect(out).toEqual({ box_out: JSON.stringify({ answer: 42 }, null, 2) });
   });
 });
+
+describe('what an empty box that also shows hands on', () => {
+  /**
+   * Its port is text, and a node wired to it is told so. What arrived used to
+   * go straight through when nobody had typed anything: an object on a text
+   * port, and a list of objects as "[object Object]" per line.
+   */
+  const both = box({ mode: 'both', value: '' });
+
+  it('hands on what arrived as the text the box shows it as', async () => {
+    expect(await element.execute(both, { box_in: { a: 1 } })).toEqual({ box_out: JSON.stringify({ a: 1 }, null, 2) });
+    expect(await element.execute(both, { box_in: 42 })).toEqual({ box_out: '42' });
+    expect(await element.execute(both, { box_in: 'plain' })).toEqual({ box_out: 'plain' });
+    expect(await element.execute(both, {})).toEqual({ box_out: '' });
+  });
+
+  it('hands on a list one item per line, each item as text', async () => {
+    expect(await element.execute(both, { box_in: ['one', { two: 2 }] }))
+      .toEqual({ box_out: `one\n${JSON.stringify({ two: 2 }, null, 2)}` });
+  });
+
+  it('hands on what the person typed over what arrived', async () => {
+    expect(await element.execute(box({ mode: 'both', value: 'typed' }), { box_in: { a: 1 } })).toEqual({ box_out: 'typed' });
+  });
+});
