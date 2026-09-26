@@ -279,7 +279,8 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
     outputs: Array.isArray(rawNode.outputs) ? rawNode.outputs : defaults.outputs,
     // A key the file left out means what the engine reads it as, not what a
     // new node starts with: loading and saving must not change what a graph
-    // does. A node made in the editor comes from `create` and never passes here.
+    // does. A node made in the editor starts from `create`, and once saved it
+    // carries these keys, so only a graph that never said them is filled here.
     config: {
       ...defaults.config,
       ...whenMissing(nodeType),
