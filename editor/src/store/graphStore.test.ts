@@ -5,6 +5,10 @@ import { guiWidgetPorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
+import { NODE_KINDS } from '@/document/nodeKinds';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { parseGraph, type GraphNode as EngineNode } from '@engine/graph.ts';
+import { executeGraph } from '@engine/execution/executor.ts';
 
 // The same defaults every node type is created with. Copied out field by field
 // here once, which meant adding a field to NodeConfig broke this file for a
@@ -143,6 +147,86 @@ describe('graphStore.loadGraph gui port sync', () => {
     const loaded = useGraphStore.getState().rfNodes[0].data.graphNode;
     expect(loaded.inputs.map((p) => p.id)).toEqual([`${widget.id}_in`]);
     expect(loaded.outputs.map((p) => p.id)).toEqual([`${widget.id}_out`]);
+  });
+});
+
+/**
+ * A graph written by hand, by the MCP server or by a model leaves keys out, and
+ * the engine reads each missing one some way. Opening such a graph and saving
+ * it must not change what it does: the editor used to fill a missing key with
+ * what a *new* node starts with, and then save that. A code node with no
+ * batch_mode ran once on the whole list from the command line and once per
+ * item after one Save in the editor; an output node with no label came back
+ * keyed "Result" instead of by its id.
+ *
+ * The mirror of `elements/savedConfig.test.ts`: that one holds a saved node to
+ * the full one, this one holds a loaded node to the file it was loaded from.
+ * Not `config()` itself: it spells a setting as it is stored, and a missing
+ * provider and 'default' are one and the same provider to a run.
+ */
+describe('graphStore.loadGraph: a key the file leaves out', () => {
+  const QUESTIONS = [
+    'batchMode', 'batchConcurrency', 'readsFileInputs', 'catchesErrors', 'needsInput',
+    'derivedPorts', 'runtimeRequirements', 'referencedPaths', 'logic',
+  ] as const;
+  const answers = (node: GraphNode): Record<string, string> => {
+    const element = engineRegistry.node(node.node_type) as unknown as Record<string, (node: EngineNode) => unknown>;
+    return Object.fromEntries(QUESTIONS
+      .filter((question) => typeof element[question] === 'function')
+      .map((question) => [question, JSON.stringify(element[question](node as EngineNode)) ?? 'undefined']));
+  };
+
+  /** Each node type as a file might say it: its ports, and not one setting. */
+  const bare = Object.values(NODE_KINDS).map((kind) => {
+    const made = kind.create('n');
+    return { ...made, config: {} as GraphNode['config'] };
+  });
+
+  it.each(bare.map((node) => [node.node_type, node]))(
+    '%s: opened and saved, the engine runs it as the file said',
+    (_type, node) => {
+      loadTestGraph([node]);
+      const saved = useGraphStore.getState().exportGraph().nodes[0];
+      expect(answers(saved)).toEqual(answers(node));
+    },
+  );
+
+  it('keeps two unlabelled outputs apart in the run\'s result, as the command line does', async () => {
+    const text = (id: string, value: string) => ({ ...NODE_KINDS.input.create(id), config: { value } as GraphNode['config'] });
+    const show = (id: string) => ({ ...NODE_KINDS.output.create(id), config: {} as GraphNode['config'] });
+    const file: Graph = {
+      metadata: { name: 'T', version: '1.0.0', description: '', author: '', tags: [], ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+      nodes: [text('a', 'alpha'), text('b', 'beta'), show('first'), show('second')],
+      edges: [
+        { id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'first', target_port_id: 'value' },
+        { id: 'e2', source_node_id: 'b', source_port_id: 'output', target_node_id: 'second', target_port_id: 'value' },
+      ],
+    };
+    const run = async (graph: Graph) => Object.keys((await executeGraph(parseGraph(JSON.parse(JSON.stringify(graph))), {
+      registry: engineRegistry,
+      runtime: {
+        files: { resolve: (path) => path, exists: async () => false, read: async () => '', write: async () => {}, list: async () => [] },
+        code: { run: async () => ({}) },
+        ai: { complete: async () => '' },
+      },
+    })).outputs).sort();
+
+    useGraphStore.getState().loadGraph(file);
+    expect(await run(useGraphStore.getState().exportGraph())).toEqual(await run(file));
+  });
+
+  it('still starts a node made in the editor per item, and keys its output "Result"', () => {
+    loadTestGraph([]);
+    const code = useGraphStore.getState().addNode('code', { x: 0, y: 0 });
+    const output = useGraphStore.getState().addNode('output', { x: 0, y: 0 });
+    const saved = useGraphStore.getState().exportGraph().nodes;
+    expect(saved.find((node) => node.id === code)!.config.batch_mode).toBe('per_item');
+    expect(saved.find((node) => node.id === output)!.config).toMatchObject({ output_label: 'Result', write_mode: 'window' });
+  });
+
+  it('keeps what the file did say', () => {
+    loadTestGraph([graphNode({ id: 'each', node_type: 'code', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
+    expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');
   });
 });
 

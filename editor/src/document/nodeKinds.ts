@@ -26,6 +26,18 @@ import { baseNodeConfig } from './baseNodeConfig';
 /** Kept even at its starting value: the executor reads it whether or not anyone set it. */
 const ALWAYS_SAVED = ['batch_mode'];
 
+/**
+ * What a key a file leaves out means to the engine, for every node, where that
+ * is not what a new node starts with.
+ *
+ * A node made here starts per item, and says so in the file (`ALWAYS_SAVED`).
+ * A node without the key -- written by hand, by the MCP server, by a model --
+ * runs once on the whole list (`NodeRunner.batchMode`), and filling it from
+ * `create` turned that into per item on the first Save, without anyone touching
+ * the setting: the command line and the editor ran the same file two ways.
+ */
+const WHEN_MISSING: Partial<NodeConfig> = { batch_mode: 'whole_list' };
+
 const SUBGRAPH = new SubgraphNodeRunner();
 const TRIGGER = new TriggerNodeRunner();
 
@@ -48,6 +60,12 @@ export interface NodeKind {
    * node never reads.
    */
   settings: readonly (keyof NodeConfig)[];
+  /**
+   * What this kind's element reads a key a file leaves out as, where that is
+   * not what `create` starts a new node with. Loading fills a missing key from
+   * here first, so that opening a graph and saving it never changes what it does.
+   */
+  whenMissing?: Partial<NodeConfig>;
   /** Running this node puts its result in a window of its own. */
   showsResultWindow?(node: GraphNode): boolean;
 }
@@ -81,6 +99,9 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       'output_format', 'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
       'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors', 'examples', 'run_code',
     ],
+    // A new node starts with a system prompt to show where one goes; a file
+    // without one sends none, and a Save must not start sending ours.
+    whenMissing: { system_prompt: '' },
     create: (id) => ({
       id,
       node_type: 'ai',
@@ -108,6 +129,10 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       'code', 'code_prompt', 'output_schema', 'examples', 'output_format', 'output_format_prompt',
       'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
     ],
+    // The starter body is for a node made here. A file without code is a node
+    // with no code -- which `check` says -- not one that quietly hands its
+    // input on after a Save.
+    whenMissing: { code: '' },
     create: (id) => ({
       id,
       node_type: 'code',
@@ -136,6 +161,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
 
   output: {
     settings: ['output_label', 'write_mode', 'value', 'prompt_at_runtime'],
+    // No label is the node's id as the key of the run's result, and no
+    // write_mode writes nothing and opens no window (`OutputNodeRunner.config`,
+    // `finalOutputs`). Filled with a new node's 'Result', a second output left
+    // unlabelled came back from one Save under the same key as the first.
+    whenMissing: { output_label: '', write_mode: 'none' },
     showsResultWindow: (node) => node.config.write_mode === 'window',
     create: (id) => ({
       id,
@@ -200,6 +230,14 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
     }),
   },
 };
+
+/**
+ * What a node of this type, read from a file, takes each key the file left out
+ * to mean -- before `create`'s starting values, which are for a new node.
+ */
+export function whenMissing(nodeType: NodeType): Partial<NodeConfig> {
+  return { ...WHEN_MISSING, ...(NODE_KINDS[nodeType].whenMissing ?? {}) };
+}
 
 /**
  * The node as a graph file keeps it: its own settings, and any other key only
