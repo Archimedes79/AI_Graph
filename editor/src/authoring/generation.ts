@@ -172,7 +172,7 @@ export interface GenerationRequest<S> {
    * about it. Empty descriptions are left out.
    */
   portNotes?: { inputs?: Record<string, string>; outputs?: Record<string, string> };
-  /** The output interface this node keeps (`output.schema.json`): the shape a body must go on returning. */
+  /** The output interface this node keeps (in its `interface.json`): the shape a body must go on returning. */
   outputSchema?: unknown;
   /** The node's examples (`examples.md`): what it is checked against, so what it is written to satisfy. */
   examples?: string;
@@ -198,7 +198,7 @@ export interface GenerationRequest<S> {
    * measurement -- and exactly what the *next* node is generated against. It
    * used to be written into the node's format description as a sentence,
    * over the one field that is the person's own words; the shape is where a
-   * measurement belongs (`output.schema.json`), and a run would put it there
+   * measurement belongs (the node's `interface.json`), and a run would put it there
    * anyway. Only for a node: a block inside a page has no output of its own.
    */
   recordShape?: (outputs: Record<string, unknown>) => void;

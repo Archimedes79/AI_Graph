@@ -1,22 +1,9 @@
 {
-  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
-  "node": "page",
-  "type": "gui",
-  "label": "Folder summaries",
-  "about": "The page this tool shows",
-  "runs": {
-    "by": "engine",
-    "where": "engine/src/elements/nodes/gui/GuiNodeRunner.ts › execute",
-    "does": "Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives; a block with code of its own runs it sandboxed before showing."
-  },
   "inputs": [
     {
       "port": "summaries_in",
       "name": "Summaries",
-      "type": "any",
-      "from": [
-        "summarize.output"
-      ]
+      "type": "any"
     }
   ],
   "outputs": [
@@ -24,10 +11,7 @@
       "port": "folder_out",
       "name": "Folder",
       "type": "file_path",
-      "list": true,
-      "to": [
-        "summarize.story"
-      ]
+      "list": true
     }
   ]
 }

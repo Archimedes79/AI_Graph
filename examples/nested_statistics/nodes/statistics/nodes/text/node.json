@@ -1,0 +1,8 @@
+{
+  "label": "Text",
+  "description": "Handed in by the node above; on its own run, this value",
+  "config": {
+    "input_mode": "text",
+    "value": "One sentence, and it has exactly eight words."
+  }
+}

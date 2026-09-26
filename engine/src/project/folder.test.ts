@@ -75,7 +75,7 @@ describe('a project folder', () => {
     await writeProject(dir, sample());
     expect(await text('nodes/count/code.js')).toBe('function run(inputs) {\n  return { total: inputs.files.length };\n}\n');
     expect(await text('nodes/count/task.md')).toBe('Count the files.\n');
-    expect(JSON.parse(await text('nodes/count/output.schema.json'))).toMatchObject({ properties: { total: { type: 'integer' } } });
+    expect(JSON.parse(await text('nodes/count/interface.json')).output_schema).toMatchObject({ properties: { total: { type: 'integer' } } });
     expect(await text('nodes/say/system.md')).toBe('You report counts.\n');
     expect(await text('nodes/say/message.md')).toBe('There are {{total}} files.\n');
     expect(await text('nodes/say/output.md')).toBe('One sentence.\n');
@@ -84,15 +84,44 @@ describe('a project folder', () => {
     expect(await text('nodes/page/chart/task.md')).toBe('Bars.\n');
   });
 
-  it('leaves the writing and the positions out of graph.json, and the settings in', async () => {
+  it('says the flow once, in flow.json, and nothing about any node there', async () => {
     await writeProject(dir, sample());
-    const wiring = JSON.parse(await text('graph.json'));
-    const count = wiring.nodes.find((n: { id: string }) => n.id === 'count');
-    expect(count.config).toEqual({ batch_mode: 'whole_list' });
-    expect(count).not.toHaveProperty('position');
-    expect(wiring.nodes.find((n: { id: string }) => n.id === 'say').config).toEqual({ output_format: 'text', temperature: 0.2 });
-    expect(wiring.nodes.find((n: { id: string }) => n.id === 'page').config.gui_widgets[0]).toEqual({ id: 'chart', kind: 'plot_window', label: 'Chart' });
+    expect(JSON.parse(await text('flow.json'))).toEqual({
+      name: 'Sample',
+      description: 'All the writing there is.',
+      nodes: { folder: 'input', count: 'code', say: 'ai', page: 'gui' },
+      wires: ['folder.files -> count.files', 'count.total -> say.total'],
+    });
+    expect(existsSync(join(dir, 'graph.json'))).toBe(false);
+    expect(existsSync(join(dir, 'flow.js'))).toBe(false);
+  });
+
+  it('keeps a node\'s settings in its node.json and its ports in its interface.json', async () => {
+    await writeProject(dir, sample());
+    expect(JSON.parse(await text('nodes/count/node.json'))).toEqual({ label: 'Count', config: { batch_mode: 'whole_list' } });
+    expect(JSON.parse(await text('nodes/say/node.json')).config).toEqual({ output_format: 'text', temperature: 0.2 });
+    expect(JSON.parse(await text('nodes/page/node.json')).config.gui_widgets[0]).toEqual({ id: 'chart', kind: 'plot_window', label: 'Chart' });
+    const ports = JSON.parse(await text('nodes/count/interface.json'));
+    expect(ports.inputs).toEqual([{ port: 'files', type: 'any' }]);
+    expect(ports.outputs).toEqual([{ port: 'total', type: 'any' }]);
+    // Nothing about who is on the other end of a wire: that is the flow's.
+    expect(JSON.stringify(ports)).not.toContain('folder');
     expect(JSON.parse(await text('layout.json')).count).toEqual({ x: 300, y: 20, width: 360, height: 180 });
+  });
+
+  it('opens a folder saved before flow.json, and saves it in this shape', async () => {
+    const graph = sample();
+    await writeFile(join(dir, 'graph.json'), JSON.stringify(graph));
+    await mkdir(join(dir, 'nodes/count'), { recursive: true });
+    await writeFile(join(dir, 'nodes/count/output.schema.json'), JSON.stringify({ type: 'object', properties: { old: { type: 'string' } } }));
+    await writeFile(join(dir, 'flow.js'), '// rendered once');
+    const read = await readProject(dir);
+    expect(read.nodes[1].config.code).toContain('inputs.files.length');
+    await writeProject(dir, read);
+    expect(existsSync(join(dir, 'graph.json'))).toBe(false);
+    expect(existsSync(join(dir, 'flow.js'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes/count/output.schema.json'))).toBe(false);
+    expect(JSON.parse(await text('flow.json')).nodes.count).toBe('code');
   });
 
   it('reads back exactly what was written', async () => {
@@ -100,16 +129,22 @@ describe('a project folder', () => {
     await writeProject(dir, original);
     const read = await readProject(dir);
     original.nodes[1].position.x = 300; // stored rounded
-    expect(read.nodes).toEqual(original.nodes.map((node) => ({ ...node, width: node.width ?? null, height: node.height ?? null })));
-    expect(read.edges).toEqual(original.edges);
+    const sortedKeys = (value: unknown): unknown => (Array.isArray(value) ? value.map(sortedKeys)
+      : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortedKeys((value as Record<string, unknown>)[key])])) : value);
+    expect(sortedKeys(read.nodes)).toEqual(sortedKeys(original.nodes.map((node) => ({ ...node, width: node.width ?? null, height: node.height ?? null }))));
+    // A wire is named by what it joins.
+    expect(read.edges).toEqual(original.edges.map((edge) => ({
+      ...edge, id: `${edge.source_node_id}.${edge.source_port_id} -> ${edge.target_node_id}.${edge.target_port_id}`,
+    })));
     expect(read.metadata.name).toBe('Sample');
   });
 
   it('writes the same bytes for the same graph, so an unchanged save is no change', async () => {
     await writeProject(dir, sample());
-    const first = [await text('graph.json'), await text('layout.json')];
+    const files = ['flow.json', 'layout.json', 'nodes/count/node.json', 'nodes/count/interface.json', 'nodes/page/node.json'];
+    const first = await Promise.all(files.map(text));
     await writeProject(dir, await readProject(dir));
-    expect([await text('graph.json'), await text('layout.json')]).toEqual(first);
+    expect(await Promise.all(files.map(text))).toEqual(first);
   });
 
   it('has no file for empty writing, and removes the file of writing that was emptied', async () => {
@@ -222,10 +257,12 @@ describe('two editors on one folder', () => {
     await expect(writeProject(dir, graph)).resolves.toBeUndefined();
   });
 
-  it('reads a newly written interface file as JSON', async () => {
+  it('does not overwrite a node\'s interface changed outside since it was read', async () => {
     await writeProject(dir, sample());
-    await touch(join(dir, 'nodes/count/output.schema.json'), '{"type": "object"}\n');
-    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', widget_id: '', field: 'output_schema', value: { type: 'object' } }]);
+    const graph = await readProject(dir);
+    await touch(join(dir, 'nodes/count/interface.json'), '{"inputs": [], "outputs": [{"port": "total", "type": "number"}]}\n');
+    await expect(writeProject(dir, graph)).rejects.toThrow(FileChanged);
+    expect(JSON.parse(await text('nodes/count/interface.json')).outputs[0].type).toBe('number');
   });
 });
 
@@ -259,16 +296,16 @@ describe('a graph inside a node', () => {
     edges: [],
   });
 
-  it('is a project folder of its own, and is out of the graph.json above it', async () => {
+  it('is a project folder of its own, and is out of the node.json above it', async () => {
     await writeProject(dir, nested());
 
     expect(await text('nodes/part/task.md')).toBe('Summarise a paper.\n');
-    expect(JSON.parse(await text('nodes/part/graph.json')).metadata.name).toBe('Inner');
+    expect(JSON.parse(await text('nodes/part/flow.json')).name).toBe('Inner');
     // The inner node's body is a file down there, the same as anywhere else.
     expect(await text('nodes/part/nodes/shorten/code.js')).toContain('i.text.slice');
     expect(JSON.parse(await text('nodes/part/layout.json')).shorten).toEqual({ x: 5, y: 5 });
     // And none of it is repeated above.
-    expect(JSON.parse(await text('graph.json')).nodes[0].config).toEqual({});
+    expect(JSON.parse(await text('nodes/part/node.json')).config).toEqual({});
   });
 
   it('reads back whole, body and all', async () => {
@@ -419,7 +456,7 @@ describe('looking for what changed, while someone else is writing', () => {
     expect(await changesOnDisk(dir)).toEqual([]);
 
     await touch(join(dir, 'nodes/note/code.js'), 'function run() { return { mine: true }; }\n');
-    await touch(join(dir, 'nodes/part/graph.json'), '{ "nodes": [');
+    await touch(join(dir, 'nodes/part/flow.json'), '{ "nodes": {');
 
     // The half-written file is skipped, and the change that *was* found comes
     // back rather than being lost with the exception.
@@ -427,7 +464,7 @@ describe('looking for what changed, while someone else is writing', () => {
     expect(changes.map((change) => change.node_id)).toEqual(['note']);
 
     // And once the other editor has finished, the graph inside is reported too.
-    await touch(join(dir, 'nodes/part/graph.json'), JSON.stringify({ metadata: { name: 'Mended' }, nodes: [], edges: [] }));
+    await touch(join(dir, 'nodes/part/flow.json'), JSON.stringify({ name: 'Mended', nodes: {}, wires: [] }));
     const after = await changesOnDisk(dir);
     expect(after.map((change) => change.field)).toEqual(['nested_graph']);
   });

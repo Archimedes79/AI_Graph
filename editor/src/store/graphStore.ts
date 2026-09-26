@@ -17,6 +17,7 @@ import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { inferInterface } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
+import { freeId } from '@/document/ids';
 
 type RFNode = Node<RFNodeData>;
 
@@ -413,9 +414,9 @@ function keepsText(node: GraphNode, field: string): boolean {
   return engineRegistry.node(node.node_type)?.texts(node).some((text) => text.field === field) ?? false;
 }
 
-/** Whether this node keeps an output interface (`output.schema.json`). */
+/** Whether this node keeps an output interface (in its `interface.json`). */
 export function keepsOutputInterface(node: GraphNode): boolean {
-  return keepsText(node, 'output_schema');
+  return engineRegistry.node(node.node_type)?.keepsOutputInterface ?? false;
 }
 
 /** Whether this node can keep examples (`examples.md`). */
@@ -456,7 +457,7 @@ export const useGraphStore = create<GraphStore>()(
 
     addNode: (nodeType, position) => {
       get().commit();
-      const id = newId(nodeType);
+      const id = freeId(nodeType, get().rfNodes.map((existing) => existing.id));
       const defaults = NODE_KINDS[nodeType].create(id);
       const rfNode: Node<RFNodeData> = {
         id,

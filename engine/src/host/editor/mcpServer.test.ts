@@ -360,7 +360,7 @@ describe('save_graph', () => {
     expect(await readFile(join(root, 'notes.json'), 'utf8')).toBe('not even json');
   });
 
-  it('saves into a project the way the editor does: the code to its file, the wiring to graph.json', async () => {
+  it('saves into a project the way the editor does: the code to its file, the wiring to flow.json', async () => {
     await mkdir(join(root, 'proj', 'nodes'), { recursive: true });
     const saved = await toolsWith().call('save_graph', {
       path: 'proj/graph.json', graph: graphOf([textInput('greeting'), code('work'), output('result')],
@@ -368,10 +368,11 @@ describe('save_graph', () => {
     });
     expect(saved.isError).toBeUndefined();
     expect(await readFile(join(root, 'proj', 'nodes', 'work', 'code.js'), 'utf8')).toContain('function run');
-    const wiring = JSON.parse(await readFile(join(root, 'proj', 'graph.json'), 'utf8'));
-    expect(wiring.nodes[1].config).not.toHaveProperty('code');
-    // And what it saved is what it reads back.
-    const ran = await answer(toolsWith(), 'run_graph', { path: 'proj/graph.json' });
+    const flow = JSON.parse(await readFile(join(root, 'proj', 'flow.json'), 'utf8'));
+    expect(flow.wires).toEqual(['greeting.output -> work.in', 'work.out -> result.value']);
+    expect(JSON.parse(await readFile(join(root, 'proj', 'nodes', 'work', 'node.json'), 'utf8')).config).not.toHaveProperty('code');
+    // And what it saved is what it reads back, by the project's own file.
+    const ran = await answer(toolsWith(), 'run_graph', { path: 'proj/flow.json' });
     expect(ran.json.status).toBe('success');
     expect(ranBody).toContain('function run');
   });
@@ -609,6 +610,15 @@ describe('list_graphs', () => {
     expect(listed.json.graphs.map((graph: { path: string }) => graph.path)).toEqual(['a/deep/er/graph.json', 'b.json']);
     expect(listed.json.graphs[0]).toEqual({ path: 'a/deep/er/graph.json', name: 'Deep', description: 'Deep, described', nodes: 1 });
     expect(listed.json.truncated).toBeUndefined();
+  });
+
+  it('lists a project by its flow.json, whole, and none of the files its nodes keep', async () => {
+    await toolsWith().call('save_graph', {
+      path: 'proj/flow.json', graph: graphOf([textInput('greeting'), code('work'), output('result')],
+        [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')]),
+    });
+    const listed = await answer(toolsWith(), 'list_graphs');
+    expect(listed.json.graphs.map((graph: { path: string; nodes: number }) => [graph.path, graph.nodes])).toEqual([['proj/flow.json', 3]]);
   });
 });
 

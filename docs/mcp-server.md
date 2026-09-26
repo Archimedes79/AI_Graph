@@ -67,8 +67,8 @@ npx @modelcontextprotocol/inspector --cli --config servers.json --server ai-grap
 | `test_graph` | `path`, `node_id?`, `offline?` | Runs the examples nodes keep in their `examples.md` and reports each as pass, fail (with what differed), error or skipped. |
 | `list_graphs` | — | The graphs under the root: path, name, description, node count. Four folders deep, 200 at most. |
 
-A project folder is reached through its `graph.json` (`examples/chat/graph.json`): reading
-it fills in the code and prompts from the files under `nodes/`, and `save_graph` to it
+A project folder is reached through its `flow.json` (`examples/chat/flow.json`): reading
+it puts the graph together from the node folders under `nodes/`, and `save_graph` to it
 writes them back there, the way the editor saves — every one of those files held to the
 same folder the server is confined to. Any other `.json` path is one file with everything
 inline.

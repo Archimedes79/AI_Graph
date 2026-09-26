@@ -76,12 +76,11 @@ Nothing leaves the machine unless the graph itself sends it there.
   the round it started; wired into a node's ◆ it decides whether the node runs, and a
   code node that returns booleans is the filter and the router. What a node made last
   stands until it runs again.
-- **The graph reads as code** — `flow.js` beside `graph.json`: one call per node, in the order
-  a run takes, each handed what its wires carry. Written on every save, never run: the
-  engine stays the one implementation.
-- **Every node's folder says what it is** — `interface.json` (what goes in, from where,
-  what comes out), its prompts or code, and for an AI node `run.js`: the call itself, as
-  a file you can change.
+- **The flow in one file** — `flow.json`: which nodes there are, and every wire as one
+  line, `"page.file_out -> chart.csv"`. Nothing else is in it.
+- **Every node's folder says what it is** — `node.json` (its settings), `interface.json`
+  (what goes in and what comes out), its prompts or code, and for an AI node `run.js`:
+  the call itself, as a file you can change.
 - **AI generation** — a node's code or system prompt, a plot transform, or an entire
   graph, written from a plain-language description and left visible and editable. Code
   generation starts from a typed skeleton of the node's real ports — the types and
@@ -144,8 +143,8 @@ defaults; its page events run what they are wired to; and it can be **deployed**
 as a bundle into an empty folder and run from there, with the files it starts on carried
 along.
 
-Each is a project folder: `graph.json` for the wiring, and every node's code, prompts and
-output interface as files of their own under `nodes/` — open `nodes/chart/code.js` and
+Each is a project folder: `flow.json` for the wiring, and every node's settings, ports,
+code and prompts as files of their own under `nodes/` — open `nodes/chart/code.js` and
 it is plain JavaScript. The ones that
 need a model name Google's `gemini-flash-lite-latest` on the node itself — put a key in
 `ai-settings.json` (see [docs/ai-providers.md](docs/ai-providers.md)), or pick another

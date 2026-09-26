@@ -1,0 +1,95 @@
+{
+  "label": "Summarizer",
+  "description": "The page this tool shows",
+  "config": {
+    "gui_widgets": [
+      {
+        "h": 1,
+        "id": "title",
+        "kind": "text",
+        "label": "",
+        "mode": "heading",
+        "tone": "plain",
+        "value": "File reader & summarizer",
+        "w": 16
+      },
+      {
+        "h": 1,
+        "id": "intro",
+        "kind": "text",
+        "label": "",
+        "mode": "caption",
+        "tone": "plain",
+        "value": "Choose a text file — it is read and summarized straight away, and again whenever you change the length. The button asks for a fresh wording of the same thing.",
+        "w": 16
+      },
+      {
+        "extensions": ".txt,.md",
+        "h": 2,
+        "id": "file",
+        "kind": "input_picker",
+        "label": "File",
+        "mode": "file",
+        "run_on_change": true,
+        "tone": "sunken",
+        "value": "examples/data/stories/01_the_lighthouse_keeper.txt",
+        "w": 9
+      },
+      {
+        "h": 2,
+        "id": "length",
+        "kind": "select",
+        "label": "Length",
+        "options": "One sentence\nThree sentences\nFive bullet points",
+        "run_on_change": true,
+        "tone": "sunken",
+        "value": "Three sentences",
+        "w": 4
+      },
+      {
+        "h": 2,
+        "id": "go",
+        "kind": "button",
+        "label": "Summarize again",
+        "tone": "plain",
+        "w": 3
+      },
+      {
+        "h": 1,
+        "id": "rule",
+        "kind": "divider",
+        "label": "",
+        "mode": "horizontal",
+        "tone": "plain",
+        "w": 16
+      },
+      {
+        "h": 5,
+        "id": "summary",
+        "kind": "text_io",
+        "label": "Summary",
+        "mode": "output",
+        "tone": "raised",
+        "w": 10
+      },
+      {
+        "h": 5,
+        "id": "about",
+        "kind": "text_io",
+        "label": "About the file",
+        "mode": "output",
+        "tone": "raised",
+        "w": 6
+      },
+      {
+        "h": 6,
+        "id": "content",
+        "kind": "text_io",
+        "label": "What was read",
+        "mode": "output",
+        "tone": "raised",
+        "w": 16
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "label": "Read file",
+  "description": "Reads the chosen file and says what it is",
+  "config": {
+    "batch_mode": "whole_list",
+    "read_file_inputs": true
+  }
+}

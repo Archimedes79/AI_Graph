@@ -1,80 +1,46 @@
 {
-  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
-  "node": "page",
-  "type": "gui",
-  "label": "Review panel",
-  "about": "The page this tool shows",
-  "runs": {
-    "by": "engine",
-    "where": "engine/src/elements/nodes/gui/GuiNodeRunner.ts › execute",
-    "does": "Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives; a block with code of its own runs it sandboxed before showing."
-  },
   "inputs": [
     {
       "port": "verdict_in",
       "name": "Judge — consolidated advice",
-      "type": "any",
-      "from": [
-        "judge.output"
-      ]
+      "type": "any"
     },
     {
       "port": "scientific_in",
       "name": "Scientific reviewer",
-      "type": "any",
-      "from": [
-        "scientific.output"
-      ]
+      "type": "any"
     },
     {
       "port": "adversarial_in",
       "name": "Adversarial reviewer",
-      "type": "any",
-      "from": [
-        "adversarial.output"
-      ]
+      "type": "any"
     },
     {
       "port": "claims_in",
       "name": "Evidence & claims reviewer",
-      "type": "any",
-      "from": [
-        "claims.output"
-      ]
+      "type": "any"
     },
     {
       "port": "references_in",
       "name": "References reviewer",
-      "type": "any",
-      "from": [
-        "references.output"
-      ]
+      "type": "any"
     },
     {
       "port": "figures_in",
       "name": "Figures & tables reviewer",
-      "type": "any",
-      "from": [
-        "figures.output"
-      ]
+      "type": "any"
     }
   ],
   "outputs": [
     {
       "port": "paper_out",
       "name": "Manuscript",
-      "type": "file_path",
-      "to": [
-        "read.file"
-      ]
+      "type": "file_path"
     },
     {
       "port": "go_out",
       "name": "Review",
-      "type": "boolean",
-      "to": [
-        "read.◆"
-      ]
+      "type": "boolean"
     }
   ]
 }

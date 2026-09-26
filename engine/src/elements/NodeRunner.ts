@@ -107,14 +107,26 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   }
 
   /**
+   * This node keeps the shape of what it produced: set from a run, then every
+   * later run is checked against it, and the node after it is told it. It lives
+   * with the node's ports, in its `interface.json`.
+   */
+  readonly keepsOutputInterface: boolean = false;
+
+  /**
    * What this node's outputs are held to, once someone has kept one: see
    * `execution/interface.ts`. None by default -- a model's answer is described
    * to the model instead (an AI node's `output.md`), not checked afterwards.
    */
   outputInterface(node: GraphNode): Schema | undefined {
-    // Kept by whichever element says it keeps one (`output.schema.json` among
-    // its `texts`): set from a run, then every run is checked against it.
-    return this.texts(node).some((text) => text.field === 'output_schema') ? readInterface(node.config.output_schema) : undefined;
+    return this.keepsOutputInterface ? readInterface(node.config.output_schema) : undefined;
+  }
+
+  /** Put a kept output interface back, as its folder had it; `null` forgets it. */
+  setOutputInterface(node: GraphNode, schema: unknown): void {
+    if (!this.keepsOutputInterface) return;
+    if (schema === null || schema === undefined) delete node.config.output_schema;
+    else node.config.output_schema = schema;
   }
 
   // ── Run time ──────────────────────────────────────────────────────────────

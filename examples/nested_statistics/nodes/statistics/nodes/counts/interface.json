@@ -1,31 +1,16 @@
 {
-  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
-  "node": "counts",
-  "type": "code",
-  "label": "Counts",
-  "runs": {
-    "by": "body",
-    "where": "code.js",
-    "does": "Calls run(inputs, node) in code.js, sandboxed, and hands on the object it returns, keyed by output port."
-  },
   "inputs": [
     {
       "port": "text",
       "name": "Text",
-      "type": "text",
-      "from": [
-        "text.output"
-      ]
+      "type": "text"
     }
   ],
   "outputs": [
     {
       "port": "output",
       "name": "Output",
-      "type": "json",
-      "to": [
-        "numbers.value"
-      ]
+      "type": "json"
     }
   ],
   "output_schema": {

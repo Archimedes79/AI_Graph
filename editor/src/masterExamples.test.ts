@@ -8,6 +8,7 @@ import { registry } from '@engine/elements/registry.ts';
 import { problemsIn } from '@engine/project/check.ts';
 import { filePorts } from '@engine/execution/fileInputs.ts';
 import { parseGraph } from '@engine/graph.ts';
+import { graphFrom } from '@engine/project/flow.ts';
 import type { Runtime } from '@engine/elements/Runtime.ts';
 
 /**
@@ -30,9 +31,18 @@ import type { Runtime } from '@engine/elements/Runtime.ts';
  * offers -- is a trick, and this is where it is caught.
  */
 
-const EXAMPLES = import.meta.glob('../../examples/*/graph.json', { eager: true, import: 'default' }) as Record<string, unknown>;
+const FLOWS = import.meta.glob('../../examples/*/flow.json', { eager: true, import: 'default' }) as Record<string, unknown>;
+const NODE_FILES = import.meta.glob('../../examples/*/nodes/*/{node,interface}.json', { eager: true, import: 'default' }) as Record<string, unknown>;
 const BODIES = import.meta.glob('../../examples/*/nodes/*/code.js', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>;
-const example = (name: string): Graph => parseGraph(EXAMPLES[`../../examples/${name}/graph.json`]) as unknown as Graph;
+/** An example as the engine puts it together from its folder: the flow, and each node's own files. */
+const example = (name: string): Graph => graphFrom(
+  FLOWS[`../../examples/${name}/flow.json`],
+  (id) => ({
+    about: NODE_FILES[`../../examples/${name}/nodes/${id}/node.json`],
+    ports: NODE_FILES[`../../examples/${name}/nodes/${id}/interface.json`],
+  }),
+  name,
+) as unknown as Graph;
 const bodyOf = (name: string, node: string): string => BODIES[`../../examples/${name}/nodes/${node}/code.js`];
 
 // ── What a person does ────────────────────────────────────────────────────

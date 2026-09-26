@@ -3,8 +3,9 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseGraph } from '../graph.ts';
-import { loadGraph, saveGraph } from './folder.ts';
+import { forgetSeen, loadGraph, saveGraph } from './folder.ts';
 import { checkPath } from './check.ts';
+import { NotAGraph } from '../errors.ts';
 
 const port = (id: string, kind: 'input' | 'output', type = 'text', extra: Record<string, unknown> = {}) =>
   ({ id, name: id, kind, data_type: type, multi: false, required: false, description: '', ...extra });
@@ -16,7 +17,8 @@ const graph = () => parseGraph({
       inputs: [], outputs: [port('go_out', 'output', 'boolean'), port('len_out', 'output')] },
     { id: 'count', node_type: 'code', label: 'Count', description: 'Counts the words',
       config: { code: 'function run(i) { return { words: 1 }; }', output_schema: { type: 'object', properties: { words: { type: 'integer' } } } },
-      inputs: [port('length', 'input', 'text', { required: true, description: 'short or long' })], outputs: [port('words', 'output', 'number')] },
+      inputs: [port('length', 'input', 'text', { required: true, description: 'short or long', name: 'Length', multi: true })],
+      outputs: [port('words', 'output', 'number')] },
     { id: 'show', node_type: 'output', config: {}, inputs: [port('value', 'input', 'any')], outputs: [] },
   ],
   edges: [
@@ -26,36 +28,54 @@ const graph = () => parseGraph({
   ],
 });
 
+async function saved(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'interfaces-'));
+  forgetSeen();
+  await saveGraph(dir, graph());
+  return dir;
+}
+
 describe('interface.json', () => {
-  it('says, in the node\'s own folder, what goes in, from where, what opens it and what comes out', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iface-'));
-    await saveGraph(dir, graph());
-    const written = JSON.parse(await readFile(join(dir, 'nodes', 'count', 'interface.json'), 'utf8'));
-    expect(written).toMatchObject({
-      node: 'count', type: 'code', label: 'Count', about: 'Counts the words',
-      inputs: [{ port: 'length', type: 'text', required: true, description: 'short or long', from: ['page.len_out'] }],
-      gate: ['page.go_out'],
-      outputs: [{ port: 'words', type: 'number', to: ['show.value'] }],
+  it('says what goes in and what comes out, and the shape the node keeps -- nothing about its neighbours', async () => {
+    const dir = await saved();
+    const written = JSON.parse(await readFile(join(dir, 'nodes/count/interface.json'), 'utf8'));
+    expect(written).toEqual({
+      inputs: [{ port: 'length', name: 'Length', type: 'text', list: true, required: true, description: 'short or long' }],
+      outputs: [{ port: 'words', type: 'number' }],
       output_schema: { type: 'object', properties: { words: { type: 'integer' } } },
     });
-    // What runs: the body beside it, for a node that has one ...
-    expect(written.runs).toMatchObject({ by: 'body', where: 'code.js' });
-    // Every node has one: an output node's folder says what it is shown,
-    // ... and names the engine class that does the work, for one that has none.
-    const shown = JSON.parse(await readFile(join(dir, 'nodes', 'show', 'interface.json'), 'utf8'));
-    expect(shown.inputs[0].from).toEqual(['count.words']);
-    expect(shown.runs).toMatchObject({ by: 'engine', where: 'engine/src/elements/nodes/output/OutputNodeRunner.ts › execute' });
+    // Where a port is wired from or to is the flow's to say, once.
+    expect(JSON.stringify(written)).not.toMatch(/page|show/);
+    // The kept shape lives here and nowhere else.
+    expect(JSON.parse(await readFile(join(dir, 'nodes/count/node.json'), 'utf8')).config).not.toHaveProperty('output_schema');
   });
 
-  it('is rendered, never read back: edited outside, it is replaced and nothing is refused', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iface-'));
-    await saveGraph(dir, graph());
-    const path = join(dir, 'nodes', 'count', 'interface.json');
-    await writeFile(path, '{"inputs": [{"port": "renamed"}]}');
-    const loaded = await loadGraph(dir);
-    expect(loaded.nodes[1].inputs.map((p) => p.id)).toEqual(['length']);
-    await saveGraph(dir, loaded);
-    expect(JSON.parse(await readFile(path, 'utf8')).inputs[0].port).toBe('length');
-    expect((await checkPath(dir)).problems).toEqual([]);
+  it('is where the ports are kept: edited in the file, they are what opens', async () => {
+    const dir = await saved();
+    const path = join(dir, 'nodes/count/interface.json');
+    const edited = JSON.parse(await readFile(path, 'utf8'));
+    edited.outputs[0] = { port: 'words', type: 'number', description: 'how many' };
+    edited.output_schema = { type: 'object', properties: { words: { type: 'number' } } };
+    await writeFile(path, JSON.stringify(edited));
+    forgetSeen();
+    const count = (await loadGraph(dir)).nodes.find((node) => node.id === 'count')!;
+    expect(count.outputs[0]).toMatchObject({ id: 'words', kind: 'output', data_type: 'number', description: 'how many' });
+    expect(count.config.output_schema).toEqual({ type: 'object', properties: { words: { type: 'number' } } });
+    expect(count.inputs[0]).toMatchObject({ id: 'length', name: 'Length', kind: 'input', multi: true, required: true });
+  });
+
+  it('says why when it is not an interface', async () => {
+    const dir = await saved();
+    await writeFile(join(dir, 'nodes/count/interface.json'), JSON.stringify({ inputs: 'length' }));
+    forgetSeen();
+    await expect(loadGraph(dir)).rejects.toThrow(NotAGraph);
+    await expect(loadGraph(dir)).rejects.toThrow(/"inputs" must be a list of ports/);
+  });
+
+  it('belongs in the folder: check reports a stray file beside it, and not it', async () => {
+    const dir = await saved();
+    await writeFile(join(dir, 'nodes/count/notes.txt'), 'mine');
+    const problems = (await checkPath(dir)).problems ?? [];
+    expect(problems.map((problem) => problem.where)).toEqual(['nodes/count/notes.txt']);
   });
 });

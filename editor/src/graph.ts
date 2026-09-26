@@ -74,7 +74,7 @@ export type NodeConfig = {
   run_code?: string;
   /** Inputs and what must come out, as Markdown: `examples.md` in a project. See engine `execution/examples.ts`. */
   examples?: string;
-  /** A code node's output interface (JSON Schema), set from a run: `output.schema.json` in a project. */
+  /** A code node's output interface (JSON Schema), set from a run: in its `interface.json` in a project. */
   output_schema?: unknown;
   /** Tool servers an ai node may call, one per line: a URL, or a name this machine configured. */
   mcp_servers?: string;

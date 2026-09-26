@@ -131,6 +131,13 @@ export default function App() {
       setSaveStatus(`❌ ${file.name} is not a .json graph file.`);
       return;
     }
+    // A project's flow.json is its wiring only: each node is a folder beside
+    // it, which a browser does not hand over.
+    if (file.name === 'flow.json') {
+      setSaveStatus('❌ This is a project\'s flow.json: its nodes are folders beside it, which a browser '
+        + 'does not hand over. Drop the project folder, or open it with 📂 Open.');
+      return;
+    }
     let text: string;
     let graph: Graph;
     try {
@@ -140,8 +147,8 @@ export default function App() {
       setSaveStatus(`❌ ${errorText(error, `Could not read ${file.name}`)}`);
       return;
     }
-    // A project's graph.json is its wiring only: the code, the prompts and the
-    // positions are files beside it, which a browser does not hand over.
+    // The same for a project saved before flow.json: its graph.json is its
+    // wiring only, and the code, the prompts and the positions are files beside it.
     // Loaded as it stands it would be every node stacked in one place with
     // nothing in it -- so it is not loaded, and the way that works is named.
     const raw = JSON.parse(text) as { nodes?: Array<{ position?: unknown }> };
@@ -240,7 +247,7 @@ export default function App() {
     useGraphStore.getState().metadata.name.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'my_graph';
 
   // Open and Save As go straight to the file browser: choosing a file is what
-  // they are for, and a path box first -- "/path/to/graph.json" -- asked the
+  // they are for, and a path box first -- "/path/to/my_graph" -- asked the
   // one question a newcomer cannot answer. Closing the browser leaves the path
   // box, for whoever would rather type.
   const handleOpenLoad = () => {
@@ -255,9 +262,9 @@ export default function App() {
   };
 
   /**
-   * Open the project again from disk: for `graph.json` itself changing
-   * outside -- a git pull, a merge. Code and prompts need no such thing: they
-   * are watched (below).
+   * Open the project again from disk: for the flow, or a node's settings or
+   * ports, changing outside -- a git pull, a merge. Code and prompts need no
+   * such thing: they are watched (below).
    */
   const handleReloadProject = async () => {
     if (!currentFilePath) return;
@@ -504,7 +511,7 @@ export default function App() {
                     value={filePrompt.path}
                     onChange={(e) => setFilePrompt({ ...filePrompt, path: e.target.value })}
                     onKeyDown={(e) => e.key === 'Enter' && handleFilePromptConfirm()}
-                    placeholder="/path/to/graph.json"
+                    placeholder="/path/to/my_graph"
                   />
                   <button
                     type="button"

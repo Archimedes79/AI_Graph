@@ -49,7 +49,7 @@ export interface DeployNeeds {
 
 /**
  * One piece of an element's writing, as a project folder keeps it: a file of
- * its own in the element's folder instead of a string inside `graph.json`.
+ * its own in the element's folder instead of a string inside its `node.json`.
  */
 export interface TextFile {
   /** The config key it is stored under. */
@@ -68,8 +68,8 @@ export interface TextFile {
 }
 
 /**
- * What runs when an element runs, said for whoever reads its folder or its
- * panel: a node's `interface.json` carries it, and the editor shows it.
+ * What runs when an element runs, said for whoever reads its panel or the
+ * documentation: the editor shows it at the foot of the node's panel.
  */
 export interface WhatRuns {
   /**
@@ -106,10 +106,10 @@ export abstract class ElementRunner<S extends { id: string; config: RawConfig },
 
   /**
    * What this element keeps in files of its own when its graph is a project
-   * folder. Everything else it stores stays in `graph.json`.
+   * folder. Everything else it stores stays in its `node.json`.
    *
    * Fixed names rather than ones made from a label: a folder holding
-   * `code.js`, `task.md` and `output.schema.json` says what each file is
+   * `code.js`, `task.md` and `examples.md` says what each file is
    * before it is opened, and renaming a node renames nothing on disk.
    */
   texts(_subject: S): readonly TextFile[] {

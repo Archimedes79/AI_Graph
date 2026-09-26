@@ -1,0 +1,46 @@
+{
+  "name": "Paper review panel",
+  "description": "A pre-submission review panel: five AI reviewers — scientific soundness, an adversarial referee, evidence and claims, references, figures and tables — read the same manuscript in parallel, and a judge consolidates their findings into one ranked list with a recommendation. The AI advises; the researcher decides. The sample paper is fictional and has problems planted in it. Paths are relative to the working directory, so run this from the repository root.",
+  "ai_defaults": {
+    "provider": "google",
+    "model": "gemini-flash-lite-latest"
+  },
+  "author": "AI-Graph",
+  "tags": [
+    "example",
+    "gui",
+    "ai",
+    "multi-agent",
+    "review"
+  ],
+  "nodes": {
+    "page": "gui",
+    "read": "code",
+    "scientific": "ai",
+    "adversarial": "ai",
+    "claims": "ai",
+    "references": "ai",
+    "figures": "ai",
+    "judge": "ai"
+  },
+  "wires": [
+    "page.paper_out -> read.file",
+    "page.go_out -> read.__run",
+    "read.text -> scientific.paper",
+    "scientific.output -> judge.scientific",
+    "scientific.output -> page.scientific_in",
+    "read.text -> adversarial.paper",
+    "adversarial.output -> judge.adversarial",
+    "adversarial.output -> page.adversarial_in",
+    "read.text -> claims.paper",
+    "claims.output -> judge.claims",
+    "claims.output -> page.claims_in",
+    "read.text -> references.paper",
+    "references.output -> judge.references",
+    "references.output -> page.references_in",
+    "read.text -> figures.paper",
+    "figures.output -> judge.figures",
+    "figures.output -> page.figures_in",
+    "judge.output -> page.verdict_in"
+  ]
+}
