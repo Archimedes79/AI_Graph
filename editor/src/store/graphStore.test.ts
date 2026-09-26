@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { useGraphStore } from './graphStore';
 import type { Graph, GraphNode } from '@/graph';
-import { guiWidgetPorts } from '@/document/guiWidgets';
+import { guiWidgetPorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
@@ -88,6 +88,28 @@ describe('graphStore.updateNode edge pruning', () => {
     const remainingEdges = useGraphStore.getState().rfEdges;
     expect(remainingEdges).toHaveLength(1);
     expect(remainingEdges[0].id).toBe('e1');
+  });
+
+  it('keeps the wire from a block\'s error port through a later edit of the page', () => {
+    // What the designer does on every edit: the page's new blocks, their ports
+    // synced, handed to updateNode -- whose pruning cut this wire as soon as
+    // anybody renamed a block, because the synced ports had no `_error`.
+    const pick = { ...WIDGET_BUILDERS.select.create('Pick'), catch_errors: true };
+    const page = syncGuiNodePorts(graphNode({ id: 'gui1', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [pick] } }));
+    const sink = graphNode({
+      id: 'sink',
+      node_type: 'output',
+      inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+    });
+    loadTestGraph([page, sink], [
+      { id: 'e1', source_node_id: 'gui1', source_port_id: `${pick.id}_error`, target_node_id: 'sink', target_port_id: 'value' },
+    ]);
+
+    const stored = useGraphStore.getState().rfNodes.find((n) => n.id === 'gui1')!.data.graphNode;
+    const renamed = { ...stored.config.gui_widgets[0], label: 'Choose' };
+    useGraphStore.getState().updateNode('gui1', syncGuiNodePorts({ ...stored, config: { ...stored.config, gui_widgets: [renamed] } }));
+
+    expect(useGraphStore.getState().rfEdges.map((edge) => edge.sourceHandle)).toEqual([`${pick.id}_error`]);
   });
 
   it('leaves edges alone when the update does not touch ports', () => {

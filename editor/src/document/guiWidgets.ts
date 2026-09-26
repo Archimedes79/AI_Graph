@@ -76,17 +76,16 @@ export function widgetFiresRun(widget: GuiWidget): boolean {
  * port ids (`${id}_in` / `${id}_out`) stay stable across re-syncs and
  * existing edges remain attached. A WIDGET node is just a GUI node whose
  * `gui_widgets` holds exactly one widget -- same derivation.
+ *
+ * The page's ports are the engine's answer (`GuiNodeRunner.derivedPorts`),
+ * the same one a load gets. This used to add the blocks' own ports up here,
+ * and a block told to catch its failures has one more -- `<id>_error`, which
+ * the engine adds and the sum here did not. So ticking "catch" grew no port
+ * until the next load, and once it was there and wired, the next edit of any
+ * block on the page dropped it again and `updateNode` pruned its wire.
  */
 export function syncGuiNodePorts(node: GraphNode): GraphNode {
   if (!engineRegistry.node(node.node_type)?.hasInterface) return node;
-
-  const inputs: Port[] = [];
-  const outputs: Port[] = [];
-  for (const widget of node.config.gui_widgets) {
-    const { inputs: widgetInputs, outputs: widgetOutputs } = guiWidgetPorts(widget);
-    inputs.push(...widgetInputs);
-    outputs.push(...widgetOutputs);
-  }
-
-  return { ...node, inputs, outputs };
+  const derived = derivedNodePorts(node);
+  return derived ? { ...node, inputs: derived.inputs, outputs: derived.outputs } : node;
 }
