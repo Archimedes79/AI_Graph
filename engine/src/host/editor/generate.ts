@@ -101,7 +101,16 @@ function parsedPreview(content: string, format: string): string {
   return '';
 }
 
-/** *context* with a sample file's content, and a parsed peek at it, appended. */
+/**
+ * *context* with a sample file's content, and a parsed peek at it, appended.
+ *
+ * A sample file that is no longer there is said and left out, not refused. It
+ * only ever added to what the model is told, and a stored path goes stale on
+ * its own: the project opened from somewhere else, the copy removed. Refusing
+ * made the node's ✨ unusable until someone found the setting to clear -- a
+ * file that is there and cannot be read is still refused, since that is a
+ * mistake worth hearing about.
+ */
 export async function withContextFile(context: string, path?: string): Promise<string> {
   if (!path) return context;
   let content: string;
@@ -110,6 +119,10 @@ export async function withContextFile(context: string, path?: string): Promise<s
     content = await readFile(path, 'utf8');
     format = await detectFormat(path);
   } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      const gone = `The sample file ${path} is no longer there, so it is not shown.`;
+      return context ? `${context}\n\n${gone}` : gone;
+    }
     throw new GenerationRefused(`Could not read context file: ${error instanceof Error ? error.message : String(error)}`);
   }
   // Cut to a budget: a sample file is attached to show what arrives, and the

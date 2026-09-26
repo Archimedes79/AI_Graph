@@ -52,9 +52,12 @@ const SKIPPED = new Set(['node_modules', 'dist', 'build']);
 /**
  * Where the example files people attach to a node are kept.
  *
- * Beside the project, under `data/attachments`, so a graph and the samples it
- * was generated against travel together; overridable for a packaged editor,
- * whose own directory tree is a temp dir that vanishes on exit.
+ * Under `data/attachments` in the folder the editor's server was started in
+ * -- not beside the project, whatever folder that is: a graph moved or opened
+ * from elsewhere keeps a path to a copy that is not there, which is why a
+ * sample file that is gone is left out of ✨ rather than refused
+ * (`generate.ts`). Overridable for a packaged editor, whose own directory tree
+ * is a temp dir that vanishes on exit.
  */
 export function attachmentsDir(root = process.cwd()): string {
   return process.env.ATTACHMENTS_DIR || join(root, 'data', 'attachments');

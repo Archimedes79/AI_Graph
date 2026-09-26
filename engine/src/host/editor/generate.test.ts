@@ -324,8 +324,24 @@ describe('a sample file in the context', () => {
     expect(context).toContain('"a": "1"');
   });
 
-  it('refuses a file it cannot read, by name', async () => {
-    await expect(withContextFile('', join(tmpdir(), 'nope.csv'))).rejects.toThrow(/Could not read context file/);
+  it('says a sample file that is gone and leaves it out -- it used to refuse, and ✨ never asked the model', async () => {
+    const gone = join(tmpdir(), `gone-${Date.now()}.csv`);
+    const context = await withContextFile('Given.', gone);
+    expect(context).toContain('Given.');
+    expect(context).toContain(`The sample file ${gone} is no longer there`);
+
+    const ai = scripted(['```js\nfunction run(i) { return { out: 1 }; }\n```']);
+    const reply = await generate(
+      { element: 'code', description: 'x', inputs: ['a'], outputs: ['out'], context_file: gone },
+      { ai, code: runner(() => ({})), generationFor, target },
+    );
+    expect(ai.asked).toHaveLength(1);
+    expect(reply.result).toContain('out: 1');
+  });
+
+  it('still refuses a file that is there and cannot be read, by name', async () => {
+    const folder = await mkdtemp(join(tmpdir(), 'not-a-file-'));
+    await expect(withContextFile('', folder)).rejects.toThrow(/Could not read context file/);
   });
 
   it('cuts a large sample file to a budget -- the first rows show its shape as well as all of it', async () => {
