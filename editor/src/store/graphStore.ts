@@ -122,6 +122,12 @@ export interface GraphStore {
   /** Come back out one level, putting what was edited back into the node that holds it. */
   closeSubgraph: () => void;
   /**
+   * Come back out until *depth* levels are left -- 0 is the graph at the top --
+   * or as far as a run in flight allows: a level that will not close ends it,
+   * where asking again would ask forever.
+   */
+  closeSubgraphsTo: (depth: number) => void;
+  /**
    * The whole document: what is open, folded back through every node it is
    * inside. What is saved, and what "unsaved" is measured against, whatever
    * level the canvas happens to be showing.
@@ -715,6 +721,14 @@ export const useGraphStore = create<GraphStore>()(
         state.past = changed ? [...frame.past, before].slice(-HISTORY_LIMIT) : frame.past;
         state.future = changed ? [] : frame.future;
       });
+    },
+
+    closeSubgraphsTo: (depth) => {
+      while (get().subgraphStack.length > depth) {
+        const before = get().subgraphStack.length;
+        get().closeSubgraph();
+        if (get().subgraphStack.length === before) return;
+      }
     },
 
     rootGraph: () => {

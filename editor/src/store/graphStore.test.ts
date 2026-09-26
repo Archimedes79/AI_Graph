@@ -565,6 +565,26 @@ describe('a graph inside a node', () => {
     expect(store().canUndo()).toBe(false);
   });
 
+  it('comes back out to the top, one level at a time', () => {
+    loadTestGraph([holder(inner([{ ...holder(), id: 'deeper', label: 'Deeper' }]))]);
+    store().openSubgraph('part');
+    store().openSubgraph('deeper');
+    store().closeSubgraphsTo(0);
+    expect(store().subgraphStack).toHaveLength(0);
+    expect(store().rfNodes.map((n) => n.id)).toEqual(['part']);
+  });
+
+  it('stops where a level will not close, rather than asking forever', () => {
+    // A run in flight keeps the level it runs on open. Asked in a loop until
+    // the stack is short enough, that loop never ended.
+    loadTestGraph([holder()]);
+    store().openSubgraph('part');
+    useGraphStore.setState({ isExecuting: true });
+    store().closeSubgraphsTo(0);
+    expect(store().subgraphStack).toHaveLength(1);
+    useGraphStore.setState({ isExecuting: false });
+  });
+
   it('will not change level while a run is in flight', () => {
     loadTestGraph([holder()]);
     useGraphStore.setState({ isExecuting: true });

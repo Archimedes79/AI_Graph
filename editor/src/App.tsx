@@ -7,6 +7,7 @@ import Sidebar from '@/app/Sidebar';
 import GraphCanvas from '@/canvas/GraphCanvas';
 import DesignerTab from '@/page/DesignerTab';
 import PreviewTab from '@/page/PreviewTab';
+import TopGraphOnly from '@/page/TopGraphOnly';
 import ViewTabs, { type EditorView } from '@/app/ViewTabs';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import NodeEditor from '@/canvas/NodeEditor';
@@ -445,8 +446,10 @@ export default function App() {
           <GraphCanvas active={view === 'graph'} />
           <ResultsPanel />
         </div>
-        {view === 'design' && <DesignerTab />}
-        {view === 'preview' && <PreviewTab />}
+        {/* The page is the top graph's: inside a node's graph there is none to
+            build or try, and these would act on the graph in there. */}
+        {view === 'design' && <TopGraphOnly><DesignerTab /></TopGraphOnly>}
+        {view === 'preview' && <TopGraphOnly><PreviewTab /></TopGraphOnly>}
 
         {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
 
