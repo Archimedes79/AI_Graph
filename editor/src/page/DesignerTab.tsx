@@ -6,6 +6,7 @@ import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { ALL_ENTRIES, type PaletteEntry } from './DesignerPalette';
 import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { routePage } from './pageWrite';
+import { liveTypedValues } from './typedValues';
 import WidgetEditor from './WidgetEditor';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import { SCHEMES, type SchemeId } from '@/ui/scheme';
@@ -28,9 +29,12 @@ export default function DesignerTab() {
   const guiNodes = useGuiNodes();
   const events = usePageEvents();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Typing in a live widget while designing: kept local until the next run, so
-  // the graph is not marked unsaved on every keystroke.
-  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  // What was typed into a live block, shown in place of what arrived there --
+  // for as long as the block still holds it. A run that sent it, or a panel
+  // edit that replaced it, ends it (`liveTypedValues`). The value itself is
+  // stored as it is typed; this only decides which of the two a block shows.
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  const overrides = liveTypedValues(typed, blocks);
 
   const ownerOf = (widgetId: string) => blocks.find((b) => b.widget.id === widgetId)?.node ?? null;
   const selected = blocks.find((b) => b.widget.id === selectedId)?.widget ?? null;
@@ -194,7 +198,7 @@ export default function DesignerTab() {
   const setWidgetValue = (block: SurfaceBlock, value: unknown) => {
     // Only text is remembered as an edit in progress; a block that stores
     // something richer holds it itself and has no half-typed state to protect.
-    if (typeof value === 'string') setOverrides((prev) => ({ ...prev, [block.widget.id]: value }));
+    if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
     updateNode(block.node.id, {
       config: {
         ...block.node.config,
@@ -220,7 +224,7 @@ export default function DesignerTab() {
           onChange={applyWidgets}
           onWidgetValue={setWidgetValue}
           onWidgetTrigger={(block, value) => {
-            if (typeof value === 'string') setOverrides((prev) => ({ ...prev, [block.widget.id]: value }));
+            if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
             events.fire(block, value);
           }}
           selectedId={selectedId}
