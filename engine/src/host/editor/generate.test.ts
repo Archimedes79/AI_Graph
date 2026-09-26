@@ -104,8 +104,33 @@ describe('code', () => {
     );
     expect(probed).toBe(false);
     expect(reply.probe.status).toBe('skipped');
-    expect(ai.asked[0].prompt).toContain('inputs["value"]');
-    expect(ai.asked[0].prompt).toContain('Must expose draw(data, window)');    // the block's own contract, first
+    expect(ai.asked[0].prompt).toContain('- `value`');
+    expect(ai.asked[0].prompt).toContain('Must expose draw(data, window)');    // the block's own contract
+  });
+
+  it('asks for a chart\'s draw(data, window) in the page\'s worker, and nothing a graph\'s node is told', async () => {
+    // It was told draw(data, window), then "complete function run(inputs), keep
+    // its name", then Node's standard library -- and followed the skeleton.
+    const ai = scripted(['```js\nfunction draw(data, window) { return []; }\n```']);
+    await generate({ element: 'plot_window', description: 'a line of the temperatures' }, { ai, code: runner(() => ({})), generationFor, target });
+    const { prompt, system } = ai.asked[0];
+    expect(prompt).toContain('## The function\nComplete this function. Keep its name and its two parameters');
+    expect(prompt).toContain('function draw(data, window) {');
+    expect(prompt).toContain('runs in a worker');
+    expect(prompt).not.toContain('function run(inputs)');
+    expect(prompt).not.toContain('one node of a graph');
+    expect(prompt).not.toContain('Node has built in');
+    expect(prompt).not.toContain('Downstream nodes');
+    expect(prompt).not.toContain('## Also');                                   // the contract is the frame, said once
+    expect(system).not.toContain('node.llm');
+    expect(system).not.toContain('downstream nodes');
+  });
+
+  it('still asks a table\'s transform for run(inputs) in the sandbox, which is where it runs', async () => {
+    const ai = scripted(['```js\nfunction run(inputs) { return { value: [] }; }\n```']);
+    await generate({ element: 'table', description: 'one row per file' }, { ai, code: runner(() => ({})), generationFor, target });
+    expect(ai.asked[0].prompt).toContain('function run(inputs) {');
+    expect(ai.asked[0].prompt).toContain('Node has built in');
   });
 });
 

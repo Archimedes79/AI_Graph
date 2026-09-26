@@ -141,10 +141,13 @@ export async function withContextFile(context: string, path?: string): Promise<s
 // The four bodies
 // ---------------------------------------------------------------------------
 
-const CODE_SYSTEM =
+const FENCED_CODE =
   'You are an expert software engineer. When asked to generate code, output ONLY valid code '
   + 'inside a markdown code block, followed by a brief explanation outside the block. Do not add '
-  + 'extra prose before the code block. The returned object\'s keys must exactly match the '
+  + 'extra prose before the code block.';
+
+const CODE_SYSTEM =
+  `${FENCED_CODE} The returned object's keys must exactly match the `
   + 'requested output names - downstream nodes look up values by these exact keys. '
   // Every body may ask (`elements/body.ts`), and a generator that is not told so
   // writes a word list where a question was wanted -- or guesses at an API.
@@ -153,38 +156,74 @@ const CODE_SYSTEM =
   + '"await node.llm({ prompt: "..." })", which resolves to the answer as text; never call a model API '
   + 'yourself and never use a key. For everything else, plain code.';
 
+/**
+ * For a body the element calls itself (see `framedByElement`). It has no keys
+ * a downstream node looks up and no `node` to ask a model with: telling it to
+ * declare `run(inputs, node)` is how a chart came to call `node.llm` in a
+ * page where no such thing exists.
+ */
+const FRAMED_CODE_SYSTEM =
+  `${FENCED_CODE} Complete exactly the function you are given, keeping its name and its parameters, `
+  + 'and use only what the description of where it runs says it has.';
+
 function firstCodeBlock(text: string): string {
   return /```(?:\w+)?\n([\s\S]*?)```/.exec(text)?.[1].trim() ?? '';
+}
+
+/**
+ * Whether *spec*'s element calls the body itself, not as a graph runs one.
+ *
+ * An element says so by saying how the probe must run it (`probeWith`): a
+ * body the sandbox calls as `run(inputs, node)` needs no wrapper. Its frame
+ * -- the function to complete and where it runs -- is then the element's own
+ * contract. A chart's is `draw(data, window)`, in the page's worker, and the
+ * node's skeleton, its output keys and Node's standard library would each
+ * contradict it: the model was told all three at once, and followed the
+ * skeleton into a `run(inputs)` that never sees the window.
+ */
+function framedByElement(spec: Generation | undefined): boolean {
+  return Boolean(spec?.probeWith);
 }
 
 /**
  * Ask for code that maps *inputs* to *outputs*: the task, the brief, whatever
  * else the element or the caller adds, then the skeleton to complete.
  * *evidence* is a failed attempt and what went wrong with it, for the repair.
+ * *frame*, for a body the element calls itself, replaces the skeleton and
+ * every rule that belongs to a graph's node.
  */
 async function generateCode(
   ai: AiService, target: Target, request: GenerateRequest, context: string, sample?: Sample, evidence = '',
+  frame?: string,
 ): Promise<{ text: string; explanation: string }> {
   const inputs = request.inputs ?? [];
   const outputs = request.outputs ?? [];
-  const parts = ['Write a JavaScript function for one node of a graph. The node should:', request.description];
-  const brief = renderBrief(request, 'code', sample);
+  const framed = frame !== undefined;
+  const parts = [framed ? 'Write the JavaScript this element runs. It should:' : 'Write a JavaScript function for one node of a graph. The node should:', request.description];
+  // A framed body says in its frame what it returns; `value` as an output key
+  // would be one more thing to obey that is not so.
+  const brief = renderBrief(framed ? { ...request, outputs: [] } : request, 'code', sample);
   if (brief) parts.push(`\n${brief}`);
   if (context) parts.push(`\n## Also\n${context}`);
   if (evidence) parts.push(`\n${evidence}`);
   parts.push('\n## The function');
-  if (inputs.length || outputs.length) {
-    parts.push('Complete this function. Keep its name, its `inputs` and the returned keys exactly as they are:\n\n'
-      + renderSkeleton(inputs, outputs, sample?.values, request.input_types));
+  if (framed) {
+    parts.push(frame);
+  } else {
+    if (inputs.length || outputs.length) {
+      parts.push('Complete this function. Keep its name, its `inputs` and the returned keys exactly as they are:\n\n'
+        + renderSkeleton(inputs, outputs, sample?.values, request.input_types));
+    }
+    if (outputs.length) {
+      parts.push(`The returned object's keys must be exactly: ${JSON.stringify(outputs)}. Downstream nodes look `
+        + 'values up by these exact strings - do not rename, abbreviate, reorder, or invent additional keys, '
+        + 'and include every one of them.');
+    }
+    parts.push('Use only what Node has built in. There is no package manager and no `npm install`: `require` '
+      + "and `import` of anything outside Node's own standard library will fail at run time.");
   }
-  if (outputs.length) {
-    parts.push(`The returned object's keys must be exactly: ${JSON.stringify(outputs)}. Downstream nodes look `
-      + 'values up by these exact strings - do not rename, abbreviate, reorder, or invent additional keys, '
-      + 'and include every one of them.');
-  }
-  parts.push('Use only what Node has built in. There is no package manager and no `npm install`: `require` '
-    + "and `import` of anything outside Node's own standard library will fail at run time.");
-  const raw = await ai.complete({ prompt: parts.join('\n'), system: CODE_SYSTEM, temperature: 0.2, ...target });
+  const system = framed ? FRAMED_CODE_SYSTEM : CODE_SYSTEM;
+  const raw = await ai.complete({ prompt: parts.join('\n'), system, temperature: 0.2, ...target });
   const code = firstCodeBlock(raw);
   const explanation = code ? raw.slice(raw.lastIndexOf('```') + 3).trim() : raw.replace(/```(?:javascript|js)?/g, '').trim();
   return { text: code || raw, explanation };
@@ -386,12 +425,14 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
 async function generateVerifiedCode(
   ai: AiService, runtime: Runtime, target: Target, request: GenerateRequest, context: string,
   given: Sample | undefined,
-  check?: (outputs: Record<string, unknown>) => string[],
-  probeWith?: (body: string) => string,
+  spec?: Generation,
 ): Promise<{ text: string; explanation: string; probe: ProbeReport }> {
   const outputs = request.outputs ?? [];
   const sample = given?.values;
-  const first = await generateCode(ai, target, request, context, given);
+  const check = spec?.check;
+  const probeWith = spec?.probeWith;
+  const frame = framedByElement(spec) ? spec?.contract ?? '' : undefined;
+  const first = await generateCode(ai, target, request, context, given, '', frame);
   const report: ProbeReport = { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' };
   if (!sample || !Object.keys(sample).length) return { ...first, probe: report };
   // A sample that is an example says what must come out of it, and that is
@@ -437,7 +478,7 @@ async function generateVerifiedCode(
   const evidence = repairPrompt(first.text, sample, attempt.error, attempt.missing, outputs, attempt.problems);
   let second: { text: string; explanation: string };
   try {
-    second = await generateCode(ai, target, request, context, given, evidence);
+    second = await generateCode(ai, target, request, context, given, evidence, frame);
   } catch {
     // The repair pass is a bonus, never a reason to fail the request.
     return { ...first, probe: reportOf(attempt, 'failed') };
@@ -530,8 +571,10 @@ export async function generate(asked: GenerateRequest, deps: GenerateDeps): Prom
   const ai = recording(request.preview ? PREVIEW_AI : deps.ai, calls);
   const kind = spec?.kind ?? request.kind ?? '';
 
+  // An element that calls the body itself says in its contract how: that is
+  // the function to complete, said where the function is, not beside it.
   const context = await withContextFile(
-    [spec?.contract ?? '', request.context ?? ''].filter(Boolean).join('\n\n'),
+    [framedByElement(spec) ? '' : spec?.contract ?? '', request.context ?? ''].filter(Boolean).join('\n\n'),
     request.context_file,
   );
   const fixedPorts = Boolean(spec?.inputs);
@@ -555,7 +598,7 @@ export async function generate(asked: GenerateRequest, deps: GenerateDeps): Prom
   try {
     switch (kind) {
       case 'code': {
-        const { text, explanation, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, shaped, context, sample, spec?.check, spec?.probeWith);
+        const { text, explanation, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, shaped, context, sample, spec);
         return { result: text, explanation, probe: report, calls };
       }
       case 'prompt': {

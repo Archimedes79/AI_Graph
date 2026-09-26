@@ -55,8 +55,20 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
   override generation(): Generation {
     return {
       kind: 'code', fields: TRANSFORM_FIELDS,
+      // The whole frame the body is written in (the generator puts it where
+      // the function is, because `probeWith` says the page calls it): the
+      // function, where it runs, and what it may answer.
       contract: [
-        'Must expose draw(data, window) -> what to show.',
+        'Complete this function. Keep its name and its two parameters exactly as they are:',
+        '',
+        'function draw(data, window) {',
+        '  // data: what arrived at the block -- `value` above -- or null before anything has',
+        '  // window: { width, height, scheme, dark }',
+        '  return [];',
+        '}',
+        '',
+        'Must expose draw(data, window) -> what to show. The page the block is on calls it,',
+        'not the graph: its answer is drawn, and nothing downstream reads it.',
         '',
         '`data` is what arrived at the block, and is null before anything has. Draw that',
         'case too -- empty axes, or an empty list of points -- rather than throwing: it is',
@@ -108,8 +120,13 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
         'for. Do not paint a background rectangle: the block has one.',
         '',
         'Do NOT import anything: the code runs in a worker with no modules, no network and',
-        'no DOM -- data in, points or a string of SVG out. Scripts and event handlers inside',
-        'the SVG are stripped before it is drawn.',
+        'no DOM -- there is no `require` and none of Node\'s built-ins -- data in, a figure',
+        'or a string of SVG out. Scripts and event handlers inside the SVG are stripped',
+        'before it is drawn.',
+        '',
+        'It cannot ask a model either: it is handed no `node`, and there is no `node.llm`',
+        'in a page. Whatever needs a model\'s judgement is done by a node upstream, which',
+        'sends the chart its answer.',
       ].join('\n'),
       inputs: ['value'], outputs: ['value'],
       // Looked at before anyone sees it: see check.ts.

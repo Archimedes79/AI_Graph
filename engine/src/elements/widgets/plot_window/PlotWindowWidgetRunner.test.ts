@@ -61,5 +61,14 @@ describe('a chart, from the engine', () => {
     it('no longer teaches a fixed frame, which was only ever a way round not knowing', () => {
       expect(contract).not.toMatch(/viewBox="0 0 \d+ \d+"/);
     });
+
+    it('is the whole frame the body is written in: the function, and a worker with neither Node nor a model', () => {
+      // The generator puts it where the function goes, in place of a node's
+      // run(inputs) skeleton and Node's rules, which contradicted it.
+      expect(contract).toMatch(/^Complete this function\. Keep its name and its two parameters/);
+      expect(contract).toContain('function draw(data, window) {');
+      expect(contract).toContain('no `require`');
+      expect(contract).toContain('no `node.llm`');
+    });
   });
 });
