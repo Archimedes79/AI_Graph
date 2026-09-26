@@ -19,4 +19,9 @@ export class TextIoWidgetGuiBuilder extends WidgetGuiBuilder {
   protected override defaultTone(mode: string) {
     return mode === 'output' ? 'plain' as const : 'sunken' as const;
   }
+
+  /** What is typed into it, nothing yet. */
+  protected override initialSettings() {
+    return { value: '' };
+  }
 }

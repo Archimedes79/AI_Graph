@@ -8,6 +8,7 @@
 
 import { lazy } from 'react';
 import type { ComponentType } from 'react';
+import type { GuiWidget } from '@/graph';
 import type { WidgetPanelProps } from '../WidgetGuiBuilder';
 import { DisplayWidgetGuiBuilder } from './DisplayWidgetGuiBuilder';
 
@@ -22,4 +23,9 @@ export abstract class TransformingDisplayGuiBuilder extends DisplayWidgetGuiBuil
 
   /** What the widget does, said above everything else -- for a widget whose use is not obvious. */
   readonly intro: string = '';
+
+  /** Its transform: the code, and what was asked of it. */
+  protected override initialSettings(): Partial<GuiWidget> {
+    return { code: '', code_prompt: '' };
+  }
 }

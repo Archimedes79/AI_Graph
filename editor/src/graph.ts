@@ -103,21 +103,29 @@ export type NodeConfig = {
  * One block on a page. Ports are never edited by hand: they are derived from
  * this list by the engine (`GuiNodeRunner.derivedPorts`), so a block's `id` must
  * stay stable once assigned -- it is what keeps edges attached across edits.
+ *
+ * Beyond who it is and how it is drawn, a block holds only its own kind's
+ * settings, so they are optional here: a divider has no selector, and a block
+ * written by hand, by ✨ or over MCP leaves out what it does not set. Read one
+ * the way its runner does -- `select_all_files` missing means every file.
  */
 export type GuiWidget = {
+  /** A chart's, a table's or an image's transform. */
   code?: string;
-  code_prompt: string;
-  example_file: string;
-  extensions: string;
+  code_prompt?: string;
+  /** An example file an older version of the block editor attached; step 1 offers to take it in. */
+  example_file?: string;
+  /** `input_picker`: the file types a folder's listing keeps. */
+  extensions?: string;
   h?: number;
   id: string;
   kind: WidgetKind;
   label: string;
   mode?: string;
-  recursive: boolean;
-  select_all_files: boolean;
-  selector_code: string;
-  selector_prompt: string;
+  recursive?: boolean;
+  select_all_files?: boolean;
+  selector_code?: string;
+  selector_prompt?: string;
   tone: 'plain' | 'raised' | 'sunken' | 'accent';
   /** Draw a frame regardless of the tone; unset lets the tone decide. */
   border?: boolean;

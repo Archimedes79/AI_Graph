@@ -56,6 +56,11 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
     return { w: 6, h: 2 };
   }
 
+  /** Its path, what a folder lists, and the selector that narrows the list -- which takes every file until asked not to. */
+  protected override initialSettings(): Partial<GuiWidget> {
+    return { value: '', extensions: '', recursive: false, select_all_files: true, selector_prompt: '', selector_code: '' };
+  }
+
   /** A field you operate looks like a field, or nobody clicks it. */
   protected override defaultTone() {
     return 'sunken' as const;

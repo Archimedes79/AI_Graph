@@ -59,7 +59,7 @@ export default function InputPickerWidgetPanel({
           <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
             <input
               type="checkbox"
-              checked={widget.recursive}
+              checked={widget.recursive === true}
               onChange={(e) => onUpdate({ recursive: e.target.checked })}
             />
             Recursive

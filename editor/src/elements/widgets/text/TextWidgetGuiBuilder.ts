@@ -23,4 +23,9 @@ export class TextWidgetGuiBuilder extends StaticWidgetGuiBuilder {
   protected override defaultSpan(mode: string) {
     return mode === 'heading' || mode === 'caption' ? { w: 16, h: 1 } : { w: 16, h: 3 };
   }
+
+  /** Its words, none yet. */
+  protected override initialSettings() {
+    return { value: '' };
+  }
 }

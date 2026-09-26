@@ -79,6 +79,11 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
    * A new widget of this kind, as the palette puts it on a page: the
    * counterpart of `NodeGuiBuilder.create`. No position -- the order of the list is the
    * position, so a new widget simply goes last.
+   *
+   * What every block has, and then what this kind keeps (`initialSettings`).
+   * Every kind's settings used to be spread onto every block, so a divider was
+   * saved with a folder selector's code, an options list and an example file,
+   * and graph.json carried settings no runner of that kind reads.
    */
   create(label = '', mode = this.defaultMode): GuiWidget {
     created += 1;
@@ -86,19 +91,9 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
       id: `widget-${created}-${Date.now()}`,
       kind: this.widgetKind,
       label,
-      value: '',
-      extensions: '',
-      mode,
+      ...(mode ? { mode } : {}),
       ...this.defaultSpan(mode),
       tone: this.defaultTone(mode),
-      code: '',
-      recursive: false,
-      select_all_files: true,
-      selector_prompt: '',
-      selector_code: '',
-      code_prompt: '',
-      example_file: '',
-      options: '',
       ...this.initialSettings(),
     };
   }
@@ -118,7 +113,7 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
     return 'plain';
   }
 
-  /** What a new widget of this kind holds beyond the common fields: a dropdown's first options. */
+  /** What a new widget of this kind holds beyond the common fields, and only what it reads: a dropdown's first options. */
   protected initialSettings(): Partial<GuiWidget> {
     return {};
   }
