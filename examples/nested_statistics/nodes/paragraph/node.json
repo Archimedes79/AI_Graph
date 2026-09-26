@@ -1,0 +1,8 @@
+{
+  "label": "Paragraph",
+  "description": "The text to measure",
+  "config": {
+    "input_mode": "text",
+    "value": "A graph grows in two directions. It grows wider as nodes are added beside each other, and it grows deeper when a part of the work becomes a graph of its own."
+  }
+}

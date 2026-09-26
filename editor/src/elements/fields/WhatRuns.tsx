@@ -6,8 +6,8 @@ import { DIMMER, LINE, MUTED } from '@/ui/theme';
  * What runs when this node runs: the file in its folder, or the engine class
  * that does the work, and in one sentence what that is.
  *
- * Asked of the engine's element (`whatRuns`), so the panel, the node's
- * `interface.json` and the documentation say the same thing in the same words.
+ * Asked of the engine's element (`whatRuns`), so the panel and the documentation
+ * say the same thing in the same words.
  */
 export default function WhatRuns({ node, folded }: { node: GraphNode; folded?: boolean }) {
   const runs = engineRegistry.node(node.node_type)?.whatRuns(node as never);

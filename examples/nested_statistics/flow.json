@@ -1,0 +1,17 @@
+{
+  "name": "Nested statistics",
+  "description": "A part of the work built as its own graph: the counting lives inside one node, and the graph above it reads as a sentence.",
+  "tags": [
+    "subgraph",
+    "code"
+  ],
+  "nodes": {
+    "paragraph": "input",
+    "statistics": "subgraph",
+    "report": "output"
+  },
+  "wires": [
+    "paragraph.output -> statistics.text",
+    "statistics.numbers -> report.value"
+  ]
+}

@@ -16,7 +16,7 @@ interface OutputInterfaceProps {
  * run writes down what came out (see `graphStore.setExecutionResult`); from
  * then on every run is checked against it, and the nodes after this one are
  * generated against it. "Set from last run" is for when the node was changed
- * on purpose. In a project it is `output.schema.json`, for editing by hand.
+ * on purpose. In a project it is `output_schema` in the node's `interface.json`, for editing by hand.
  */
 /** The kept shape in one line -- `output: list of text` -- with the JSON Schema a click away. */
 interface SchemaPart { type?: string; items?: SchemaPart; properties?: Record<string, SchemaPart> }

@@ -39,7 +39,7 @@ import { loadGraph, projectFolderOf } from '../project/folder.ts';
 /** Where a served tool keeps its last scheduled round: inside a project, beside a file. */
 function lastRunFile(graphPath: string): string {
   const folder = projectFolderOf(graphPath);
-  return folder ? join(folder, 'graph.last-run.json') : `${graphPath}.last-run.json`;
+  return folder ? join(folder, 'flow.last-run.json') : `${graphPath}.last-run.json`;
 }
 
 export interface ServeOptions {

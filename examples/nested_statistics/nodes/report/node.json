@@ -1,0 +1,8 @@
+{
+  "label": "Report",
+  "description": "What came back out of the subgraph, as the run's result",
+  "config": {
+    "output_label": "Statistics",
+    "write_mode": "window"
+  }
+}

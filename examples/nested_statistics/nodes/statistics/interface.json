@@ -1,23 +1,10 @@
 {
-  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
-  "node": "statistics",
-  "type": "subgraph",
-  "label": "Statistics",
-  "about": "A graph of its own: open it to see how the counting is done",
-  "runs": {
-    "by": "engine",
-    "where": "engine/src/elements/nodes/subgraph/SubgraphNodeRunner.ts › execute",
-    "does": "Runs the graph in its folder, whole, with what arrives standing in for its input nodes, and hands on what reaches its output nodes."
-  },
   "inputs": [
     {
       "port": "text",
       "name": "Text",
       "type": "any",
-      "description": "The text to measure",
-      "from": [
-        "paragraph.output"
-      ]
+      "description": "The text to measure"
     }
   ],
   "outputs": [
@@ -25,10 +12,7 @@
       "port": "numbers",
       "name": "Numbers",
       "type": "any",
-      "description": "What was counted",
-      "to": [
-        "report.value"
-      ]
+      "description": "What was counted"
     }
   ]
 }

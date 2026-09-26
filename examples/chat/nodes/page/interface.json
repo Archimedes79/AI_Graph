@@ -1,23 +1,10 @@
 {
-  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
-  "node": "page",
-  "type": "gui",
-  "label": "Chat",
-  "about": "The page this tool shows",
-  "runs": {
-    "by": "engine",
-    "where": "engine/src/elements/nodes/gui/GuiNodeRunner.ts › execute",
-    "does": "Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives; a block with code of its own runs it sandboxed before showing."
-  },
   "inputs": [
     {
       "port": "chat_in",
       "name": "chat: reply",
       "type": "any",
-      "description": "The answer to the message just sent. It is added to the conversation.",
-      "from": [
-        "assistant.output"
-      ]
+      "description": "The answer to the message just sent. It is added to the conversation."
     }
   ],
   "outputs": [
@@ -25,19 +12,13 @@
       "port": "chat_out",
       "name": "chat: message",
       "type": "text",
-      "description": "What the person just sent. Sending it starts the graph from whatever this is wired to.",
-      "to": [
-        "assistant.message"
-      ]
+      "description": "What the person just sent. Sending it starts the graph from whatever this is wired to."
     },
     {
       "port": "chat_history",
       "name": "chat: history",
       "type": "text",
-      "description": "Everything said before this message, one turn per paragraph.",
-      "to": [
-        "assistant.history"
-      ]
+      "description": "Everything said before this message, one turn per paragraph."
     }
   ]
 }

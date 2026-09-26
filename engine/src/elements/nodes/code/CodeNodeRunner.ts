@@ -18,8 +18,6 @@ export interface CodeConfig {
 const CODE_TEXTS: readonly TextFile[] = [
   { field: 'code', file: 'code.js' },
   { field: 'code_prompt', file: 'task.md' },
-  // The output interface, set from a run: see `execution/interface.ts`.
-  { field: 'output_schema', file: 'output.schema.json', json: true },
   // Optional: inputs, and the outputs they must give. See `execution/examples.ts`.
   { field: 'examples', file: 'examples.md' },
 ];
@@ -34,6 +32,8 @@ const CODE_TEXTS: readonly TextFile[] = [
  */
 export class CodeNodeRunner extends NodeRunner<CodeConfig> {
   readonly nodeType = 'code' as const;
+
+  override readonly keepsOutputInterface = true;
 
   override texts(): readonly TextFile[] {
     return CODE_TEXTS;

@@ -1,0 +1,18 @@
+{
+  "name": "Population plotter",
+  "description": "Choose a CSV of names and numbers and see it as a chart. One page, one code node: the code says what to plot, the chart block draws it. Choosing a file redraws it -- there is nothing to press. Paths are relative to the working directory, so run this from the repository root.",
+  "tags": [
+    "example",
+    "plot",
+    "csv",
+    "gui"
+  ],
+  "nodes": {
+    "page": "gui",
+    "chart": "code"
+  },
+  "wires": [
+    "page.file_out -> chart.csv",
+    "chart.figure -> page.plot_in"
+  ]
+}

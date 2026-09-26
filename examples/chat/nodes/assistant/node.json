@@ -1,0 +1,11 @@
+{
+  "label": "Assistant",
+  "description": "Answers the last message, knowing the conversation so far",
+  "config": {
+    "ai_model": "gemini-flash-lite-latest",
+    "ai_provider": "google",
+    "batch_mode": "whole_list",
+    "output_format": "text",
+    "temperature": 0.7
+  }
+}

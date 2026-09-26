@@ -10,7 +10,7 @@ export interface BrowseEntry {
   name: string;
   path: string;
   is_dir: boolean;
-  /** A folder with a graph.json: a project, which is chosen rather than walked into. */
+  /** A folder with a flow.json: a project, which is chosen rather than walked into. */
   project?: boolean;
 }
 

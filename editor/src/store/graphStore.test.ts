@@ -560,3 +560,24 @@ describe('graphStore.updateNode: a renamed port keeps its wires', () => {
     expect(edges[0].sourceHandle).toBe('figure');
   });
 });
+
+describe('graphStore.connect', () => {
+  const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any' as const, multi: false, required: false, description: '' });
+  const nodes = () => [
+    graphNode({ id: 'a', node_type: 'code', outputs: [port('out', 'output')] }),
+    graphNode({ id: 'b', node_type: 'code', inputs: [port('in', 'input')] }),
+  ];
+
+  it('names a new wire the way flow.json writes it', () => {
+    loadTestGraph(nodes());
+    useGraphStore.getState().connect({ source: 'a', sourceHandle: 'out', target: 'b', targetHandle: 'in' });
+    expect(useGraphStore.getState().rfEdges.map((edge) => edge.id)).toEqual(['a.out -> b.in']);
+  });
+
+  it('does not draw a wire twice, whatever the one already there is called', () => {
+    // A wire read from an older file keeps the id it was saved with.
+    loadTestGraph(nodes(), [{ id: 'e1', source_node_id: 'a', source_port_id: 'out', target_node_id: 'b', target_port_id: 'in' }]);
+    useGraphStore.getState().connect({ source: 'a', sourceHandle: 'out', target: 'b', targetHandle: 'in' });
+    expect(useGraphStore.getState().rfEdges).toHaveLength(1);
+  });
+});

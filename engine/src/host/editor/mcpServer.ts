@@ -68,7 +68,8 @@ import { nodeRuntime } from '../node.ts';
 import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { generationTarget } from './settings.ts';
-import { loadGraph as loadProject, projectFolderOf, writeProject } from '../../project/folder.ts';
+import { FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, writeProject } from '../../project/folder.ts';
+import { INTERFACE_FILE } from '../../project/interfaceFile.ts';
 import { folderProblems, names, problemsIn, type Problem } from '../../project/check.ts';
 
 export type { Problem };
@@ -281,7 +282,7 @@ const SPECS: ToolSpec[] = [
     parameters: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder (a project: its graph.json).' },
+        path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder (a project: its flow.json).' },
         node_id: { type: 'string', description: 'The node to run.' },
         inputs: { type: 'object', description: 'Values by input port id. Omit to use what the graph feeds the node.' },
       },
@@ -297,7 +298,7 @@ const SPECS: ToolSpec[] = [
     parameters: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder (a project: its graph.json).' },
+        path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder (a project: its flow.json).' },
         node_id: { type: 'string', description: 'Only this node\'s examples.' },
         offline: { type: 'boolean', description: 'Ask no model.' },
       },
@@ -421,7 +422,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
 
   /**
    * Rule 1 for the files of a project: its code and prompts live in
-   * `nodes/…` beside the `graph.json` that was confined, and a link among them
+   * `nodes/…` beside the `flow.json` that was confined, and a link among them
    * is a way out of the folder like any other. Their extensions are their own.
    */
   const insideRoot = async (path: string): Promise<void> => {
@@ -431,11 +432,10 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
     }
   };
 
-  /** A graph file, or a project's `graph.json` with its code and prompts read in from their files. */
+  /** A graph file, or a project -- its `flow.json` -- with everything in it read in from its files. */
   const loadGraph = async (given: unknown): Promise<{ graph: Graph; full: string }> => {
     const full = await confine(given, 'path');
-    const graph = await readGraphFile(full, String(given));
-    if (!projectFolderOf(full)) return { graph, full };
+    if (!projectFolderOf(full)) return { graph: await readGraphFile(full, String(given)), full };
     try {
       return { graph: await loadProject(full, insideRoot), full };
     } catch (error) {
@@ -453,7 +453,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
     const full = await confine(given, argument);
     // Rule 3. Looked at before anything is written, and by reading it: a name
     // says nothing about what a file is.
-    if (existsSync(full)) {
+    if (existsSync(full) && !projectFolderOf(full)) {
       try {
         await readGraphFile(full, String(given));
       } catch {
@@ -464,9 +464,9 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
     const problems = problemsIn(parseGraph(JSON.parse(JSON.stringify(graph))));
     if (problems.length) return { problems };
 
-    // Into a project, the way the editor saves one: the code and prompts to
-    // their files, the wiring to `graph.json`. Anywhere else, one file.
-    const folder = projectFolderOf(full);
+    // Into a project, the way the editor saves one: the wiring to `flow.json`,
+    // each node to its own folder. Anywhere else, one file.
+    const folder = projectFolderOf(full) ?? (basename(full) === FLOW_FILE ? dirname(full) : null);
     if (folder) await writeProject(folder, graph, insideRoot);
     else {
       await mkdir(dirname(full), { recursive: true });
@@ -665,11 +665,13 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
             continue;
           }
           if (!entry.isFile() || extname(entry.name).toLowerCase() !== '.json') continue;
+          // A project's own parts: its flow.json stands for all of them.
+          if ([NODE_FILE, INTERFACE_FILE, LAYOUT_FILE].includes(entry.name)) continue;
           try {
             // The same door as every other read, so the same files stay shut.
             await confine(full, 'path');
             examined += 1;
-            const graph = await readGraphFile(full, entry.name);
+            const graph = entry.name === FLOW_FILE ? (await loadGraph(full)).graph : await readGraphFile(full, entry.name);
             graphs.push({
               path: shown(full),
               name: graph.metadata.name,

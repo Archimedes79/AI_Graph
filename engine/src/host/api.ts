@@ -67,7 +67,7 @@ export interface Requirement {
   current_value: string;
 }
 
-/** `project`: a folder with a `graph.json` in it, which opens rather than being walked into. */
+/** `project`: a folder with a `flow.json` in it, which opens rather than being walked into. */
 export interface BrowseEntry { name: string; path: string; is_dir: boolean; project?: boolean }
 /** One directory, for a picker. A deployed tool lists files only: no parent, no drives. */
 export interface BrowsePage { path: string; parent: string | null; entries: BrowseEntry[]; roots: string[] }
@@ -301,7 +301,7 @@ export const API = {
   saveGraph: route<{ path: string; graph: Graph }, GraphFile>('POST', '/api/graphs/file/save', 'editor'),
   /** Project folders with this name under where the editor runs: for a folder dropped onto the page. */
   findProjects: route<{ name: string }, { paths: string[] }>('GET', '/api/graphs/find', 'editor'),
-  /** Open the same path again: after `graph.json` itself changed outside the editor. */
+  /** Open the same path again: after its `flow.json`, or a node's settings or ports, changed outside the editor. */
   reloadGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/reload', 'editor'),
   /** The code and prompts of an open project that changed on disk since last asked. */
   projectChanges: route<{ path: string }, { changes: TextChange[] }>('GET', '/api/graphs/file/changes', 'editor'),

@@ -17,6 +17,8 @@ import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { inferInterface } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
+import { freeId } from '@/document/ids';
+import { wireOf } from '@engine/project/flow.ts';
 
 type RFNode = Node<RFNodeData>;
 
@@ -413,9 +415,9 @@ function keepsText(node: GraphNode, field: string): boolean {
   return engineRegistry.node(node.node_type)?.texts(node).some((text) => text.field === field) ?? false;
 }
 
-/** Whether this node keeps an output interface (`output.schema.json`). */
+/** Whether this node keeps an output interface (in its `interface.json`). */
 export function keepsOutputInterface(node: GraphNode): boolean {
-  return keepsText(node, 'output_schema');
+  return engineRegistry.node(node.node_type)?.keepsOutputInterface ?? false;
 }
 
 /** Whether this node can keep examples (`examples.md`). */
@@ -456,7 +458,7 @@ export const useGraphStore = create<GraphStore>()(
 
     addNode: (nodeType, position) => {
       get().commit();
-      const id = newId(nodeType);
+      const id = freeId(nodeType, get().rfNodes.map((existing) => existing.id));
       const defaults = NODE_KINDS[nodeType].create(id);
       const rfNode: Node<RFNodeData> = {
         id,
@@ -476,8 +478,15 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     connect: (wire) => {
-      const id = `edge-${wire.source}-${wire.sourceHandle}-${wire.target}-${wire.targetHandle}`;
-      if (get().rfEdges.some((edge: Edge) => edge.id === id)) return;
+      // Named the way flow.json writes a wire, and known by its two ends: a wire
+      // read from an older file keeps the id it was saved with.
+      const id = wireOf({
+        id: '', source_node_id: wire.source, source_port_id: wire.sourceHandle ?? '',
+        target_node_id: wire.target, target_port_id: wire.targetHandle ?? '',
+      });
+      const joins = (edge: Edge): boolean => edge.source === wire.source && edge.target === wire.target
+        && (edge.sourceHandle ?? '') === (wire.sourceHandle ?? '') && (edge.targetHandle ?? '') === (wire.targetHandle ?? '');
+      if (get().rfEdges.some(joins)) return;
       get().commit();
       set((state) => {
         state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as never);
