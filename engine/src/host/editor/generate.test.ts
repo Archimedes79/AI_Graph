@@ -6,6 +6,10 @@ import { join } from 'node:path';
 import type { AiRequest, AiService, CodeService } from '../../elements/Runtime.ts';
 import { registry } from '../../elements/registry.ts';
 import { parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
+import { port } from '../../elements/port.ts';
+import { executeNode } from '../../execution/executor.ts';
+import { inferInterface } from '../../execution/interface.ts';
+import { parseGraph } from '../../graph.ts';
 import { GenerationFailed, GenerationRefused, generate, generateGraph, withContextFile } from './generate.ts';
 import { nodeCode } from '../node.ts';
 
@@ -214,6 +218,108 @@ describe('what the node says about itself reaches the model', () => {
     expect(prompt).toContain('- `output`: What the model answered');
     expect(prompt).toContain('Format: Two sentences, no heading.');
     expect(prompt).toContain('need not repeat it');
+  });
+});
+
+describe('a node run once per item', () => {
+  /** A body run in this process: the probe and a run both reach it through `CodeService`, so they can be compared. */
+  const inProcess: CodeService = {
+    run: async (body, inputs) => new Function('inputs', `${body}\nreturn run(inputs);`)(inputs) as Record<string, unknown>,
+  };
+  const request = {
+    element: 'code', description: 'Shout each word.', inputs: ['text'], outputs: ['out'],
+    input_types: { text: 'text' }, batch_mode: 'per_item' as const,
+    sample_inputs: { text: ['alpha', 'beta'] },
+  };
+  const shout = '```js\nfunction run(inputs) { return { out: inputs.text.toUpperCase() }; }\n```';
+
+  it('is shown and tried on one item, as `run` is called -- a correct body used to fail on the whole list', async () => {
+    const ai = scripted([shout]);
+    const tried: unknown[] = [];
+    const code: CodeService = { run: async (body, inputs) => { tried.push(inputs.text); return inProcess.run(body, inputs); } };
+    const reply = await generate(request, { ai, code, generationFor, target });
+    const prompt = ai.asked[0].prompt;
+    expect(prompt).toContain('sample, from the last run, the first of its 2 items: "alpha"');
+    expect(prompt).toContain('@property {string} text\n');
+    expect(tried).toEqual(['alpha']);
+    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1 });
+  });
+
+  it('turns away a body written for the list, which the probe used to pass and every item of a run failed', async () => {
+    const ai = scripted([
+      '```js\nfunction run(inputs) { return { out: inputs.text.map((word) => word.toUpperCase()) }; }\n```',
+      shout,
+    ]);
+    const reply = await generate(request, { ai, code: inProcess, generationFor, target });
+    expect(ai.asked[1].prompt).toContain('inputs["text"]: string = "alpha"');
+    expect(reply.probe.status).toBe('repaired');
+    expect(reply.result).not.toContain('.map(');
+  });
+
+  it('keeps the shape a run of the node hands on, not the shape of one call', async () => {
+    const ai = scripted([shout]);
+    const reply = await generate(request, { ai, code: inProcess, generationFor, target });
+    const graph = parseGraph({
+      nodes: [{
+        id: 'shout', node_type: 'code', config: { code: reply.result, batch_mode: 'per_item' },
+        inputs: [port('text', 'Text', 'input', 'any', true)], outputs: [port('out', 'Out', 'output', 'any', true)],
+      }],
+    });
+    const runtime = { code: inProcess, ai, files: {} as never };
+    const ran = await executeNode(graph, 'shout', { text: ['alpha', 'beta'] }, { runtime, registry });
+    expect(ran.outputs).toEqual({ out: ['ALPHA', 'BETA'] });
+    // One item was tried; what it hands on is a list, as the run's is.
+    expect(reply.probe.outputs).toEqual({ out: ['ALPHA'] });
+    expect(inferInterface(reply.probe.outputs!)).toEqual(inferInterface(ran.outputs));
+  });
+
+  it('does not cut a list the body is handed whole, and a list of one is its one item', async () => {
+    const ai = scripted([shout]);
+    let tried: Record<string, unknown> = {};
+    const code: CodeService = { run: async (body, inputs) => { tried = inputs; return inProcess.run(body, inputs); } };
+    const reply = await generate({
+      ...request, inputs: ['text', 'stop'], input_types: { text: 'text', stop: 'list of text' },
+      sample_inputs: { text: ['alpha'], stop: ['a', 'the'] },
+    }, { ai, code, generationFor, target });
+    expect(tried).toEqual({ text: 'alpha', stop: ['a', 'the'] });
+    expect(ai.asked[0].prompt).toContain('sample, from the last run, its one item: "alpha"');
+    // A batch of one is not a fan-out: it hands on what the one call returned.
+    expect(reply.probe.outputs).toEqual({ out: 'ALPHA' });
+  });
+
+  it('tries nothing on an empty list, which a run never calls the body for', async () => {
+    const ai = scripted([shout]);
+    const reply = await generate({ ...request, sample_inputs: { text: [] } },
+      { ai, code: runner(() => { throw new Error('must not run'); }), generationFor, target });
+    expect(reply.probe.status).toBe('skipped');
+    expect(ai.asked[0].prompt).not.toContain('sample, from');
+  });
+
+  it('holds one item to no example of the whole node, and a body taking the list whole to its example', async () => {
+    const examples = '## Two words\n\n```json input\n{"text": ["alpha", "beta"]}\n```\n\n```json expect\n{"out": ["ALPHA", "BETA"]}\n```\n';
+    const perItem = await generate({ ...request, sample_inputs: undefined, examples }, { ai: scripted([shout]), code: inProcess, generationFor, target });
+    expect(perItem.probe.status).toBe('ok');
+
+    const ai = scripted([
+      '```js\nfunction run(inputs) { return { out: [] }; }\n```',
+      '```js\nfunction run(inputs) { return { out: inputs.text.map((word) => word.toUpperCase()) }; }\n```',
+    ]);
+    const whole = await generate({
+      ...request, batch_mode: 'whole_list', input_types: { text: 'list of text' }, sample_inputs: undefined, examples,
+    }, { ai, code: inProcess, generationFor, target });
+    expect(ai.asked[1].prompt).toContain('for the example "Two words", output.out has 0 items; expected 2');
+    expect(whole.probe.status).toBe('repaired');
+  });
+
+  it('tells a prompt that the model is sent one item, and shows it that item', async () => {
+    const ai = scripted(['<system_prompt>Summarise the story.</system_prompt>']);
+    await generate({
+      element: 'ai', description: 'Summarise each story.', inputs: ['story'], outputs: ['output'],
+      input_types: { story: 'text' }, batch_mode: 'per_item', sample_inputs: { story: ['Once.', 'Twice.', 'Thrice.'] },
+    }, { ai, code: runner(() => ({})), generationFor, target });
+    const prompt = ai.asked[0].prompt;
+    expect(prompt).toContain('sample, from the last run, the first of its 3 items: "Once."');
+    expect(prompt).toContain('the model is called once per item and is sent that one item');
   });
 });
 

@@ -20,9 +20,12 @@
 import { readFile } from 'node:fs/promises';
 import type { AiRequest, AiService, CodeService, FileService, Runtime } from '../../elements/Runtime.ts';
 import { runBody } from '../../elements/body.ts';
+import { port } from '../../elements/port.ts';
 import { PLAIN_ASK } from '../../elements/nodes/ai/ask.ts';
 import type { Generation } from '../../authoring/generation.ts';
+import { batchItems, mergeBatchOutputs } from '../../execution/batching.ts';
 import { readPorts } from '../../execution/fileInputs.ts';
+import type { GraphNode } from '../../graph.ts';
 import { renderSkeleton } from './skeleton.ts';
 import { BUDGET, clip, exampleSample, renderBrief, type Sample } from './brief.ts';
 import { unmet } from '../../execution/examples.ts';
@@ -231,6 +234,67 @@ const DATA_FORMAT_SYSTEM =
   + 'representative example value) inside <data_format> tags, followed by a brief explanation.';
 
 // ---------------------------------------------------------------------------
+// A node that runs once per item
+// ---------------------------------------------------------------------------
+
+/**
+ * The node as the executor fans it out, for the executor's own rules
+ * (`batchItems`, `mergeBatchOutputs`): only its ports, which is all they read.
+ *
+ * A run fans out over the inputs declared multi. The request does not carry
+ * that flag; it carries what the body is handed on each port (`input_types`).
+ * A port it is handed a list on takes lists -- whole, or one list per item --
+ * so a list arriving on any other port is one the body is handed an item of.
+ * Every output counts as multi, as the one a code or ai node is created with:
+ * a list one call returns adds its entries to what the node hands on.
+ */
+function fannedOut(request: GenerateRequest, sample: Record<string, unknown>): GraphNode {
+  const takesLists = (id: string) => String(request.input_types?.[id] ?? '').startsWith('list of');
+  return {
+    inputs: Object.keys(sample).map((id) => port(id, id, 'input', 'any', !takesLists(id))),
+    outputs: (request.outputs ?? []).map((id) => port(id, id, 'output', 'any', true)),
+  } as GraphNode;
+}
+
+/**
+ * The sample as one call of a per-item body meets it: the first item, and how
+ * many a run would call it for. Undefined when there is nothing to cut.
+ *
+ * A sample is what came off the wires, so for a node run once per item it is
+ * the whole list. Shown and tried whole, the model read "a list of 2" and a
+ * skeleton typing it `string[]` while `run` is handed one string; a correct
+ * body failed the probe on `toUpperCase is not a function`, and the repair
+ * turned it into list code that then failed on every item of a real run. So
+ * it is cut by the rule the executor cuts by. An empty list is no call at
+ * all, and so no sample.
+ */
+function oneItem(request: GenerateRequest): { values: Record<string, unknown> | null; items: number } | undefined {
+  const sample = request.sample_inputs;
+  if (request.batch_mode !== 'per_item' || !sample) return undefined;
+  const node = fannedOut(request, sample);
+  if (!node.inputs.some((input) => input.multi && Array.isArray(sample[input.id]))) return undefined;
+  const items = batchItems(node, sample);
+  return { values: items[0] ?? null, items: items.length };
+}
+
+/**
+ * What a node run once per item hands on, from the one item the probe ran.
+ *
+ * The executor collects every item's answer into a list, so the next node is
+ * handed a list where one call returned a value -- and the shape kept from a
+ * probe is what that node is generated against and what every later run is
+ * checked against. Kept as one call's shape, a correct per-item node was
+ * told on each run that it "does not match its output interface". The items
+ * the probe did not run are answers that add nothing; a batch of one is not
+ * a fan-out, and stays as it came.
+ */
+function handedOn(result: Record<string, unknown>, items: number): Record<string, unknown> {
+  if (items <= 1) return result;
+  const node = { outputs: Object.keys(result).map((id) => port(id, id, 'output', 'any', true)) } as GraphNode;
+  return mergeBatchOutputs(node, [result, {}]);
+}
+
+// ---------------------------------------------------------------------------
 // Verify and repair
 // ---------------------------------------------------------------------------
 
@@ -332,10 +396,10 @@ async function generateVerifiedCode(
   if (!sample || !Object.keys(sample).length) return { ...first, probe: report };
   // A sample that is an example says what must come out of it, and that is
   // checked too -- an example is a test, and a body that returns the right
-  // keys with the wrong contents has not passed it. Only when nothing in it
-  // is a list: a node run once per item returns one item's result, not the
-  // list the example expects of the whole node.
-  const expect = given?.expect && !Object.values(sample).some(Array.isArray) ? given.expect : undefined;
+  // keys with the wrong contents has not passed it. Not when the probe ran
+  // one item of several: that returns one item's result, not what the
+  // example expects of the whole node.
+  const expect = given?.expect && (given.items ?? 1) <= 1 ? given.expect : undefined;
 
   /**
    * Run it, then ask three questions in order: did it run, did it return the
@@ -356,10 +420,15 @@ async function generateVerifiedCode(
     const reached = !ran.result ? 0 : missing.length ? 1 : problems.length ? 2 : 3;
     return { ...ran, missing, problems, reached };
   };
-  const reportOf = (verdict: Awaited<ReturnType<typeof judge>>, status: ProbeReport['status']): ProbeReport => ({
-    ...report, status, error: verdict.error, missing_outputs: verdict.missing, problems: verdict.problems,
-    ...(verdict.result ? { output_preview: preview(verdict.result), outputs: verdict.result } : {}),
-  });
+  const reportOf = (verdict: Awaited<ReturnType<typeof judge>>, status: ProbeReport['status']): ProbeReport => {
+    // Handed on as the node hands it on: the shape kept from a probe is what
+    // the next node is generated against, and a run checks itself against it.
+    const outputs = verdict.result ? handedOn(verdict.result, given?.items ?? 1) : undefined;
+    return {
+      ...report, status, error: verdict.error, missing_outputs: verdict.missing, problems: verdict.problems,
+      ...(outputs ? { output_preview: preview(outputs), outputs } : {}),
+    };
+  };
 
   report.attempts = 1;
   const attempt = await judge(first.text);
@@ -447,14 +516,18 @@ export async function generate(asked: GenerateRequest, deps: GenerateDeps): Prom
   // run would read it (`asReceived`), shown in the brief and tried the code on.
   const ran = asked.sample_inputs && Object.keys(asked.sample_inputs).length;
   const exampled = ran ? undefined : exampleSample(asked.examples);
-  const request = await asReceived(exampled ? { ...asked, sample_inputs: exampled.values } : asked, deps.files);
+  const spec = asked.element ? deps.generationFor(asked.element) : undefined;
+  if (asked.element && !spec) throw new GenerationRefused(`'${asked.element}' is not an element that generates anything`);
+  const whole = exampled ? { ...asked, sample_inputs: exampled.values } : asked;
+  // One item of it, for a node run once per item: what its body is called
+  // with. A snippet with ports of its own is not fanned out by anyone.
+  const cut = spec?.inputs ? undefined : oneItem(whole);
+  const request = await asReceived(cut ? { ...whole, sample_inputs: cut.values } : whole, deps.files);
   const calls: AICall[] = deps.calls ?? [];
   // A preview runs every step a generation does up to the model, and stops
   // there: the request it hands back is the request, not a second rendering
   // of it that could differ.
   const ai = recording(request.preview ? PREVIEW_AI : deps.ai, calls);
-  const spec = request.element ? deps.generationFor(request.element) : undefined;
-  if (request.element && !spec) throw new GenerationRefused(`'${request.element}' is not an element that generates anything`);
   const kind = spec?.kind ?? request.kind ?? '';
 
   const context = await withContextFile(
@@ -473,7 +546,10 @@ export async function generate(asked: GenerateRequest, deps: GenerateDeps): Prom
 
   const values = shaped.sample_inputs;
   const sample: Sample | undefined = values && Object.keys(values).length
-    ? { values, origin: exampled?.origin ?? request.sample_origin ?? 'the last run', expect: exampled?.expect }
+    ? {
+      values, origin: exampled?.origin ?? request.sample_origin ?? 'the last run', expect: exampled?.expect,
+      ...(cut ? { items: cut.items } : {}),
+    }
     : undefined;
 
   try {
