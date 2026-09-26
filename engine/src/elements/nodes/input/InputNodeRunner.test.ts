@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { InputNodeRunner } from './InputNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
-import type { GraphNode } from '../../../graph.ts';
+import { parseGraph, type Graph, type GraphNode } from '../../../graph.ts';
+import { forgetSeen, writeProject } from '../../../project/folder.ts';
 
 /**
  * A read that fails: a missing file, an unreadable folder.
@@ -88,5 +93,60 @@ describe('a file that cannot be read', () => {
     const okay: Runtime = { ...broken, files: { ...broken.files, resolve: (p) => p, read: async () => 'hi' } };
     const result = await element.execute(inputNode({ input_mode: 'file', value: '/x.txt', catch_errors: true }), {}, okay);
     expect(result).toEqual({ content: 'hi', path: '/x.txt', error: '' });
+  });
+});
+
+describe('the selector', () => {
+  /**
+   * Only a folder listing is narrowed by a selector. The editor gives every
+   * input node the starter selector, and a text or single-file input used to
+   * have it written into its folder as `select.js`: a file that never runs,
+   * saying the node chooses files.
+   */
+  const starter = 'function run(inputs) {\n  return { files: inputs.files ?? [] };\n}\n';
+
+  it('is kept in a file of its own only by a node that lists a folder', () => {
+    const element = new InputNodeRunner();
+    for (const mode of ['text', 'file']) {
+      expect(element.texts(inputNode({ input_mode: mode, selector_code: starter })), mode).toEqual([]);
+    }
+    expect(element.texts(inputNode({ input_mode: 'directory', selector_code: starter })).map((text) => text.file))
+      .toEqual(['select.js', 'task.md']);
+  });
+
+  describe('in a project folder', () => {
+    let dir: string;
+    beforeEach(async () => {
+      dir = await mkdtemp(join(tmpdir(), 'ai-graph-input-'));
+      forgetSeen();
+    });
+    afterEach(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    const graphWith = (mode: string): Graph => parseGraph({
+      nodes: [{
+        id: 'source', node_type: 'input', label: 'Source', position: { x: 0, y: 0 }, inputs: [], outputs: [],
+        config: { input_mode: mode, value: 'data', selector_code: starter },
+      }],
+      edges: [],
+    });
+
+    it('writes no select.js for a text or file input', async () => {
+      for (const mode of ['text', 'file']) {
+        await writeProject(dir, graphWith(mode));
+        expect(existsSync(join(dir, 'nodes', 'source', 'select.js')), mode).toBe(false);
+      }
+    });
+
+    it('tidies away the select.js a node left when it stops listing a folder, and keeps what it said', async () => {
+      await writeProject(dir, graphWith('directory'));
+      expect(existsSync(join(dir, 'nodes', 'source', 'select.js'))).toBe(true);
+      await writeProject(dir, graphWith('text'));
+      expect(existsSync(join(dir, 'nodes', 'source', 'select.js'))).toBe(false);
+      // Not lost: a node switched back to directory mode still has its selector.
+      const saved = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8'));
+      expect(saved.nodes[0].config.selector_code).toBe(starter);
+    });
   });
 });

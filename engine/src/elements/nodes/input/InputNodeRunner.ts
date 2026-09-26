@@ -39,8 +39,15 @@ const SELECTOR_TEXTS: readonly TextFile[] = [
 export class InputNodeRunner extends NodeRunner<InputConfig> {
   readonly nodeType = 'input' as const;
 
-  override texts(): readonly TextFile[] {
-    return SELECTOR_TEXTS;
+  /**
+   * Only a folder listing keeps a selector in its folder, as `logic` says.
+   * A text or single-file input selects nothing, and a `select.js` beside it
+   * said that it did. A stale one left from directory mode is still tidied
+   * away on save: the file-picker block keeps the same names, so they stay
+   * among the files a save may remove.
+   */
+  override texts(node: GraphNode): readonly TextFile[] {
+    return this.config(node).mode === 'directory' ? SELECTOR_TEXTS : [];
   }
 
   config(node: GraphNode): InputConfig {
