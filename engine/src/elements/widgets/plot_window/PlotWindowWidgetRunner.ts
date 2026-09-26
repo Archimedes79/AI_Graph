@@ -1,4 +1,5 @@
 import { TransformingDisplayRunner } from '../TransformingDisplayRunner.ts';
+import type { DeployNeeds } from '../../ElementRunner.ts';
 import type { Widget } from '../../WidgetRunner.ts';
 import type { Generation } from '../../../authoring/generation.ts';
 import { TRANSFORM_FIELDS } from '../TransformingDisplayRunner.ts';
@@ -38,6 +39,14 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
       + '"value": number} -- or an object {"kind": "bars"|"columns"|"line"|"donut", "title": string, '
       + '"points": [...]}. The chart draws it at the block\'s real size and in the page\'s colours, '
       + 'neither of which exists while the graph runs, so SVG built here would be stretched to fit.';
+  }
+
+  /**
+   * Its body runs in the page (`bodyDrawsOnThePage`), which cannot ask a
+   * model, whatever the body says: a bundle need not bring one for it.
+   */
+  override deployNeeds(_widget: Widget): DeployNeeds {
+    return { needsInterface: false, asksAi: false };
   }
 
   /**
@@ -138,17 +147,28 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
        * that follows knows it: it reads the viewBox the body itself declared,
        * not these.
        *
-       * A body that still defines `run` -- every chart written before this --
-       * is left exactly as it is.
+       * It is called the way the page's worker calls it (`plot_window/draw.ts`),
+       * whatever it defines. A body that still defines `run` -- every chart
+       * written before `draw` -- is handed `({ value }, window)`, never the
+       * sandbox's `node`: one that asks `node.llm` passed the probe with a
+       * real node and then failed on every page. The body gets a scope of its
+       * own, so its `run` is not the wrapper's, and no `require`, which a
+       * worker does not have either.
        */
-      probeWith: (body) => (/\bfunction\s+run\b|\brun\s*=/.test(body) ? body : [
+      probeWith: (body) => [
+        'const __probe = run;',
+        'const __chart = ((require) => {',
         body,
-        'function run(inputs) {',
+        ';',
+        "  return { draw: typeof draw === 'function' ? draw : undefined, run: typeof run === 'function' && run !== __probe ? run : undefined };",
+        '})();',
+        'async function run(inputs) {',
         "  const window = { width: 640, height: 360, scheme: 'night', dark: true };",
-        '  const drawn = draw(inputs.value, window);',
-        "  return drawn && typeof drawn === 'object' && 'value' in drawn ? drawn : { value: drawn };",
+        "  if (!__chart.draw && !__chart.run) throw new Error(\"This chart's code defines neither draw(data, window) nor run(inputs).\");",
+        '  const drawn = await (__chart.draw ? __chart.draw(inputs.value, window) : __chart.run({ value: inputs.value }, window));',
+        "  return { value: drawn && typeof drawn === 'object' && 'value' in drawn ? drawn.value : drawn };",
         '}',
-      ].join('\n')),
+      ].join('\n'),
       guard: 'Please describe the chart you want first.',
       success: '✅ Chart generated!',
     };

@@ -28,22 +28,41 @@ describe('a chart, from the engine', () => {
       expect(wrapped).toMatch(/height: \d+/);
     });
 
-    it('leaves a body that still defines run() exactly as it is', () => {
-      // Every chart written before this one defines `run`. A wrapper appended
-      // to it would declare a second `run` and quietly win.
-      const old = 'function run(inputs) { return { value: inputs.value }; }';
-      expect(probeWith(old)).toBe(old);
-      const assigned = 'const run = (inputs) => ({ value: inputs.value });';
-      expect(probeWith(assigned)).toBe(assigned);
+    /** The wrapped body, run the way the sandbox runs one: `run(inputs, node)`, with a node that could ask a model. */
+    const probe = (body: string, value: unknown) => new Function(`${probeWith(body)}\nreturn run({ value: ${JSON.stringify(value)} }, { llm: async () => 'asked' });`)() as Promise<unknown>;
+
+    it('calls a body that still defines run() as the page does: with the value and a window, never the node', async () => {
+      // Every chart written before draw() defines `run`, and the page calls it
+      // `run({ value }, window)`. Left as it was, the probe handed it a node
+      // that could ask a model, and a body asking `node.llm` passed here and
+      // failed on every page.
+      await expect(probe('function run(inputs, window) { return { value: [inputs.value, window.width > 0] }; }', 3))
+        .resolves.toEqual({ value: [3, true] });
+      await expect(probe('const run = (inputs) => ({ value: inputs.value });', [4])).resolves.toEqual({ value: [4] });
+      await expect(probe('async function run(inputs, node) { return { value: await node.llm({ prompt: "x" }) }; }', 1))
+        .rejects.toThrow(/node\.llm is not a function/);
     });
 
-    it('unwraps either shape a draw may answer with', () => {
-      // `draw` may return the value, or `{ value }` as a transform did.
-      const bare = new Function(`${probeWith('function draw(d) { return [1]; }')}\nreturn run({ value: null });`)();
-      expect(bare).toEqual({ value: [1] });
-      const wrapped = new Function(`${probeWith('function draw(d) { return { value: [2] }; }')}\nreturn run({ value: null });`)();
-      expect(wrapped).toEqual({ value: [2] });
+    it('has no require, as a worker has none', async () => {
+      await expect(probe('function draw() { return [require("node:fs") ? 1 : 0]; }', null)).rejects.toThrow(/require is not a function/);
     });
+
+    it('says so when the body defines neither function', async () => {
+      await expect(probe('const points = [1];', null)).rejects.toThrow(/defines neither draw\(data, window\) nor run\(inputs\)/);
+    });
+
+    it('unwraps either shape a draw may answer with', async () => {
+      // `draw` may return the value, or `{ value }` as a transform did.
+      await expect(probe('function draw(d) { return [1]; }', null)).resolves.toEqual({ value: [1] });
+      await expect(probe('function draw(d) { return { value: [2] }; }', null)).resolves.toEqual({ value: [2] });
+      await expect(probe('function draw(d) { return { kind: "line", title: "T", points: [3] }; }', null))
+        .resolves.toEqual({ value: { kind: 'line', title: 'T', points: [3] } });
+    });
+  });
+
+  it('never asks a bundle for a model: its body runs in the page, which has none to ask', () => {
+    const asking = { id: 'c', kind: 'plot_window', label: '', w: 8, h: 4, tone: 'plain', config: { code: 'async function run(i, node) { return node.llm({}); }' } } as const;
+    expect(element.deployNeeds(asking as never).asksAi).toBe(false);
   });
 
   describe('what the contract asks for', () => {
