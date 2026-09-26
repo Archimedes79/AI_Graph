@@ -591,6 +591,18 @@ describe('a block\'s snippet is looked at before anyone sees it', () => {
     expect(reply.probe.outputs).toEqual({ value: { kind: 'line', title: 'Temperature', points: [{ label: '08:00', value: 61 }, { label: '08:05', value: 64 }] } });
   }, 30_000);
 
+  it('tells the repair the line of the chart\'s body an error is on, as the body is shown to it', async () => {
+    // The wrapper that calls it as the page does stood two lines above it, and
+    // the repair was told of a line 5 in a body of four.
+    const ai = scripted([
+      '```js\nfunction draw(data, window) {\n  const rows = data;\n  return rows.nope.map((row) => row.temp);\n}\n```',
+      '```js\nfunction draw(data) { return data.map((row) => row.temp); }\n```',
+    ]);
+    const reply = await generate({ element: 'plot_window', description: 'a line', sample_inputs: sample }, { ai, code: nodeCode, generationFor, target });
+    expect(ai.asked[1].prompt).toMatch(/reading 'map'\)[\s\S]*\bline 3, column \d+/);
+    expect(reply.probe.status).toBe('repaired');
+  }, 30_000);
+
   it('still ignores a sample keyed by the node\'s ports, which a block\'s snippet does not have', async () => {
     const ai = scripted(['```js\nfunction run(i) { return { value: [] }; }\n```']);
     const reply = await generate(

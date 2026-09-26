@@ -153,12 +153,12 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
        * sandbox's `node`: one that asks `node.llm` passed the probe with a
        * real node and then failed on every page. The body gets a scope of its
        * own, so its `run` is not the wrapper's, and no `require`, which a
-       * worker does not have either.
+       * worker does not have either. It starts on the wrapper's first line:
+       * an error is reported by the line it is on, and the repair is shown the
+       * body, whose line 3 must be the line 3 it is told about.
        */
       probeWith: (body) => [
-        'const __probe = run;',
-        'const __chart = ((require) => {',
-        body,
+        `const __probe = run; const __chart = ((require) => { ${body}`,
         ';',
         "  return { draw: typeof draw === 'function' ? draw : undefined, run: typeof run === 'function' && run !== __probe ? run : undefined };",
         '})();',
