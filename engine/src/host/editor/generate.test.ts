@@ -266,6 +266,9 @@ describe('a node run once per item', () => {
     const prompt = ai.asked[0].prompt;
     expect(prompt).toContain('sample, from the last run, the first of its 2 items: "alpha"');
     expect(prompt).toContain('@property {string} text\n');
+    // What goes out is said as the list a run collects, so an example's list
+    // of two is not read as what one call must return.
+    expect(prompt).toContain('What the calls return is collected into one list per output');
     expect(tried).toEqual(['alpha']);
     expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1 });
   });
@@ -308,8 +311,41 @@ describe('a node run once per item', () => {
     }, { ai, code, generationFor, target });
     expect(tried).toEqual({ text: 'alpha', stop: ['a', 'the'] });
     expect(ai.asked[0].prompt).toContain('sample, from the last run, its one item: "alpha"');
-    // A batch of one is not a fan-out: it hands on what the one call returned.
-    expect(reply.probe.outputs).toEqual({ out: 'ALPHA' });
+  });
+
+  it('hands on a list even for one item, as a run of the node\'s list output does -- it kept the bare answer', async () => {
+    // What a run of the node as it is created hands on: a multi output
+    // collects its answers whatever their number, so a run of one item hands
+    // on a list of one, and a single value arriving is a run of one item.
+    const graph = parseGraph({
+      nodes: [{
+        id: 'shout', node_type: 'code', config: { code: shout.split('\n')[1], batch_mode: 'per_item' },
+        inputs: [port('text', 'Text', 'input', 'any', true)], outputs: [port('out', 'Out', 'output', 'any', true)],
+      }],
+    });
+    for (const text of [['alpha'], 'alpha']) {
+      const reply = await generate({ ...request, sample_inputs: { text } }, { ai: scripted([shout]), code: inProcess, generationFor, target });
+      const ran = await executeNode(graph, 'shout', { text }, { runtime: { code: inProcess, ai: scripted([]), files: {} as never }, registry });
+      expect(ran.outputs).toEqual({ out: ['ALPHA'] });
+      expect(reply.probe.outputs).toEqual(ran.outputs);
+    }
+  });
+
+  it('holds a correct body to an example kept from a run of one item, list and all', async () => {
+    // `test` holds the example to what the node hands on, a list of one; held
+    // to the bare answer, the probe failed a correct body and asked for a repair.
+    const kept = '## One word\n\n```json input\n{"text": ["alpha"]}\n```\n\n```json expect\n{"out": ["ALPHA"]}\n```\n';
+    const reply = await generate({ ...request, sample_inputs: undefined, examples: kept }, { ai: scripted([shout]), code: inProcess, generationFor, target });
+    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1, problems: [] });
+    // A port declared single hands on the bare answer, and the request cannot say which ports are: that meets it too.
+    const typed = '## One word\n\n```json input\n{"text": "alpha"}\n```\n\n```json expect\n{"out": "ALPHA"}\n```\n';
+    const single = await generate({ ...request, sample_inputs: undefined, examples: typed }, { ai: scripted([shout]), code: inProcess, generationFor, target });
+    expect(single.probe).toMatchObject({ status: 'ok', attempts: 1 });
+    // And a wrong answer meets neither.
+    const lower = '```js\nfunction run(inputs) { return { out: inputs.text }; }\n```';
+    const wrong = await generate({ ...request, sample_inputs: undefined, examples: kept }, { ai: scripted([lower, lower]), code: inProcess, generationFor, target });
+    expect(wrong.probe.status).toBe('failed');
+    expect(wrong.probe.problems?.[0]).toContain('for the example "One word", output.out[0] is "alpha"; expected "ALPHA"');
   });
 
   it('tries nothing on an empty list, which a run never calls the body for', async () => {

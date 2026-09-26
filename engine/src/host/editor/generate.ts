@@ -277,6 +277,15 @@ const DATA_FORMAT_SYSTEM =
 // ---------------------------------------------------------------------------
 
 /**
+ * Whether a run calls this body once per item. A node's can be; a snippet
+ * with ports of its own (a selector's `files`, a block's `value`) is not
+ * fanned out by anyone.
+ */
+function runsPerItem(request: GenerateRequest, spec: Generation | undefined): boolean {
+  return request.batch_mode === 'per_item' && !spec?.inputs;
+}
+
+/**
  * The node's inputs as the executor fans them out, for its own rule
  * (`batchItems`): only the ports, which is all it reads.
  *
@@ -304,7 +313,7 @@ function fannedOut(request: GenerateRequest, sample: Record<string, unknown>): G
  */
 function oneItem(request: GenerateRequest): { values: Record<string, unknown> | null; items: number } | undefined {
   const sample = request.sample_inputs;
-  if (request.batch_mode !== 'per_item' || !sample) return undefined;
+  if (!sample) return undefined;
   const node = fannedOut(request, sample);
   if (!node.inputs.some((input) => input.multi && Array.isArray(sample[input.id]))) return undefined;
   const items = batchItems(node, sample);
@@ -319,14 +328,17 @@ function oneItem(request: GenerateRequest): { values: Record<string, unknown> | 
  * probe is what that node is generated against and what every later run is
  * checked against. Kept as one call's shape, a correct per-item node was
  * told on each run that it "does not match its output interface". The items
- * the probe did not run are answers that add nothing; a batch of one is not
- * a fan-out, and stays as it came. Every output counts as multi, as the one a
- * code or ai node is created with: a list one call returns adds its entries.
+ * the probe did not run are answers that add nothing.
+ *
+ * Every output counts as multi, as the one a code or ai node is created with:
+ * a list one call returns adds its entries, and even a single item is handed
+ * on as a list of one -- a run of one item is still a run per item, and its
+ * multi outputs are collected all the same. Only a port declared single keeps
+ * a lone answer as it came, and the request does not say which ports are.
  */
-function handedOn(result: Record<string, unknown>, items: number): Record<string, unknown> {
-  if (items <= 1) return result;
+function handedOn(result: Record<string, unknown>): Record<string, unknown> {
   const node = { outputs: Object.keys(result).map((id) => port(id, id, 'output', 'any', true)) } as GraphNode;
-  return mergeBatchOutputs(node, [result, {}]);
+  return mergeBatchOutputs(node, [result]);
 }
 
 // ---------------------------------------------------------------------------
@@ -431,12 +443,26 @@ async function generateVerifiedCode(
   const first = await generateCode(ai, target, request, context, given, '', frame);
   const report: ProbeReport = { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' };
   if (!sample || !Object.keys(sample).length) return { ...first, probe: report };
+  const perItem = runsPerItem(request, spec);
   // A sample that is an example says what must come out of it, and that is
   // checked too -- an example is a test, and a body that returns the right
   // keys with the wrong contents has not passed it. Not when the probe ran
   // one item of several: that returns one item's result, not what the
   // example expects of the whole node.
   const expect = given?.expect && (given.items ?? 1) <= 1 ? given.expect : undefined;
+  /**
+   * What an example's expectation is short of. It says what the node hands
+   * on, which is what `test` holds it to -- for a node run once per item, the
+   * one call's answer collected into a list. Held to the bare answer instead,
+   * a correct body failed an example kept from a run of one item. A port
+   * declared single hands the bare answer on, and the request cannot say
+   * which ports are, so meeting it either way is meeting it.
+   */
+  const gaps = (result: Record<string, unknown>): string[] => {
+    if (!expect) return [];
+    const found = unmet(expect, perItem ? handedOn(result) : result);
+    return found.length && perItem && !unmet(expect, result).length ? [] : found;
+  };
 
   /**
    * Run it, then ask three questions in order: did it run, did it return the
@@ -451,7 +477,7 @@ async function generateVerifiedCode(
     const ran = await probe(runtime, target, probeWith ? probeWith(body) : body, sample);
     const missing = ran.result ? outputs.filter((port) => !(port in ran.result!)) : [];
     const problems = ran.result && !missing.length
-      ? [...(check ? check(ran.result) : []), ...(expect ? unmet(expect, ran.result).map((gap) => `for ${given!.origin}, ${gap}`) : [])]
+      ? [...(check ? check(ran.result) : []), ...gaps(ran.result).map((gap) => `for ${given!.origin}, ${gap}`)]
       : [];
     // How far it got: not at all, wrong keys, a flawed result, a good one.
     const reached = !ran.result ? 0 : missing.length ? 1 : problems.length ? 2 : 3;
@@ -460,7 +486,7 @@ async function generateVerifiedCode(
   const reportOf = (verdict: Awaited<ReturnType<typeof judge>>, status: ProbeReport['status']): ProbeReport => {
     // Handed on as the node hands it on: the shape kept from a probe is what
     // the next node is generated against, and a run checks itself against it.
-    const outputs = verdict.result ? handedOn(verdict.result, given?.items ?? 1) : undefined;
+    const outputs = verdict.result && perItem ? handedOn(verdict.result) : verdict.result ?? undefined;
     return {
       ...report, status, error: verdict.error, missing_outputs: verdict.missing, problems: verdict.problems,
       ...(outputs ? { output_preview: preview(outputs), outputs } : {}),
@@ -558,9 +584,8 @@ export async function generate(asked: GenerateRequest, deps: GenerateDeps): Prom
   const spec = asked.element ? deps.generationFor(asked.element) : undefined;
   if (asked.element && !spec) throw new GenerationRefused(`'${asked.element}' is not an element that generates anything`);
   const whole = exampled ? { ...asked, sample_inputs: exampled.values } : asked;
-  // One item of it, for a node run once per item: what its body is called
-  // with. A snippet with ports of its own is not fanned out by anyone.
-  const cut = spec?.inputs ? undefined : oneItem(whole);
+  // One item of it, for a node run once per item: what its body is called with.
+  const cut = runsPerItem(whole, spec) ? oneItem(whole) : undefined;
   const request = await asReceived(cut ? { ...whole, sample_inputs: cut.values } : whole, deps.files);
   const calls: AICall[] = deps.calls ?? [];
   // A preview runs every step a generation does up to the model, and stops

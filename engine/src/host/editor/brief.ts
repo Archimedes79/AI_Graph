@@ -125,12 +125,17 @@ function inputsSection(request: GenerateRequest, kind: 'code' | 'prompt', sample
   }
   // Said for a model's prompt as much as for code: a system prompt that says
   // "summarise each of the stories" to a model sent one story is wrong the
-  // same way a `run` written for the list is.
+  // same way a `run` written for the list is. And said of what goes out: the
+  // shape a run kept and an example's expectation are of the list the calls'
+  // answers are collected into, and a body told it "must return" a list of
+  // two was written for the list.
   if (request.batch_mode) {
     const perItem = request.batch_mode !== 'whole_list';
     lines.push(kind === 'code'
       ? (perItem
-        ? 'A list arrives one item at a time: `run` is called once per item, with one value from each list input.'
+        ? 'A list arrives one item at a time: `run` is called once per item, with one value from each list input. '
+          + 'What the calls return is collected into one list per output: a shape or an example below describes '
+          + 'that list, not what one call returns.'
         : 'A list arrives whole: `run` is called once with the full lists and must handle or reduce them.')
       : (perItem
         ? 'A list arrives one item at a time: the model is called once per item and is sent that one item, '
