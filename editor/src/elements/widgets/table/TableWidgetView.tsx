@@ -1,5 +1,5 @@
 import type { WidgetViewProps } from '../WidgetView';
-import { DIMMER, LINE, MUTED, TEXT } from '@/ui/theme';
+import { DIMMER, LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
 
 /**
  * Rows, as a table. Display-only, like the plot: one input port, no output.
@@ -75,7 +75,10 @@ export default function TableWidgetView({ widget, value, incoming }: WidgetViewP
                 style={{
                   textAlign: 'left', padding: '3px 8px', position: 'sticky', top: 0,
                   borderBottom: `1px solid ${LINE}`, color: MUTED, fontWeight: 600,
-                  background: 'rgba(15,17,23,0.95)',
+                  // The page's own recessed colour, so the header follows its
+                  // scheme -- a fixed near-black band sat on the light ones --
+                  // and opaque, because rows scroll under a sticky header.
+                  background: SUNKEN,
                 }}
               >
                 {cell}
