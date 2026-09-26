@@ -5,6 +5,7 @@ import { parseGraph, type Graph, type GraphNode } from '../../../graph.ts';
 import type { Runtime } from '../../Runtime.ts';
 import { nodeCode } from '../../../host/node.ts';
 import { SUBGRAPH_RUN } from './runTemplate.ts';
+import { bundleNeeds } from '../../../cli/bundle.ts';
 
 /**
  * A graph inside a node, run by the engine that runs graphs.
@@ -242,5 +243,27 @@ describe('a run.js of its own', () => {
     const element = registry.node('subgraph')!;
     expect(element.whatRuns(holder({ run_code: SUBGRAPH_RUN }))).toMatchObject({ by: 'engine' });
     expect(element.whatRuns(holder({ run_code: 'async function run(i, node) { return node.graph(i); }' }))).toMatchObject({ by: 'body', where: 'run.js' });
+  });
+});
+
+describe('what a bundle of it needs', () => {
+  // The graph inside is followed by `bundleNeeds` on its own; what this node's
+  // own run.js asks is this node's to say, and it said nothing.
+  const empty = { metadata: { name: 'inside' }, nodes: [], edges: [] };
+  const asking = 'async function run(inputs, node) {\n  return { answer: await node.llm("Say hello.") };\n}';
+
+  it('is a model, when its own run.js asks one around a graph that asks none', () => {
+    const part = node('part', 'subgraph', { subgraph: empty, run_code: asking });
+    expect(bundleNeeds(graph([part])).ai).toBe(true);
+    // The same answer an offline `test` skips its examples by.
+    expect(registry.node('subgraph')!.asksModel(part)).toBe(true);
+  });
+
+  it('is no model, with the standard run.js around a graph that asks none', () => {
+    for (const run_code of [SUBGRAPH_RUN, '']) {
+      const part = node('part', 'subgraph', { subgraph: empty, run_code });
+      expect(bundleNeeds(graph([part])).ai).toBe(false);
+      expect(registry.node('subgraph')!.asksModel(part)).toBe(false);
+    }
   });
 });
