@@ -54,8 +54,12 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
    */
   readonly inlineText?: boolean;
 
-  /** Drawn on the canvas under the widget's input port: what last arrived there. */
-  readonly CanvasPreview?: ComponentType<{ data: unknown }>;
+  /**
+   * Drawn on the canvas under the widget's input port: what last arrived
+   * there, as the block shows it. Handed the block too, because what it shows
+   * can be its own code's work -- a chart's draw() -- and not what arrived.
+   */
+  readonly CanvasPreview?: ComponentType<{ widget: GuiWidget; data: unknown }>;
 
   /** Said under "⚡ Using this starts the graph", for a widget that can be told to. */
   readonly runOnChangeHint: string =

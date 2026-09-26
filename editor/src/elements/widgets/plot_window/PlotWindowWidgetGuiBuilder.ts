@@ -2,7 +2,7 @@ import type { GuiWidget } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { PlotWindowWidgetRunner } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
 import { TransformingDisplayGuiBuilder } from '../TransformingDisplayGuiBuilder';
-import PlotChart from './PlotChart';
+import PlotCanvasPreview from './PlotCanvasPreview';
 
 export class PlotWindowWidgetGuiBuilder extends TransformingDisplayGuiBuilder {
   readonly widgetKind = 'plot_window';
@@ -30,6 +30,6 @@ export class PlotWindowWidgetGuiBuilder extends TransformingDisplayGuiBuilder {
     bodyHeight: 100,
   };
 
-  /** What last arrived on this widget's input port, charted on the graph canvas itself. */
-  override readonly CanvasPreview = PlotChart;
+  /** What last arrived on this widget's input port, charted on the graph canvas itself -- by its own draw(). */
+  override readonly CanvasPreview = PlotCanvasPreview;
 }
