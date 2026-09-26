@@ -16,6 +16,10 @@ import { DIMMER, MUTED, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
 export default function TopGraphOnly({ children }: { children: ReactNode }) {
   const inside = useGraphStore((s) => s.subgraphStack.length > 0);
   const closeSubgraphsTo = useGraphStore((s) => s.closeSubgraphsTo);
+  // No level changes while a run is in flight -- its result would land on the
+  // canvas of another graph (`openSubgraph`) -- so the way up waits for it. A
+  // button that then did nothing, without a word, would look broken.
+  const running = useGraphStore((s) => s.isExecuting);
   if (!inside) return <>{children}</>;
 
   return (
@@ -29,11 +33,17 @@ export default function TopGraphOnly({ children }: { children: ReactNode }) {
       </p>
       <button
         className="mt-2 text-xs px-3 py-1.5 rounded-lg"
-        style={NEUTRAL_BUTTON}
+        style={{ ...NEUTRAL_BUTTON, opacity: running ? 0.5 : 1 }}
+        disabled={running}
         onClick={() => closeSubgraphsTo(0)}
       >
         ↑ Back to the graph at the top
       </button>
+      {running && (
+        <p className="text-xs" style={{ color: DIMMER }}>
+          A run is going on. The way up opens when it is over.
+        </p>
+      )}
     </div>
   );
 }

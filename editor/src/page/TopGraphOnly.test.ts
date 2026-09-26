@@ -7,7 +7,7 @@ import TopGraphOnly from './TopGraphOnly';
 // one a test has since moved it to -- so the one question it asks is answered
 // here instead: how deep into the document the canvas is. (Vitest lifts both
 // of these above the imports.)
-const level = vi.hoisted(() => ({ subgraphStack: [] as unknown[], closeSubgraphsTo: () => {} }));
+const level = vi.hoisted(() => ({ subgraphStack: [] as unknown[], isExecuting: false, closeSubgraphsTo: () => {} }));
 vi.mock('@/store/graphStore', () => ({
   useGraphStore: (select: (state: typeof level) => unknown) => select(level),
 }));
@@ -28,5 +28,20 @@ describe('the page views, at each level of the document', () => {
     const html = shown();
     expect(html).not.toContain('the page designer');
     expect(html).toContain('The page belongs to the graph at the top.');
+    expect(html).not.toMatch(/<button[^>]*disabled/);
+  });
+
+  it('say why the way up waits while a run is in flight, instead of a button that does nothing', () => {
+    // No level closes during a run (`closeSubgraph`), so the button would have
+    // been pressed to no effect and no word.
+    level.subgraphStack = [{ nodeId: 'part' }];
+    level.isExecuting = true;
+    try {
+      const html = shown();
+      expect(html).toMatch(/<button[^>]*disabled/);
+      expect(html).toContain('The way up opens when it is over.');
+    } finally {
+      level.isExecuting = false;
+    }
   });
 });
