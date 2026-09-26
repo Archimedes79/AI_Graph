@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import type { GuiWidget } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { InputPickerWidgetRunner } from '@engine/elements/widgets/input_picker/InputPickerWidgetRunner.ts';
+import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { WidgetGuiBuilder } from '../../WidgetGuiBuilder';
 
 export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
@@ -22,7 +23,8 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
   // behaviour one level down -- the engine returns literally the same object.
   override readonly generation: ElementGeneration<GuiWidget> = {
     ...fromEngine(new InputPickerWidgetRunner().generation()),
-    available: (widget) => widget.mode === 'directory',
+    // Only a folder is selected from, and only when not every file is taken.
+    available: (widget) => widget.mode === 'directory' && !this.selectsAll(widget),
     promptLabel: 'Prompt text',
     promptPlaceholder: 'Select Markdown files that contain API documentation',
     mono: true,
@@ -37,6 +39,17 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
    */
   override missingExample(widget: GuiWidget): boolean {
     return !String(widget.value ?? '').trim();
+  }
+
+  /**
+   * Whether a run takes every file the folder lists, and runs no selector:
+   * the engine's answer, asked of the engine. A picker without the key --
+   * written by ✨, by hand or over MCP -- takes them all; the panel read the
+   * missing key as "no", offered a selector to write, and every run went on
+   * emitting the whole folder.
+   */
+  selectsAll(widget: GuiWidget): boolean {
+    return new InputPickerWidgetRunner().config(parseWidget(widget)).selectAll;
   }
 
   protected override defaultSpan() {

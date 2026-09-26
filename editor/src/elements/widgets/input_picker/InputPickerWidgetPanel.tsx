@@ -1,11 +1,15 @@
 import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
 import { FIELD_ON_SURFACE, LINE, MUTED } from '@/ui/theme';
 import type { WidgetPanelProps } from '../../WidgetGuiBuilder';
+import { InputPickerWidgetGuiBuilder } from './InputPickerWidgetGuiBuilder';
 
 export default function InputPickerWidgetPanel({
-  widget, generation, fields, onUpdate, generating, message, onGenerate,
+  builder, widget, generation, fields, onUpdate, generating, message, onGenerate,
 }: WidgetPanelProps) {
+  if (!(builder instanceof InputPickerWidgetGuiBuilder)) return null;
   const mode = widget.mode || 'file';
+  // As a run reads it: a picker that does not say takes every file.
+  const selectAll = builder.selectsAll(widget);
 
   return (
     <div className="space-y-2">
@@ -73,12 +77,12 @@ export default function InputPickerWidgetPanel({
               message={message}
               onGenerate={onGenerate}
               onSurface
-              bodyHidden={widget.select_all_files}
+              bodyHidden={selectAll}
             >
               <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
                 <input
                   type="checkbox"
-                  checked={widget.select_all_files}
+                  checked={selectAll}
                   onChange={(e) => onUpdate({ select_all_files: e.target.checked })}
                 />
                 Select all files
