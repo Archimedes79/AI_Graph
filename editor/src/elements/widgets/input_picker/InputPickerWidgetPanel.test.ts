@@ -2,11 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import InputPickerWidgetPanel from './InputPickerWidgetPanel';
+import type { InputPickerWidgetGuiBuilder } from './InputPickerWidgetGuiBuilder';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { widgetFields } from '@/authoring/generation';
 import type { GuiWidget } from '@/graph';
 
-const builder = WIDGET_BUILDERS.input_picker;
+const builder = WIDGET_BUILDERS.input_picker as InputPickerWidgetGuiBuilder;
 
 function panel(widget: GuiWidget): string {
   return renderToStaticMarkup(createElement(InputPickerWidgetPanel, {
