@@ -150,3 +150,25 @@ describe('the selector', () => {
     });
   });
 });
+
+describe('what it hands on', () => {
+  it('counts a folder\'s files as a number, and says so on its port', async () => {
+    const element = new InputNodeRunner();
+    const listing: Runtime = { ...broken, files: { ...broken.files, list: async () => ['/d/a.txt', '/d/b.txt'] } };
+    const result = await element.execute(inputNode({ input_mode: 'directory', value: '/d' }), {}, listing);
+    expect(result).toMatchObject({ files: ['/d/a.txt', '/d/b.txt'], count: 2 });
+    const count = element.derivedPorts(inputNode({ input_mode: 'directory' }))!.outputs.find((port) => port.id === 'count');
+    expect(count?.data_type).toBe('number');
+  });
+
+  it('hands on the text it holds in text mode, and nothing from a wire it does not have', async () => {
+    // Text mode declares no inputs. A wire left on "path" from file mode used
+    // to be handed on as the text whenever the box was empty.
+    const element = new InputNodeRunner();
+    expect(element.derivedPorts(inputNode({ input_mode: 'text' }))!.inputs).toEqual([]);
+    expect(await element.execute(inputNode({ input_mode: 'text', value: 'hello' }), { path: '/elsewhere.txt' }, broken))
+      .toEqual({ output: 'hello' });
+    expect(await element.execute(inputNode({ input_mode: 'text', value: '' }), { path: '/elsewhere.txt', value: 'x' }, broken))
+      .toEqual({ output: '' });
+  });
+});

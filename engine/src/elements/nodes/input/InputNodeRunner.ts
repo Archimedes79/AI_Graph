@@ -92,7 +92,7 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
         inputs: [path],
         outputs: [
           port('files', 'Files', 'output', 'file_path', true, 'Rooted file paths'),
-          port('count', 'Count', 'output', 'text'),
+          port('count', 'Count', 'output', 'number', false, 'How many files were listed'),
           ...error,
         ],
       };
@@ -132,9 +132,10 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const settings = this.config(node);
 
-    if (settings.mode === 'text') {
-      return { output: settings.value || inputs.value || inputs.path || '' };
-    }
+    // Text mode has no inputs to read: what it hands on is what it holds. A
+    // graph above answers it without running it (`given`), and a value asked
+    // for when the run starts is put where it holds its text.
+    if (settings.mode === 'text') return { output: settings.value };
 
     // The wired path wins over the configured one -- what the port promises
     // ("Override the configured path") and what the output node has always
