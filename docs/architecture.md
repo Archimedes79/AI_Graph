@@ -439,6 +439,9 @@ node holds. It is one undo step, and opens the node's dialog (`authoring/dropped
 with `refine`: the body as it is, what came of it (the try on screen, else the last run) and
 the words -- none for a fix, which is the repair step made of the body there is. The answer
 brings the task back restated, and the dialog writes both as one step and tries it at once.
+A change is not held to the example's expectation, written before it, and its repair is
+written from the restated task and the change: held to the old one, the repair turned the
+change back while the task said it was made.
 
 **One way to run a body — on Node.** A code node's `code.js` and an ai node's or a
 subgraph node's changed `run.js` are one kind of thing, and `elements/body.ts` (`runBody`)

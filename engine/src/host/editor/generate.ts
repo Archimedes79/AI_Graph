@@ -328,13 +328,20 @@ async function probe(
   }
 }
 
-/** The evidence block handed to the second pass. */
-function repairPrompt(body: string, sample: Record<string, unknown>, error: string, missing: string[], outputs: string[], problems: string[] = []): string {
+/**
+ * The evidence block handed to the second pass. *change* is what the attempt
+ * was written to change, in the person's words: a repair of a change that
+ * does not say so is a repair of the body from before it, and turned it back.
+ */
+function repairPrompt(
+  body: string, sample: Record<string, unknown>, error: string, missing: string[], outputs: string[], problems: string[] = [], change = '',
+): string {
   const parts = [
     'Your previous attempt was executed against real data and did not work. Fix it. Return the complete corrected function, not a patch.',
     '', '--- your previous attempt ---', body,
-    '', '--- the inputs it actually received ---', describeInputs(sample) || '  (no inputs)',
   ];
+  if (change) parts.push('', '--- the change it was written to make, which the fix keeps ---', change);
+  parts.push('', '--- the inputs it actually received ---', describeInputs(sample) || '  (no inputs)');
   if (error) parts.push('', '--- the error it raised ---', error);
   if (missing.length) {
     parts.push('', '--- wrong result keys ---',
@@ -368,12 +375,18 @@ async function generateVerifiedCode(
   const first = await generateCode(ai, target, request, given, change);
   if (!sample || !Object.keys(sample).length) return { ...first, probe: notProbed() };
   const perItem = runsPerItem(request);
+  // What the person asked to change, when this is a change.
+  const asked = request.refine?.change?.trim() ?? '';
   // A sample that is an example says what must come out of it, and that is
   // checked too -- an example is a test, and a body that returns the right
   // keys with the wrong contents has not passed it. Not when the probe ran
   // one item of several: that returns one item's result, not what the
-  // example expects of the whole node.
-  const expect = given?.expect && (given.items ?? 1) <= 1 ? given.expect : undefined;
+  // example expects of the whole node. And not for a change: the example was
+  // written before it, and "return it in upper case" fails an example that
+  // expects lower case -- the repair then turned the change back while the
+  // task said it was made. Try it holds the changed body to the example, and
+  // Keep makes what it gives the example's expectation.
+  const expect = !asked && given?.expect && (given.items ?? 1) <= 1 ? given.expect : undefined;
   /**
    * What an example's expectation is short of. It says what the node hands
    * on, which is what `test` holds it to -- for a node run once per item, the
@@ -412,10 +425,13 @@ async function generateVerifiedCode(
   const attempt = await judge(first.text);
   if (attempt.reached === 3) return { ...first, probe: reportOf(attempt, 'ok') };
 
-  const evidence = repairPrompt(first.text, sample, attempt.error, attempt.missing, outputs, attempt.problems);
+  const evidence = repairPrompt(first.text, sample, attempt.error, attempt.missing, outputs, attempt.problems, asked);
+  // A change is repaired as the task it restated, which says the change; the
+  // task from before it asks for the body the change was to replace.
+  const task = asked && first.task ? { ...request, description: first.task } : request;
   let second: { text: string; explanation: string };
   try {
-    second = await generateCode(ai, target, request, given, evidence);
+    second = await generateCode(ai, target, task, given, evidence);
   } catch {
     // The repair pass is a bonus, never a reason to fail the request.
     return { ...first, probe: reportOf(attempt, 'failed') };

@@ -104,12 +104,16 @@ export function nodeFields(
  * saying so now is kinder than letting the next ▶ Run say it; when it runs and
  * only the element's own check or the example's expected output found fault
  * with the result, it says that, and not that it does not run.
+ *
+ * *held*: whether the probe held it to what the example expects. A change is
+ * not (`generate.ts`): the example was written before it, so a change that
+ * runs has run on it, and Try it says whether it gives what that expects.
  */
-export function probeMessage(probe: ProbeReport | undefined, fallback: string, origin?: string, done = 'Generated'): string {
+export function probeMessage(probe: ProbeReport | undefined, fallback: string, origin?: string, done = 'Generated', held = true): string {
   const on = origin ?? 'the sample';
   switch (probe?.status) {
     case 'ok':
-      return `✅ ${done} and verified against ${on}.`;
+      return held ? `✅ ${done} and verified against ${on}.` : `✅ ${done}, and it runs on ${on}.`;
     case 'repaired':
       return `✅ ${done}. The first attempt failed on ${on}; this one runs.`;
     case 'failed': {
@@ -282,13 +286,14 @@ export function generationGuard<S>(request: GenerationRequest<S>): string | unde
  */
 export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
   const { generation: spec, fields, refine } = request;
+  const change = !!refine?.change?.trim();
   // What it did, in a word: written anew, changed as said, or repaired.
-  const done = !refine ? 'Generated' : refine.change?.trim() ? 'Changed' : 'Fixed';
+  const done = !refine ? 'Generated' : change ? 'Changed' : 'Fixed';
 
   return {
     guard: () => generationGuard(request),
     pending: refine ? 'Changing…' : 'Generating…',
-    success: (result) => probeMessage(result.probe, refine ? `✅ ${done}.` : spec.success ?? '✅ Generated!', request.sampleOrigin, done),
+    success: (result) => probeMessage(result.probe, refine ? `✅ ${done}.` : spec.success ?? '✅ Generated!', request.sampleOrigin, done, !change),
     failure: refine ? 'The change failed' : 'Generation failed',
     run: (progressId?: string) => call('generate', {
       ...generateRequest(request),

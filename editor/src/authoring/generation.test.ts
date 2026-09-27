@@ -105,10 +105,11 @@ describe('a change to the body there is ("Say what to change", ✨ Fix)', () => 
     expect(buildGeneration(asked({}, '')).guard?.()).toBeTruthy();
   });
 
-  it('says what it did: changed as said, or fixed', () => {
+  it('says what it did: changed as said -- run on the example, which a change is not held to -- or fixed', () => {
     const ok = { result: 'x', explanation: '', probe: { status: 'ok' as const, error: '', missing_outputs: [] }, calls: [] };
     const said = (options: ReturnType<typeof buildGeneration>) => (typeof options.success === 'function' ? options.success(ok) : options.success);
-    expect(said(buildGeneration({ ...asked({}), refine, sampleOrigin: 'the example in step 1' }))).toBe('✅ Changed and verified against the example in step 1.');
+    // "Verified against the example" said of a change that no longer gives what the example expects.
+    expect(said(buildGeneration({ ...asked({}), refine, sampleOrigin: 'the example in step 1' }))).toBe('✅ Changed, and it runs on the example in step 1.');
     expect(said(buildGeneration({ ...asked({}), refine: { body: 'x', error: 'boom' }, sampleOrigin: 'the last run' }))).toBe('✅ Fixed and verified against the last run.');
   });
 

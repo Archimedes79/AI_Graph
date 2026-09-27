@@ -309,8 +309,10 @@ uses — ✨ Generate and its verify pass, Try it, the AI node's request, and `t
 **Say what to change.** Under the result, one line: say what to change and press Enter.
 ✨ changes the body there is -- from the body, what came of it (the try, else the last run)
 and your words -- restates the task to match, writes both as one undo step and tries it at
-once. Where the try or the last run failed, or fell short of the expected output or the
-judge, **✨ Fix** repairs the body from the error, the input and the body.
+once. A change is not held to the expected output, which was written before it: the try
+shows whether it still gives it, and **Keep** makes what it gives the new one. Where the
+try or the last run failed, or fell short of the expected output or the judge, **✨ Fix**
+repairs the body from the error, the input and the body.
 
 **What ✨ Generate is told** is the same for a code node and an AI node: one brief, built
 from steps 1–3, each fact said once and everything long cut to a budget (about 8 000

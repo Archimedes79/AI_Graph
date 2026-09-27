@@ -161,6 +161,47 @@ describe('changing a body there is (refine)', () => {
     expect(reply.probe.status).toBe('ok');
   });
 
+  describe('held to an example written before it', () => {
+    /** A body run in this process, as the sandbox would run it. */
+    const evaluated: CodeService = {
+      run: async (body, inputs) => new Function('inputs', `${body}\nreturn run(inputs);`)(inputs) as Record<string, unknown>,
+    };
+    // The example as the dialog writes it when a result was kept: an input, and what must come out.
+    const examples = '## The example\n\n```json input\n{"name": "anna"}\n```\n\n```json expect\n{"out": "anna"}\n```\n';
+    const asked = {
+      element: 'code', description: 'Return the name.', inputs: ['name'], outputs: ['out'], examples,
+      refine: { body: 'function run(i) { return { out: i.name }; }', outcome: 'anna', change: 'Return it in upper case.' },
+    };
+
+    it('is not: the repair turned the change back to the example, and the task said it was made', async () => {
+      const ai = scripted([
+        '```js\nfunction run(i) { return { out: String(i.name).toUpperCase() }; }\n```\n<task>Return the name in upper case.</task>',
+        // What a repair held to the old example writes: the body from before the change.
+        '```js\nfunction run(i) { return { out: i.name }; }\n```',
+      ]);
+      const reply = await generate(asked, { ai, code: evaluated, generationFor, target });
+      expect(ai.asked).toHaveLength(1);
+      expect(reply).toMatchObject({ result: 'function run(i) { return { out: String(i.name).toUpperCase() }; }', task: 'Return the name in upper case.' });
+      expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 'ANNA' }, problems: [] });
+      // Told what the examples are: written before the change, which wins.
+      expect(ai.asked[0].prompt).toContain('## Examples -- written before this change: where one disagrees with the change, the change wins');
+    });
+
+    it('and a change that does not run is repaired as the change, from the task it restated', async () => {
+      const ai = scripted([
+        '```js\nfunction run(i) { return { out: i.name.toUpperCase() }; }\n```\n<task>Return the name in upper case.</task>',
+        '```js\nfunction run(i) { return { out: String(i.name).toUpperCase() }; }\n```',
+      ]);
+      const reply = await generate({ ...asked, examples: examples.replace('"anna"}', '5}') }, { ai, code: evaluated, generationFor, target });
+      const repair = ai.asked[1].prompt;
+      expect(repair).toContain('The node should:\nReturn the name in upper case.');
+      expect(repair).toContain('--- the change it was written to make, which the fix keeps ---\nReturn it in upper case.');
+      expect(repair).toContain('i.name.toUpperCase is not a function');
+      expect(reply).toMatchObject({ result: 'function run(i) { return { out: String(i.name).toUpperCase() }; }', task: 'Return the name in upper case.' });
+      expect(reply.probe.status).toBe('repaired');
+    });
+  });
+
   it('writes a system prompt from the one there is, what the model answered and what to change, with the task restated', async () => {
     const ai = scripted(['<system_prompt>Answer in one word.</system_prompt>\nShorter now.\n<task>Name the capital, in one word.</task>']);
     const reply = await generate(

@@ -179,11 +179,18 @@ function outputsSection(request: GenerateRequest, kind: BriefKind): string {
   return lines.length > 1 ? lines.join('\n') : '';
 }
 
-function examplesSection(text: string | undefined): string {
+/**
+ * The node's examples. For a change (*changing*) they were written before it,
+ * and a change is not held to them (`generate.ts`): said as the check, they
+ * asked for the body the change replaces.
+ */
+function examplesSection(text: string | undefined, changing: boolean): string {
   if (!text?.trim()) return '';
   const { examples } = parseExamples(text);
   if (!examples.length) return '';
-  const lines = ['## Examples -- the result is checked against these'];
+  const lines = [changing
+    ? '## Examples -- written before this change: where one disagrees with the change, the change wins'
+    : '## Examples -- the result is checked against these'];
   for (const example of examples.slice(0, BUDGET.examples)) {
     lines.push(`- ${example.title}`, `  in: ${shown(example.inputs, BUDGET.example)}`);
     if (example.expect) lines.push(`  must return, at least: ${shown(example.expect, BUDGET.example)}`);
@@ -198,6 +205,7 @@ function examplesSection(text: string | undefined): string {
  * it. The task goes first and the element's fixed text last, by the caller.
  */
 export function renderBrief(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
-  return [inputsSection(request, kind, sample), outputsSection(request, kind), examplesSection(request.examples)]
+  const changing = !!request.refine?.change?.trim();
+  return [inputsSection(request, kind, sample), outputsSection(request, kind), examplesSection(request.examples, changing)]
     .filter(Boolean).join('\n\n');
 }
