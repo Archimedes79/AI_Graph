@@ -1,11 +1,13 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import type { RFNodeData } from '@/store/nodeData';
 import { useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from '@/elements/registry';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { delivered } from '@/store/executionStatus';
-import { showsPage, widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
+import { derivedNodePorts, showsPage, widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
+import { carriesFiles, dropExample, droppedFile } from '@/authoring/droppedFile';
+import { errorText } from '@/api/errorText';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 
 /**
@@ -53,6 +55,31 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const summary = builder?.canvasSummary?.(graphNode);
 
   const handleEdit = useCallback(() => setEditingNode(id), [id, setEditingNode]);
+
+  // A file dropped on a node built in the four steps, with one input, is its
+  // example -- no dialog on the way; its own dialog opens on it (`dropExample`).
+  const dropInto = builder?.stepped && derivedNodePorts(graphNode) === null && graphNode.inputs.length === 1
+    ? graphNode.inputs[0].id
+    : undefined;
+  const [fileOver, setFileOver] = useState(false);
+  const [dropFailed, setDropFailed] = useState('');
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    if (!dropInto || !carriesFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+    setFileOver(true);
+  }, [dropInto]);
+  const onDrop = useCallback((event: React.DragEvent) => {
+    setFileOver(false);
+    const file = dropInto ? droppedFile(event.dataTransfer) : undefined;
+    if (!file || !dropInto) return;
+    // Not the canvas's, and not the window's: this drop is not a graph to open.
+    event.preventDefault();
+    event.stopPropagation();
+    setDropFailed('');
+    dropExample(id, dropInto, file).catch((reason) => setDropFailed(errorText(reason, 'The file could not be read.')));
+  }, [id, dropInto]);
   // The ✕ sits a few pixels from ✏️, deleting is immediate, and it silently
   // takes every attached edge with it -- so a node that is wired into the
   // graph asks first; Ctrl+Z is not where anyone should find that out. An
@@ -78,10 +105,13 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
       className="rounded-lg overflow-hidden shadow-lg select-none"
       // Anywhere on the node, as the palette's hint says -- not only on its title bar.
       onDoubleClick={handleEdit}
+      onDragOver={onDragOver}
+      onDragLeave={() => setFileOver(false)}
+      onDrop={onDrop}
       style={
         isGuiLike
           ? { background: bgColor, border: `2px solid ${statusColor ?? LINE}`, width: '100%', height: '100%' }
-          : { background: bgColor, border: `2px solid ${statusColor ?? LINE}`, minWidth: 180, maxWidth: 240 }
+          : { background: bgColor, border: `2px solid ${fileOver ? ACCENT : statusColor ?? LINE}`, minWidth: 180, maxWidth: 240 }
       }
     >
       {isGuiLike && (
@@ -331,6 +361,12 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
             style={{ background: 'rgba(239,68,68,0.1)', color: DANGER_TEXT }}
           >
             {executionResult.error?.slice(0, 80)}
+          </div>
+        )}
+        {/* A file dropped here that could not become its example, and why. */}
+        {dropFailed && (
+          <div className="text-xs mt-1 px-1 py-0.5 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: DANGER_TEXT }}>
+            {dropFailed}
           </div>
         )}
 

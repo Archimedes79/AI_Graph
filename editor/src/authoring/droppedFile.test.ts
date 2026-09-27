@@ -1,0 +1,66 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { GraphNode } from '@/graph';
+import { NODE_KINDS } from '@/document/nodeKinds';
+import { useGraphStore } from '@/store/graphStore';
+import { readPair } from './examplePair';
+import { dropExample, droppedPath, droppedValue, uriPath, type Dropped } from './droppedFile';
+
+/**
+ * A file dropped onto a node, or onto step 1's example field, is the example:
+ * its path on an input that reads the file, otherwise what it says.
+ */
+
+const dropped = (name: string, text: string, uri?: string): Dropped => ({ name, size: text.length, text: async () => text, ...(uri ? { uri } : {}) });
+const one = (path: string) => async () => [path];
+const as = async (path: string) => path;
+
+describe('where a dropped file is', () => {
+  it('is the path its drop named, where it named one', async () => {
+    expect(uriPath('file:///D:/work/data/people%20list.csv')).toBe('D:/work/data/people list.csv');
+    expect(uriPath('file:///home/me/a.csv')).toBe('/home/me/a.csv');
+    expect(await droppedPath(dropped('a.csv', 'x', 'file:///home/me/a.csv'), async () => [])).toBe('/home/me/a.csv');
+  });
+
+  it('is otherwise the one file of its name and size under the editor\'s folder -- and none, or several, is said', async () => {
+    expect(await droppedPath(dropped('a.csv', 'x'), one('D:/work/a.csv'))).toBe('D:/work/a.csv');
+    await expect(droppedPath(dropped('a.csv', 'x'), async () => [])).rejects.toThrow(/choose it with 📂/);
+    await expect(droppedPath(dropped('a.csv', 'x'), async () => ['a', 'b'])).rejects.toThrow(/2 files called “a.csv”/);
+  });
+});
+
+describe('what a dropped file puts into the example', () => {
+  it('is its path where the node reads the file, and what it says -- parsed when JSON -- where it does not', async () => {
+    expect(await droppedValue(dropped('a.csv', 'name\nAnna'), true, one('D:/work/a.csv'), as)).toBe('D:/work/a.csv');
+    expect(await droppedValue(dropped('a.csv', 'name\nAnna'), false)).toBe('name\nAnna');
+    expect(await droppedValue(dropped('a.json', '{"rows": [1, 2]}'), false)).toEqual({ rows: [1, 2] });
+  });
+});
+
+describe('a file dropped onto a node on the canvas', () => {
+  const store = () => useGraphStore.getState();
+  const stored = (id: string) => store().rfNodes.find((item) => item.id === id)!.data.graphNode as GraphNode;
+  beforeEach(() => {
+    const reader = NODE_KINDS.code.create('reader');
+    reader.inputs = [{ ...reader.inputs[0], id: 'csv', name: 'csv', data_type: 'file_path' }];
+    store().loadGraph({
+      metadata: { name: 'Drop', description: '', gui_scheme: 'night' },
+      nodes: [reader, NODE_KINDS.code.create('shout'), NODE_KINDS.data.create('memory')],
+      edges: [],
+    });
+  });
+
+  it('is the example on its one input, one undo step, and opens the node\'s dialog to try it', async () => {
+    await dropExample('reader', 'csv', dropped('people.csv', 'name\nAnna'), one('D:/work/people.csv'), as);
+    expect(readPair(stored('reader').config.examples).input).toEqual({ csv: 'D:/work/people.csv' });
+    expect(store().editingNodeId).toBe('reader');
+    store().undo();
+    expect(stored('reader').config.examples ?? '').toBe('');
+  });
+
+  it('puts what the file says where the node does not read it, and is what a data node holds', async () => {
+    await dropExample('shout', 'input', dropped('note.txt', 'hello'));
+    expect(readPair(stored('shout').config.examples).input).toEqual({ input: 'hello' });
+    await dropExample('memory', 'input', dropped('state.json', '{"count": 3}'));
+    expect(stored('memory').config.data_value).toEqual({ count: 3 });
+  });
+});

@@ -134,6 +134,12 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       return { paths: asked.name ? await files.findProjects(String(asked.name)) : [] };
     },
 
+    findFile: async (asked, { loopback }) => {
+      if (!loopback) throw new Refusal(403, 'Looking for files is only offered on this machine.');
+      const size = Number(asked.size);
+      return { paths: asked.name && Number.isFinite(size) ? await files.findFiles(String(asked.name), size) : [] };
+    },
+
     async projectChanges(asked) {
       const folder = asked.path ? project.projectFolderOf(resolve(expandHome(asked.path))) : null;
       if (!folder) return { changes: [] };

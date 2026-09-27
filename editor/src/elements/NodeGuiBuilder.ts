@@ -4,7 +4,7 @@ import type { ComponentType, ReactNode } from 'react';
 import type { Graph, GraphNode, NodeType } from '@/graph';
 import type { ChangeAsked, FieldAccess } from '@/authoring/generation';
 import { describeDeclaredOutput } from '@/authoring/outputFormat';
-import { readPair } from '@/authoring/examplePair';
+import { asExampleText, readPair, withInput } from '@/authoring/examplePair';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
 
 /**
@@ -164,6 +164,16 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    */
   exampleInput(node: GraphNode): Record<string, unknown> | undefined {
     return readPair(node.config.examples).input;
+  }
+
+  /**
+   * *node* with step 1's example holding *value* on *port*, beside what else
+   * it holds there: what a file dropped on the node on the canvas does. The
+   * first pair of `examples.md` by default, where `exampleInput` reads it.
+   */
+  withExampleValue(node: GraphNode, port: string, value: unknown): GraphNode {
+    const examples = withInput(node.config.examples, asExampleText({ ...this.exampleInput(node), [port]: value }));
+    return { ...node, config: { ...node.config, examples } };
   }
 
   /**

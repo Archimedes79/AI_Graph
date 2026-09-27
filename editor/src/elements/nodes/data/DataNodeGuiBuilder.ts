@@ -65,6 +65,11 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
     return value === undefined ? undefined : { input: value };
   }
 
+  /** A file dropped on it is what it holds from now on. */
+  override withExampleValue(node: GraphNode, _port: string, value: unknown): GraphNode {
+    return { ...node, config: { ...node.config, data_value: value } };
+  }
+
   override describeOutput(node: GraphNode): string {
     return describeDataFormat(node);
   }

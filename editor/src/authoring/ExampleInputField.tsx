@@ -4,6 +4,7 @@ import { errorText } from '@/api/errorText';
 import CodeField from './CodeField';
 import { asExampleText, exampleObject } from './examplePair';
 import { contentValue, readFileAsRun, storedPath } from './readAsRun';
+import { carriesFiles, droppedFile, droppedValue } from './droppedFile';
 import { useTyped } from './useTyped';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
@@ -67,7 +68,8 @@ interface Props {
  *
  * Two ways to fill it, and typing is editing what they filled. What really
  * arrives -- the last run's values, or what the graph delivers when what feeds
- * the node is run. Or a file. There used to be six places a sample came from,
+ * the node is run. Or a file, picked or dropped on the field (`droppedFile`).
+ * There used to be six places a sample came from,
  * and each consumer read a different few of them; the 📎 among them was an
  * uploaded copy that was only ever pasted into ✨'s prompt, never run.
  */
@@ -103,13 +105,12 @@ export default function ExampleInputField({
     }
   };
 
-  /** Puts the file at *path* into the example. */
-  const take = async (path: string): Promise<void> => {
+  /** Puts what a file gives -- picked with 📂, or dropped -- into the example, on the input chosen for it. */
+  const take = async (value: (port: string) => Promise<unknown>): Promise<void> => {
     if (!into) return;
     setBusy('file'); setFailure(''); setSaid('');
     try {
-      const value = await pickedValue(path, into, reads);
-      type(withPortValue(latest.current, into, value));
+      type(withPortValue(latest.current, into, await value(into)));
       setSaid(reads.includes(into)
         ? `“${into}” holds the file's path, which is read as a run reads it.`
         : `“${into}” holds what the file says.`);
@@ -120,10 +121,26 @@ export default function ExampleInputField({
     }
   };
 
+  // A file dropped on the field is taken as 📂 takes one, with no dialog.
+  const onDragOver = (event: React.DragEvent) => {
+    if (!into || !carriesFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+  const onDrop = (event: React.DragEvent) => {
+    const file = into ? droppedFile(event.dataTransfer) : undefined;
+    if (!file) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void take((port) => droppedValue(file, reads.includes(port)));
+  };
+
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" onDragOver={onDragOver} onDrop={onDrop}>
       <div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs font-medium" style={{ color: MUTED, flex: '1 1 8rem' }}>{label}</label>
+        <label className="text-xs font-medium" style={{ color: MUTED, flex: '1 1 8rem' }}>
+          {label}{ports.length > 0 && <span className="font-normal" style={{ color: DIMMER }}> — or drop a file here</span>}
+        </label>
         {fromGraph && (
           <button className="text-xs px-2 py-1 rounded" style={{ ...NEUTRAL_BUTTON, opacity: busy ? 0.5 : 1 }}
             disabled={busy !== ''} onClick={fetch}
@@ -166,7 +183,7 @@ export default function ExampleInputField({
       {browsing && (
         <FileBrowserDialog
           mode="file"
-          onPick={(path) => { setBrowsing(false); void take(path); }}
+          onPick={(path) => { setBrowsing(false); void take((port) => pickedValue(path, port, reads)); }}
           onClose={() => setBrowsing(false)}
         />
       )}

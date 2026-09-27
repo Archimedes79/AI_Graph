@@ -1,5 +1,5 @@
-// The editor's view of the machine's files: finding projects, and handing a
-// node's file to the editor the person works in.
+// The editor's view of the machine's files: finding projects and dropped
+// files, and handing a node's file to the editor the person works in.
 //
 // Editor-only, on purpose: none of it belongs in a bundle, which is why this
 // folder is skipped by the bundle walk along with every other `editor/`.
@@ -8,7 +8,7 @@
 // a bundle carries.
 
 import { existsSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { basename, extname, join, resolve, sep } from 'node:path';
 import { platform } from 'node:os';
 
@@ -47,6 +47,37 @@ export async function findProjects(name: string, root = process.cwd(), depth = 4
 }
 
 const SKIPPED = new Set(['node_modules', 'dist', 'build']);
+
+/**
+ * Files named *name*, of *size* bytes, under *root*, a few levels down.
+ *
+ * For a file dropped onto a node, or onto its example: a browser hands a page
+ * a file's name, size and content, never where it is -- and a node that reads
+ * the file at a path needs the path. The file dropped is almost always one in
+ * the folder the editor was started in; the size tells two of one name apart.
+ */
+export async function findFiles(name: string, size: number, root = process.cwd(), depth = 4): Promise<string[]> {
+  const found: string[] = [];
+  const walk = async (directory: string, level: number): Promise<void> => {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (!SKIPPED.has(entry.name) && level < depth) await walk(path, level + 1);
+      } else if (entry.name === name && (await stat(path).catch(() => null))?.size === size) {
+        found.push(path);
+      }
+    }
+  };
+  await walk(root, 1);
+  return found;
+}
 
 // ---------------------------------------------------------------------------
 // Handing a node's file to the person's own editor

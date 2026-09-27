@@ -182,7 +182,9 @@ export default function App() {
     };
     const onDrop = (event: DragEvent) => {
       const file = event.dataTransfer?.files?.[0];
-      if (!file) return;   // a palette drag: leave it to the canvas
+      // A palette drag is the canvas's. A file dropped on a node or on an
+      // example field is theirs, and does not arrive here: they stop it.
+      if (!file) return;
       event.preventDefault();
       // Only answerable while the event lasts: afterwards the item is gone.
       if (event.dataTransfer?.items?.[0]?.webkitGetAsEntry()?.isDirectory) void handleProjectFolderDrop(file.name);

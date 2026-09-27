@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findProjects } from './files.ts';
+import { findFiles, findProjects } from './files.ts';
 
 /**
  * What the editor's project search and its "open in my editor" get from the machine.
@@ -58,5 +58,20 @@ describe('findProjects', () => {
       .toEqual(['examples/chat', 'work/chat']);
     expect(await findProjects('data', root)).toEqual([]);
     expect(await findProjects('chat', join(root, 'examples', 'chat'))).toEqual([join(root, 'examples', 'chat')]);
+  });
+});
+
+describe('findFiles', () => {
+  it('finds a dropped file by its name and size, and nothing in dependencies, dot-folders or build output', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ai-graph-find-file-'));
+    for (const folder of ['examples/data', 'other', 'node_modules/pkg', '.cache']) await mkdir(join(root, folder), { recursive: true });
+    await writeFile(join(root, 'examples/data/people.csv'), 'name\nAnna\n');
+    await writeFile(join(root, 'other/people.csv'), 'name\nAnna\nBen\n');
+    await writeFile(join(root, 'node_modules/pkg/people.csv'), 'name\nAnna\n');
+    await writeFile(join(root, '.cache/people.csv'), 'name\nAnna\n');
+    const found = async (size: number) => (await findFiles('people.csv', size, root)).map((path) => path.slice(root.length + 1).split(/[\\/]/).join('/'));
+    expect(await found(10)).toEqual(['examples/data/people.csv']);
+    expect(await found(14)).toEqual(['other/people.csv']);
+    expect(await found(3)).toEqual([]);
   });
 });

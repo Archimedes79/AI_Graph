@@ -247,7 +247,7 @@ export default function NodeSteps({
       {body.beside}
       <TryItInline
         canRun={!!tried}
-        whyNot={broken ? 'The example in step 1 is not an object keyed by input port.' : 'Fill step 1\'s example first: ⟳ from the graph, or 📂 from a file.'}
+        whyNot={broken ? 'The example in step 1 is not an object keyed by input port.' : 'Fill step 1\'s example first: ⟳ from the graph, 📂 from a file, or drop a file on it.'}
         busy={trying.busy}
         onTry={() => void trying.start()}
         tried={trying.tried}

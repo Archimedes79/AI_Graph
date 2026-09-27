@@ -327,6 +327,8 @@ export const API = {
   saveGraph: route<{ path: string; graph: Graph }, GraphFile>('POST', '/api/graphs/file/save', 'editor'),
   /** Project folders with this name under where the editor runs: for a folder dropped onto the page. */
   findProjects: route<{ name: string }, { paths: string[] }>('GET', '/api/graphs/find', 'editor'),
+  /** Files of this name and size under where the editor runs: for a file dropped onto a node, whose path a browser never says. */
+  findFile: route<{ name: string; size: string }, { paths: string[] }>('GET', '/api/files/find', 'editor'),
   /** The code and prompts of an open project that changed on disk since last asked. */
   projectChanges: route<{ path: string }, { changes: TextChange[] }>('GET', '/api/graphs/file/changes', 'editor'),
 
