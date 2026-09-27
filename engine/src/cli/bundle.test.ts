@@ -7,6 +7,7 @@ import { parseGraph } from '../graph.ts';
 import { loadGraph } from '../project/folder.ts';
 import { registry } from '../elements/registry.ts';
 import { bundleNeeds, writeBundle } from './bundle.ts';
+import { NODE_MAJOR } from './launchers.ts';
 
 /**
  * A bundle is only a claim until someone runs it somewhere else.
@@ -174,7 +175,8 @@ describe('a bundle', () => {
     const dir = await bundleOf(resolve(REPO, 'examples', 'population_plotter'));
     try {
       const readme = await readFile(join(dir, 'README.md'), 'utf8');
-      expect(readme).toContain('Node 22 or newer');
+      // The Node the launchers check for: it said 22 while run.sh refused anything below 24.
+      expect(readme).toContain(`Node ${NODE_MAJOR} or newer`);
       // The one thing a recipient has to be told, and now the only one: the
       // interpreter that runs the engine runs every body in the graph too.
       expect(readme).toContain('Nothing else');

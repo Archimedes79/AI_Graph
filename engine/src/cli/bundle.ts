@@ -16,7 +16,7 @@ import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'no
 import { fileURLToPath } from 'node:url';
 import type { Graph } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
-import { runCmd, runSh, zipMode } from './launchers.ts';
+import { NODE_MAJOR, runCmd, runSh, zipMode } from './launchers.ts';
 
 /** `engine/src`: the tree a bundle copies. This file sits in its `cli/`. */
 const ENGINE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -249,7 +249,8 @@ function readme(
     '',
     '## What you need',
     '',
-    '- **Node 22 or newer.** Nothing to install and nothing to build.',
+    // What the launchers check before they start: one number, said once.
+    `- **Node ${NODE_MAJOR} or newer.** Nothing to install and nothing to build.`,
     '- Nothing else. Every code node in this graph is JavaScript, so the',
     '  interpreter that runs the engine runs them too.',
   ];
