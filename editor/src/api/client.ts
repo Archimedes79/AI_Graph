@@ -67,16 +67,21 @@ export async function call<K extends RouteName>(name: K, request?: RequestOf<K>)
     throw new ApiError(response.status, failure);
   }
   const type = response.headers.get('Content-Type') ?? '';
-  return (type.includes('application/json') ? response.json() : response.blob()) as Promise<EditorView<ResponseOf<K>>>;
+  if (type.includes('application/json')) return response.json() as Promise<EditorView<ResponseOf<K>>>;
+  // A download, named by the server (`Download`): a File, which is a Blob
+  // that also carries that name, so no caller works the name out again.
+  const blob = await response.blob();
+  const named = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ?? 'download';
+  return new File([blob], named, { type: blob.type }) as EditorView<ResponseOf<K>>;
 }
 
-/** Save the deploy bundle the way a browser saves any download. */
+/** Save the deploy bundle the way a browser saves any download, under the name the engine gave it. */
 export async function downloadBundle(graph: RequestOf<'bundle'>): Promise<void> {
-  const zip = await call('bundle', graph) as Blob;
+  const zip = await call('bundle', graph);
   const url = URL.createObjectURL(zip);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${graph.metadata.name.toLowerCase().replace(/\s+/g, '_')}_bundle.zip`;
+  link.download = zip.name;
   link.click();
   URL.revokeObjectURL(url);
 }

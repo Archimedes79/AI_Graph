@@ -323,8 +323,8 @@ export const API = {
   generateGraph: route<{ description: string; context?: string } & ModelChoice & Watched, { graph: Graph; explanation: string }>(
     'POST', '/api/ai/generate-graph', 'editor'),
 
-  /** The graph as a deployable zip. */
-  bundle: route<Graph, Blob>('POST', '/api/deploy/bundle', 'editor'),
+  /** The graph as a deployable zip, named by the server (`<graph name>_bundle.zip`). */
+  bundle: route<Graph, File>('POST', '/api/deploy/bundle', 'editor'),
   /**
    * Hand this server the graph to serve as a tool, so `runtime.html` can be
    * opened against it — the deployed page, in its own window, without zipping
