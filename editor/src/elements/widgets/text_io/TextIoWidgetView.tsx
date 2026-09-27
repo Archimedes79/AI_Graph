@@ -20,21 +20,37 @@ const NEAR_END = 8;
  * unless the person scrolled up to read, and then it stays where they are
  * until they scroll back down. Where they are is kept here as well: a browser
  * may move a box whose text is set, and staying is then putting it back.
+ *
+ * A box with nothing to scroll tells nothing about where the person reads: a
+ * run empties the box while it works, and the empty box, at its end by
+ * definition, had turned following back on under someone reading further up.
  */
 function useFollow(text: string) {
   const box = useRef<HTMLElement | null>(null);
   const following = useRef(true);
   const kept = useRef(0);
+  const resized = useRef<ResizeObserver | null>(null);
 
   useLayoutEffect(() => {
     const at = box.current;
     if (at) at.scrollTop = following.current ? at.scrollHeight : kept.current;
   }, [text]);
 
-  const ref = useCallback((element: HTMLElement | null) => { box.current = element; }, []);
+  // A box is drawn before the page has measured its grid, and a window can be
+  // resized: a box that grows or shrinks moves its end, and one being followed
+  // goes with it -- the newest line was left half under the edge.
+  const ref = useCallback((element: HTMLElement | null) => {
+    resized.current?.disconnect();
+    box.current = element;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    resized.current = new ResizeObserver(() => {
+      if (following.current) element.scrollTop = element.scrollHeight;
+    });
+    resized.current.observe(element);
+  }, []);
   const onScroll = () => {
     const at = box.current;
-    if (!at) return;
+    if (!at || at.scrollHeight <= at.clientHeight) return;
     kept.current = at.scrollTop;
     following.current = at.scrollHeight - at.scrollTop - at.clientHeight <= NEAR_END;
   };
