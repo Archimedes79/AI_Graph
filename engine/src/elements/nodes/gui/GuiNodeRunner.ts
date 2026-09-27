@@ -165,7 +165,15 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     // neither. See `WidgetRunner.bodyDrawsOnThePage`.
     if (element.bodyDrawsOnThePage) return element.displayValue(widget, value, runtime);
     const transformed = await element.runSnippet(widget, { value }, runtime);
-    return element.displayValue(widget, transformed.value ?? value, runtime);
+    // A block with no transform is handed back what it was given, `value`
+    // included. One whose transform returned no `value` has a broken
+    // transform, and says so: shown the raw input instead, it looked like a
+    // block without one. An explicit null is what the transform said to show.
+    if (!('value' in transformed)) {
+      const returned = Object.keys(transformed);
+      return `⚠ ${widget.id}: its transform returned no "value"${returned.length ? ` (only ${returned.map((key) => `"${key}"`).join(', ')})` : ''}.`;
+    }
+    return element.displayValue(widget, transformed.value, runtime);
   }
 
   /** A picker with nothing chosen is a question, and its block is who to ask. */

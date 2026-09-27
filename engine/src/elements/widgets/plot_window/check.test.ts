@@ -53,8 +53,21 @@ describe('what a chart transform returned', () => {
     expect(checkPlot({ value: [{ label: 'a', value: 1 }, { label: 'b', value: '12' }] })[0]).toMatch(/Point 1 is/);
   });
 
-  it('says what to return when it got neither', () => {
-    expect(checkPlot({ value: null })[0]).toMatch(/list of points, or an SVG/);
+  it('accepts the {kind, title, points} figure the contract says to prefer -- it used to be refused as "object"', () => {
+    expect(checkPlot({ value: { kind: 'line', title: 'Temperature', points: [{ label: '08:00', value: 12 }, { label: '08:05', value: 14 }] } }))
+      .toEqual([]);
+    expect(checkPlot({ value: { kind: 'bars', title: 'Nothing yet', points: [] } })).toEqual([]);
+    // The chart reads it as JSON text too, so the check does.
+    expect(checkPlot({ value: JSON.stringify({ kind: 'donut', title: 'Share', points: [1, 2] }) })).toEqual([]);
+  });
+
+  it('holds a figure\'s points to the same rule as a bare list', () => {
+    expect(checkPlot({ value: { kind: 'columns', title: 'T', points: [{ label: 'a', value: 'lots' }] } })[0]).toMatch(/Point 0 is/);
+    expect(checkPlot({ value: { kind: 'columns', title: 'T' } })[0]).toMatch(/without a "points" list/);
+  });
+
+  it('says what to return when it got none of them, the figure included', () => {
+    expect(checkPlot({ value: null })[0]).toMatch(/list of points, a \{"kind", "title", "points"\} figure, or an SVG/);
     expect(checkPlot({ value: 'see above' })[0]).toMatch(/not an SVG document/);
   });
 });

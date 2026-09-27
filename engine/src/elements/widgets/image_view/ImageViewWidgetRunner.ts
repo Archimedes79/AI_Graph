@@ -20,13 +20,17 @@ export class ImageViewWidgetRunner extends TransformingDisplayRunner {
    * A failure is shown, not raised — the same rule as a failing transform.
    * Nothing downstream depends on a picture, and taking the whole node down
    * would take every sibling block's output with it.
+   *
+   * So a failure that arrives here -- a transform's, already a "⚠" message --
+   * is shown as it is. Loaded as a path, it came out as "Not a recognised
+   * image file: <the folder>\⚠ img: transform failed: …".
    */
   override async displayValue(widget: Widget, value: unknown, runtime: Runtime): Promise<unknown> {
     if (Array.isArray(value)) {
       return Promise.all(value.map((item) => this.displayValue(widget, item, runtime)));
     }
     if (typeof value !== 'string' || !value.trim()) return value;
-    if (isInlineUrl(value)) return value;
+    if (isInlineUrl(value) || value.startsWith('⚠ ')) return value;
     try {
       return await imageDataUrl(value, runtime.files);
     } catch (error) {
@@ -36,7 +40,13 @@ export class ImageViewWidgetRunner extends TransformingDisplayRunner {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  override receives(): string {
+  /**
+   * A path -- unless the block has a transform of its own, which takes
+   * whatever it was written to read and finds the path itself. A block handed
+   * over without its settings (`config`) counts as one without a transform.
+   */
+  override receives(widget: Widget): string | undefined {
+    if (String(widget.config?.code ?? '').trim()) return undefined;
     return 'an image file path or URL, or a list of them -- not the picture\'s bytes.';
   }
 
