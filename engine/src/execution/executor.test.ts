@@ -47,6 +47,26 @@ describe('memoryFeedbackEdges', () => {
     expect([...memoryFeedbackEdges(nodes, edges, registry)]).toEqual(['write']);
   });
 
+  it('cuts only an edge that closes a loop, whatever order the wires are stored in', async () => {
+    // store <-> step is the loop; step -> kept -> show hangs below it, and
+    // `kept` remembers too. Cutting the wire into `kept` would settle it a
+    // round late for nothing.
+    const nodes = () => [
+      node('store', 'data', { data_value: 1 }), node('step', 'code', { code: 'function run(i) { return { out: i.x + 1 }; }' }),
+      node('kept', 'data', { data_value: 'stale' }), node('show', 'code', { code: 'function run(i) { return { saw: i.v }; }' }),
+    ];
+    const loop = [edge('read', 'store', 'output', 'step', 'x'), edge('write', 'step', 'out', 'store', 'input')];
+    const tail = [edge('keep', 'step', 'out', 'kept', 'input'), edge('shown', 'kept', 'output', 'show', 'v')];
+    expect([...memoryFeedbackEdges(nodes(), [...loop, ...tail], registry)]).toEqual(['write']);
+    expect([...memoryFeedbackEdges(nodes(), [...tail, ...loop], registry)]).toEqual(['write']);
+
+    const runtime = quietRuntime({ code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) } });
+    const saw = async (edges: typeof loop) => (await executeGraph(graphOf(nodes(), edges), { runtime, registry }))
+      .node_results.find((r) => r.node_id === 'show')!.outputs;
+    expect(await saw([...tail, ...loop])).toEqual({ saw: 2 });
+    expect(await saw([...loop, ...tail])).toEqual({ saw: 2 });
+  });
+
   it('leaves a cycle between two forgetful nodes alone, for the ordering to reject', () => {
     const nodes = [node('a', 'code'), node('b', 'code')];
     const edges = [edge('e1', 'a', 'o', 'b', 'i'), edge('e2', 'b', 'o', 'a', 'i')];

@@ -74,9 +74,28 @@ export function memoryFeedbackEdges(
 
     if (visited.size === byId.size) return feedback;
 
-    // Cut one more edge into a node that remembers. If there is none, the cycle
-    // is a real one and `topologicalLevels` reports it as such.
-    const candidate = active.find((e) => !visited.has(e.target_node_id) && remembers(e.target_node_id));
+    // Cut one more edge into a node that remembers -- one that closes a loop:
+    // a node below a loop is unvisited too, and cutting the wire into it
+    // settles its value a round late for nothing. Chosen by the graph's node
+    // order and then by id, never by the order the wires happen to be stored
+    // in. If there is none, the cycle is a real one and `topologicalLevels`
+    // reports it as such.
+    const reaches = (from: string, to: string): boolean => {
+      const seen = new Set([from]);
+      const queue = [from];
+      while (queue.length) {
+        const id = queue.shift()!;
+        if (id === to) return true;
+        for (const e of successors.get(id) ?? []) {
+          if (!seen.has(e.target_node_id)) { seen.add(e.target_node_id); queue.push(e.target_node_id); }
+        }
+      }
+      return false;
+    };
+    const order = new Map(nodes.map((n, index) => [n.id, index]));
+    const [candidate] = active
+      .filter((e) => !visited.has(e.target_node_id) && remembers(e.target_node_id) && reaches(e.target_node_id, e.source_node_id))
+      .sort((a, b) => order.get(a.target_node_id)! - order.get(b.target_node_id)! || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     if (!candidate) return feedback;
     feedback.add(candidate.id);
   }
