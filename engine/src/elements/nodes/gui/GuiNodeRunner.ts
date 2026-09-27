@@ -251,9 +251,13 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     return this.engineRuns('Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives.');
   }
 
-  /** A gui node *is* the interface, so a bundle holding one needs the page. Its blocks run no code, and so ask no model. */
-  override deployNeeds() {
-    return { needsInterface: true, asksAi: false };
+  /**
+   * A page is its blocks: a bundle holding one with blocks needs the page, and
+   * one whose blocks are all gone has nothing to draw -- a tool without a
+   * page, run on the terminal. Its blocks run no code, and so ask no model.
+   */
+  override deployNeeds(node: GraphNode) {
+    return { needsInterface: this.config(node).widgets.length > 0, asksAi: false };
   }
 
   /** What its pickers start on. */
