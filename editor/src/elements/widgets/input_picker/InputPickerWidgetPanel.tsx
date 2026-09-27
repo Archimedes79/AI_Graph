@@ -1,20 +1,15 @@
 import PathField, { FileTypesField } from '@/dialogs/PathField';
-import SelectorSteps from '@/authoring/SelectorSteps';
+import { listBlockAsRun } from '@/authoring/readAsRun';
 import { FIELD_ON_SURFACE, MUTED } from '@/ui/theme';
+import FolderListing from '../../fields/FolderListing';
 import type { WidgetPanelProps } from '../../WidgetGuiBuilder';
-import { InputPickerWidgetGuiBuilder } from './InputPickerWidgetGuiBuilder';
 
 /**
- * A file or a folder, picked on the page. In directory mode it can choose
- * some of the folder's files by code, and then it is built in the four steps
- * an input node's folder is, drawn by the same component -- it is one
- * behaviour at two levels.
+ * A file or a folder, picked on the page. A folder is its file types and its
+ * subfolders, then the list -- the listing an input node's folder is, drawn by
+ * the same component: it is one behaviour at two levels.
  */
-export default function InputPickerWidgetPanel({
-  builder, widget, fields, onUpdate, generating, message, onGenerate, steps,
-}: WidgetPanelProps) {
-  const generation = builder.generation;
-  if (!(builder instanceof InputPickerWidgetGuiBuilder)) return null;
+export default function InputPickerWidgetPanel({ widget, onUpdate }: WidgetPanelProps) {
   const mode = widget.mode || 'file';
   const directory = mode === 'directory';
   const path = typeof widget.value === 'string' ? widget.value : '';
@@ -59,44 +54,15 @@ export default function InputPickerWidgetPanel({
     <FileTypesField value={widget.extensions ?? ''} onChange={(extensions) => onUpdate({ extensions })} onSurface />
   );
 
-  if (!directory || !generation || !steps) {
-    return <div className="space-y-2">{modeField}{pathField}{typesField}</div>;
-  }
-
-  return (
-    <div className="space-y-2">
-      {modeField}
-      <SelectorSteps
-        folder={(
-          <div className="space-y-2">
-            {pathField}
-            {typesField}
-            <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-              <input
-                type="checkbox"
-                checked={widget.recursive === true}
-                onChange={(e) => onUpdate({ recursive: e.target.checked })}
-              />
-              Look into subfolders too
-            </label>
-          </div>
-        )}
-        noFolder={!path.trim()}
-        // As a run reads it: a picker that does not say takes every file.
-        selectAll={builder.selectsAll(widget)}
-        onSelectAll={(all) => onUpdate({ select_all_files: all })}
-        generation={generation}
-        subject={widget}
-        fields={fields}
-        generating={generating}
-        message={message}
-        onGenerate={onGenerate}
-        tryIt={steps.tryIt}
-        preview={steps.preview}
-        sent={steps.sent}
-        openInEditor={steps.openInEditor}
-        onSurface
-      />
-    </div>
+  const listing = directory && (
+    <FolderListing
+      recursive={widget.recursive === true}
+      onRecursive={(recursive) => onUpdate({ recursive })}
+      noFolder={!path.trim()}
+      list={() => listBlockAsRun(widget)}
+      of={JSON.stringify([path, widget.extensions ?? '', widget.recursive === true])}
+    />
   );
+
+  return <div className="space-y-2">{modeField}{pathField}{typesField}{listing}</div>;
 }

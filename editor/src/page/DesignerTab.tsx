@@ -216,7 +216,6 @@ export default function DesignerTab() {
         </h3>
         <WidgetEditor
           widget={selected}
-          nodeId={selected ? ownerOf(selected.id)?.id ?? '' : ''}
           onChange={(patch) => { if (selected) patchBlock(selected.id, patch); }}
           onRemove={removeSelected}
         />

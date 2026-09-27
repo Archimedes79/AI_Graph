@@ -251,11 +251,9 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     return this.engineRuns('Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives.');
   }
 
-  override deployNeeds(node: GraphNode) {
-    // A gui node *is* the interface, so a bundle holding one needs the page. A
-    // folder picker's selector may ask a model like any other body.
-    const asksAi = this.config(node).widgets.some((widget) => BY_KIND.get(widget.kind)?.deployNeeds(widget).asksAi === true);
-    return { needsInterface: true, asksAi };
+  /** A gui node *is* the interface, so a bundle holding one needs the page. Its blocks run no code, and so ask no model. */
+  override deployNeeds() {
+    return { needsInterface: true, asksAi: false };
   }
 
   /** What its pickers start on. */

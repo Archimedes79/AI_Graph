@@ -13,7 +13,7 @@ import {
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
 
-/** One of each element that keeps writing: a code node, an ai node, a directory input, a page with a chart. */
+/** A code node and an ai node, which keep writing, beside a directory input and a page with a chart, which keep none. */
 function sample(): Graph {
   return parseGraph({
     metadata: { name: 'Sample', description: 'All the writing there is.' },
@@ -21,7 +21,7 @@ function sample(): Graph {
       {
         id: 'folder', node_type: 'input', label: 'Folder', position: { x: 10, y: 20 },
         inputs: [], outputs: [port('files', 'output')],
-        config: { input_mode: 'directory', value: 'data', selector_code: 'function run(i) { return { files: i.files }; }', selector_prompt: 'Only the CSVs.' },
+        config: { input_mode: 'directory', value: 'data', extensions: '.csv' },
       },
       {
         id: 'count', node_type: 'code', label: 'Count', position: { x: 300.4, y: 20 }, width: 360, height: 180,
@@ -81,8 +81,8 @@ describe('a project folder', () => {
     expect(await text('nodes/say/system.md')).toBe('You report counts.\n');
     expect(await text('nodes/say/message.md')).toBe('There are {{total}} files.\n');
     expect(await text('nodes/say/output.md')).toBe('One sentence.\n');
-    expect(await text('nodes/folder/select.js')).toContain('i.files');
-    // A chart has no writing of its own: it draws what arrives.
+    // A folder listing and a chart have no writing of their own.
+    expect(existsSync(join(dir, 'nodes/folder/select.js'))).toBe(false);
     expect(existsSync(join(dir, 'nodes/page/chart'))).toBe(false);
   });
 
@@ -240,8 +240,8 @@ describe('what a folder could write and not read back', () => {
       nodes: [{
         id: 'page', node_type: 'gui', label: 'Page', position: { x: 0, y: 0 }, inputs: [], outputs: [],
         config: { gui_widgets: [
-          { id: 'chart', kind: 'input_picker', mode: 'directory', selector_code: 'function run(i) { return { files: ["FIRST"] }; }' },
-          { id: 'chart', kind: 'input_picker', mode: 'directory', selector_code: 'function run(i) { return { files: ["SECOND"] }; }' },
+          { id: 'chart', kind: 'input_picker', mode: 'directory', value: 'first' },
+          { id: 'chart', kind: 'input_picker', mode: 'directory', value: 'second' },
         ] },
       }],
       edges: [],

@@ -1,12 +1,12 @@
 // Files, read the way a run reads them.
 //
 // Step 1's example can come from a file, an input node shows what it will hand
-// on, and a file selector is written against a folder's listing. Each of those
-// is a read, and each is done by the engine's own input node, run on its own by
-// the route "▶ Try it" uses (`runNode`): the same path resolved against the same
-// folder, the same text read, the same extensions and recursion applied to a
-// listing. A second way of reading a file here would be a second answer to
-// "what does the node get".
+// on, and a folder listing shows the files it lists. Each of those is a read,
+// and each is done by the engine's own element, run on its own by the route
+// "▶ Try it" uses (`runNode`): the same path resolved against the same folder,
+// the same text read, the same extensions and recursion applied to a listing.
+// A second way of reading a file here would be a second answer to "what does
+// the node get".
 
 import type { GraphNode, GuiWidget } from '@/graph';
 import { call } from '@/api/client';
@@ -17,33 +17,18 @@ import type { TryResult } from './TryItInline';
 
 /**
  * A node, run by itself: nothing else of the graph is sent or run, with the
- * graph's metadata as a run has it. What trying an input node gives -- the
- * files its folder lists and its selector keeps -- and what a block on a page
- * of its own hands on (`runBlockAlone`).
+ * graph's metadata as a run has it.
  */
-export function runAlone(node: GraphNode): Promise<TryResult> {
+function runAlone(node: GraphNode): Promise<TryResult> {
   const graph = { metadata: useGraphStore.getState().metadata, nodes: [node], edges: [] };
   return call('runNode', { ...graph, node_id: node.id, inputs: {} });
 }
 
 /**
- * *widget* on a page of its own, run by itself -- nothing else of the graph is
- * sent or run: what the block hands on, made the way a run makes it. A folder
- * picker lists its folder here exactly as it does on the page, through the
- * same element.
- *
- * A failure is said, not caught: a block told to catch its failures put the
- * reason on its error port and handed on nothing, so a folder that does not
- * exist was listed as "0 files".
+ * What *node* hands on, run by itself. A failure is thrown, not caught: a node
+ * told to catch its failures puts the reason on its error port and hands on
+ * nothing, so a folder that does not exist was listed as "0 files".
  */
-export async function runBlockAlone(widget: GuiWidget): Promise<TryResult> {
-  const blank = NODE_KINDS.gui.create('page');
-  const page = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [{ ...widget, catch_errors: false }] } });
-  const result = await runAlone(page);
-  return { status: result.status, shown: result.outputs?.[`${widget.id}_out`], error: result.error, messages: result.messages };
-}
-
-/** What *node* hands on, run by itself; a failed read is thrown. */
 async function readAlone(node: GraphNode): Promise<Record<string, unknown>> {
   const result = await runAlone(node);
   if (result.status === 'error') throw new Error(result.error || 'It could not be read.');
@@ -62,12 +47,17 @@ export async function readFileAsRun(path: string): Promise<string> {
   return String((await readAlone(node)).content ?? '');
 }
 
-/**
- * The files an input node in directory mode lists, before any selector:
- * what its selector is handed as `files`, and so the selector's example.
- */
+/** The files an input node in directory mode lists, as a run lists them. */
 export async function listAsRun(node: GraphNode): Promise<string[]> {
-  const listed = (await readAlone(reading(node, { select_all_files: true }))).files;
+  const listed = (await readAlone(reading(node, {}))).files;
+  return Array.isArray(listed) ? listed.map(String) : [];
+}
+
+/** The files a folder picker on a page lists, as a run lists them: the block on a page of its own. */
+export async function listBlockAsRun(widget: GuiWidget): Promise<string[]> {
+  const blank = NODE_KINDS.gui.create('page');
+  const page = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [{ ...widget, catch_errors: false }] } });
+  const listed = (await readAlone(page))[`${widget.id}_out`];
   return Array.isArray(listed) ? listed.map(String) : [];
 }
 

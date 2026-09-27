@@ -1,4 +1,4 @@
-import type { GraphNode, GuiWidget } from '@/graph';
+import type { GraphNode } from '@/graph';
 import { call, type AICall, type GenerateRequest, type GenerateResponse, type ProbeReport } from '@/api/client';
 import type { GenerateOptions } from './useGenerate';
 import type { Generation } from '@engine/authoring/generation.ts';
@@ -7,21 +7,15 @@ import type { Generation } from '@engine/authoring/generation.ts';
  * The ✨ Generate button, declared by the element instead of written out by the
  * shell that draws it.
  *
- * There were five hand-written call sites: four handlers in NodeEditor.tsx,
- * passed to every Panel so each could pick the one prop it recognised;
- * an `isPlot` ternary threaded through eight lines of WidgetEditor.tsx; and
- * OutputFormatEditor's own. Which is why `image_view` had a `code` field with
- * the same contract as plot_window and no button at all -- nobody added the
- * sixth branch.
+ * There were five hand-written call sites, passed to every Panel so each could
+ * pick the one prop it recognised -- and an element one of them forgot had a
+ * body and no button at all.
  *
- * What is NOT here is as important as what is. The generator kind, the contract
- * sentence describing what the engine will do with the snippet, and any fixed
- * port names live on the *engine* element (`Generation`, declared by each
- * element under `engine/src/elements/`) and are resolved server-side from the element's name.
- * A contract sentence copied into the editor would be a second copy of a
- * statement about engine behaviour, and a prompt that exists twice is a prompt
- * that will drift -- which is exactly what happened to the file-selector
- * sentence, which existed three times.
+ * What is NOT here is as important as what is. The generator kind lives on the
+ * *engine* element (`Generation`, declared by each element under
+ * `engine/src/elements/`) and is resolved server-side from the element's name:
+ * a sentence about engine behaviour copied into the editor is a second copy,
+ * and a prompt that exists twice is a prompt that will drift.
  */
 /**
  * The half of a generation the engine already declared, in the editor's words.
@@ -29,8 +23,7 @@ import type { Generation } from '@engine/authoring/generation.ts';
  * Which field holds the request, which the body, and what to say when the
  * request is missing or the answer arrived -- an element's `Generation` says
  * all of it, beside its `Logic`, from one constant. The editor's definition
- * adds only what the engine cannot know: labels, placeholders, and whether the
- * button is offered on this particular node.
+ * adds only what the engine cannot know: labels and placeholders.
  */
 export function fromEngine(
   generation: Generation | undefined,
@@ -47,7 +40,7 @@ export function fromEngine(
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- a node's and a widget's, held side by side
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- whatever the element is attached to
 export interface ElementGeneration<S = any> {
   /**
    * Field holding the user's request. `'description'` means the node's own
@@ -56,14 +49,6 @@ export interface ElementGeneration<S = any> {
   promptField: string;
   /** Field the generated text is written into. */
   targetField: string;
-  /**
-   * Is there a body to write for this particular subject? Omitted means
-   * always. An input node selects files only in directory mode; that is a
-   * question about one node, not about the element, which is why it is here
-   * and not in the backend descriptor. The graph sweep passes over a subject
-   * that has none; a panel shows step 4, and so ✨, only where there is one.
-   */
-  available?: (subject: S) => boolean;
   /**
    * Context only the editor can know: what the user chose in this node's own
    * config (batch mode, declared output format). Everything about the *graph*
@@ -93,13 +78,6 @@ export interface ElementGeneration<S = any> {
   language: 'javascript' | 'markdown';
   /** How tall the body box starts out; a system prompt needs less than a module. */
   bodyHeight?: number;
-  /**
-   * A sample only the engine can produce, asked for when ✨ is pressed: a
-   * folder's listing, which is what a file selector is handed and what no
-   * field of the node holds. It wins over the node's own sample, which is keyed
-   * by ports the snippet does not have.
-   */
-  fetchSample?: (subject: S) => Promise<{ values: Record<string, unknown>; origin: string } | undefined>;
 }
 
 /** Reading and writing one element's fields, wherever they happen to live. */
@@ -121,17 +99,6 @@ export function nodeFields(
   };
 }
 
-/** A widget's fields: all flat on the widget, one level down. */
-export function widgetFields(
-  widget: GuiWidget,
-  update: (patch: Partial<GuiWidget>) => void,
-): FieldAccess {
-  const flat = widget as unknown as Record<string, unknown>;
-  return {
-    get: (field) => String(flat[field] ?? ''),
-    set: (field, value) => update({ [field]: value } as Partial<GuiWidget>),
-  };
-}
 
 /**
  * What to say after generating.
@@ -165,7 +132,7 @@ export function probeMessage(probe: ProbeReport | undefined, fallback: string, o
 }
 
 export interface GenerationRequest<S> {
-  /** NodeType or WidgetKind -- the server resolves the rest from it. */
+  /** The node type -- the server resolves the rest from it. */
   element: string;
   generation: ElementGeneration<S>;
   subject: S;
@@ -226,18 +193,11 @@ export interface GenerationRequest<S> {
    * used to be written into the node's format description as a sentence,
    * over the one field that is the person's own words; the shape is where a
    * measurement belongs (the node's `interface.json`), and a run would put it there
-   * anyway. Only for a node: a block inside a page has no output of its own.
+   * anyway.
    */
   recordShape?: (outputs: Record<string, unknown>) => void;
 }
 
-/**
- * Turn an element's declaration into the options `useGenerate().run` takes.
- *
- * Both shells call exactly this, so a node and a widget generate through one
- * code path -- as they already execute, author files and declare ports through
- * one.
- */
 /** Only the entries that say something: an empty description is not a note. */
 function said(notes: Record<string, string> | undefined): Record<string, string> | undefined {
   const kept = Object.entries(notes ?? {}).filter(([, text]) => text?.trim());
@@ -277,53 +237,34 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
 }
 
 /**
- * The request with the sample its element can only get by asking the engine
- * (`ElementGeneration.fetchSample`), when it declares one. Asked at the moment
- * ✨ is pressed, so it is what is there now; one that cannot be had leaves the
- * request as it was, and the verify pass is simply off.
- */
-async function withFetchedSample<S>(request: GenerationRequest<S>): Promise<GenerationRequest<S>> {
-  const fetch = request.generation.fetchSample;
-  if (!fetch) return request;
-  try {
-    const fetched = await fetch(request.subject);
-    return fetched ? { ...request, sampleInputs: fetched.values, sampleOrigin: fetched.origin } : request;
-  } catch {
-    return request;
-  }
-}
-
-/**
  * What ✨ Generate would send, without sending it: the server builds the same
  * request and stops at the first model call (`preview`). The answer is that
  * call -- system and prompt, as the model would read them.
  */
 export async function previewGeneration<S>(request: GenerationRequest<S>): Promise<AICall[]> {
-  const response = await call('generate', { ...generateRequest(await withFetchedSample(request)), preview: true });
+  const response = await call('generate', { ...generateRequest(request), preview: true });
   return response.calls ?? [];
 }
 
+/**
+ * Turn an element's declaration into the options `useGenerate().run` takes.
+ * A node's dialog and the graph sweep both call exactly this, so a button and
+ * a sweep generate through one code path.
+ */
 export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
   const { generation: spec, fields } = request;
   const prompt = fields.get(spec.promptField).trim();
-  // What the verify pass ran it on, as the message after it says: set once the
-  // request is sent, since a fetched sample is only known then.
-  let origin = request.sampleOrigin;
 
   return {
     guard: () => (prompt ? undefined : (spec.guard ?? 'Please add a prompt first.')),
     pending: 'Generating…',
-    success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!', origin),
+    success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!', request.sampleOrigin),
     failure: 'Generation failed',
-    run: async (progressId?: string) => {
-      const sent = await withFetchedSample(request);
-      origin = sent.sampleOrigin;
-      return call('generate', {
-        ...generateRequest(sent),
-        // Only a single ✨ button passes one; a sweep runs unattended.
-        ...(progressId ? { progress_id: progressId } : {}),
-      });
-    },
+    run: (progressId?: string) => call('generate', {
+      ...generateRequest(request),
+      // Only a single ✨ button passes one; a sweep runs unattended.
+      ...(progressId ? { progress_id: progressId } : {}),
+    }),
     apply: (result) => {
       fields.set(spec.targetField, result.result);
 

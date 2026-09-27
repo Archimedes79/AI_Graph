@@ -1,32 +1,23 @@
 import { Suspense } from 'react';
 import type { GuiWidget } from '@/graph';
 import { guiWidgetPorts, widgetFiresRun } from '@/document/guiWidgets';
-import { useGenerate } from '@/authoring/useGenerate';
-import { buildGeneration, widgetFields, type GenerationRequest } from '@/authoring/generation';
-import { widgetLogic } from '@/authoring/logic';
 import { WIDGET_BUILDERS } from '@/elements/registry';
-import type { WidgetSteps } from '@/elements/WidgetGuiBuilder';
-import { GenerationReport } from '@/authoring/GenerationTranscript';
-import { useWhatSends } from '@/authoring/WhatSends';
 import { GUI_GRID_COLUMNS } from '@/document/layout';
-import { runBlockAlone } from '@/authoring/readAsRun';
-import OpenInMyEditor from '@/authoring/OpenInMyEditor';
 import { TONES, TONE_LABELS, type Tone } from '@/ui/tone';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, WELL } from '@/ui/theme';
 
 interface WidgetEditorProps {
   widget: GuiWidget | null;
-  /** The gui node this block sits on, so its last run can be looked up. */
-  nodeId: string;
   onChange: (patch: Partial<GuiWidget>) => void;
   /** Remove this block from the page. Dragging is what arranges it. */
   onRemove?: () => void;
 }
 
 /**
- * What the widget selected on the designer canvas *is*: its name, its mode, and
- * whatever body it authors -- in the four steps, drawn by its own panel, with
- * Try it under the body rather than at the foot of the editor.
+ * What the widget selected on the designer canvas *is*: its label, what using
+ * it starts, its own settings drawn by its own panel, and how it looks. A block
+ * has no body to write: a chart, a table or an image says in one sentence what
+ * it shows, and what reshapes a value is a node.
  *
  * This was a list editor holding every widget at once, next to a designer
  * holding the same list again -- two editable views of one thing, plus ↑↓
@@ -35,23 +26,7 @@ interface WidgetEditorProps {
  * hand. Same shape as a node's config panel one level down, which is why it
  * draws the element's own `Panel` rather than knowing any widget kind.
  */
-export default function WidgetEditor({
-  widget, nodeId, onChange, onRemove,
-}: WidgetEditorProps) {
-  const generate = useGenerate();
-
-  /**
-   * The one ✨ Generate request, for whichever widget kind asks -- the button
-   * and "what ✨ sends" send the same. Each widget declares it
-   * (`WidgetGuiBuilder.generation`); a shared shell switches on no kind.
-   */
-  const request = (): GenerationRequest<GuiWidget> | undefined => {
-    const spec = widget ? WIDGET_BUILDERS[widget.kind].generation : undefined;
-    if (!widget || !spec) return undefined;
-    return { element: widget.kind, generation: spec, subject: widget, fields: widgetFields(widget, onChange) };
-  };
-  const sends = useWhatSends(request, widget ? `${nodeId}::${widget.id}` : '');
-
+export default function WidgetEditor({ widget, onChange, onRemove }: WidgetEditorProps) {
   if (!widget) {
     return (
       <p className="text-xs" style={{ color: DIMMER }}>
@@ -62,28 +37,6 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
 
   const element = WIDGET_BUILDERS[widget.kind];
   const Panel = element.Panel;
-  const logic = widgetLogic(widget);
-
-  const handleGenerate = () => {
-    const asked = request();
-    if (asked) generate.run(buildGeneration(asked), widget.id);
-  };
-
-  // In a project, a block's code is a file of its own, one folder below its
-  // page's. Keyed by the block, so one block's "Opened in …" is not said of
-  // the next one selected.
-  const openInEditor = logic
-    ? <OpenInMyEditor key={widget.id} nodeId={nodeId} widgetId={widget.id} />
-    : undefined;
-
-  // What only this shell knows, for a block that authors a body: the page it
-  // sits on. The panel places each in its step.
-  const steps: WidgetSteps | undefined = element.generation ? {
-    tryIt: () => runBlockAlone(widget),
-    preview: sends.preview,
-    sent: sends.sent,
-    openInEditor,
-  } : undefined;
 
   return (
     <div className="px-3 py-3 rounded-lg" style={WELL}>
@@ -142,33 +95,13 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
         </div>
       )}
 
+      {/* A panel is its own chunk, loaded when a widget is first opened.
+          Keyed by the block: what one block's panel holds -- a listing -- is
+          not shown in the next block selected. */}
       {Panel && (
-        <GenerationReport
-          calls={generate.transcript(widget.id)}
-          live={generate.liveTranscript(widget.id)}
-          review={{
-            pending: generate.isPending(widget.id),
-            accept: () => generate.accept(widget.id),
-            discard: () => generate.discard(widget.id),
-          }}
-        >
-        {/* A panel is its own chunk, loaded when a widget is first opened.
-            Keyed by the block: what one block's panel holds -- a try, a
-            listing -- is not shown in the next block selected. */}
         <Suspense fallback={null}>
-        <Panel
-          key={widget.id}
-          builder={element}
-          widget={widget}
-          fields={widgetFields(widget, onChange)}
-          onUpdate={onChange}
-          generating={generate.isGenerating(widget.id)}
-          message={generate.message(widget.id)}
-          onGenerate={handleGenerate}
-          steps={steps}
-        />
+          <Panel key={widget.id} builder={element} widget={widget} onUpdate={onChange} />
         </Suspense>
-        </GenerationReport>
       )}
 
       {/* Everything that is a preference rather than a decision: how it looks,

@@ -116,7 +116,7 @@ describe('what a run calls', () => {
   const RUN_TIME = [
     ...readdirSync(join(SRC, 'execution')).filter((name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name) && name !== 'examples.ts')
       .map((name) => `execution/${name}`),
-    'elements/body.ts', 'elements/fileSelection.ts', 'authoring/logic.ts',
+    'elements/body.ts', 'elements/folderListing.ts', 'authoring/logic.ts',
     'host/serve.ts', 'host/runs.ts', 'host/rounds.ts', 'host/schedule.ts', 'host/node.ts',
   ];
 
@@ -172,17 +172,15 @@ describe('what runs', () => {
     for (const file of [...BASES, ...kinds(join(HERE, 'nodes'))]) expect(readFileSync(file, 'utf8'), file).not.toMatch(/constructor\.name\b(?!`)/);
   });
 
-  it('names a file that is there, and only a body that does run', () => {
+  it('names a file only when the node keeps one of that name', () => {
     const element = registry.node('input')!;
-    const folder = (config: Record<string, unknown>) => node('input', { input_mode: 'directory', selector_code: 'function run({ files }) { return { files }; }', ...config });
-    // A sentence may name a file in the node's folder: then the node keeps one of that name.
-    for (const subject of [folder({ select_all_files: false }), folder({ select_all_files: true })]) {
+    // A folder is listed by the engine, whatever an old node still carries: no body chooses its files.
+    for (const input_mode of ['text', 'file', 'directory']) {
+      const subject = node('input', { input_mode, selector_code: 'function run({ files }) { return { files }; }' });
       const kept = element.texts(subject).map((text) => text.file);
       for (const named of element.whatRuns(subject).does.match(/\b[\w.-]+\.(?:js|md|json)\b/g) ?? []) expect(kept).toContain(named);
+      expect(element.whatRuns(subject).by, input_mode).toBe('engine');
     }
-    // With "select all" ticked the body that chooses is not run, so it is not said to be.
-    expect(element.whatRuns(folder({ select_all_files: false })).does).toContain('select.js');
-    expect(element.whatRuns(folder({ select_all_files: true })).does).not.toContain('select.js');
   });
 
   it('follows an ai node from the engine\'s call to a body once run.js is changed', () => {

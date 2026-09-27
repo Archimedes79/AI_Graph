@@ -1,8 +1,8 @@
 import React from 'react';
 import PathField, { FileTypesField } from '@/dialogs/PathField';
-import SelectorSteps from '@/authoring/SelectorSteps';
 import { clip } from '@/authoring/TryItInline';
-import { readFileAsRun, runAlone } from '@/authoring/readAsRun';
+import { listAsRun, readFileAsRun } from '@/authoring/readAsRun';
+import FolderListing from '../../fields/FolderListing';
 import { errorText } from '@/api/errorText';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
@@ -47,18 +47,15 @@ function WhatItHandsOn({ path }: { path: string }) {
 }
 
 /**
- * An input node: text, one file, or a folder -- and for a folder, the files it
- * keeps, chosen by code in the four steps a folder picker on a page is built
- * in, drawn by the same component.
+ * An input node: text, one file, or a folder -- and for a folder, its file
+ * types and whether it looks into subfolders, then the list, drawn by the same
+ * component a folder picker on a page is.
  *
  * What it reads is what every node after it is shown before the graph has run
  * (`InputNodeGuiBuilder.restingFile`), so there is no sample of its own to
  * attach and no second description of what the files hold.
  */
-export default function InputNodePanel({
-  builder, node, setConfig, fields, generating, message, onGenerate, steps,
-}: NodePanelProps) {
-  const generation = builder.generation;
+export default function InputNodePanel({ builder, node, setConfig }: NodePanelProps) {
   if (!(builder instanceof InputNodeGuiBuilder)) return null;
   const mode:'text' | 'file' | 'directory' =
     (node.config.input_mode || 'text') as 'text' | 'file' | 'directory';
@@ -153,48 +150,21 @@ export default function InputNodePanel({
     <FileTypesField value={node.config.extensions ?? ''} onChange={(extensions) => setConfig('extensions', extensions)} />
   );
 
-  if (!isDirectory || !generation || !steps) {
-    return (
-      <div className="space-y-4">
-        {modeField}{valueField}{!isText && !isDirectory && <WhatItHandsOn path={path} />}{typesField}{catchFailures}
-      </div>
-    );
-  }
+  // A folder: its file types and its subfolders, then the list -- as a run
+  // lists it, the way the folder picker on a page does.
+  const listing = isDirectory && (
+    <FolderListing
+      recursive={!!node.config.recursive}
+      onRecursive={(recursive) => setConfig('recursive', recursive)}
+      noFolder={!path.trim()}
+      list={() => listAsRun(node)}
+      of={JSON.stringify([path, node.config.extensions ?? '', !!node.config.recursive])}
+    />
+  );
 
   return (
     <div className="space-y-4">
-      {modeField}
-      <SelectorSteps
-        folder={(
-          <div className="space-y-3">
-            {valueField}
-            {typesField}
-            <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-              <input
-                type="checkbox"
-                checked={!!node.config.recursive}
-                onChange={(e) => setConfig('recursive', e.target.checked)}
-              />
-              Look into subfolders too
-            </label>
-          </div>
-        )}
-        noFolder={!path.trim()}
-        // As a run reads it, the way the folder picker on a page asks.
-        selectAll={builder.selectsAll(node)}
-        onSelectAll={(all) => setConfig('select_all_files', all)}
-        generation={generation}
-        subject={node}
-        fields={fields}
-        generating={generating}
-        message={message}
-        onGenerate={onGenerate}
-        tryIt={() => runAlone(node)}
-        preview={steps.preview}
-        sent={steps.sent}
-        openInEditor={steps.openInEditor}
-      />
-      {catchFailures}
+      {modeField}{valueField}{!isText && !isDirectory && <WhatItHandsOn path={path} />}{typesField}{listing}{catchFailures}
     </div>
   );
 }

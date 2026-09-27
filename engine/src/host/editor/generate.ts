@@ -177,13 +177,9 @@ const DATA_FORMAT_SYSTEM =
 // A node that runs once per item
 // ---------------------------------------------------------------------------
 
-/**
- * Whether a run calls this body once per item. A node's can be; a snippet
- * with ports of its own (a selector's `files`, a block's `value`) is not
- * fanned out by anyone.
- */
-function runsPerItem(request: GenerateRequest, spec: Generation | undefined): boolean {
-  return request.batch_mode === 'per_item' && !spec?.inputs;
+/** Whether a run calls this body once per item. */
+function runsPerItem(request: GenerateRequest): boolean {
+  return request.batch_mode === 'per_item';
 }
 
 /**
@@ -330,13 +326,12 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
 async function generateVerifiedCode(
   ai: AiService, runtime: Runtime, target: Target, request: GenerateRequest, context: string,
   given: Sample | undefined,
-  spec?: Generation,
 ): Promise<{ text: string; explanation: string; probe: ProbeReport }> {
   const outputs = request.outputs ?? [];
   const sample = given?.values;
   const first = await generateCode(ai, target, request, context, given);
   if (!sample || !Object.keys(sample).length) return { ...first, probe: notProbed() };
-  const perItem = runsPerItem(request, spec);
+  const perItem = runsPerItem(request);
   // A sample that is an example says what must come out of it, and that is
   // checked too -- an example is a test, and a body that returns the right
   // keys with the wrong contents has not passed it. Not when the probe ran
@@ -445,15 +440,7 @@ async function asReceived(request: GenerateRequest, files?: FileService): Promis
   }
 }
 
-/**
- * Generate one element's authored text, whatever the element is.
- *
- * The element's own contract goes first in the context: it says what the
- * running engine will do with this snippet, which nothing else can imply. A
- * sub-snippet whose ports the element fixes (a selector's `files`) is
- * generated against those -- and probed against a sample only when the
- * sample is keyed by those same ports.
- */
+/** Generate one node's authored text, whatever kind of node it is. */
 export async function generate(given: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
   // The error port is the executor's (`catch_errors`): filled when the body
   // fails, never returned by it. Left in, the skeleton returned it and the
@@ -474,7 +461,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   if (!spec) throw new GenerationRefused(`'${asked.element}' is not an element that generates anything`);
   const whole = exampled ? { ...asked, sample_inputs: exampled.values } : asked;
   // One item of it, for a node run once per item: what its body is called with.
-  const cut = runsPerItem(whole, spec) ? oneItem(whole) : undefined;
+  const cut = runsPerItem(whole) ? oneItem(whole) : undefined;
   const request = await asReceived(cut ? { ...whole, sample_inputs: cut.values } : whole, deps.files);
   const calls: AICall[] = deps.calls ?? [];
   // A preview runs every step a generation does up to the model, and stops
@@ -483,18 +470,8 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   const ai = recording(request.preview ? PREVIEW_AI : deps.ai, calls);
   const kind = spec.kind;
 
-  const context = [spec.contract ?? '', request.context ?? ''].filter(Boolean).join('\n\n');
-  const fixedPorts = Boolean(spec?.inputs);
-  const fits = fixedPorts && request.sample_inputs
-    && Object.keys(request.sample_inputs).every((key) => spec!.inputs!.includes(key));
-  const shaped: GenerateRequest = fixedPorts
-    ? {
-      ...request, inputs: spec!.inputs, outputs: spec!.outputs ?? request.outputs,
-      sample_inputs: fits ? request.sample_inputs : null, input_sources: undefined,
-    }
-    : request;
-
-  const values = shaped.sample_inputs;
+  const context = request.context ?? '';
+  const values = request.sample_inputs;
   const sample: Sample | undefined = values && Object.keys(values).length
     ? {
       values, origin: exampled?.origin ?? request.sample_origin ?? 'the last run', expect: exampled?.expect,
@@ -505,7 +482,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   try {
     switch (kind) {
       case 'code': {
-        const { text, explanation, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, shaped, context, sample, spec);
+        const { text, explanation, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, request, context, sample);
         return { result: text, explanation, probe: report, calls };
       }
       case 'prompt': {

@@ -1,9 +1,8 @@
 // One way to run a body.
 //
 // A body is JavaScript somebody wrote, or a model did: a code node's `code.js`,
-// an ai node's changed `run.js`, the `select.js` that picks files, the code a
-// display block shapes its value with. They are one kind of thing and run one
-// way, whichever element they belong to:
+// an ai node's or a subgraph node's changed `run.js`. They are one kind of
+// thing and run one way, whichever element they belong to:
 //
 //   async function run(inputs, node) { …; return { <output port>: value }; }
 //

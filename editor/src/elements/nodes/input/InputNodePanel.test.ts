@@ -40,4 +40,20 @@ describe('an input node\'s panel', () => {
     expect(panel(node)).toMatch(/<button(?![^>]*disabled)[^>]*>Show what it hands on<\/button>/);
     expect(panel(NODE_KINDS.input.create('text'))).not.toContain('Show what it hands on');
   });
+
+  it('is, for a folder, the folder, its file types and its subfolders, and then the list -- no code to write', () => {
+    const node = NODE_KINDS.input.create('folder');
+    node.config.input_mode = 'directory';
+    expect(panel(node)).toMatch(/<button[^>]*disabled=""[^>]*>Show the files it lists<\/button>/);
+    node.config.value = 'data/stories';
+    const html = panel(node);
+    expect(html).toContain('aria-label="Directory"');
+    expect(html).toContain('aria-label="File types"');
+    expect(html).toContain('Look into subfolders too');
+    expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Show the files it lists<\/button>/);
+    // Choosing some of the files is a code node after it, said in one line.
+    expect(html).toContain('To use only some of them, wire a code node after it');
+    expect(html).not.toContain('✨');
+    expect(html).not.toContain('Every file it lists');
+  });
 });

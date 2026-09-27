@@ -1,20 +1,14 @@
 // What an element does, as an object rather than as three field names.
 //
-// Every element that does anything at all does it the same way: someone writes
-// a prompt, an AI turns that prompt into a body, and the body is what runs. A
-// code node, an AI node, a file selector and a chart transform are four
-// instances of that one sentence, and they differed only in which config keys
-// happened to hold the two halves — `code`/`code_prompt` here,
-// `selector_code`/`selector_prompt` there, `system_prompt`/the node's own
-// description somewhere else.
+// Every node that does anything authored does it the same way: someone writes a
+// request, an AI turns it into a body, and the body is what runs. A code node,
+// an AI node and a data node's format are instances of that one sentence, and
+// they differ only in which config keys hold the two halves — `code`/
+// `code_prompt` here, `system_prompt`/the node's own description there.
 //
 // That difference was expressed as strings: an element returned the *names* of
-// its fields and the caller reached into an untyped bag to find them. Two costs
-// followed, and both are gone now. `selectFiles` took the element itself plus
-// `subject: unknown` and cast it `as never` internally, because the body it
-// wanted to run lived behind a generic it could not name. And the same idea was
-// declared three times — once here, once in the editor, once in Python — with a
-// different field list each time.
+// its fields and the caller reached into an untyped bag to find them, and the
+// same idea was declared more than once, with a different field list each time.
 //
 // So the body becomes a thing. An element hands out a `Logic`; a caller runs
 // it. Nobody names a config key, and nobody needs the element to run the body

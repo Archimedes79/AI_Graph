@@ -105,21 +105,8 @@ describe('code', () => {
     expect(reply.result).toContain('wrong: 1');
   });
 
-  it('generates a fixed-port snippet against its own ports, never probing the node\'s sample', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { files: [] }; }\n```']);
-    let probed = false;
-    const reply = await generate(
-      { element: 'input', description: 'the markdown ones', inputs: ['text'], outputs: ['result'], sample_inputs: { text: 'x' } },
-      { ai, code: runner(() => { probed = true; return {}; }), generationFor, target },
-    );
-    expect(probed).toBe(false);
-    expect(reply.probe.status).toBe('skipped');
-    expect(ai.asked[0].prompt).toContain('- `files`');
-    expect(ai.asked[0].prompt).toContain('Return only the selected paths');    // the selector's own contract
-  });
-
-  it('is not offered for a block that shows what arrives: it has no code to write', async () => {
-    for (const kind of ['plot_window', 'table', 'image_view']) {
+  it('is not offered for a block, nor for a folder listing: neither has code to write', async () => {
+    for (const kind of ['plot_window', 'table', 'image_view', 'input_picker', 'input']) {
       await expect(generate({ element: kind, description: 'x' }, { ai: scripted([]), code: runner(() => ({})), generationFor, target }))
         .rejects.toThrow(GenerationRefused);
     }

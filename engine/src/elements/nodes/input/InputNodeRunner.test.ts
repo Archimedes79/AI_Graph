@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InputNodeRunner } from './InputNodeRunner.ts';
@@ -93,58 +93,26 @@ describe('a file that cannot be read', () => {
   });
 });
 
-describe('the selector', () => {
-  /**
-   * Only a folder listing is narrowed by a selector. The editor gave every
-   * input node the starter selector, and a text or single-file input used to
-   * have it written into its folder as `select.js`: a file that never runs,
-   * saying the node chooses files.
-   */
-  const starter = 'function run(inputs) {\n  return { files: inputs.files ?? [] };\n}\n';
-
-  it('is kept in a file of its own only by a node that lists a folder', () => {
-    const element = new InputNodeRunner();
-    for (const mode of ['text', 'file']) {
-      expect(element.texts(inputNode({ input_mode: mode, selector_code: starter })), mode).toEqual([]);
-    }
-    expect(element.texts(inputNode({ input_mode: 'directory', selector_code: starter })).map((text) => text.file))
-      .toEqual(['select.js', 'task.md']);
+describe('a folder it lists', () => {
+  /** Nothing is written beside a listing: no body chooses its files, a code node after it does. */
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ai-graph-input-'));
+    forgetSeen();
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
   });
 
-  describe('in a project folder', () => {
-    let dir: string;
-    beforeEach(async () => {
-      dir = await mkdtemp(join(tmpdir(), 'ai-graph-input-'));
-      forgetSeen();
-    });
-    afterEach(async () => {
-      await rm(dir, { recursive: true, force: true });
-    });
-
-    const graphWith = (mode: string): Graph => parseGraph({
-      nodes: [{
-        id: 'source', node_type: 'input', label: 'Source', position: { x: 0, y: 0 }, inputs: [], outputs: [],
-        config: { input_mode: mode, value: 'data', selector_code: starter },
-      }],
-      edges: [],
-    });
-
-    it('writes no select.js for a text or file input', async () => {
-      for (const mode of ['text', 'file']) {
-        await writeProject(dir, graphWith(mode));
-        expect(existsSync(join(dir, 'nodes', 'source', 'select.js')), mode).toBe(false);
-      }
-    });
-
-    it('tidies away the select.js a node left when it stops listing a folder, and keeps what it said', async () => {
-      await writeProject(dir, graphWith('directory'));
-      expect(existsSync(join(dir, 'nodes', 'source', 'select.js'))).toBe(true);
-      await writeProject(dir, graphWith('text'));
-      expect(existsSync(join(dir, 'nodes', 'source', 'select.js'))).toBe(false);
-      // Not lost: a node switched back to directory mode still has its selector.
-      const saved = JSON.parse(await readFile(join(dir, 'nodes', 'source', 'node.json'), 'utf8'));
-      expect(saved.config.selector_code).toBe(starter);
-    });
+  it('keeps no file of its own in a project folder, whatever an old node still carries', async () => {
+    const element = new InputNodeRunner();
+    const old = { input_mode: 'directory', value: 'data', selector_code: 'function run(i) { return i; }', selector_prompt: 'Only the CSVs.' };
+    expect(element.texts(inputNode(old))).toEqual([]);
+    expect(element.logic(inputNode(old))).toBeUndefined();
+    const graph: Graph = parseGraph({ nodes: [{ ...inputNode(old), id: 'source' }], edges: [] });
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'nodes', 'source', 'select.js'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes', 'source', 'task.md'))).toBe(false);
   });
 });
 

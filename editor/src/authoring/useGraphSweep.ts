@@ -6,15 +6,14 @@
 // — and writes what comes back into the store.
 
 import { useCallback, useRef, useState } from 'react';
-import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
+import type { GraphEdge, GraphNode } from '@/graph';
 import type { GenerateResponse } from '@/api/client';
 import { shapeToKeep, useGraphStore } from '@/store/graphStore';
 import { graphEdge } from '@/document/wires';
-import { showsPage } from '@/document/guiWidgets';
 import { nodeFacts } from './nodeFacts';
-import { WIDGET_BUILDERS, NODE_BUILDERS } from '@/elements/registry';
-import { buildGeneration, nodeFields, widgetFields } from './generation';
-import { missingExamples, sampleFromPredecessors, sweep, writtenBody, type SweepTarget, type SweepUnit } from './graphSweep';
+import { NODE_BUILDERS } from '@/elements/registry';
+import { buildGeneration, nodeFields } from './generation';
+import { missingExamples, sampleFromPredecessors, sweep, writtenBody, type SweepUnit } from './graphSweep';
 
 export interface SweepState {
   run: () => Promise<void>;
@@ -54,66 +53,26 @@ export async function sweepGraph({ say, stopped }: { say: (message: string) => v
   // it is generated against real values even when the graph has never run.
   const produced = new Map<string, Record<string, unknown>>();
 
-  const guiNodes = new Set(nodesOf().filter((n) => showsPage(n.node_type)).map((n) => n.id));
-
   /**
    * One unit, written only into the graph it was asked for: refused, which
    * stops the sweep and says why, once another graph is open.
    */
-  const inThisGraph = (unit: SweepUnit<GenerateResponse>, key: string): SweepUnit<GenerateResponse> => ({
+  const inThisGraph = (unit: SweepUnit<GenerateResponse>, nodeId: string): SweepUnit<GenerateResponse> => ({
     ...unit,
     apply: (result) => {
       if (!stillOpen()) throw new Error(ANOTHER_GRAPH);
       unit.apply(result);
-      // Filed under the target, so the one after it -- which may be a block,
-      // a node away -- is generated against what this one really returned.
-      if (result.probe?.outputs) produced.set(key, result.probe.outputs);
+      // So the node after it is generated against what this one really returned.
+      if (result.probe?.outputs) produced.set(nodeId, result.probe.outputs);
     },
   });
 
-  /** One block on a page, generated exactly as its own ✨ button would. */
-  const unitForWidget = (
-    target: SweepTarget & { widget: GuiWidget },
-  ): SweepUnit<GenerateResponse> | undefined => {
-    const element = WIDGET_BUILDERS[target.widget.kind as keyof typeof WIDGET_BUILDERS];
-    const spec = element?.generation;
-    if (!spec) return undefined;
-
-    const node = nodesOf().find((n) => n.id === target.node.id);
-    const widget = (node?.config.gui_widgets ?? []).find((w) => w.id === target.widget.id);
-    if (!node || !widget) return undefined;
-    if (spec.available && !spec.available(widget)) return undefined;
-
-    // Never overwrite a body somebody already has, the same rule a node gets.
-    const written = String((widget as unknown as Record<string, unknown>)[spec.targetField] ?? '').trim();
-    if (written) return undefined;
-
-    const onChange = (patch: Partial<GuiWidget>) => {
-      const latest = nodesOf().find((n) => n.id === node.id);
-      if (!latest) return;
-      useGraphStore.getState().updateNode(node.id, {
-        config: {
-          ...latest.config,
-          gui_widgets: latest.config.gui_widgets.map((w) => (w.id === widget.id ? { ...w, ...patch } : w)),
-        } as GraphNode['config'],
-      });
-    };
-
-    // The same request its own ✨ button sends.
-    return inThisGraph(buildGeneration({
-      element: widget.kind, generation: spec, subject: widget, fields: widgetFields(widget, onChange),
-    }), target.key);
-  };
-
-  const unitFor = (target: SweepTarget): SweepUnit<GenerateResponse> | undefined => {
-    if (target.widget) return unitForWidget(target as SweepTarget & { widget: GuiWidget });
-    const node = target.node;
+  const unitFor = (node: GraphNode): SweepUnit<GenerateResponse> | undefined => {
     const element = NODE_BUILDERS[node.node_type];
     const spec = element?.generation;
     if (!spec) return undefined;
 
     const current = nodesOf().find((n) => n.id === node.id) ?? node;
-    if (spec.available && !spec.available(current)) return undefined;
 
     // Never overwrite a body somebody already has. A sweep fills a graph in;
     // rewriting working code because a button was pressed is not that. What
@@ -136,7 +95,7 @@ export async function sweepGraph({ say, stopped }: { say: (message: string) => v
     // Its own example wins, as in its dialog; what the nodes before it just
     // returned stands in only where the node has nothing else to go on.
     const ownSample = facts.sampleInputs || element.exampleInput(current);
-    const predecessors = ownSample ? undefined : sampleFromPredecessors(target, rfEdges(), produced, guiNodes);
+    const predecessors = ownSample ? undefined : sampleFromPredecessors(node.id, rfEdges(), produced);
     return inThisGraph(buildGeneration({
       element: node.node_type,
       generation: spec,
@@ -154,7 +113,7 @@ export async function sweepGraph({ say, stopped }: { say: (message: string) => v
         const kept = now && shapeToKeep(now, outputs);
         if (kept) setConfig('output_schema', kept);
       },
-    }), target.key);
+    }), node.id);
   };
 
   let written = 0;

@@ -1,20 +1,16 @@
 import { NodeRunner } from '../../NodeRunner.ts';
-import type { TextFile, WhatRuns } from '../../ElementRunner.ts';
+import type { WhatRuns } from '../../ElementRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type GraphNode, type Port } from '../../../graph.ts';
-import { logicFrom, Logic } from '../../../authoring/logic.ts';
-import { selectFiles } from '../../fileSelection.ts';
+import { listFolder } from '../../folderListing.ts';
 import { port } from '../../port.ts';
 import { errorOutput } from '../../../execution/wiring.ts';
-import { SELECTOR_FIELDS, SELECTOR_GENERATION } from '../../../authoring/generation.ts';
-import type { Generation } from '../../../authoring/generation.ts';
 
 export interface InputConfig {
   value: string;
   mode: 'text' | 'file' | 'directory';
   recursive: boolean;
   extensions: string;
-  selectAll: boolean;
   promptAtRuntime: boolean;
   /** Return a failed read or listing as an `error` port instead of failing the node. */
   catchErrors: boolean;
@@ -32,14 +28,6 @@ function portInWords(port: Port): string {
   return `"${port.id}" (${port.multi ? `a list of ${many}` : one}${what})`;
 }
 
-/** The body that chooses files: named once, so what is said about it names the file that exists. */
-const SELECTOR_FILE = 'select.js';
-/** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
-const SELECTOR_TEXTS: readonly TextFile[] = [
-  { field: 'selector_code', file: SELECTOR_FILE },
-  { field: 'selector_prompt', file: 'task.md' },
-];
-
 /**
  * A value from outside the graph: typed text, one file, or a folder listing.
  *
@@ -48,18 +36,12 @@ const SELECTOR_TEXTS: readonly TextFile[] = [
  * `count`. That is the node's declared contract, not a convention: an element
  * emits the ports its node says it has, which is the thing a second engine gets
  * wrong first if it invents names of its own.
+ *
+ * A listing is the folder, its file types and its subfolders, and nothing
+ * else: keeping only some of the files is a code node after it.
  */
 export class InputNodeRunner extends NodeRunner<InputConfig> {
   readonly nodeType = 'input' as const;
-
-  /**
-   * Only a folder listing keeps a selector in its folder, as `logic` says.
-   * A text or single-file input selects nothing, and a `select.js` beside it
-   * would say that it did.
-   */
-  override texts(node: GraphNode): readonly TextFile[] {
-    return this.config(node).mode === 'directory' ? SELECTOR_TEXTS : [];
-  }
 
   config(node: GraphNode): InputConfig {
     const c = node.config;
@@ -69,7 +51,6 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
       mode: (['text', 'file', 'directory'].includes(mode) ? mode : 'text') as InputConfig['mode'],
       recursive: c.recursive === true,
       extensions: String(c.extensions ?? ''),
-      selectAll: c.select_all_files !== false,
       promptAtRuntime: c.prompt_at_runtime === true,
       catchErrors: c.catch_errors === true,
     };
@@ -118,12 +99,6 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
     };
   }
 
-  /** Only a folder listing is authored: a text or single-file input selects nothing. */
-  override logic(node: GraphNode): Logic | undefined {
-    if (this.config(node).mode !== 'directory') return undefined;
-    return logicFrom(node, 'code', SELECTOR_FIELDS);
-  }
-
   override runtimeRequirements(node: GraphNode) {
     const settings = this.config(node);
     if (!settings.promptAtRuntime) return [];
@@ -167,7 +142,7 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
       const content = await runtime.files.read(path);
       return { content, path, ...(settings.catchErrors ? { error: '' } : {}) };
     }
-    const files = await selectFiles(this.logic(node), settings, raw, runtime);
+    const files = await listFolder(raw, settings, runtime);
     return { files, count: files.length, ...(settings.catchErrors ? { error: '' } : {}) };
   }
 
@@ -185,15 +160,16 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
       return `  - input_mode "${mode}": outputs ${outputs.map(portInWords).join(' and ')}${taken}.`;
     });
     return 'config.value is the text, the file path or the folder path; config.input_mode is text, file or directory. '
+      + 'A directory lists every file in the folder: config.extensions (e.g. ".csv, .txt") keeps only those types, '
+      + 'config.recursive = true looks into subfolders too; to keep only some of the files, wire a code node after it. '
       + `Its ports are DERIVED from input_mode, not taken from this document:\n${modes.join('\n')}`;
   }
 
   override whatRuns(node: GraphNode): WhatRuns {
-    const { mode, selectAll } = this.config(node);
+    const { mode } = this.config(node);
     if (mode === 'file') return this.engineRuns('Reads the file whose path arrives on "path" (or the one it names) and hands on its text as "content".');
     if (mode === 'directory') {
-      return this.engineRuns('Lists the folder whose path arrives on "path" (or the one it names) and hands on the files as "files"'
-        + (!selectAll && this.logic(node)?.isEmpty === false ? `, chosen by ${SELECTOR_FILE}, which runs sandboxed.` : '.'));
+      return this.engineRuns('Lists the folder whose path arrives on "path" (or the one it names) -- its file types, and its subfolders when it looks into them -- and hands on the files as "files".');
     }
     return this.engineRuns('Hands on the text it holds, or what the person running the graph was asked for.');
   }
@@ -201,10 +177,5 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
   override referencedPaths(node: GraphNode): string[] {
     const settings = this.config(node);
     return settings.mode !== 'text' && settings.value ? [settings.value] : [];
-  }
-
-  /** Literally the object the file-picker block returns: one behaviour, two levels. */
-  override generation(): Generation {
-    return SELECTOR_GENERATION;
   }
 }

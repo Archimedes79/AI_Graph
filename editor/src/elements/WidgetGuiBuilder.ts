@@ -1,39 +1,17 @@
 // A widget's build-time half, in the browser: the mirror of `engine/src/elements/WidgetRunner.ts`.
 
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import type { GuiWidget, WidgetKind } from '@/graph';
-import type { FieldAccess } from '@/authoring/generation';
-import type { TryResult } from '@/authoring/TryItInline';
 import { DEFAULT_WIDGET_SPAN } from '@/document/layout';
 import type { Tone } from '@/ui/tone';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
 
-/**
- * What only the shell can hand a panel laid out in the four steps: the page
- * the block sits on. The panel places each where its step is.
- */
-export interface WidgetSteps {
-  /** The block run by itself, the way a run runs it. */
-  tryIt: () => Promise<TryResult>;
-  /** "What ✨ sends", beside ✨, and what it sends, under it. */
-  preview?: ReactNode;
-  sent?: ReactNode;
-  /** "Open in my editor", under the body, in a project. */
-  openInEditor?: ReactNode;
-}
-
-/** What the widget editor hands every widget panel. */
+/** What the widget editor hands every widget panel: a block has settings, and no body to write. */
 export interface WidgetPanelProps {
   /** This widget kind's own builder. */
   builder: WidgetGuiBuilder;
   widget: GuiWidget;
   onUpdate: (patch: Partial<GuiWidget>) => void;
-  fields: FieldAccess;
-  generating: boolean;
-  message?: string;
-  onGenerate: () => void;
-  /** For a block that authors a body: see `WidgetSteps`. */
-  steps?: WidgetSteps;
 }
 
 /** One entry of the page designer's palette: a kind in one of its modes, as a person looks for it. */
@@ -71,8 +49,8 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
   // merely uncalled in it.
 
   // ── Build time ────────────────────────────────────────────────────────────
-  // The editor: the palette, a new element, its panels, what ✨ Generate is told.
-  // Nothing else, and now nothing a tool can reach (`runtime/boundary.test.ts`).
+  // The editor: the palette, a new element, its panel. Nothing else, and now
+  // nothing a tool can reach (`runtime/boundary.test.ts`).
 
   /** What the palette and the properties header call it. */
   abstract readonly label: string;

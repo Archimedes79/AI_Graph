@@ -23,9 +23,6 @@ export function baseNodeConfig(): NodeConfig {
     input_mode: 'text',
     recursive: false,
     extensions: '',
-    select_all_files: true,
-    selector_prompt: '',
-    selector_code: '',
     // 'default' -> the one AI setting in ⚙ Settings (engine/src/ai/settings.ts
     // `aiSetting`), until someone pins this node to a provider of its own.
     ai_provider: 'default',

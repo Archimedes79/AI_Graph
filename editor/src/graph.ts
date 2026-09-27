@@ -91,9 +91,6 @@ export type NodeConfig = {
   prompt_at_runtime: boolean;
   read_file_inputs: boolean;
   recursive: boolean;
-  select_all_files: boolean;
-  selector_code: string;
-  selector_prompt: string;
   send_images: boolean;
   system_prompt: string;
   /** Unset: the model's own default -- current Claude models refuse one at all. */
@@ -108,9 +105,9 @@ export type NodeConfig = {
  * stay stable once assigned -- it is what keeps edges attached across edits.
  *
  * Beyond who it is and how it is drawn, a block holds only its own kind's
- * settings, so they are optional here: a divider has no selector, and a block
+ * settings, so they are optional here: a divider has no options, and a block
  * written by hand, by ✨ or over MCP leaves out what it does not set. Read one
- * the way its runner does -- `select_all_files` missing means every file.
+ * the way its runner does -- `recursive` missing means only the folder itself.
  */
 export type GuiWidget = {
   /** `input_picker`: the file types a folder's listing keeps. */
@@ -120,10 +117,8 @@ export type GuiWidget = {
   kind: WidgetKind;
   label: string;
   mode?: string;
+  /** `input_picker`: a folder's listing looks into its subfolders too. */
   recursive?: boolean;
-  select_all_files?: boolean;
-  selector_code?: string;
-  selector_prompt?: string;
   tone: 'plain' | 'raised' | 'sunken' | 'accent';
   /** Draw a frame regardless of the tone; unset lets the tone decide. */
   border?: boolean;

@@ -3,8 +3,6 @@ import type { BodyContext, Runtime } from './Runtime.ts';
 import type { GraphNode } from '../graph.ts';
 import { runBody } from './body.ts';
 import { registry } from './registry.ts';
-import { selectFiles } from './fileSelection.ts';
-import { Logic } from '../authoring/logic.ts';
 import { quietRuntime } from '../../test/fakes.ts';
 
 /**
@@ -15,11 +13,10 @@ import { quietRuntime } from '../../test/fakes.ts';
 function watching(): { runtime: Runtime; seen: { body: string; context?: BodyContext }[] } {
   const seen: { body: string; context?: BodyContext }[] = [];
   const runtime = quietRuntime({
-    files: { list: async () => ['a.txt', 'b.txt'] },
     code: {
       run: async (body, inputs, _signal, context) => {
         seen.push({ body, context });
-        return body.includes('files') ? { files: ['b.txt'] } : { value: inputs.value, output: 'ran' };
+        return { value: inputs.value, output: 'ran' };
       },
     },
     ai: { complete: async () => 'an answer' },
@@ -58,14 +55,6 @@ describe('every kind of body runs that way', () => {
     await registry.node('ai')!.execute(node('ai', { run_code: 'async function run() { return { output: "mine" }; }', system_prompt: 'S' }), {}, runtime);
     expect(seen[0].context?.calls).toHaveProperty('llm');
     expect(seen[0].context?.data).toMatchObject({ texts: { system: 'S' } });
-  });
-
-  it('the code that chooses files', async () => {
-    const { runtime, seen } = watching();
-    const logic = new Logic('code', '', 'function run({ files }) { return { files }; }', { body: 'selector_code', prompt: 'selector_prompt' });
-    const chosen = await selectFiles(logic, { recursive: false, extensions: '', selectAll: false }, 'folder', runtime);
-    expect(chosen).toEqual(['b.txt']);
-    expect(seen[0].context?.calls).toHaveProperty('llm');
   });
 });
 

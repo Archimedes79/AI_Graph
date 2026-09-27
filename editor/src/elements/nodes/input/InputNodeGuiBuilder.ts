@@ -1,13 +1,7 @@
 import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
-import type { ElementGeneration } from '@/authoring/generation';
-import { selectorGeneration } from '@/authoring/selectorGeneration';
-import { listAsRun } from '@/authoring/readAsRun';
 import { continuing } from '@/store/portRenames';
-import { InputNodeRunner } from '@engine/elements/nodes/input/InputNodeRunner.ts';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
-
-const INPUT = new InputNodeRunner();
 
 const mode = (node: GraphNode): string => String(node.config.input_mode ?? 'text');
 
@@ -33,26 +27,6 @@ export class InputNodeGuiBuilder extends NodeGuiBuilder {
   readonly color = 'var(--ui-node-input, #1e3a5f)';
 
   override readonly Panel = lazy(() => import('./InputNodePanel'));
-
-  override readonly generation: ElementGeneration<GraphNode> = selectorGeneration(INPUT.generation(), {
-    isFolder: (node) => mode(node) === 'directory',
-    selectsAll: (node) => this.selectsAll(node),
-    bodyHeight: 140,
-    // The selector is handed the folder's listing, and that listing is its
-    // example: the one the engine makes, fetched when ✨ is pressed.
-    fetchSample: async (node) => {
-      if (!String(node.config.value ?? '').trim()) return undefined;
-      return { values: { files: await listAsRun(node) }, origin: `the listing of ${String(node.config.value)}` };
-    },
-  });
-
-  /**
-   * Whether a run takes every file the folder lists, and runs no selector:
-   * the engine's answer, as the folder picker on a page asks it.
-   */
-  selectsAll(node: GraphNode): boolean {
-    return INPUT.config(node).selectAll;
-  }
 
   /**
    * A file or a folder is a guess until there is one to read: a default path,

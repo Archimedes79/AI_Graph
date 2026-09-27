@@ -511,7 +511,7 @@ async function commit(plan: Plan, guard?: Guard): Promise<void> {
  * Remove the files nothing claims any more, and the folders that leaves empty.
  *
  * Only files this process read or wrote as a node's -- a deleted node's, a
- * deleted block's, a selector of a node that no longer lists a folder. A file
+ * file a node of another kind no longer keeps. A file
  * it never saw is a person's, whatever it is called and however deep it sits:
  * `nodes/count/fixtures/code.js` stays.
  *

@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { browse, extensionFilter } from './browse.ts';
+import { browse } from './browse.ts';
+import { extensionFilter } from '../elements/folderListing.ts';
 
 /**
  * What a file picker gets from the machine — the editor's and a deployed

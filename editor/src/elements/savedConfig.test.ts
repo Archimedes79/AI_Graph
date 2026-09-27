@@ -60,16 +60,10 @@ describe('NodeGuiBuilder.saved', () => {
     expect(Object.keys(saved.subgraph)).toEqual(['subgraph']);
   });
 
-  it('saves no selector for an input nobody wrote one for, in any mode, and keeps one somebody did', () => {
-    for (const mode of ['text', 'file', 'directory'] as const) {
-      const node = NODE_KINDS.input.create('n');
-      node.config.input_mode = mode;
-      expect(savedNode(node).config, mode).not.toHaveProperty('selector_code');
-      expect(savedNode(node).config, mode).not.toHaveProperty('selector_prompt');
-    }
+  it('saves a folder input as its folder, its file types and its subfolders, and nothing more', () => {
     const node = NODE_KINDS.input.create('n');
-    node.config = { ...node.config, input_mode: 'directory', selector_prompt: 'Only the CSVs.', selector_code: 'function run(i) { return i; }' };
-    expect(savedNode(node).config).toMatchObject({ selector_prompt: 'Only the CSVs.', selector_code: 'function run(i) { return i; }' });
+    node.config = { ...node.config, input_mode: 'directory', value: 'data', extensions: '.csv', recursive: true };
+    expect(savedNode(node).config).toEqual({ input_mode: 'directory', value: 'data', extensions: '.csv', recursive: true });
   });
 
   it('keeps any key once somebody changed it from its default', () => {

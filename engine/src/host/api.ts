@@ -84,7 +84,7 @@ export interface Watched { progress_id?: string }
 
 /** One element's body to write. The element's own `Generation` decides the rest. */
 export interface GenerateRequest {
-  /** A node type or block kind: whose `Generation` says what is written and how. */
+  /** A node type: whose `Generation` says what is written and how. */
   element: string;
   description: string;
   context?: string;
@@ -177,7 +177,7 @@ export interface ProbeReport {
   status: 'skipped' | 'ok' | 'repaired' | 'failed';
   error: string;
   missing_outputs: string[];
-  /** What the element itself found wrong with a result that ran: a chart off its frame, NaN in the markup. */
+  /** What a result that ran falls short of: the example it was tried on, and what that example expects. */
   problems?: string[];
   /**
    * What the node hands on from the sample, whole -- the next node's sample,
