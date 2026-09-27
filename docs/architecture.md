@@ -343,11 +343,12 @@ other knows, it imports it or replays its result:
 ## A run
 
 1. **Order.** Kahn's algorithm gives levels. A loop through a node that remembers (a page,
-   a data node) is legal: the fewest edges into memory nodes are left out of the ordering
-   (`memoryFeedbackEdges`) and settled after the round.
+   a data node) is legal: edges that close a loop into memory nodes are left out of the
+   ordering (`memoryFeedbackEdges`, never by the order the wires are stored in) and settled
+   after the round, port by port.
 2. **What runs.** Everything — or, for an event (a block on a page, a trigger node), the
-   nodes its port is wired to, what follows from them, and what those need upstream
-   (`triggers.ts`). An event is a boolean that is true for the round it started
+   nodes its port is wired to, what follows from them, and what those need upstream,
+   including what computes a ◆ among them the event does not open itself (`triggers.ts`). An event is a boolean that is true for the round it started
    (`Runtime.fired`, asked of `NodeRunner.eventPorts`); a run no event started counts every
    event as fired.
    **The ◆ (`__run`) is a gate**: wired, the node runs only when this round opens it — the

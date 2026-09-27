@@ -147,6 +147,22 @@ describe('a code node that returns booleans is a filter', () => {
     expect(ran).toEqual(['page', 'router', 'source', 'table']);
   });
 
+  it('is computed in an event round when it is not downstream of the event itself', async () => {
+    // The button starts `a`, and `n` after it; whether `n` may run is decided
+    // by `allow`, which nothing on the page feeds.
+    const graph = graphOf(
+      [
+        node('page', 'gui', { gui_widgets: [{ id: 'go', kind: 'button' }] }),
+        node('a', 'code', { code: 'function run() { return { out: "from a" }; }' }, { in: ['x'], out: ['out'] }),
+        node('allow', 'code', { code: 'function run() { return { ok: true }; }' }, { out: ['ok'] }),
+        node('n', 'code', { code: 'function run(i) { return { got: i.x }; }' }, { in: ['x'], out: ['got'] }),
+      ],
+      [edge('p', 'page', 'go_out', 'a', 'x'), edge('an', 'a', 'out', 'n', 'x'), edge('gate', 'allow', 'ok', 'n', RUN_PORT)],
+    );
+    const run = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'page', port_id: 'go_out' } });
+    expect(result(run, 'n')).toMatchObject({ status: 'success', outputs: { got: 'from a' } });
+  });
+
   it('opens a gate with true and with nothing else', async () => {
     ran = [];
     const truthy = 'function run() { return { draw: "yes", refresh: 1 }; }';

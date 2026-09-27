@@ -17,6 +17,8 @@
 //     what the event is *for*;
 //   - everything upstream of those that they need an input from -- because a
 //     node cannot run on values nobody produced;
+//   - whatever computes the ◆ of one of them the event does not open itself,
+//     and what that needs -- a gate nobody computes never opens;
 //   - and nothing else.
 //
 // A block wired to nothing starts everything, which is what a lone "Go" button
@@ -123,7 +125,17 @@ export function after(ms: number, then: () => void, keepsAlive = true): () => vo
 export function triggeredNodes(graph: Graph, trigger: Trigger, feedback: Set<string>): Set<string> | null {
   const downstream = firedNodes(graph, trigger, feedback);
   if (!downstream) return null;
-  const needed = upstreamOf(graph, downstream, feedback);
+  // What decides whether a node the event is for may run is needed as much as
+  // what it runs on: a ◆ computed by a node outside the event would otherwise
+  // never be computed in its round, and never open. Not for a node the event
+  // is wired to itself, which that opens.
+  const live = graph.edges.filter((edge) => !feedback.has(edge.id));
+  const opened = new Set(live.filter((edge) => edge.source_node_id === trigger.node_id
+    && (!trigger.port_id || edge.source_port_id === trigger.port_id)).map((edge) => edge.target_node_id));
+  const gates = live
+    .filter((edge) => edge.target_port_id === RUN_PORT && downstream.has(edge.target_node_id) && !opened.has(edge.target_node_id))
+    .map((edge) => edge.source_node_id);
+  const needed = upstreamOf(graph, [...downstream, ...gates], feedback);
   needed.add(trigger.node_id);
   return needed;
 }
