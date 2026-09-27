@@ -86,6 +86,12 @@ export interface GraphStore {
   editingNodeId: string | null;
 
   // Actions
+  /**
+   * Change what the graph is called, what it does, its page's scheme: a
+   * change like any other, one undo step per field typed into (`commit`).
+   * The tool's name and description took none, so an Undo meant for the
+   * block added before them took them too.
+   */
   setMetadata: (meta: Partial<GraphMetadata>) => void;
   setCurrentFilePath: (path: string | null, isProject?: boolean) => void;
   /**
@@ -462,10 +468,13 @@ export const useGraphStore = create<GraphStore>()(
     runProgress: null,
     currentRunId: null,
 
-    setMetadata: (meta) =>
+    setMetadata: (meta) => {
+      // Named without ": ", so it is never taken for a node dialog's change (`nodeId: fields`).
+      get().commit(`metadata.${Object.keys(meta).join('+')}`);
       set((state) => {
         Object.assign(state.metadata, meta);
-      }),
+      });
+    },
 
     setCurrentFilePath: (path, isProject = false) =>
       set((state) => {

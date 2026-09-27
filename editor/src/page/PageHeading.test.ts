@@ -1,8 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { createElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import PageHeading from './PageHeading';
+import { insertBlock } from './pageWrite';
+import { pageOf } from './GuiPage';
 import { useGraphStore } from '@/store/graphStore';
+import { WIDGET_BUILDERS } from '@/elements/registry';
+import type { GraphNode } from '@/graph';
 
 /** The field of *element* that says it is *name*: what a person types into. */
 function field(element: ReactNode, name: string): { onChange: (event: { target: { value: string } }) => void } | undefined {
@@ -37,5 +41,37 @@ describe('above the page: the tool\'s name and what it does, which are the graph
     field(heading(), 'What the tool does')!.onChange({ target: { value: 'Plots a CSV' } });
     expect(useGraphStore.getState().metadata).toMatchObject({ name: 'Plotter', description: 'Plots a CSV' });
     expect(useGraphStore.getState().exportGraph().metadata).toMatchObject({ name: 'Plotter', description: 'Plots a CSV' });
+  });
+});
+
+describe('the tool\'s name and description, typed above the page', () => {
+  const store = () => useGraphStore.getState();
+  const blocks = () => pageOf(store().rfNodes.map((n) => n.data.graphNode as GraphNode)).blocks.length;
+  beforeEach(() => { vi.useFakeTimers(); store().newGraph(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('take an undo step of their own: Undo takes back the description, then the block added before it', () => {
+    // They took none: an Undo meant for the block took the description with
+    // it, and with nothing before them Undo could not take them back at all.
+    insertBlock({ ...WIDGET_BUILDERS.text_io.create('Box'), id: 'box' });
+    store().setMetadata({ description: 'Counts the words in a text.' });
+    store().undo();
+    expect(store().metadata.description).toBe('');
+    expect(blocks()).toBe(1);
+    store().undo();
+    expect(blocks()).toBe(0);
+    store().redo();
+    store().redo();
+    expect(store().metadata.description).toBe('Counts the words in a text.');
+  });
+
+  it('are one step per field typed into, not one per keystroke', () => {
+    for (const name of ['W', 'Wo', 'Word']) { store().setMetadata({ name }); vi.advanceTimersByTime(300); }
+    store().setMetadata({ description: 'Counts.' });
+    expect(store().past).toHaveLength(2);
+    store().undo();
+    expect(store().metadata).toMatchObject({ name: 'Word', description: '' });
+    store().undo();
+    expect(store().metadata.name).toBe('Untitled Graph');
   });
 });
