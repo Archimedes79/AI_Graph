@@ -85,7 +85,7 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
 
   /** Said under "⚡ Using this starts the graph", for a widget that can be told to. */
   readonly runOnChangeHint: string =
-    'Choosing a value runs the nodes this widget is wired to, and what follows from them — not the whole graph.';
+    'Choosing a value runs the nodes this block is wired to, and what follows from them — not the whole graph.';
 
   /** The widget is a source whose data nothing describes yet: see `NodeGuiBuilder.missingExample`. */
   missingExample(_widget: GuiWidget): boolean {

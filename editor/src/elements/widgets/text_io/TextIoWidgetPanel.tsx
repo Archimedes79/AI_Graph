@@ -40,12 +40,12 @@ export default function TextIoWidgetPanel({ widget, onUpdate }: WidgetPanelProps
 
       {mode === 'output' && (
         <p className="text-xs" style={{ color: DIM }}>
-          Output mode: this widget has only an <strong style={{ color: '#a78bfa' }}>input port</strong> and shows whatever the connected node produces.
+          Output mode: this block has only an <strong style={{ color: '#a78bfa' }}>input port</strong> and shows whatever the connected node produces.
         </p>
       )}
       {mode === 'input' && (
         <p className="text-xs" style={{ color: DIM }}>
-          Input mode: this widget has only an <strong style={{ color: '#a78bfa' }}>output port</strong> carrying the user's typed text.
+          Input mode: this block has only an <strong style={{ color: '#a78bfa' }}>output port</strong> carrying the user's typed text.
         </p>
       )}
     </div>

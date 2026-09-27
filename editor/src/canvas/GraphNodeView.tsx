@@ -167,7 +167,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
         </div>
       </div>
 
-      {/* Ports — GUI/widget nodes get a special two-column layout: outputs left, inputs right */}
+      {/* Ports — the page gets a two-column layout: what its blocks hand on left, what they show right */}
       {isGuiLike ? (
         <div className="px-3 py-2">
           <div className="grid grid-cols-2 gap-x-2">
@@ -241,7 +241,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
           {/* Memory-feedback hint -- this node's own persisted value breaks any cycle automatically, no manual edge marking needed */}
           {(graphNode.inputs.length > 0 && graphNode.outputs.length > 0) && (
             <p className="text-xs mt-2 px-1" style={{ color: DIMMER }}>
-              Tip: this node remembers its own value, so a feedback edge into it (e.g. AI → text window) breaks the cycle automatically.
+              Tip: the page remembers what it shows, so a wire back into it (AI → a text block) closes a loop without a cycle.
             </p>
           )}
           {failure && <div className="mt-1">{failure}</div>}

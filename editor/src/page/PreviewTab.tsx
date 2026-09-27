@@ -81,7 +81,7 @@ export default function PreviewTab() {
       {blocks.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm" style={{ color: DIMMER }}>
-            No page yet. Add blocks to it on the “GUI editor” tab.
+            No page yet. Add blocks to it on the Page tab.
           </p>
         </div>
       ) : (

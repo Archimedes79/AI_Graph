@@ -17,8 +17,7 @@ import { ACCENT, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/
  * a bundle's recipient wants a window, not three.
  */
 export default function DesignerTab() {
-  const updateNode = useGraphStore((s) => s.updateNode);
-  const guiScheme = useGraphStore((s) => s.metadata.gui_scheme);
+  const metadata = useGraphStore((s) => s.metadata);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const blocks = useSurfaceBlocks();
   const page = usePage();
@@ -162,7 +161,7 @@ export default function DesignerTab() {
       <DesignerPalette onAdd={addWidget} onDragStart={(entry) => setDragEntry(entry)} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <PageHeading nodes={page ? [page] : []} onChange={(nodeId, words) => updateNode(nodeId, words)} />
+        <PageHeading name={metadata.name} description={metadata.description} onChange={setMetadata} />
         <div
           data-gui-dropzone
           className="flex-1 overflow-auto px-8 py-6"
@@ -199,7 +198,7 @@ export default function DesignerTab() {
         <select
           className="w-full rounded-lg px-2 py-1.5 text-sm mb-5"
           style={FIELD_ON_SURFACE}
-          value={guiScheme}
+          value={metadata.gui_scheme}
           onChange={(e) => setMetadata({ gui_scheme: e.target.value as SchemeId })}
         >
           {SCHEMES.map((entry) => (
@@ -218,7 +217,7 @@ export default function DesignerTab() {
 
         {/* A page has no panel of its own -- this is where it is edited -- so
             what runs when it runs is said here, as every other node says it. */}
-        {page && <div className="mt-5"><WhatRuns node={page} /></div>}
+        {page && <div className="mt-5"><WhatRuns node={page} folded /></div>}
       </aside>
 
       {/* The element under the cursor while it is being dragged. Without it the

@@ -21,7 +21,7 @@ describe('the page views, at each level of the document', () => {
   });
 
   it('are not there inside a node\'s graph, where they would build a page nobody sees', () => {
-    // The bug: the GUI editor inside a subgraph added a gui node in there on
+    // The bug: the Page tab inside a subgraph added a gui node in there on
     // the first block, which `check` rejects, and wrote the colour scheme into
     // the inner graph.
     level.subgraphStack = [{ nodeId: 'part' }];

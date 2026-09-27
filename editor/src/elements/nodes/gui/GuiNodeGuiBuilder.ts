@@ -12,7 +12,7 @@ function receives(widget: GuiWidget): string | undefined {
 }
 
 /**
- * A composite: it holds widgets, generates nothing itself, and emits what its widgets emit.
+ * The page: it holds blocks, generates nothing itself, and emits what its blocks emit.
  *
  * The doubled word is not a slip. The node type is `gui`, so its runner is
  * `GuiNodeRunner` and its build-time half is that node's `GuiBuilder` --
@@ -27,20 +27,20 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  readonly label = 'GUI Node';
+  readonly label = 'Page';
 
-  readonly hint = 'Give the graph its own interface, built from widgets';
+  readonly hint = 'The page this tool shows: its blocks, built on the Page tab';
 
   readonly icon = '🖥️';
 
   readonly color = 'var(--ui-node-gui, #4a1d3a)';
 
-  // No Panel: a page is edited in the GUI editor, where its name and what it
-  // is about are edited above it (`PageHeading`), and the node dialog is never
-  // opened for it (App.tsx). The panel it had could not be reached.
+  // No Panel: the page is edited on the Page tab, under the graph's name and
+  // description (`PageHeading`), and the node dialog is never opened for it
+  // (App.tsx). It has no name of its own to give: the tool's is the graph's.
 
   /**
-   * Asked widget by widget, not of the node: a page with an unfilled picker
+   * Asked block by block, not of the node: a page with an unfilled picker
    * beside a fed text box is still a guess at the picker.
    */
   override missingExample(node: GraphNode): boolean {
@@ -59,7 +59,7 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
   }
 
   override describeOutput(): string {
-    return 'values from its widgets';
+    return 'values from its blocks';
   }
 
   /**

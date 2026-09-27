@@ -164,7 +164,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
     create: (id) => ({
       id,
       node_type: 'gui',
-      label: 'GUI Node',
+      label: 'Page',
       description: '',
       position: { x: 0, y: 0 },
       inputs: [],
