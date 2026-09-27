@@ -53,10 +53,11 @@ export interface ElementGeneration<S = any> {
   /** Field the generated text is written into. */
   targetField: string;
   /**
-   * Is the button offered for this particular subject? Omitted means always.
-   * An input node selects files only in directory mode; that is a question
-   * about one node, not about the element, which is why it is here and not in
-   * the backend descriptor.
+   * Is there a body to write for this particular subject? Omitted means
+   * always. An input node selects files only in directory mode; that is a
+   * question about one node, not about the element, which is why it is here
+   * and not in the backend descriptor. The graph sweep passes over a subject
+   * that has none; a panel shows step 4, and so ✨, only where there is one.
    */
   available?: (subject: S) => boolean;
   /**

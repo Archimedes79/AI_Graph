@@ -220,7 +220,6 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
           generating={generate.isGenerating(widget.id)}
           message={generate.message(widget.id)}
           onGenerate={handleGenerate}
-          canGenerate={!!element.generation && (element.generation.available?.(widget) ?? true)}
           steps={steps}
         />
         </Suspense>

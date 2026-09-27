@@ -22,7 +22,6 @@ export interface NodePanelProps {
   generating: boolean;
   message?: string;
   onGenerate: () => void;
-  canGenerate: boolean;
   /**
    * Says that something the panel holds cannot be saved as it stands -- JSON
    * that does not parse -- under *key*, or that it can again (''). While any

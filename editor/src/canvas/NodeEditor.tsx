@@ -197,7 +197,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
    * it is looking at. Adding a generating node type adds nothing to this file.
    */
   const generation = element.generation;
-  const canGenerate = !!generation && (generation.available?.(node) ?? true);
   const fields = nodeFields(node, setConfig, setDescription);
   /** Everything ✨ Generate is told, in one request: the button and its preview send the same. */
   generationRequest.current = (): GenerationRequest<GraphNode> | undefined => generation && ({
@@ -357,7 +356,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 generating={generating}
                 message={genMessage}
                 onGenerate={handleGenerate}
-                canGenerate={canGenerate}
                 setInvalid={setInvalid}
                 steps={steps}
               /></Suspense>}

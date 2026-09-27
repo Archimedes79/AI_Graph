@@ -11,7 +11,7 @@ function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(OutputNodePanel, {
     builder: NODE_BUILDERS.output, node, setConfig: () => {}, updateNode: () => {}, setDescription: () => {},
     fields: nodeFields(node, () => {}, () => {}), generating: false,
-    onGenerate: () => {}, canGenerate: false, setInvalid: () => {},
+    onGenerate: () => {}, setInvalid: () => {},
   }));
 }
 

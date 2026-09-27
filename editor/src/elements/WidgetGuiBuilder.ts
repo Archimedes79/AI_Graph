@@ -41,7 +41,6 @@ export interface WidgetPanelProps {
   generating: boolean;
   message?: string;
   onGenerate: () => void;
-  canGenerate: boolean;
   /** For a block that authors a body: see `WidgetSteps`. */
   steps?: WidgetSteps;
 }
