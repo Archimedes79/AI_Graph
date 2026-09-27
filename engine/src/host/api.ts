@@ -307,7 +307,7 @@ export const API = {
   browse: route<{ path: string; extensions?: string }, BrowsePage>('POST', '/api/files/browse', 'tool'),
 
   // -- what only the editor serves ------------------------------------------
-  /** One node on the inputs given: ▶ Test in a node's editor. */
+  /** One node on the inputs given: ▶ Try it in a node's dialog. */
   runNode: route<OnNode & { inputs: Record<string, unknown> }, NodeResult>('POST', '/api/execute/node', 'editor'),
   /** What one node would ask a model on the inputs given -- its run, with every answer made up and nothing sent. */
   nodeRequests: route<OnNode & { inputs: Record<string, unknown> }, { requests: SentRequest[]; error: string | null }>('POST', '/api/execute/node/requests', 'editor'),

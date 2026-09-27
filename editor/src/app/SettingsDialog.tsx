@@ -12,7 +12,7 @@ interface SettingsDialogProps {
 }
 
 /**
- * The one AI setting: which AI ✨ Generate, Try it, ▶ Test and every run call,
+ * The one AI setting: which AI ✨ Generate, Try it and every run call,
  * wherever a node does not pin its own. This machine's, saved in
  * `ai-settings.json` beside the keys it needs and never in a graph, so a graph
  * handed to someone else runs on whatever they chose.
@@ -102,7 +102,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               AI
             </h3>
             <p className="text-xs mb-3" style={{ color: DIM }}>
-              What ✨ Generate, Try it, ▶ Test and every run call — for each AI node left on
+              What ✨ Generate, Try it and every run call — for each AI node left on
               “Use the setting in ⚙ Settings”, and for code that asks a model. A node that names
               its own provider and model always uses those instead. Saved on this machine in{' '}
               <code>ai-settings.json</code>, never in a graph: a graph you share runs on whatever

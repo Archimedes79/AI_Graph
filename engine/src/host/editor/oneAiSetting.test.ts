@@ -12,7 +12,7 @@ import { graphOf } from '../../../test/fakes.ts';
 /**
  * Where an AI call goes, whoever makes it: to the node's own provider and
  * model when it pins them, and to the one AI setting otherwise -- for a run,
- * ✨ Generate, Try it and ▶ Test alike.
+ * ✨ Generate and Try it, its judge too, alike.
  *
  * Both are providers nobody has, so the provider layer refuses each by name
  * before anything leaves the machine, and the refusal says where the call
@@ -56,7 +56,7 @@ const onSetting = asking({ ai_provider: 'default', ai_model: '' });
 const pinned = asking({ ai_provider: PIN, ai_model: 'its-model' });
 
 describe('a node that pins its own model', () => {
-  it('is sent there by a run, by Try it and by ▶ Test', async () => {
+  it('is sent there by a run, and by Try it -- with a judge too', async () => {
     const run = await executeGraph(graphOf([pinned]), { runtime: nodeRuntime(), registry });
     expect(run.node_results[0].error).toContain(refusedBy(PIN));
 
@@ -72,7 +72,7 @@ describe('a node that pins its own model', () => {
 });
 
 describe('everything else', () => {
-  it('goes to the one AI setting in a run, in Try it and in ▶ Test', async () => {
+  it('goes to the one AI setting in a run, and in Try it -- with a judge too', async () => {
     const run = await executeGraph(graphOf([onSetting]), { runtime: nodeRuntime(), registry });
     expect(run.node_results[0].error).toContain(refusedBy(SETTING));
 
