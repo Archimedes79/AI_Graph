@@ -76,23 +76,6 @@ function preview(value: unknown): string {
   return text.length > SAMPLE_BUDGET ? `${text.slice(0, SAMPLE_BUDGET)}\n… (truncated)` : text;
 }
 
-/**
- * What actually arrived on this node's input ports the last time the graph ran.
- *
- * The single most informative thing available, and it was going unused: the
- * store already holds it, and a description of a CSV is a poor substitute for
- * eight of its rows. Absent before the first run, which is exactly when there is
- * nothing to say.
- */
-/**
- * The raw values this node's input ports received on the last run.
- *
- * `lastRunContext` above renders the same values as prose for the model to read.
- * This is the machine-readable half: the server runs the generated function
- * against it and repairs the code if it fails (see
- * engine/src/host/editor/generate.ts). Undefined when the node has never run, which turns the
- * verification pass off rather than inventing a sample.
- */
 type Wire = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
 
 /**
@@ -134,6 +117,15 @@ export function readFilePorts(node: GraphNode, nodes: GraphNode[] = [], edges: W
   return engineRegistry.node(node.node_type)?.readsFileInputs(node) ? pathPorts(node, nodes, edges) : [];
 }
 
+/**
+ * The raw values this node's input ports received on the last run.
+ *
+ * `lastRunContext` below renders the same values as prose for the model to read.
+ * This is the machine-readable half: the server runs the generated function
+ * against it and repairs the code if it fails (see
+ * engine/src/host/editor/generate.ts). Undefined when the node has never run, which turns the
+ * verification pass off rather than inventing a sample.
+ */
 export function lastRunInputs(
   nodeId: string,
   result: ExecutionResult | null,
@@ -162,6 +154,13 @@ export function lastRunWidgetInput(
 }
 
 /**
+ * What actually arrived on this node's input ports the last time the graph ran.
+ *
+ * The single most informative thing available, and it was going unused: the
+ * store already holds it, and a description of a CSV is a poor substitute for
+ * eight of its rows. Absent before the first run, which is exactly when there is
+ * nothing to say.
+ *
  * *asFiles* names the ports the node is handed a file's text on: what the run
  * recorded there is the path, and quoting it as "the value received" tells the
  * model to expect a filename where the code will get the content.

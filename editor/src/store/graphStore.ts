@@ -604,8 +604,8 @@ export const useGraphStore = create<GraphStore>()(
         // A run is where an output interface comes from: nodes are wired, the
         // graph runs, and what a node actually produced is the first honest
         // statement of its outputs. Kept once, the first time it succeeds;
-        // after that it is the contract the next runs are held to, and only
-        // "Set from last run" replaces it.
+        // after that it is the contract the next runs are held to, until its
+        // Clear in the node's dialog lets the next run measure it again.
         for (const rfNode of state.rfNodes) {
           const node = rfNode.data.graphNode;
           if (!keepsOutputInterface(node) || node.config.output_schema) continue;
