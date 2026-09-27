@@ -13,13 +13,10 @@
 import type { LogicFields } from './logic.ts';
 
 /**
- * Which generator writes the body, and so which prompt it is written with.
- *
- * `code` and `prompt` are the two bodies that run; `data_format` is a
- * contract written for *other* elements to be generated against, which is a
- * different prompt and a different result.
+ * Which generator writes the body, and so which prompt it is written with:
+ * code that runs, or a system prompt a model is sent.
  */
-export type GenerationKind = 'code' | 'prompt' | 'data_format';
+export type GenerationKind = 'code' | 'prompt';
 
 /** One element's answer to "how does an AI write this?". */
 export interface Generation {

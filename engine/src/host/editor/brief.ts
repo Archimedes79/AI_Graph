@@ -1,5 +1,5 @@
-// What ✨ Generate is told about a node: one brief, the same for code, for a
-// system prompt and for a data node's format.
+// What ✨ Generate is told about a node: one brief, the same for code and for
+// a system prompt.
 //
 // A body is written against four things, and a node already holds all four:
 //
@@ -98,13 +98,8 @@ export function exampleSample(examples: string | undefined): Sample | undefined 
   return first ? { values: first.inputs, origin: `the example "${first.title}"`, expect: first.expect } : undefined;
 }
 
-/**
- * What the brief is for: a body that runs (`code`), a system prompt a model
- * is sent (`prompt`), or the format a data node holds (`format`) -- which is
- * written against the same neighbours and sample as code, and is itself the
- * format, so it is told none.
- */
-export type BriefKind = 'code' | 'prompt' | 'format';
+/** What the brief is for: a body that runs (`code`), or a system prompt a model is sent (`prompt`). */
+export type BriefKind = 'code' | 'prompt';
 
 function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
   const inputs = request.inputs ?? [];
@@ -172,9 +167,6 @@ function outputsSection(request: GenerateRequest, kind: BriefKind): string {
     const target = request.output_targets?.[port];
     if (target) lines.push(`  to ${target}`);
   }
-  // A format is what is being written: what the node says of its output is
-  // that format, not a given to write it against.
-  if (kind === 'format') return lines.length > 1 ? lines.join('\n') : '';
   const format = request.output_format?.trim();
   if (format) lines.push(`Format: ${clip(format, BUDGET.format)}`);
   const schema = request.output_schema;

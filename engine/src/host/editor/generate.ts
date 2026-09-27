@@ -2,9 +2,8 @@
 //
 // One entry point, for every element that generates anything: the element
 // says what kind of body it wants (`Generation`), and this says how to ask for
-// it. Three kinds — code, a system prompt, a data node's format contract —
-// plus authoring a whole graph, which shares neither the request nor the
-// answer and so stands apart.
+// it. Two kinds — code and a system prompt — plus authoring a whole graph,
+// which shares neither the request nor the answer and so stands apart.
 //
 // A body can also be changed rather than written anew (`refine`): "Say what to
 // change" in a node's dialog sends the body there is, what came of it and what
@@ -86,7 +85,7 @@ export function recording(ai: AiService, calls: AICall[]): AiService {
 }
 
 // ---------------------------------------------------------------------------
-// The four bodies
+// The bodies
 // ---------------------------------------------------------------------------
 
 const CODE_SYSTEM =
@@ -145,7 +144,7 @@ function codeChange(refine: Refine, sample: Sample | undefined, outputs: string[
   return parts.join('\n');
 }
 
-/** The same for a body that is prose -- a system prompt, a data format -- asked for inside `<tag>`. */
+/** The same for a body that is prose -- a system prompt -- asked for inside `<tag>`. */
 function proseChange(refine: Refine, what: string, tag: string, sample: Sample | undefined): string {
   const change = refine.change?.trim();
   const on = sample ? ` on ${sample.origin}` : '';
@@ -208,26 +207,6 @@ const PROMPT_SYSTEM =
   'You are an expert prompt engineer. Given a natural language description of a task, generate a '
   + 'concise, effective system prompt for an AI assistant. Output the system prompt as plain text '
   + 'inside <system_prompt> tags, then a brief explanation.';
-
-const DATA_FORMAT_SYSTEM =
-  'You are an expert at designing the data format/schema a graph "data" node should persist. Given a task '
-  + 'description and, if provided, example input data, propose two or three plausible candidate formats '
-  + '(field names, types, nesting, or structure), briefly weigh their tradeoffs against the given examples, '
-  + 'then commit to the single best one.\n\n'
-  + 'Example:\n'
-  + 'Task description: Store the extracted invoice line items.\n'
-  + 'Example data: "3x Widget @ 9.99, 1x Gadget @ 19.99"\n'
-  + 'Candidate formats:\n'
-  + '1. A flat list of strings, one per line item.\n'
-  + '2. A JSON array of {name, quantity, unit_price} objects.\n'
-  + '3. A single JSON object keyed by item name mapping to quantity.\n'
-  + 'Chosen format: option 2, because line items need distinct quantity and price fields for later '
-  + 'calculations, and a list naturally accommodates any number of items.\n'
-  + '<data_format>A JSON array of objects, each with "name" (string), "quantity" (integer), and '
-  + '"unit_price" (number), e.g. [{"name": "Widget", "quantity": 3, "unit_price": 9.99}].</data_format>\n\n'
-  + 'Now do the same for the given task: think through candidate proposals and your reasoning as plain '
-  + 'text, then put only the final chosen format description (field names, types, nesting, and a '
-  + 'representative example value) inside <data_format> tags, followed by a brief explanation.';
 
 // ---------------------------------------------------------------------------
 // A node that runs once per item
@@ -566,19 +545,6 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
               + 'every time the node runs, and its answer goes where the outputs go.',
         ].filter(Boolean).join('\n\n');
         const { text, explanation, task } = await generateTagged(ai, deps.target, PROMPT_SYSTEM, 'system_prompt', prompt);
-        return { result: text, explanation, probe: notProbed(), calls, ...restated(task) };
-      }
-      case 'data_format': {
-        // Written against what the node is wired to and what it holds, told
-        // as a body's brief tells them: the one rendering of a node's
-        // neighbours and its sample, whoever is written from them.
-        const prompt = [
-          `Task description: ${request.description || '(not said yet)'}`,
-          renderBrief(request, 'format', sample),
-          context ? `Additional context: ${context}` : '',
-          refine ? proseChange(refine, 'format', 'data_format', sample) : '',
-        ].filter(Boolean).join('\n\n');
-        const { text, explanation, task } = await generateTagged(ai, deps.target, DATA_FORMAT_SYSTEM, 'data_format', prompt);
         return { result: text, explanation, probe: notProbed(), calls, ...restated(task) };
       }
       default:
