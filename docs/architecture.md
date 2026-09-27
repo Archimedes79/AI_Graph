@@ -305,9 +305,9 @@ editor asks the registry what a node is. Panels are lazy chunks, so there is no 
 
 **1. An element owns everything about its kind.** Its settings (`config()`), its ports,
 what it does (`execute`), what it shows (`display`), how an AI writes its body
-(`generation()`) — in its own class. Adding a kind adds one folder on each side and one line in each registry
-(`elements/registry.ts` and `widgets/roster.ts` in the engine, `elements/registry.ts` in
-the editor), and nothing else changes.
+(`generation()`) — in its own class. Adding a kind adds one folder on each side and one
+line in each registry (`elements/registry.ts` and `widgets/roster.ts` in the engine,
+`elements/registry.ts` in the editor), and nothing else changes.
 
 **2. The executor owns everything about a run.** Ordering, fan-out over lists, reading
 the file on each input that says so, catching failures, stopping, idle-skipping, settling memory, and asking for
@@ -527,9 +527,9 @@ or a page that has them can do the same.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving, and
   the editor says it before Load under a graph pasted as JSON and under one ✨ AI Graph
-  designed (`app/GraphProblems.tsx`). It
-  reads no disk, so the page can ask it; what only a project folder gets wrong -- a folder or a
-  file nothing claims -- is [`folderCheck.ts`](../engine/src/project/folderCheck.ts)'s. It finds
+  designed (`app/GraphProblems.tsx`). It reads no disk, so the page can ask it; what only a
+  project folder gets wrong -- a folder or a file nothing claims -- is
+  [`folderCheck.ts`](../engine/src/project/folderCheck.ts)'s. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
   that element's `problems()`. A second page is a problem: a graph has one, the first node that
