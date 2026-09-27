@@ -3,13 +3,11 @@ import { errorText } from '@/api/errorText';
 import { ownOutputs } from './nodeStepRules';
 import { ACCENT_TEXT, DANGER_TEXT, DIMMER, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, TEXT } from '@/ui/theme';
 
-/** What trying an element gave: a node's outputs, or what a block drew. */
+/** What trying a node gave. */
 export interface TryResult {
   status: string;
-  /** A node's outputs, per port. */
+  /** Its outputs, per port. */
   outputs?: Record<string, unknown>;
-  /** A block's drawn value. */
-  shown?: unknown;
   error?: string | null;
   messages?: string[];
 }
@@ -41,7 +39,7 @@ export function currentTry<T>(held: { of: string; value: T } | null, now: string
 
 interface Props {
   /**
-   * What would be tried now, as text (`tryKey`, `blockTryKey`): the element as
+   * What would be tried now, as text (`tryKey`): the element as
    * it runs and the example it runs on. A result is shown while it is a result
    * of this, and not after.
    */

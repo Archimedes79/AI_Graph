@@ -96,12 +96,20 @@ describe('the graph prompt', () => {
     expect(registry.widget('text_io')!.graphAuthorNote()).toMatch(/input .*output .*both/);
   });
 
-  it('offers a drawing block no code of its own: it shows what arrives', () => {
+  it('offers a block no code of its own: a drawing block shows what arrives, a folder hands on its listing', () => {
     for (const kind of ['plot_window', 'table', 'image_view'] as const) {
       const note = registry.widget(kind)!.graphAuthorNote()!;
       expect(note, kind).toMatch(/^shows what arrives on "<id>_in"/);
       expect(note, kind).not.toMatch(/config\.code|transform/);
     }
+    expect(GRAPH_SYSTEM).toContain('A block has no code of its own');
+    expect(GRAPH_SYSTEM).not.toMatch(/selector|select_all_files/);
+    // Choosing some of a folder's files is a code node, said where a folder is.
+    for (const note of [registry.node('input')!.graphAuthorNote()!, registry.widget('input_picker')!.graphAuthorNote()!]) {
+      expect(note).toMatch(/extensions/);
+      expect(note).toMatch(/recursive/);
+    }
+    expect(registry.node('input')!.graphAuthorNote()).toContain('to keep only some of the files, wire a code node after it');
   });
 
   it('names every node type the registry knows, except the ones that say a graph is not built with them', () => {

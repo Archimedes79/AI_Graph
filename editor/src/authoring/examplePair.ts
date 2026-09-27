@@ -57,7 +57,7 @@ function cut(text: string): { before: string; first: string; after: string; othe
 /**
  * An example as values: an object keyed by port, or undefined while *text* is
  * empty or is not one -- what `parseExamples` accepts as a block. The one
- * reading of an example's text, for a node's pair and a block's step 1 alike.
+ * reading of an example's text.
  */
 export function exampleObject(text: string | undefined): Record<string, unknown> | undefined {
   const trimmed = String(text ?? '').trim();

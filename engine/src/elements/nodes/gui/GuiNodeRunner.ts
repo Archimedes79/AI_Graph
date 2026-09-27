@@ -204,8 +204,8 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
 
   /**
    * A block's ports are named after its id, so an id that is missing or
-   * shared is two blocks on one port. What is wrong with one block as it is
-   * written, the block says itself (`WidgetRunner.problems`).
+   * shared is two blocks on one port; and a kind nobody knows draws nothing.
+   * A block runs no code, so there is nothing else in it to get wrong.
    */
   override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
     const found: Problem[] = [];
@@ -217,15 +217,12 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
         found.push({ where, problem: `More than one block has the id "${block.id}".`, fix: 'Give every block on the page its own id.' });
       }
       seen.add(block.id);
-      const element = BY_KIND.get(block.kind);
-      if (!element) {
+      if (!BY_KIND.has(block.kind)) {
         found.push({
           where: `${where}, block "${block.id}"`,
           problem: `Unknown block kind "${block.kind}".`,
           fix: `Use one of: ${[...BY_KIND.keys()].join(', ')}.`,
         });
-      } else {
-        found.push(...element.problems(block, `${where}, block "${block.id}"`));
       }
     }
     return found;
@@ -244,7 +241,9 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     });
     return 'config.gui_widgets is the list of blocks on the page. A block is {"id", "kind", "label", "w" (1-16 columns), '
       + '"h" (rows), ...}. The page\'s ports are DERIVED from its blocks, not taken from this document: every block '
-      + `contributes "<block id>_out", "<block id>_in", or both, "<id>" standing for its id. The kinds:\n${kinds.join('\n')}`;
+      + 'contributes "<block id>_out", "<block id>_in", or both, "<id>" standing for its id. A block has no code of its '
+      + 'own: what reshapes a value before a block shows it, or keeps only some of the files a folder lists, is a code '
+      + `node wired in between. The kinds:\n${kinds.join('\n')}`;
   }
 
   override whatRuns(): WhatRuns {

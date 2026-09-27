@@ -39,8 +39,6 @@ interface Props {
   fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
   /** One line under the field. */
   note?: React.ReactNode;
-  /** The field's words when it is empty. */
-  placeholder?: string;
   /**
    * Draw the example's own field. A node whose example is kept, and edited,
    * somewhere of its own -- what a data node holds -- has only the ways to
@@ -62,7 +60,7 @@ interface Props {
  * uploaded copy that was only ever pasted into ✨'s prompt, never run.
  */
 export default function ExampleInputField({
-  text, onText, error, ports, pathPorts, fromGraph, note, placeholder, showField = true, label = 'Example input',
+  text, onText, error, ports, pathPorts, fromGraph, note, showField = true, label = 'Example input',
 }: Props) {
   const [typed, type] = useTyped(text, onText);
   // What the box holds now, for a file read that ends after more was typed:
@@ -141,7 +139,7 @@ export default function ExampleInputField({
           value={typed}
           onChange={type}
           language="javascript"
-          placeholder={placeholder ?? `{ ${(ports.length ? ports : [{ id: 'input' }]).map((candidate) => `"${candidate.id}": …`).join(', ')} }`}
+          placeholder={`{ ${(ports.length ? ports : [{ id: 'input' }]).map((candidate) => `"${candidate.id}": …`).join(', ')} }`}
           minHeight={72}
           title={label}
         />

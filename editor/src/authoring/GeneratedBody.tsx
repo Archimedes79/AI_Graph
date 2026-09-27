@@ -1,4 +1,5 @@
 import type React from 'react';
+import type { GraphNode } from '@/graph';
 import GenerationTranscript, { useGenerationReview, useLiveGeneration } from './GenerationTranscript';
 import LiveGeneration from './LiveGeneration';
 import CodeField from './CodeField';
@@ -6,8 +7,7 @@ import type { ElementGeneration, FieldAccess } from './generation';
 import { ACCENT_FILL, ACCENT_TEXT, MUTED, SUCCESS } from '@/ui/theme';
 
 interface Props {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a node's or a widget's
-  generation: ElementGeneration<any>;
+  generation: ElementGeneration<GraphNode>;
   fields: FieldAccess;
   generating: boolean;
   message?: string;

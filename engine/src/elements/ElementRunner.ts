@@ -159,12 +159,8 @@ export abstract class ElementRunner<S extends { id: string; config: RawConfig },
   // nothing a run calls may reach it (`elements/times.test.ts` holds that line).
 
   /**
-   * How an AI writes this element's body, or undefined if none does.
-   *
-   * A property of the element, not of one subject: whether the button is
-   * *offered* on a particular node — an input node selects files only in
-   * directory mode — is a question about that node, and the editor asks it by
-   * checking whether `logic()` answered.
+   * How an AI writes this element's body, or undefined if none does: a code
+   * node, an ai node and a data node's format are written; a block never is.
    */
   generation(): Generation | undefined {
     return undefined;
