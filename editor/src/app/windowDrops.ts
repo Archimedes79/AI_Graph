@@ -2,23 +2,10 @@
 //
 // The window listens rather than the canvas, so that a file dropped a hair
 // outside the canvas is not the browser's, which would open it and take the
-// unsaved graph with it (`App.tsx`). What lands on a node or on an example box
-// is theirs, and never arrives there; what lands in a code box does, and is
-// the box's all the same.
+// unsaved graph with it (`App.tsx`). What lands on a node, on the files line
+// of its ✨ Input or on a data node's box is theirs, and never arrives there.
 
 import { call } from '@/api/client';
-import { CODE_FIELD } from '@/authoring/CodeField';
-
-/**
- * Whether a drop landed in a code box (`CodeField`) -- a node's body, in its
- * dialog or enlarged. Its editor types the text of a file dropped into it in,
- * where it was dropped, and lets the drop go on to the window, which took the
- * file for a graph to open as well: a .json one replaced the graph, anything
- * else was said to be no graph file.
- */
-export function landedInCodeField(target: EventTarget | null): boolean {
-  return !!(target as Partial<Element> | null)?.closest?.(CODE_FIELD);
-}
 
 /** How a dropped folder is looked for (`findProjects`): the projects found, and where it looked, in words. */
 type FindProjects = (name: string) => Promise<{ paths: string[]; searched: string }>;
