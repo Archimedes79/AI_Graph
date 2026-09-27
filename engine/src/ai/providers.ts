@@ -61,12 +61,37 @@ export const DEFAULT_SETTINGS: ProviderSettings = {
   timeoutMs: 0,
 };
 
-/** A provider that speaks the OpenAI chat-completions API. */
+/**
+ * The providers whose base URL a person may point somewhere else, and the env
+ * var that can say it instead. The environment (`settingsFromEnv`) and the
+ * editor's settings dialog both go by this list, so a provider is configurable
+ * in both or in neither.
+ */
+export const ENDPOINT_ENV: Record<string, string> = {
+  ollama: 'OLLAMA_BASE_URL',
+  lmstudio: 'LMSTUDIO_BASE_URL',
+  openai_compatible: 'OPENAI_COMPATIBLE_BASE_URL',
+  google: 'GOOGLE_BASE_URL',
+  github_copilot: 'GITHUB_MODELS_BASE_URL',
+};
+
+/**
+ * The providers that want a credential: which slot of `apiKeys` (and of the
+ * settings file's `api_keys`) holds it, and the env var that can supply it
+ * instead. GitHub's slot is `github`, older than the provider's name.
+ */
+export const CREDENTIALS: Record<string, { key: string; env: string }> = {
+  openai: { key: 'openai', env: 'OPENAI_API_KEY' },
+  anthropic: { key: 'anthropic', env: 'ANTHROPIC_API_KEY' },
+  openai_compatible: { key: 'openai_compatible', env: 'OPENAI_COMPATIBLE_API_KEY' },
+  google: { key: 'google', env: 'GOOGLE_API_KEY' },
+  github_copilot: { key: 'github', env: 'GITHUB_TOKEN' },
+};
+
+/** A provider that speaks the OpenAI chat-completions API. Its credential slot, if any, is in `CREDENTIALS`. */
 interface OpenAIStyle {
   /** Which key in `endpoints` holds its base URL. */
   endpoint: string;
-  /** Which key in `apiKeys` holds its credential, if it wants one. */
-  credential?: string;
   credentialRequired?: boolean;
   missingCredential?: string;
   missingEndpoint?: string;
@@ -75,30 +100,26 @@ interface OpenAIStyle {
 const OPENAI_STYLE: Record<string, OpenAIStyle> = {
   openai: {
     endpoint: 'openai',
-    credential: 'openai',
     credentialRequired: true,
-    missingCredential: 'No OpenAI API key configured (OPENAI_API_KEY).',
+    missingCredential: `No OpenAI API key configured (${CREDENTIALS.openai.env}).`,
   },
   // A local LM Studio needs no credential at all.
   lmstudio: { endpoint: 'lmstudio' },
   openai_compatible: {
     endpoint: 'openai_compatible',
-    // Optional on purpose: many self-hosted endpoints have no key.
-    credential: 'openai_compatible',
-    missingEndpoint: 'No OpenAI-compatible endpoint configured (OPENAI_COMPATIBLE_BASE_URL).',
+    // The key is optional on purpose: many self-hosted endpoints have none.
+    missingEndpoint: `No OpenAI-compatible endpoint configured (${ENDPOINT_ENV.openai_compatible}).`,
   },
   google: {
     endpoint: 'google',
-    credential: 'google',
     credentialRequired: true,
     missingCredential:
-      'No Google API key configured (GOOGLE_API_KEY). A free one: https://aistudio.google.com/apikey',
+      `No Google API key configured (${CREDENTIALS.google.env}). A free one: https://aistudio.google.com/apikey`,
   },
   github_copilot: {
     endpoint: 'github_copilot',
-    credential: 'github',
     credentialRequired: true,
-    missingCredential: 'No GITHUB_TOKEN configured.',
+    missingCredential: `No ${CREDENTIALS.github_copilot.env} configured.`,
   },
 };
 
@@ -417,8 +438,9 @@ function openAiStyle(
   if (!base) throw new Error(spec.missingEndpoint ?? `No base URL configured for ${provider}.`);
 
   const headers: Record<string, string> = {};
-  if (spec.credential) {
-    const token = settings.apiKeys[spec.credential] ?? '';
+  const slot = CREDENTIALS[provider]?.key;
+  if (slot) {
+    const token = settings.apiKeys[slot] ?? '';
     if (!token && spec.credentialRequired) throw new Error(spec.missingCredential!);
     if (token) headers.Authorization = `Bearer ${token}`;
   }
@@ -689,20 +711,12 @@ export function aiService(settings: Partial<ProviderSettings> = {}): AiService {
 /** Settings from the environment, the way a server or a bundle is configured. */
 export function settingsFromEnv(env: Record<string, string | undefined>): Partial<ProviderSettings> {
   const endpoints: Record<string, string> = {};
-  for (const [key, name] of [
-    ['ollama', 'OLLAMA_BASE_URL'], ['lmstudio', 'LMSTUDIO_BASE_URL'],
-    ['openai_compatible', 'OPENAI_COMPATIBLE_BASE_URL'], ['google', 'GOOGLE_BASE_URL'],
-    ['github_copilot', 'GITHUB_MODELS_BASE_URL'],
-  ] as const) {
-    if (env[name]) endpoints[key] = env[name]!;
+  for (const [provider, name] of Object.entries(ENDPOINT_ENV)) {
+    if (env[name]) endpoints[provider] = env[name]!;
   }
 
   const apiKeys: Record<string, string> = {};
-  for (const [key, name] of [
-    ['openai', 'OPENAI_API_KEY'], ['anthropic', 'ANTHROPIC_API_KEY'],
-    ['google', 'GOOGLE_API_KEY'], ['github', 'GITHUB_TOKEN'],
-    ['openai_compatible', 'OPENAI_COMPATIBLE_API_KEY'],
-  ] as const) {
+  for (const { key, env: name } of Object.values(CREDENTIALS)) {
     if (env[name]) apiKeys[key] = env[name]!;
   }
 

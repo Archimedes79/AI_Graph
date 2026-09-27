@@ -214,7 +214,6 @@ export interface GenerateResponse {
 export interface SettingsStatus {
   settings_file: string;
   settings_file_exists: boolean;
-  endpoint_keys: Record<string, string>;
   endpoints: Record<string, string>;
   credentials: Record<string, { configured: boolean; source: string }>;
 }

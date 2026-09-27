@@ -14,22 +14,13 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { candidatePaths, fromFile, readSettingsFile, type SettingsFile } from '../../ai/settings.ts';
-import { DEFAULT_SETTINGS, settingsFromEnv } from '../../ai/providers.ts';
+import { CREDENTIALS, DEFAULT_SETTINGS, ENDPOINT_ENV, settingsFromEnv } from '../../ai/providers.ts';
 import type { ProviderStatus, SettingsPatch, SettingsStatus, Target } from '../api.ts';
 
 type Env = Record<string, string | undefined>;
 
-/** The providers whose base URL a person may point somewhere else. */
-export const ENDPOINT_PROVIDERS = ['ollama', 'lmstudio', 'openai_compatible', 'google', 'github_copilot'] as const;
-
-/** The providers that want a credential, and the env var that can supply it instead. */
-export const CREDENTIALS: Record<string, { key: string; env: string }> = {
-  openai: { key: 'openai', env: 'OPENAI_API_KEY' },
-  anthropic: { key: 'anthropic', env: 'ANTHROPIC_API_KEY' },
-  openai_compatible: { key: 'openai_compatible', env: 'OPENAI_COMPATIBLE_API_KEY' },
-  google: { key: 'google', env: 'GOOGLE_API_KEY' },
-  github_copilot: { key: 'github', env: 'GITHUB_TOKEN' },
-};
+/** The providers whose base URL a person may point somewhere else: the ones the environment can point, too. */
+const ENDPOINT_PROVIDERS = Object.keys(ENDPOINT_ENV);
 
 /** A usable model when none was configured, per provider. Empty: only the user knows. */
 export const DEFAULT_MODELS: Record<string, string> = {
@@ -73,8 +64,6 @@ export function status(cwd = process.cwd(), env: Env = process.env): SettingsSta
   return {
     settings_file: path,
     settings_file_exists: existsSync(path),
-    // The same word on both sides now: the file's keys are the provider names.
-    endpoint_keys: Object.fromEntries(ENDPOINT_PROVIDERS.map((p) => [p, p])),
     endpoints,
     credentials,
   };
@@ -94,7 +83,7 @@ export async function save(patch: SettingsPatch, cwd = process.cwd(), env: Env =
   const apiKeys = { ...file.api_keys };
 
   for (const [provider, value] of Object.entries(patch.endpoints ?? {})) {
-    if ((ENDPOINT_PROVIDERS as readonly string[]).includes(provider)) endpoints[provider] = String(value ?? '').trim();
+    if (ENDPOINT_PROVIDERS.includes(provider)) endpoints[provider] = String(value ?? '').trim();
   }
   for (const [provider, value] of Object.entries(patch.api_keys ?? {})) {
     const key = CREDENTIALS[provider]?.key;
