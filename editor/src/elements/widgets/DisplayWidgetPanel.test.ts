@@ -10,7 +10,6 @@ describe('the dialog of a block that shows what arrives', () => {
     const builder = WIDGET_BUILDERS[kind];
     const widget = builder.create('Block');
     const html = renderToStaticMarkup(createElement(DisplayWidgetPanel, { builder, widget, onUpdate: () => {} }));
-    expect(builder.generation).toBeUndefined();
     expect(html).toContain('Shows what arrives, which should be ');
     expect(html).toContain('code node wired in before it');
     expect(html).not.toContain('✨');

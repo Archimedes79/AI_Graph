@@ -1,5 +1,4 @@
-import { NodeRunner, type Runners } from '../../NodeRunner.ts';
-import type { DeployNeeds, TextFile, WhatRuns } from '../../ElementRunner.ts';
+import { NodeRunner, type Runners, type DeployNeeds, type TextFile, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
 import { errorOutput, type Problem } from '../../../execution/wiring.ts';
@@ -16,7 +15,7 @@ export interface SubgraphConfig {
   runCode: string;
 }
 
-/** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
+/** What this keeps in files of its own in a project folder: see `NodeRunner.texts`. */
 const SUBGRAPH_TEXTS: readonly TextFile[] = [
   { field: 'task', file: 'task.md' },
   { field: 'run_code', file: 'run.js', standard: SUBGRAPH_RUN },
@@ -162,7 +161,7 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
 
   /**
    * A run.js somebody changed is a body, and every body may ask a model: one
-   * that mentions `llm` is taken to, by the rule `ElementRunner.deployNeeds`
+   * that mentions `llm` is taken to, by the rule `NodeRunner.deployNeeds`
    * applies to every other body. Asked here because this node's body runs
    * through `execute`, not `logic()`, so the base class never sees it -- and a
    * bundle of a part that asks a model around a graph with no ai node in it

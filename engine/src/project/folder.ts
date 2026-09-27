@@ -7,7 +7,7 @@
 //         count/            one folder per node, by id
 //           node.json       its name and its settings
 //           interface.json  what goes in and what comes out
-//           code.js         what the element keeps in files: `ElementRunner.texts`
+//           code.js         what the element keeps in files: `NodeRunner.texts`
 //         page/
 //           node.json       a page's blocks are settings: they live here
 //           interface.json
@@ -35,7 +35,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry } from '../elements/registry.ts';
-import { shippedText } from '../elements/ElementRunner.ts';
+import { shippedText } from '../elements/NodeRunner.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 import { FLOW_FILE, flowOf, graphFrom } from './flow.ts';
 import { folderName } from './names.ts';

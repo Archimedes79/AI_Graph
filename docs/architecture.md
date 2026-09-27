@@ -101,8 +101,8 @@ its names, on both sides.
 Behaviour lives in classes. Shared code asks the element and never switches on a type name.
 
 ```
-ElementRunner<Subject, Config>          config() · texts() · logic() · catchesErrors() ┊ generation() · deployNeeds()
-├── NodeRunner<C>                a node: derivedPorts · execute · display · eventPorts · keepsTime · settleMemory ┊ whatRuns · problems · graphAuthorNote
+ElementRunner<Subject, Config>          config() · catchesErrors()
+├── NodeRunner<C>                a node: texts · logic · derivedPorts · execute · display · eventPorts · keepsTime · settleMemory ┊ generation · deployNeeds · whatRuns · problems · graphAuthorNote
 │   ├── InputNodeRunner   AiNodeRunner   CodeNodeRunner
 │   ├── DataNodeRunner    OutputNodeRunner   SubgraphNodeRunner
 │   ├── TriggerNodeRunner        an event with nobody there: the tool starting, a clock
@@ -115,8 +115,8 @@ ElementRunner<Subject, Config>          config() · texts() · logic() · catche
     └── DisplayWidgetRunner      one input, nothing out: shows what arrives, says what it draws
         └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
 
-ElementGuiBuilder<PanelProps>                    Panel · generation
-├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
+ElementGuiBuilder<PanelProps>                    Panel
+├── NodeGuiBuilder                        label · icon · color · hint · generation · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
 │                                         + the four steps' declarations: stepped · exampleInput · ownsDescription
 │                                           portEditing/portHint · wantsOn · restingValue · publishedDescription
 │                                           dropPort/withExampleValue (what a file dropped on the node fills)
@@ -166,8 +166,8 @@ turned out there was nothing to keep apart — see below.)
 | | What it is | Run time | Build time |
 |---|---|---|---|
 | **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
-| `ElementRunner` | `config` · `texts` · `logic` | `catchesErrors` | `generation` · `deployNeeds` |
-| `NodeRunner` | `nodeType` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `resultLabel` · `boundaryRole` · `valuePorts` · `keepsOutputInterface` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `fansOut` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
+| `ElementRunner` | `config` | `catchesErrors` | — |
+| `NodeRunner` | `nodeType` · `texts` · `logic` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `resultLabel` · `boundaryRole` · `valuePorts` · `keepsOutputInterface` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `fansOut` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `generation` · `deployNeeds` · `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
 | `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | `receives` · `graphAuthorNote` |
 | `NodeGuiBuilder` | `nodeType` | — | **everything**: the palette, panels, what ✨ Generate is told |
 | `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, its panel |
@@ -490,7 +490,7 @@ A graph is a folder, and **each fact is in one place**:
   `NodeRunner.keepsOutputInterface`.
 - Every piece of writing is a file of its own beside them — `code.js`, `system.md`. Which
   fields become which files is element knowledge, so each element declares it
-  (`ElementRunner.texts`). A page's blocks write nothing: they are settings, in its
+  (`NodeRunner.texts`). A page's blocks write nothing: they are settings, in its
   `node.json`.
 - `layout.json` — positions only.
 

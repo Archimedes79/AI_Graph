@@ -14,7 +14,7 @@
 // separate process that may read files and has none of this machine's keys. It
 // asks for the model call; it cannot make one.
 
-import { isStandardText } from '../../ElementRunner.ts';
+import { isStandardText } from '../../NodeRunner.ts';
 
 /** How often one run of a body may ask for the model. A loop that forgot to end must not spend a budget. */
 export const LLM_CALLS_PER_RUN = 25;

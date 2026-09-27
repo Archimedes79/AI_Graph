@@ -13,8 +13,6 @@ import { guiWidgetPorts, showsPage } from '@/document/guiWidgets';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from './registry';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { nodeLogic } from '@/authoring/logic';
-import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 
 /**
  * A widget as the app really creates one, with a fixed id so assertions can name
@@ -121,12 +119,5 @@ describe.each(Object.entries(WIDGET_BUILDERS))('gui widget element: %s', (widget
       return;
     }
     expect(isLazy(element.Panel)).toBe(true);
-  });
-
-  it('authors nothing: a block shows or hands on what it holds, and has no body to write', () => {
-    const widget = parseWidget(makeWidget(widgetKind as GuiWidget['kind']));
-    expect(element.generation).toBeUndefined();
-    expect(engineRegistry.widget(widgetKind)!.logic(widget)).toBeUndefined();
-    expect(engineRegistry.widget(widgetKind)!.texts(widget)).toEqual([]);
   });
 });

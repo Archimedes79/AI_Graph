@@ -1,5 +1,4 @@
-import { NodeRunner } from '../../NodeRunner.ts';
-import type { TextFile, WhatRuns } from '../../ElementRunner.ts';
+import { NodeRunner, type TextFile, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
@@ -27,7 +26,7 @@ function serverList(raw: unknown): string[] {
   return entries.map((entry) => String(entry).trim()).filter(Boolean);
 }
 
-/** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
+/** What this keeps in files of its own in a project folder: see `NodeRunner.texts`. */
 const AI_TEXTS: readonly TextFile[] = [
   // What the node does with the rest of this folder: see `runTemplate.ts`.
   { field: 'run_code', file: 'run.js', standard: AI_RUN },

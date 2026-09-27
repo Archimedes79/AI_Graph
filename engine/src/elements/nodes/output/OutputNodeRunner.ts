@@ -1,5 +1,4 @@
-import { NodeRunner } from '../../NodeRunner.ts';
-import type { WhatRuns } from '../../ElementRunner.ts';
+import { NodeRunner, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type GraphNode, type Port } from '../../../graph.ts';
 

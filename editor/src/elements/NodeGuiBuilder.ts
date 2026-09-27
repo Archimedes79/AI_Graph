@@ -2,7 +2,7 @@
 
 import type { ComponentType, ReactNode } from 'react';
 import type { Graph, GraphNode, NodeResult, NodeType } from '@/graph';
-import type { ChangeAsked, FieldAccess } from '@/authoring/generation';
+import type { ChangeAsked, ElementGeneration, FieldAccess } from '@/authoring/generation';
 import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { asExampleText, readPair, withInput } from '@/authoring/examplePair';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
@@ -106,6 +106,13 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
 
   /** The node's tint on the canvas: a scheme variable, with the default scheme's colour as fallback. */
   abstract readonly color: string;
+
+  /**
+   * The ✨ Generate button this node offers, mirroring the engine's
+   * `NodeRunner.generation()`. Absent for a node that authors nothing, which
+   * is what decides whether a button is drawn at all.
+   */
+  readonly generation?: ElementGeneration;
 
   /**
    * The settings most people never touch, drawn folded away under everything

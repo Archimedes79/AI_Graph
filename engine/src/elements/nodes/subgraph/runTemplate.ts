@@ -6,7 +6,7 @@
 // `node.graph(inputs)` asks for the graph to be run -- once per item, again
 // until an answer passes a check, one run's outputs into the next.
 
-import { isStandardText } from '../../ElementRunner.ts';
+import { isStandardText } from '../../NodeRunner.ts';
 
 /** How often one run of a body may run its graph. A loop that forgot to end must not run forever. */
 export const GRAPH_RUNS_PER_BODY = 100;
