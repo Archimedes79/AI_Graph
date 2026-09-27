@@ -112,6 +112,19 @@ describe('runExamples', () => {
     expect(failed).toMatchObject({ status: 'fail', details: ['judged: It is not above one.'] });
   });
 
+  it('says a judge that could not be asked apart from the node: it ran, and its answer stands unjudged', async () => {
+    const examples = section('Friendly', [block('json input', '{ "input": 1 }'), block('judge', 'A number above one.')]);
+    const busy = quietRuntime({
+      code: { run: async (_body, inputs) => ({ output: Number(inputs.input) * 2 }) },
+      ai: { complete: async () => { throw new Error('429 Too Many Requests'); } },
+    });
+    const [result] = await runExamples(graphWith('code', examples), 'n', { runtime: busy, registry });
+    expect(result).toEqual({
+      title: 'Friendly', status: 'error', details: ['The judge could not be asked: 429 Too Many Requests'],
+      outputs: { output: 2 }, judgeError: '429 Too Many Requests',
+    });
+  });
+
   it('offline, skips what needs a model: an AI node, and a judged-only example', async () => {
     const judgedOnly = section('Judged', [block('json input', '{ "input": 1 }'), block('judge', 'Anything.')]);
     expect((await runExamples(graphWith('code', judgedOnly), 'n', { runtime: runtime(), registry, offline: true }))[0].status).toBe('skipped');

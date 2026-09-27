@@ -35,6 +35,21 @@ describe('a try made as `test` runs the examples', () => {
     expect(tried.judged).toBeUndefined();
   });
 
+  it('says a judge that could not be asked as that -- not as the node failing, and with nothing to fix', () => {
+    // runExamples: the node ran and answered Paris; only the call to the judge failed.
+    const busy = {
+      ...first, status: 'error' as const, details: ['The judge could not be asked: 429 Too Many Requests'], judgeError: '429 Too Many Requests',
+    };
+    const tried = triedFromExamples([busy], judgedBy('Names a capital city.'));
+    expect(tried).toMatchObject({ result: { status: 'success', outputs: { output: 'Paris' }, error: null }, unjudged: '429 Too Many Requests' });
+    expect(tried.judged).toBeUndefined();
+    expect(whatCameOf(tried, undefined, undefined)).toEqual({ said: { outcome: 'Paris' }, failed: false });
+    const drawn = renderToStaticMarkup(createElement(TryItInline, { canRun: true, busy: false, onTry: () => {}, tried }));
+    expect(drawn).toContain('Paris');
+    expect(drawn).toContain('Not judged: the model that judges could not be asked -- 429 Too Many Requests');
+    expect(drawn).not.toContain('It failed');
+  });
+
   it('says a broken output interface beside what came out, as a run says it', () => {
     const broken = { ...first, status: 'fail' as const, details: ['breaks its output interface: output.output is string; the interface says integer'] };
     expect(triedFromExamples([broken], readPair(example)).result?.messages).toEqual(['breaks its output interface: output.output is string; the interface says integer']);

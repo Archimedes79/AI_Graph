@@ -104,6 +104,9 @@ describe('▶ Try it', () => {
       .toBe('and 2 more: 1 pass, 1 fail -- “Wrong”: output.output is 4; expected 5');
     expect(othersLine([{ title: 'examples.md', status: 'error', details: ['"Broken": no ```json input block.'] }]))
       .toBe('and 1 more: 1 cannot run -- “examples.md”: "Broken": no ```json input block.');
+    // One whose judge could not be asked ran: it is not judged, which is not "cannot run".
+    expect(othersLine([passed, { title: 'Busy', status: 'error', details: ['The judge could not be asked: 429'], judgeError: '429' }]))
+      .toBe('and 2 more: 1 pass, 1 not judged -- “Busy”: The judge could not be asked: 429');
   });
 });
 

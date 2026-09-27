@@ -150,6 +150,12 @@ export interface ExampleResult {
   status: 'pass' | 'fail' | 'error' | 'skipped';
   details: string[];
   outputs?: Record<string, unknown>;
+  /**
+   * Why the model that judges the answer could not be asked, where it could
+   * not: the example is not checked (`error`), but the node ran, and what it
+   * gave stands, unjudged -- a limit reached is not a body to repair.
+   */
+  judgeError?: string;
 }
 
 const JUDGE_SYSTEM = 'You check whether an answer meets a criterion. Reply with PASS or FAIL on the first line, '
@@ -203,7 +209,10 @@ export async function runExamples(
         const [first = '', ...rest] = verdict.trim().split('\n');
         if (!/^\W*PASS\b/i.test(first)) details.push(`judged: ${[first, ...rest].join(' ').replace(/^\W*FAIL\W*/i, '').trim() || 'does not meet the criterion'}`);
       } catch (error) {
-        results.push({ title: example.title, status: 'error', details: [`The judge could not be asked: ${(error as Error).message}`], outputs: ran.outputs });
+        const why = (error as Error).message;
+        results.push({
+          title: example.title, status: 'error', details: [...details, `The judge could not be asked: ${why}`], outputs: ran.outputs, judgeError: why,
+        });
         continue;
       }
     }

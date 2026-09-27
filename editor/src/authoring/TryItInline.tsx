@@ -23,12 +23,17 @@ export interface Tried {
   failure?: string;
   /** The model's word on the answer, where the example is judged: '' when it meets the sentence, else why not. */
   judged?: string;
+  /**
+   * Why the model that judges could not be asked, where it could not: the
+   * answer stands, unjudged. Not the node failing, and nothing to fix.
+   */
+  unjudged?: string;
   /** The examples after the first, as `test` ran them beside it. */
   others?: ExampleResult[];
   /**
-   * What `judged` and `others` speak of: the judge's sentence, and the
-   * examples after the first, as they were when ▶ was pressed. Neither is
-   * the node, so a try stays when they change -- and those two words go
+   * What the judge's word and `others` speak of: the judge's sentence, and
+   * the examples after the first, as they were when ▶ was pressed. Neither is
+   * the node, so a try stays when they change -- and those words go
    * (`stillSaid`).
    */
   of?: { judge: string; later: string };
@@ -70,10 +75,11 @@ export function stillSaid(tried: Tried | null, pair: ExamplePair): Tried | null 
   const judge = tried.of.judge === (pair.judge ?? '');
   const later = tried.of.later === pair.later;
   if (judge && later) return tried;
-  const { judged, others, ...rest } = tried;
+  const { judged, unjudged, others, ...rest } = tried;
   return {
     ...rest,
     ...(judge && judged !== undefined ? { judged } : {}),
+    ...(judge && unjudged ? { unjudged } : {}),
     ...(later && others ? { others } : {}),
   };
 }
@@ -83,12 +89,14 @@ export function stillSaid(tried: Tried | null, pair: ExamplePair): Tried | null 
  * step 1's example, so what came out is its outputs and the judge's word is
  * on that answer; the rest are the other examples -- those of *pair*, which
  * the try speaks of (`stillSaid`). A broken output interface is said beside
- * what came out, as a run says it.
+ * what came out, as a run says it. A judge that could not be asked is said
+ * as that (`unjudged`): read as the node failing, it offered ✨ Fix to rewrite
+ * a body that works because a model was busy.
  */
 export function triedFromExamples(results: ExampleResult[], pair: ExamplePair): Tried {
   const [first, ...others] = results;
   if (!first) return { failure: 'Its examples.md holds no example that can be run.' };
-  const failed = first.status === 'error';
+  const failed = first.status === 'error' && !first.judgeError;
   const verdict = first.details.find((line) => line.startsWith('judged: '));
   return {
     result: {
@@ -97,7 +105,9 @@ export function triedFromExamples(results: ExampleResult[], pair: ExamplePair): 
       error: failed ? first.details.join('\n') : null,
       messages: first.details.filter((line) => line.startsWith('breaks its output interface')),
     },
-    ...(pair.judge && !failed ? { judged: verdict ? verdict.slice('judged: '.length) : '' } : {}),
+    ...(pair.judge && !failed
+      ? first.judgeError ? { unjudged: first.judgeError } : { judged: verdict ? verdict.slice('judged: '.length) : '' }
+      : {}),
     others,
     of: { judge: pair.judge ?? '', later: pair.later },
   };
@@ -232,7 +242,7 @@ interface Props {
  * ▶ Test of their own -- while what they were about showed down here.
  */
 export default function TryItInline({ canRun, whyNot, busy, onTry, tried, gaps, expected, keep, renderResult, judge, after, children }: Props) {
-  const { result = null, failure = '', judged, others } = tried ?? {};
+  const { result = null, failure = '', judged, unjudged, others } = tried ?? {};
   const ran = !!result && result.status !== 'error' && result.status !== 'skipped';
   const more = others?.length ? othersLine(others) : '';
 
@@ -312,6 +322,11 @@ export default function TryItInline({ canRun, whyNot, busy, onTry, tried, gaps, 
       {judged !== undefined && (
         <p className="text-xs" style={{ color: judged ? DANGER_TEXT : SUCCESS }}>
           {judged ? `✗ Judged by a model: ${judged}` : '✓ Judged by a model: it meets this.'}
+        </p>
+      )}
+      {unjudged && (
+        <p className="text-xs" style={{ color: DANGER_TEXT }}>
+          Not judged: the model that judges could not be asked -- {unjudged}
         </p>
       )}
       {more && <p className="text-xs" style={{ color: others?.every((one) => one.status === 'pass') ? SUCCESS : DANGER_TEXT }}>{more}</p>}

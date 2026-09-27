@@ -142,6 +142,10 @@ export function whatCameOf(
   return undefined;
 }
 
+/** How an example did, in a word: one whose judge could not be asked ran, and is not judged. */
+const WORDS: Record<ExampleResult['status'], string> = { pass: 'pass', fail: 'fail', error: 'cannot run', skipped: 'skipped' };
+const wordFor = (result: ExampleResult): string => (result.judgeError ? 'not judged' : WORDS[result.status]);
+
 /**
  * How the examples after the first did, in one line under Try it: "and 2
  * more: pass" -- or how many did what, and the first reason one did not.
@@ -149,11 +153,12 @@ export function whatCameOf(
  */
 export function othersLine(results: ExampleResult[]): string {
   if (!results.length) return '';
-  const count = (status: ExampleResult['status']) => results.filter((result) => result.status === status).length;
+  const words = results.map(wordFor);
+  const count = (word: string) => words.filter((one) => one === word).length;
   if (count('pass') === results.length) return `and ${results.length} more: pass`;
-  const said = ([['pass', 'pass'], ['fail', 'fail'], ['error', 'cannot run'], ['skipped', 'skipped']] as const)
-    .filter(([status]) => count(status))
-    .map(([status, word]) => `${count(status)} ${word}`);
+  const said = ['pass', 'fail', 'cannot run', 'not judged', 'skipped']
+    .filter((word) => count(word))
+    .map((word) => `${count(word)} ${word}`);
   const first = results.find((result) => result.status === 'fail' || result.status === 'error');
   const why = first ? ` -- “${first.title}”: ${first.details[0] ?? 'no reason was given'}` : '';
   return `and ${results.length} more: ${said.join(', ')}${why}`;
