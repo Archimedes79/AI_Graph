@@ -1,5 +1,6 @@
 import type { NodeChange } from 'reactflow';
 import type { GraphNode } from '@/graph';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 
 /**
  * The keys that delete what is selected on the canvas: Delete and Backspace --
@@ -24,7 +25,8 @@ export function deleteKeys(active: boolean, editing: boolean): string[] | null {
  * The node's own ✕ already asks when edges would go with it. This is the same
  * question for a larger loss, arriving by a different route. A page with
  * nothing on it is deleted without ceremony: a confirmation for an empty
- * node is the kind of prompt people learn to click through.
+ * node is the kind of prompt people learn to click through. Which blocks a
+ * node holds is the element's to say (`NodeRunner.blocks`).
  */
 export function removalsToApply(
   changes: NodeChange[],
@@ -33,7 +35,8 @@ export function removalsToApply(
 ): NodeChange[] {
   return changes.filter((change) => {
     if (change.type !== 'remove') return true;
-    const blocks = nodeById(change.id)?.config.gui_widgets?.length ?? 0;
+    const node = nodeById(change.id);
+    const blocks = node ? engineRegistry.node(node.node_type)?.blocks(node).length ?? 0 : 0;
     if (!blocks) return true;
     return confirm(`Delete the page? Its ${blocks} ${blocks === 1 ? 'block goes' : 'blocks go'} with it.`);
   });
