@@ -1,9 +1,49 @@
 import React from 'react';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 import SelectorSteps from '@/authoring/SelectorSteps';
-import { runAlone } from '@/authoring/readAsRun';
-import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
+import { clip } from '@/authoring/TryItInline';
+import { readFileAsRun, runAlone } from '@/authoring/readAsRun';
+import { errorText } from '@/api/errorText';
+import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
+
+/**
+ * What a file input hands on, read the way a run reads it: the text every
+ * node after it is shown before the graph has run. Shown when asked, since
+ * reading is a trip to the engine, and forgotten when the path changes.
+ */
+function WhatItHandsOn({ path }: { path: string }) {
+  const [read, setRead] = React.useState<{ text: string } | { error: string } | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => setRead(null), [path]);
+
+  const show = async () => {
+    setBusy(true);
+    try {
+      setRead({ text: await readFileAsRun(path) });
+    } catch (error) {
+      setRead({ error: errorText(error, 'The file could not be read.') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <button className="text-xs px-2 py-1 rounded" style={{ ...NEUTRAL_BUTTON, opacity: busy || !path.trim() ? 0.5 : 1 }}
+        disabled={busy || !path.trim()} onClick={show}
+        title={path.trim() ? 'Read the file as a run reads it, and show what it hands on as its content' : 'Choose a file first'}>
+        {busy ? 'Reading…' : read ? 'Read it again' : 'Show what it hands on'}
+      </button>
+      {read && 'error' in read && <p className="text-xs" style={{ color: DANGER_TEXT }}>{read.error}</p>}
+      {read && 'text' in read && (
+        <pre className="text-xs rounded px-2 py-1.5 whitespace-pre-wrap overflow-auto" style={{ background: SUNKEN, color: read.text ? TEXT : DIMMER, maxHeight: 200 }}>
+          {read.text ? clip(read.text, 1500) : '(the file is empty)'}
+        </pre>
+      )}
+    </div>
+  );
+}
 
 /**
  * An input node: text, one file, or a folder -- and for a folder, the files it
@@ -180,7 +220,11 @@ export default function InputNodePanel({
   );
 
   if (!isDirectory || !generation || !steps) {
-    return <div className="space-y-4">{modeField}{valueField}{typesField}{said}{catchFailures}</div>;
+    return (
+      <div className="space-y-4">
+        {modeField}{valueField}{!isText && !isDirectory && <WhatItHandsOn path={path} />}{typesField}{said}{catchFailures}
+      </div>
+    );
   }
 
   return (
