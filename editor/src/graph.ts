@@ -63,8 +63,6 @@ export type NodeConfig = {
   data_format_prompt: string;
   data_prompt: string;
   data_value?: unknown;
-  /** An example file the 📎 of an older version attached: step 1 offers to take it in, and it is never written anew. */
-  example_file: string;
   extensions: string;
   gui_widgets: GuiWidget[];
   input_mode: 'text' | 'file' | 'directory';
@@ -123,8 +121,6 @@ export type GuiWidget = {
    * of `{"value": …}`, as it is handed the value (`example.json`).
    */
   example?: string;
-  /** An example file an older version of the block editor attached; step 1 offers to take it in. */
-  example_file?: string;
   /** `input_picker`: the file types a folder's listing keeps. */
   extensions?: string;
   h?: number;

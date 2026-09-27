@@ -2,7 +2,7 @@ import type { Edge } from 'reactflow';
 import type { ExecutionResult, GraphNode } from '@/graph';
 import type { GenerationRequest } from './generation';
 import { inputSources, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
-import { outputExampleText } from './outputFormat';
+import { outputExampleText, outputFormatText } from './outputFormat';
 import { readPair } from './examplePair';
 import { NODE_BUILDERS } from '@/elements/registry';
 
@@ -56,8 +56,7 @@ function restingValues(node: GraphNode, nodes: GraphNode[], edges: Edge[]): Samp
  * The sample is the node's example (step 1) when it has one: the engine reads
  * it from `examples` itself, so that what the example expects is checked too.
  * Without one, it is what arrived on the last run, and before any run what the
- * nodes wired in hold now. An example file the 📎 of an older version attached
- * is not a second sample beside these: step 1 offers to take it in.
+ * nodes wired in hold now.
  *
  * The node dialog, the graph sweep and "what ✨ sends" all ask this one
  * function, so none of them can tell the model less than the others.
@@ -108,7 +107,7 @@ export function nodeFacts(
       outputs: Object.fromEntries(node.outputs.map((port) => [port.id, port.description ?? ''])),
     },
     outputTargets: outputTargets(node.id, nodes, edges, true),
-    outputFormat: element?.outputFormatFor(node) ?? '',
+    outputFormat: outputFormatText(node.config),
     outputExample: outputExampleText(node.config),
     outputSchema: node.config.output_schema,
     examples: node.config.examples,

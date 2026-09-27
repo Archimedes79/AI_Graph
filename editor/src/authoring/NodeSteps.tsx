@@ -153,9 +153,6 @@ export default function NodeSteps({
         ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
         pathPorts={pathPorts(node, nodes, edges)}
         fromGraph={steps.fromGraph}
-        earlierFile={node.config.example_file
-          ? { path: node.config.example_file, drop: () => setConfig('example_file', '') }
-          : undefined}
         note={(
           <>
             {strayInputs.length > 0 && (

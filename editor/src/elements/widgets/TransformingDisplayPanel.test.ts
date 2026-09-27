@@ -50,15 +50,6 @@ describe('a chart, a table or an image, built in the four steps', () => {
     expect(tryButton(html)).not.toContain('disabled');
   });
 
-  it('offers a file an older version attached, beside an example too, and a way to let it go', () => {
-    const table = { ...WIDGET_BUILDERS.table.create('Rows'), id: 'rows', example_file: 'data/rows.json' };
-    expect(panel(table)).toContain('Use the example file from before');
-    expect(panel(table)).toContain('aria-label="Drop the example file from before"');
-    const since = panel({ ...table, example: '{"value": []}' });
-    expect(since).toContain('Use the example file from before');
-    expect(since).toContain('Using it replaces what the example gives “value”.');
-  });
-
   it('says why Try it waits while the example is not an object keyed by what arrives', () => {
     const table = { ...WIDGET_BUILDERS.table.create('Rows'), id: 'rows', example: '[1, 2]' };
     expect(tryButton(panel(table))).toContain('disabled');

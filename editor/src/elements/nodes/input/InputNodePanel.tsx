@@ -66,8 +66,6 @@ export default function InputNodePanel({
   const isText = mode === 'text';
   const isDirectory = mode === 'directory';
   const path = String(node.config.value ?? '');
-  const earlierFile = String(node.config.example_file ?? '').trim();
-  const saidBefore = String(node.config.output_format_prompt ?? '').trim();
 
   const modeField = (
     <div>
@@ -112,26 +110,6 @@ export default function InputNodePanel({
           ariaLabel={isDirectory ? 'Directory' : 'File'}
         />
       )}
-      {/* An example file the 📎 of an older version attached: what the nodes
-          after this one were meant to be shown. It still is, while no file is
-          set above; here it can be made the file, or let go. A folder reads
-          no single file, so there it only says so. */}
-      {!isText && earlierFile && (
-        <p className="text-xs mt-1 flex flex-wrap items-center gap-2" style={{ color: DIMMER }}>
-          <span className="flex-1 min-w-0">
-            An example file was attached here before: {earlierFile}{isDirectory ? ' (a folder does not use it)' : ''}
-          </span>
-          {!isDirectory && !path.trim() && (
-            <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} onClick={() => setConfig('value', earlierFile)}>
-              Read this file
-            </button>
-          )}
-          <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} onClick={() => setConfig('example_file', '')}
-            aria-label="Drop the example file from before">
-            ✕
-          </button>
-        </p>
-      )}
       {/* The one setting this text used to promise without offering: the engine
           asks only when it is on (`runtimeRequirements`). */}
       <label className="flex items-center gap-2 mt-2 text-sm" style={{ color: MUTED }}>
@@ -148,21 +126,6 @@ export default function InputNodePanel({
           : `Every run uses what is above. Tick to be asked each time instead.`}
       </p>
     </div>
-  );
-
-  // What an older version let a person say the files contain. Nothing asks
-  // for it now -- what a file holds is read from it -- but what was said is
-  // still told to the nodes after this one, so it is shown, and can be dropped.
-  const said = !isText && saidBefore && (
-    <p className="text-xs flex items-start gap-1.5" style={{ color: DIMMER }}>
-      <span className="flex-1 min-w-0">Said before about what the files contain: “{saidBefore}”</span>
-      <button className="text-xs px-1 rounded flex-shrink-0" style={NEUTRAL_BUTTON}
-        title="The nodes after this one are still told it. Drop it."
-        aria-label="Drop what was said about the files"
-        onClick={() => { setConfig('output_format_prompt', ''); setConfig('output_format', undefined); }}>
-        ✕
-      </button>
-    </p>
   );
 
   const catchFailures = !isText && (
@@ -193,7 +156,7 @@ export default function InputNodePanel({
   if (!isDirectory || !generation || !steps) {
     return (
       <div className="space-y-4">
-        {modeField}{valueField}{!isText && !isDirectory && <WhatItHandsOn path={path} />}{typesField}{said}{catchFailures}
+        {modeField}{valueField}{!isText && !isDirectory && <WhatItHandsOn path={path} />}{typesField}{catchFailures}
       </div>
     );
   }
@@ -214,7 +177,6 @@ export default function InputNodePanel({
               />
               Look into subfolders too
             </label>
-            {said}
           </div>
         )}
         noFolder={!path.trim()}

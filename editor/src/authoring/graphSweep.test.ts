@@ -121,28 +121,10 @@ describe('what a sweep would have to guess at', () => {
     expect(missingExamples([source], [])).toEqual([]);
   });
 
-  it('takes the example file an older version attached, which the nodes after it are shown', () => {
-    const source = node('src', 'input');
-    source.config.input_mode = 'file';
-    source.config.example_file = '/data/sample.csv';
-    expect(missingExamples([source], [])).toEqual([]);
-  });
-
-  it('does not take an older example file for a folder, which reads no single file', () => {
+  it('names a folder input with no folder, and not one with a folder set', () => {
     const source = node('src', 'input');
     source.config.input_mode = 'directory';
-    source.config.example_file = '/data/sample.csv';
     expect(missingExamples([source], []).map((n) => n.id)).toEqual(['src']);
-  });
-
-  it('does not take words about the files for a folder to read: no node after it was ever told them', () => {
-    // The sweep used to be satisfied by "what these files contain", a box
-    // that reached no generation downstream: the first node was written
-    // against nothing all the same.
-    const source = node('src', 'input');
-    source.config.input_mode = 'directory';
-    source.config.output_format_prompt = 'UTF-8 CSV: date, amount, description';
-    expect(missingExamples([source], [])).toHaveLength(1);
 
     source.config.value = 'data/statements';
     expect(missingExamples([source], [])).toEqual([]);

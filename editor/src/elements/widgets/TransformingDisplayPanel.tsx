@@ -41,9 +41,6 @@ export default function TransformingDisplayPanel({
         ports={[{ id: 'value', name: 'what arrives' }]}
         pathPorts={builder.runner.readsPaths ? ['value'] : []}
         fromGraph={steps.fromGraph}
-        earlierFile={widget.example_file
-          ? { path: widget.example_file, drop: () => onUpdate({ example_file: undefined }) }
-          : undefined}
         placeholder={'{ "value": … }'}
       />
     </>

@@ -3,7 +3,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { Graph, GraphNode, NodeType } from '@/graph';
 import type { FieldAccess } from '@/authoring/generation';
-import { describeDeclaredOutput, outputFormatText } from '@/authoring/outputFormat';
+import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { readPair } from '@/authoring/examplePair';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
 
@@ -151,16 +151,6 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    */
   describeOutput(node: GraphNode): string {
     return describeDeclaredOutput(node.config);
-  }
-
-  /**
-   * The format in words that ✨ is told this node's *own* body must return.
-   * The node's declared output by default; a node whose words describe
-   * something else -- an input's old "what these files contain", which is what
-   * its files hold and not what its selector returns -- says nothing here.
-   */
-  outputFormatFor(node: GraphNode): string {
-    return outputFormatText(node.config);
   }
 
   /**

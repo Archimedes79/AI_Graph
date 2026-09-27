@@ -31,7 +31,6 @@ export function baseNodeConfig(): NodeConfig {
     data_format: 'text',
     data_prompt: '',
     data_format_prompt: '',
-    example_file: '',
     output_format_prompt: '',
     output_label: 'Result',
     write_mode: 'none',
