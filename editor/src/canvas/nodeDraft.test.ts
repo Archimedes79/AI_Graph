@@ -73,7 +73,7 @@ describe('a setting changed after a wait', () => {
     const node = NODE_KINDS.code.create('worker');
     const clicked = withInput('', '{"input": "old"}');
     const draft = { ...node, config: { ...node.config, examples: withExpect(clicked, '{"output": "typed meanwhile"}') } };
-    const landed = withSetting(draft, node, 'examples', (current: unknown) => withInput(String(current), '{"input": "from the graph"}'));
+    const landed = withSetting(draft, 'examples', (current: unknown) => withInput(String(current), '{"input": "from the graph"}'));
     expect(readPair(String(landed.config.examples))).toMatchObject({
       input: { input: 'from the graph' },
       expect: { output: 'typed meanwhile' },
@@ -86,8 +86,8 @@ describe('catching failures', () => {
 
   it('grows the error output when ticked and takes it away when unticked', () => {
     const node = NODE_KINDS.code.create('worker');
-    const ticked = withSetting(node, node, 'catch_errors', true);
+    const ticked = withSetting(node, 'catch_errors', true);
     expect(outputIds(ticked)).toEqual([...outputIds(node), 'error']);
-    expect(outputIds(withSetting(ticked, ticked, 'catch_errors', false))).toEqual(outputIds(node));
+    expect(outputIds(withSetting(ticked, 'catch_errors', false))).toEqual(outputIds(node));
   });
 });

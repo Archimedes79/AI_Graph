@@ -129,7 +129,7 @@ export function nodeDialog(nodeId: string): NodeDialog {
       changed();
     },
     setConfig(key, value) {
-      dialog.change((now) => withSetting(now, stored(), key, value));
+      dialog.change((now) => withSetting(now, key, value));
     },
     watch(onChange) {
       changed = onChange;

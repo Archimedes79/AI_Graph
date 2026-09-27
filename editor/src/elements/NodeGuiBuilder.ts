@@ -134,19 +134,6 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   }
 
   /**
-   * *after* -- the node once a setting re-derived its ports -- with each new
-   * port that carries on what a port of *before* carried marked as that one
-   * (`continuing`), so its wires follow it when the dialog writes. *before* is
-   * the node as stored, whose ports the wires are on, not the dialog's node a
-   * step earlier (`withSetting`). By default no port continues another: a derived port is
-   * the port of its name, or new, and a port that is gone takes its wires
-   * with it.
-   */
-  continuePorts(_before: GraphNode, after: GraphNode): GraphNode {
-    return after;
-  }
-
-  /**
    * What this node emits, in one line, for its neighbours' generation context.
    * The node's declared output by default -- its words, and the shape a run
    * kept, which is the best description there is of what the next

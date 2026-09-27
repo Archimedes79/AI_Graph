@@ -7,9 +7,9 @@ import { nodeDialog } from '@/canvas/nodeDialog';
  * Switching an input node's mode in its dialog: which wire stays.
  *
  * Done as the dialog does it (`nodeDialog`): each choice goes through
- * `withSetting`, which re-derives the node's ports and asks the element which
- * new port carries on an old one, and the write moves the wires by what
- * `portRenames` makes of that.
+ * `withSetting`, which re-derives the node's ports, and the write moves the
+ * wires by what `portRenames` makes of that -- a port of the same name keeps
+ * its wire, and a port that is gone takes its wire with it.
  */
 const store = () => useGraphStore.getState();
 /** Every wire out of *source*, as "port -> target". */

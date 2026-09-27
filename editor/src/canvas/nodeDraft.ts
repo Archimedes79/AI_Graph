@@ -16,14 +16,8 @@ const CAUGHT = 'Why this node failed. Optional to wire: unwired, the run simply 
  *
  * *value* may be a function of the setting as *draft* holds it: a change that
  * lands after a wait is made to what is there by then (`NodePanelProps.setConfig`).
- *
- * *stored* is the node as the store holds it, whose ports the wires are on.
- * Which new port carries on an old one is asked against it rather than the
- * draft: a person stepping through a mode select passes modes that have no
- * such port, and asked against the draft, the step through one of them
- * forgot which port the wire was on.
  */
-export function withSetting(draft: GraphNode, stored: GraphNode | undefined, key: string, value: unknown): GraphNode {
+export function withSetting(draft: GraphNode, key: string, value: unknown): GraphNode {
   const settled = typeof value === 'function'
     ? (value as (current: unknown) => unknown)((draft.config as Record<string, unknown>)[key])
     : value;
@@ -32,10 +26,10 @@ export function withSetting(draft: GraphNode, stored: GraphNode | undefined, key
   // ports follow it here and now. They used to follow only on the next
   // load, which is why ticking "catch failures" on an input node grew its
   // error port sometime later, to a person who had gone looking for it.
-  // A derived port that carries on an old one's work takes its wires,
-  // where the element says so (`continuePorts`).
+  // A derived port is the port of its name, or new: the write keeps the
+  // wires of the one and lets those of a port that is gone go (`portRenames`).
   const derived = derivedNodePorts(next);
-  if (derived) return NODE_BUILDERS[draft.node_type].continuePorts(stored ?? draft, { ...next, ...derived });
+  if (derived) return { ...next, ...derived };
   // Ticking "catch failures" is what puts the port on the node. Nobody
   // should have to add an output by hand and guess that it must be called
   // `error` for the executor to fill it. Which setting that is, the element
