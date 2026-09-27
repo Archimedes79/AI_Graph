@@ -33,8 +33,8 @@ export function fromEngine(
   return {
     promptField: generation.fields.promptOnSubject ? 'description' : generation.fields.prompt,
     targetField: generation.fields.body,
-    // Code is JavaScript; a system prompt is prose -- the rule
-    // `Logic.extension` gives a file holding the body, from the same kind.
+    // Code is JavaScript; a system prompt is prose, as the file that keeps it
+    // says (`code.js`, `system.md`).
     language: generation.kind === 'code' ? 'javascript' : 'markdown',
     guard: generation.guard,
     success: generation.success,

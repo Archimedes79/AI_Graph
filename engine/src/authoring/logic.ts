@@ -36,7 +36,8 @@ export interface LogicFields {
 }
 
 /**
- * One element's authored half: the request, the body, and how to run it.
+ * One element's authored half: the body, where it and the request that
+ * produced it are kept, and how to run it.
  *
  * Constructed by the element from its own config, so the field names above
  * appear once — in the element that owns them — instead of travelling to every
@@ -45,11 +46,9 @@ export interface LogicFields {
 export class Logic {
   /** What the body is, and so who executes it. */
   readonly kind: LogicKind;
-  /** The natural-language request that produced `body`. */
-  readonly prompt: string;
   /** What runs, or what is sent. Empty means "not written yet". */
   readonly body: string;
-  /** Which config keys these came from, for the editor and the file layer. */
+  /** Which config keys the body and its request are kept in, for the editor and the file layer. */
   readonly fields: LogicFields;
 
   // Fields declared and assigned rather than written as constructor parameter
@@ -57,23 +56,10 @@ export class Logic {
   // parameter property is one of the few TypeScript spellings that emits code
   // rather than only removing types. `strippable.test.ts` holds every file here
   // to that.
-  constructor(kind: LogicKind, prompt: string, body: string, fields: LogicFields) {
+  constructor(kind: LogicKind, body: string, fields: LogicFields) {
     this.kind = kind;
-    this.prompt = prompt;
     this.body = body;
     this.fields = fields;
-  }
-
-  /**
-   * The extension a file holding this body should have.
-   *
-   * Derived rather than declared: real code gets `.js` and an editor's language
-   * support with it, prose gets `.md` because prose in a `.js` is a syntax
-   * error. This used to be a field every element filled in, which is how one of
-   * them came to say `.py` long after the last Python body was gone.
-   */
-  get extension(): string {
-    return this.kind === 'code' ? '.js' : '.md';
   }
 
   /** Whether anything was actually written. */
@@ -100,18 +86,6 @@ export class Logic {
 }
 
 /** Read a logic straight off a subject's config, given where its halves live. */
-export function logicFrom(
-  subject: { config: Record<string, unknown>; description?: string },
-  kind: LogicKind,
-  fields: LogicFields,
-): Logic {
-  const prompt = fields.promptOnSubject
-    ? String(subject.description ?? '')
-    : String(subject.config[fields.prompt] ?? '');
-  return new Logic(
-    kind,
-    prompt,
-    String(subject.config[fields.body] ?? ''),
-    fields,
-  );
+export function logicFrom(subject: { config: Record<string, unknown> }, kind: LogicKind, fields: LogicFields): Logic {
+  return new Logic(kind, String(subject.config[fields.body] ?? ''), fields);
 }
