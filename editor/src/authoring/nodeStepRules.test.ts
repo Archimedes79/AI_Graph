@@ -5,7 +5,7 @@ import { exampleFor, keptExpect, listPorts, othersLine, runsPerItem, tryInputs, 
 import { readPair, withExpect, withInput } from './examplePair';
 import { errorOutput } from '@engine/execution/wiring.ts';
 
-describe('"Keep this result"', () => {
+describe('"Keep as expected output"', () => {
   it('keeps what a code node gave as its example\'s expected output, which `test` then holds it to', () => {
     // Step 5 promised to keep a result as an example, and nothing could.
     const tried = withInput('', '{"input": ["a", "b"]}');

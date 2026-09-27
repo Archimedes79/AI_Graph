@@ -32,7 +32,7 @@ describe('computeAxisRange', () => {
 describe('a chart the model drew itself', () => {
   /**
    * The point of this path: a bar chart is one plot, and the block should not
-   * be limited to the plots someone thought of here. A transform may hand back
+   * be limited to the plots someone thought of here. A node upstream may hand back
    * finished SVG -- a scatter, a pie, its own legend -- and it is drawn as it
    * stands.
    */

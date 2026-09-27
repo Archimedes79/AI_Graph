@@ -116,8 +116,8 @@ function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sampl
     const said = oneLine(request.input_notes?.[port]);
     lines.push(`- \`${port}\`${type ? ` (${type})` : ''}${said ? `: ${said}` : ''}`);
     const source = request.input_sources?.[port];
-    // A snippet whose ports the element fixes (a chart's `value`) is told no
-    // wiring at all, rather than told it is unwired.
+    // A request that says nothing of the wiring -- one the editor did not
+    // make -- is told none, rather than that every input is unwired.
     if (source) lines.push(`  from ${source}`);
     else if (request.input_sources) lines.push('  not wired yet');
     if (sample && port in sample.values) {

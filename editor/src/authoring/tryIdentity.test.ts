@@ -6,7 +6,7 @@ import { withExpect, withInput, withJudge } from './examplePair';
 
 /**
  * What a try belongs to. ▶ Try it shows what came out, ✓ holds it to step 2,
- * and "Keep this result" keeps it -- and all three described a try of an
+ * and Keep keeps it -- and all three described a try of an
  * older example or body once either had changed since ▶ was pressed.
  */
 describe('a try, once what it tried has changed', () => {
