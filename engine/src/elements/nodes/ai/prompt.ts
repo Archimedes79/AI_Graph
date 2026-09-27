@@ -29,7 +29,7 @@ export interface PromptSettings {
   systemPrompt: string;
   /** The message, with `{{port}}` where a port's value goes. Empty: send what arrived. */
   template: string;
-  /** What the node says about its answer, in words (`outputWords`): what a person wrote, an older node's format in front. */
+  /** What the node says about its answer, in words (`outputWords`). */
   outputFormatPrompt: string;
   /** An answer to imitate, when the format was learned from a run rather than described. */
   outputExample: string;
@@ -66,26 +66,9 @@ export function placeholders(template: string): string[] {
   return [...new Set([...template.matchAll(PLACEHOLDER)].map((match) => match[1]))];
 }
 
-/**
- * What a node says about its output, in words: what a person wrote -- the
- * node's `output.md` -- with the sentence an older node's picked format stood
- * for in front.
- *
- * `output_format` was a choice of formats once; the words are the declaration
- * now, and nothing writes the choice any more. A node that still carries json
- * or csv is read as if the sentence were written in its words, so the run, the
- * dialog's words box, ✨ and the nodes it feeds all read one text -- and the
- * words box, once edited, saves what the run was already sending. A kept
- * example stands for the format itself (`formatInstruction`), so under one the
- * old choice says nothing.
- */
-export function outputWords(config: { output_format?: unknown; output_format_prompt?: unknown; output_example?: unknown }): string {
-  const format = String(config.output_format ?? '');
-  const rule = String(config.output_example ?? '').trim() ? ''
-    : format === 'json' ? 'Respond with JSON and nothing else.'
-      : format.startsWith('csv') ? 'Respond with CSV and nothing else.'
-        : '';
-  return [rule, String(config.output_format_prompt ?? '').trim()].filter(Boolean).join('\n\n');
+/** What a node says about its output, in words: what a person wrote, the node's `output.md`. */
+export function outputWords(config: { output_format_prompt?: unknown }): string {
+  return String(config.output_format_prompt ?? '').trim();
 }
 
 /**

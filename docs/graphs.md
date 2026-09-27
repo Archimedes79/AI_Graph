@@ -237,9 +237,7 @@ either way. Then there are two ways to say more, and both are sent whenever they
 anything: in words (“a JSON list of {title, score}”), or shown — press ▶ Try it, and if
 the answer has the shape you want, **Keep this result** makes it step 2's example answer.
 The node is then told to answer in that same structure with new content, and its
-neighbours are generated against it. (There used to be a menu of formats — JSON, CSV,
-custom, example — and only *custom* sent your words; a graph that picked JSON still says
-so, in front of them.) Nothing checks the answer afterwards; a model that ignores the
+neighbours are generated against it. Nothing checks the answer afterwards; a model that ignores the
 format is caught by a Code node, not by this setting.
 
 Everything else — model, temperature, tools, vision, batching, failures — has a default

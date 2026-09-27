@@ -38,7 +38,7 @@ function sample(): Graph {
         inputs: [port('total', 'input')], outputs: [port('output', 'output')],
         config: {
           system_prompt: 'You report counts.', prompt_template: 'There are {{total}} files.',
-          output_format: 'text', output_format_prompt: 'One sentence.', temperature: 0.2,
+          output_format_prompt: 'One sentence.', temperature: 0.2,
         },
       },
       {
@@ -105,14 +105,12 @@ describe('a project folder', () => {
       nodes: { folder: 'input', count: 'code', say: 'ai', page: 'gui' },
       wires: ['folder.files -> count.files', 'count.total -> say.total'],
     });
-    expect(existsSync(join(dir, 'graph.json'))).toBe(false);
-    expect(existsSync(join(dir, 'flow.js'))).toBe(false);
   });
 
   it('keeps a node\'s settings in its node.json and its ports in its interface.json', async () => {
     await writeProject(dir, sample());
     expect(JSON.parse(await text('nodes/count/node.json'))).toEqual({ label: 'Count', config: { batch_mode: 'whole_list' } });
-    expect(JSON.parse(await text('nodes/say/node.json')).config).toEqual({ output_format: 'text', temperature: 0.2 });
+    expect(JSON.parse(await text('nodes/say/node.json')).config).toEqual({ temperature: 0.2 });
     expect(JSON.parse(await text('nodes/page/node.json')).config.gui_widgets[0]).toEqual({ id: 'chart', kind: 'plot_window', label: 'Chart' });
     const ports = JSON.parse(await text('nodes/count/interface.json'));
     expect(ports.inputs).toEqual([{ port: 'files', type: 'any' }]);
@@ -503,7 +501,7 @@ describe('saving a project that holds a project', () => {
     expect(existsSync(join(dir, 'nodes/part/nodes/shorten/code.js'))).toBe(true);
 
     // The node is gone. Its folder was a project of its own, which is no
-    // reason to keep it: nothing in graph.json claims it any more.
+    // reason to keep it: nothing in flow.json claims it any more.
     graph.nodes = [];
     await writeProject(dir, graph);
     expect(existsSync(join(dir, 'nodes/part'))).toBe(false);
@@ -518,7 +516,7 @@ describe('saving a project that holds a project', () => {
       config: { code: 'function run() { return { output: 1 }; }' },
     }] as Graph['nodes'];
     await writeProject(dir, graph);
-    expect(existsSync(join(dir, 'nodes/part/graph.json'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes/part/flow.json'))).toBe(false);
     expect(await text('nodes/part/code.js')).toContain('output: 1');
   });
 
