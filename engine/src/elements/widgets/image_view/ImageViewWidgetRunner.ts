@@ -40,10 +40,17 @@ export class ImageViewWidgetRunner extends TransformingDisplayRunner {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  /** A path, which the block reads itself. */
-  protected override receivesAsItIs(): string {
-    return 'an image file path or URL, or a list of them -- not the picture\'s bytes.';
+  /**
+   * A path, which the block reads itself. The formats are the ones
+   * `imageMediaType` knows; the editor said SVG as well, which a run refuses.
+   */
+  override draws(): string {
+    return 'an image file path or URL, or a list of them -- not the picture\'s bytes: the block reads '
+      + 'each file and shows the picture. PNG, JPEG, GIF, WebP and BMP are recognised.';
   }
+
+  /** What `displayValue` above reads. */
+  override readonly readsPaths = true;
 
   /** The same snippet contract as a chart, with a different destination: a path. */
   override generation(): Generation {

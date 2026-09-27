@@ -61,15 +61,27 @@ export abstract class TransformingDisplayRunner extends DisplayWidgetRunner<Tran
    * (`config`) counts as one without code.
    */
   override receives(widget: Widget): string | undefined {
-    return String(widget.config?.code ?? '').trim() ? undefined : this.receivesAsItIs();
+    return String(widget.config?.code ?? '').trim() ? undefined : this.draws();
   }
 
-  /** What a node wired into this kind of block should hand it, while the block has no code of its own. */
-  protected abstract receivesAsItIs(): string;
+  /**
+   * What this kind draws as it arrives, in words: what a node wired into it
+   * should hand it while the block has no code of its own, and what the
+   * block's own dialog says it shows. Lower case, to follow "should be".
+   */
+  abstract draws(): string;
+
+  /**
+   * What arrives is a path the block reads itself (`displayValue`): an image.
+   * The editor then keeps a file picked as the block's example as its path,
+   * and reads it the way a run does; for any other block, what the file says
+   * is the example.
+   */
+  readonly readsPaths: boolean = false;
 
   /** What arrives, and the code that may reshape it first: said once for the three drawing kinds. */
   override graphAuthorNote(): string {
-    return `shows what arrives on "<id>_in", which should be ${this.receivesAsItIs()} `
+    return `shows what arrives on "<id>_in", which should be ${this.draws()} `
       + 'Optional config.code is code of its own that reshapes what arrives first.';
   }
 }

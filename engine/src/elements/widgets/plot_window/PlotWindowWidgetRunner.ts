@@ -31,7 +31,7 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
   // ── Build time ────────────────────────────────────────────────────────────
 
   /** The data to plot, which the page draws -- a `draw()` of its own takes whatever it was written to read. */
-  protected override receivesAsItIs(): string {
+  override draws(): string {
     return 'the data to plot, NOT a drawing: a list of points -- numbers, or {"label": string, '
       + '"value": number} -- or an object {"kind": "bars"|"columns"|"line"|"donut", "title": string, '
       + '"points": [...]}. The chart draws it at the block\'s real size and in the page\'s colours, '

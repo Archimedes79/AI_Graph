@@ -9,11 +9,19 @@
 import { lazy } from 'react';
 import type { ComponentType } from 'react';
 import type { GuiWidget } from '@/graph';
+import type { TransformingDisplayRunner } from '@engine/elements/widgets/TransformingDisplayRunner.ts';
 import type { WidgetPanelProps } from '../WidgetGuiBuilder';
 import { DisplayWidgetGuiBuilder } from './DisplayWidgetGuiBuilder';
 
 export abstract class TransformingDisplayGuiBuilder extends DisplayWidgetGuiBuilder {
   override readonly Panel: ComponentType<WidgetPanelProps> = lazy(() => import('./TransformingDisplayPanel'));
+
+  /**
+   * The kind's engine half, which says what it draws as it arrives (`draws`)
+   * and whether what arrives is a path it reads itself (`readsPaths`: an
+   * image, whose example file is then kept as its path).
+   */
+  abstract readonly runner: TransformingDisplayRunner;
 
   /**
    * Step 2, in one sentence: what the block shows, which is what its code
@@ -23,12 +31,11 @@ export abstract class TransformingDisplayGuiBuilder extends DisplayWidgetGuiBuil
    */
   abstract readonly shows: string;
 
-  /**
-   * What arrives is a path the block reads itself -- an image. A file picked
-   * as step 1's example is then kept as its path, and read the way a run reads
-   * it; for any other block, what the file says is the example.
-   */
-  readonly takesPaths: boolean = false;
+  /** What the engine says the kind draws, as a sentence, and how its code hands that on. */
+  protected drawsAnd(handsOn: string): string {
+    const draws = this.runner.draws();
+    return `${draws.charAt(0).toUpperCase()}${draws.slice(1)} ${handsOn}`;
+  }
 
   /** Its transform: the code, and what was asked of it. */
   protected override initialSettings(): Partial<GuiWidget> {

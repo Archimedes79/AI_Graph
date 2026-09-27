@@ -10,13 +10,12 @@ export class ImageViewWidgetGuiBuilder extends TransformingDisplayGuiBuilder {
 
   readonly label = 'Image';
 
-  readonly shows = 'An image file path or URL, or a list of them -- from a folder picker, say: the block reads each file and shows the picture. PNG, JPEG, GIF, WebP, BMP and SVG are recognised. Its code hands the path on as {"value": path}.';
+  readonly runner = new ImageViewWidgetRunner();
 
-  /** What arrives is a path this block reads itself. */
-  override readonly takesPaths = true;
+  readonly shows = this.drawsAnd('Its code hands the path on as {"value": path}.');
 
   override readonly generation: ElementGeneration<GuiWidget> = {
-    ...fromEngine(new ImageViewWidgetRunner().generation()),
+    ...fromEngine(this.runner.generation()),
     promptLabel: 'Which picture to show',
     promptPlaceholder: "e.g. the 'cover' field of each record",
     bodyLabel: 'Code — run(inputs) receives {"value"} and returns {"value": path}',
