@@ -15,12 +15,15 @@ const mode = (node: GraphNode): string => String(node.config.input_mode ?? 'text
 const TEXT_PORT: Record<string, string> = { text: 'output', file: 'content' };
 
 /**
- * The file a file input reads, as a sample: the path it is set to, or else
- * the example file attached to it by an older version of this dialog, which
- * was meant for exactly this and reached nobody.
+ * What a file or folder input reads, as a sample: the path it is set to, or
+ * else, for one file, the example file attached to it by an older version of
+ * this dialog, which was meant for exactly this and reached nobody. A folder
+ * has no use for one file: counted there, it let the sweep write every node
+ * after an input with no folder against nothing.
  */
 function fileRead(node: GraphNode): string {
-  return String(node.config.value ?? '').trim() || String(node.config.example_file ?? '').trim();
+  const set = String(node.config.value ?? '').trim();
+  return set || (mode(node) === 'file' ? String(node.config.example_file ?? '').trim() : '');
 }
 
 /** What an older version of this dialog let a person say the files contain; nothing asks for it now. */

@@ -114,10 +114,13 @@ export default function InputNodePanel({
       )}
       {/* An example file the 📎 of an older version attached: what the nodes
           after this one were meant to be shown. It still is, while no file is
-          set above; here it can be made the file, or let go. */}
+          set above; here it can be made the file, or let go. A folder reads
+          no single file, so there it only says so. */}
       {!isText && earlierFile && (
         <p className="text-xs mt-1 flex flex-wrap items-center gap-2" style={{ color: DIMMER }}>
-          <span className="flex-1 min-w-0">An example file was attached here before: {earlierFile}</span>
+          <span className="flex-1 min-w-0">
+            An example file was attached here before: {earlierFile}{isDirectory ? ' (a folder does not use it)' : ''}
+          </span>
           {!isDirectory && !path.trim() && (
             <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} onClick={() => setConfig('value', earlierFile)}>
               Read this file
