@@ -13,6 +13,7 @@ import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
 import LiveGeneration from '@/authoring/LiveGeneration';
 import SubgraphTrail from './SubgraphTrail';
+import GraphProblems from './GraphProblems';
 import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, TEXT } from '@/ui/theme';
 
 /**
@@ -463,6 +464,7 @@ export default function Toolbar({
                 {aiResult.graph.edges.length} edge{aiResult.graph.edges.length === 1 ? '' : 's'})
               </div>
             )}
+            {aiResult && <GraphProblems graph={aiResult.graph} />}
           </div>
         </Modal>
       )}
