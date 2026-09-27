@@ -66,6 +66,13 @@ describe('a node on the canvas, after a run', () => {
     expect(html).toContain('opacity:0.6');
   });
 
+  it('shows what a run that lost items made in amber, as the results panel says it -- not in a success\'s green', () => {
+    const drawnAs = (status: string) => node({ node_id: 'count', status, inputs: {}, outputs: { output: 'Two of three stories' }, error: null });
+    expect(drawnAs('partial')).toContain('color:#fcd34d');
+    expect(drawnAs('partial')).not.toContain('color:#86efac');
+    expect(drawnAs('success')).toContain('color:#86efac');
+  });
+
   it('shows why it failed, on one line', () => {
     const html = node({ node_id: 'count', status: 'error', inputs: {}, outputs: {}, error: 'No such file: data/x.csv\nat read' });
     expect(html).toMatch(/title="No such file: data\/x.csv\nat read"[^>]*>No such file: data\/x.csv</);

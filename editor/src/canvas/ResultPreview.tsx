@@ -1,21 +1,26 @@
+import type { ExecutionStatus } from '@/graph';
 import type { Preview } from '@/elements/resultPreview';
 import { computeAxisRange } from '@/elements/widgets/plot_window/PlotChart';
-import { DANGER_TEXT } from '@/ui/theme';
-
-/** The green of a value a run delivered, the red of a failure: the canvas's two result colours. */
-const MADE = { background: 'rgba(34,197,94,0.1)', color: '#86efac' };
-const FAILED = { background: 'rgba(239,68,68,0.1)', color: DANGER_TEXT };
+import { statusTone } from '@/store/executionStatus';
 
 /**
  * One value a node made, under the port it stands at: a line, a count and its
  * first row, a sketch, or a thumbnail -- never more than a small picture high,
  * so a run does not push the graph apart. What the value *is* was decided
  * before this (`elements/resultPreview.ts`, and the element that reads it);
- * this only draws it. Faded when the node stood still this round.
+ * this only draws it, in the colours of the run that made it (`statusTone`):
+ * green, or amber where it lost items. Faded when the node stood still this
+ * round, and what stands is what it made before.
  */
-export default function ResultPreview({ preview, held }: { preview: Preview; held?: boolean }) {
+export default function ResultPreview({ preview, status = 'success', held }: {
+  preview: Preview;
+  /** How the run that made it went: delivered, or delivered with items lost (`partial`). */
+  status?: ExecutionStatus;
+  held?: boolean;
+}) {
   const box = 'text-xs px-1 py-0.5 rounded min-w-0 w-full';
-  const style = { ...MADE, opacity: held ? 0.6 : 1 };
+  const tone = statusTone(held ? 'success' : status);
+  const style = { background: tone.bg, color: tone.fg, opacity: held ? 0.6 : 1 };
   switch (preview.kind) {
     case 'line':
       return <div className={`${box} truncate`} style={style} title={preview.text}>{preview.text}</div>;
@@ -42,7 +47,12 @@ export default function ResultPreview({ preview, held }: { preview: Preview; hel
 
 /** A failed node's reason, on one line; the whole of it on hover. */
 export function ErrorPreview({ line, error }: { line: string; error: string }) {
-  return <div className="text-xs px-1 py-0.5 rounded truncate min-w-0 w-full" style={FAILED} title={error}>{line}</div>;
+  const tone = statusTone('error');
+  return (
+    <div className="text-xs px-1 py-0.5 rounded truncate min-w-0 w-full" style={{ background: tone.bg, color: tone.fg }} title={error}>
+      {line}
+    </div>
+  );
 }
 
 /** Numbers as a line or bars, 24 pixels high, as wide as the node: the shape, not the figures. */

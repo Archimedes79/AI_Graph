@@ -1,4 +1,5 @@
 import type { ExecutionStatus, NodeResult } from '@/graph';
+import { DANGER_TEXT } from '@/ui/theme';
 
 /**
  * Whether a node result carries usable output.
@@ -22,9 +23,12 @@ export const delivered = (status: ExecutionStatus | string | undefined): boolean
 export const hasOutputs = (result: Pick<NodeResult, 'status' | 'held'>): boolean =>
   delivered(result.status) || result.held === true;
 
-/** Chip/label colours for a status, shared by the results panel and the canvas. */
+/**
+ * Chip/label colours for a status, shared by the results panel and the canvas:
+ * green delivered, amber delivered with items lost (`partial`), red otherwise.
+ */
 export const statusTone = (status: ExecutionStatus | string | undefined) => {
   if (status === 'success') return { bg: 'rgba(34,197,94,0.1)', fg: '#86efac' };
   if (status === 'partial') return { bg: 'rgba(234,179,8,0.12)', fg: '#fcd34d' };
-  return { bg: 'rgba(239,68,68,0.1)', fg: '#fca5a5' };
+  return { bg: 'rgba(239,68,68,0.1)', fg: DANGER_TEXT };
 };

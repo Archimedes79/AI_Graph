@@ -261,7 +261,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                         title={port.description || port.name}
                       />
                     </div>
-                    {preview && <ResultPreview preview={preview} held={held} />}
+                    {preview && <ResultPreview preview={preview} status={executionResult?.status} held={held} />}
                   </React.Fragment>
                 );
               })}
@@ -306,7 +306,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                   {port.multi && <span title="Takes a list: several values, or one from each wired node"> ∞</span>}
                 </span>
               </div>
-              {preview && <ResultPreview preview={preview} held={held} />}
+              {preview && <ResultPreview preview={preview} status={executionResult?.status} held={held} />}
             </React.Fragment>
           );
         })}
@@ -370,7 +370,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                 title={port.description || port.name}
               />
             </div>
-            {previews?.outputs[port.id] && <ResultPreview preview={previews.outputs[port.id]} held={held} />}
+            {previews?.outputs[port.id] && <ResultPreview preview={previews.outputs[port.id]} status={executionResult?.status} held={held} />}
           </React.Fragment>
         ))}
       </div>
