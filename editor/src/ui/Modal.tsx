@@ -27,6 +27,16 @@ interface ModalProps {
 }
 
 /**
+ * Whether Escape is this dialog's to act on: only while no other dialog is
+ * open inside it. A file browser opened from a node's dialog is drawn inside
+ * it, and both hear Escape on the document -- the node's dialog closed with
+ * the browser, in the order the two happened to listen.
+ */
+export function hearsEscape(panel: Pick<Element, 'querySelector'> | null): boolean {
+  return panel !== null && panel.querySelector('[role="dialog"]') === null;
+}
+
+/**
  * The one modal shell.
  *
  * Nine overlays used to author this same backdrop/panel/header/footer skeleton
@@ -62,7 +72,7 @@ export default function Modal({
   useEffect(() => {
     if (!dismissOnEscape) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && hearsEscape(panelRef.current)) {
         event.stopPropagation();
         onClose();
       }

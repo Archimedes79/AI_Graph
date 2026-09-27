@@ -87,6 +87,8 @@ export default function FileBrowserDialog({
   const canConfirm =
     mode === 'directory' ? !!path : mode === 'save' ? !!path && !!fileName.trim() : !!selected;
 
+  // Its Enter keys are its own and go no further: opened from "Before
+  // running…", an Enter typed here to open a folder also started the run.
   const confirm = () => {
     if (mode === 'directory') return onPick(path);
     if (mode === 'save') return onPick(join(path, fileName.trim()));
@@ -148,7 +150,7 @@ export default function FileBrowserDialog({
             style={FIELD}
             value={path}
             onChange={(e) => setPath(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') load(path); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); load(path); } }}
             aria-label="Current path"
           />
           <button
@@ -224,7 +226,7 @@ export default function FileBrowserDialog({
               style={FIELD}
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && canConfirm) confirm(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); if (canConfirm) confirm(); } }}
               placeholder={projects ? 'my_graph  (or my_graph.json for one file)' : 'my_graph.json'}
             />
           </div>
