@@ -189,7 +189,6 @@ export interface ProbeReport {
   missing_outputs: string[];
   /** What the element itself found wrong with a result that ran: a chart off its frame, NaN in the markup. */
   problems?: string[];
-  output_preview: string;
   /**
    * What the node hands on from the sample, whole -- the next node's sample,
    * not a peek at it. For a node run once per item that is not one call's

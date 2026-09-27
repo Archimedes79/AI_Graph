@@ -56,7 +56,7 @@ describe('the request ✨ Generate sends', () => {
 });
 
 describe('what is said after ✨', () => {
-  const report = (probe: Partial<ProbeReport>): ProbeReport => ({ status: 'failed', attempts: 2, error: '', missing_outputs: [], output_preview: '', ...probe });
+  const report = (probe: Partial<ProbeReport>): ProbeReport => ({ status: 'failed', attempts: 2, error: '', missing_outputs: [], ...probe });
 
   it('names the sample it was verified on, which was always said to be "the last run\'s data"', () => {
     expect(probeMessage(report({ status: 'ok' }), 'done', 'the example in step 1')).toBe('✅ Generated and verified against the example in step 1.');

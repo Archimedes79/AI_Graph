@@ -380,7 +380,7 @@ async function generateVerifiedCode(
   const probeWith = spec?.probeWith;
   const frame = framedByElement(spec) ? spec?.contract ?? '' : undefined;
   const first = await generateCode(ai, target, request, context, given, '', frame);
-  const report: ProbeReport = { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' };
+  const report: ProbeReport = { status: 'skipped', attempts: 0, error: '', missing_outputs: [] };
   if (!sample || !Object.keys(sample).length) return { ...first, probe: report };
   const perItem = runsPerItem(request, spec);
   // A sample that is an example says what must come out of it, and that is
@@ -429,7 +429,7 @@ async function generateVerifiedCode(
     const outputs = verdict.result && perItem ? handedOn(request, verdict.result) : verdict.result ?? undefined;
     return {
       ...report, status, error: verdict.error, missing_outputs: verdict.missing, problems: verdict.problems,
-      ...(outputs ? { output_preview: preview(outputs), outputs } : {}),
+      ...(outputs ? { outputs } : {}),
     };
   };
 
@@ -580,14 +580,14 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
           + 'every time the node runs, and its answer goes where the outputs go.',
         ].filter(Boolean).join('\n\n');
         const { text, explanation } = await generateTagged(ai, deps.target, PROMPT_SYSTEM, 'system_prompt', prompt);
-        return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' }, calls };
+        return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [] }, calls };
       }
       case 'output_format':
       case 'data_format': {
         const system = kind === 'output_format' ? OUTPUT_FORMAT_SYSTEM : DATA_FORMAT_SYSTEM;
         const prompt = `Task description: ${request.description}${context ? `\n\nAdditional context: ${context}` : ''}`;
         const { text, explanation } = await generateTagged(ai, deps.target, system, kind, prompt);
-        return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' }, calls };
+        return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [] }, calls };
       }
       default:
         throw new GenerationRefused(`Unknown generation kind '${kind}'`);
@@ -597,7 +597,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
       // Recorded as a failure by `recording`; it is not one.
       const last = calls.at(-1);
       if (last) last.error = null;
-      return { result: '', explanation: '', probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [], output_preview: '' }, calls, preview: true };
+      return { result: '', explanation: '', probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [] }, calls, preview: true };
     }
     if (error instanceof GenerationRefused) throw error;
     // The failing generation is the one whose transcript is worth reading.

@@ -73,7 +73,7 @@ describe('code', () => {
       { element: 'code', description: 'double', inputs: ['a'], outputs: ['out'], sample_inputs: { a: 21 } },
       { ai, code: runner(() => ({ out: 42 })), generationFor, target },
     );
-    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1, output_preview: '{"out":42}', outputs: { out: 42 } });
+    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1, outputs: { out: 42 } });
   });
 
   it('repairs once with the evidence when the first attempt misses a key', async () => {
