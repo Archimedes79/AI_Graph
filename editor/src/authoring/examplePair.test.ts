@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseExamples } from '@engine/execution/examples.ts';
-import { readPair, withExpect, withInput, withJudge } from './examplePair';
+import { examplesFollowPorts, readPair, withExpect, withInput, withJudge } from './examplePair';
 
 /**
  * A node's one example is the first section of its `examples.md`: what the
@@ -89,5 +89,97 @@ describe('the example pair', () => {
   it('adds an expect block after the input where a section has none', () => {
     const text = withExpect('## Mine\n\n```json input\n{"a": 1}\n```\n', '{"b": 2}');
     expect(parseExamples(text).examples).toEqual([{ title: 'Mine', inputs: { a: 1 }, expect: { b: 2 } }]);
+  });
+});
+
+describe('an example taken away, and one begun from step 2', () => {
+  it('takes the example away when its input is emptied, rather than running the node on {}', () => {
+    // Emptied, the box stored `{}` next to an empty expectation: `test` ran
+    // the node on nothing, and the box showed `{}` again on reopening.
+    expect(withInput(withInput('', '{"text": "hello"}'), '')).toBe('');
+    expect(withInput(withInput('Notes above.\n', '{"text": "hello"}'), '  ')).toBe('Notes above.\n\n');
+    expect(withInput('', '')).toBe('');
+  });
+
+  it('keeps what step 2 wrote, and the sections after it byte for byte, when the first input is emptied', () => {
+    const emptied = withInput(TWO, '');
+    expect(readPair(emptied)).toMatchObject({ title: 'Counts rows', inputText: '', input: undefined, expect: { count: 2 }, complete: false });
+    expect(emptied.slice(emptied.indexOf('## Written by hand'))).toBe(TWO.slice(TWO.indexOf('## Written by hand')));
+    // `test` runs nothing on it, and `check` says why.
+    const { examples, problems } = parseExamples(emptied);
+    expect(examples.map((example) => example.title)).toEqual(['Written by hand']);
+    expect(problems).toEqual(['"Counts rows": no ```json input block.']);
+    // Typed afresh, it is the same example again.
+    expect(parseExamples(withInput(emptied, '{"csv": "a\\nb"}')).examples[0]).toEqual({ title: 'Counts rows', inputs: { csv: 'a\nb' }, expect: { count: 2 } });
+  });
+
+  it('keeps an emptied first section while others follow, so the next keystroke does not land in one written by hand', () => {
+    // A first example that checks only that it runs holds nothing once its input is gone.
+    const plain = withExpect(TWO, '');
+    expect(readPair(plain).expectText).toBe('{}');
+    const emptied = withInput(plain, '');
+    expect(readPair(emptied)).toMatchObject({ title: 'Counts rows', inputText: '', others: 1 });
+    expect(readPair(withInput(emptied, '{"csv": "x"}'))).toMatchObject({ title: 'Counts rows', input: { csv: 'x' } });
+  });
+
+  it('writes a judge or an expectation typed before any input without an input of {}', () => {
+    // A judge typed first made an example on nothing, which `test` then judged.
+    const judged = withJudge('', 'Says hello.');
+    expect(judged).not.toContain('json input');
+    expect(readPair(judged)).toMatchObject({ judge: 'Says hello.', inputText: '', complete: false });
+    expect(parseExamples(judged).examples).toEqual([]);
+    // The input, once typed, completes it.
+    expect(parseExamples(withInput(judged, '{"name": "Ada"}')).examples)
+      .toEqual([{ title: 'The example', inputs: { name: 'Ada' }, judge: 'Says hello.' }]);
+    // Taken away again, nothing is left behind.
+    expect(withJudge(judged, '')).toBe('');
+    expect(withExpect(withExpect('', '{"out": 1}'), '')).toBe('');
+  });
+});
+
+describe('the examples, when a port is renamed or removed', () => {
+  const FILE = [
+    '## One',
+    '',
+    '```json input',
+    '{"input": "a,b", "top": 2}',
+    '```',
+    '',
+    '```json expect',
+    '{"output": 2}',
+    '```',
+    '',
+    '## Two',
+    '',
+    '```json input',
+    '{"input": "c", "top": 1}',
+    '```',
+    '',
+    '```judge',
+    'Counts.',
+    '```',
+    '',
+  ].join('\n');
+
+  it('renames the key in every section\'s input, and an output\'s in every expectation', () => {
+    const moved = examplesFollowPorts(FILE, { inputs: { input: 'csv' }, outputs: { output: 'count' } });
+    expect(parseExamples(moved).examples).toEqual([
+      { title: 'One', inputs: { csv: 'a,b', top: 2 }, expect: { count: 2 } },
+      { title: 'Two', inputs: { csv: 'c', top: 1 }, judge: 'Counts.' },
+    ]);
+    // Where the key stood, not moved to the end.
+    expect(Object.keys(readPair(moved).input!)).toEqual(['csv', 'top']);
+  });
+
+  it('drops the key of a port that is gone', () => {
+    const moved = examplesFollowPorts(FILE, { inputs: { top: null }, outputs: {} });
+    expect(parseExamples(moved).examples.map((example) => example.inputs)).toEqual([{ input: 'a,b' }, { input: 'c' }]);
+  });
+
+  it('leaves a key alone when its new name is a key already, and the file alone when nothing is renamed', () => {
+    expect(examplesFollowPorts(FILE, { inputs: { input: 'top' }, outputs: {} })).toBe(FILE);
+    expect(examplesFollowPorts(FILE, { inputs: { other: 'x' }, outputs: {} })).toBe(FILE);
+    expect(examplesFollowPorts('```json input\n{"input": 1}\n```\n', { inputs: { input: 'x' }, outputs: {} }))
+      .toBe('```json input\n{"input": 1}\n```\n');
   });
 });

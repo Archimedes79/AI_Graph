@@ -3,7 +3,7 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import { parseExamples } from '@engine/execution/examples.ts';
 import { formatInstruction } from '@engine/elements/nodes/ai/prompt.ts';
 import { AiNodeRunner } from '@engine/elements/nodes/ai/AiNodeRunner.ts';
-import { keptAnswer, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
+import { exampleFor, keptAnswer, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
 import { readPair, withExpect, withInput } from './examplePair';
 
 describe('"Keep this result"', () => {
@@ -88,5 +88,19 @@ describe('▶ Try it', () => {
     const node = NODE_KINDS.code.create('maker');
     node.inputs = [];
     expect(tryInputs(node, undefined)).toEqual({});
+  });
+});
+
+describe('a check written in step 2', () => {
+  it('is written against an input of {} for a node that takes nothing in, and waits for step 1 otherwise', () => {
+    // A node with no inputs has no box to type its example into: it is run on nothing.
+    const maker = NODE_KINDS.code.create('maker');
+    maker.inputs = [];
+    const made = withExpect(exampleFor(maker, ''), '{"output": 1}');
+    expect(parseExamples(made).examples).toEqual([{ title: 'The example', inputs: {}, expect: { output: 1 } }]);
+
+    const worker = NODE_KINDS.code.create('worker');
+    expect(exampleFor(worker, '')).toBe('');
+    expect(parseExamples(withExpect(exampleFor(worker, ''), '{"output": 1}')).examples).toEqual([]);
   });
 });

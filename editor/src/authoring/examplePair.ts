@@ -113,6 +113,10 @@ function without(first: string, role: Role): string {
 /** An expect block that names nothing: "only that it runs". */
 const checksNothing = (candidate: ExampleBlock): boolean => candidate.role === 'expect' && candidate.body.replace(/\s/g, '') === '{}';
 
+/** Whether *section* still holds an example: an input, or something checked beyond that it runs. */
+const holdsExample = (section: string): boolean => exampleBlocks(section).some((candidate) => candidate.role === 'input'
+  || candidate.role === 'judge' || (candidate.role === 'expect' && !checksNothing(candidate)));
+
 /**
  * *text* with its first pair's *role* block set to *body*: replaced where it
  * is, added where it belongs when it is not there, and a first section begun
@@ -121,14 +125,33 @@ const checksNothing = (candidate: ExampleBlock): boolean => candidate.role === '
  * A pair that gets an input and has nothing to check is given an empty expect
  * block: "it runs on this" is a check, and without one `check` reports the
  * section as unreadable and `test` and ✨ pass it over.
+ *
+ * An input emptied is the example taken away, not one run on nothing. It was
+ * written as `{}`, which `test` then ran the node on and the box showed again
+ * when the dialog was reopened, and there was no way left to remove an
+ * example. An expectation or a judge written without an input stays, in a
+ * section with no input block: `check` says what it lacks, `test` runs nothing
+ * on it, and what was written in step 2 is still there once step 1 is filled.
+ * (A node with no inputs is run on `{}`, and its caller writes that:
+ * `nodeStepRules.exampleFor`.)
+ *
+ * A first section left holding no example is dropped -- unless another
+ * section follows. That one would then be the first, and the next keystroke
+ * of someone who emptied the box to type it afresh would land in an example
+ * written by hand; the emptied one stays instead, for `check` to point at.
  */
 function withBlock(text: string | undefined, role: Role, body: string): string {
   const { before, first, after } = cut(text ?? '');
+  if (role === 'input' && !body.trim()) {
+    if (!first) return text ?? '';
+    const section = without(first, 'input');
+    return holdsExample(section) || after ? assemble(before, section, after) : before;
+  }
   if (!first) {
+    const section = `## ${PAIR_TITLE}\n\n${block(role, body)}${role === 'input' ? `\n\n${block('expect', '{}')}` : ''}\n`;
+    if (!holdsExample(section)) return text ?? '';
     const lead = before.trim() ? `${before.trimEnd()}\n\n` : '';
-    const input = role === 'input' ? body : '{}';
-    const checked = role === 'input' ? block('expect', '{}') : block(role, body);
-    return `${lead}## ${PAIR_TITLE}\n\n${block('input', input)}\n\n${checked}\n`;
+    return `${lead}${section}`;
   }
   const blocks = exampleBlocks(first);
   const own = blocks.find((candidate) => candidate.role === role);
@@ -152,7 +175,7 @@ function withBlock(text: string | undefined, role: Role, body: string): string {
     const input = exampleBlocks(section).find((candidate) => candidate.role === 'input')!;
     section = `${section.slice(0, input.end)}\n\n${block('expect', '{}')}${section.slice(input.end)}`;
   }
-  return assemble(before, section, after);
+  return holdsExample(section) || after ? assemble(before, section, after) : before;
 }
 
 /** *text* with the first pair's input set to *body*, the JSON as typed. */
@@ -186,6 +209,48 @@ export function withJudge(text: string | undefined, sentence: string): string {
   const unchecked = !exampleBlocks(section).some((candidate) => candidate.role === 'expect');
   const judged = assemble(before, section, after);
   return unchecked ? withExpect(judged, '{}') : judged;
+}
+
+const has = (object: object, key: string): boolean => Object.prototype.hasOwnProperty.call(object, key);
+
+/**
+ * *text* with its examples keyed by the ports' names as they are now: for
+ * each name in *names* (`portRenames.renamedPorts`), an input block's key --
+ * and an expect block's, for an output -- renamed, or dropped where the port
+ * is gone. Every section, not only the first: `test` and `check` read them
+ * all, and hold each to the ports.
+ *
+ * A key is left where it is when the new name is a key of that block already:
+ * a rename typed through another port's name ("text2" to "text3" passes
+ * "text") must not overwrite that port's value on its way. A block that is not
+ * an object yet is left as typed.
+ */
+export function examplesFollowPorts(
+  text: string,
+  names: { inputs: Record<string, string | null>; outputs: Record<string, string | null> },
+): string {
+  const normal = text.replace(/\r\n/g, '\n');
+  const marker = normal.search(EXAMPLE_SECTION);
+  if (marker < 0) return text;
+  let out = normal;
+  let changed = false;
+  for (const own of exampleBlocks(normal).reverse()) {
+    if (own.start < marker || (own.role !== 'input' && own.role !== 'expect')) continue;
+    const fate = own.role === 'input' ? names.inputs : names.outputs;
+    const value = exampleObject(own.body);
+    if (!value) continue;
+    const entries: [string, unknown][] = [];
+    for (const [key, item] of Object.entries(value)) {
+      const into = has(fate, key) ? fate[key] : key;
+      if (into === null) continue;
+      entries.push([has(value, into) ? key : into, item]);
+    }
+    if (JSON.stringify(entries.map(([key]) => key)) === JSON.stringify(Object.keys(value))) continue;
+    const bodyAt = own.end - 3 - own.body.length;
+    out = `${out.slice(0, bodyAt)}${asExampleText(Object.fromEntries(entries))}\n${out.slice(own.end - 3)}`;
+    changed = true;
+  }
+  return changed ? out : text;
 }
 
 /** A value as the example holds it: JSON, two spaces, as it is read back. */

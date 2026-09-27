@@ -7,7 +7,7 @@
 import type { GraphNode, Wire } from '@/graph';
 import { promptText } from '@engine/elements/nodes/ai/prompt.ts';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
-import { asExampleText } from './examplePair';
+import { asExampleText, readPair, withInput } from './examplePair';
 
 /** What a node hands on, without the executor's own error port: what a body returns, and an example expects. */
 export function ownOutputs(outputs: Record<string, unknown> | undefined): Record<string, unknown> {
@@ -66,6 +66,17 @@ export function withPerItem(node: GraphNode, perItem: boolean, lists: string[] =
  */
 export function tryInputs(node: GraphNode, example: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   return example ?? (node.inputs.length ? undefined : {});
+}
+
+/**
+ * *examples* ready for step 2 to write a check into. A node with no inputs is
+ * run on nothing (`tryInputs`), and has no box to type that into, so its
+ * example's input is `{}` from the first check on. A node with inputs waits
+ * for step 1: an expectation written before it stands alone, and nothing is
+ * run on it until there is an input to run it on.
+ */
+export function exampleFor(node: GraphNode, examples: string): string {
+  return node.inputs.length || readPair(examples).inputText.trim() ? examples : withInput(examples, '{}');
 }
 
 /**
