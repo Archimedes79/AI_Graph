@@ -331,17 +331,23 @@ answer. A new node's is the standard one:
 
 ```
 Input:
-{Input Needs}         each input: its type, where it is wired from and what that node
-                      hands on, whether its file is read, and a sample (≤ 700 characters)
+{Input Needs}
+
 Output Example:
-{Output Example}      each output: where it goes and what the node there wants; output.md;
-                      the shape a run kept; the first 3 examples, what must come out
+{Output Example}
+
 Graph Context:
-{Graph}               the graph around the node ("Not given." until something says it)
+{Graph}
 
 Prompt:
 <what it should do>
 ```
+
+- `{Input Needs}`: each input -- its type, where it is wired from and what that node hands
+  on, whether its file is read -- and a sample of it (≤ 700 characters).
+- `{Output Example}`: each output -- where it goes and what the node there wants --
+  `output.md`, the shape a run kept, and the first 3 examples, what must come out.
+- `{Graph}`: the graph around the node; "Not given." until something says it.
 
 Filled, it reads like this -- followed by what the engine adds: for code, the typed
 signature to complete and the keys it must return; for an AI node, where to put its
