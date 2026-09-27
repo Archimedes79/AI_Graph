@@ -813,8 +813,10 @@ async function runNode(
  *
  * The list returned is the whole of it. Whoever holds the long-lived copy of
  * the graph -- the editor, a served page, the scheduler -- replays the list
- * into it instead of working the same thing out a second time, which is what
- * the editor's store used to do, in sixty lines that had already drifted.
+ * into it instead of working the same thing out a second time.
+ *
+ * Per port, as the round delivers: a port fed by several wires keeps the list
+ * of what arrived on them, not whichever wire came last.
  */
 function settleMemory(
   graph: Graph,
@@ -826,20 +828,29 @@ function settleMemory(
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const written: MemoryWrite[] = [];
 
+  const ports = new Map<string, { target: GraphNode; element: NodeRunner; port: string; wires: GraphEdge[]; loops: boolean }>();
   for (const edge of graph.edges) {
-    const source = outputs.get(edge.source_node_id);
-    if (!source || !(edge.source_port_id in source) || edge.target_port_id === RUN_PORT) continue;
-
+    if (edge.target_port_id === RUN_PORT) continue;
     const target = byId.get(edge.target_node_id);
     const element = target && registry.node(target.node_type);
     if (!target || !element?.isMemory) continue;
-    if (!feedback.has(edge.id) && !element.settlesOnArrival) continue;
+    const key = JSON.stringify([target.id, edge.target_port_id]);
+    const entry = ports.get(key) ?? { target, element, port: edge.target_port_id, wires: [], loops: false };
+    entry.wires.push(edge);
+    entry.loops ||= feedback.has(edge.id);
+    ports.set(key, entry);
+  }
 
-    const value = source[edge.source_port_id];
-    element.settleMemory(target, edge.target_port_id, value);
-    written.push({ node_id: target.id, port_id: edge.target_port_id, value });
+  for (const { target, element, port, wires, loops } of ports.values()) {
+    if (!loops && !element.settlesOnArrival) continue;
+    const delivered = wires.filter((edge) => edge.source_port_id in (outputs.get(edge.source_node_id) ?? {}));
+    if (!delivered.length) continue;
+    const values = delivered.map((edge) => outputs.get(edge.source_node_id)![edge.source_port_id]);
+    const value = wires.length > 1 ? values : values[0];
+    element.settleMemory(target, port, value);
+    written.push({ node_id: target.id, port_id: port, value });
 
-    if (!feedback.has(edge.id)) continue;
+    if (!loops) continue;
     // Said as having arrived, because it did -- only after the round rather
     // than in it. A node the event did not ask to run gets a result for this.
     let result = results.find((r) => r.node_id === target.id);
@@ -847,7 +858,7 @@ function settleMemory(
       result = { node_id: target.id, status: 'success', inputs: {}, outputs: {}, error: null };
       results.push(result);
     }
-    result.inputs = { ...result.inputs, [edge.target_port_id]: value };
+    result.inputs = { ...result.inputs, [port]: value };
   }
   return written;
 }

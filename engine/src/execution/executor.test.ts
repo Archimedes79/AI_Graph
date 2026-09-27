@@ -186,6 +186,34 @@ describe('executeGraph', () => {
     expect(store.config.data_value).toBe('fresh');
   });
 
+  it('keeps the list a port fed by two wires received, not the last wire\'s value', async () => {
+    // A data node fed by two nodes hands on both this round: it must keep both.
+    const store = node('store', 'data', { data_value: 'old' });
+    const runtime = { ...nowhere, code: { run: async (body: string) => ({ v: body }) } };
+    const run = await executeGraph(
+      graphOf([node('a', 'code', { code: 'A' }), node('b', 'code', { code: 'B' }), store],
+        [edge('ea', 'a', 'v', 'store', 'input'), edge('eb', 'b', 'v', 'store', 'input')]),
+      { runtime, registry },
+    );
+    expect(run.node_results.find((r) => r.node_id === 'store')!.outputs.output).toEqual(['A', 'B']);
+    expect(store.config.data_value).toEqual(['A', 'B']);
+    expect(run.memory).toEqual([{ node_id: 'store', port_id: 'input', value: ['A', 'B'] }]);
+  });
+
+  it('shows a block fed across a loop by two wires both of them', async () => {
+    const page = node('page', 'gui', { gui_widgets: [{ id: 'q', kind: 'text_io', mode: 'input', value: 'go' }, { id: 'show', kind: 'table' }] });
+    const runtime = { ...nowhere, code: { run: async (body: string) => ({ output: body }) } };
+    const run = await executeGraph(
+      graphOf([page, node('a', 'code', { code: 'answer a' }), node('b', 'code', { code: 'answer b' })], [
+        edge('e1', 'page', 'q_out', 'a', 'x'), edge('e2', 'page', 'q_out', 'b', 'x'),
+        edge('e3', 'a', 'output', 'page', 'show_in'), edge('e4', 'b', 'output', 'page', 'show_in'),
+      ]),
+      { runtime, registry },
+    );
+    expect(run.node_results.find((r) => r.node_id === 'page')!.inputs.show_in).toEqual(['answer a', 'answer b']);
+    expect(run.memory).toEqual([{ node_id: 'page', port_id: 'show_in', value: ['answer a', 'answer b'] }]);
+  });
+
   it('keeps every output in the result when two share a label', async () => {
     // Every new output node is called "Result". Two of them used to leave the
     // run's result with one value, the other gone without a word.
