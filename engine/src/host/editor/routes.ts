@@ -229,15 +229,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     providers: () => settings.providerStatus(),
 
-    async detectFormat(asked) {
-      if (!asked.path) throw new Refusal(400, "Missing required field 'path'");
-      try {
-        return { format: await files.detectFormat(asked.path) };
-      } catch (error) {
-        throw new Refusal(404, message(error));
-      }
-    },
-
     async openExternal(asked, { loopback }) {
       if (!loopback) throw new Refusal(403, 'Opening files is only offered on this machine.');
       if (!asked.graph_path || !asked.node_id) throw new Refusal(400, "Missing 'graph_path' or 'node_id'.");

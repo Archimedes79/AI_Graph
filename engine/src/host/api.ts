@@ -344,7 +344,6 @@ export const API = {
   saveAiSettings: route<SettingsPatch, SettingsStatus>('POST', '/api/ai/settings', 'editor'),
   providers: route<void, ProviderStatus>('GET', '/api/ai/providers', 'editor'),
 
-  detectFormat: route<{ path: string }, { format: string }>('POST', '/api/files/detect-format', 'editor'),
   /** A node's (or block's) body file in a project -- `nodes/<id>/code.js` -- in the person's own editor. Loopback only: it starts a program. */
   openExternal: route<{ graph_path: string; node_id: string; widget_id?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
   /** The file is the body and its name rides on the query: nothing multipart to get wrong. */

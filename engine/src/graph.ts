@@ -37,8 +37,6 @@ export interface Port {
   multi: boolean;
   required: boolean;
   description: string;
-  /** How a wired file is read, when the element reads files at all. */
-  format?: string | null;
 }
 
 /** An element's stored settings. Its own element narrows this; nothing else may. */

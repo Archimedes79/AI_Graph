@@ -183,7 +183,6 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                       title={fires
                         ? `${port.description || port.name} — using this block starts the graph, from whatever this is wired to.`
                         : (port.description || port.name)}
-                      onClick={(e) => { e.stopPropagation(); data.onPortEdit(id, port.id); }}
                     />
                     <span className="text-xs truncate" style={{ color: fires ? '#fbbf24' : '#86efac' }}>
                       {fires && <span title="Using this block starts the graph">⚡ </span>}
@@ -224,7 +223,6 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                           flexShrink: 0,
                         }}
                         title={port.description || port.name}
-                        onClick={(e) => { e.stopPropagation(); data.onPortEdit(id, port.id); }}
                       />
                     </div>
                     {CanvasPreview && (
@@ -281,10 +279,6 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                     flexShrink: 0,
                   }}
                   title={port.description || port.name}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    data.onPortEdit(id, port.id);
-                  }}
                 />
                 <span className="text-xs" style={{ color: MUTED }}>
                   {port.name}
@@ -360,10 +354,6 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                 flexShrink: 0,
               }}
               title={port.description || port.name}
-              onClick={(event) => {
-                event.stopPropagation();
-                data.onPortEdit(id, port.id);
-              }}
             />
           </div>
         ))}

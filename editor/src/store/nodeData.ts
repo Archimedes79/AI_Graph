@@ -6,6 +6,5 @@ export interface RFNodeData {
   graphNode: GraphNode;
   onEdit: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
-  onPortEdit: (nodeId: string, portId: string) => void;
   executionStatus?: ExecutionStatus;
 }

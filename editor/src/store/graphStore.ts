@@ -75,7 +75,6 @@ export interface GraphStore {
   // UI state
   selectedNodeId: string | null;
   editingNodeId: string | null;
-  editingPort: { nodeId: string; portId: string } | null;
 
   // Actions
   setMetadata: (meta: Partial<GraphMetadata>) => void;
@@ -104,7 +103,6 @@ export interface GraphStore {
   setRFEdges: (edges: Edge[]) => void;
   setSelectedNode: (nodeId: string | null) => void;
   setEditingNode: (nodeId: string | null) => void;
-  setEditingPort: (port: { nodeId: string; portId: string } | null) => void;
   /**
    * `ran` is the part of *result* that is new, when a page event re-ran only
    * some nodes and the rest was kept from before. Memory is settled from that
@@ -359,7 +357,6 @@ const HISTORY_LIMIT = 50;
 interface NodeCallbacks {
   onEdit: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
-  onPortEdit: (nodeId: string, portId: string) => void;
 }
 
 /** The size a node was given, if it was given one, as ReactFlow lays it out. */
@@ -449,7 +446,6 @@ export const useGraphStore = create<GraphStore>()(
     textOutputWindows: [],
     selectedNodeId: null,
     editingNodeId: null,
-    editingPort: null,
     subgraphStack: [],
     savedSnapshot: null,
     past: [],
@@ -480,7 +476,6 @@ export const useGraphStore = create<GraphStore>()(
           graphNode: defaults,
           onEdit: (nid) => get().setEditingNode(nid),
           onDelete: (nid) => get().deleteNode(nid),
-          onPortEdit: (nid, pid) => get().setEditingPort({ nodeId: nid, portId: pid }),
         },
       };
       set((state) => {
@@ -594,11 +589,6 @@ export const useGraphStore = create<GraphStore>()(
         state.editingNodeId = nodeId;
       }),
 
-    setEditingPort: (port) =>
-      set((state) => {
-        state.editingPort = port;
-      }),
-
     setExecutionResult: (shown, ran) =>
       set((state) => {
         state.executionResult = shown;
@@ -649,7 +639,6 @@ export const useGraphStore = create<GraphStore>()(
       const callbacks = {
         onEdit: (nid: string) => get().setEditingNode(nid),
         onDelete: (nid: string) => get().deleteNode(nid),
-        onPortEdit: (nid: string, pid: string) => get().setEditingPort({ nodeId: nid, portId: pid }),
       };
 
       const { rfNodes, rfEdges } = buildReactFlowGraph(normalizedGraph, callbacks);
@@ -822,7 +811,6 @@ export const useGraphStore = create<GraphStore>()(
       const { rfNodes, rfEdges } = buildReactFlowGraph(graph, {
         onEdit: (nid: string) => get().setEditingNode(nid),
         onDelete: (nid: string) => get().deleteNode(nid),
-        onPortEdit: (nid: string, pid: string) => get().setEditingPort({ nodeId: nid, portId: pid }),
       });
       set((state) => {
         state.metadata = graph.metadata;
@@ -834,7 +822,6 @@ export const useGraphStore = create<GraphStore>()(
         // graph's run floating over this one, a selection nobody can see.
         state.executionResult = null;
         state.editingNodeId = null;
-        state.editingPort = null;
         state.selectedNodeId = null;
         state.textOutputWindows = [];
       });

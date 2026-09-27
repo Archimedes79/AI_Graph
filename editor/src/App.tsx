@@ -11,7 +11,6 @@ import TopGraphOnly from '@/page/TopGraphOnly';
 import ViewTabs, { type EditorView } from '@/app/ViewTabs';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import NodeEditor from '@/canvas/NodeEditor';
-import ConnectorEditor from '@/canvas/ConnectorEditor';
 import ResultsPanel from '@/app/ResultsPanel';
 
 import SettingsDialog from '@/app/SettingsDialog';
@@ -28,8 +27,6 @@ export default function App() {
   const addNode = useGraphStore((s) => s.addNode);
   const editingNodeId = useGraphStore((s) => s.editingNodeId);
   const setEditingNode = useGraphStore((s) => s.setEditingNode);
-  const editingPort = useGraphStore((s) => s.editingPort);
-  const setEditingPort = useGraphStore((s) => s.setEditingPort);
   const loadGraph = useGraphStore((s) => s.loadGraph);
   // Saving and exporting are about the whole document, whichever level of it
   // the canvas is showing; running is about the level you are looking at.
@@ -457,14 +454,6 @@ export default function App() {
           <NodeEditor
             nodeId={editingNodeId}
             onClose={() => setEditingNode(null)}
-          />
-        )}
-
-        {editingPort && (
-          <ConnectorEditor
-            nodeId={editingPort.nodeId}
-            portId={editingPort.portId}
-            onClose={() => setEditingPort(null)}
           />
         )}
 
