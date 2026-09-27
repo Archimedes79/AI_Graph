@@ -432,7 +432,7 @@ function buildReactFlowGraph(graph: Graph) {
     data: { graphNode: gn },
   }));
 
-  // How a wire looks is the canvas's to say (`canvas/wires.ts`): it depends
+  // How a wire looks is the canvas's to say (`canvas/wireLook.ts`): it depends
   // on what is selected there, which the document knows nothing of.
   const rfEdges: Edge[] = graph.edges.map((ge) => ({
     id: ge.id,

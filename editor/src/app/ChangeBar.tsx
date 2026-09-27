@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { Graph } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
@@ -39,6 +39,13 @@ export default function ChangeBar() {
   const [change, setChange] = useState<Change>({ phase: 'idle' });
   // Only the last change asked for is still wanted: Stop leaves the one on its way unwanted.
   const asked = useRef(lastAsked());
+  // Another graph opened, or a level in or out of this one: a change asked of
+  // the graph before -- on its way, or back and not applied -- is not this one's.
+  const opened = useGraphStore((s) => s.document);
+  useEffect(() => {
+    asked.current.cancel();
+    setChange({ phase: 'idle' });
+  }, [opened]);
 
   const asking = change.phase === 'asking';
 
@@ -53,7 +60,6 @@ export default function ChangeBar() {
       return;
     }
     const graph = store.exportGraph();
-    const document = store.document;
     const wanted = asked.current.ask();
     setChange({ phase: 'asking', said: words, calls: [] });
     setText('');
@@ -63,11 +69,6 @@ export default function ChangeBar() {
         (calls) => { if (wanted()) setChange((now) => (now.phase === 'asking' ? { ...now, calls } : now)); },
       );
       if (!wanted()) return;
-      // Another graph is open now, or a level in or out of it: what came back is not its.
-      if (useGraphStore.getState().document !== document) {
-        setChange({ phase: 'idle' });
-        return;
-      }
       setChange({ phase: 'ready', said: words, graph: result.graph, explanation: result.explanation, sent: JSON.stringify(graph) });
     } catch (error) {
       if (!wanted()) return;
