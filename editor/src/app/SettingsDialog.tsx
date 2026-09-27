@@ -91,9 +91,8 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}
             >
               When this graph is deployed, whoever runs it can point it somewhere else without
-              editing it — <code>--ai-provider</code>/<code>--ai-model</code> on the command
-              line, an <code>AI_GRAPH_AI_PROVIDER</code> environment variable, or an{' '}
-              <code>ai-settings.json</code> next to the executable all take precedence over this.
+              editing it — an <code>AI_GRAPH_AI_PROVIDER</code> environment variable or an{' '}
+              <code>ai-settings.json</code> next to the executable both take precedence over this.
             </div>
           </section>
 

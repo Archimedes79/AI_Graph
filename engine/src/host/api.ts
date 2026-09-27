@@ -222,7 +222,7 @@ export interface SettingsPatch {
   api_keys?: Record<string, string>;
   /** Providers whose stored key is to be removed -- distinct from "left blank". */
   clear_keys?: string[];
-  ai?: { provider?: string; model?: string; force?: boolean };
+  ai?: { provider?: string; model?: string };
   codegen?: { provider?: string; model?: string };
 }
 
