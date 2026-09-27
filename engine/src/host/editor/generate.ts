@@ -58,7 +58,7 @@ const PREVIEW_AI: AiService = {
 // ---------------------------------------------------------------------------
 
 /** An AI service that writes down every call it makes, for one generation. */
-export function recording(ai: AiService, calls: AICall[]): AiService {
+function recording(ai: AiService, calls: AICall[]): AiService {
   return {
     async complete(request: AiRequest): Promise<string> {
       const entry: AICall = {
@@ -439,7 +439,7 @@ function definitionFaults(kind: 'input' | 'output', text: string, shape: Shape):
 // The one entry point
 // ---------------------------------------------------------------------------
 
-export interface GenerateDeps {
+interface GenerateDeps {
   ai: AiService;
   code: CodeService;
   /** Reads the example file ✨ Input is given, when the request does not bring its text. */

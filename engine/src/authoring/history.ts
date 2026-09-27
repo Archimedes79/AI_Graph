@@ -12,7 +12,7 @@
 import type { AICall } from '../host/api.ts';
 
 /** How much history a node keeps: about 500 KB of text. */
-export const HISTORY_LIMIT = 500 * 1024;
+const HISTORY_LIMIT = 500 * 1024;
 
 /** Where an exchange begins: its heading, with the date and the time it happened. */
 const ENTRY = /^## \d{4}-\d{2}-\d{2} \d{2}:\d{2} · /m;

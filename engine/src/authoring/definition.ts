@@ -70,7 +70,7 @@ export function definitionsIn(node: Pick<GraphNode, 'config'>): Definitions {
 }
 
 /** A definition's example, or the sentence that says why it cannot be read. */
-export type DefinitionExample = { example: Record<string, unknown> } | { problem: string };
+type DefinitionExample = { example: Record<string, unknown> } | { problem: string };
 
 const EXPORTS = /\bmodule\.exports\s*=/;
 

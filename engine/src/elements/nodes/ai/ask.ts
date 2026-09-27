@@ -11,7 +11,7 @@ import { imageDataUrl, imageMediaType } from '../../../execution/images.ts';
 import { assemblePrompt } from './prompt.ts';
 
 /** How often one run of a body may ask for the model. A loop that forgot to end must not spend a budget. */
-export const LLM_CALLS_PER_RUN = 25;
+const LLM_CALLS_PER_RUN = 25;
 
 export interface AskSettings {
   /** What the model is told before what arrived: an ai node's prompt.md, filled in. Empty: nothing but what arrived. */

@@ -81,7 +81,7 @@ export function everyGraphIn(graph: Graph, registry: Runners, inside = ''): { gr
 }
 
 /** One node's example run, and the node, with the way down to it. */
-export interface TestedExample { inside: string; nodeId: string; result: ExampleRun }
+interface TestedExample { inside: string; nodeId: string; result: ExampleRun }
 
 /**
  * Run the example of every node that has one -- an input.js, or no inputs to
