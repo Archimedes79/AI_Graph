@@ -2,8 +2,6 @@
   "label": "References",
   "description": "References reviewer: the references.",
   "config": {
-    "ai_model": "gemini-flash-lite-latest",
-    "ai_provider": "google",
     "batch_mode": "whole_list",
     "read_file_inputs": false,
     "temperature": 0.2

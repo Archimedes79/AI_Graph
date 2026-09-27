@@ -2,8 +2,6 @@
   "label": "Judge",
   "description": "Merges the five reviews into one ranked list and a recommendation",
   "config": {
-    "ai_model": "gemini-flash-lite-latest",
-    "ai_provider": "google",
     "batch_mode": "whole_list",
     "read_file_inputs": false,
     "temperature": 0.2

@@ -2,8 +2,6 @@
   "label": "Each file",
   "description": "Summarizes one file; runs once per file in the folder",
   "config": {
-    "ai_model": "gemini-flash-lite-latest",
-    "ai_provider": "google",
     "batch_concurrency": 3,
     "batch_mode": "per_item",
     "read_file_inputs": true,
