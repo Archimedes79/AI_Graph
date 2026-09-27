@@ -84,6 +84,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               onModelChange={(model) => setAiDefaults({ model })}
               allowDefault
               defaultLabel="Unset (falls back to Ollama / llama3)"
+              readByRuns
             />
             <div
               className="text-xs rounded-lg px-3 py-2 mt-3"

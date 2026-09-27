@@ -58,6 +58,25 @@ function useProviderStatus(): ProviderStatus | null {
   return status;
 }
 
+/** A provider and a model, as the graph's default and the machine's runtime target say them. */
+type Home = { provider: string; model: string };
+
+/**
+ * The model a run calls when a picker a run reads leaves the model empty, or
+ * '' when there is none and the run will refuse.
+ *
+ * An empty model is filled from the first place that names *the same
+ * provider* -- the graph's own default, then this machine's -- and from
+ * nowhere else: the engine no longer sends one provider another's model, which
+ * it can only answer with a 404 that reads like a broken endpoint. `default`
+ * follows the first place that names a provider at all.
+ */
+export function modelWhenEmpty(provider: string, homes: Array<Home | undefined>): string {
+  const named = homes.filter((home): home is Home => !!home?.provider && home.provider !== 'default');
+  const calls = provider === 'default' ? named[0]?.provider : provider;
+  return named.find((home) => home.provider === calls && home.model)?.model ?? '';
+}
+
 interface ProviderModelSelectProps {
   provider: AIProvider;
   model: string;
@@ -73,10 +92,18 @@ interface ProviderModelSelectProps {
   allowDefault?: boolean;
   /** Wording for the `default` option; required for it to read sensibly. */
   defaultLabel?: string;
+  /**
+   * A run reads this choice (an AI node, the graph's default), so an empty
+   * model means what `modelWhenEmpty` says -- not the provider's own default,
+   * which is what the generation AI takes.
+   */
+  readByRuns?: boolean;
+  /** With `readByRuns`: the graph's own default, which an empty model is filled from first. */
+  graphDefault?: Home;
 }
 
 export default function ProviderModelSelect({
-  provider, model, onProviderChange, onModelChange, compact, allowDefault, defaultLabel,
+  provider, model, onProviderChange, onModelChange, compact, allowDefault, defaultLabel, readByRuns, graphDefault,
 }: ProviderModelSelectProps) {
   const status = useProviderStatus();
   const listId = useId();
@@ -97,9 +124,14 @@ export default function ProviderModelSelect({
   // an LM Studio model id from memory is exactly the friction this removes.
   const effectiveProvider = provider === 'default' ? status?.runtime_target?.provider : provider;
   const servedModels = (effectiveProvider && status?.local?.[effectiveProvider]?.models) || [];
-  const placeholder = provider === 'default'
-    ? (status?.runtime_target?.model || 'default model')
-    : servedModels[0] ?? 'model name';
+  const fallback = readByRuns && status ? modelWhenEmpty(provider, [graphDefault, status.runtime_target]) : '';
+  const placeholder = readByRuns && status
+    // Left empty with nothing to fill it, a run refuses: the box says a model
+    // must be named rather than showing one a run would never send.
+    ? fallback || (servedModels[0] ? `required, e.g. ${servedModels[0]}` : 'required: name a model')
+    : provider === 'default'
+      ? (status?.runtime_target?.model || 'default model')
+      : servedModels[0] ?? 'model name';
 
   const selectClass = compact ? 'rounded px-2 py-1 text-xs' : 'w-full rounded-lg px-3 py-2 text-sm';
   const inputClass = compact ? 'rounded px-2 py-1 text-xs w-24' : 'w-full rounded-lg px-3 py-2 text-sm';
