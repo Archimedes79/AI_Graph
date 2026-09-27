@@ -163,7 +163,7 @@ turned out there was nothing to keep apart — see below.)
 | **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
 | `ElementRunner` | `config` · `texts` · `logic` | `catchesErrors` · `snippetFailure` · `runSnippet` | `generation` · `deployNeeds` |
 | `NodeRunner` | `nodeType` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `boundaryRole` · `valuePorts` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
-| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | — |
+| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | `receives` · `problems` |
 | `NodeGuiBuilder` | `nodeType` | — | **everything**: the palette, panels, what ✨ Generate is told |
 | `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, panels, what ✨ Generate is told |
 

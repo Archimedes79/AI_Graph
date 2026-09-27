@@ -221,7 +221,11 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  /** A block's ports are named after its id, so an id that is missing or shared is two blocks on one port. */
+  /**
+   * A block's ports are named after its id, so an id that is missing or
+   * shared is two blocks on one port. What is wrong with one block as it is
+   * written, the block says itself (`WidgetRunner.problems`).
+   */
   override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
     const found: Problem[] = [];
     const seen = new Set<string>();
@@ -232,12 +236,15 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
         found.push({ where, problem: `More than one block has the id "${block.id}".`, fix: 'Give every block on the page its own id.' });
       }
       seen.add(block.id);
-      if (!BY_KIND.has(block.kind)) {
+      const element = BY_KIND.get(block.kind);
+      if (!element) {
         found.push({
           where: `${where}, block "${block.id}"`,
           problem: `Unknown block kind "${block.kind}".`,
           fix: `Use one of: ${[...BY_KIND.keys()].join(', ')}.`,
         });
+      } else {
+        found.push(...element.problems(block, `${where}, block "${block.id}"`));
       }
     }
     return found;

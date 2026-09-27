@@ -3,9 +3,13 @@ import type { DeployNeeds } from '../../ElementRunner.ts';
 import type { Widget } from '../../WidgetRunner.ts';
 import type { Generation } from '../../../authoring/generation.ts';
 import { TRANSFORM_FIELDS } from '../TransformingDisplayRunner.ts';
+import type { Problem } from '../../../execution/wiring.ts';
 import { checkPlot } from './check.ts';
 
 export { PLOT_VIEW } from './view.ts';
+
+/** A call of `node.llm(…)` in a body: the call, not the name in passing. */
+const ASKS_A_MODEL = /\bnode\s*\.\s*llm\s*\(/;
 
 /** Points to draw: a list of numbers, or of {label, value}. */
 export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
@@ -40,6 +44,21 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
    */
   override deployNeeds(_widget: Widget): DeployNeeds {
     return { needsInterface: false, asksAi: false };
+  }
+
+  /**
+   * A body that asks a model fails on the page every time: it is handed a
+   * window there, not a node, and no page has a model to ask. ✨'s probe
+   * calls it as the page does and says so while it is written; one written
+   * by hand, or over MCP, `check` reported as fine.
+   */
+  override problems(widget: Widget, where: string): Problem[] {
+    if (!ASKS_A_MODEL.test(this.config(widget).code)) return [];
+    return [{
+      where,
+      problem: 'The chart\'s code asks a model (node.llm), and a chart is drawn in the page, which has none to ask: it fails there every time.',
+      fix: 'Ask in a node upstream and wire its answer into the chart; the chart only draws what arrives.',
+    }];
   }
 
   /**

@@ -3,6 +3,7 @@
 import type { Port, RawConfig, WidgetKind } from '../graph.ts';
 import { ElementRunner } from './ElementRunner.ts';
 import type { Runtime } from './Runtime.ts';
+import type { Problem } from '../execution/wiring.ts';
 
 /**
  * How a block sits on the page. Nothing an element ever reads to decide what
@@ -128,6 +129,15 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
    */
   receives(_widget: Widget): string | undefined {
     return undefined;
+  }
+
+  /**
+   * What is wrong with this block as written, for `check`: the page asks each
+   * of its blocks (`GuiNodeRunner.problems`), saying *where* it is. Nothing,
+   * for a kind that cannot be written wrong in a way its run would not say.
+   */
+  problems(_widget: Widget, _where: string): Problem[] {
+    return [];
   }
 
 }

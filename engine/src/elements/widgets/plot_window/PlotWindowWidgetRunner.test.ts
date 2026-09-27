@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PlotWindowWidgetRunner } from './PlotWindowWidgetRunner.ts';
+import { parseGraph } from '../../../graph.ts';
+import { problemsIn } from '../../../project/check.ts';
 
 /**
  * A chart is the one block a run does not draw.
@@ -63,6 +65,18 @@ describe('a chart, from the engine', () => {
   it('never asks a bundle for a model: its body runs in the page, which has none to ask', () => {
     const asking = { id: 'c', kind: 'plot_window', label: '', w: 8, h: 4, tone: 'plain', config: { code: 'async function run(i, node) { return node.llm({}); }' } } as const;
     expect(element.deployNeeds(asking as never).asksAi).toBe(false);
+  });
+
+  it('is reported by `check` when its code asks a model, which it cannot do in the page', () => {
+    // The bug: such a chart failed on every page with "node.llm is not a
+    // function" while `check` printed ✓ for its graph.
+    const page = (code: string) => parseGraph({
+      nodes: [{ id: 'page', node_type: 'gui', config: { gui_widgets: [{ id: 'temps', kind: 'plot_window', label: 'Temperatures', code }] } }],
+    });
+    const asking = problemsIn(page('async function run(inputs, node) { return { value: await node.llm({ prompt: "Plot it." }) }; }'));
+    expect(asking).toEqual([expect.objectContaining({ where: expect.stringContaining('block "temps"'), problem: expect.stringContaining('asks a model (node.llm)') })]);
+    // Saying there is none, in passing, is no call.
+    expect(problemsIn(page('// no node.llm in a page\nfunction draw(data) { return data ?? []; }'))).toEqual([]);
   });
 
   describe('what the contract asks for', () => {
