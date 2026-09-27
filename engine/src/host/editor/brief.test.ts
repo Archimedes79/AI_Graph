@@ -1,48 +1,67 @@
 import { describe, it, expect } from 'vitest';
-import { PROMPT_VARIABLES } from '../../authoring/promptFile.ts';
-import { promptVariables } from './brief.ts';
+import { parseGraph, type GraphNode } from '../../graph.ts';
+import { BUDGET, exampleFile, inputDefinition, outputDefinition, variables } from './brief.ts';
 
-/**
- * What the three variables of a node's `prompt.md` say, as the person reads
- * them in what ✨ sends: each says something even for a node that has nothing
- * yet, so the template never reads as a heading over nothing.
- */
-describe('the variables of a node\'s prompt', () => {
-  const request = {
-    element: 'code', prompt: 'Count the rows.', inputs: ['csv', 'top'], outputs: ['count'],
-    input_types: { csv: 'file_path', top: 'number' }, read_file_ports: ['csv'],
-    input_sources: { csv: '"Page" (port "CSV file")' },
-    output_targets: { count: '"Result" (port "Value")' },
-    output_format: 'The number of data rows, without the header.',
-    examples: '## Two rows\n\n```json input\n{"csv": "example/rows.csv", "top": 1}\n```\n\n```json expect\n{"count": 2}\n```\n',
-  };
+const port = (id: string, kind: 'input' | 'output', extra: Record<string, unknown> = {}) =>
+  ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '', ...extra });
 
-  it('are exactly the three the template may name', () => {
-    expect(Object.keys(promptVariables(request, 'code')).sort()).toEqual([...PROMPT_VARIABLES].sort());
+const node = (config: Record<string, unknown> = {}): GraphNode => parseGraph({
+  metadata: { name: 't' },
+  nodes: [{
+    id: 'rows', node_type: 'code', label: 'Rows', description: 'One row per file.',
+    inputs: [port('files', 'input', { data_type: 'file_path', multi: true, description: 'Every file in the folder' }), port('top', 'input', { data_type: 'number' })],
+    outputs: [port('rows', 'output', { multi: true }), port('error', 'output')],
+    config,
+  }],
+  edges: [],
+}).nodes[0];
+
+describe('{Input Definition}', () => {
+  it('is input.js as it is, while there is one', () => {
+    expect(inputDefinition({ node: node({ input_definition: '  module.exports = { "top": 3 };\n' }) }, [])).toBe('module.exports = { "top": 3 };');
   });
 
-  it('say each input -- its type, that its file is read, where from -- and its sample only where there is one', () => {
-    const needs = promptVariables(request, 'code', { values: { csv: 'a\nb', top: 1 }, origin: 'the last run' })['Input Needs'];
-    expect(needs).toContain('- `csv` (file_path)\n  a path: the node reads the file there, and is handed its text\n  from "Page" (port "CSV file")');
-    expect(needs).toContain('sample, from the last run: "a\\nb"');
-    expect(needs).toContain('- `top` (number)\n  not wired yet');
-    expect(promptVariables(request, 'code')['Input Needs']).not.toContain('sample');
+  it('is each input from its wiring while there is none: its type, what it is, where from', () => {
+    const said = inputDefinition({ node: node({ batch_mode: 'per_item' }), input_sources: { files: '"Page" (port "Folder")' } }, ['files']);
+    expect(said).toBe([
+      'None yet. Its inputs:',
+      '- `files` (a path: the node reads the file there, and is handed its text): Every file in the folder',
+      '  from "Page" (port "Folder")',
+      '- `top` (number)',
+      '  not wired yet',
+      'A list arrives one item at a time: each call is handed one item.',
+    ].join('\n'));
+  });
+});
+
+describe('{Output Definition}', () => {
+  it('is each output while there is no output.js: where it goes and what is wanted there -- the error port is the executor\'s', () => {
+    expect(outputDefinition({ node: node(), output_targets: { rows: '"Page" (port "table"), which wants rows' } })).toBe([
+      'None yet. Its outputs:',
+      '- `rows`',
+      '  to "Page" (port "table"), which wants rows',
+    ].join('\n'));
   });
 
-  it('say each output, where it goes, its definition and what the examples must give', () => {
-    const example = promptVariables(request, 'code')['Output Example'];
-    expect(example).toContain('- `count`\n  to "Result" (port "Value")');
-    expect(example).toContain('Its output definition (output.md):\nThe number of data rows, without the header.');
-    expect(example).toContain('Examples -- the result is checked against these:\n- Two rows');
-    expect(example).toContain('must return, at least: {"count":2}');
+  it('is output.js as it is, while there is one', () => {
+    expect(outputDefinition({ node: node({ output_definition: 'module.exports = { "rows": [] };' }) })).toBe('module.exports = { "rows": [] };');
   });
+});
 
-  it('say so where a node has nothing yet', () => {
-    const empty = promptVariables({ element: 'code', prompt: '' }, 'code');
-    expect(empty).toEqual({ 'Input Needs': 'Nothing is wired in.', 'Output Example': 'Nothing is said about it yet.', Graph: 'Not given.' });
+describe('{Example File}', () => {
+  it('is its path and the start of it -- or that there is none, or that it could not be read', () => {
+    expect(exampleFile(undefined)).toBe('None.');
+    expect(exampleFile({ path: 'a.csv', text: 'x,y\n1,2' })).toBe('a.csv:\nx,y\n1,2');
+    expect(exampleFile({ path: 'gone.csv' })).toBe('gone.csv (it could not be read)');
+    expect(exampleFile({ path: 'big.csv', text: 'z'.repeat(BUDGET.exampleFile + 50) })).toMatch(/… \(50 more characters not shown\)$/);
   });
+});
 
-  it('carry the graph around the node where the request says it', () => {
-    expect(promptVariables({ ...request, graph_context: 'A page with one chart.' }, 'code').Graph).toBe('A page with one chart.');
+describe('every variable', () => {
+  it('is filled, the graph around the node said as the editor built it', () => {
+    const values = variables({ node: node(), context: 'Graph: Files' }, []);
+    expect(values['Node Description']).toBe('# Rows (ID rows, code node)\n\nOne row per file.');
+    expect(values.Context).toBe('Graph: Files');
+    expect(variables({ node: node() }, []).Context).toBe('Not given.');
   });
 });

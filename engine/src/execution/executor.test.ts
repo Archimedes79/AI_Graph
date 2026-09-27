@@ -374,7 +374,7 @@ describe('what a run leaves on the page', () => {
           { id: 'a', kind: 'text_io', mode: 'input', value: '' },
           { id: 'b', kind: 'text_io', mode: 'input', value: '' },
         ] }),
-        node('ask', 'ai', { system_prompt: 'Answer.' }),
+        node('ask', 'ai', { prompt: 'Answer.' }),
       ],
       [edge('ea', 'page', 'a_out', 'ask', 'message'), edge('eb', 'page', 'b_out', 'ask', 'message')],
     );
@@ -458,7 +458,7 @@ describe('one node tried by itself', () => {
   it('stands still where a run would, with the run\'s reason, and asks no model', async () => {
     let asked = 0;
     const runtime = quietRuntime({ ai: { complete: async () => { asked += 1; return 'answer'; } } });
-    const ask = node('ask', 'ai', { system_prompt: 'Answer.' });
+    const ask = node('ask', 'ai', { prompt: 'Answer.' });
     ask.inputs = [{ id: 'message', name: 'm', kind: 'input', data_type: 'text', multi: false, required: false, description: '' }];
     const graph = graphOf([node('src', 'code'), ask], [edge('e', 'src', 'out', 'ask', 'message')]);
     const alone = await executeNode(graph, 'ask', { message: '' }, { runtime, registry });
@@ -476,11 +476,11 @@ describe('one node tried by itself', () => {
     expect(result.error).toMatch(/ENOENT: data\.csv/);
   });
 
-  it('says it broke its output interface, as a run says it', async () => {
-    const make = node('make', 'code', { code: 'x', output_schema: { type: 'object', properties: { n: { type: 'number' } } } });
+  it('says what does not fit its output.js, as a run says it', async () => {
+    const make = node('make', 'code', { code: 'x', output_definition: 'module.exports = { "n": 1.5 };' });
     make.outputs = [{ id: 'n', name: 'n', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }];
     const runtime = quietRuntime({ code: { run: async () => ({ n: 'not a number' }) } });
     const alone = await executeNode(graphOf([make]), 'make', {}, { runtime, registry });
-    expect(alone.messages?.[0]).toMatch(/Does not match its output interface/);
+    expect(alone.messages?.[0]).toBe('Does not fit its output.js: output.n is string; output.js says number');
   });
 });

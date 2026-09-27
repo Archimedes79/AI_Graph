@@ -7,8 +7,7 @@
 //         count/            one folder per node, by id
 //           node.json       its name and its settings
 //           interface.json  what goes in and what comes out
-//           code.js         what the element keeps in files: `NodeRunner.texts`
-//           example/        the files its example reads: `execution/exampleFiles.ts`
+//           input.js …      what the element keeps in files: `NodeRunner.texts`
 //         page/
 //           node.json       a page's blocks are settings: they live here
 //           interface.json
@@ -36,8 +35,6 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry } from '../elements/registry.ts';
-import { shippedText } from '../elements/NodeRunner.ts';
-import { EXAMPLE_DIR, EXAMPLE_FILES, exampleFilesOf, isExampleFileName } from '../execution/exampleFiles.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 import { FLOW_FILE, flowOf, graphFrom } from './flow.ts';
 import { folderName } from './names.ts';
@@ -103,8 +100,8 @@ export interface ProjectText {
   path: string;
   /** The node's config, where the field lives. */
   holder: Record<string, unknown>;
-  /** See `TextFile`: what the file says while nobody has written their own. */
-  standard?: string;
+  /** See `TextFile`: a value kept as JSON. */
+  json: boolean;
 }
 
 /**
@@ -133,7 +130,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
     for (const text of registry.node(node.node_type)?.texts(node) ?? []) {
       found.push({
         node_id: node.id, field: text.field, path: `${folder}/${text.file}`,
-        holder: node.config, standard: text.standard,
+        holder: node.config, json: text.json === true,
       });
     }
   }
@@ -171,19 +168,22 @@ export function nestedGraphs(graph: Graph): NestedGraph[] {
 /**
  * Exactly one newline is added on the way out and taken off on the way in, so
  * what was in the field is what comes back -- and a file saved by an editor
- * that ends every file with a newline reads as the text without it.
+ * that ends every file with a newline reads as the text without it. What is
+ * not text -- what a run left in a data node kept as text -- is written as
+ * its JSON, which is what reads back.
  */
 function toFile(value: unknown, json: boolean): string {
-  return `${json ? JSON.stringify(value, null, 2) : String(value)}\n`;
+  return `${json || typeof value !== 'string' ? JSON.stringify(value, null, 2) : value}\n`;
 }
 
-function fromFile(content: string): string {
-  return content.replace(/\r\n/g, '\n').replace(/\n$/, '');
-}
-
-/** Nobody's own: nothing, or the text the element itself ships. */
-function isStandard(value: unknown, text: { standard?: string }): boolean {
-  return isBlank(value) || shippedText(value, text);
+function fromFile(content: string, json: boolean, path: string): unknown {
+  const text = content.replace(/\r\n/g, '\n').replace(/\n$/, '');
+  if (!json) return text;
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new NotAGraph(`${path} is not valid JSON: ${(error as Error).message}`);
+  }
 }
 
 /** Nothing written: no file for it. A JSON value that is an empty object says nothing either. */
@@ -223,108 +223,6 @@ async function remember(path: string): Promise<void> {
 /** Forget every file: for tests, which reuse paths a real session would not. */
 export function forgetSeen(): void {
   seen.clear();
-  notText.clear();
-}
-
-// ---------------------------------------------------------------------------
-// A node's example files
-// ---------------------------------------------------------------------------
-//
-// Files like the texts, but a folder of them rather than one each: whatever is
-// in `nodes/<id>/example/` is the node's `example_files`, by the name an
-// example gives it -- "example/rows.csv". Read and written byte for byte: a
-// CSV somebody saved with Windows line ends is data, and a save that "tidied"
-// it would change what the example reads.
-
-/** The signature of each file in an example folder that is not text, so a look for changes does not read it again. */
-const notText = new Map<string, string>();
-
-/** Keeps a byte order mark as it is, and says so where the bytes are not UTF-8 at all. */
-const TEXT = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-
-/** Where node *nodeId*'s example files are, in the project folder *folder*. */
-function exampleDir(folder: string, nodeId: string): string {
-  return join(folder, nodeFolder(nodeId), EXAMPLE_DIR);
-}
-
-/** The files in node *nodeId*'s example folder, one level down, each with its name and its signature. */
-async function exampleEntries(folder: string, nodeId: string): Promise<{ name: string; path: string; signed: string }[]> {
-  const dir = exampleDir(folder, nodeId);
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const found: { name: string; path: string; signed: string }[] = [];
-  for (const entry of entries) {
-    const name = `${EXAMPLE_DIR}/${entry.name}`;
-    if (!entry.isFile() || !isExampleFileName(name)) continue;
-    const path = join(dir, entry.name);
-    found.push({ name, path, signed: await signature(path) });
-  }
-  return found.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-}
-
-/**
- * Node *nodeId*'s example files as the graph holds them, each read and
- * remembered like any file of the project -- and one that was there when last
- * looked and is gone now, forgotten.
- *
- * Only what is UTF-8 text is read. An example's file is text by construction
- * (`EXAMPLE_FILE_LIMIT`); one that is not -- a picture somebody put there --
- * read as text and written back by the next save would be broken. It is left
- * alone, and never tidied away: it was never read.
- */
-async function readExampleFiles(folder: string, nodeId: string, guard?: Guard): Promise<Record<string, string>> {
-  const held: Record<string, string> = {};
-  const here = await exampleEntries(folder, nodeId);
-  for (const { name, path, signed } of here) {
-    await guard?.(path);
-    try {
-      held[name] = TEXT.decode(await readFile(path));
-    } catch {
-      // Not ours, even where it was text when last read: a save tidies away
-      // only what it read, and this it did not.
-      notText.set(path, signed);
-      seen.delete(path);
-      continue;
-    }
-    notText.delete(path);
-    seen.set(path, signed);
-  }
-  const dir = exampleDir(folder, nodeId);
-  const present = new Set(here.map((file) => file.path));
-  for (const path of [...seen.keys()]) if (dirname(path) === dir && !present.has(path)) seen.delete(path);
-  return held;
-}
-
-/** Whether node *nodeId*'s example files changed since they were last read or written: one changed, came or went. */
-async function exampleFilesMoved(folder: string, nodeId: string): Promise<boolean> {
-  const here = await exampleEntries(folder, nodeId);
-  if (here.some(({ path, signed }) => seen.get(path) !== signed && notText.get(path) !== signed)) return true;
-  const dir = exampleDir(folder, nodeId);
-  const present = new Set(here.map((file) => file.path));
-  return [...seen.keys()].some((path) => dirname(path) === dir && !present.has(path));
-}
-
-/**
- * The example files *node* holds, each by the path it is written to -- or a
- * refusal, before anything is written, for one named so that it could not be:
- * a name that leads out of the node's folder is never written, and not
- * dropped without a word either.
- */
-function exampleFilesToWrite(folder: string, node: GraphNode): Map<string, string> {
-  const held = node.config[EXAMPLE_FILES];
-  if (held === undefined || held === null) return new Map();
-  const own = exampleFilesOf(node);
-  const names = typeof held === 'object' && !Array.isArray(held) ? Object.keys(held) : null;
-  const stray = names ? names.find((name) => !(name.replace(/\\/g, '/') in own)) : String(held);
-  if (stray !== undefined) {
-    throw new NotAGraph(`Node "${node.id}": its example files cannot be written${names ? `, "${stray}" among them` : ''}. `
-      + `They are texts by name, each named "${EXAMPLE_DIR}/<name>": one level down in the node's folder.`);
-  }
-  return new Map(Object.entries(own).map(([name, text]) => [join(folder, nodeFolder(node.id), ...name.split('/')), text]));
 }
 
 // ---------------------------------------------------------------------------
@@ -421,17 +319,9 @@ export async function readProject(folder: string, guard?: Guard): Promise<Graph>
     const signed = await signature(path);
     if (signed !== ABSENT) {
       await guard?.(path);
-      const read = fromFile(await readFile(path, 'utf8'));
-      // The element's own text is nobody's setting: the node stays as it was
-      // written, and saving writes today's standard back out.
-      if (text.standard === undefined || !isStandard(read, text)) text.holder[text.field] = read;
+      text.holder[text.field] = fromFile(await readFile(path, 'utf8'), text.json, path);
     }
     seen.set(path, signed);
-  }
-  // Every node may keep files its example reads; the files win over what its node.json says, like a text's.
-  for (const node of graph.nodes) {
-    const held = await readExampleFiles(folder, node.id, guard);
-    if (Object.keys(held).length) node.config[EXAMPLE_FILES] = held;
   }
   // A node that holds a graph holds a project folder: the same rule one level
   // down, so the file wins there too.
@@ -513,26 +403,17 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   }
 
   const files = new Map<string, string | null>();
-  // A node's ports and kept output shape: its interface, in its own folder.
+  // A node's ports: its interface, in its own folder.
   const flow = flowOf(copy);
   for (const node of copy.nodes) {
-    const element = registry.node(node.node_type);
     // A typo in flow.json must not cost the node its code on the next save.
-    if (!element) untouched.add(join(folder, nodeFolder(node.id)));
-    files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(node, element?.outputInterface(node)), true));
-    element?.setOutputInterface(node, null);
+    if (!registry.node(node.node_type)) untouched.add(join(folder, nodeFolder(node.id)));
+    files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(node), true));
   }
   for (const text of projectTexts(copy)) {
-    const written = text.holder[text.field];
+    const value = text.holder[text.field];
     delete text.holder[text.field];
-    const value = text.standard !== undefined && isStandard(written, text) ? text.standard : written;
-    files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, false));
-  }
-  // As they are, byte for byte; one the map no longer holds is tidied away,
-  // if this process read or wrote it -- a file dropped in since stays.
-  for (const node of copy.nodes) {
-    for (const [path, text] of exampleFilesToWrite(folder, node)) files.set(path, text);
-    delete node.config[EXAMPLE_FILES];
+    files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, text.json));
   }
 
   const layout: Record<string, Record<string, number>> = {};
@@ -660,24 +541,16 @@ export async function saveGraph(path: string, graph: Graph, guard?: Guard): Prom
 
 /**
  * One of a node's files, relative to the project's `nodes/` folder --
- * `count/code.js`, `say/system.md`, `chart/example/rows.csv` -- for opening it
- * in the person's own editor. *file* is named from the node's folder, and must
- * be one of the texts the node keeps, or an example file it has; without it,
- * the body. A text is created empty when nothing has been written into it yet,
- * so there is something to open.
+ * `count/code.js`, `count/input.js`, `say/history.md` -- for opening it in the
+ * person's own editor. *file* is named from the node's folder, and must be one
+ * of the texts the node keeps; without it, the body. A text is created empty
+ * when nothing has been written into it yet, so there is something to open.
  */
 export async function nodeFileOf(folder: string, nodeId: string, file?: string): Promise<string> {
   const { graph } = await readStructure(folder);
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node) throw new NotFound(`No node "${nodeId}" in ${folder}. Save the graph first.`);
   const texts = projectTexts(graph).filter((text) => text.node_id === nodeId);
-  if (file !== undefined && isExampleFileName(file)) {
-    const example = `${nodeFolder(nodeId)}/${file.replace(/\\/g, '/')}`;
-    if (!existsSync(join(folder, example))) {
-      throw new NotFound(`"${nodeId}" has no example file ${file.replace(/\\/g, '/')} yet: save the graph first -- saving is what writes it.`);
-    }
-    return example.slice(NODES_DIR.length + 1);
-  }
   const logic = registry.node(node.node_type)?.logic(node);
   const body = file === undefined
     ? texts.find((text) => text.field === logic?.fields.body) ?? texts[0]
@@ -686,7 +559,7 @@ export async function nodeFileOf(folder: string, nodeId: string, file?: string):
     const kept = texts.map((text) => text.path.slice(text.path.lastIndexOf('/') + 1));
     throw file === undefined
       ? new NotFound(`"${nodeId}" keeps nothing in files.`)
-      : new Error(`"${file}" is not one of the files of "${nodeId}": it keeps ${kept.length ? kept.join(', ') : 'none'}, and the example files in ${EXAMPLE_DIR}/.`);
+      : new Error(`"${file}" is not one of the files of "${nodeId}": it keeps ${kept.length ? kept.join(', ') : 'none'}.`);
   }
   const path = join(folder, body.path);
   if (!existsSync(path)) {
@@ -707,8 +580,8 @@ export type { TextChange };
  * The texts of the project in *folder* whose files changed since this process
  * last read or wrote them -- edited in another editor, restored by git,
  * deleted -- with what they say now. Each is then taken as seen: asking twice
- * reports it once. Only texts and example files are watched; the flow, or a
- * node's settings or ports, changing under an open editor is a reload, not a patch.
+ * reports it once. Only texts are watched; the flow, or a node's settings or
+ * ports, changing under an open editor is a reload, not a patch.
  */
 export async function changesOnDisk(folder: string): Promise<TextChange[]> {
   const { graph } = await readStructure(folder);
@@ -718,15 +591,9 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
     const known = seen.get(path);
     const now = await signature(path);
     if (known === undefined || known === now) continue;
-    const value = now === ABSENT ? '' : fromFile(await readFile(path, 'utf8'));
+    const value = now === ABSENT ? (text.json ? null : '') : fromFile(await readFile(path, 'utf8'), text.json, text.path);
     seen.set(path, now);
     changes.push({ node_id: text.node_id, field: text.field, value });
-  }
-  // A node's example files are one setting: any of them changed, came or
-  // went, and the whole of what is there now comes back.
-  for (const node of graph.nodes) {
-    if (!await exampleFilesMoved(folder, node.id)) continue;
-    changes.push({ node_id: node.id, field: EXAMPLE_FILES, value: await readExampleFiles(folder, node.id) });
   }
   // A node that holds a graph: anything changed in its folder is that graph
   // changed, and it comes back whole. Which file it was is a distinction
@@ -772,8 +639,6 @@ async function changedUnder(folder: string): Promise<boolean> {
   for (const path of files.keys()) await look(path);
   await look(join(folder, LAYOUT_FILE));
   for (const text of projectTexts(graph)) await look(join(folder, text.path));
-  // Read, and so marked, by the `readProject` a change here leads to.
-  for (const node of graph.nodes) if (await exampleFilesMoved(folder, node.id)) changed = true;
   for (const nested of nestedGraphs(graph)) {
     const inside = join(folder, nested.folder);
     if (isProjectFolder(inside) && await changedUnder(inside)) changed = true;

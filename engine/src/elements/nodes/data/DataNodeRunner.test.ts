@@ -42,14 +42,19 @@ describe('a data node holding nothing', () => {
 });
 
 describe('a data node is its value', () => {
-  it('keeps no writing of its own and has no body to write: no prompt.md, no format.md, no ✨', () => {
-    // It had a task and a format beside the value, each a file of its own and
-    // a ✨ of its own, and the neighbours were written against the format
-    // while they were handed the value.
+  it('keeps it in a file of its own, as JSON where it holds structure, and its history beside it', () => {
+    expect(element.texts(dataNode({ data_format: 'structure', data_value: { count: 2 } }))).toEqual([
+      { field: 'data_value', file: 'data.json', json: true },
+      { field: 'history', file: 'history.md' },
+    ]);
+    expect(element.texts(dataNode({ data_format: 'text', data_value: 'hello' }))[0]).toEqual({ field: 'data_value', file: 'data.txt' });
+  });
+
+  it('has its value written by ✨ Data, and nothing that runs', () => {
     const node = dataNode({ data_format: 'structure', data_value: { count: 2 } });
-    expect(element.texts(node)).toEqual([]);
     expect(element.logic(node)).toBeUndefined();
-    expect(element.generation()).toBeUndefined();
+    expect(element.generation()).toMatchObject({ kind: 'data', fields: { body: 'data_value' } });
+    expect(element.definitions(node)).toBeUndefined();
     expect(element.graphAuthorNote()).not.toMatch(/data_prompt|data_format_prompt|format\.md|schema/);
   });
 });

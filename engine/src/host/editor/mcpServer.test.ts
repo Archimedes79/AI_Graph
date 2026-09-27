@@ -446,7 +446,7 @@ describe('confinement', () => {
 
   it('reads and writes .json and nothing else', async () => {
     const tools = toolsWith();
-    await refused(tools, 'run.js', /not a \.json file/);
+    await refused(tools, 'code.js', /not a \.json file/);
     await refused(tools, 'graph.json.', /not a \.json file/);
     await refused(tools, 'graph', /not a \.json file/);
   });
@@ -496,14 +496,17 @@ describe('confinement', () => {
 });
 
 describe('one node at a time', () => {
-  const chain = (examples = '') => {
+  const chain = (definitions?: { input: string; output: string }) => {
     const work = code('work');
-    if (examples) (work.config as Record<string, unknown>).examples = examples;
+    if (definitions) Object.assign(work.config, { input_definition: definitions.input, output_definition: definitions.output });
     return graphOf([textInput('greeting'), work, output('result')],
       [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')]);
   };
-  const example = (title: string, input: string, out: string) =>
-    `## ${title}\n\`\`\`json input\n{ "in": ${JSON.stringify(input)} }\n\`\`\`\n\`\`\`json expect\n{ "out": ${JSON.stringify(out)} }\n\`\`\`\n`;
+  /** A node's definitions: the input it is tried on, and the example of what it returns. */
+  const defined = (input: string, out: unknown) => ({
+    input: `module.exports = { "in": ${JSON.stringify(input)} };`,
+    output: `module.exports = { "out": ${JSON.stringify(out)} };`,
+  });
 
   it('run_node runs a node on what feeds it, or on the inputs given', async () => {
     await writeFile(join(root, 'g.json'), JSON.stringify(chain()));
@@ -516,27 +519,24 @@ describe('one node at a time', () => {
     expect(wrong.text).toMatch(/"greeting", "work", "result"/);
   });
 
-  it('test_graph runs the examples a node keeps, and says what differed', async () => {
-    await writeFile(join(root, 'g.json'), JSON.stringify(chain(
-      example('Passes', 'a', 'ran on a') + example('Fails', 'b', 'something else'),
-    )));
+  it('test_graph runs a node on its input.js, holds it to its output.js, and says what does not fit', async () => {
+    await writeFile(join(root, 'g.json'), JSON.stringify(chain(defined('a', 'some text'))));
+    expect((await answer(toolsWith(), 'test_graph', { path: 'g.json' })).json).toEqual({ passed: true, results: [{ node: 'work', status: 'pass' }] });
+    await writeFile(join(root, 'g.json'), JSON.stringify(chain(defined('b', 2))));
     const tested = await answer(toolsWith(), 'test_graph', { path: 'g.json' });
     expect(tested.json.passed).toBe(false);
-    expect(tested.json.results).toEqual([
-      { node: 'work', example: 'Passes', status: 'pass' },
-      { node: 'work', example: 'Fails', status: 'fail', details: ['output.out is "ran on b"; expected "something else"'] },
-    ]);
+    expect(tested.json.results).toEqual([{ node: 'work', status: 'fail', details: ['output.out is string; output.js says integer'] }]);
   });
 
-  it('test_graph also runs the examples of a node inside another, as `test` does', async () => {
+  it('test_graph also runs a node inside another, as `test` does', async () => {
     // It looked at the top graph only, and skipped these without a word.
     const holder = {
       id: 'part', node_type: 'subgraph', label: 'part', description: '', position: { x: 0, y: 0 }, inputs: [], outputs: [],
-      config: { subgraph: chain(example('Inside', 'c', 'ran on c')) },
+      config: { subgraph: chain(defined('c', 'some text')) },
     };
     await writeFile(join(root, 'g.json'), JSON.stringify(graphOf([holder])));
     const tested = await answer(toolsWith(), 'test_graph', { path: 'g.json' });
-    expect(tested.json).toEqual({ passed: true, results: [{ node: 'part ▸ work', example: 'Inside', status: 'pass' }] });
+    expect(tested.json).toEqual({ passed: true, results: [{ node: 'part ▸ work', status: 'pass' }] });
     const one = await answer(toolsWith(), 'test_graph', { path: 'g.json', node_id: 'work' });
     expect(one.json.results).toHaveLength(1);
     const wrong = await toolsWith().call('test_graph', { path: 'g.json', node_id: 'ghost' });

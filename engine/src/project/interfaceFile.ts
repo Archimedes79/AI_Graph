@@ -1,8 +1,7 @@
 // `interface.json`: what goes into a node and what comes out, in its own folder.
 //
-// The node's ports, and the shape of what it produced when it keeps one. This
-// is where they are kept -- not a copy of something elsewhere, and read back
-// on every open. What a port is wired to is not here: that is the flow's, and
+// The node's ports. This is where they are kept -- not a copy of something
+// elsewhere, and read back on every open. What a port is wired to is not here: that is the flow's, and
 // a node that needs to know what arrives follows the wire and reads the other
 // node's interface there.
 
@@ -47,16 +46,15 @@ function fromDisk(raw: unknown, kind: PortKind, path: string): Port {
 }
 
 /** What a node's `interface.json` says. */
-export function describeInterface(node: GraphNode, outputSchema?: unknown): Record<string, unknown> {
+export function describeInterface(node: GraphNode): Record<string, unknown> {
   return {
     inputs: node.inputs.map(onDisk),
     outputs: node.outputs.map(onDisk),
-    ...(outputSchema && typeof outputSchema === 'object' ? { output_schema: outputSchema } : {}),
   };
 }
 
-/** A node's ports and kept output shape, read from what its `interface.json` says. */
-export function interfaceFrom(raw: unknown, path: string): { inputs: Port[]; outputs: Port[]; outputSchema?: unknown } {
+/** A node's ports, read from what its `interface.json` says. */
+export function interfaceFrom(raw: unknown, path: string): { inputs: Port[]; outputs: Port[] } {
   if (raw === undefined) return { inputs: [], outputs: [] };
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new NotAGraph(`${path} is not an interface: expected an object with "inputs" and "outputs".`);
   const r = raw as Record<string, unknown>;
@@ -68,6 +66,5 @@ export function interfaceFrom(raw: unknown, path: string): { inputs: Port[]; out
   return {
     inputs: list(r.inputs, 'input'),
     outputs: list(r.outputs, 'output'),
-    ...(r.output_schema !== undefined ? { outputSchema: r.output_schema } : {}),
   };
 }

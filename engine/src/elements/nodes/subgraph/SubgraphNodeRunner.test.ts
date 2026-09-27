@@ -3,8 +3,6 @@ import { executeGraph } from '../../../execution/executor.ts';
 import { registry } from '../../registry.ts';
 import { parseGraph, type Graph, type GraphEdge, type GraphNode } from '../../../graph.ts';
 import type { Runtime } from '../../Runtime.ts';
-import { nodeCode } from '../../../host/node.ts';
-import { SUBGRAPH_RUN } from './runTemplate.ts';
 import { bundleNeeds } from '../../../cli/bundle.ts';
 import { edge, quietRuntime } from '../../../../test/fakes.ts';
 
@@ -205,59 +203,13 @@ describe('events and a graph inside a node', () => {
   });
 });
 
-describe('a run.js of its own', () => {
-  // The inner code node shouts; the outer body is real JavaScript, run where
-  // bodies run, so node.graph goes through the same channel node.llm does.
-  const running: Runtime = {
-    ...shouting,
-    code: {
-      run: (body, inputs, signal, context) => body === 'x'
-        ? shouting.code.run(body, inputs, signal, context)
-        : nodeCode.run(body, inputs, signal, context),
-    },
-  };
-  const outer = (runCode: string) => graph(
-    [holder({ run_code: runCode }), node('list', 'input', { input_mode: 'text', value: 'x' }), node('show', 'output', {}, { inputs: ['value'] })],
-    [edge('in', 'list', 'output', 'part', 'subject'), edge('out', 'part', 'loud', 'show', 'value')],
-  );
-
-  it('runs the graph as often as it asks, and hands on what it returns', async () => {
-    const perWord = `async function run(inputs, node) {
-      const words = ['owl', 'wren'];
-      const loud = [];
-      for (const word of words) loud.push((await node.graph({ subject: word })).loud);
-      return { loud: loud.join(' ') };
-    }`;
-    const result = await executeGraph(outer(perWord), { runtime: running, registry });
-    expect(result.status).toBe('success');
-    expect(result.node_results.find((r) => r.node_id === 'show')?.inputs.value).toBe('OWL WREN');
-  });
-
-  it('is the standard -- one run, made by the engine -- while it says what the standard says', async () => {
-    const element = registry.node('subgraph')!;
-    expect(element.whatRuns(holder({ run_code: SUBGRAPH_RUN }))).toMatchObject({ by: 'engine' });
-    expect(element.whatRuns(holder({ run_code: 'async function run(i, node) { return node.graph(i); }' }))).toMatchObject({ by: 'body', where: 'run.js' });
-  });
-});
-
 describe('what a bundle of it needs', () => {
-  // The graph inside is followed by `bundleNeeds` on its own; what this node's
-  // own run.js asks is this node's to say, and it said nothing.
+  // The graph inside is followed by `bundleNeeds` on its own: the node itself runs it and asks nothing.
   const empty = { metadata: { name: 'inside' }, nodes: [], edges: [] };
-  const asking = 'async function run(inputs, node) {\n  return { answer: await node.llm("Say hello.") };\n}';
 
-  it('is a model, when its own run.js asks one around a graph that asks none', () => {
-    const part = node('part', 'subgraph', { subgraph: empty, run_code: asking });
-    expect(bundleNeeds(graph([part])).ai).toBe(true);
-    // The same answer an offline `test` skips its examples by.
-    expect(registry.node('subgraph')!.asksModel(part)).toBe(true);
-  });
-
-  it('is no model, with the standard run.js around a graph that asks none', () => {
-    for (const run_code of [SUBGRAPH_RUN, '']) {
-      const part = node('part', 'subgraph', { subgraph: empty, run_code });
-      expect(bundleNeeds(graph([part])).ai).toBe(false);
-      expect(registry.node('subgraph')!.asksModel(part)).toBe(false);
-    }
+  it('is no model around a graph that asks none', () => {
+    const part = node('part', 'subgraph', { subgraph: empty });
+    expect(bundleNeeds(graph([part])).ai).toBe(false);
+    expect(registry.node('subgraph')!.asksModel(part)).toBe(false);
   });
 });

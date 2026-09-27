@@ -18,11 +18,11 @@
 // serves to whoever opens it; an `editor` route exists only while building,
 // and a server without the editor answers it with 404.
 
-import type { ExecutionResult, Graph, NodeResult } from '../graph.ts';
+import type { ExecutionResult, Graph, GraphNode, NodeResult } from '../graph.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/changes.ts';
-import type { ExampleResult } from '../execution/examples.ts';
+import type { ExampleRun } from '../execution/examples.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 
 export type { TextChange };
@@ -83,96 +83,42 @@ export interface Target { provider: string; model: string }
 export interface Watched { progress_id?: string }
 
 /**
- * One element's writing to do: its body, one example of what arrives at it,
- * or the definition of what goes out. The element's own `Generation` decides
- * the rest.
+ * One node's writing to do, as its ✨ asks it: its input definition
+ * (input.js), its output definition (output.js), or its body -- code, an ai
+ * node's prompt, a data node's data. The node's element decides the rest.
  */
 export interface GenerateRequest {
-  /** A node type: whose `Generation` says what is written and how. */
-  element: string;
   /**
-   * What ✨ is sent: the node's `prompt.md`, a template naming `{Input Needs}`,
-   * `{Output Example}` and `{Graph}` with the request after its `Prompt:`
-   * line -- or a bare request, which is sent in the standard template. See
-   * `authoring/promptFile.ts`.
+   * The node as the editor holds it: its kind, id, heading and text -- what
+   * everything is written from -- its ports, its definitions, its body, and
+   * the ✨ prompts someone changed (`config.prompts`). Its history is not needed.
    */
-  prompt: string;
+  node: GraphNode;
+  /** What to write: `input` (input.js), `output` (output.js), or the body (the default). */
+  write?: 'input' | 'output' | 'body';
+  /** The graph around the node, in words: what {Context} says. Built by the editor. */
+  context?: string;
   /**
-   * What to write: the body (the default); `example`, one example input for
-   * the node and the files it reads; `output`, its output definition (`output.md`).
+   * The file ✨ Input writes the input definition from: {Example File}. Its
+   * text is read here, the start of it, when the request does not bring it.
    */
-  write?: 'body' | 'example' | 'output';
-  /** The graph around the node, in words: what `{Graph}` says. Absent: "Not given." */
-  graph_context?: string;
+  example_file?: { path: string; text?: string };
   /**
-   * The node's example files, by the name an example gives each
-   * ("example/rows.csv"): a sample that names one is read from them, and so
-   * is what the probe reads.
+   * Where each input is wired from and what that node hands on, by port id:
+   * {Input Definition} while the node has no input.js.
    */
-  example_files?: Record<string, string>;
-  inputs?: string[];
-  outputs?: string[];
-  /** Real port values from the last run; enables the verify-and-repair pass. */
-  sample_inputs?: Record<string, unknown> | null;
   input_sources?: Record<string, string>;
   /**
-   * Input ports the running node is handed a file's text on, not the path the
-   * wire carries (typed `file_path`). The sample holds what came off the wire,
-   * so these are read, as a run reads them, before the sample is shown or used.
-   */
-  read_file_ports?: string[];
-  /**
-   * What each port is, in the words the person gave it (`Port.description`),
-   * keyed by port id. The ports' names say what to call a value; these say
-   * what it is -- "One summary per file, same order" -- which no name carries.
-   */
-  input_notes?: Record<string, string>;
-  output_notes?: Record<string, string>;
-  /**
-   * The shape this node's outputs have been held to since a run produced them
-   * (`output_schema`). Sent so that a body written again keeps the shape the
-   * next nodes were built against, instead of only its top-level key names.
-   */
-  output_schema?: unknown;
-  /** The node's examples (`examples.md`): inputs with what must come out. */
-  examples?: string;
-  /** An ai node's message layout (`message.md`): how what is wired in reaches the model. */
-  message_template?: string;
-  /** Each input port's declared type, in words: `text`, `a list of file paths`. */
-  input_types?: Record<string, string>;
-  /**
-   * Where each output port goes, by port id, and what the node there wants of
-   * it -- `"Sizes" chart on "Dashboard" -- wants: the data to plot…`. The
-   * other half of `input_sources`.
+   * Where each output goes, by port id, and what the node there wants of it --
+   * `"Sizes" chart on "Dashboard" -- wants: the data to plot…`: {Output
+   * Definition} while the node has no output.js.
    */
   output_targets?: Record<string, string>;
   /**
-   * What the output looks like, in the person's words (`output.md`). Sent
-   * whenever it says anything, whatever else is set: the one declaration of
-   * the output a person writes.
-   */
-  output_format?: string;
-  /** Where `sample_inputs` came from, for the model: `the last run`, `the example in step 1`. */
-  sample_origin?: string;
-  /** How a list on an input arrives: one item per run (`per_item`) or whole (`whole_list`). */
-  batch_mode?: 'per_item' | 'whole_list';
-  /**
-   * The input ports declared as lists (`Port.multi`): what a run fans out over
-   * when the node runs once per item, so what the sample is cut by for one
-   * call. Sent with `batch_mode`; absent, nothing fans out.
-   */
-  multi_inputs?: string[];
-  /**
-   * The output ports declared as lists: what a run per item collects into a
-   * list, where one declared single hands a lone answer on as it came. Sent
-   * with `batch_mode`; absent, none is declared a list.
-   */
-  multi_outputs?: string[];
-  /**
    * Change the body there is, instead of writing one from nothing: "Say what
-   * to change" and ✨ Fix in a node's dialog. The answer brings the request
-   * along when there was something to change (`GenerateResponse.request`),
-   * restated to say what the changed body does, so the two are changed together.
+   * to change" and ✨ Fix. The answer brings the node's text back restated
+   * where there was something to change (`GenerateResponse.description`), so
+   * the two are changed together.
    */
   refine?: Refine;
   /**
@@ -182,17 +128,15 @@ export interface GenerateRequest {
   preview?: boolean;
 }
 
-/** A body to change, what it did on the sample, and what to change about it (`GenerateRequest.refine`). */
+/** What came of the body there is, and what to change about it (`GenerateRequest.refine`). */
 export interface Refine {
-  /** The body as it is now. */
-  body: string;
   /** What to change, in the person's words. Absent: repair it from how it failed (✨ Fix). */
   change?: string;
-  /** What it gave on the sample: its outputs as JSON, or a model's answer. */
+  /** What it gave on its example: its outputs as JSON, or a model's answer. */
   outcome?: string;
-  /** The error it raised on the sample. */
+  /** The error it raised on its example. */
   error?: string;
-  /** What its result falls short of: an example's expected output, a judge's word. */
+  /** Where what it gave does not fit its output.js. */
   problems?: string[];
 }
 
@@ -211,45 +155,32 @@ export interface AICall {
 }
 
 /**
- * What running generated code against real data revealed. `skipped`: no
- * sample, one pass; `ok` passed the first try, `repaired` the second.
+ * What trying generated code on the node's example revealed -- the example in
+ * its input.js, held to its output.js. `skipped`: there was nothing to try it
+ * on; `ok` passed the first try, `repaired` the second.
  */
 export interface ProbeReport {
   status: 'skipped' | 'ok' | 'repaired' | 'failed';
+  /** How it failed, where it did not run. */
   error: string;
-  missing_outputs: string[];
-  /** What a result that ran falls short of: the example it was tried on, and what that example expects. */
-  problems?: string[];
-  /**
-   * What the node hands on from the sample, whole -- the next node's sample,
-   * not a peek at it. For a node run once per item that is not one call's
-   * return: the probe runs one item, and its answer is collected the way a
-   * run collects it, a list even for one item on an output declared a list.
-   */
-  outputs?: Record<string, unknown>;
+  /** Where what it returned does not fit its output.js, or misses an output. */
+  problems: string[];
 }
 
 export interface GenerateResponse {
   /**
-   * The generated text: the body, or the output definition. Which field it
-   * belongs in is the caller's business. Empty for an example, which is `example`.
+   * What was written: the whole file -- input.js, output.js, code.js,
+   * prompt.md -- or, for a data node, the text of what it holds. Which field
+   * it belongs in is the caller's business.
    */
   result: string;
   /**
-   * The node's request, restated to fit a body changed as asked
-   * (`GenerateRequest.refine`): what follows `Prompt:` in its `prompt.md` now.
+   * The node's text, restated to fit a body changed as asked
+   * (`GenerateRequest.refine` with a change): what the node says it does now.
    */
-  request?: string;
-  /** How an ai node's inputs are laid out in its message, written with its instructions: `message.md`. */
-  message_template?: string;
-  /**
-   * One example of what arrives at the node, keyed by input id -- an input
-   * that reads a file naming one of `files` ("example/<name>") -- and those
-   * files' text. With `write: 'example'`.
-   */
-  example?: { inputs: Record<string, unknown>; files: Record<string, string> };
+  description?: string;
   probe: ProbeReport;
-  /** Every model call this generation made, in order. For a preview, the one request, unsent. */
+  /** Every model call this generation made, in order: what the node's history.md keeps. For a preview, the one request, unsent. */
   calls: AICall[];
 }
 
@@ -316,14 +247,6 @@ function route<Req, Res>(method: Method, path: string, audience: 'tool' | 'edito
 type RunGraph = Graph & { trigger?: RunTrigger | null };
 type OnNode = Graph & { node_id: string };
 
-/** One request a node would send, as the model would read it. */
-export interface SentRequest {
-  system: string;
-  prompt: string;
-  /** How many images go with it. */
-  images: number;
-}
-
 export const API = {
   // -- what a deployed tool serves ------------------------------------------
   /** The graph this tool ships. */
@@ -343,14 +266,12 @@ export const API = {
   browse: route<{ path: string; extensions?: string }, BrowsePage>('POST', '/api/files/browse', 'tool'),
 
   // -- what only the editor serves ------------------------------------------
-  /** One node on the inputs given: ▶ Try it in a node's dialog. */
+  /** One node on the inputs given, as a run runs it: files read, lists fanned out. How the editor reads a file the way a run does. */
   runNode: route<OnNode & { inputs: Record<string, unknown> }, NodeResult>('POST', '/api/execute/node', 'editor'),
-  /** What one node would ask a model on the inputs given -- its run, with every answer made up and nothing sent. */
-  nodeRequests: route<OnNode & { inputs: Record<string, unknown> }, { requests: SentRequest[]; error: string | null }>('POST', '/api/execute/node/requests', 'editor'),
   /** What would arrive at a node: what feeds it is run, the node is not. */
   nodeInputs: route<OnNode, { inputs: Record<string, unknown>; error: string | null }>('POST', '/api/execute/inputs', 'editor'),
-  /** Run a node's examples.md: each example's inputs, held to what it expects. */
-  testNode: route<OnNode, { results: ExampleResult[] }>('POST', '/api/execute/examples', 'editor'),
+  /** ▶ Try: one call of a node on the example in its input.js, held to its output.js. */
+  testNode: route<OnNode, ExampleRun>('POST', '/api/execute/example', 'editor'),
 
   /**
    * A project folder or a single graph file: see `project/folder.ts`. Also
@@ -398,8 +319,8 @@ export const API = {
 
   /**
    * One of a node's files in a project, in the person's own editor: `file`,
-   * named from the node's folder -- `prompt.md`, `example/rows.csv` -- or,
-   * without it, its body (`nodes/<id>/code.js`). Loopback only: it starts a program.
+   * named from the node's folder -- `input.js`, `history.md` -- or, without
+   * it, its body (`nodes/<id>/code.js`). Loopback only: it starts a program.
    */
   openExternal: route<{ graph_path: string; node_id: string; file?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
 } as const;

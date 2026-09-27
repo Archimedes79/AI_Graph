@@ -22,6 +22,25 @@
 // output definition's keys are the outputs (✨ Output sets them from it).
 
 import { inferInterface, mismatches, type Schema } from '../execution/interface.ts';
+import type { GraphNode } from '../graph.ts';
+import type { TextFile } from '../elements/NodeRunner.ts';
+
+/** A node's two definitions as it holds them, each '' while it has none. */
+export interface Definitions {
+  input: string;
+  output: string;
+}
+
+/** Where a node that has definitions keeps them: two settings, each a file in its folder. */
+export const DEFINITION_TEXTS: readonly TextFile[] = [
+  { field: 'input_definition', file: 'input.js' },
+  { field: 'output_definition', file: 'output.js' },
+];
+
+/** *node*'s definitions, from where `DEFINITION_TEXTS` keeps them. */
+export function definitionsIn(node: Pick<GraphNode, 'config'>): Definitions {
+  return { input: String(node.config.input_definition ?? ''), output: String(node.config.output_definition ?? '') };
+}
 
 /** A definition's example, or the sentence that says why it cannot be read. */
 export type DefinitionExample = { example: Record<string, unknown> } | { problem: string };

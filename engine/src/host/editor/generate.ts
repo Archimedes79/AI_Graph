@@ -1,50 +1,43 @@
-// Writing an element's body with a model.
+// Writing a node's files with a model.
 //
-// One entry point, for every element that generates anything: the element
-// says what kind of body it wants (`Generation`), and this says how to ask for
-// it. Two kinds — code and a system prompt — plus authoring a whole graph,
-// which shares neither the request nor the answer and so stands apart.
-//
-// What is sent is the node's `prompt.md` -- its template, its three variables
-// filled from what the node holds (`brief.ts`), and the person's request --
-// and after it the frame this file owns: what makes an answer usable, the
-// skeleton to complete and the keys to return, not what the person asks.
-//
-// Besides a body, the same prompt writes the node's other two things
-// (`write`): one example of what arrives at it, with the files the example
-// reads, and its output definition. Neither is run.
+// One entry point for every ✨: a node's input definition (input.js), its
+// output definition (output.js), and its body -- code, an ai node's prompt, a
+// data node's data. What is sent is a prompt -- the standard one for that ✨,
+// or the node's own where someone changed it (`authoring/prompts.ts`) -- with
+// its variables filled from what the node and the graph hold (`brief.ts`), and
+// after it the frame this file owns: the file format and how to answer, which
+// is what makes an answer usable and not what the person asks.
 //
 // A body can also be changed rather than written anew (`refine`): "Say what to
-// change" in a node's dialog sends the body there is, what came of it and what
-// to change, and gets the body back with the request restated to fit it; ✨ Fix
-// sends how it failed, and gets the repair a generation makes of its own first
-// attempt. Same prompt, same verify-and-repair: not a second generator.
+// change" sends the body there is, what came of it and what to change, and gets
+// the body back with the node's text restated to fit it; ✨ Fix sends how it
+// failed, and gets the repair a generation makes of its own first attempt. Same
+// prompt, same verify-and-repair: not a second generator.
 //
-// Code is not one call. It is generated, run once against real data when the
-// caller has some, and repaired once with the evidence when that run fails —
-// because a wrong output key is the single most common way generated code
-// "works" and still delivers nothing, and all of it becomes knowable the
-// moment the code executes. The second pass is not "try again"; it is "here
-// is exactly what went wrong", which is why one extra round is usually
-// enough and why there is no third.
+// Code is not one call. It is written, run once on the example in the node's
+// input.js, held to its output.js, and repaired once with the evidence when
+// that fails -- because a wrong output key is the single most common way
+// generated code "works" and still delivers nothing, and all of it becomes
+// knowable the moment the code executes. The second pass is not "try again";
+// it is "here is exactly what went wrong", which is why one extra round is
+// usually enough and why there is no third. A definition whose example cannot
+// be read is sent back once the same way.
 //
-// Every call a generation makes is recorded and handed back, so the editor can
-// show what was sent when the answer is "the model returned nothing".
+// Every call a generation makes is recorded and handed back: the editor shows
+// what was sent, and keeps it in the node's history.md.
 
 import type { AiRequest, AiService, CodeService, FileService, Runtime } from '../../elements/Runtime.ts';
+import type { Runners } from '../../elements/NodeRunner.ts';
 import { runBody } from '../../elements/body.ts';
-import { port } from '../../elements/port.ts';
 import { PLAIN_ASK } from '../../elements/nodes/ai/ask.ts';
 import type { Generation } from '../../authoring/generation.ts';
-import { fillPrompt, requestOf, withRequest } from '../../authoring/promptFile.ts';
-import { batchItems, mergeBatchOutputs } from '../../execution/batching.ts';
-import { readPorts } from '../../execution/fileInputs.ts';
-import { EXAMPLE_DIR, EXAMPLE_FILE_LIMIT, exampleFilesOf, withExampleFiles } from '../../execution/exampleFiles.ts';
+import { STANDARD_PROMPTS, fillPrompt, type PromptKind } from '../../authoring/prompts.ts';
+import { definitionExample, misfits, type Definitions } from '../../authoring/definition.ts';
+import { filePorts } from '../../execution/fileInputs.ts';
+import { ERROR_PORT } from '../../execution/wiring.ts';
 import type { GraphNode } from '../../graph.ts';
 import { renderSkeleton } from './skeleton.ts';
-import { BUDGET, clip, exampleSample, promptVariables, shown, type BriefKind, type Sample } from './brief.ts';
-import { unmet } from '../../execution/examples.ts';
-import { ERROR_PORT } from '../../execution/wiring.ts';
+import { BUDGET, clip, shown, variables } from './brief.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import type { AICall, GenerateRequest, GenerateResponse, ProbeReport, Refine, Target } from '../api.ts';
 
@@ -96,7 +89,7 @@ export function recording(ai: AiService, calls: AICall[]): AiService {
 }
 
 // ---------------------------------------------------------------------------
-// The bodies
+// What is written, and how an answer is read
 // ---------------------------------------------------------------------------
 
 const CODE_SYSTEM =
@@ -111,6 +104,19 @@ const CODE_SYSTEM =
   + '"await node.llm({ prompt: "..." })", which resolves to the answer as text; never call a model API '
   + 'yourself and never use a key. For everything else, plain code.';
 
+/** Who the model is told it is, for each thing it writes. */
+const SYSTEMS: Record<PromptKind, string> = {
+  input: 'You write one file of a node in a graph tool: its input definition, input.js -- a JSDoc typedef of what one call '
+    + 'of the node is handed, then one example of it as plain JSON. Output only the file, in one ```js block.',
+  output: 'You write one file of a node in a graph tool: its output definition, output.js -- a JSDoc typedef of what one '
+    + 'call of the node returns, then one example of it as plain JSON. Output only the file, in one ```js block.',
+  code: CODE_SYSTEM,
+  prompt: 'You are an expert prompt engineer. You write the instructions one node of a graph tool gives a model every time '
+    + 'it runs: concise, effective, and about the task. Output only the instructions, in one ```md block.',
+  data: 'You write the data one node of a graph tool holds between runs: realistic, and shaped as the nodes it feeds want '
+    + 'it. Output only the data, in one fenced block.',
+};
+
 export function firstCodeBlock(text: string): string {
   // Any info string (`javascript `, `js title="x"`, `c++`), Windows line ends,
   // and a close at the start of a line: code that writes "```" into a string
@@ -120,320 +126,109 @@ export function firstCodeBlock(text: string): string {
   return block?.[1].trim() ?? '';
 }
 
-// ---------------------------------------------------------------------------
-// The prompt
-// ---------------------------------------------------------------------------
+/** The file a model wrote, out of its answer: its first fenced block, or the whole answer where it wrote none. */
+function fileIn(reply: string): string {
+  return firstCodeBlock(reply) || reply.trim();
+}
 
-/**
- * The node's `prompt.md` as it is sent: its variables filled from what the
- * node holds, with *sample* where there is one (`brief.ts`). A request nobody
- * has written yet is said to be so, rather than sent as nothing after `Prompt:`.
- */
-function filledPrompt(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
-  const prompt = requestOf(request.prompt ?? '').trim() ? request.prompt : withRequest(request.prompt ?? '', '(not said yet)');
-  return fillPrompt(prompt, promptVariables(request, kind, sample));
+/** Said last in a request to change a body, so the node's text changes with it. */
+const RESTATE = 'After that, restate what this node does in one or two sentences, inside <description></description> tags: '
+  + 'what it does now, with the change. It replaces the node description above.';
+
+/** The text a changed body's answer restated, and the answer without it. */
+function descriptionIn(raw: string): { description?: string; rest: string } {
+  const match = /<description>([\s\S]*?)<\/description>/.exec(raw);
+  if (!match) return { rest: raw };
+  const description = match[1].trim();
+  return { ...(description ? { description } : {}), rest: `${raw.slice(0, match.index)}${raw.slice(match.index + match[0].length)}`.trim() };
+}
+
+/** What the node is, as far as how to answer depends on it. */
+interface Shape {
+  inputs: string[];
+  /** Without the executor's error port: filled when the body fails, never returned by it. */
+  outputs: string[];
+  /** The outputs wired to other nodes: their ids are what the wires use. */
+  wired: string[];
+  /** The inputs that are handed a file's text. */
+  reads: string[];
+  /** A list arrives one item at a time. */
+  perItem: boolean;
+  definitions: Definitions | undefined;
+}
+
+const quoted = (ids: string[]): string => ids.map((id) => `"${id}"`).join(', ');
+
+/** The frame after the prompt: the file's format and how to answer. The engine's, not the person's to edit. */
+function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
+  const { inputs, outputs, wired, reads, perItem } = shape;
+  const lines = ['## How to answer'];
+  switch (kind) {
+    case 'input': {
+      lines.push('Answer with the whole file input.js, in one ```js block and nothing else:');
+      if (!inputs.length) {
+        lines.push('- it has no inputs: `/** @typedef {Object} Input */` and `module.exports = {};`.');
+        break;
+      }
+      lines.push(`- first a JSDoc comment: \`@typedef {Object} Input\`, then one \`@property {type} <id> <what it is>\` for each input -- ${quoted(inputs)} -- saying its general format, as any value it may be handed has it;`,
+        '- then `module.exports = <example>;`: one small, realistic example of what one call is handed, keyed by exactly those input ids, as plain JSON -- double-quoted keys and strings, no comments, no trailing commas.');
+      if (reads.length) lines.push(`An input that reads a file (${quoted(reads)}) is handed the file's text: its example is text in that file's format -- a few lines of it -- never a path.`);
+      if (perItem) lines.push('A list arrives one item at a time: the example is one item.');
+      break;
+    }
+    case 'output': {
+      lines.push('Answer with the whole file output.js, in one ```js block and nothing else:',
+        '- first a JSDoc comment: `@typedef {Object} Output`, then one `@property {type} <id> <what it holds>` for each output;',
+        '- then `module.exports = <example>;`: what one call returns for the example input, keyed by the outputs, as plain JSON -- double-quoted keys and strings, no comments, no trailing commas.');
+      lines.push(outputs.length
+        ? `Its keys are the node's outputs, which are ${quoted(outputs)} now. Keep those ids${wired.length ? ` -- ${quoted(wired)} ${wired.length > 1 ? 'are' : 'is'} wired to other nodes, which read ${wired.length > 1 ? 'them' : 'it'} by that id` : ''}, and add or drop one only where the description asks for it.`
+        : 'Its keys become the node\'s outputs: name each by what it holds.');
+      if (perItem) lines.push('It is what one call returns: the calls\' answers are collected into lists by themselves.');
+      break;
+    }
+    case 'code': {
+      lines.push('Answer with the whole file code.js, in one ```js block: this function, completed. Keep its name, its `inputs` and the returned keys exactly as they are:',
+        '', renderSkeleton(inputs, outputs));
+      if (outputs.length) {
+        lines.push(`The returned object's keys must be exactly: ${JSON.stringify(outputs)}. Downstream nodes look values up `
+          + 'by these exact strings - do not rename, abbreviate, reorder, or invent additional keys, and include every one of them.');
+      }
+      if (reads.length) lines.push(`${quoted(reads)} ${reads.length > 1 ? 'are' : 'is'} handed the file's text, already read: read no files yourself.`);
+      if (perItem) lines.push('`run` is called once per item: `inputs` holds one item, as in the example; what the calls return is collected into lists by themselves.');
+      lines.push('Use only what Node has built in. There is no package manager and no `npm install`: `require` '
+        + "and `import` of anything outside Node's own standard library will fail at run time.");
+      break;
+    }
+    case 'prompt': {
+      const json = !!shape.definitions?.output.trim();
+      lines.push('Answer with the whole file prompt.md, in one ```md block and nothing else: the instructions the model is given every time this node runs.',
+        inputs.length > 1 ? `What arrives is sent after them, each input under its port id: ${quoted(inputs)}.`
+          : inputs.length ? 'What arrives is sent after them, as it is.' : 'Nothing is wired in: the instructions are the whole question.',
+        'Put {Node Description} and {Output Definition} where they belong in the instructions: they are filled in when the node runs -- '
+          + `the node description as above, and ${json ? 'its output definition, output.js, as above' : '"None: answer in plain text."'}.`,
+        json ? 'The answer is parsed as JSON keyed as the output definition\'s example is, and each key handed on its own output: ask for that JSON and nothing else.'
+          : 'The answer is plain text, handed on as it is.');
+      break;
+    }
+    case 'data': {
+      lines.push(node.config.data_format === 'structure'
+        ? 'Answer with what the node holds, in one ```json block, as plain JSON, and nothing else.'
+        : 'Answer with what the node holds, in one ```text block, the text itself, and nothing else.');
+      break;
+    }
+  }
+  return lines.join('\n');
 }
 
 // ---------------------------------------------------------------------------
 // Changing what there is
 // ---------------------------------------------------------------------------
 
-/** Said last in a request to change a body, so the request changes with it. */
-const RESTATE = 'After that, restate the node\'s request in one or two sentences, inside <request></request> tags: what it does now, '
-  + 'with the change. It replaces the request given above, after "Prompt:".';
-
-/** The request a refined answer restated, and the answer without it. */
-function requestIn(raw: string): { request?: string; rest: string } {
-  const match = /<request>([\s\S]*?)<\/request>/.exec(raw);
-  if (!match) return { rest: raw };
-  const request = match[1].trim();
-  return { ...(request ? { request } : {}), rest: `${raw.slice(0, match.index)}${raw.slice(match.index + match[0].length)}`.trim() };
-}
-
 /**
- * What changing a function is written from: the function as it is, what it
- * did on the sample, and what to change -- or, with nothing to change, how it
- * failed, in the repair step's own words (`repairPrompt`): ✨ Fix is the repair
- * a generation makes of its own first attempt, made of the body there is.
- */
-function codeChange(refine: Refine, sample: Sample | undefined, outputs: string[]): string {
-  const change = refine.change?.trim();
-  if (!change) return repairPrompt(refine.body, sample?.values ?? {}, refine.error?.trim() ?? '', [], outputs, refine.problems ?? []);
-  const on = sample ? ` on ${sample.origin}` : '';
-  const parts = ['You are changing an existing function, not writing a new one.', '', '--- the function as it is now ---', refine.body.trim() || '(none yet)'];
-  if (refine.outcome?.trim()) parts.push('', `--- what it returned${on} ---`, clip(refine.outcome, BUDGET.preview));
-  if (refine.error?.trim()) parts.push('', `--- the error it raised${on} ---`, refine.error.trim());
-  if (refine.problems?.length) parts.push('', '--- what is wrong with what it returned ---', ...refine.problems.map((problem) => `- ${problem}`));
-  parts.push('', '--- what to change ---', change, '',
-    `Change the function that way and keep everything else it does. Return the complete function, not a patch. ${RESTATE}`);
-  return parts.join('\n');
-}
-
-/** The same for a system prompt, which is asked for inside `<system_prompt>` tags. */
-function systemPromptChange(refine: Refine, sample: Sample | undefined): string {
-  const change = refine.change?.trim();
-  const on = sample ? ` on ${sample.origin}` : '';
-  const parts = ['## The system prompt as it is now', refine.body.trim() || '(none yet)'];
-  if (refine.outcome?.trim()) parts.push(`## What came of it${on}`, clip(refine.outcome, BUDGET.preview));
-  if (refine.error?.trim()) parts.push(`## How it failed${on}`, refine.error.trim());
-  if (refine.problems?.length) parts.push('## What is wrong with what came of it', refine.problems.map((problem) => `- ${problem}`).join('\n'));
-  parts.push('## What to change', change || 'Only what makes it fail, or fall short, as said above.');
-  parts.push(`Write the whole system prompt again with that change, keeping what it does not touch, inside <system_prompt> tags.${change ? ` ${RESTATE}` : ''}`);
-  return parts.join('\n\n');
-}
-
-/**
- * Ask for code that maps *inputs* to *outputs*: the node's prompt, then the
- * skeleton to complete. *evidence* is a failed attempt and what went wrong
- * with it, for the repair -- or the function there is and what to change about
- * it (`codeChange`).
- */
-async function generateCode(
-  ai: AiService, target: Target, request: GenerateRequest, sample?: Sample, evidence = '',
-): Promise<{ text: string; request?: string }> {
-  const inputs = request.inputs ?? [];
-  const outputs = request.outputs ?? [];
-  const parts = [filledPrompt(request, 'code', sample)];
-  if (evidence) parts.push(`\n${evidence}`);
-  parts.push('\n## The function', 'Write the JavaScript function this node runs, as the prompt above asks.');
-  if (inputs.length || outputs.length) {
-    parts.push('Complete this function. Keep its name, its `inputs` and the returned keys exactly as they are:\n\n'
-      + renderSkeleton(inputs, outputs, sample?.values, request.input_types));
-  }
-  if (outputs.length) {
-    parts.push(`The returned object's keys must be exactly: ${JSON.stringify(outputs)}. Downstream nodes look `
-      + 'values up by these exact strings - do not rename, abbreviate, reorder, or invent additional keys, '
-      + 'and include every one of them.');
-  }
-  parts.push('Use only what Node has built in. There is no package manager and no `npm install`: `require` '
-    + "and `import` of anything outside Node's own standard library will fail at run time.");
-  const { request: restated, rest } = requestIn(await ai.complete({ prompt: parts.join('\n'), system: CODE_SYSTEM, ...target }));
-  return { text: firstCodeBlock(rest) || rest, ...(restated ? { request: restated } : {}) };
-}
-
-/**
- * What a model's instructions are written to, after the node's prompt: the
- * instructions and the message they are sent with, each in its tags, and what
- * is added to them at run time without being asked.
- */
-function instructionsFrame(inputs: string[]): string {
-  const message = inputs.length
-    ? `and how what is wired in is laid out in the message it is sent, inside <message_template></message_template> tags, with ${inputs.map((id) => `{{${id}}}`).join(', ')} standing for each input's value`
-    : 'and leave <message_template></message_template> empty: nothing is wired in, so the instructions are the whole question';
-  return `## What to write\nWrite the instructions for the model this node calls, inside <system_prompt></system_prompt> tags, ${message}. `
-    + 'The instructions are sent every time the node runs, and the answer goes where the outputs go. The output definition '
-    + '(output.md) is added after the instructions at run time, by itself: they need not repeat it, and must not contradict it.';
-}
-
-/**
- * A model's instructions, asked for inside `<system_prompt>` tags, the message
- * layout where one was written inside `<message_template>` tags, and the
- * request where one was restated.
- */
-async function generateInstructions(ai: AiService, target: Target, prompt: string): Promise<{ text: string; message?: string; request?: string }> {
-  const { request, rest } = requestIn(await ai.complete({ prompt, system: PROMPT_SYSTEM, ...target }));
-  const instructions = /<system_prompt>([\s\S]*?)<\/system_prompt>/.exec(rest);
-  const layout = /<message_template>([\s\S]*?)<\/message_template>/.exec(rest);
-  // A model that ignores the tags falls back to the whole reply, which beats nothing.
-  return {
-    text: (instructions ? instructions[1] : rest).trim(),
-    ...(layout ? { message: layout[1].trim() } : {}),
-    ...(request ? { request } : {}),
-  };
-}
-
-const PROMPT_SYSTEM =
-  'You are an expert prompt engineer. Given what one node of a graph is sent, what its answer is for and what it '
-  + 'should do, write concise, effective instructions for the model it calls. Output the instructions as plain text '
-  + 'inside <system_prompt> tags -- and, where asked, the message layout inside <message_template> tags -- then a brief explanation.';
-
-// ---------------------------------------------------------------------------
-// An example, and an output definition
-// ---------------------------------------------------------------------------
-
-const EXAMPLE_SYSTEM =
-  'You write example data for one node of a graph: what arrives at it, realistic and small, enough to show what it '
-  + 'has to handle. Output ONLY one JSON object inside a ```json code block, keyed by the node\'s input ids.';
-
-/** What an example is written to, after the node's prompt: one object, keyed by input id, a file where one is read. */
-function exampleFrame(inputs: string[], reads: string[]): string {
-  const lines = ['## What to write'];
-  if (!inputs.length) {
-    lines.push('Nothing is wired into this node: answer with {}.');
-    return lines.join('\n');
-  }
-  lines.push(`Write one example of what arrives at this node: a JSON object keyed by input id -- ${inputs.map((id) => `"${id}"`).join(', ')} -- `
-    + 'each with a value it could really be handed.');
-  if (reads.length) {
-    lines.push(`For an input that reads a file (${reads.map((id) => `"${id}"`).join(', ')}), give the file itself: `
-      + '{ "file": "<a short name with its extension>", "content": "<the whole text of the file>" } -- or a list of those, '
-      + `where a list of files arrives. Keep each file small: well under ${EXAMPLE_FILE_LIMIT / 1024} KB.`);
-  }
-  lines.push('Answer with the object alone, inside a ```json block.');
-  return lines.join('\n');
-}
-
-/** *given* as a file name an example folder can hold: its last part, plain characters, an extension. */
-function safeFileName(given: string, fallback: string): string {
-  const last = given.replace(/\\/g, '/').split('/').pop() ?? '';
-  const plain = last.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+/, '').slice(0, 80);
-  if (!plain) return fallback;
-  return /\.[A-Za-z0-9]+$/.test(plain) ? plain : `${plain}.txt`;
-}
-
-/**
- * The example a model wrote, as the node keeps it: its inputs, a file-reading
- * input's value the name of one of its example files ("example/<name>"), and
- * those files. What is not one of the node's inputs is left out; a file over
- * `EXAMPLE_FILE_LIMIT` is refused.
- */
-function exampleIn(reply: string, request: GenerateRequest): { inputs: Record<string, unknown>; files: Record<string, string> } {
-  const said = firstCodeBlock(reply) || reply.trim();
-  let value: unknown;
-  try {
-    value = JSON.parse(said);
-  } catch {
-    throw new Error(`The example the model wrote is not JSON. It began: "${clip(said, 160)}".`);
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('The example the model wrote is not an object keyed by input id.');
-  }
-  const reads = new Set(request.read_file_ports ?? []);
-  const files: Record<string, string> = {};
-  /** One file of *port*'s, kept under a name no other file has: what the input's value then names. */
-  const kept = (port: string, item: unknown, index: number): string => {
-    const file = item && typeof item === 'object' && !Array.isArray(item) ? item as { file?: unknown; content?: unknown } : undefined;
-    const content = file ? file.content : item;
-    const text = typeof content === 'string' ? content : JSON.stringify(content ?? '', null, 2);
-    const size = new TextEncoder().encode(text).length;
-    if (size > EXAMPLE_FILE_LIMIT) {
-      throw new Error(`The file the model wrote for "${port}" is ${Math.ceil(size / 1024)} KB, and an example file holds `
-        + `at most ${EXAMPLE_FILE_LIMIT / 1024} KB. Ask for a smaller example, or give it one from a file.`);
-    }
-    const named = file ? String(file.file ?? '').trim() : '';
-    const name = safeFileName(named || `${port}${index ? `_${index + 1}` : ''}.txt`, 'example.txt');
-    const dot = name.lastIndexOf('.');
-    let taken = `${EXAMPLE_DIR}/${name}`;
-    for (let n = 2; taken in files; n += 1) taken = `${EXAMPLE_DIR}/${name.slice(0, dot)}_${n}${name.slice(dot)}`;
-    files[taken] = text;
-    return taken;
-  };
-  const inputs: Record<string, unknown> = {};
-  for (const [port, given] of Object.entries(value as Record<string, unknown>)) {
-    if (request.inputs && !request.inputs.includes(port)) continue;
-    inputs[port] = !reads.has(port) ? given
-      : Array.isArray(given) ? given.map((item, index) => kept(port, item, index)) : kept(port, given, 0);
-  }
-  return { inputs, files };
-}
-
-const OUTPUT_SYSTEM =
-  'You write the output definition of one node of a graph: what each of its outputs holds and in what format, and '
-  + 'an example of it. Plain Markdown, without a preamble.';
-
-/** What an output definition is written to, after the node's prompt. */
-function outputFrame(outputs: string[]): string {
-  return '## What to write\nWrite this node\'s output definition, in Markdown: for each output'
-    + `${outputs.length ? ` (${outputs.map((id) => `\`${id}\``).join(', ')})` : ''} what it holds and its format, `
-    + 'then an example of what comes out, inside a ```json block keyed by output id. What its output definition says '
-    + 'now (above) is the person\'s own brief: keep what it says, in substance, and make it complete. '
-    + 'Answer with the definition alone.';
-}
-
-/**
- * The definition a model wrote, without a fence around the whole of it: one
- * marked Markdown may hold the example's fence inside it; any other is taken
- * off only when it is the only one there.
- */
-function unfenced(reply: string): string {
-  const said = reply.trim();
-  const whole = /^```([^\n`]*)\n([\s\S]*?)\n?```$/.exec(said);
-  if (!whole) return said;
-  const markdown = /^(markdown|md)$/i.test(whole[1].trim());
-  const fences = said.split('\n').filter((line) => /^\s*```/.test(line)).length;
-  return markdown || fences === 2 ? whole[2].trim() : said;
-}
-
-// ---------------------------------------------------------------------------
-// A node that runs once per item
-// ---------------------------------------------------------------------------
-
-/** Whether a run calls this body once per item. */
-function runsPerItem(request: GenerateRequest): boolean {
-  return request.batch_mode === 'per_item';
-}
-
-/**
- * The node's inputs as the executor fans them out, for its own rule
- * (`batchItems`): only the ports, which is all it reads.
- *
- * A run fans out over the inputs declared multi, and the request says which
- * those are (`multi_inputs`) -- not a guess from what the body is handed on
- * each port, which cut a list arriving on a single-valued port as if it
- * fanned out.
- */
-function fannedOut(request: GenerateRequest, sample: Record<string, unknown>): GraphNode {
-  const fans = (id: string) => request.multi_inputs?.includes(id) ?? false;
-  return { inputs: Object.keys(sample).map((id) => port(id, id, 'input', 'any', fans(id))) } as GraphNode;
-}
-
-/**
- * The sample as one call of a per-item body meets it: the first item, and how
- * many a run would call it for. Undefined when there is nothing to cut.
- *
- * A sample is what came off the wires, so for a node run once per item it is
- * the whole list. Shown and tried whole, the model read "a list of 2" and a
- * skeleton typing it `string[]` while `run` is handed one string; a correct
- * body failed the probe on `toUpperCase is not a function`, and the repair
- * turned it into list code that then failed on every item of a real run. So
- * it is cut by the rule the executor cuts by. An empty list is no call at
- * all, and so no sample.
- */
-function oneItem(request: GenerateRequest): { values: Record<string, unknown> | null; items: number } | undefined {
-  const sample = request.sample_inputs;
-  if (!sample) return undefined;
-  const node = fannedOut(request, sample);
-  if (!node.inputs.some((input) => input.multi && Array.isArray(sample[input.id]))) return undefined;
-  const items = batchItems(node, sample);
-  return { values: items[0] ?? null, items: items.length };
-}
-
-/**
- * What a node run once per item hands on, from the one item the probe ran.
- *
- * The executor collects every item's answer into a list, so the next node is
- * handed a list where one call returned a value -- and the shape kept from a
- * probe is what that node is generated against and what every later run is
- * checked against. Kept as one call's shape, a correct per-item node was
- * told on each run that it "does not match its output interface". The items
- * the probe did not run are answers that add nothing.
- *
- * An output declared multi (`multi_outputs`) is collected as a run collects
- * it: a list one call returns adds its entries, and even a single item is
- * handed on as a list of one -- a run of one item is still a run per item.
- * One declared single keeps a lone answer as it came.
- */
-function handedOn(request: GenerateRequest, result: Record<string, unknown>): Record<string, unknown> {
-  const multi = (id: string) => request.multi_outputs?.includes(id) ?? false;
-  const node = { outputs: Object.keys(result).map((id) => port(id, id, 'output', 'any', multi(id))) } as GraphNode;
-  return mergeBatchOutputs(node, [result]);
-}
-
-// ---------------------------------------------------------------------------
-// Verify and repair
-// ---------------------------------------------------------------------------
-
-/** A probe is a smoke test, not a run: longer than this on one sample is not something a repair fixes. */
-const PROBE_TIMEOUT_MS = 25_000;
-
-/** The report of a probe that did not run: no sample to try on, or a body no probe tries. A fresh one each time. */
-const notProbed = (): ProbeReport => ({ status: 'skipped', error: '', missing_outputs: [] });
-
-/**
- * Each input as the repair is shown it: the brief's own rendering (`shown`),
- * so one prompt says a value -- and a list's length -- one way. A single
- * value is named by its type too: "string", said outright, is what turns a
- * body written for a list back into one written for an item.
+ * Each input as a repair is shown it (`shown`), so one prompt says a value --
+ * and a list's length -- one way. A single value is named by its type too:
+ * "string", said outright, is what turns a body written for a list back into
+ * one written for an item.
  */
 function describeInputs(sample: Record<string, unknown>): string {
   return Object.entries(sample).map(([key, value]) => {
@@ -442,8 +237,69 @@ function describeInputs(sample: Record<string, unknown>): string {
   }).join('\n');
 }
 
+/**
+ * The evidence handed to the second pass. *change* is what the attempt was
+ * written to change, in the person's words: a repair of a change that does not
+ * say so is a repair of the body from before it, and turned it back.
+ */
+function repairPrompt(body: string, sample: Record<string, unknown>, error: string, problems: string[], change = ''): string {
+  const parts = [
+    'Your previous attempt was executed on the example in input.js and did not work. Fix it. Return the complete corrected function, not a patch.',
+    '', '--- your previous attempt ---', body,
+  ];
+  if (change) parts.push('', '--- the change it was written to make, which the fix keeps ---', change);
+  parts.push('', '--- the inputs it actually received ---', describeInputs(sample) || '  (no inputs)');
+  if (error) parts.push('', '--- the error it raised ---', error);
+  if (problems.length) {
+    parts.push('', '--- what is wrong with what it returned ---',
+      'It ran, but what it returned does not fit the output definition (output.js) -- downstream nodes look values up by exactly its keys, in its shape:',
+      ...problems.map((problem) => `- ${problem}`));
+  }
+  return parts.join('\n');
+}
+
+/**
+ * What changing a function is written from: the function as it is, what it
+ * did on its example, and what to change -- or, with nothing to change, how it
+ * failed, in the repair step's own words (`repairPrompt`): ✨ Fix is the repair
+ * a generation makes of its own first attempt, made of the body there is.
+ */
+function codeChange(refine: Refine, body: string, sample: Record<string, unknown> | undefined): string {
+  const change = refine.change?.trim();
+  if (!change) return repairPrompt(body, sample ?? {}, refine.error?.trim() ?? '', refine.problems ?? []);
+  const parts = ['You are changing an existing function, not writing a new one.', '', '--- the function as it is now ---', body.trim() || '(none yet)'];
+  if (refine.outcome?.trim()) parts.push('', '--- what it returned on its example ---', clip(refine.outcome, BUDGET.preview));
+  if (refine.error?.trim()) parts.push('', '--- the error it raised on its example ---', refine.error.trim());
+  if (refine.problems?.length) parts.push('', '--- what does not fit its output definition ---', ...refine.problems.map((problem) => `- ${problem}`));
+  parts.push('', '--- what to change ---', change, '',
+    `Change the function that way and keep everything else it does. Return the complete function, not a patch. ${RESTATE}`);
+  return parts.join('\n');
+}
+
+/** The same for instructions or data, written again whole with the change. */
+function bodyChange(refine: Refine, body: string, what: string): string {
+  const change = refine.change?.trim();
+  const parts = [`## ${what} as it is now`, body.trim() || '(none yet)'];
+  if (refine.outcome?.trim()) parts.push('## What came of it on its example', clip(refine.outcome, BUDGET.preview));
+  if (refine.error?.trim()) parts.push('## How it failed on its example', refine.error.trim());
+  if (refine.problems?.length) parts.push('## What does not fit its output definition', refine.problems.map((problem) => `- ${problem}`).join('\n'));
+  parts.push('## What to change', change || 'Only what makes it fail, or fall short, as said above.');
+  parts.push(`Write it again whole, with that change, keeping what the change does not touch.${change ? ` ${RESTATE}` : ''}`);
+  return parts.join('\n\n');
+}
+
+// ---------------------------------------------------------------------------
+// Verify and repair
+// ---------------------------------------------------------------------------
+
+/** A probe is a smoke test, not a run: longer than this on one example is not something a repair fixes. */
+const PROBE_TIMEOUT_MS = 25_000;
+
+/** The report of a probe that did not run: nothing to try it on, or nothing that is tried. A fresh one each time. */
+const notProbed = (): ProbeReport => ({ status: 'skipped', error: '', problems: [] });
+
 /** A probe with no way to read files: what it asks a model cannot name one. */
-const refuse = async (): Promise<never> => { throw new Error('No files here: this body is being tried on a sample.'); };
+const refuse = async (): Promise<never> => { throw new Error('No files here: this body is being tried on its example.'); };
 const NO_FILES: FileService = { resolve: (path) => path, exists: async () => false, read: refuse, write: refuse, list: refuse };
 
 async function probe(
@@ -467,7 +323,7 @@ async function probe(
     return { result, error: '' };
   } catch (error) {
     if (stop.signal.aborted) {
-      return { result: null, error: `The function did not finish within ${PROBE_TIMEOUT_MS / 1000}s on one sample item.` };
+      return { result: null, error: `The function did not finish within ${PROBE_TIMEOUT_MS / 1000}s on its example.` };
     }
     return { result: null, error: (error instanceof Error ? error.message : String(error)).trim() };
   } finally {
@@ -476,122 +332,97 @@ async function probe(
 }
 
 /**
- * The evidence block handed to the second pass. *change* is what the attempt
- * was written to change, in the person's words: a repair of a change that
- * does not say so is a repair of the body from before it, and turned it back.
+ * What one call is tried on: the example in the node's input.js -- nothing,
+ * for a node that takes nothing in -- or undefined when there is none to try
+ * it on: then it is written and not tried.
  */
-function repairPrompt(
-  body: string, sample: Record<string, unknown>, error: string, missing: string[], outputs: string[], problems: string[] = [], change = '',
-): string {
-  const parts = [
-    'Your previous attempt was executed against real data and did not work. Fix it. Return the complete corrected function, not a patch.',
-    '', '--- your previous attempt ---', body,
-  ];
-  if (change) parts.push('', '--- the change it was written to make, which the fix keeps ---', change);
-  parts.push('', '--- the inputs it actually received ---', describeInputs(sample) || '  (no inputs)');
-  if (error) parts.push('', '--- the error it raised ---', error);
-  if (missing.length) {
-    parts.push('', '--- wrong result keys ---',
-      `It ran, but the returned object is missing ${JSON.stringify(missing)}. The declared output ports are `
-      + `${JSON.stringify(outputs)}; downstream nodes look values up by exactly these keys, so every one of them `
-      + 'must be present in the returned object.');
-  }
-  if (problems.length) {
-    parts.push('', '--- what is wrong with what it produced ---',
-      'It ran and returned the right keys, but the result itself was checked and is not usable as it stands:',
-      ...problems.map((problem) => `- ${problem}`));
-  }
-  return parts.join('\n');
+function exampleOf(shape: Shape): Record<string, unknown> | undefined {
+  const input = shape.definitions?.input ?? '';
+  if (!input.trim()) return shape.inputs.length ? undefined : {};
+  const read = definitionExample(input);
+  return 'example' in read ? read.example : undefined;
+}
+
+/** The body a model wrote, out of its answer, and the text it restated where it was asked to. */
+async function askForCode(ai: AiService, target: Target, prompt: string): Promise<{ text: string; description?: string }> {
+  const { description, rest } = descriptionIn(await ai.complete({ prompt, system: CODE_SYSTEM, ...target }));
+  return { text: fileIn(rest), ...(description ? { description } : {}) };
 }
 
 /**
- * Generate code and, when a sample is available, verify it by running it.
+ * Write code and, when there is an example, verify it by running it on that
+ * and holding what it returns to the output definition.
  *
  * The code handed back is always the best one obtained: pass 2's if it improved
  * things, pass 1's otherwise -- a failed repair never leaves the user with
- * something worse than the first attempt. *change* is what the first pass is
- * written from beside the prompt, when it changes a body rather than writing
- * one (`codeChange`); the request it restated comes back whichever pass is kept.
+ * something worse than the first attempt. *prompt* puts a pass's evidence into
+ * the prompt: *opening*, for the first -- a change to make, a failure to fix,
+ * or nothing -- and for a repair, how the first attempt failed, written from
+ * the text a change restated. *change* is the change asked for, which the
+ * repair keeps.
  */
-async function generateVerifiedCode(
-  ai: AiService, runtime: Runtime, target: Target, request: GenerateRequest,
-  given: Sample | undefined, change = '',
-): Promise<{ text: string; request?: string; probe: ProbeReport }> {
-  const outputs = request.outputs ?? [];
-  const sample = given?.values;
-  const first = await generateCode(ai, target, request, given, change);
-  if (!sample || !Object.keys(sample).length) return { ...first, probe: notProbed() };
-  const perItem = runsPerItem(request);
-  // What the person asked to change, when this is a change.
-  const asked = request.refine?.change?.trim() ?? '';
-  // A sample that is an example says what must come out of it, and that is
-  // checked too -- an example is a test, and a body that returns the right
-  // keys with the wrong contents has not passed it. Not when the probe ran
-  // one item of several: that returns one item's result, not what the
-  // example expects of the whole node. And not for a change: the example was
-  // written before it, and "return it in upper case" fails an example that
-  // expects lower case -- the repair then turned the change back while the
-  // request said it was made. Try it holds the changed body to the example, and
-  // Keep makes what it gives the example's expectation.
-  const expect = !asked && given?.expect && (given.items ?? 1) <= 1 ? given.expect : undefined;
-  /**
-   * What an example's expectation is short of. It says what the node hands
-   * on, which is what `test` holds it to -- for a node run once per item, the
-   * one call's answer collected into a list. Held to the bare answer instead,
-   * a correct body failed an example kept from a run of one item.
-   */
-  const gaps = (result: Record<string, unknown>): string[] => (
-    expect ? unmet(expect, perItem ? handedOn(request, result) : result) : []
+async function writeVerifiedCode(
+  ai: AiService, runtime: Runtime, target: Target, shape: Shape,
+  prompt: (evidence: string, description?: string) => string, opening: string, change: string,
+): Promise<{ text: string; description?: string; probe: ProbeReport }> {
+  const first = await askForCode(ai, target, prompt(opening));
+  const sample = exampleOf(shape);
+  if (!sample) return { ...first, probe: notProbed() };
+  const output = shape.definitions?.output ?? '';
+
+  /** Run it, then ask: did it run, did it return every output, does it fit output.js. */
+  const verdict = async (body: string) => {
+    const ran = await probe(runtime, target, body, sample);
+    const missing = ran.result ? shape.outputs.filter((port) => !(port in ran.result!)) : [];
+    const problems = ran.result
+      ? [...missing.map((port) => `it returns no "${port}"`), ...misfits(ran.result, output).filter((line) => !missing.some((port) => line === `output.${port} is missing`))]
+      : [];
+    // How far it got: not at all, with its keys wrong, or all the way.
+    const reached = !ran.result ? 0 : problems.length ? 1 : 2;
+    return { ...ran, problems, reached };
+  };
+  const reportOf = (found: Awaited<ReturnType<typeof verdict>>, status: ProbeReport['status']): ProbeReport => (
+    { status, error: found.error, problems: found.problems }
   );
 
-  /**
-   * Run it, then ask three questions in order: did it run, did it return the
-   * right keys, and -- when the sample is an example -- did it return what the
-   * example expects.
-   */
-  const judge = async (body: string) => {
-    const ran = await probe(runtime, target, body, sample);
-    const missing = ran.result ? outputs.filter((port) => !(port in ran.result!)) : [];
-    const problems = ran.result && !missing.length
-      ? gaps(ran.result).map((gap) => `for ${given!.origin}, ${gap}`)
-      : [];
-    // How far it got: not at all, wrong keys, a flawed result, a good one.
-    const reached = !ran.result ? 0 : missing.length ? 1 : problems.length ? 2 : 3;
-    return { ...ran, missing, problems, reached };
-  };
-  const reportOf = (verdict: Awaited<ReturnType<typeof judge>>, status: ProbeReport['status']): ProbeReport => {
-    // Handed on as the node hands it on: the shape kept from a probe is what
-    // the next node is generated against, and a run checks itself against it.
-    const outputs = verdict.result && perItem ? handedOn(request, verdict.result) : verdict.result ?? undefined;
-    return {
-      status, error: verdict.error, missing_outputs: verdict.missing, problems: verdict.problems,
-      ...(outputs ? { outputs } : {}),
-    };
-  };
+  const attempt = await verdict(first.text);
+  if (attempt.reached === 2) return { ...first, probe: reportOf(attempt, 'ok') };
 
-  const attempt = await judge(first.text);
-  if (attempt.reached === 3) return { ...first, probe: reportOf(attempt, 'ok') };
-
-  const evidence = repairPrompt(first.text, sample, attempt.error, attempt.missing, outputs, attempt.problems, asked);
-  // A change is repaired as the request it restated, which says the change;
-  // the request from before it asks for the body the change was to replace.
-  const repairing = asked && first.request ? { ...request, prompt: withRequest(request.prompt ?? '', first.request) } : request;
   let second: { text: string };
   try {
-    second = await generateCode(ai, target, repairing, given, evidence);
+    // A change is repaired as the text it restated, which says the change; the
+    // text from before it asks for the body the change was to replace.
+    second = await askForCode(ai, target, prompt(repairPrompt(first.text, sample, attempt.error, attempt.problems, change), first.description));
   } catch {
     // The repair pass is a bonus, never a reason to fail the request.
     return { ...first, probe: reportOf(attempt, 'failed') };
   }
-  // The repair is asked for code alone: what the change made of the request stands.
-  const repaired = { text: second.text, ...(first.request ? { request: first.request } : {}) };
-  const again = await judge(second.text);
-  if (again.reached === 3) return { ...repaired, probe: reportOf(again, 'repaired') };
-  // Still not right. Keep the attempt that got further -- one that misses an
-  // example beats one that does not run -- and say what remains.
+  // The repair is asked for code alone: what the change made of the text stands.
+  const repaired = { text: second.text, ...(first.description ? { description: first.description } : {}) };
+  const again = await verdict(second.text);
+  if (again.reached === 2) return { ...repaired, probe: reportOf(again, 'repaired') };
+  // Still not right. Keep the attempt that got further -- one that misses a
+  // key beats one that does not run -- and say what remains.
   return again.reached >= attempt.reached
     ? { ...repaired, probe: reportOf(again, 'failed') }
     : { ...first, probe: reportOf(attempt, 'failed') };
+}
+
+/**
+ * What is wrong with a definition a model wrote: its example cannot be read,
+ * an input.js names an input the node does not have, an output.js leaves out
+ * an output other nodes are wired to.
+ */
+function definitionFaults(kind: 'input' | 'output', text: string, shape: Shape): string[] {
+  const read = definitionExample(text);
+  if ('problem' in read) return [`Its example cannot be read: ${read.problem}.`];
+  const keys = Object.keys(read.example);
+  if (kind === 'input') {
+    const stray = keys.filter((key) => !shape.inputs.includes(key));
+    return stray.length ? [`It names ${quoted(stray)}, which ${stray.length > 1 ? 'are' : 'is'} not among the inputs: ${quoted(shape.inputs) || 'none'}.`] : [];
+  }
+  const lost = shape.wired.filter((port) => !keys.includes(port));
+  return lost.length ? [`It leaves out ${quoted(lost)}, which other nodes are wired to and read by that id.`] : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -601,14 +432,10 @@ async function generateVerifiedCode(
 export interface GenerateDeps {
   ai: AiService;
   code: CodeService;
-  /**
-   * Reads the files a sample names, for a node that is handed their text --
-   * after the node's own example files (`GenerateRequest.example_files`).
-   * Without either, the sample stays as sent.
-   */
+  /** Reads the example file ✨ Input is given, when the request does not bring its text. */
   files?: FileService;
-  /** The element's declaration, or undefined for a name that generates nothing. */
-  generationFor: (element: string) => Generation | undefined;
+  /** The elements, asked what a node's kind writes and whether it has definitions. */
+  elements: Runners;
   target: Target;
   /**
    * Where to write the transcript, if somebody is watching it.
@@ -616,128 +443,106 @@ export interface GenerateDeps {
    * A generation is several calls -- write, probe, repair -- over a minute or
    * more, and until it returns there is nothing to see. Handing the array in
    * lets a caller read it while it fills, which is what the editor polls to
-   * show the prompt, the context and each step as they happen.
+   * show the prompt and each step as they happen.
    */
   calls?: AICall[];
 }
 
-/**
- * The request with its sample as the body will meet it.
- *
- * A sample is what came off the wires, and for a node that reads its file
- * inputs that is a path where the body gets the text. Shown as it was, the
- * model is told `csv` is "D:\data\sales.csv" and the code is then tried on
- * that string: it finds no rows, returns an empty chart, and the probe calls
- * that a pass. So the files are read here, by the function a run reads them
- * with. One that cannot be read turns the verify pass off rather than letting
- * it vouch for code it tried on a filename.
- */
-async function asReceived(request: GenerateRequest, files?: FileService): Promise<GenerateRequest> {
-  const sample = request.sample_inputs;
-  const ports = (request.read_file_ports ?? []).filter((port) => sample && sample[port] !== null && sample[port] !== undefined);
-  if (!sample || !ports.length || !files) return request;
-  const sources = { ...request.input_sources };
-  for (const port of ports) sources[port] = [sources[port], 'the text of the file, already read'].filter(Boolean).join(': ');
+/** What `GenerateRequest.write` may ask for. */
+const WRITES = ['input', 'output', 'body'] as const;
+
+/** The example file's text, the start of it, read here when the request did not bring it. */
+async function withExampleText(request: GenerateRequest, files: FileService | undefined): Promise<GenerateRequest> {
+  const file = request.example_file;
+  if (!file?.path.trim() || file.text !== undefined || !files) return request;
   try {
-    return { ...request, sample_inputs: await readPorts(sample, ports, files), input_sources: sources };
+    const text = await files.read(file.path);
+    return { ...request, example_file: { path: file.path, text: text.slice(0, BUDGET.exampleFile + 1) } };
   } catch {
-    return { ...request, sample_inputs: null, input_sources: sources };
+    return request;
   }
 }
 
-/** What `GenerateRequest.write` may ask for. */
-const WRITES = ['body', 'example', 'output'] as const;
-
-/** Generate one node's authored text, whatever kind of node it is: its body, an example, or its output definition. */
+/** Write one of a node's files, whatever kind of node it is: its input definition, its output definition, or its body. */
 export async function generate(given: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
-  // The error port is the executor's (`catch_errors`): filled when the body
-  // fails, never returned by it. Left in, the skeleton returned it and the
-  // rule said the keys must include it, so correct code was reported as
-  // missing a key and "repaired". Dropped once, here, where every caller's
-  // request comes in, so the skeleton, the rule, the probe and the prompt all
-  // see the same outputs.
-  const asked = given.outputs ? { ...given, outputs: given.outputs.filter((id) => id !== ERROR_PORT) } : given;
-  // Real data when the graph has run; the first example's inputs when it has
-  // not -- an example is the person saying what arrives. Either is read as a
-  // run would read it (`asReceived`), shown in the prompt and tried the code on.
-  const ran = asked.sample_inputs && Object.keys(asked.sample_inputs).length;
-  const exampled = ran ? undefined : exampleSample(asked.examples);
-  // What is written, and how, is the element's to say: a request that names
-  // none has nobody to ask.
-  if (!asked.element) throw new GenerationRefused('A generation names the element it writes for.');
-  const spec = deps.generationFor(asked.element);
-  if (!spec) throw new GenerationRefused(`'${asked.element}' is not an element that generates anything`);
-  const write = asked.write ?? 'body';
+  const node = given.node as GraphNode | undefined;
+  if (!node?.node_type) throw new GenerationRefused('A generation names the node it writes for.');
+  const element = deps.elements.node(node.node_type);
+  const spec: Generation | undefined = element?.generation();
+  if (!element || !spec) throw new GenerationRefused(`A ${node.node_type} node has nothing ✨ writes.`);
+  const write = given.write ?? 'body';
   if (!(WRITES as readonly string[]).includes(write)) {
     throw new GenerationRefused(`'${String(write)}' is nothing ✨ writes: it writes a node's ${WRITES.join(', ')}.`);
   }
-  // The node's own example files first: an example that reads a file names one of them.
-  const own = exampleFilesOf({ config: { example_files: asked.example_files } });
-  const files = deps.files || Object.keys(own).length ? withExampleFiles(deps.files ?? NO_FILES, own) : undefined;
-  const whole = exampled ? { ...asked, sample_inputs: exampled.values } : asked;
-  // One item of it, for a node run once per item: what its body is called with.
-  const cut = runsPerItem(whole) ? oneItem(whole) : undefined;
-  // An example is written from what the node knows, not copied from a sample of it.
-  const request = write === 'example' ? { ...asked, sample_inputs: null }
-    : await asReceived(cut ? { ...whole, sample_inputs: cut.values } : whole, files);
+  const definitions = element.definitions(node);
+  if (write !== 'body' && !definitions) throw new GenerationRefused(`A ${node.node_type} node has no input or output definition.`);
+
+  const request = write === 'input' ? await withExampleText(given, deps.files) : given;
+  const kind: PromptKind = write === 'body' ? spec.kind : write;
+  const shape: Shape = {
+    inputs: node.inputs.map((port) => port.id),
+    // The error port is the executor's (`catch_errors`): filled when the body
+    // fails, never returned by it. Left in, the skeleton returned it and the
+    // rule said the keys must include it, so correct code was reported as
+    // missing a key and "repaired".
+    outputs: node.outputs.map((port) => port.id).filter((id) => id !== ERROR_PORT),
+    wired: Object.keys(request.output_targets ?? {}).filter((id) => id !== ERROR_PORT),
+    reads: filePorts(node, deps.elements),
+    perItem: element.batchMode(node) === 'per_item',
+    definitions,
+  };
+  const own = (node.config.prompts as Partial<Record<string, string>> | undefined)?.[write];
+  const template = own?.trim() ? own : STANDARD_PROMPTS[kind];
+  const values = variables(request, shape.reads);
+  /** The prompt as sent: the template filled -- with the text a change restated, for its repair -- then *evidence*, then the frame. */
+  const prompt = (evidence: string, description?: string): string => [
+    fillPrompt(template, description ? variables({ ...request, node: { ...node, description } }, shape.reads) : values),
+    evidence, frame(kind, shape, node),
+  ].filter(Boolean).join('\n\n');
+
   const calls: AICall[] = deps.calls ?? [];
   // A preview runs every step a generation does up to the model, and stops
   // there: the request it hands back is the request, not a second rendering
   // of it that could differ.
   const ai = recording(request.preview ? PREVIEW_AI : deps.ai, calls);
-  const kind = spec.kind;
-
-  const values = request.sample_inputs;
-  const sample: Sample | undefined = values && Object.keys(values).length
-    ? {
-      values, origin: exampled?.origin ?? request.sample_origin ?? 'the last run', expect: exampled?.expect,
-      ...(cut ? { items: cut.items } : {}),
-    }
-    : undefined;
-
-  // A change to a body is written from the same prompt as a body from
-  // nothing, with the body there is, what came of it and what to change beside
-  // it -- and only a change restates the request: nothing else asks for it,
-  // and a request a model offered unasked is not written over the person's.
   const { refine } = request;
-  const restated = (said: string | undefined) => (said && refine?.change?.trim() ? { request: said } : {});
+  const held = node.config[spec.fields.body];
+  const body = typeof held === 'string' ? held : held === undefined || held === null ? '' : JSON.stringify(held, null, 2);
+  // Only a change restates the text: nothing else asks for it, and a text a
+  // model offered unasked is not written over the person's.
+  const restated = (said: string | undefined) => (said && refine?.change?.trim() ? { description: said } : {});
+
   try {
-    // What arrives, and what goes out: written from the same prompt, and
-    // never run -- they are what a body is then written against and tried on.
-    if (write === 'example') {
-      const prompt = [filledPrompt(request, kind), exampleFrame(request.inputs ?? [], request.read_file_ports ?? [])].join('\n\n');
-      const reply = await ai.complete({ prompt, system: EXAMPLE_SYSTEM, ...deps.target });
-      return { result: '', example: exampleIn(reply, request), probe: notProbed(), calls };
-    }
-    if (write === 'output') {
-      const prompt = [filledPrompt(request, kind, sample), outputFrame(request.outputs ?? [])].join('\n\n');
-      const reply = await ai.complete({ prompt, system: OUTPUT_SYSTEM, ...deps.target });
-      return { result: unfenced(reply), probe: notProbed(), calls };
-    }
-    switch (kind) {
-      case 'code': {
-        const change = refine ? codeChange(refine, sample, request.outputs ?? []) : '';
-        const probing = { code: deps.code, ai, files: files ?? NO_FILES };
-        const { text, request: said, probe: report } = await generateVerifiedCode(ai, probing, deps.target, request, sample, change);
-        return { result: text, probe: report, calls, ...restated(said) };
+    if (write === 'input' || write === 'output') {
+      const ask = async (evidence: string) => fileIn(await ai.complete({ prompt: prompt(evidence), system: SYSTEMS[kind], ...deps.target }));
+      let text = await ask('');
+      let faults = definitionFaults(write, text, shape);
+      if (faults.length) {
+        // Once, with what is wrong: a definition nobody can read is no definition.
+        const again = await ask(`Your last answer was this file:\n\n${text}\n\nIt cannot be used as it is: ${faults.join(' ')} Write the whole file again, corrected.`);
+        const left = definitionFaults(write, again, shape);
+        if (left.length <= faults.length) [text, faults] = [again, left];
       }
-      case 'prompt': {
-        // The same prompt a code node's body is written from: instructions
-        // are written for a model that is sent these inputs, and whose answer
-        // goes where the outputs go. A change keeps the message as it is.
-        const prompt = [
-          filledPrompt(request, 'prompt', sample),
-          refine ? systemPromptChange(refine, sample) : instructionsFrame(request.inputs ?? []),
-        ].join('\n\n');
-        const { text, message, request: said } = await generateInstructions(ai, deps.target, prompt);
-        return {
-          result: text, ...(message !== undefined && !refine ? { message_template: message } : {}),
-          probe: notProbed(), calls, ...restated(said),
-        };
-      }
-      default:
-        throw new GenerationRefused(`Unknown generation kind '${String(kind)}'`);
+      return { result: text, probe: faults.length ? { status: 'failed', error: '', problems: faults } : notProbed(), calls };
     }
+    if (kind === 'code') {
+      const opening = refine ? codeChange(refine, body, exampleOf(shape)) : '';
+      const probing = { code: deps.code, ai, files: NO_FILES };
+      const written = await writeVerifiedCode(ai, probing, deps.target, shape, prompt, opening, refine?.change?.trim() ?? '');
+      return { result: written.text, probe: written.probe, calls, ...restated(written.description) };
+    }
+    const what = kind === 'prompt' ? 'The instructions (prompt.md)' : 'What the node holds';
+    const reply = await ai.complete({ prompt: prompt(refine ? bodyChange(refine, body, what) : ''), system: SYSTEMS[kind], ...deps.target });
+    const { description, rest } = descriptionIn(reply);
+    const text = fileIn(rest);
+    if (kind === 'data' && node.config.data_format === 'structure') {
+      try {
+        JSON.parse(text);
+      } catch (error) {
+        throw new Error(`The data the model wrote is not JSON (${(error as Error).message}). It began: "${clip(text, 160)}".`);
+      }
+    }
+    return { result: text, probe: notProbed(), calls, ...restated(description) };
   } catch (error) {
     if (error instanceof PreviewReached) {
       // Recorded as a failure by `recording`; it is not one.

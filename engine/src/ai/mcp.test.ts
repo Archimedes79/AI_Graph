@@ -170,7 +170,7 @@ describe('a stdio server', () => {
     const ask = {
       id: 'ask', node_type: 'ai' as const, label: 'ask', description: '', position: { x: 0, y: 0 }, inputs: [],
       outputs: [{ id: 'output', name: 'output', kind: 'output' as const, data_type: 'text' as const, multi: false, required: false, description: '' }],
-      config: { system_prompt: 'hello', mcp_servers: ['mute'] },
+      config: { prompt: 'hello', mcp_servers: ['mute'] },
     };
     const stop = new AbortController();
     setTimeout(() => stop.abort(), 200);

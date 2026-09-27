@@ -1,50 +1,28 @@
-// The empty body of a code element, rendered as a typed, runnable stub.
+// The empty body of a code node, as the stub ✨ Code completes.
 //
 // A generator used to be told its ports as prose — `Inputs: text, files` —
 // with no type, no shape and no idea where a value came from. That is the
 // least informative form of the most important fact, and small local models
-// guess badly from it. The same is true for a person: a code node opened for
-// the first time showed an empty textarea.
-//
-// So both get the same thing instead: the function signature, typed. What
-// arrives on each port, and from where, is said in the brief above it
-// (`brief.ts`), once.
+// guess badly from it. The node's definitions say all of it now, as types in
+// `input.js` and `output.js`, so the stub names them rather than typing the
+// ports a second time:
 //
 //     /**
-//      * @typedef {Object} Inputs
-//      * @property {string} text
-//      * @property {string[]} files
+//      * @param {import('./input.js').Input} inputs
+//      * @returns {import('./output.js').Output}
 //      */
-//
-//     /** @param {Inputs} inputs */
 //     function run(inputs) {
-//       return { summary: null };
+//       const csv = inputs["csv"];
+//
+//       return {"figure": null};
 //     }
 //
 // JSDoc rather than TypeScript: it *is* plain JavaScript at run time, so
-// nothing has to strip anything before the body runs, and the annotation
-// cannot become a second contract that disagrees with the ports.
+// nothing has to strip anything before the body runs, and an IDE opening the
+// node's folder follows the types to the files that define them.
 //
 // **Rendered, never parsed back.** Ports are derived from the wiring; a text
 // file allowed to rename one would silently detach edges.
-
-function jsType(value: unknown): string {
-  if (typeof value === 'boolean') return 'boolean';
-  if (typeof value === 'number') return 'number';
-  if (typeof value === 'string') return 'string';
-  if (Array.isArray(value)) return `${value.length ? jsType(value[0]) : '*'}[]`;
-  if (value && typeof value === 'object') return 'Object';
-  return '*';
-}
-
-/** A declared port type (`text`, `list of file_path`) as a JSDoc type. */
-function declaredType(declared: string | undefined): string {
-  if (!declared) return '*';
-  const list = declared.startsWith('list of ');
-  const base = list ? declared.slice('list of '.length) : declared;
-  const js = ({ text: 'string', file_path: 'string', number: 'number', boolean: 'boolean', json: 'Object', image: 'string' } as Record<string, string>)[base] ?? '*';
-  return list ? `${js}[]` : js;
-}
 
 /**
  * A port id as a local variable name.
@@ -57,31 +35,14 @@ function identifier(port: string): string {
   return !cleaned || /^\d/.test(cleaned) ? `_${cleaned}` : cleaned;
 }
 
-/**
- * The stub for one element's `run`: the signature, typed, and nothing else.
- *
- * What each port holds, where it comes from and a sample of it are said once,
- * in the brief above the stub (`brief.ts`). They used to be said here too, as
- * comments, beside a second copy in the context -- the same wire twice, in two
- * wordings, and the sample three times.
- *
- * *sample* decides a type when it has the port -- what arrived is surer than
- * what was declared -- and *types*, the declared one, otherwise.
- */
-export function renderSkeleton(
-  inputs: string[],
-  outputs: string[],
-  sample?: Record<string, unknown>,
-  types: Record<string, string> = {},
-): string {
+/** The stub for one code node's `run`: the signature, typed by its definitions, and nothing else. */
+export function renderSkeleton(inputs: string[], outputs: string[]): string {
   const lines: string[] = [];
-  if (inputs.length) {
-    lines.push('/**', ' * @typedef {Object} Inputs');
-    for (const port of inputs) {
-      const kind = sample && port in sample ? jsType(sample[port]) : declaredType(types[port]);
-      lines.push(` * @property {${kind}} ${port}`);
-    }
-    lines.push(' */', '', '/** @param {Inputs} inputs */');
+  if (inputs.length || outputs.length) {
+    lines.push('/**');
+    if (inputs.length) lines.push(" * @param {import('./input.js').Input} inputs");
+    if (outputs.length) lines.push(" * @returns {import('./output.js').Output}");
+    lines.push(' */');
   }
   lines.push('function run(inputs) {');
   for (const port of inputs) lines.push(`  const ${identifier(port)} = inputs["${port}"];`);

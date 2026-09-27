@@ -12,7 +12,10 @@ import type { AiService, CodeService } from '../../elements/Runtime.ts';
  */
 
 const never: CodeService = { run: async () => ({}) };
-const generationFor = (name: string) => registry.generation(name);
+/** An ai node that says what it should do: what its instructions are written from. */
+const node = (description: string) => ({
+  id: 'say', node_type: 'ai' as const, label: 'Say', description, position: { x: 0, y: 0 }, inputs: [], outputs: [], config: {},
+});
 const target = { provider: 'p', model: 'm' };
 
 /** A model that answers slowly, so the transcript can be read mid-flight. */
@@ -30,8 +33,8 @@ describe('watching a generation while it runs', () => {
   it('fills the array that was handed in, before it returns', async () => {
     const calls: AICall[] = [];
     const running = generate(
-      { element: 'ai', prompt: 'be brief' },
-      { ai: slow(['written'], 120), code: never, generationFor, target, calls },
+      { node: node('be brief') },
+      { ai: slow(['written'], 120), code: never, elements: registry, target, calls },
     );
 
     // Mid-flight: the call is recorded with its prompt, and no reply yet.
@@ -48,8 +51,8 @@ describe('watching a generation while it runs', () => {
   it('is the same array the reply carries, so nothing is counted twice', async () => {
     const calls: AICall[] = [];
     const reply = await generate(
-      { element: 'ai', prompt: 'x' },
-      { ai: slow(['ok'], 1), code: never, generationFor, target, calls },
+      { node: node('x') },
+      { ai: slow(['ok'], 1), code: never, elements: registry, target, calls },
     );
     expect(reply.calls).toBe(calls);
   });

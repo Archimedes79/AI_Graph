@@ -10,12 +10,11 @@
 import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
 import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
 import { RUN_PORT } from '../execution/triggers.ts';
-import { names, wiringProblems, type Problem } from '../execution/wiring.ts';
+import { ERROR_PORT, names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
 import { resultKeys } from '../elements/NodeRunner.ts';
-import { mismatches, portMisfit, readInterface } from '../execution/interface.ts';
-import { filePorts } from '../execution/fileInputs.ts';
-import { parseExamples } from '../execution/examples.ts';
+import { portMisfit } from '../execution/interface.ts';
+import { definitionExample } from '../authoring/definition.ts';
 import { unsavableIds } from './flow.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
@@ -79,8 +78,7 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       });
     }
 
-    problems.push(...interfaceProblems(node, where));
-    problems.push(...exampleProblems(graph, node, where));
+    problems.push(...definitionProblems(node, where));
     problems.push(...nestedProblems(node, where, depth));
   }
 
@@ -230,27 +228,36 @@ function nestedProblems(node: GraphNode, where: string, depth: number): Problem[
   return [...own, ...problemsIn(held, `${where} ▸ `, depth + 1)];
 }
 
-/** A kept output interface that cannot be read, or that names ports the node does not have. */
-function interfaceProblems(node: GraphNode, where: string): Problem[] {
-  const stored = node.config.output_schema;
-  if (stored === undefined || stored === null || stored === '') return [];
-  const schema = readInterface(stored);
-  if (!schema) {
-    return [{
-      where,
-      problem: 'Its output interface ("output_schema" in interface.json) is not a JSON Schema object.',
-      fix: 'Set it again from a run, or write an object such as {"type": "object", "properties": {...}}.',
-    }];
-  }
+/**
+ * A node's definitions, held to its ports: each must be readable -- its
+ * example plain JSON after module.exports -- and name ports the node has: an
+ * input.js its inputs, an output.js exactly its outputs, which ✨ Output sets
+ * from it. A key that is no port is a value nothing hands on or nothing reads.
+ */
+function definitionProblems(node: GraphNode, where: string): Problem[] {
+  const definitions = registry.node(node.node_type)?.definitions(node);
+  if (!definitions) return [];
   const found: Problem[] = [];
-  const ports = new Set(node.outputs.map((port) => port.id));
-  for (const key of Object.keys(schema.properties ?? {})) {
-    if (ports.has(key)) continue;
-    found.push({
-      where,
-      problem: `Its output interface describes "${key}", which is not one of its outputs.`,
-      fix: `Its outputs are ${names(ports)}. Set the interface again from a run, or rename the property.`,
-    });
+  const sides = [
+    { file: 'input.js', text: definitions.input, ports: node.inputs, side: 'input', writer: '✨ Input' },
+    { file: 'output.js', text: definitions.output, ports: node.outputs.filter((port) => port.id !== ERROR_PORT), side: 'output', writer: '✨ Output' },
+  ];
+  for (const { file, text, ports, side, writer } of sides) {
+    if (!text.trim()) continue;
+    const at = `${where}, ${file}`;
+    const read = definitionExample(text);
+    if ('problem' in read) {
+      found.push({ where: at, problem: `It cannot be read: ${read.problem}.`, fix: `Write its example after module.exports as plain JSON, or have ${writer} write it again.` });
+      continue;
+    }
+    const ids = new Set(ports.map((port) => port.id));
+    for (const key of Object.keys(read.example).filter((key) => !ids.has(key))) {
+      found.push({ where: at, problem: `It names "${key}", which is not one of the node's ${side}s.`, fix: `Its ${side}s are ${names(ids)}: rename the key, or give the node that ${side}.` });
+    }
+    if (side !== 'output') continue;
+    for (const port of ports.filter((one) => !(one.id in read.example))) {
+      found.push({ where: at, problem: `It does not name the output "${port.id}", so nothing says what goes out there.`, fix: `Add "${port.id}" to its example, or remove the output: ${writer} sets the outputs from the file.` });
+    }
   }
   return found;
 }
@@ -258,10 +265,10 @@ function interfaceProblems(node: GraphNode, where: string): Problem[] {
 /**
  * A wire whose two ends disagree about what travels on it.
  *
- * Only where both ends have said something: the output interface a run left
- * on the node it starts from -- what really came out -- and a declared type on
- * the port it ends on. A wire from a node that has never run, or into a port
- * that takes anything, has nothing to disagree about.
+ * Only where both ends have said something: the output definition of the node
+ * it starts from -- the shape of its output.js example -- and a declared type
+ * on the port it ends on. A wire from a node without one, or into a port that
+ * takes anything, has nothing to disagree about.
  */
 function wireMisfit(graph: Graph, edge: GraphEdge): Omit<Problem, 'where'> | undefined {
   const producer = graph.nodes.find((node) => node.id === edge.source_node_id);
@@ -275,58 +282,6 @@ function wireMisfit(graph: Graph, edge: GraphEdge): Omit<Problem, 'where'> | und
   if (!misfit) return undefined;
   return {
     problem: `It carries "${producer.id}.${edge.source_port_id}" into "${consumer.id}.${port.id}", and the two disagree: ${misfit}.`,
-    fix: `Change the data_type of "${consumer.id}.${port.id}", or what "${producer.id}" returns there -- then run it again to set its interface.`,
+    fix: `Change the data_type of "${consumer.id}.${port.id}", or what "${producer.id}" returns there, in its output.js and its body.`,
   };
-}
-
-/**
- * A node's examples, held to the node and to its neighbours.
- *
- * To the node: every input an example gives, and every output it expects,
- * must be a port the node has. To its neighbours: an example says what the
- * node needs to receive, and the node wired into that port has an output
- * interface saying what it gives -- when the two disagree, one of them has to
- * change, and this says which port and why, before anything is run.
- */
-function exampleProblems(graph: Graph, node: GraphNode, where: string): Problem[] {
-  const text = String(node.config.examples ?? '');
-  if (!text.trim()) return [];
-  const { examples, problems: unreadable } = parseExamples(text);
-  const found: Problem[] = unreadable.map((problem) => ({
-    where: `${where}, examples.md`, problem, fix: 'Give each "## title" section a ```json input block, and a ```json expect or ```judge block.',
-  }));
-  const inputs = new Set(node.inputs.map((port) => port.id));
-  const outputs = new Set(node.outputs.map((port) => port.id));
-  // A port whose path is read into text arrives as the text; the producer's interface describes the path.
-  const read = new Set(filePorts(node, registry));
-
-  for (const example of examples) {
-    const at = `${where}, example "${example.title}"`;
-    for (const port of Object.keys(example.inputs)) {
-      if (!inputs.has(port)) {
-        found.push({ where: at, problem: `It gives an input "${port}", which the node does not have.`, fix: `Its inputs are ${names(inputs)}.` });
-        continue;
-      }
-      if (read.has(port)) continue;
-      for (const edge of graph.edges.filter((e) => e.target_node_id === node.id && e.target_port_id === port)) {
-        const producer = graph.nodes.find((candidate) => candidate.id === edge.source_node_id);
-        const iface = producer && registry.node(producer.node_type)?.outputInterface(producer);
-        const given = iface?.properties?.[edge.source_port_id];
-        if (!given) continue;
-        const off = mismatches(example.inputs[port], given, `input "${port}"`);
-        if (!off.length) continue;
-        found.push({
-          where: at,
-          problem: `"${producer!.id}" is wired into "${port}", and what this example gives there does not fit its output interface: ${off[0]}.`,
-          fix: `Either this example asks for the wrong thing, or "${producer!.id}" has to deliver it: change one, then run it again to set its interface.`,
-        });
-      }
-    }
-    for (const port of Object.keys(example.expect ?? {})) {
-      if (!outputs.has(port)) {
-        found.push({ where: at, problem: `It expects an output "${port}", which the node does not have.`, fix: `Its outputs are ${names(outputs)}.` });
-      }
-    }
-  }
-  return found;
 }

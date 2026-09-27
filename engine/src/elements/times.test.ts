@@ -182,10 +182,4 @@ describe('what runs', () => {
       expect(element.whatRuns(subject).by, input_mode).toBe('engine');
     }
   });
-
-  it('follows an ai node from the engine\'s call to a body once run.js is changed', () => {
-    const element = registry.node('ai')!;
-    expect(element.whatRuns(node('ai'))).toMatchObject({ by: 'engine', where: 'run.js' });
-    expect(element.whatRuns(node('ai', { run_code: 'async function run() { return { output: "mine" }; }' }))).toMatchObject({ by: 'body', where: 'run.js' });
-  });
 });

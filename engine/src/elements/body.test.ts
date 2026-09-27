@@ -6,8 +6,9 @@ import { registry } from './registry.ts';
 import { quietRuntime } from '../../test/fakes.ts';
 
 /**
- * One way to run a body: whichever element it belongs to, it is handed the
- * same second argument and may ask the same question.
+ * One way to run a body: it is handed the same second argument wherever it
+ * runs -- in a run, and in the probe that tries generated code -- and may ask
+ * the same question.
  */
 
 function watching(): { runtime: Runtime; seen: { body: string; context?: BodyContext }[] } {
@@ -35,12 +36,6 @@ describe('runBody', () => {
     expect(Object.keys(seen[0].context?.calls ?? {})).toEqual(['llm']);
     expect(await seen[0].context!.calls!.llm({ prompt: 'anything' })).toBe('an answer');
   });
-
-  it('hands on the plain data an element gives its body', async () => {
-    const { runtime, seen } = watching();
-    await runBody('function run() {}', {}, runtime, { data: { texts: { system: 'Be brief.' } } });
-    expect(seen[0].context?.data).toEqual({ texts: { system: 'Be brief.' } });
-  });
 });
 
 describe('every kind of body runs that way', () => {
@@ -48,13 +43,6 @@ describe('every kind of body runs that way', () => {
     const { runtime, seen } = watching();
     await registry.node('code')!.execute(node('code', { code: 'function run() { return { output: 1 }; }' }), {}, runtime);
     expect(seen[0].context?.calls).toHaveProperty('llm');
-  });
-
-  it('a changed run.js', async () => {
-    const { runtime, seen } = watching();
-    await registry.node('ai')!.execute(node('ai', { run_code: 'async function run() { return { output: "mine" }; }', system_prompt: 'S' }), {}, runtime);
-    expect(seen[0].context?.calls).toHaveProperty('llm');
-    expect(seen[0].context?.data).toMatchObject({ texts: { system: 'S' } });
   });
 });
 

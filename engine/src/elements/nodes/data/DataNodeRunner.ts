@@ -1,6 +1,7 @@
-import { NodeRunner, type WhatRuns } from '../../NodeRunner.ts';
+import { NodeRunner, type TextFile, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import type { GraphNode } from '../../../graph.ts';
+import type { Generation } from '../../../authoring/generation.ts';
 
 export interface DataConfig {
   /** What it holds between runs. */
@@ -10,10 +11,10 @@ export interface DataConfig {
 /**
  * A value that survives a run — the graph's memory.
  *
- * A value and nothing else: its kind (text or structure) and what it holds,
- * which is what it hands on and what the nodes wired to it are shown. It keeps
- * no writing of its own and has no body for ✨ to write -- a format described
- * beside the value said less than the value itself, and went stale beside it.
+ * A value: its kind (text or structure) and what it holds, which is what it
+ * hands on and what the nodes wired to it are shown. It keeps it in a file of
+ * its own -- data.json or data.txt, by its kind -- and ✨ Data writes it from
+ * the node's text, shaped as the nodes it feeds want it.
  *
  * `isMemory` is what lets an edge back into this node close a loop: the
  * executor leaves that edge out of the ordering and settles the fresh value
@@ -22,6 +23,15 @@ export interface DataConfig {
  */
 export class DataNodeRunner extends NodeRunner<DataConfig> {
   readonly nodeType = 'data' as const;
+
+  /** What it holds, as JSON where it holds structure, and every exchange with the model about it. */
+  override texts(node: GraphNode): readonly TextFile[] {
+    const structure = node.config.data_format === 'structure';
+    return [
+      { field: 'data_value', file: structure ? 'data.json' : 'data.txt', ...(structure ? { json: true } : {}) },
+      { field: 'history', file: 'history.md' },
+    ];
+  }
 
   /**
    * Holding nothing is said in the node's own kind: empty text for a text
@@ -56,6 +66,15 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
       + 'config.data_value is what it holds and hands on; what arrives on "input" replaces it and is kept for the next run. '
       + 'Set config.data_format to text or structure (JSON), and initialize config.data_value when useful. '
       + 'Its description says in words what it holds: the nodes wired to it are generated against that and its value.';
+  }
+
+  /** What it holds, written from its text and from what the nodes it feeds want. */
+  override generation(): Generation {
+    return {
+      kind: 'data', fields: { body: 'data_value' },
+      guard: 'Say what this node holds first: its text is what the data is written from.',
+      success: '✅ Data written.',
+    };
   }
 
   override whatRuns(): WhatRuns {

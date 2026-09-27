@@ -117,12 +117,15 @@ describe('the graph prompt', () => {
     expect(registry.node('input')!.graphAuthorNote()).toContain('to keep only some of the files, wire a code node after it');
   });
 
-  it('says where a node\'s request is kept -- config.prompt, in plain words -- and an ai node\'s message layout', () => {
-    for (const type of ['code', 'ai']) expect(registry.node(type)!.graphAuthorNote(), type).toContain('config.prompt is the request');
-    expect(registry.node('ai')!.graphAuthorNote()).toContain('config.message_template');
-    expect(GRAPH_SYSTEM).not.toMatch(/"description" field says what it is for/);
-    // And the worked example does it: its code node carries the request it was written from.
-    expect(parseGraph(example()).nodes.find((node) => node.node_type === 'code')!.config.prompt).toBe('Count the lines of the text.');
+  it('says a node is its label and its description, and where each kind keeps what it runs', () => {
+    expect(GRAPH_SYSTEM).toContain('Every node is its label and its description');
+    for (const type of ['code', 'ai']) expect(registry.node(type)!.graphAuthorNote(), type).toMatch(/^its description says in words what it does/);
+    expect(registry.node('code')!.graphAuthorNote()).toContain('config.code holds it as JavaScript');
+    expect(registry.node('ai')!.graphAuthorNote()).toContain('config.output_definition');
+    // And the worked example does it: its code node says what it does in its description.
+    const code = parseGraph(example()).nodes.find((node) => node.node_type === 'code')!;
+    expect(code.description).toBe('Count the lines of the text.');
+    expect(code.config.prompt).toBeUndefined();
   });
 
   it('says a graph has one page, which holds every block: a second one is a problem check names', () => {

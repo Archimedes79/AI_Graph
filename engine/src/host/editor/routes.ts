@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { parseGraph, type Graph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
-import { runExamples } from '../../execution/examples.ts';
+import { runExample } from '../../execution/examples.ts';
 import { registry } from '../../elements/registry.ts';
 import { writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
@@ -25,7 +25,7 @@ import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
 import { nodeRuntime } from '../node.ts';
 import { aiSetting } from '../../ai/settings.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
-import type { AICall, GraphFile, SentRequest } from '../api.ts';
+import type { AICall, GraphFile } from '../api.ts';
 import * as files from './files.ts';
 import { NotAGraph, NotFound } from '../../errors.ts';
 import * as settings from './settings.ts';
@@ -92,29 +92,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       parseGraph(asked), String(asked.node_id ?? ''), asked.inputs ?? {}, { runtime: nodeRuntime(), registry },
     ),
 
-    // The node's own run -- its run.js, if someone changed it -- with a model
-    // that answers every question with a stand-in and remembers the question.
-    // Tool servers are opened for nothing: the stand-in never calls a tool.
-    // The stand-in is a JSON string, so a node whose answer is parsed as JSON
-    // parses it too, rather than failing on an answer nobody gave.
-    async nodeRequests(asked) {
-      const requests: SentRequest[] = [];
-      const runtime = nodeRuntime({
-        ai: {
-          complete: async (request) => {
-            requests.push({ system: request.system ?? '', prompt: request.prompt, images: request.images?.length ?? 0 });
-            return JSON.stringify(`⟨the model's answer to question ${requests.length}⟩`);
-          },
-        },
-        tools: { open: async () => ({ specs: [], call: async () => '', close: async () => {} }) },
-      });
-      const result = await executeNode(parseGraph(asked), String(asked.node_id ?? ''), asked.inputs ?? {}, { runtime, registry });
-      return { requests, error: result.status === 'error' ? result.error ?? 'It failed.' : null };
-    },
-
-    testNode: async (asked) => ({
-      results: await runExamples(parseGraph(asked), String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry }),
-    }),
+    testNode: (asked) => runExample(parseGraph(asked), String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry }),
 
     async nodeInputs(asked) {
       const graph = parseGraph(asked);
@@ -162,7 +140,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
         ai: runtime.ai,
         code: runtime.code,
         files: runtime.files,
-        generationFor: (name) => registry.generation(name),
+        elements: registry,
         target: await aiSetting(),
         calls,
       });

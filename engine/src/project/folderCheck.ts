@@ -11,7 +11,6 @@ import { join } from 'node:path';
 import type { Graph } from '../graph.ts';
 import { names, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
-import { EXAMPLE_DIR } from '../execution/exampleFiles.ts';
 import { INTERFACE_FILE } from './interfaceFile.ts';
 import {
   FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, isProjectFolder, loadGraph, nodeFolder, projectFolderOf, projectTexts, readStructure,
@@ -20,11 +19,10 @@ import { problemsIn } from './check.ts';
 
 /**
  * What only a project folder can get wrong: a folder under `nodes/` that
- * belongs to no node (the node was deleted, or renamed in \`flow.json\` by
+ * belongs to no node (the node was deleted, or renamed in `flow.json` by
  * hand), and a file in a node's folder that nothing reads -- `instructions.md`
- * where an AI node reads `system.md` is a text somebody wrote and nobody will ever
- * send. Its `example/` folder is the exception: every file there is one an
- * example may name.
+ * where an AI node reads `prompt.md` is a text somebody wrote and nobody will
+ * ever send.
  */
 export async function folderProblems(folder: string): Promise<Problem[]> {
   const { graph } = await readStructure(folder);
@@ -36,16 +34,12 @@ export async function folderProblems(folder: string): Promise<Problem[]> {
     if (!expected.has(dir)) expected.set(dir, new Set());
     expected.get(dir)!.add(text.path.slice(slash + 1));
   }
-  // Every node and block has a folder it may use, even one that keeps no writing yet.
-  // And an example folder, whose every file is one its example may read.
-  const examples = new Set<string>();
+  // Every node has a folder it may use, even one that keeps no writing yet.
   for (const node of graph.nodes) {
     const nodeDir = nodeFolder(node.id);
     if (!expected.has(nodeDir)) expected.set(nodeDir, new Set());
     // Its name and settings, and what goes in and what comes out.
     expected.get(nodeDir)!.add(NODE_FILE).add(INTERFACE_FILE);
-    examples.add(`${nodeDir}/${EXAMPLE_DIR}`);
-    expected.set(`${nodeDir}/${EXAMPLE_DIR}`, new Set());
   }
 
   // A node that holds a graph holds a project folder: its own flow.json and
@@ -88,7 +82,7 @@ export async function folderProblems(folder: string): Promise<Problem[]> {
           continue;
         }
         await walk(path);
-      } else if (reads && !examples.has(relative) && !reads.has(entry.name) && !entry.name.startsWith('.')) {
+      } else if (reads && !reads.has(entry.name) && !entry.name.startsWith('.')) {
         found.push({
           where: path,
           problem: 'Nothing reads this file.',

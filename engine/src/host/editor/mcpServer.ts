@@ -294,15 +294,16 @@ const SPECS: ToolSpec[] = [
   },
   {
     name: 'test_graph',
-    description: 'Run the examples nodes keep in their examples.md -- inputs, and what must come out -- and report each '
-      + 'as pass, fail (with what differed), error or skipped. All nodes that have examples, or one with node_id -- '
+    description: 'Run each code and ai node once on the example in its input definition (config.input_definition, '
+      + 'input.js) and hold what comes out to its output definition (config.output_definition, output.js); report each '
+      + 'as pass, fail (with what does not fit), error or skipped. Every node that has an example, or one with node_id -- '
       + 'also inside the graphs nodes hold, where a result names the way down ("part ▸ work"). '
-      + 'offline: ask no model; an AI node\'s examples and judged expectations are skipped.',
+      + 'offline: ask no model; an ai node is skipped.',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder (a project: its flow.json).' },
-        node_id: { type: 'string', description: 'Only this node\'s examples.' },
+        node_id: { type: 'string', description: 'Only this node.' },
         offline: { type: 'boolean', description: 'Ask no model.' },
       },
       required: ['path'],
@@ -584,11 +585,11 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       }
       // A node inside another is named with the way down to it: ids are unique only within one graph.
       const results = ran.map(({ inside, nodeId, result }) => ({
-        node: `${inside}${nodeId}`, example: result.title, status: result.status,
+        node: `${inside}${nodeId}`, status: result.status,
         ...(result.details.length ? { details: result.details.map((line) => brief(line, ERROR_LIMIT)) } : {}),
       }));
       const failed = results.filter((result) => result.status === 'fail' || result.status === 'error').length;
-      return json({ passed: failed === 0, results, ...(tested ? {} : { note: 'No node of this graph has examples.' }) });
+      return json({ passed: failed === 0, results, ...(tested ? {} : { note: 'No node of this graph has an example in an input definition.' }) });
     },
 
     async save_graph(args) {

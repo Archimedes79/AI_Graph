@@ -4,11 +4,11 @@ import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
-import { STANDARD_PROMPT } from '../../../authoring/promptFile.ts';
+import { DEFINITION_TEXTS, definitionsIn, type Definitions } from '../../../authoring/definition.ts';
 import type { Problem } from '../../../execution/wiring.ts';
 
 /** What a code node stores. Its own fields, and no one else's. */
-const CODE_FIELDS: LogicFields = { body: 'code', prompt: 'prompt' };
+const CODE_FIELDS: LogicFields = { body: 'code' };
 
 export interface CodeConfig {
   code: string;
@@ -16,19 +16,13 @@ export interface CodeConfig {
 
 /**
  * What this keeps in files of its own in a project folder (see
- * `NodeRunner.texts`), in the order a node is built: what comes in, what goes
- * out, what ✨ is asked, and the code.
+ * `NodeRunner.texts`), in the order a node is built: what one call is handed,
+ * what it returns, the code, and every exchange with the model about it.
  */
 const CODE_TEXTS: readonly TextFile[] = [
-  // Optional: inputs, and the outputs they must give -- the first is the example. See `execution/examples.ts`.
-  { field: 'examples', file: 'examples.md' },
-  // What goes out, in words: each output, its format, an example of it.
-  { field: 'output_format_prompt', file: 'output.md' },
-  // What ✨ Generate is sent: the template, then the request. See `authoring/promptFile.ts`.
-  { field: 'prompt', file: 'prompt.md', standard: STANDARD_PROMPT },
-  // The requests sent before, newest first.
-  { field: 'prompt_history', file: 'prompt.history.md' },
+  ...DEFINITION_TEXTS,
   { field: 'code', file: 'code.js' },
+  { field: 'history', file: 'history.md' },
 ];
 
 /**
@@ -42,10 +36,12 @@ const CODE_TEXTS: readonly TextFile[] = [
 export class CodeNodeRunner extends NodeRunner<CodeConfig> {
   readonly nodeType = 'code' as const;
 
-  override readonly keepsOutputInterface = true;
-
   override texts(): readonly TextFile[] {
     return CODE_TEXTS;
+  }
+
+  override definitions(node: GraphNode): Definitions {
+    return definitionsIn(node);
   }
 
   config(node: GraphNode): CodeConfig {
@@ -79,15 +75,20 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
     // into their content are the executor's business (see `batchMode` and
     // `readsFileInputs`), so this stays one call.
     //
-    // It may ask a model, as an ai node's `run.js` does: `await node.llm({ prompt })`,
-    // answered by the process that holds the keys, on the one AI setting's model.
+    // It may ask a model: `await node.llm({ prompt })`, answered by the
+    // process that holds the keys, on the one AI setting's model.
     return logic.run(inputs, runtime);
   }
 
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `config.code holds JavaScript as "function run(inputs) { ... }", returning an object whose keys are exactly this node's output port ids. config.prompt is the request it was written from, in a sentence or two of plain words. Use only what Node has built in; there is no package manager. The function may be async and is handed a second argument, node: "await node.llm({ prompt: '...' })" asks the configured model a question and resolves to its answer as text -- use it when code has to decide what to ask, or ask in a loop; for one question, use an ai node instead.`;
+    return 'its description says in words what it does, and config.code holds it as JavaScript: "function run(inputs) { ... }", '
+      + 'returning an object whose keys are exactly this node\'s output port ids. Use only what Node has built in; there is no '
+      + 'package manager. The function may be async and is handed a second argument, node: "await node.llm({ prompt: \'...\' })" '
+      + 'asks the configured model a question and resolves to its answer as text -- use it when code has to decide what to ask, '
+      + 'or ask in a loop; for one question, use an ai node instead. config.input_definition and config.output_definition may '
+      + 'say what one call is handed and returns, each as a JSDoc typedef followed by "module.exports = <one example as plain JSON>;".';
   }
 
   override whatRuns(): WhatRuns {
@@ -99,13 +100,12 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
     return [{
       where,
       problem: 'A code node with no config.code: it fails the moment it runs.',
-      fix: `Put the body in config.code as "function run(inputs) { ... }", returning an object keyed by this node's output port ids.`,
+      fix: `Put the body in config.code as "function run(inputs) { ... }", returning an object keyed by this node's output port ids -- or write it with ✨ from its description.`,
     }];
   }
 
   /**
-   * Written against the node's own ports: `inputs`/`outputs` are left unset,
-   * which means "whatever this node is actually wired as".
+   * Written against the node's own ports and definitions.
    *
    * No contract of its own. It used to carry one about charts -- return the
    * data to plot, never a drawing -- and every code node was told it, including
@@ -116,8 +116,8 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
   override generation(): Generation {
     return {
       kind: 'code', fields: CODE_FIELDS,
-      guard: 'Say what this node should do first.',
-      success: '✅ Code generated!',
+      guard: 'Say what this node should do first: its text is what the code is written from.',
+      success: '✅ Code written.',
     };
   }
 }

@@ -59,7 +59,7 @@ describe('a chatbot is a page and a model', () => {
         id: 'ai', node_type: 'ai',
         inputs: [{ id: 'history', name: 'history' }, { id: 'message', name: 'message' }],
         outputs: [{ id: 'output', name: 'output' }],
-        config: { ai_model: 'm', message_template: '{{history}}\n\nUser: {{message}}' },
+        config: { ai_model: 'm' },
       },
     ],
     edges: [
@@ -80,13 +80,14 @@ describe('a chatbot is a page and a model', () => {
     const trigger = { node_id: 'page', port_id: 'chat_out' };
 
     await executeGraph(g, { runtime, registry, trigger });
-    expect(asked[0].prompt).toBe('User: What is 2+2?');
+    // Two inputs, each under its port id: the model can tell the history from the message.
+    expect(asked[0].prompt).toBe('history:\n\n\nmessage:\nWhat is 2+2?');
 
     const stored = (g.nodes[0].config.gui_widgets as { value: { messages: unknown[]; pending: string } }[])[0];
     expect(stored.value.messages).toEqual([{ role: 'user', text: 'What is 2+2?' }, { role: 'assistant', text: '4' }]);
 
     stored.value.pending = 'And plus 2?';
     await executeGraph(g, { runtime, registry, trigger });
-    expect(asked[1].prompt).toBe('User: What is 2+2?\n\nAssistant: 4\n\nUser: And plus 2?');
+    expect(asked[1].prompt).toBe('history:\nUser: What is 2+2?\n\nAssistant: 4\n\nmessage:\nAnd plus 2?');
   });
 });

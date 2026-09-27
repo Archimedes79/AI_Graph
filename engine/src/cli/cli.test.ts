@@ -98,15 +98,15 @@ describe('run-node', () => {
     }
   }
 
-  it('runs a node on its example, the file it names read from its example folder, and prints what came out', async () => {
+  it('runs a node once on the example in its input.js -- a file\'s text, already read -- and holds it to its output.js', async () => {
     const dir = await project({
-      examples: '## Two rows\n\n```json input\n{"csv": "example/rows.csv"}\n```\n\n```json expect\n{"rows": 2}\n```\n',
-      example_files: { 'example/rows.csv': 'name\nAda\nBo\n' },
+      input_definition: '/** @typedef {Object} Input @property {string} csv a CSV\'s text */\nmodule.exports = { "csv": "name\\nAda\\nBo" };\n',
+      output_definition: '/** @typedef {Object} Output @property {number} rows how many rows */\nmodule.exports = { "rows": 2 };\n',
     });
     try {
       const { code, out } = await printed(['run-node', dir, 'count']);
       expect(code).toBe(0);
-      expect(JSON.parse(out)).toMatchObject({ status: 'success', outputs: { rows: 2 } });
+      expect(JSON.parse(out)).toMatchObject({ status: 'pass', outputs: { rows: 2 }, held: true });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -115,7 +115,9 @@ describe('run-node', () => {
   it('says what to do for a node with no example', async () => {
     const dir = await project({});
     try {
-      await expect(main(['run-node', dir, 'count'])).rejects.toThrow('It has no example: give its inputs as JSON, or write one in examples.md.');
+      const { code, out } = await printed(['run-node', dir, 'count']);
+      expect(code).toBe(1);
+      expect(JSON.parse(out).details).toEqual(['It has no input.js, so there is nothing to try it on: write one with ✨ Input.']);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
