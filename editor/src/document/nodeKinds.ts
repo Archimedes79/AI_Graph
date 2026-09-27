@@ -47,7 +47,12 @@ const TRIGGER = new TriggerNodeRunner();
 // code for the blurb. What the type is for is the field's placeholder instead
 // (`NodeGuiBuilder.hint`).
 
-const CODE_STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
+/**
+ * The code a new code node starts with. The code dialog shows the same text as
+ * its placeholder, and the graph sweep counts it as nobody's work: one text,
+ * so the three cannot drift apart.
+ */
+export const CODE_STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
 
 export interface NodeKind {
   /** A node of this type with nothing set: what a new one is, and what a loaded one falls back to. */

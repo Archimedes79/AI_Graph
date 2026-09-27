@@ -3,9 +3,8 @@ import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { CodeNodeRunner } from '@engine/elements/nodes/code/CodeNodeRunner.ts';
+import { CODE_STARTER } from '@/document/nodeKinds';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
-
-const STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
 
 export class CodeNodeGuiBuilder extends NodeGuiBuilder {
   readonly nodeType = 'code';
@@ -43,7 +42,7 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
     promptLabel: 'What this node should do',
     promptPlaceholder: 'In a sentence or two: what should this node do with what comes in? ✨ Generate writes the code from it.',
     bodyLabel: 'Code',
-    bodyPlaceholder: STARTER.trimEnd(),
+    bodyPlaceholder: CODE_STARTER.trimEnd(),
     bodyHeight: 220,
     // Batch mode and the declared output reach ✨ as the node's facts
     // (`nodeFacts`), in the brief the engine writes.
