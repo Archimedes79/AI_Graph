@@ -8,6 +8,10 @@ import { baseNodeConfig } from '@/document/baseNodeConfig';
 /**
  * The node dialog, saved: which wire ends up on which port.
  *
+ * A port's id is the name a body reads it by -- `inputs.csv`, `{ figure }` --
+ * so the ports editor edits exactly that, and a rename must not cut the wire
+ * on it: renaming `input` to `csv` would otherwise quietly cut the graph in half.
+ *
  * The three edits below are the ones the ports editor makes (`PortsEditor`):
  * a row is edited by spreading it with the change, removed by filtering it
  * out, and a new one is appended. Each test edits a draft that way, saves it
@@ -77,6 +81,14 @@ describe('saving the node dialog: the wires follow the ports, not the rows', () 
   it('moves the wire of a port that was renamed', () => {
     saveDialog('ai', (draft) => ({ ...draft, inputs: edit(draft.inputs, 0, { id: 'question' }) }));
     expect(into('ai')).toEqual(['a -> question', 'b -> context']);
+  });
+
+  it('moves the wire of an output that was renamed, at its source end', () => {
+    load([node('code', [], [output('output')]), node('sink', [input('value')])],
+      [{ id: 'e1', source_node_id: 'code', source_port_id: 'output', target_node_id: 'sink', target_port_id: 'value' }]);
+    saveDialog('code', (draft) => ({ ...draft, outputs: edit(draft.outputs, 0, { id: 'figure' }) }));
+    expect(store().rfEdges.map((edge) => `${edge.source}.${edge.sourceHandle} -> ${edge.target}.${edge.targetHandle}`))
+      .toEqual(['code.figure -> sink.value']);
   });
 
   it('tells a removal and a rename apart when both happen before one Save', () => {
