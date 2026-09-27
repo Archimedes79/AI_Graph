@@ -16,8 +16,10 @@ import { useGraphStore } from '@/store/graphStore';
 import type { TryResult } from './TryItInline';
 
 /**
- * An input node, run by itself: nothing else of the graph is sent or run.
- * What trying it gives -- the files its folder lists and its selector keeps.
+ * A node, run by itself: nothing else of the graph is sent or run, with the
+ * graph's metadata as a run has it. What trying an input node gives -- the
+ * files its folder lists and its selector keeps -- and what a block on a page
+ * of its own hands on (`runBlockAlone`).
  */
 export function runAlone(node: GraphNode): Promise<TryResult> {
   const graph = { metadata: useGraphStore.getState().metadata, nodes: [node], edges: [] };

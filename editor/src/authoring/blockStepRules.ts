@@ -12,6 +12,7 @@ import { guiWidgetPorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
 import type { TryResult } from './TryItInline';
 import { exampleObject } from './examplePair';
+import { runAlone } from './readAsRun';
 
 /**
  * Why step 1's example of a block cannot be used as it stands, or ''. Empty is
@@ -37,8 +38,7 @@ export function exampleProblem(text: string | undefined): string {
 export async function runBlockAlone(widget: GuiWidget): Promise<TryResult> {
   const blank = NODE_KINDS.gui.create('page');
   const page = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [{ ...widget, catch_errors: false }] } });
-  const graph = { metadata: useGraphStore.getState().metadata, nodes: [page], edges: [] };
-  const result = await call('runNode', { ...graph, node_id: page.id, inputs: {} });
+  const result = await runAlone(page);
   return { status: result.status, shown: result.outputs?.[`${widget.id}_out`], error: result.error, messages: result.messages };
 }
 
