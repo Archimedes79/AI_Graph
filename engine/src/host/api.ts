@@ -231,7 +231,7 @@ export interface ProviderStatus {
   gen_target: Target;
 }
 
-/** A graph file on disk, as Open, Save and Reload return it. */
+/** A graph file on disk, as Open (and so Reload) and Save return it. */
 /** `project`: the path is a project folder, whose code and prompts are files of their own. */
 export interface GraphFile { path: string; graph: Graph; project: boolean }
 
@@ -308,14 +308,16 @@ export const API = {
   /** Run a node's examples.md: each example's inputs, held to what it expects. */
   testNode: route<OnNode, { results: ExampleResult[] }>('POST', '/api/execute/examples', 'editor'),
 
-  /** A project folder or a single graph file: see `project/folder.ts`. */
-  openGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),
+  /**
+   * A project folder or a single graph file: see `project/folder.ts`. Also
+   * Reload: the same path opened again, after its `flow.json`, or a node's
+   * settings or ports, changed outside the editor.
+   */
+  openGraph:route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),
   /** A `.json` path is written as one file; any other path as a project folder. */
   saveGraph: route<{ path: string; graph: Graph }, GraphFile>('POST', '/api/graphs/file/save', 'editor'),
   /** Project folders with this name under where the editor runs: for a folder dropped onto the page. */
   findProjects: route<{ name: string }, { paths: string[] }>('GET', '/api/graphs/find', 'editor'),
-  /** Open the same path again: after its `flow.json`, or a node's settings or ports, changed outside the editor. */
-  reloadGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/reload', 'editor'),
   /** The code and prompts of an open project that changed on disk since last asked. */
   projectChanges: route<{ path: string }, { changes: TextChange[] }>('GET', '/api/graphs/file/changes', 'editor'),
 

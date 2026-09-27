@@ -72,7 +72,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
     }
   }
 
-  /** Open, Save and Reload, with the project layer's refusals as the statuses the page reads. */
+  /** Open (and so Reload) and Save, with the project layer's refusals as the statuses the page reads. */
   async function onFile(path: string, action: string, work: (path: string) => Promise<GraphFile['graph']>): Promise<GraphFile> {
     if (!path) throw new Refusal(400, "Missing required field 'path'");
     const full = resolve(expandHome(path));
@@ -153,7 +153,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       await project.saveGraph(path, graph);
       return graph;
     }),
-    reloadGraph: (asked) => onFile(asked.path, 'reload', (path) => project.loadGraph(path)),
 
     findProjects: async (asked, { loopback }) => {
       if (!loopback) throw new Refusal(403, 'Looking for projects is only offered on this machine.');

@@ -262,14 +262,14 @@ export default function App() {
   /**
    * Open the project again from disk: for the flow, or a node's settings or
    * ports, changing outside -- a git pull, a merge. Code and prompts need no
-   * such thing: they are watched (below).
+   * such thing: they are watched (below). It is Open, of the same path.
    */
   const handleReloadProject = async () => {
     if (!currentFilePath) return;
     if (!confirmDiscard('Reload the project from disk?')) return;
     setSaveStatus('Reloading…');
     try {
-      const result = await call('reloadGraph', { path: currentFilePath });
+      const result = await call('openGraph', { path: currentFilePath });
       loadGraph(result.graph);
       setCurrentFilePath(result.path, result.project);
       setSaveStatus('✅ Reloaded from disk');
