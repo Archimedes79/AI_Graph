@@ -1,6 +1,5 @@
 {
-  "label": "Review panel",
-  "description": "The page this tool shows",
+  "label": "Page",
   "config": {
     "gui_widgets": [
       {
