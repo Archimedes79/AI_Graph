@@ -7,9 +7,8 @@
 // there, `brief.ts#exampleSample`). There is no second store: the dialog's
 // step 1 and step 2 are views of this section and nothing else.
 //
-// A file may hold more than one section, written by hand or by an older
-// version of the dialog. Only the first is edited here; the rest are kept as
-// they are, and `test` still runs them.
+// A file may hold more than one section, written by hand. Only the first is
+// edited here; the rest are kept as they are, and `test` still runs them.
 //
 // Where a section begins and what its blocks are is the engine's grammar,
 // imported rather than copied: what the dialog shows as the example is what

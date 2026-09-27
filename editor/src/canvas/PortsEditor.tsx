@@ -159,19 +159,10 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, reads, lists, 
                 </>
               )}
             </div>
-            {/* What is said about the port -- by its kind when it was made, or by
-                hand in a box that is gone -- is still told to ✨, so it is shown,
-                and dropped here by the one who no longer wants it said. */}
+            {/* What the node's kind says about the port when it makes it --
+                "What to ask. A list asks once per item." -- and ✨ is told. */}
             {port.description?.trim() && (
-              <p className="text-xs pl-1 flex items-start gap-1.5" style={{ color: DIMMER }}>
-                <span className="flex-1 min-w-0">“{port.description.trim()}”</span>
-                <button className="text-xs px-1 rounded flex-shrink-0" style={NEUTRAL_BUTTON}
-                  title="What ✨ Generate is told about this port. Drop it."
-                  aria-label={`Drop what is said about ${kind} ${port.id}`}
-                  onClick={() => set(at, { description: '' })}>
-                  ✕
-                </button>
-              </p>
+              <p className="text-xs pl-1" style={{ color: DIMMER }}>{port.description.trim()}</p>
             )}
             <p className="text-xs pl-1" style={{ color: DIMMER }}>
               {wiring[port.id]

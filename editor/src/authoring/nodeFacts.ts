@@ -100,8 +100,7 @@ export function nodeFacts(
       return [port.id, list ? `list of ${base === 'any' ? 'values' : base}` : base];
     })),
     batchMode: node.inputs.some((port) => port.multi) ? (whole ? 'whole_list' : 'per_item') : undefined,
-    // What a port carries is no longer written per port; what older graphs
-    // said there is kept, and still sent.
+    // What the node's kind says about each port when it makes it.
     portNotes: {
       inputs: Object.fromEntries(node.inputs.map((port) => [port.id, port.description ?? ''])),
       outputs: Object.fromEntries(node.outputs.map((port) => [port.id, port.description ?? ''])),

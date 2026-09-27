@@ -131,8 +131,8 @@ export default function NodeSteps({
     </p>
   );
   // An expectation that names something. An ai node's step 2 asks for an
-  // answer to imitate rather than for one, but a file written by hand or by
-  // an older dialog can hold one, and `test` holds the answer to it.
+  // answer to imitate rather than for one, but a file written by hand can
+  // hold one, and `test` holds the answer to it.
   const expects = !!pair.expect && Object.keys(pair.expect).length > 0;
 
   const comesIn = (
@@ -211,19 +211,6 @@ export default function NodeSteps({
       />
       {expectError && <p className="text-xs mt-1" style={{ color: DANGER_TEXT }}>{expectError}</p>}
       {strayOutputNote}
-      {/* A result to imitate, kept by "Example of the output" in an older
-          version: still told to ✨, so shown, and dropped here by whoever no
-          longer wants it said. */}
-      {String(node.config.output_example ?? '').trim() && (
-        <p className="text-xs mt-1 flex items-start gap-1.5" style={{ color: DIMMER }}>
-          <span className="flex-1 min-w-0">Kept before as an example of the output, and still told to ✨: “{clip(String(node.config.output_example).trim(), 200)}”</span>
-          <button className="text-xs px-1 rounded flex-shrink-0" style={NEUTRAL_BUTTON}
-            aria-label="Drop the example of the output kept before"
-            onClick={() => setConfig('output_example', '')}>
-            ✕
-          </button>
-        </p>
-      )}
     </div>
   );
 
