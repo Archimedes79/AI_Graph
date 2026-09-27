@@ -14,6 +14,27 @@ export interface CodeConfig {
   code: string;
 }
 
+/** code.js while there is no code: what it is, and which ✨ writes it. */
+const CODE_STUB = `// code.js: what this code node does -- \`function run(inputs)\`, returning an
+// object keyed by its outputs. ✨ Code writes it from the node's text, its
+// input.js and its output.js.`;
+
+/**
+ * What follows the code in code.js, and only there: the folder writes it after
+ * the body and takes it off again when it reads the file, so the node, the
+ * sandbox and the generator never see it. The sandbox runs a body as an ES
+ * module, where `module` does not exist, so it would be inert there too.
+ */
+export const RUN_ON_ITS_OWN = `// ── Run on its own ─────────────────────────────────────────────────────────
+// \`node code.js\` runs this node on the example in input.js and prints what
+// comes out. In a graph it is run by the engine, and this part is skipped.
+if (typeof module !== 'undefined' && require.main === module) {
+  const example = require('./input.js');
+  if (example == null) throw new Error('input.js has no example yet: write it with ✨ Input.');
+  const node = { llm: async () => { throw new Error('node.llm needs the engine: node engine/src/main.ts run-node <project> <node id>'); } };
+  Promise.resolve(run(example, node)).then((out) => console.log(JSON.stringify(out, null, 2)));
+}`;
+
 /**
  * What this keeps in files of its own in a project folder (see
  * `NodeRunner.texts`), in the order a node is built: what one call is handed,
@@ -21,7 +42,7 @@ export interface CodeConfig {
  */
 const CODE_TEXTS: readonly TextFile[] = [
   ...DEFINITION_TEXTS,
-  { field: 'code', file: 'code.js' },
+  { field: 'code', file: 'code.js', standard: CODE_STUB, footer: RUN_ON_ITS_OWN },
   { field: 'history', file: 'history.md' },
 ];
 

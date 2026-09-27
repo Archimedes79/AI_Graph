@@ -35,7 +35,14 @@ function serverList(raw: unknown): string[] {
  */
 const AI_TEXTS: readonly TextFile[] = [
   ...DEFINITION_TEXTS,
-  { field: 'prompt', file: 'prompt.md' },
+  {
+    field: 'prompt', file: 'prompt.md', standard: `<!--
+prompt.md: the instructions this ai node's model is given each time it runs,
+with the node's description and its output definition filled in where they
+are named. ✨ Prompt writes it from the node's text and its output.js. While it
+says nothing but this, the node runs with the standard instructions.
+-->`,
+  },
   { field: 'history', file: 'history.md' },
 ];
 

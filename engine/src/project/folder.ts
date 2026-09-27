@@ -100,8 +100,10 @@ export interface ProjectText {
   path: string;
   /** The node's config, where the field lives. */
   holder: Record<string, unknown>;
-  /** See `TextFile`: a value kept as JSON. */
+  /** See `TextFile`: a value kept as JSON, the file's stub, and what follows what the node holds. */
   json: boolean;
+  standard?: string;
+  footer?: string;
 }
 
 /**
@@ -131,6 +133,8 @@ export function projectTexts(graph: Graph): ProjectText[] {
       found.push({
         node_id: node.id, field: text.field, path: `${folder}/${text.file}`,
         holder: node.config, json: text.json === true,
+        ...(text.standard !== undefined ? { standard: text.standard } : {}),
+        ...(text.footer !== undefined ? { footer: text.footer } : {}),
       });
     }
   }
@@ -168,19 +172,35 @@ export function nestedGraphs(graph: Graph): NestedGraph[] {
 /**
  * Exactly one newline is added on the way out and taken off on the way in, so
  * what was in the field is what comes back -- and a file saved by an editor
- * that ends every file with a newline reads as the text without it. What is
- * not text -- what a run left in a data node kept as text -- is written as
- * its JSON, which is what reads back.
+ * that ends every file with a newline reads as the text without it.
  */
 function toFile(value: unknown, json: boolean): string {
-  return `${json || typeof value !== 'string' ? JSON.stringify(value, null, 2) : value}\n`;
+  return `${json ? JSON.stringify(value, null, 2) : String(value)}\n`;
 }
 
-function fromFile(content: string, json: boolean, path: string): unknown {
-  const text = content.replace(/\r\n/g, '\n').replace(/\n$/, '');
-  if (!json) return text;
+/**
+ * What the file of *text* says for *value*: the text -- or the JSON, of a
+ * value kept as JSON or of what a run left in a data node kept as text -- with
+ * the footer after it; the stub while the node holds nothing there; or null,
+ * for no file at all.
+ */
+function fileFor(value: unknown, text: ProjectText): string | null {
+  if (isBlank(value)) return text.standard === undefined ? null : toFile(text.standard, false);
+  const said = text.json || typeof value !== 'string' ? JSON.stringify(value, null, 2) : value;
+  return toFile(text.footer ? `${said.replace(/\n+$/, '')}\n\n${text.footer}` : said, false);
+}
+
+/**
+ * What the node holds, for a file of *text* that says *content*: the file
+ * without its footer, parsed where it is JSON -- or nothing, for the stub.
+ */
+function heldIn(content: string, text: ProjectText, path: string): { value: unknown } | undefined {
+  let said = content.replace(/\r\n/g, '\n').replace(/\n$/, '');
+  if (text.footer && said.endsWith(text.footer)) said = said.slice(0, -text.footer.length).replace(/\n+$/, '');
+  if (text.standard !== undefined && said.trim() === text.standard.trim()) return undefined;
+  if (!text.json) return { value: said };
   try {
-    return JSON.parse(text);
+    return { value: JSON.parse(said) };
   } catch (error) {
     throw new NotAGraph(`${path} is not valid JSON: ${(error as Error).message}`);
   }
@@ -319,7 +339,9 @@ export async function readProject(folder: string, guard?: Guard): Promise<Graph>
     const signed = await signature(path);
     if (signed !== ABSENT) {
       await guard?.(path);
-      text.holder[text.field] = fromFile(await readFile(path, 'utf8'), text.json, path);
+      const held = heldIn(await readFile(path, 'utf8'), text, path);
+      // The stub is nobody's writing: the node holds nothing there.
+      if (held) text.holder[text.field] = held.value;
     }
     seen.set(path, signed);
   }
@@ -413,7 +435,7 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   for (const text of projectTexts(copy)) {
     const value = text.holder[text.field];
     delete text.holder[text.field];
-    files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, text.json));
+    files.set(join(folder, text.path), fileFor(value, text));
   }
 
   const layout: Record<string, Record<string, number>> = {};
@@ -543,8 +565,9 @@ export async function saveGraph(path: string, graph: Graph, guard?: Guard): Prom
  * One of a node's files, relative to the project's `nodes/` folder --
  * `count/code.js`, `count/input.js`, `say/history.md` -- for opening it in the
  * person's own editor. *file* is named from the node's folder, and must be one
- * of the texts the node keeps; without it, the body. A text is created empty
- * when nothing has been written into it yet, so there is something to open.
+ * of the texts the node keeps; without it, the body. A text nothing has been
+ * written into yet is created -- its stub, or empty -- so there is something
+ * to open.
  */
 export async function nodeFileOf(folder: string, nodeId: string, file?: string): Promise<string> {
   const { graph } = await readStructure(folder);
@@ -564,7 +587,7 @@ export async function nodeFileOf(folder: string, nodeId: string, file?: string):
   const path = join(folder, body.path);
   if (!existsSync(path)) {
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, '', 'utf8');
+    await writeFile(path, fileFor(undefined, body) ?? '', 'utf8');
     await remember(path);
   }
   return body.path.slice(NODES_DIR.length + 1);
@@ -591,7 +614,8 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
     const known = seen.get(path);
     const now = await signature(path);
     if (known === undefined || known === now) continue;
-    const value = now === ABSENT ? (text.json ? null : '') : fromFile(await readFile(path, 'utf8'), text.json, text.path);
+    const held = now === ABSENT ? undefined : heldIn(await readFile(path, 'utf8'), text, text.path);
+    const value = held ? held.value : text.json ? null : '';
     seen.set(path, now);
     changes.push({ node_id: text.node_id, field: text.field, value });
   }

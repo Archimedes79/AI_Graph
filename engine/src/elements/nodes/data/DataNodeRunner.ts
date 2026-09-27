@@ -24,11 +24,15 @@ export interface DataConfig {
 export class DataNodeRunner extends NodeRunner<DataConfig> {
   readonly nodeType = 'data' as const;
 
-  /** What it holds, as JSON where it holds structure, and every exchange with the model about it. */
+  /**
+   * What it holds -- as JSON where it holds structure, and there from the
+   * start, holding nothing: `null`, or no text -- and every exchange with the
+   * model about it.
+   */
   override texts(node: GraphNode): readonly TextFile[] {
     const structure = node.config.data_format === 'structure';
     return [
-      { field: 'data_value', file: structure ? 'data.json' : 'data.txt', ...(structure ? { json: true } : {}) },
+      structure ? { field: 'data_value', file: 'data.json', json: true, standard: 'null' } : { field: 'data_value', file: 'data.txt', standard: '' },
       { field: 'history', file: 'history.md' },
     ];
   }

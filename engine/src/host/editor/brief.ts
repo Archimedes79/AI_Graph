@@ -16,6 +16,7 @@
 // model room to answer.
 
 import { nodeDescription, type Variable } from '../../authoring/prompts.ts';
+import { definitionsIn } from '../../authoring/definition.ts';
 import type { GraphNode, Port } from '../../graph.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
 import type { GenerateRequest } from '../api.ts';
@@ -65,7 +66,7 @@ function perItem(node: GraphNode): boolean {
  */
 export function inputDefinition(request: GenerateRequest, reads: string[]): string {
   const { node } = request;
-  const written = String(node.config.input_definition ?? '');
+  const written = definitionsIn(node).input;
   if (written.trim()) return written.trim();
   if (!node.inputs.length) return 'It has no inputs: nothing is handed to it.';
   const lines = ['None yet. Its inputs:'];
@@ -86,7 +87,7 @@ export function inputDefinition(request: GenerateRequest, reads: string[]): stri
  */
 export function outputDefinition(request: GenerateRequest): string {
   const { node } = request;
-  const written = String(node.config.output_definition ?? '');
+  const written = definitionsIn(node).output;
   if (written.trim()) return written.trim();
   const outputs = node.outputs.filter((port) => port.id !== ERROR_PORT);
   if (!outputs.length) return 'None yet, and it has no outputs yet.';

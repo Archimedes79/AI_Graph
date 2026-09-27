@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { mkdir, mkdtemp, readFile, rm, writeFile, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +9,8 @@ import { join } from 'node:path';
 import { parseGraph, type Graph } from '../graph.ts';
 import { NotAGraph } from '../errors.ts';
 import { problemsIn } from './check.ts';
+import { RUN_ON_ITS_OWN } from '../elements/nodes/code/CodeNodeRunner.ts';
+import { DEFINITION_TEXTS } from '../authoring/definition.ts';
 import {
   FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, nodeFileOf, projectFolderOf, readProject, saveGraph, writeProject,
 } from './folder.ts';
@@ -73,7 +77,7 @@ const touch = async (path: string, content: string) => {
 describe('a project folder', () => {
   it('keeps each piece of writing in a file named for what it is', async () => {
     await writeProject(dir, sample());
-    expect(await text('nodes/count/code.js')).toBe('function run(inputs) {\n  return { total: inputs.files.length };\n}\n');
+    expect(await text('nodes/count/code.js')).toBe(`function run(inputs) {\n  return { total: inputs.files.length };\n}\n\n${RUN_ON_ITS_OWN}\n`);
     expect(await text('nodes/count/input.js')).toBe('module.exports = { "files": ["a.csv"] };\n');
     expect(await text('nodes/count/output.js')).toBe('module.exports = { "total": 1 };\n');
     expect(await text('nodes/count/history.md')).toBe('## 2026-09-28 09:05 · ✨ Code\n\nNothing was sent.\n');
@@ -140,16 +144,42 @@ describe('a project folder', () => {
     expect(await Promise.all(files.map(text))).toEqual(first);
   });
 
-  it('has no file for empty writing, and removes the file of writing that was emptied', async () => {
+  it('writes every file a node has from the start: a stub for what it holds nothing of, which reads back as nothing', async () => {
     const graph = sample();
-    await writeProject(dir, graph);
     graph.nodes[1].config.output_definition = '';
+    graph.nodes[2].config.prompt = '';
     await writeProject(dir, graph);
-    expect(existsSync(join(dir, 'nodes/count/output.js'))).toBe(false);
-    expect(existsSync(join(dir, 'nodes/count/input.js'))).toBe(true);
-    // An ai node that says nothing of its own runs with the standard instructions: no file for them.
-    expect(existsSync(join(dir, 'nodes/say/input.js'))).toBe(false);
+    const [inputStub, outputStub] = DEFINITION_TEXTS.map((text) => `${text.standard}\n`);
+    expect(await text('nodes/count/output.js')).toBe(outputStub);
+    expect(await text('nodes/say/input.js')).toBe(inputStub);
+    expect(await text('nodes/say/output.js')).toBe(outputStub);
+    expect(await text('nodes/say/prompt.md')).toMatch(/^<!--\nprompt\.md: the instructions/);
+    // History comes with the first exchange, not before.
+    expect(existsSync(join(dir, 'nodes/say/history.md'))).toBe(false);
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes[1].config).not.toHaveProperty('output_definition');
+    expect(read.nodes[2].config).not.toHaveProperty('prompt');
+    expect(read.nodes[2].config).not.toHaveProperty('input_definition');
+    // A stub is not a problem check names: it is a node that says nothing there yet.
+    expect(problemsIn(read)).toEqual([]);
   });
+
+  it('writes code.js so it runs on its own on its example, and reads back the code without that part', async () => {
+    const graph = sample();
+    Object.assign(graph.nodes[1].config, {
+      code: 'function run(inputs) {\n  return { total: inputs.files.length };\n}',
+      input_definition: 'module.exports = { "files": ["a.csv", "b.csv"] };',
+    });
+    await writeProject(dir, graph);
+    const { stdout } = await promisify(execFile)(process.execPath, [join(dir, 'nodes', 'count', 'code.js')], { cwd: dir });
+    expect(JSON.parse(stdout)).toEqual({ total: 2 });
+    forgetSeen();
+    expect((await readProject(dir)).nodes[1].config.code).toBe('function run(inputs) {\n  return { total: inputs.files.length };\n}');
+    // Edited in another editor with its own line ends, it is still taken off.
+    await touch(join(dir, 'nodes/count/code.js'), (await text('nodes/count/code.js')).replace(/\n/g, '\r\n'));
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'code', value: 'function run(inputs) {\n  return { total: inputs.files.length };\n}' }]);
+  }, 30_000);
 
   it('keeps what a data node holds as JSON where it holds structure, as text otherwise', async () => {
     const data = (id: string, config: Record<string, unknown>) => ({
@@ -232,9 +262,9 @@ describe('a node\'s files, opened in the person\'s own editor', () => {
     await writeProject(dir, sample());
     expect(await nodeFileOf(dir, 'count')).toBe('count/code.js');
     expect(await nodeFileOf(dir, 'count', 'output.js')).toBe('count/output.js');
-    // A text nobody has written yet is made, empty, so there is something to open.
+    // A text nobody has written yet is there as its stub, so there is something to open.
     expect(await nodeFileOf(dir, 'say', 'input.js')).toBe('say/input.js');
-    expect(await text('nodes/say/input.js')).toBe('');
+    expect(await text('nodes/say/input.js')).toMatch(/module\.exports = null;\n$/);
     for (const file of ['node.json', '../say/prompt.md', 'example/rows.csv']) {
       await expect(nodeFileOf(dir, 'count', file), file).rejects.toThrow(/is not one of the files of "count": it keeps input\.js, output\.js, code\.js, history\.md\./);
     }
@@ -372,7 +402,7 @@ describe('two editors on one folder', () => {
     const graph = sample();
     await writeProject(dir, graph);
     graph.nodes[1].config.code = 'function run() { return { total: 3 }; }';
-    await touch(join(dir, 'nodes/count/code.js'), 'function run() { return { total: 3 }; }\n');
+    await touch(join(dir, 'nodes/count/code.js'), `function run() { return { total: 3 }; }\n\n${RUN_ON_ITS_OWN}\n`);
     await expect(writeProject(dir, graph)).resolves.toBeUndefined();
   });
 

@@ -39,6 +39,19 @@ export interface TextFile {
   file: string;
   /** A value kept as JSON rather than as text: what a data node holds as structure. */
   json?: boolean;
+  /**
+   * What the file says while the node holds nothing of its own there: written
+   * all the same, so a node's folder shows every file it has from the start,
+   * and read back as nothing -- a stub that says what the file is and which ✨
+   * writes it.
+   */
+  standard?: string;
+  /**
+   * Written after what the node holds, and taken off again when the file is
+   * read, so the node never holds it: what makes a file work on its own --
+   * `node code.js` runs the node on its example.
+   */
+  footer?: string;
 }
 
 /**

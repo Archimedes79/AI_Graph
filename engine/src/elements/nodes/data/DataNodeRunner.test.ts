@@ -44,10 +44,10 @@ describe('a data node holding nothing', () => {
 describe('a data node is its value', () => {
   it('keeps it in a file of its own, as JSON where it holds structure, and its history beside it', () => {
     expect(element.texts(dataNode({ data_format: 'structure', data_value: { count: 2 } }))).toEqual([
-      { field: 'data_value', file: 'data.json', json: true },
+      { field: 'data_value', file: 'data.json', json: true, standard: 'null' },
       { field: 'history', file: 'history.md' },
     ]);
-    expect(element.texts(dataNode({ data_format: 'text', data_value: 'hello' }))[0]).toEqual({ field: 'data_value', file: 'data.txt' });
+    expect(element.texts(dataNode({ data_format: 'text', data_value: 'hello' }))[0]).toEqual({ field: 'data_value', file: 'data.txt', standard: '' });
   });
 
   it('has its value written by ✨ Data, and nothing that runs', () => {

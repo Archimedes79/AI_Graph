@@ -31,15 +31,42 @@ export interface Definitions {
   output: string;
 }
 
-/** Where a node that has definitions keeps them: two settings, each a file in its folder. */
+/**
+ * Where a node that has definitions keeps them: two settings, each a file in
+ * its folder -- there from the start, as a stub that says what it is and which
+ * ✨ writes it, with no example yet: `module.exports = null;`.
+ */
 export const DEFINITION_TEXTS: readonly TextFile[] = [
-  { field: 'input_definition', file: 'input.js' },
-  { field: 'output_definition', file: 'output.js' },
+  {
+    field: 'input_definition', file: 'input.js', standard: `/**
+ * input.js: what one call of this node is handed -- a JSDoc @typedef Input
+ * with one @property per input, then one example of it after module.exports,
+ * as plain JSON. ✨ Input writes it; ▶ Try and \`test\` run the node on the
+ * example.
+ */
+module.exports = null;`,
+  },
+  {
+    field: 'output_definition', file: 'output.js', standard: `/**
+ * output.js: what one call of this node returns -- a JSDoc @typedef Output
+ * with one @property per output, then one example of it after
+ * module.exports, as plain JSON. ✨ Output writes it, and the node's outputs
+ * are its keys.
+ */
+module.exports = null;`,
+  },
 ];
 
-/** *node*'s definitions, from where `DEFINITION_TEXTS` keeps them. */
+/** A definition that has no example yet -- `module.exports = null;`, as its stub says -- is none. */
+const NO_EXAMPLE = /\bmodule\.exports\s*=\s*null\s*;?\s*$/;
+
+/** *node*'s definitions, from where `DEFINITION_TEXTS` keeps them: '' for one it has none of. */
 export function definitionsIn(node: Pick<GraphNode, 'config'>): Definitions {
-  return { input: String(node.config.input_definition ?? ''), output: String(node.config.output_definition ?? '') };
+  const said = (value: unknown): string => {
+    const text = String(value ?? '');
+    return NO_EXAMPLE.test(text) ? '' : text;
+  };
+  return { input: said(node.config.input_definition), output: said(node.config.output_definition) };
 }
 
 /** A definition's example, or the sentence that says why it cannot be read. */
