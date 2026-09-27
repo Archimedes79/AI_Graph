@@ -40,7 +40,7 @@ export function storedValue(text: string, kind: DataKind): { value: unknown } | 
   try {
     return { value: JSON.parse(text) };
   } catch {
-    return { error: 'Structured data must be valid JSON before saving.' };
+    return { error: 'Structured data must be valid JSON.' };
   }
 }
 

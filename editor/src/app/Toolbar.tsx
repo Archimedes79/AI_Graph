@@ -443,7 +443,7 @@ export default function Toolbar({
               onChange={(e) => setAiDescription(e.target.value)}
               className="w-full rounded-lg p-3 text-sm resize-y outline-none"
               style={{ minHeight: 100, background: SUNKEN, border: `1px solid ${LINE}`, color: TEXT }}
-              placeholder="e.g. Read a text file, summarize it with AI, and show the result in a text window."
+              placeholder="e.g. Read a text file, summarize it with AI, and show the result on a page."
               disabled={aiGenerating}
             />
 
