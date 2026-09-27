@@ -7,7 +7,7 @@
 //     what comes in   each input -- its type, what it holds, where it is wired
 //                     from and what that node hands on -- and one real sample
 //     what goes out   each output, where it goes and what the node there
-//                     wants; the format in words; an example; the kept shape
+//                     wants; the format in words; the kept shape
 //     examples        inputs, and what must come out
 //
 // They used to reach the model from five places in five wordings, some of
@@ -32,7 +32,6 @@ export const BUDGET = {
   /** One example's inputs, or what it expects. */
   example: 400,
   format: 1200,
-  outputExample: 900,
   /** A value a probe was given, in a repair prompt. */
   preview: 900,
   schema: 700,
@@ -178,15 +177,11 @@ function outputsSection(request: GenerateRequest, kind: BriefKind): string {
   if (kind === 'format') return lines.length > 1 ? lines.join('\n') : '';
   const format = request.output_format?.trim();
   if (format) lines.push(`Format: ${clip(format, BUDGET.format)}`);
-  // An answer kept to imitate is an AI node's (`output.example.md`); what a
-  // body returns is held by its examples and its kept shape instead.
-  const example = kind === 'prompt' ? request.output_example?.trim() : '';
-  if (example) lines.push(`An example of an answer -- the same structure, new content:\n${clip(example, BUDGET.outputExample)}`);
   const schema = request.output_schema;
   if (schema && typeof schema === 'object') {
     lines.push(`The shape it returned so far, which the nodes after it were built against -- keep it: ${clip(outline(schema), BUDGET.schema)}`);
   }
-  if (kind === 'prompt' && (format || example)) {
+  if (kind === 'prompt' && format) {
     lines.push('The format is added after the system prompt by itself, at run time: the system prompt need not repeat it, and must not contradict it.');
   }
   return lines.length > 1 ? lines.join('\n') : '';

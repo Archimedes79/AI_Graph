@@ -38,13 +38,13 @@ type Props = Pick<NodePanelProps,
   /** What step 2's words mean for this node, said above them: who reads them, and when. */
   wordsHint: string;
   /**
-   * Step 2's example output, where it is an answer a model is shown to
-   * imitate rather than an output the example must give (an ai node's
-   * `output_example`): the element's own field, and how Try it's "Keep"
-   * keeps a result there. Absent, it is the example's expect block, checked
-   * by Try it, ▶ Test and `test`.
+   * What Try it's "Keep" does with a result, where it does not make it the
+   * example's expected output: an ai node's answer is never the same twice,
+   * so it is kept as a shape to answer in, in step 2's words
+   * (`keptAnswer.withAnswerShape`). Absent, it is the example's expect block,
+   * checked by Try it and `test`.
    */
-  answer?: { field: React.ReactNode; keep: (result: TryResult) => void };
+  keep?: (result: TryResult) => void;
 };
 
 /** An expectation of nothing -- "only that it runs" -- is kept as `{}` and shown as an empty box. */
@@ -72,7 +72,7 @@ const noExpectation = (examples: string): string => {
  */
 export default function NodeSteps({
   builder, node, setConfig, updateNode, setInvalid, fields, generating, message, onGenerate, steps,
-  body, subject, request, renderResult, wordsHint, answer,
+  body, subject, request, renderResult, wordsHint, keep: keepOwn,
 }: Props) {
   const generation = builder.generation;
   const nodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
@@ -80,7 +80,7 @@ export default function NodeSteps({
 
   const examples = String(node.config.examples ?? '');
   const pair = readPair(examples);
-  const answers = !!answer;
+  const answers = !!keepOwn;
   const inputError = pair.inputText.trim() && !pair.input
     ? 'The example input is not an object keyed by input port yet, like {"input": "…"}. It cannot be saved like this.'
     : '';
@@ -175,9 +175,8 @@ export default function NodeSteps({
     </>
   );
 
-  const exampleOutput = answer ? (
+  const exampleOutput = keepOwn ? (
     <div>
-      {answer.field}
       {/* Not asked for here, and still checked: shown, so that a `test`
           that fails on it can be seen, and dropped where it is not wanted. */}
       {expects && (
@@ -264,7 +263,7 @@ export default function NodeSteps({
     </>
   );
 
-  const keep = answer?.keep
+  const keep = keepOwn
     ?? ((result: TryResult) => editExamples((current) => withExpect(exampleFor(node, current), keptExpect(result.outputs))));
 
   const content = (

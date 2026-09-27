@@ -68,8 +68,6 @@ export type NodeConfig = {
   input_mode: 'text' | 'file' | 'directory';
   /** The output format in words: `output.md` in a project. */
   output_format_prompt: string;
-  /** An answer to imitate, recorded from a test run. */
-  output_example?: string;
   /** The message an ai node sends, with `{{port}}` where a port's value goes. Empty: send what arrived. */
   prompt_template?: string;
   /** An ai node's `run.js` when somebody changed it; absent or empty for the standard one. */

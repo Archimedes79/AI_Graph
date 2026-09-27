@@ -229,13 +229,11 @@ describe('what ✨ is told about a node, as facts', () => {
     expect(facts.batchMode).toBe('per_item');
   });
 
-  it('sends the format in words, and an answer kept to imitate', () => {
+  it('sends the format in words', () => {
     const ai = NODE_KINDS.ai.create('worker');
     ai.config.output_format_prompt = 'a list of {title, score}';
-    ai.config.output_example = '[{"title": "a", "score": 1}]';
     const facts = nodeFacts(ai, [ai], [], null);
     expect(facts.outputFormat).toBe('a list of {title, score}');
-    expect(facts.outputExample).toBe('[{"title": "a", "score": 1}]');
   });
 
   it('takes step 1\'s example as the sample, over what the last run delivered', () => {

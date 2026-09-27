@@ -2,7 +2,7 @@ import type { Edge } from 'reactflow';
 import type { ExecutionResult, GraphNode } from '@/graph';
 import type { GenerationRequest } from './generation';
 import { inputSources, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
-import { outputExampleText, outputFormatText } from './outputFormat';
+import { outputFormatText } from './outputFormat';
 import { readPair } from './examplePair';
 import { NODE_BUILDERS } from '@/elements/registry';
 
@@ -50,7 +50,7 @@ function restingValues(node: GraphNode, nodes: GraphNode[], edges: Edge[]): Samp
  *     what comes in   each input: type, where from and what that node hands
  *                     on, and one sample
  *     what goes out   each output: where to and what the node there wants;
- *                     the format in words; an example; the shape a run kept
+ *                     the format in words; the shape a run kept
  *     examples        the node's `examples.md`
  *
  * The sample is the node's example (step 1) when it has one: the engine reads
@@ -107,7 +107,6 @@ export function nodeFacts(
     },
     outputTargets: outputTargets(node.id, nodes, edges, true),
     outputFormat: outputFormatText(node.config),
-    outputExample: outputExampleText(node.config),
     outputSchema: node.config.output_schema,
     examples: node.config.examples,
     messageTemplate: node.config.prompt_template,

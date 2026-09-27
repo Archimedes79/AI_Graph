@@ -182,8 +182,6 @@ export interface GenerationRequest<S> {
   outputTargets?: Record<string, string>;
   /** The output format, in the person's words (`output.md`) -- sent whenever it says anything. */
   outputFormat?: string;
-  /** A result to imitate (`output.example.md`). */
-  outputExample?: string;
   /**
    * Keep what the generated body actually returned, as the node's output
    * shape, when it has none yet.
@@ -232,7 +230,6 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
     multi_outputs: request.lists?.outputs,
     output_targets: request.outputTargets && Object.keys(request.outputTargets).length ? request.outputTargets : undefined,
     output_format: request.outputFormat?.trim() || undefined,
-    output_example: request.outputExample?.trim() || undefined,
   };
 }
 

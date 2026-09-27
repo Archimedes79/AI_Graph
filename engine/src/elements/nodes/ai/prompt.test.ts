@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { assemblePrompt, formatInstruction, placeholders, promptText, type PromptSettings } from './prompt.ts';
+import { assemblePrompt, placeholders, promptText, type PromptSettings } from './prompt.ts';
 
 const settings = (over: Partial<PromptSettings> = {}): PromptSettings =>
-  ({ systemPrompt: '', template: '', outputFormatPrompt: '', outputExample: '', ...over });
+  ({ systemPrompt: '', template: '', outputFormatPrompt: '', ...over });
 
 describe('assemblePrompt', () => {
   it('sends what arrived when nobody wrote anything', () => {
@@ -60,35 +60,16 @@ describe('assemblePrompt', () => {
     expect(promptText([{ a: 1 }])).toBe('{"a":1}');
   });
 
-  it('adds the words about the answer to the instructions', () => {
+  it('adds the words about the answer to the instructions -- an answer kept in them too', () => {
     expect(assemblePrompt(settings({ systemPrompt: 'Be brief.', outputFormatPrompt: 'Respond with JSON.' }), { text: 'hi' }).system)
       .toBe('Be brief.\n\nRespond with JSON.');
-  });
-
-  it('can ask for an answer shaped like one it gave before', () => {
-    const { system } = assemblePrompt(settings({ outputExample: '{"title": "x", "score": 3}' }), { text: 'hi' });
-    expect(system).toContain('same format as this example');
-    expect(system).toContain('{"title": "x", "score": 3}');
+    expect(assemblePrompt(settings({ outputFormatPrompt: 'Answer in this shape: {"a": 1}' }), { text: 'hi' }).system)
+      .toBe('Answer in this shape: {"a": 1}');
+    expect(assemblePrompt(settings({ systemPrompt: 'Be brief.', outputFormatPrompt: '   ' }), { text: 'hi' }).system).toBe('Be brief.');
   });
 
   it('lists placeholders once each, in order', () => {
     expect(placeholders('{{b}} {{ a }} {{b}}')).toEqual(['b', 'a']);
-  });
-});
-
-describe('formatInstruction', () => {
-  it('follows a kept example -- it was kept to be followed', () => {
-    expect(formatInstruction(settings({ outputExample: '{"a": 1}', outputFormatPrompt: 'Short.' })))
-      .toBe('Answer in exactly the same format as this example -- the same structure, the same fields, new content:\n\n{"a": 1}\n\nShort.');
-  });
-
-  it('sends the description of the answer (output.md)', () => {
-    expect(formatInstruction(settings({ outputFormatPrompt: 'One sentence.' }))).toBe('One sentence.');
-  });
-
-  it('says nothing for plain text with no description', () => {
-    expect(formatInstruction(settings())).toBe('');
-    expect(formatInstruction(settings({ outputFormatPrompt: '   ' }))).toBe('');
   });
 });
 

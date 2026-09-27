@@ -71,11 +71,11 @@ export function tryInputs(node: GraphNode, example: Record<string, unknown> | un
  * What ▶ Try it would try now, as text (`TryItInline`'s `of`): the node as it
  * runs -- its ports and settings -- and *tried*, what it runs on. Not what
  * only describes it: *request*, the field it was written from; the example's
- * expectation and judge; the shape and the answer a try may keep.
+ * expectation and judge; the shape a try may keep.
  */
 export function tryKey(node: GraphNode, tried: Record<string, unknown> | undefined, request?: string): string {
   const runs: Record<string, unknown> = { ...node.config };
-  for (const key of ['examples', 'output_example', 'output_schema', request ?? '']) delete runs[key];
+  for (const key of ['examples', 'output_schema', request ?? '']) delete runs[key];
   return JSON.stringify([node.inputs, node.outputs, runs, tried ?? null]);
 }
 

@@ -106,9 +106,9 @@ describe.each(['code', 'ai'] as const)('a %s node\'s step 1', (type) => {
 });
 
 describe('step 2', () => {
-  it('asks an ai node for an answer to imitate, not for an output to check', () => {
+  it('has no box of its own for an answer an ai node liked: that is a shape, kept in its words', () => {
     const html = panel(made('ai'));
-    expect(html).toContain('aria-label="Example answer"');
+    expect(html).not.toContain('Example answer');
     expect(html).not.toContain('>Example output</label>');
   });
 

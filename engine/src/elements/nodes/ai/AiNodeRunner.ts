@@ -35,7 +35,6 @@ const AI_TEXTS: readonly TextFile[] = [
   { field: 'prompt_template', file: 'message.md' },
   // What the model is told its answer must look like.
   { field: 'output_format_prompt', file: 'output.md' },
-  { field: 'output_example', file: 'output.example.md' },
   // Optional: inputs, and what the answer must meet. See `execution/examples.ts`.
   { field: 'examples', file: 'examples.md' },
 ];
@@ -73,7 +72,6 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
       sendImages: c.send_images === true,
       template: String(c.prompt_template ?? ''),
       outputFormatPrompt: outputWords(c),
-      outputExample: String(c.output_example ?? ''),
       toolServers: serverList(c.mcp_servers),
       runCode: isStandardRun(String(c.run_code ?? '')) ? '' : String(c.run_code),
     };
@@ -116,10 +114,7 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
 
     return runBody(settings.runCode, inputs, runtime, {
       data: {
-        texts: {
-          system: settings.systemPrompt, message: settings.template,
-          output: settings.outputFormatPrompt, output_example: settings.outputExample,
-        },
+        texts: { system: settings.systemPrompt, message: settings.template, output: settings.outputFormatPrompt },
       },
       ask: settings,
       order,

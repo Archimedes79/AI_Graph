@@ -26,12 +26,12 @@ describe('a try, once what it tried has changed', () => {
     expect(tryKey({ ...node, outputs: [] }, example, 'code_prompt')).not.toBe(key);
   });
 
-  it('is still the try after what it only describes changed: the expectation, the judge, what Keep keeps, the request', () => {
+  it('is still the try after what it only describes changed: the expectation, the judge, the kept shape, the request', () => {
     const node = NODE_KINDS.code.create('c');
     const example = { input: 'a' };
     const key = tryKey(node, example, 'code_prompt');
     const examples = withJudge(withExpect(withInput('', '{"input": "a"}'), '{"output": "A"}'), 'Upper case.');
-    const described = { ...node, config: { ...node.config, examples, output_example: 'A', output_schema: { type: 'object' }, code_prompt: 'Shout it.' } };
+    const described = { ...node, config: { ...node.config, examples, output_schema: { type: 'object' }, code_prompt: 'Shout it.' } };
     expect(tryKey(described, example, 'code_prompt')).toBe(key);
   });
 });

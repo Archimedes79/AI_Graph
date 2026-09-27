@@ -130,8 +130,6 @@ export interface GenerateRequest {
    * the output a person writes.
    */
   output_format?: string;
-  /** An answer an AI node was kept to imitate (`output.example.md`). Only a prompt is told it. */
-  output_example?: string;
   /** Where `sample_inputs` came from, for the model: `the last run`, `the example in step 1`. */
   sample_origin?: string;
   /** How a list on an input arrives: one item per run (`per_item`) or whole (`whole_list`). */
