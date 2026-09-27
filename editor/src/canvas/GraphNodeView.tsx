@@ -66,8 +66,9 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
 
   const handleEdit = useCallback(() => setEditingNode(id), [id, setEditingNode]);
 
-  // A file dropped on a node is its example, where the element takes one --
-  // no dialog on the way; its own dialog opens on it (`dropExample`).
+  // A file dropped on a node fills what the element says (`dropPort`): the
+  // example of a node built in the four steps, what a data node holds. No
+  // dialog on the way; its own dialog opens on it (`dropExample`).
   const dropInto = builder?.dropPort(graphNode);
   const [fileOver, setFileOver] = useState(false);
   const [dropFailed, setDropFailed] = useState('');

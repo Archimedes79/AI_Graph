@@ -164,8 +164,7 @@ export default function ExampleInputField({ text, onText, ports, reads, fromGrap
         minHeight={72}
         title="Example input"
       />
-
-      {error && <p className="text-xs" style={{ color: DANGER_TEXT }}>{error}</p>}
+      {error &&<p className="text-xs" style={{ color: DANGER_TEXT }}>{error}</p>}
       {failure && <p className="text-xs" style={{ color: DANGER_TEXT }}>{failure}</p>}
       {said && !failure && <p className="text-xs" style={{ color: DIMMER }}>{said}</p>}
       {note}
