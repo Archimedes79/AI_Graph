@@ -160,6 +160,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
 
   data: {
     settings: ['data_value', 'data_format', 'data_prompt', 'data_format_prompt'],
+    // A file without a value holds nothing, which is null for a structure and
+    // '' for text (`DataNodeRunner.config`). One null says both, since the
+    // engine reads it as '' for text. A new node's '' made a structure hand
+    // on a string after one Save.
+    whenMissing: { data_value: null },
     create: (id) => ({
       id,
       node_type: 'data',

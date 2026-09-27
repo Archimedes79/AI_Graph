@@ -203,6 +203,15 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     },
   );
 
+  it('keeps a structure data node without a value holding nothing, not ""', () => {
+    // The engine reads a missing value as null for a structure; filled from a
+    // new node's '' it came back from one Save as a string.
+    const node = { ...NODE_KINDS.data.create('n'), config: { data_format: 'structure' } as GraphNode['config'] };
+    loadTestGraph([node]);
+    const saved = useGraphStore.getState().exportGraph().nodes[0];
+    expect(runAnswers(saved)).toEqual(runAnswers(node));
+  });
+
   it('keeps two unlabelled outputs apart in the run\'s result, as the command line does', async () => {
     const text = (id: string, value: string) => ({ ...NODE_KINDS.input.create(id), config: { value } as GraphNode['config'] });
     const show = (id: string) => ({ ...NODE_KINDS.output.create(id), config: {} as GraphNode['config'] });
