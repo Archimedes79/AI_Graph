@@ -13,6 +13,7 @@ import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import NodeEditor from '@/canvas/NodeEditor';
 import PageCardPanel from '@/canvas/PageCardPanel';
 import ResultsPanel from '@/app/ResultsPanel';
+import ChangeBar from '@/app/ChangeBar';
 
 import SettingsDialog from '@/app/SettingsDialog';
 import GraphProblems from '@/app/GraphProblems';
@@ -431,6 +432,7 @@ export default function App() {
           <Sidebar onAddNode={handleAddNode} />
           <div className="flex flex-col flex-1 min-w-0">
             <GraphCanvas active={view === 'graph'} onOpenPage={openPage} />
+            <ChangeBar />
           </div>
           {/* Beside the canvas: the panel of the node the person is on -- or,
               on none, what the last run gave. One at a time, so the canvas
