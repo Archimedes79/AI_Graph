@@ -3,17 +3,11 @@ import { derivedNodePorts } from '@/document/guiWidgets';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { renamedPorts } from '@/store/portRenames';
 import { examplesFollowPorts } from '@/authoring/examplePair';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { ERROR_PORT, errorOutput } from '@engine/execution/wiring.ts';
 
-/** The output a node grows when it is told to catch its own failures. */
-const ERROR_OUTPUT: Port = {
-  id: 'error',
-  name: 'Error',
-  kind: 'output',
-  data_type: 'text',
-  multi: false,
-  required: false,
-  description: 'Why this node failed. Optional to wire: unwired, the run simply carries on.',
-};
+/** What the output a node grows when it is told to catch its own failures says it is. */
+const CAUGHT = 'Why this node failed. Optional to wire: unwired, the run simply carries on.';
 
 /**
  * The node dialog's *draft* with its setting *key* set to *value*, and its
@@ -43,10 +37,14 @@ export function withSetting(draft: GraphNode, stored: GraphNode | undefined, key
   if (derived) return NODE_BUILDERS[draft.node_type].continuePorts(stored ?? draft, { ...next, ...derived });
   // Ticking "catch failures" is what puts the port on the node. Nobody
   // should have to add an output by hand and guess that it must be called
-  // `error` for the executor to fill it.
-  if (key === 'catch_errors') {
-    const without = next.outputs.filter((port) => port.id !== 'error');
-    next.outputs = settled ? [...without, ERROR_OUTPUT] : without;
+  // `error` for the executor to fill it. Which setting that is, the element
+  // says (`catchesErrors`), and the port is touched only when its answer
+  // turns: an older node's own `error` output survives an unrelated edit.
+  const element = engineRegistry.node(draft.node_type);
+  const catches = element?.catchesErrors(next) ?? false;
+  if (element && catches !== element.catchesErrors(draft)) {
+    const without = next.outputs.filter((port) => port.id !== ERROR_PORT);
+    next.outputs = catches ? [...without, errorOutput(CAUGHT)] : without;
   }
   return next;
 }

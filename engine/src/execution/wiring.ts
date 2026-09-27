@@ -12,8 +12,9 @@
 // not there, which can only ever deliver nothing, and two nodes sharing an id,
 // which used to be reported as a cycle.
 
-import type { Graph, GraphNode } from '../graph.ts';
+import type { Graph, GraphNode, Port } from '../graph.ts';
 import type { Runners } from '../elements/NodeRunner.ts';
+import { port } from '../elements/port.ts';
 import { RUN_PORT } from './triggers.ts';
 
 /** One thing to fix: where it is, what it is, and what to do about it. */
@@ -30,6 +31,15 @@ export const names = (ids: Iterable<string>): string => [...ids].map((id) => `"$
  * reason otherwise. See `failureOutputs` in the executor.
  */
 export const ERROR_PORT = 'error';
+
+/**
+ * That output as a port, for a node that lists it. Each kind says in its own
+ * *description* what the reason is a reason for; the id, name and type are
+ * the executor's and are spelled here only.
+ */
+export function errorOutput(description: string): Port {
+  return port(ERROR_PORT, 'Error', 'output', 'text', false, description);
+}
 
 /** The ports *node* really has -- derived where the engine derives them, declared where a person names them. */
 function portsOf(node: GraphNode, registry: Runners): { inputs: Set<string>; outputs: Set<string>; derived: boolean } {

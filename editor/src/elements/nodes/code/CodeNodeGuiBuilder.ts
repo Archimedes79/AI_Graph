@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { CodeNodeRunner } from '@engine/elements/nodes/code/CodeNodeRunner.ts';
+import { ERROR_PORT } from '@engine/execution/wiring.ts';
 import { CODE_STARTER } from '@/document/nodeKinds';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 
@@ -46,7 +47,7 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
       const first = node.inputs[0]?.id ?? 'name';
       return `The code reads each one as inputs.${first}.`;
     }
-    const keys = node.outputs.filter((port) => port.id !== 'error').map((port) => `${port.id}: …`);
+    const keys = node.outputs.filter((port) => port.id !== ERROR_PORT).map((port) => `${port.id}: …`);
     return `run() returns one key per output: { ${keys.join(', ') || 'output: …'} }.`;
   }
 }

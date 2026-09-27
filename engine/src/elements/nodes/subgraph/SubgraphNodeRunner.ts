@@ -2,8 +2,7 @@ import { NodeRunner, type Runners } from '../../NodeRunner.ts';
 import type { DeployNeeds, TextFile, WhatRuns } from '../../ElementRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
-import { port } from '../../port.ts';
-import type { Problem } from '../../../execution/wiring.ts';
+import { errorOutput, type Problem } from '../../../execution/wiring.ts';
 import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedUp } from './boundary.ts';
 import { runBody } from '../../body.ts';
 import { GRAPH_RUNS_PER_BODY, SUBGRAPH_RUN, SUBGRAPH_RUN_TEMPLATES, isStandardGraphRun } from './runTemplate.ts';
@@ -87,7 +86,7 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
     if (!this.catchesErrors(node)) return ports;
     return {
       inputs: ports.inputs,
-      outputs: [...ports.outputs, port('error', 'Error', 'output', 'text', false, 'Set when the graph inside failed')],
+      outputs: [...ports.outputs, errorOutput('Set when the graph inside failed')],
     };
   }
 

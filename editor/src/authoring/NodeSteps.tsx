@@ -3,6 +3,7 @@ import type { Graph } from '@/graph';
 import { call } from '@/api/client';
 import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { unmet } from '@engine/execution/examples.ts';
+import { ERROR_PORT } from '@engine/execution/wiring.ts';
 import type { NodePanelProps } from '@/elements/NodeGuiBuilder';
 import FourSteps, { RunOncePerItem, TaskField } from './FourSteps';
 import ExampleInputField from './ExampleInputField';
@@ -210,7 +211,7 @@ export default function NodeSteps({
         value={expectTyped}
         onChange={typeExpect}
         language="javascript"
-        placeholder={`{ ${node.outputs.filter((port) => port.id !== 'error').map((port) => `"${port.id}": …`).join(', ') || '"output": …'} }`}
+        placeholder={`{ ${node.outputs.filter((port) => port.id !== ERROR_PORT).map((port) => `"${port.id}": …`).join(', ') || '"output": …'} }`}
         minHeight={56}
         title="Example output"
       />

@@ -5,6 +5,7 @@ import { type GraphNode, type Port } from '../../../graph.ts';
 import { logicFrom, Logic } from '../../../authoring/logic.ts';
 import { selectFiles } from '../../fileSelection.ts';
 import { port } from '../../port.ts';
+import { errorOutput } from '../../../execution/wiring.ts';
 import { SELECTOR_FIELDS, SELECTOR_GENERATION } from '../../../authoring/generation.ts';
 import type { Generation } from '../../../authoring/generation.ts';
 
@@ -108,7 +109,7 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
     // A missing or unreadable file is the one thing here that can fail at run
     // time; text mode has nothing to read and so nothing to catch.
     const error = settings.catchErrors && mode !== 'text'
-      ? [port('error', 'Error', 'output', 'text', false, 'Set when the read failed; empty otherwise')]
+      ? [errorOutput('Set when the read failed; empty otherwise')]
       : [];
 
     if (mode === 'text') {

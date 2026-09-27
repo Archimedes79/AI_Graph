@@ -80,3 +80,22 @@ describe('a setting changed after a wait', () => {
     });
   });
 });
+
+describe('catching failures', () => {
+  const outputIds = (draft: GraphNode) => draft.outputs.map((port) => port.id);
+
+  it('grows the error output when ticked and takes it away when unticked', () => {
+    const node = NODE_KINDS.code.create('worker');
+    const ticked = withSetting(node, node, 'catch_errors', true);
+    expect(outputIds(ticked)).toEqual([...outputIds(node), 'error']);
+    expect(outputIds(withSetting(ticked, ticked, 'catch_errors', false))).toEqual(outputIds(node));
+  });
+
+  it('leaves an older node\'s own error output alone when another setting changes', () => {
+    // A node saved with an output of that name and catching off: editing its
+    // task is no reason to drop the port and the wire on it.
+    const node = NODE_KINDS.code.create('worker');
+    const own = { ...node, outputs: [...node.outputs, { ...node.outputs[0], id: 'error', name: 'error' }] };
+    expect(outputIds(withSetting(own, own, 'task', 'something else'))).toEqual(outputIds(own));
+  });
+});
