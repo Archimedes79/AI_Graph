@@ -48,7 +48,7 @@ export default function TestEveryExample({ graph, nodeId, count }: Props) {
       <button className="text-xs px-2 py-1 rounded" style={{ ...NEUTRAL_BUTTON, opacity: running ? 0.5 : 1 }}
         disabled={running} onClick={run}
         title="Run the node on each example in its examples.md and check each, the way test does -- a model is asked where one judges">
-        {running ? 'Testing…' : count > 1 ? `▶ Test all ${count} examples` : '▶ Test the example, judge included'}
+        {running ? 'Testing…' : count > 1 ? `▶ Test all ${count} examples` : '▶ Test the example as test does'}
       </button>
       {failure && <p className="text-xs" style={{ color: DANGER_TEXT }}>{failure}</p>}
       {results && (

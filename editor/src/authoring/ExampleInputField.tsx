@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 import { errorText } from '@/api/errorText';
 import CodeField from './CodeField';
@@ -67,6 +67,10 @@ export default function ExampleInputField({
   text, onText, error, ports, pathPorts, fromGraph, earlierFile, note, placeholder, showField = true, label = 'Example input',
 }: Props) {
   const [typed, type] = useTyped(text, onText);
+  // What the box holds now, for a file read that ends after more was typed:
+  // the file's value is put into that, not into the box as it was clicked.
+  const latest = useRef(typed);
+  latest.current = typed;
   const [busy, setBusy] = useState<'' | 'graph' | 'file'>('');
   const [said, setSaid] = useState('');
   const [failure, setFailure] = useState('');
@@ -92,7 +96,8 @@ export default function ExampleInputField({
     if (!into) return;
     setBusy('file'); setFailure(''); setSaid('');
     try {
-      type(withPortValue(typed, into, await pickedValue(path, into, pathPorts)));
+      const value = await pickedValue(path, into, pathPorts);
+      type(withPortValue(latest.current, into, value));
       setSaid(pathPorts.includes(into)
         ? `“${into}” holds the file's path, as a run hands it on.`
         : `“${into}” holds what the file says.`);

@@ -17,7 +17,7 @@ import { derivedOutputWords } from './derivedOutput';
 import { pathPorts } from './generationContext';
 import { fromTheGraph } from './fromTheGraph';
 import { outputFormatText } from './outputFormat';
-import { keptAnswer, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
+import { exampleFor, keptAnswer, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 type Props = Pick<NodePanelProps,
@@ -35,6 +35,16 @@ type Props = Pick<NodePanelProps,
 
 /** An expectation of nothing -- "only that it runs" -- is kept as `{}` and shown as an empty box. */
 const shownExpect = (text: string): string => (text === '{}' ? '' : text);
+
+/**
+ * *examples* with the first pair's expectation taken back to "only that it
+ * runs" -- or away, beside a judge, which checks the answer instead (`withJudge`).
+ */
+const noExpectation = (examples: string): string => {
+  const { judge } = readPair(examples);
+  const emptied = withExpect(examples, '');
+  return judge ? withJudge(emptied, judge) : emptied;
+};
 
 /**
  * A code or an ai node, built in the four steps (`FourSteps`), each filled
@@ -66,15 +76,21 @@ export default function NodeSteps({
     : '';
   useEffect(() => setInvalid('example input', inputError), [inputError, setInvalid]);
   useEffect(() => setInvalid('example output', expectError), [expectError, setInvalid]);
+  /**
+   * The examples changed from what the draft holds when the change lands, not
+   * from this render's copy: a fill that waits on a run upstream or a file
+   * wrote its render's copy back, over an expectation, a judge or a kept
+   * result entered while it waited.
+   */
+  const editExamples = (change: (current: string) => string) =>
+    setConfig('examples', (current: unknown) => change(String(current ?? '')));
   const [expectTyped, typeExpect] = useTyped(shownExpect(pair.expectText), (text) => {
-    const next = withExpect(examples, text);
-    setConfig('examples', next);
-    return shownExpect(readPair(next).expectText);
+    editExamples((current) => withExpect(exampleFor(node, current), text));
+    return shownExpect(readPair(withExpect(exampleFor(node, examples), text)).expectText);
   });
   const [judgeTyped, typeJudge] = useTyped(pair.judge ?? '', (text) => {
-    const next = withJudge(examples, text);
-    setConfig('examples', next);
-    return readPair(next).judge ?? '';
+    editExamples((current) => withJudge(exampleFor(node, current), text));
+    return readPair(withJudge(exampleFor(node, examples), text)).judge ?? '';
   });
   const lists = listPorts(node, pair.input, nodes, edges);
   // Once asked, the question stays while the dialog is open: unticked, no
@@ -104,6 +120,21 @@ export default function NodeSteps({
   // A node that takes nothing in has no example to fill, unless one was written before.
   const exampled = node.inputs.length > 0 || !!pair.inputText.trim();
   const tried = tryInputs(node, pair.input);
+  // What the example names that is no port of the node's (any more): written
+  // by hand, or kept from before a port was renamed outside this dialog.
+  // `check` holds every example to the ports; here it is said where it is edited.
+  const strayInputs = Object.keys(pair.input ?? {}).filter((key) => !node.inputs.some((port) => port.id === key));
+  const strayOutputs = Object.keys(pair.expect ?? {}).filter((key) => !node.outputs.some((port) => port.id === key));
+  const named = (keys: string[]) => keys.map((key) => `“${key}”`).join(', ');
+  const strayOutputNote = strayOutputs.length > 0 && (
+    <p className="text-xs mt-1" style={{ color: DANGER_TEXT }}>
+      It names {named(strayOutputs)}, which no output is called: <code>test</code> finds {strayOutputs.length > 1 ? 'them' : 'it'} missing.
+    </p>
+  );
+  // An expectation that names something. An ai node's step 2 asks for an
+  // answer to imitate rather than for one, but a file written by hand or by
+  // an older dialog can hold one, and `test` holds the answer to it.
+  const expects = !!pair.expect && Object.keys(pair.expect).length > 0;
 
   const comesIn = (
     <>
@@ -111,20 +142,29 @@ export default function NodeSteps({
       {exampled && <ExampleInputField
         text={pair.inputText}
         onText={(text) => {
-          const next = withInput(examples, text);
-          setConfig('examples', next);
-          return readPair(next).inputText;
+          editExamples((current) => withInput(current, text));
+          return readPair(withInput(examples, text)).inputText;
         }}
         error={inputError}
         ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
         pathPorts={pathPorts(node, nodes, edges)}
         fromGraph={node.inputs.length ? fromGraph : undefined}
         earlierFile={!pair.input && node.config.example_file ? node.config.example_file : undefined}
-        note={pair.others > 0 && (
-          <p className="text-xs" style={{ color: DIMMER }}>
-            Its examples.md holds {pair.others} more example{pair.others > 1 ? 's' : ''} after this one: kept there as
-            {pair.others > 1 ? ' they are' : ' it is'}, and still run by <code>test</code> and by ▶ Test in step 2. This is the first.
-          </p>
+        note={(
+          <>
+            {strayInputs.length > 0 && (
+              <p className="text-xs" style={{ color: DANGER_TEXT }}>
+                It gives {named(strayInputs)}, which no input is called: nothing reads {strayInputs.length > 1 ? 'them' : 'it'} by
+                that name, and <code>check</code> reports it. Rename or remove it here.
+              </p>
+            )}
+            {pair.others > 0 && (
+              <p className="text-xs" style={{ color: DIMMER }}>
+                Its examples.md holds {pair.others} more example{pair.others > 1 ? 's' : ''} after this one: kept there as
+                {pair.others > 1 ? ' they are' : ' it is'}, and still run by <code>test</code> and by ▶ Test in step 2. This is the first.
+              </p>
+            )}
+          </>
         )}
       />}
       {askedPerItem.current && (
@@ -157,6 +197,21 @@ export default function NodeSteps({
         spellCheck={false}
         aria-label="Example answer"
       />
+      {/* Not asked for here, and still checked: shown, so that a `test`
+          that fails on it can be seen, and dropped where it is not wanted. */}
+      {expects && (
+        <div className="text-xs mt-1 flex items-start gap-1.5" style={{ color: DIMMER }}>
+          <span className="flex-1 min-w-0">
+            <code>test</code> also compares the answer to this, from its examples.md: <code>{clip(pair.expectText.trim(), 200)}</code>
+          </span>
+          <button className="text-xs px-1 rounded flex-shrink-0" style={NEUTRAL_BUTTON}
+            aria-label="Drop the expected output"
+            onClick={() => editExamples(noExpectation)}>
+            ✕
+          </button>
+        </div>
+      )}
+      {strayOutputNote}
     </div>
   ) : (
     <div>
@@ -174,6 +229,7 @@ export default function NodeSteps({
         title="Example output"
       />
       {expectError && <p className="text-xs mt-1" style={{ color: DANGER_TEXT }}>{expectError}</p>}
+      {strayOutputNote}
       {/* A result to imitate, kept by "Example of the output" in an older
           version: still told to ✨, so shown, and dropped here by whoever no
           longer wants it said. */}
@@ -215,9 +271,9 @@ export default function NodeSteps({
     </div>
   );
 
-  // What Try it cannot check -- a judge, the examples after the first -- is
-  // checked as `test` checks it.
-  const testsMore = pair.others > 0 || !!pair.judge;
+  // What Try it cannot check -- a judge, the examples after the first, an ai
+  // node's expectation -- is checked as `test` checks it.
+  const testsMore = pair.others > 0 || !!pair.judge || (answers && expects);
 
   const comesOut = (
     <>
@@ -244,7 +300,7 @@ export default function NodeSteps({
 
   const keep = (result: TryResult) => (answers
     ? setConfig('output_example', keptAnswer(node, result.outputs))
-    : setConfig('examples', withExpect(examples, keptExpect(result.outputs))));
+    : editExamples((current) => withExpect(exampleFor(node, current), keptExpect(result.outputs))));
 
   const content = (
     <>
@@ -263,7 +319,7 @@ export default function NodeSteps({
         canRun={!!tried && !inputError}
         whyNot={inputError ? 'The example in step 1 is not an object yet.' : 'Fill step 1\'s example first: ⟳ from the graph, or 📂 from a file.'}
         run={() => call('runNode', { ...graphWithDraft(), node_id: node.id, inputs: tried ?? {} })}
-        verdict={answers ? undefined : (outputs) => (pair.expect && Object.keys(pair.expect).length ? unmet(pair.expect, outputs) : undefined)}
+        verdict={(outputs) => (expects && pair.expect ? unmet(pair.expect, outputs) : undefined)}
         onKeep={keep}
         renderResult={renderResult}
       >
