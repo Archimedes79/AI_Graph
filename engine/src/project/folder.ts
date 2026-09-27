@@ -429,7 +429,6 @@ interface Plan {
   files: Map<string, string | null>;
   /** The folders under `nodes/` that hold a project of their own: `tidy` leaves them to it. */
   nested: Set<string>;
-  document: { flow: unknown; layout: unknown };
 }
 
 /** What writing *graph* into *folder* comes to, this level and every level below it. */
@@ -479,9 +478,14 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
     };
     files.set(join(folder, nodeFolder(node.id), NODE_FILE), toFile(about, true));
   }
+  // Files like the rest, so one changed outside -- another writer added a node
+  // and its folder -- refuses the save instead of being written over, and the
+  // new node's files tidied away.
+  files.set(join(folder, FLOW_FILE), toFile(flow, true));
+  files.set(join(folder, LAYOUT_FILE), toFile(layout, true));
 
   // Deepest first, so a level is only written once everything it holds is.
-  return [...deeper, { folder, files, nested, document: { flow, layout } }];
+  return [...deeper, { folder, files, nested }];
 }
 
 /**
@@ -527,13 +531,6 @@ async function commit(plan: Plan, guard?: Guard): Promise<void> {
   const names = new Set([...textFileNames(), FLOW_FILE, LAYOUT_FILE, NODE_FILE, INTERFACE_FILE, GRAPH_FILE, ...RETIRED_FILES]);
   await tidy(join(plan.folder, NODES_DIR), new Set(plan.files.keys()), names, plan.nested);
 
-  await mkdir(plan.folder, { recursive: true });
-  for (const [name, content] of [[FLOW_FILE, plan.document.flow], [LAYOUT_FILE, plan.document.layout]] as const) {
-    const path = join(plan.folder, name);
-    await guard?.(path);
-    await writeFile(path, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
-    await remember(path);
-  }
   // An older save's structure and its rendered wiring: this shape replaces both.
   for (const name of [GRAPH_FILE, 'flow.js']) {
     const path = join(plan.folder, name);

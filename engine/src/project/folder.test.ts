@@ -286,6 +286,30 @@ describe('two editors on one folder', () => {
     await expect(writeProject(dir, graph)).rejects.toThrow(FileChanged);
     expect(JSON.parse(await text('nodes/count/interface.json')).outputs[0].type).toBe('number');
   });
+
+  it('does not wipe a node another writer added, nor its folder', async () => {
+    // The MCP server, or a second editor, adds node "extra" to the open project.
+    await writeProject(dir, sample());
+    const open = await readProject(dir);
+    const flow = JSON.parse(await text('flow.json'));
+    flow.nodes.extra = 'code';
+    await touch(join(dir, 'flow.json'), JSON.stringify(flow, null, 2));
+    await mkdir(join(dir, 'nodes/extra'), { recursive: true });
+    await writeFile(join(dir, 'nodes/extra/code.js'), 'function run() { return { out: "somebody else" }; }\n');
+
+    await expect(writeProject(dir, open)).rejects.toThrow(/flow\.json/);
+    expect(JSON.parse(await text('flow.json')).nodes.extra).toBe('code');
+    expect(existsSync(join(dir, 'nodes/extra/code.js'))).toBe(true);
+  });
+
+  it('does not write over a layout moved outside since it was read', async () => {
+    await writeProject(dir, sample());
+    const open = await readProject(dir);
+    const layout = JSON.parse(await text('layout.json'));
+    layout.count.x = 999;
+    await touch(join(dir, 'layout.json'), JSON.stringify(layout, null, 2));
+    await expect(writeProject(dir, open)).rejects.toThrow(/layout\.json/);
+  });
 });
 
 /**
