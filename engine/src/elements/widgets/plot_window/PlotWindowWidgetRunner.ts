@@ -1,7 +1,5 @@
 import { DisplayWidgetRunner } from '../DisplayWidgetRunner.ts';
 
-export { PLOT_VIEW } from './view.ts';
-
 /** A chart of what arrives: points or a figure, drawn by the page -- or SVG, shown as it stands. */
 export class PlotWindowWidgetRunner extends DisplayWidgetRunner {
   readonly widgetKind = 'plot_window' as const;

@@ -1,5 +1,13 @@
 import { DIM, DIMMER, HOVER, LINE, MUTED, RAISE, TEXT } from '@/ui/theme';
-import { PLOT_VIEW } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
+
+/**
+ * The room a chart leaves around its plot, in the block's own pixels -- a
+ * floor, since the room a value axis needs depends on how long its numbers
+ * are (`chartMargins`). A chart is drawn at the size the block is: there is no
+ * drawing space of its own scaled into the block, which made a label's size a
+ * function of how big the block had been dragged.
+ */
+const MARGIN = { left: 46, right: 14, top: 16, bottom: 30 };
 
 interface PlotWidgetProps {
   data: unknown;
@@ -148,8 +156,8 @@ export function chartMargins(width: number, height: number, longestLabel = 3) {
   if (!labelled) return { left: 6, right: 6, top: 6, bottom: 6, labelled };
   const forNumbers = Math.min(Math.round(width * 0.3), 12 + longestLabel * 7);
   return {
-    ...PLOT_VIEW.margin,
-    left: Math.max(PLOT_VIEW.margin.left, forNumbers),
+    ...MARGIN,
+    left: Math.max(MARGIN.left, forNumbers),
     labelled,
   };
 }

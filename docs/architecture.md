@@ -46,7 +46,7 @@ engine/src/elements/                            editor/src/elements/
                                                             SelectWidgetView.tsx
                                                             SelectWidgetPanel.tsx
     plot_window/ PlotWindowWidgetRunner.ts          plot_window/ PlotWindowWidgetGuiBuilder.ts
-                 view.ts                                        PlotWindowWidgetView.tsx
+                                                                PlotWindowWidgetView.tsx
                                                                 PlotChart.tsx
     …                                               …  WidgetView.ts
 ```

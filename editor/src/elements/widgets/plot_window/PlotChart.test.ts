@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import PlotChart, { asDrawing, axisLabel, chartMargins, computeAxisRange, toFigure } from './PlotChart';
-import { PLOT_VIEW } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
 
 describe('computeAxisRange', () => {
   it('includes 0 in the range for all-positive data', () => {
@@ -90,10 +89,6 @@ describe('one coordinate system: the block', () => {
    * There is one answer now: pixels, the block's own. What remains of the old
    * frame is margins, which were always pixels.
    */
-  it('keeps no drawing space of its own to scale from', () => {
-    expect(Object.keys(PLOT_VIEW)).toEqual(['margin']);
-  });
-
   it('gives a long number more room to its left than a short one', () => {
     // '1.4G' and '128500' do not need the same margin. One constant for both
     // either crops the long one or wastes the short one's space.
