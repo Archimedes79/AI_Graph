@@ -2,7 +2,7 @@
   "metadata": {
     "name": "Hello World",
     "version": "1.0.0",
-    "description": "The smallest possible graph: a text input wired straight to a result window.",
+    "description": "The smallest possible graph: a text input wired straight to the run's result.",
     "author": "",
     "tags": [
       "example"
@@ -57,10 +57,7 @@
         }
       ],
       "outputs": [],
-      "config": {
-        "output_label": "Hello Result",
-        "write_mode": "window"
-      }
+      "config": {}
     }
   ],
   "edges": [

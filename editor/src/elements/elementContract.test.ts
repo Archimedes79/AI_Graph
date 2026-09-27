@@ -46,7 +46,7 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
   });
 
   it('has a Panel, loaded only when the node is opened -- or is a page, and never opened', () => {
-    // A page is edited in the GUI editor and its node dialog is never opened
+    // A page is edited on the Page tab and its node dialog is never opened
     // (App.tsx), so a panel of its own is one nobody can reach -- which the
     // gui node's was, stale copy and all.
     if (showsPage(nodeType)) {

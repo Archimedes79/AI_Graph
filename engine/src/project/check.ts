@@ -145,12 +145,27 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
     } : {
       where: 'graph',
       problem: 'Nothing a person can see: there is no gui node and no output node, so a run computes its answer and shows nobody.',
-      fix: 'End every branch in an "output" node (config.write_mode "window" plus an output_label, or "file"), or in a "gui" node with a block that displays the value.',
+      fix: 'End every branch in an "output" node -- the run\'s result, under its label; config.write_mode "file" or "directory" writes it too -- or in a "gui" node with a block that displays the value.',
     });
   }
-  if (!inside) problems.push(...sharedResultLabels(graph));
+  if (!inside) problems.push(...sharedResultLabels(graph), ...secondPages(graph));
 
   return problems;
+}
+
+/**
+ * A graph is one tool with one page. Nodes that carry an interface beyond the
+ * first are shown by nobody: the editor and a delivered tool draw the first
+ * page's blocks. (Inside a node's graph any page is a problem of that node's.)
+ */
+function secondPages(graph: Graph): Problem[] {
+  const pages = graph.nodes.filter((node) => registry.node(node.node_type)?.hasInterface).map((node) => node.id);
+  if (pages.length < 2) return [];
+  return [{
+    where: `nodes ${names(pages)}`,
+    problem: `A graph has one page, and these are ${pages.length}: only the blocks of "${pages[0]}" are shown.`,
+    fix: `Move the blocks of the others into "${pages[0]}" (its config.gui_widgets), wire them there, and delete the others.`,
+  }];
 }
 
 /**
@@ -179,7 +194,7 @@ function sharedResultLabels(graph: Graph): Problem[] {
       problem: ids.length > 1
         ? `These output nodes share the label "${label}", so the run's result keeps only the first under it, the rest under ${elsewhere}.`
         : `Its label "${label}" is the key another output's result is handed on under, so the run's result keeps it under ${elsewhere}.`,
-      fix: 'Give every output node its own output_label.',
+      fix: 'Give every output node its own label.',
     });
   }
   return problems;

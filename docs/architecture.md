@@ -116,13 +116,13 @@ ElementRunner<Subject, Config>          config() · texts() · logic() · catche
         └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
 
 ElementGuiBuilder<Subject, PanelProps>           Panel · generation
-├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary   (builder only)
+├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
 │                                         + the four steps' declarations: stepped · exampleInput · ownsDescription
 │                                           portEditing/portHint · wantsOn · restingValue/restingFile · publishedDescription
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
 │   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
 │   └── GuiNodeGuiBuilder
-└── WidgetGuiBuilder                      create(label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor   (builder only)
+└── WidgetGuiBuilder                      create(label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor · preview   (builder only)
     ├── InputPickerWidgetGuiBuilder   TextIoWidgetGuiBuilder   SelectWidgetGuiBuilder
     ├── SliderWidgetGuiBuilder        ButtonWidgetGuiBuilder   ChatWidgetGuiBuilder
     ├── StaticWidgetGuiBuilder            starts unnamed: page furniture has no ports to name
@@ -134,9 +134,14 @@ ElementGuiBuilder<Subject, PanelProps>           Panel · generation
 The browser half is the same tree with `GuiBuilder` for `Runner`, and
 [`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts) compares the two lineages
 class by class. What each kind knows about its own appearance — its name, icon and colour,
-a new widget's size, tone and first values — is a member of its `GuiBuilder`, not a table in a
-shell. An element is handed its services (`Runtime.ts`: `files`, `code`, `ai`, `tools`)
-rather than reaching for them.
+a new widget's size, tone and first values, how its last result reads on the canvas — is a
+member of its `GuiBuilder`, not a table in a shell. After a run the canvas shows each value a
+node made under the port it stands at, read by its shape (`elements/resultPreview.ts`: a
+line, a count and the first row, a sketch, a thumbnail); `NodeGuiBuilder.resultPreviews` says
+which port, and where the element reads a value its own way it says so — a page shows what
+each block shows, and a chart block reads a list of points as a chart
+(`WidgetGuiBuilder.preview`). An element is handed its services (`Runtime.ts`: `files`,
+`code`, `ai`, `tools`) rather than reaching for them.
 
 ### Build time and run time, in one class
 
@@ -177,7 +182,8 @@ role that had nowhere to live:
 | Was | Is now | Because |
 |---|---|---|
 | `WidgetGuiBuilder.View`, `ownsValue` | [`page/blocks.ts`](../editor/src/page/blocks.ts) | what the **page draws** — the one part of a widget a recipient operates |
-| `NodeGuiBuilder.create`, `settings`, `saved`, `showsResultWindow` | [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| `NodeGuiBuilder.create`, `settings`, `saved` | [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| `NodeGuiBuilder.showsResultWindow` | — | gone with the output node's window: a run's result is what its output nodes hand back, under their labels |
 | `WidgetGuiBuilder.clearValueAfterRun` | `WidgetRunner.clearsValueAfterRun` | what a **run** means for a block, the same family as `settle` |
 
 A node's middle role is empty by nature: the canvas is never delivered. A widget's is not,
@@ -261,10 +267,10 @@ engine/src                               editor/src
     generation.ts    written, where it       FourSteps           Try it, the live transcript, the
     logic.ts         is kept, who runs it    NodeSteps …         page-wide sweep (graphSweep.ts)
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
-    executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor
-    triggers.ts      what starts a run     page/               a gui node's page: GuiPage (drawn by
-    batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike),
-    runtimeValues.ts  images.ts              DesignerTab …       the designer, layout, schemes
+    executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
+    triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
+    batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
+    runtimeValues.ts  images.ts              DesignerTab …       Page tab, the Preview tab, layout, schemes
     reuse.ts  interface.ts  examples.ts
   project/           a graph on disk
     folder.ts        read · write · watch
@@ -277,7 +283,7 @@ engine/src                               editor/src
     schedule.ts  node.ts                   runtime/            the deployed tool's page
     lifecycle.ts     what is stopped, in order
     editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal
-                                           dialogs/            FileBrowserDialog, PathField, RequirementsDialog, OutputWindows
+                                           dialogs/            FileBrowserDialog, PathField, RequirementsDialog
   ai/                providers · MCP · settings
   cli/               cli.ts  bundle.ts
 ```
@@ -384,13 +390,16 @@ graph** use.
 
 ## Authoring: one loop for every node that writes
 
-Every node that has a body — an AI node's prompt, a code node, a data node's format — is
-written the same way, in four steps (`authoring/FourSteps`, drawn by `NodeSteps`). A block
-on a page has none: a chart, a table or an image shows what arrives, a folder picker lists
-its folder, and what reshapes a value or chooses some of the files is a code node wired in
-before or after it. The block's dialog is its settings, and for a display block one
-sentence of what it shows (`DisplayWidgetRunner.draws`, the same words the node wired into
-it is told).
+Every node that has a body — an AI node's prompt, a code node — is written the same way,
+in four steps (`authoring/FourSteps`, drawn by `NodeSteps`). A block on a page has none: a
+chart, a table or an image shows what arrives, a folder picker lists its folder, and what
+reshapes a value or chooses some of the files is a code node wired in before or after it.
+The block's dialog is its settings, and for a display block one sentence of what it shows
+(`DisplayWidgetRunner.draws`, the same words the node wired into it is told). Nor do the
+nodes that are values: an input is a text or a folder's listing, a data node its kind and
+what it holds, an output the run's result under its label (and a file or folder of it, if
+asked) — their dialogs are those settings, and a file is read nowhere but at the input of
+the node that wants its text.
 
 ```
 1 what comes in:  ports ("read the file at this path") + ONE example   ⟳ · 📂 · a file dropped · "run once per item"
@@ -505,7 +514,8 @@ or a page that has them can do the same.
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
-  that element's `problems()`. Two output nodes sharing a label are a problem too; until it is
+  that element's `problems()`. A second page is a problem: a graph has one, the first node that
+  `hasInterface`, and the editor and a tool draw only that. Two output nodes sharing a label are a problem too; until it is
   fixed the run's result keeps the first under the label and the others under their ids
   (`NodeRunner.ts`'s `resultKeys`), and `check` names those keys. Ids a folder could not read
   back -- two differing only in case, a number, a "." or "->" -- are problems as well

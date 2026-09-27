@@ -275,7 +275,7 @@ function readme(
   if (needs.interface) {
     lines.push(
       '',
-      '## The interface',
+      '## The page',
       '',
       'This graph has a page. Running it from the command line works and fills',
       "the page's blocks with values, but does not draw them; the fields it",

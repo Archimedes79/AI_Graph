@@ -59,13 +59,13 @@ export type NodeConfig = {
   catch_errors: boolean;
   code: string;
   code_prompt: string;
+  /** A data node: what kind of value it holds. */
   data_format: 'text' | 'structure';
-  data_format_prompt: string;
-  data_prompt: string;
+  /** A data node: the value it holds, and hands on until something arrives. */
   data_value?: unknown;
   extensions: string;
   gui_widgets: GuiWidget[];
-  input_mode: 'text' | 'file' | 'directory';
+  input_mode: 'text' | 'directory';
   /** The output format in words: `output.md` in a project. */
   output_format_prompt: string;
   /** The message an ai node sends, with `{{port}}` where a port's value goes. Empty: send what arrived. */
@@ -85,7 +85,6 @@ export type NodeConfig = {
   subgraph?: unknown;
   /** What a node is meant to do, written before it is filled in: `task.md` in a project. */
   task: string;
-  output_label: string;
   prompt_at_runtime: boolean;
   recursive: boolean;
   send_images: boolean;
@@ -93,7 +92,8 @@ export type NodeConfig = {
   /** Unset: the model's own default -- current Claude models refuse one at all. */
   temperature?: number;
   value?: string | null;
-  write_mode: 'none' | 'file' | 'directory' | 'window';
+  /** An output node: also write the run's result to a file, or one file per value into a folder. */
+  write_mode: 'none' | 'file' | 'directory';
 };
 
 /**

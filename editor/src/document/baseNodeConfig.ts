@@ -9,7 +9,7 @@ import type { NodeConfig } from '@/graph';
  * key by key, because it says nothing the engine would not assume
  * (`savedNode`); and what every `NODE_KINDS[type].create()` starts from, so a
  * panel can read any field with a type. A new node that starts differently
- * -- a code node per item, an output node with a window -- says so in
+ * -- a code node per item, an ai node with a system prompt -- says so in
  * `create`, and that is what its file then carries.
  *
  * One default per key: a second one, for what a *loaded* node lacks, is what
@@ -32,11 +32,7 @@ export function baseNodeConfig(): NodeConfig {
     code_prompt: '',
     data_value: null,
     data_format: 'text',
-    data_prompt: '',
-    data_format_prompt: '',
     output_format_prompt: '',
-    // No label is the node's id as the key of the run's result.
-    output_label: '',
     write_mode: 'none',
     // Once on the whole list (`NodeRunner.batchMode`), as many at once as the run allows.
     batch_mode: 'whole_list',

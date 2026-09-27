@@ -20,7 +20,7 @@ as a tool that runs on their machine: offline, on a local model, with no account
 | 🔒 **Your data stays on the machine** | Ollama and LM Studio are the default, not a fallback. Everything binds to `127.0.0.1`, and there is no telemetry. Contracts, records or personnel files are processed where they already are. |
 | 💶 **It is free to run** | A 7B model on an ordinary workstation classifies, extracts, summarises and rewrites. Where that is not enough, pin *one* node to a paid provider instead of moving the whole pipeline into the cloud. |
 | ✨ **No AI expertise required** | Describe in plain language what a node should do, and ✨ Generate writes the system prompt or the JavaScript. No prompt engineering, no vector store, no framework, no glue code. |
-| 🚀 **You ship a tool, not a prototype** | 🚀 Deploy packages the graph with the real execution engine. The recipient needs Node and nothing else, and the code nodes run there too. A graph with `gui` nodes deploys *with its interface*. |
+| 🚀 **You ship a tool, not a prototype** | 🚀 Deploy packages the graph with the real execution engine. The recipient needs Node and nothing else, and the code nodes run there too. A graph with a page deploys *with its page*. |
 | 🔍 **Nothing is hidden** | Typed ports say what flows between nodes, generated code stays visible and editable, graphs are plain JSON, and a node's body can live in its own `.js`/`.md` file beside the graph — so `git diff` reads like text. |
 
 > **The cheap option is the private one.** Running locally costs nothing *and* keeps the
@@ -32,8 +32,8 @@ as a tool that runs on their machine: offline, on a local model, with no account
   something you assemble; here it is the state you start in.
 - **A deploy bundle vendors the engine, not generated code**, so a deployed graph
   behaves identically to the one in the editor — the same components, verbatim.
-- **A graph can carry its own interface.** `gui` nodes build a file picker, text window
-  or plot from widgets, and the node's ports are always derived from them.
+- **A graph can carry its own page.** Its blocks — a file picker, a text block, a chart —
+  are what a person uses, and the page's ports are always derived from them.
 
 ## Use Cases
 
@@ -41,8 +41,8 @@ as a tool that runs on their machine: offline, on a local model, with no account
   summarises each one, an Output node that writes the results back to disk.
 - **Charts from your own data** — choose a CSV, see the chart: a page with a file picker
   and a chart, and one Code node that says what to plot; see [examples/population_plotter/](examples/population_plotter/).
-- **Local-LLM chat or report tool** — an AI node on Ollama/LM Studio fed by a file input,
-  paired with a `gui` node's `text_io` widget: a runnable front-end with zero UI code.
+- **Local-LLM chat or report tool** — an AI node on Ollama/LM Studio that reads a file
+  at its input, paired with a text block on the page: a runnable front-end with zero UI code.
 - **A graph as a standalone tool** — once it works in the editor, 🚀 Deploy hands a
   non-technical user or a CI job something that runs without the AI-Graph editor at all.
 
@@ -70,9 +70,14 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **Visual graph editor** — a ReactFlow canvas with undo/redo; drop a graph `.json` file
   or a project folder on the window to open it, or use **Open**; every example in
   `examples/` is a project folder.
-- **Eight node types** — Input (text/file/directory), AI, Code (JavaScript), Data,
-  GUI, Output, Trigger (the tool starting, a clock), and Subgraph: a node that holds a
-  graph of its own, so a graph grows in depth as well as in width.
+- **Eight node types** — Input (a text, or a folder's listing), AI, Code (JavaScript),
+  Data (a value kept between runs), Output (the run's result, under its name; a file or a
+  folder of it if asked), Trigger (the tool starting, a clock), Subgraph: a node that holds a graph of
+  its own, so a graph grows in depth as well as in width — and the Page, one per graph,
+  which its first block makes.
+- **One ▶ Run, and results in place** — the toolbar's ▶ Run runs the graph from any tab,
+  and after it every node shows what it made under its port: a line of text, *214 rows*
+  and the first, a small chart of numbers, a thumbnail, or the first line of an error.
 - **Events are booleans, and every node has a gate** — a button or a trigger is `true` for
   the round it started; wired into a node's ◆ it decides whether the node runs, and a
   code node that returns booleans is the filter and the router. What a node made last
@@ -96,10 +101,11 @@ Nothing leaves the machine unless the graph itself sends it there.
   The toolbar counts items *within* the running node and says when a model has gone quiet,
   so a long batch is never mistaken for a hang — and a model that answers with nothing at
   all fails the node instead of quietly passing an empty string on.
-- **A project is a folder** — `flow.json` plus one folder per node under `nodes/`: code,
-  prompts and format contracts live there in `.js`/`.md` files, so a language server and
-  `git diff` both work on them.
-- **GUI nodes** — a page built like a document: type headings in place, press `/` to
+- **A project is a folder** — `flow.json` plus one folder per node under `nodes/`: code
+  and prompts live there in `.js`/`.md` files, so a language server and `git diff` both
+  work on them.
+- **A page** — built like a document, on the Page tab under the tool's name and
+  description: type headings in place, press `/` to
   insert a chat, a file picker, a dropdown, a chart or a table, and deploy it together
   with the graph. A block runs no code: a chart, a table or an image shows what arrives,
   drawn at the block's real size, and what shapes it is a node.
@@ -196,7 +202,7 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 | Document | What is in it |
 |---|---|
 | [docs/install.md](docs/install.md) | Running the editor, working on it, containers, tests and CI |
-| [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, GUI nodes and widgets |
+| [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, the page and its blocks |
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the one AI setting and a node's own, where the API key goes |
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, Docker, the Graph Runner CLI |
 | [docs/mcp-server.md](docs/mcp-server.md) | Letting Claude (or any MCP client) generate, check, save and run graphs |

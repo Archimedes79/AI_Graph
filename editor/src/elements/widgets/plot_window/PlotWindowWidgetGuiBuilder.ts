@@ -1,6 +1,7 @@
 import { PlotWindowWidgetRunner } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
 import { DisplayWidgetGuiBuilder } from '../DisplayWidgetGuiBuilder';
-import PlotChart from './PlotChart';
+import { previewOf, sketchOf, type Preview } from '../../resultPreview';
+import { toFigure } from './PlotChart';
 
 export class PlotWindowWidgetGuiBuilder extends DisplayWidgetGuiBuilder {
   readonly widgetKind = 'plot_window';
@@ -15,6 +16,9 @@ export class PlotWindowWidgetGuiBuilder extends DisplayWidgetGuiBuilder {
 
   readonly runner = new PlotWindowWidgetRunner();
 
-  /** What last arrived on this widget's input port, charted small on the graph canvas itself. */
-  override readonly CanvasPreview = PlotChart;
+  /** On a chart, whatever the chart draws is a chart: a list of `{label, value}` points too, which elsewhere is rows. */
+  override preview(value: unknown): Preview | undefined {
+    const figure = toFigure(value);
+    return figure ? sketchOf(figure) : previewOf(value);
+  }
 }

@@ -1,11 +1,12 @@
 // A node's build-time half, in the browser: the mirror of `engine/src/elements/NodeRunner.ts`.
 
 import type { ComponentType, ReactNode } from 'react';
-import type { Graph, GraphNode, NodeType } from '@/graph';
+import type { Graph, GraphNode, NodeResult, NodeType } from '@/graph';
 import type { ChangeAsked, FieldAccess } from '@/authoring/generation';
 import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { asExampleText, readPair, withInput } from '@/authoring/examplePair';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
+import { previewOf, type PortPreviews } from './resultPreview';
 
 /**
  * What the node editor hands every node panel. A panel takes the part it needs.
@@ -75,10 +76,9 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   abstract readonly nodeType: NodeType;
 
   // ── Run time ──────────────────────────────────────────────────────────────
-  // Nothing, on purpose. Whether a node's result opens a window is
-  // `NODE_KINDS[type].showsResultWindow` (document/nodeKinds.ts), which a deployed
-  // tool reads without this class; whether a node is a page of widgets is the
-  // engine's `hasInterface`, asked through `showsPage` (document/guiWidgets.ts).
+  // Nothing, on purpose. Whether a node is a page of widgets is the engine's
+  // `hasInterface`, asked through `showsPage` (document/guiWidgets.ts), which a
+  // deployed tool reads without this class.
 
   // ── Build time ────────────────────────────────────────────────────────────
   // The editor: the palette, a new element, its panels, what ✨ Generate is told.
@@ -114,8 +114,7 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    * The dialog is laid out as the four steps of building the node -- what
    * comes in, what comes out, what it should do, and how, tried right there --
    * with the ports inside those steps rather than in a list of their own. For
-   * the nodes whose body is written against its ports -- ai and code -- and
-   * for a data node, whose format is written against what it takes and hands on.
+   * the nodes whose body is written against its ports: ai and code.
    */
   readonly stepped: boolean = false;
 
@@ -177,6 +176,15 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   }
 
   /**
+   * The input a file dropped on the node on the canvas fills
+   * (`withExampleValue`), or undefined where a drop means nothing: by default
+   * the one input of a node built in the four steps, whose example it becomes.
+   */
+  dropPort(node: GraphNode): string | undefined {
+    return this.stepped && node.inputs.length === 1 ? node.inputs[0].id : undefined;
+  }
+
+  /**
    * The description a saved node publishes (the "description" in its
    * nodes/<id>/node.json). Where the dialog asks what the node should do in a
    * field of its own and draws no description box (`ownsDescription`), that
@@ -193,6 +201,23 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
 
   /** A line of what the node holds, shown on the canvas under its ports. Nothing, for most. */
   canvasSummary?(node: GraphNode): string | undefined;
+
+  /**
+   * What the canvas shows of this node's last result, beside the port each
+   * value stands at, read by its shape (`resultPreview.ts`): what came out of
+   * an output port stands under that port, and a value handed on under the
+   * name of an input -- an output node's -- under the input it arrived on.
+   */
+  resultPreviews(node: GraphNode, result: NodeResult): PortPreviews {
+    const previews: PortPreviews = { inputs: {}, outputs: {} };
+    for (const [port, value] of Object.entries(result.outputs ?? {})) {
+      const side = node.outputs.some((p) => p.id === port) ? 'outputs'
+        : node.inputs.some((p) => p.id === port) ? 'inputs' : undefined;
+      const preview = side && previewOf(value);
+      if (side && preview) previews[side][port] = preview;
+    }
+    return previews;
+  }
 
   /**
    * The node is a source whose data nothing describes yet -- no sample, no
@@ -214,9 +239,9 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
 
   /**
    * The file whose text this node hands on from one output port without
-   * running anything -- an input node's file -- or undefined. A node wired to
-   * it is shown that file's text as its sample before the graph has ever run:
-   * the path is sent, and the engine reads it the way a run reads a file.
+   * running anything, or undefined. No kind does any more: an input holds a
+   * file's path as text, and the node it is wired into reads the file at its
+   * own input -- which is what names the port to read (`readFilePorts`).
    */
   restingFile(_node: GraphNode, _port: string): string | undefined {
     return undefined;
@@ -226,7 +251,7 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    * What this node wants on one of its input ports, in words, for a node
    * wired into it: its ✨ is told, beside the output that feeds it. The
    * port's own description by default; a node whose port wants something
-   * more particular -- a chart block, a data node's format -- says that.
+   * more particular -- a chart block, what a data node stores -- says that.
    */
   wantsOn(node: GraphNode, port: string): string | undefined {
     return node.inputs.find((p) => p.id === port)?.description?.trim() || undefined;

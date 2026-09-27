@@ -40,3 +40,16 @@ describe('a data node holding nothing', () => {
     expect(await element.execute(dataNode({ data_format: 'structure', data_value: null }), { input: [3] }, nowhere)).toEqual({ output: [3] });
   });
 });
+
+describe('a data node is its value', () => {
+  it('keeps no writing of its own and has no body to write: no task.md, no format.md, no ✨', () => {
+    // It had a task and a format beside the value, each a file of its own and
+    // a ✨ of its own, and the neighbours were written against the format
+    // while they were handed the value.
+    const node = dataNode({ data_format: 'structure', data_value: { count: 2 } });
+    expect(element.texts(node)).toEqual([]);
+    expect(element.logic(node)).toBeUndefined();
+    expect(element.generation()).toBeUndefined();
+    expect(element.graphAuthorNote()).not.toMatch(/data_prompt|data_format_prompt|format\.md|schema/);
+  });
+});

@@ -5,7 +5,7 @@ import { DIMMER, MUTED, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
 /**
  * A view of the page, shown only where a page can be: in the graph at the top.
  *
- * Inside a node's graph the canvas shows that graph, and the GUI editor and the
+ * Inside a node's graph the canvas shows that graph, and the Page tab and the
  * preview used to show it too. The editor found no page in there and made one:
  * the first block added put a gui node inside the subgraph, which `check` then
  * rejects -- a page in there is never shown -- and the colour scheme was written

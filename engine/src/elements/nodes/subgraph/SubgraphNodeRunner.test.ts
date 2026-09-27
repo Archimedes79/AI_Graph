@@ -49,7 +49,7 @@ function inner(): unknown {
     nodes: [
       node('subject', 'input', { input_mode: 'text', value: 'from inside' }),
       node('shout', 'code', { code: 'x', language: 'js' }, { inputs: ['value'], outputs: ['output'] }),
-      node('loud', 'output', { output_label: 'Loud' }, { inputs: ['value'] }),
+      node('loud', 'output', {}, { inputs: ['value'] }),
     ],
     edges: [
       edge('a', 'subject', 'output', 'shout', 'value'),

@@ -11,7 +11,7 @@ describe('what ✨ is told of a node\'s neighbours', () => {
     const source = NODE_KINDS.data.create('source');
     source.label = 'Input records';
     source.config.data_format = 'structure';
-    source.config.data_format_prompt = 'columns: id integer, name text';
+    source.description = 'columns: id integer, name text';
     const processor = NODE_KINDS.code.create('processor');
     const target = NODE_KINDS.data.create('target');
     target.label = 'Result map';
@@ -56,8 +56,8 @@ describe('what ✨ is told of a node\'s neighbours', () => {
 describe('describeNodeOutput', () => {
   it('distinguishes the input node modes', () => {
     const node = NODE_KINDS.input.create('i');
-    node.config.input_mode = 'file';
-    expect(describeNodeOutput(node)).toContain('port "Content" carries the file');
+    node.config.input_mode = 'directory';
+    expect(describeNodeOutput(node)).toContain('port "Files" carries a list of file paths');
     node.config.input_mode = 'text';
     expect(describeNodeOutput(node)).toBe('text');
   });
@@ -145,7 +145,7 @@ describe('duplicate neighbours', () => {
     const wire = { source: 'worker', sourceHandle: 'output', target: 'sink', targetHandle: 'value' };
 
     expect(outputTargets('worker', [code, out], [wire, { ...wire }], true).output)
-      .toBe('"Result" (port "Value"), which wants shown as text in a window');
+      .toBe('"Result" (port "Value"), which wants the run\'s result');
   });
 });
 
@@ -246,19 +246,5 @@ describe('what ✨ is told about a node, as facts', () => {
     // An example the engine reads in full, with what it expects, is left to it.
     code.config.examples = '## Mine\n\n```json input\n{"input": "typed"}\n```\n\n```json expect\n{}\n```\n';
     expect(nodeFacts(code, [code], [], ran).sampleInputs).toBeUndefined();
-  });
-
-  it('shows a node fed by a file input that file, read as a run reads it, before the graph has run', () => {
-    const input = NODE_KINDS.input.create('src');
-    input.config.input_mode = 'file';
-    input.config.value = 'data/people.csv';
-    input.outputs = [
-      { id: 'content', name: 'Content', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
-      { id: 'path', name: 'Path', kind: 'output', data_type: 'file_path', multi: false, required: false, description: '' },
-    ];
-    const code = NODE_KINDS.code.create('worker');
-    const facts = nodeFacts(code, [input, code], [{ id: 'a', source: 'src', target: 'worker', sourceHandle: 'content', targetHandle: 'input' }] as never, null);
-    expect(facts.sampleInputs).toEqual({ input: 'data/people.csv' });
-    expect(facts.readFilePorts).toEqual(['input']);
   });
 });

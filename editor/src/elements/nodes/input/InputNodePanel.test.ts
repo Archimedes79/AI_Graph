@@ -24,21 +24,16 @@ describe('an input node\'s panel', () => {
     expect(html).toMatch(/<textarea[^>]*aria-label="Text"[^>]*>first line\nsecond line<\/textarea>/);
   });
 
-  it('offers the file types for one file too, which the file browser filters by', () => {
-    const node = NODE_KINDS.input.create('file');
-    node.config.input_mode = 'file';
-    expect(panel(node)).toContain('aria-label="File types"');
-  });
-
-  it('offers to show what a file input hands on, and only once there is a file to read', () => {
-    // The file it reads is the sample every node after it is shown; the
-    // dialog had no way to see what that was.
-    const node = NODE_KINDS.input.create('file');
-    node.config.input_mode = 'file';
-    expect(panel(node)).toMatch(/<button[^>]*disabled=""[^>]*>Show what it hands on<\/button>/);
-    node.config.value = 'data/people.csv';
-    expect(panel(node)).toMatch(/<button(?![^>]*disabled)[^>]*>Show what it hands on<\/button>/);
-    expect(panel(NODE_KINDS.input.create('text'))).not.toContain('Show what it hands on');
+  it('is a text or a folder, and reads no file: a path is a text for the node that reads it', () => {
+    // It had a third mode that read one file. Reading is the reading node's
+    // own input now, so a text here holds the path and says so.
+    const html = panel(NODE_KINDS.input.create('text'));
+    expect(html).toMatch(/<select[^>]*aria-label="Mode"[^>]*><option value="text"[^>]*>Text<\/option><option value="directory">Folder \(list of files\)<\/option><\/select>/);
+    expect(html).not.toMatch(/value="file"|Single file|Show what it hands on/);
+    expect(html).toContain('A file&#x27;s path is a text too');
+    // Nothing to list, catch or filter in a text.
+    expect(html).not.toContain('aria-label="File types"');
+    expect(html).not.toContain('Catch a failed');
   });
 
   it('is, for a folder, the folder, its file types and its subfolders, and then the list -- no code to write', () => {

@@ -1,9 +1,12 @@
 import type { NodeType } from '@/graph';
 import { NODE_BUILDERS } from '@/elements/registry';
-import { showsPage } from '@/document/guiWidgets';
-import { useGraphStore } from '@/store/graphStore';
 import { ACCENT, DIMMER, LINE, SURFACE, TEXT } from '@/ui/theme';
 
+/**
+ * What the palette offers. Not the page: a graph has one, and the Page tab
+ * makes it with its first block -- a page node dropped on the canvas was a
+ * second way to make it, and a second page one nobody would ever see.
+ */
 const CATEGORIES: { label: string; types: NodeType[] }[] = [
   {
     // `input` had no palette entry at all: the node type existed, the editor
@@ -21,10 +24,6 @@ const CATEGORIES: { label: string; types: NodeType[] }[] = [
     types: ['output'],
   },
   {
-    label: 'Interactive',
-    types: ['gui'],
-  },
-  {
     // A graph of its own, one node wide from out here: the way a graph grows
     // in depth rather than in width.
     label: 'Structure',
@@ -37,10 +36,6 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ onAddNode }: SidebarProps) {
-  // A page is shown only for the graph at the top. Inside a node's graph a
-  // page node would be one nobody ever sees, and `check` rejects it there, so
-  // the palette does not offer one -- and says why rather than hiding it.
-  const inside = useGraphStore((s) => s.subgraphStack.length > 0);
   return (
     <aside
       className="flex flex-col h-full overflow-y-auto"
@@ -65,38 +60,25 @@ export default function Sidebar({ onAddNode }: SidebarProps) {
           <h3 className="px-4 text-xs font-medium uppercase tracking-wider mb-2" style={{ color: DIMMER }}>
             {cat.label}
           </h3>
-          {cat.types.map((type) => {
-            const topOnly = inside && showsPage(type);
-            return (
-              <button
-                key={type}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover-raise"
-                style={{ color: TEXT, opacity: topOnly ? 0.4 : 1 }}
-                disabled={topOnly}
-                onClick={() => onAddNode(type)}
-                title={topOnly
-                  ? 'A page belongs to the graph at the top. Go back up to add one: a node\'s graph runs as one part of it and has no page of its own.'
-                  : NODE_BUILDERS[type].hint}
-                draggable={!topOnly}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('application/nodeType', type);
-                  e.dataTransfer.effectAllowed = 'copy';
-                }}
-              >
-                <span className="text-base">{NODE_BUILDERS[type].icon}</span>
-                <span>{NODE_BUILDERS[type].label}</span>
-              </button>
-            );
-          })}
+          {cat.types.map((type) => (
+            <button
+              key={type}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover-raise"
+              style={{ color: TEXT }}
+              onClick={() => onAddNode(type)}
+              title={NODE_BUILDERS[type].hint}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/nodeType', type);
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+            >
+              <span className="text-base">{NODE_BUILDERS[type].icon}</span>
+              <span>{NODE_BUILDERS[type].label}</span>
+            </button>
+          ))}
         </div>
       ))}
-
-      {/* No standalone widget entries any more. A gui node's blocks are added
-          inside it, on its page -- four "widget nodes" dropped on the canvas
-          produced exactly the interface one gui node with four blocks does,
-          only with four extra boxes in the graph. They also taught the wrong
-          model: a widget looked like a node type, which is the confusion that
-          produced the retired `widget` node type in the first place. */}
 
       <div className="mt-auto px-4 py-4 border-t" style={{ borderColor: LINE }}>
         <p className="text-xs" style={{ color: DIMMER }}>

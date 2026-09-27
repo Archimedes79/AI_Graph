@@ -53,8 +53,6 @@ export interface NodeKind {
    * its neighbours.
    */
   placedAmong?(node: GraphNode, others: GraphNode[]): GraphNode;
-  /** Running this node puts its result in a window of its own. */
-  showsResultWindow?(node: GraphNode): boolean;
 }
 
 export const NODE_KINDS: Record<NodeType, NodeKind> = {
@@ -129,11 +127,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
   },
 
   output: {
-    showsResultWindow: (node) => node.config.write_mode === 'window',
     create: (id) => ({
       id,
       node_type: 'output',
-      label: 'Output',
+      // What it is called is what the run's result calls its value.
+      label: 'Result',
       description: '',
       position: { x: 0, y: 0 },
       inputs: [
@@ -141,9 +139,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
         { id: 'path', name: 'Path', kind: 'input', data_type: 'file_path', multi: false, required: false, description: 'Optional: a wired file or folder path, used instead of the one set above.' },
       ],
       outputs: [],
-      // A window, not nowhere: an output that shows nothing until someone finds
-      // the setting is the one node whose whole point would be missing.
-      config: { ...baseNodeConfig(), output_label: 'Result', write_mode: 'window' },
+      config: baseNodeConfig(),
     }),
     // Its own label, "Result 2" beside a "Result": two results that share one
     // are a problem `check` names, and only the first keeps it in the run's result.
@@ -156,7 +152,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       }));
       let label = 'Result';
       for (let n = 2; taken.has(label); n += 1) label = `Result ${n}`;
-      return { ...node, config: { ...node.config, output_label: label } };
+      return { ...node, label };
     },
   },
 
@@ -164,7 +160,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
     create: (id) => ({
       id,
       node_type: 'gui',
-      label: 'GUI Node',
+      label: 'Page',
       description: '',
       position: { x: 0, y: 0 },
       inputs: [],

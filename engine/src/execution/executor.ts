@@ -447,7 +447,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   }
 
   // What stood still is not news: a reply held from the last round must not be
-  // added to the conversation a second time, nor a window popped up again.
+  // added to the conversation a second time, nor handed back as this round's result.
   for (const nodeId of held) outputs.delete(nodeId);
   const memory = settleMemory(graph, feedback, outputs, results, registry);
   // What finished before a Stop is drawn as it is: showing asks no model and
@@ -938,17 +938,15 @@ async function showDisplays(
 }
 
 /**
- * What the run produced, keyed the way the graph's output nodes asked.
+ * What the run produced, keyed by the graph's output nodes' labels.
  *
- * Two output nodes may well be given one label -- every new one starts as
- * "Result" -- and a run's result is not a place where one of them may quietly
- * replace the other. The last keeps its label, as it did when it replaced the
- * others; one that comes earlier under a label already taken is told apart by
- * its id, so a graph gets every key it always got, holding what it always
- * held (`resultKeys`).
+ * Two output nodes may well be given one label, and a run's result is not a
+ * place where one of them may quietly replace the other. The first keeps the
+ * label; one that comes later under a label already taken is told apart by its
+ * id (`resultKeys`), and `check` says to give it a label of its own.
  *
- * "Last" in the graph, whether or not it produced anything this run: a round
- * started by a page event, or one where the last stood still, would
+ * "First" in the graph, whether or not it produced anything this run: a round
+ * started by a page event, or one where the first stood still, would
  * otherwise hand another's value on under its key -- and whoever lays rounds
  * over each other (a schedule) would lose one of them once more.
  */

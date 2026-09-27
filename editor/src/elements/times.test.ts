@@ -45,10 +45,10 @@ describe('a builder', () => {
   });
 
   it('has no run-time members at all: a GuiBuilder is the builder, whole', () => {
-    // It once had four. Each left for a home that says what it is:
+    // It once had four. Each left for a home that says what it is, or went:
     //
     //   View, ownsValue          page/blocks.ts — what the page draws
-    //   showsResultWindow        nodeKinds.ts   — what a node is, loaded and saved
+    //   showsResultWindow        gone, with the output node's window
     //   clearValueAfterRun       WidgetRunner   — what a run means for a block
     //
     // Which is what lets the stronger claim be held: not "a tool may not

@@ -28,9 +28,10 @@ const code = (id: string, body = 'function run(inputs) { return { out: inputs.in
   inputs: [port('in', 'input')], outputs: [port('out', 'output')], config: { code: body } as Record<string, unknown>,
 });
 
+/** An output node as a new one starts: called "Result", which names its value in the run's result. */
 const output = (id: string) => ({
-  id, node_type: 'output', label: id, description: '', position: { x: 0, y: 0 },
-  inputs: [port('value', 'input')], outputs: [], config: { write_mode: 'window', output_label: 'Result' },
+  id, node_type: 'output', label: 'Result', description: '', position: { x: 0, y: 0 },
+  inputs: [port('value', 'input')], outputs: [], config: {},
 });
 
 const page = (id: string, blocks: Record<string, unknown>[]) => ({

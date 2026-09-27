@@ -35,10 +35,10 @@ describe('a chart on the page', () => {
 });
 
 describe('a chart under its port on the graph canvas', () => {
-  it('draws what arrived, small', () => {
-    const Preview = WIDGET_BUILDERS.plot_window.CanvasPreview!;
-    const html = renderToStaticMarkup(createElement(Preview, { data: [{ label: 'Mon', value: 3 }] }));
-    expect(html).toContain('Mon');
-    expect(html).toContain('width="220"');
+  it('is a sketch of what arrived: points are a chart here, where elsewhere they are rows', () => {
+    const points = [{ label: 'Mon', value: 3 }, { label: 'Tue', value: 5 }];
+    expect(WIDGET_BUILDERS.plot_window.preview(points)).toEqual({ kind: 'sketch', values: [3, 5], line: false });
+    expect(WIDGET_BUILDERS.table.preview(points)).toMatchObject({ kind: 'rows', count: 2, first: 'label: Mon, value: 3' });
+    expect(WIDGET_BUILDERS.plot_window.preview({ kind: 'line', title: 'T', points })).toMatchObject({ kind: 'sketch', line: true });
   });
 });

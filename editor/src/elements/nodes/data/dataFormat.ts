@@ -1,4 +1,4 @@
-// What a data node holds, and how its format contract reads to other nodes.
+// What a data node holds, and how that reads to other nodes.
 
 import type { GraphNode } from '@/graph';
 
@@ -16,8 +16,9 @@ export function dataKind(node: GraphNode): DataKind {
   return node.config.data_format === 'structure' ? 'structure' : 'text';
 }
 
+/** Its kind, and what it holds in its own words -- its description -- where it says: `structure: the running total`. */
 export function describeDataFormat(node: GraphNode): string {
-  const details = node.config.data_format_prompt?.trim();
+  const details = node.description?.trim();
   return `${dataKind(node)}${details ? `: ${details}` : ''}`;
 }
 

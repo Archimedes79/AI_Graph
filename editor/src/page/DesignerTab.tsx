@@ -3,28 +3,24 @@ import type { WidgetKind } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { newBlock, type PaletteEntry } from './DesignerPalette';
-import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
+import { usePage, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { insertBlock, moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { liveTypedValues } from './typedValues';
 import PageHeading from './PageHeading';
 import WidgetEditor from './WidgetEditor';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import { SCHEMES, type SchemeId } from '@/ui/scheme';
-import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
+import { ACCENT, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
 /**
- * The graph's interface, on one page, built on the page itself.
- *
- * The blocks of every gui node in graph order; edits go back to whichever node
- * owns the block. One graph, one tool, one page -- a bundle's recipient wants a
- * window, not three.
+ * The graph's page, built on the page itself. One graph, one tool, one page --
+ * a bundle's recipient wants a window, not three.
  */
 export default function DesignerTab() {
-  const updateNode = useGraphStore((s) => s.updateNode);
-  const guiScheme = useGraphStore((s) => s.metadata.gui_scheme);
+  const metadata = useGraphStore((s) => s.metadata);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const blocks = useSurfaceBlocks();
-  const guiNodes = useGuiNodes();
+  const page = usePage();
   const events = usePageEvents();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // What was typed into a live block, shown in place of what arrived there --
@@ -34,7 +30,6 @@ export default function DesignerTab() {
   const [typed, setTyped] = useState<Record<string, string>>({});
   const overrides = liveTypedValues(typed, blocks);
 
-  const ownerOf = (widgetId: string) => blocks.find((b) => b.widget.id === widgetId)?.node ?? null;
   const selected = blocks.find((b) => b.widget.id === selectedId)?.widget ?? null;
 
   // Every change to the page goes through `pageWrite`, which reads it from the
@@ -166,7 +161,7 @@ export default function DesignerTab() {
       <DesignerPalette onAdd={addWidget} onDragStart={(entry) => setDragEntry(entry)} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <PageHeading nodes={guiNodes} onChange={(nodeId, words) => updateNode(nodeId, words)} />
+        <PageHeading name={metadata.name} description={metadata.description} onChange={setMetadata} />
         <div
           data-gui-dropzone
           className="flex-1 overflow-auto px-8 py-6"
@@ -203,7 +198,7 @@ export default function DesignerTab() {
         <select
           className="w-full rounded-lg px-2 py-1.5 text-sm mb-5"
           style={FIELD_ON_SURFACE}
-          value={guiScheme}
+          value={metadata.gui_scheme}
           onChange={(e) => setMetadata({ gui_scheme: e.target.value as SchemeId })}
         >
           {SCHEMES.map((entry) => (
@@ -219,15 +214,10 @@ export default function DesignerTab() {
           onChange={(patch) => { if (selected) patchBlock(selected.id, patch); }}
           onRemove={removeSelected}
         />
-        {selected && new Set(blocks.map((b) => b.node.id)).size > 1 && (
-          <p className="text-xs mt-3" style={{ color: DIMMER }}>
-            Belongs to “{ownerOf(selected.id)?.label}”.
-          </p>
-        )}
 
         {/* A page has no panel of its own -- this is where it is edited -- so
             what runs when it runs is said here, as every other node says it. */}
-        {guiNodes[0] && <div className="mt-5"><WhatRuns node={guiNodes[0]} /></div>}
+        {page && <div className="mt-5"><WhatRuns node={page} folded /></div>}
       </aside>
 
       {/* The element under the cursor while it is being dragged. Without it the

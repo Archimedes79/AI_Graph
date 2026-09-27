@@ -1,12 +1,11 @@
 // Files, read the way a run reads them.
 //
-// Step 1's example can come from a file, an input node shows what it will hand
-// on, and a folder listing shows the files it lists. Each of those is a read,
-// and each is done by the engine's own element, run on its own by the route
-// "▶ Try it" uses (`runNode`): the same path resolved against the same folder,
-// the same text read, the same extensions and recursion applied to a listing.
-// A second way of reading a file here would be a second answer to "what does
-// the node get".
+// Step 1's example can come from a file, and a folder listing shows the files
+// it lists. Each of those is a read, and each is done by the engine's own
+// element, run on its own by the route "▶ Try it" uses (`runNode`): the same
+// path resolved against the same folder, the same text read, the same
+// extensions and recursion applied to a listing. A second way of reading a
+// file here would be a second answer to "what does the node get".
 
 import type { GraphNode, GuiWidget } from '@/graph';
 import { call } from '@/api/client';
@@ -19,18 +18,18 @@ import type { TryResult } from './TryItInline';
  * A node, run by itself: nothing else of the graph is sent or run, with the
  * graph's metadata as a run has it.
  */
-function runAlone(node: GraphNode): Promise<TryResult> {
+function runAlone(node: GraphNode, inputs: Record<string, unknown>): Promise<TryResult> {
   const graph = { metadata: useGraphStore.getState().metadata, nodes: [node], edges: [] };
-  return call('runNode', { ...graph, node_id: node.id, inputs: {} });
+  return call('runNode', { ...graph, node_id: node.id, inputs });
 }
 
 /**
- * What *node* hands on, run by itself. A failure is thrown, not caught: a node
- * told to catch its failures puts the reason on its error port and hands on
- * nothing, so a folder that does not exist was listed as "0 files".
+ * What *node* hands on, run by itself on *inputs*. A failure is thrown, not
+ * caught: a node told to catch its failures puts the reason on its error port
+ * and hands on nothing, so a folder that does not exist was listed as "0 files".
  */
-async function readAlone(node: GraphNode): Promise<Record<string, unknown>> {
-  const result = await runAlone(node);
+async function readAlone(node: GraphNode, inputs: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+  const result = await runAlone(node, inputs);
   if (result.status === 'error') throw new Error(result.error || 'It could not be read.');
   return result.outputs ?? {};
 }
@@ -41,10 +40,21 @@ function reading(node: GraphNode, config: Partial<GraphNode['config']>): GraphNo
   return { ...next, ...(derivedNodePorts(next) ?? {}) };
 }
 
-/** The text of the file at *path*, as an input node in file mode hands it on. */
+/**
+ * The text of the file at *path*, as a node that reads the file on its input
+ * is handed it: a code node whose one input is a file path it reads, run by
+ * itself on *path*, handing on what it was handed. No node reads a file of its
+ * own any more -- an input node holds the path as text.
+ */
 export async function readFileAsRun(path: string): Promise<string> {
-  const node = reading(NODE_KINDS.input.create('read'), { input_mode: 'file', value: path });
-  return String((await readAlone(node)).content ?? '');
+  const code = NODE_KINDS.code.create('read');
+  const node: GraphNode = {
+    ...code,
+    inputs: [{ ...code.inputs[0], id: 'file', data_type: 'file_path', multi: false }],
+    outputs: [{ ...code.outputs[0], id: 'text', multi: false }],
+    config: { ...code.config, batch_mode: 'whole_list', code: 'function run(inputs) { return { text: inputs.file }; }' },
+  };
+  return String((await readAlone(node, { file: path })).text ?? '');
 }
 
 /** The files an input node in directory mode lists, as a run lists them. */

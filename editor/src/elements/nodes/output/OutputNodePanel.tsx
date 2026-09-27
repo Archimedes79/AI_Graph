@@ -1,13 +1,18 @@
 import PathField from '@/dialogs/PathField';
 import { DIMMER, FIELD, MUTED } from '@/ui/theme';
+import { OutputNodeRunner } from '@engine/elements/nodes/output/OutputNodeRunner.ts';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
+const OUTPUT = new OutputNodeRunner();
+
 /**
- * An output node: where the result goes, what it is, and what it is called.
+ * An output node: the run's result -- where it goes besides, and what it is.
  *
  * What it is and where it goes are what the node feeding it is told it wants
- * (`OutputNodeGuiBuilder.wantsOn`), so they are asked first and in those
- * words; the name comes last, since it only labels what the first two say.
+ * (`OutputNodeGuiBuilder.wantsOn`), so they are asked in those words. What the
+ * result is called is what the node is called: the dialog's title. It had a
+ * second name for that, and a window of its own in the editor; a page is
+ * where a result is shown.
  */
 export default function OutputNodePanel({ node, setConfig, fields }: NodePanelProps) {
   const mode = node.config.write_mode;
@@ -20,14 +25,13 @@ export default function OutputNodePanel({ node, setConfig, fields }: NodePanelPr
         <select
           className="w-full rounded-lg px-3 py-2 text-sm"
           style={FIELD}
-          value={mode}
+          value={writes ? mode : 'none'}
           onChange={(e) => setConfig('write_mode', e.target.value)}
           aria-label="Where the result goes"
         >
-          <option value="none">Into the run's results only</option>
-          <option value="window">Into a window of its own (and the results)</option>
-          <option value="file">Into a file</option>
-          <option value="directory">Into a folder, one file per value</option>
+          <option value="none">Into the run's result only</option>
+          <option value="file">Into the run's result, and a file</option>
+          <option value="directory">Into the run's result, and a folder: one file per value</option>
         </select>
 
         {writes && (
@@ -73,26 +77,8 @@ export default function OutputNodePanel({ node, setConfig, fields }: NodePanelPr
         />
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
           The node wired into this one is told this, and where the result goes, when ✨ writes it.
+          The run's result calls it what this node is called: “{OUTPUT.resultLabel(node as never)}”.
         </p>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-          {mode === 'window' ? 'Its name, and the window’s title' : 'Its name in the results'}
-        </label>
-        {/* A graph file that names nothing keys the result by the node's id,
-            and the box is then empty: it says so, rather than look like a
-            name that was lost. */}
-        <input
-          className="w-full rounded-lg px-3 py-2 text-sm"
-          style={FIELD}
-          value={node.config.output_label ?? ''}
-          onChange={(e) => setConfig('output_label', e.target.value)}
-          placeholder={mode === 'window'
-            ? `Empty: the node’s id, “${node.id}”, names the result, and its label titles the window`
-            : `Empty: the node’s id, “${node.id}”, names the result`}
-          aria-label="Name of the result"
-        />
       </div>
     </div>
   );

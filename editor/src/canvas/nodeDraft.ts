@@ -20,8 +20,8 @@ const CAUGHT = 'Why this node failed. Optional to wire: unwired, the run simply 
  * *stored* is the node as the store holds it, whose ports the wires are on.
  * Which new port carries on an old one is asked against it rather than the
  * draft: a person stepping through a mode select passes modes that have no
- * such port (text, then a folder, then one file), and asked against the
- * draft, the step through the folder forgot which port the wire was on.
+ * such port, and asked against the draft, the step through one of them
+ * forgot which port the wire was on.
  */
 export function withSetting(draft: GraphNode, stored: GraphNode | undefined, key: string, value: unknown): GraphNode {
   const settled = typeof value === 'function'

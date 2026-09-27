@@ -177,6 +177,9 @@ describe('a bundle', () => {
       // The plotter asks no model, so a page of provider settings would be
       // instructions for something that never happens.
       expect(readme).not.toContain('AI_GRAPH_AI_PROVIDER');
+      // What a person is handed is a page of blocks, called that.
+      expect(readme).toContain('## The page');
+      expect(readme).not.toMatch(/\b(interface|widgets?|gui)\b/i);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

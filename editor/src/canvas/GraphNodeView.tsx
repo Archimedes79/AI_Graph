@@ -2,13 +2,15 @@ import React, { memo, useCallback, useState } from 'react';
 import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import type { RFNodeData } from '@/store/nodeData';
 import { useGraphStore } from '@/store/graphStore';
-import { NODE_BUILDERS, WIDGET_BUILDERS } from '@/elements/registry';
+import { NODE_BUILDERS } from '@/elements/registry';
+import { errorLine } from '@/elements/resultPreview';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { delivered } from '@/store/executionStatus';
-import { derivedNodePorts, showsPage, widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
+import { showsPage, widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
 import { carriesFiles, dropExample, droppedFile } from '@/authoring/droppedFile';
 import { errorText } from '@/api/errorText';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
+import ResultPreview, { ErrorPreview } from './ResultPreview';
 
 /**
  * How an event looks, wherever one appears: the amber diamond of the run port.
@@ -53,14 +55,20 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const statusColor = status?.color;
   const isGuiLike = showsPage(graphNode.node_type);
   const summary = builder?.canvasSummary?.(graphNode);
+  // What it made last, beside the port each value stands at: the element
+  // says which port and how the value reads. Faded while it stood still.
+  const previews = executionResult && delivered(executionResult.status) && builder
+    ? builder.resultPreviews(graphNode, executionResult) : undefined;
+  const held = executionResult?.held;
+  const failure = executionResult?.status === 'error'
+    ? <ErrorPreview line={errorLine(executionResult.error)} error={executionResult.error ?? ''} />
+    : null;
 
   const handleEdit = useCallback(() => setEditingNode(id), [id, setEditingNode]);
 
-  // A file dropped on a node built in the four steps, with one input, is its
-  // example -- no dialog on the way; its own dialog opens on it (`dropExample`).
-  const dropInto = builder?.stepped && derivedNodePorts(graphNode) === null && graphNode.inputs.length === 1
-    ? graphNode.inputs[0].id
-    : undefined;
+  // A file dropped on a node is its example, where the element takes one --
+  // no dialog on the way; its own dialog opens on it (`dropExample`).
+  const dropInto = builder?.dropPort(graphNode);
   const [fileOver, setFileOver] = useState(false);
   const [dropFailed, setDropFailed] = useState('');
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -187,7 +195,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
         </div>
       </div>
 
-      {/* Ports — GUI/widget nodes get a special two-column layout: outputs left, inputs right */}
+      {/* Ports — the page gets a two-column layout: what its blocks hand on left, what they show right */}
       {isGuiLike ? (
         <div className="px-3 py-2">
           <div className="grid grid-cols-2 gap-x-2">
@@ -229,15 +237,9 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
             <div className="flex flex-col gap-1 items-end">
               <span className="text-xs font-semibold mb-0.5" style={{ color: DIMMER }}>IN ←</span>
               {graphNode.inputs.map((port) => {
-                // Whether anything is previewed under this port is the widget
-                // element's answer, not this component's: it used to look for
-                // `kind === 'plot_window'` by name, which is a widget-kind
-                // switch inside a shared renderer.
-                const behind = widgetOfPort(graphNode, port.id);
-                const previewWidget = behind && WIDGET_BUILDERS[behind.kind]?.CanvasPreview ? behind : undefined;
-                const CanvasPreview = previewWidget
-                  ? WIDGET_BUILDERS[previewWidget.kind].CanvasPreview
-                  : undefined;
+                // What the block fed here shows, as the block reads it: the
+                // page's element answers, not a kind named in here.
+                const preview = previews?.inputs[port.id];
                 return (
                   <React.Fragment key={port.id}>
                     <div className="relative flex items-center gap-1.5" style={{ marginRight: -12 }}>
@@ -258,11 +260,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                         title={port.description || port.name}
                       />
                     </div>
-                    {CanvasPreview && (
-                      <div className="mt-1 mb-1 w-full">
-                        <CanvasPreview data={executionResult?.display?.[previewWidget!.id] ?? executionResult?.inputs?.[port.id]} />
-                      </div>
-                    )}
+                    {preview && <ResultPreview preview={preview} held={held} />}
                   </React.Fragment>
                 );
               })}
@@ -271,28 +269,17 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
           {/* Memory-feedback hint -- this node's own persisted value breaks any cycle automatically, no manual edge marking needed */}
           {(graphNode.inputs.length > 0 && graphNode.outputs.length > 0) && (
             <p className="text-xs mt-2 px-1" style={{ color: DIMMER }}>
-              Tip: this node remembers its own value, so a feedback edge into it (e.g. AI → text window) breaks the cycle automatically.
+              Tip: the page remembers what it shows, so a wire back into it (AI → a text block) closes a loop without a cycle.
             </p>
           )}
-          {executionResult && delivered(executionResult.status) && (
-            <div className="text-xs mt-1 px-1 py-0.5 rounded"
-              style={{ background: 'rgba(34,197,94,0.1)', color: '#86efac', maxHeight: 40, overflow: 'hidden' }}>
-              {JSON.stringify(executionResult.outputs).slice(0, 80)}
-            </div>
-          )}
-          {executionResult?.status === 'error' && (
-            <div className="text-xs mt-1 px-1 py-0.5 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: DANGER_TEXT }}>
-              {executionResult.error?.slice(0, 80)}
-            </div>
-          )}
+          {failure && <div className="mt-1">{failure}</div>}
         </div>
       ) : (
       <div className="px-3 py-2 flex flex-col gap-1">
         {/* Inputs */}
         {graphNode.inputs.map((port) => {
-          // No plot preview here: this arm only renders when `isGuiLike` is
-          // false, so the lookup that used to sit here could never match. GUI
-          // nodes render their plots in the isGuiLike arm above.
+          // What arrived here, where it is what the node hands on: an output node's result.
+          const preview = previews?.inputs[port.id];
           return (
             <React.Fragment key={port.id}>
               <div className="relative flex items-center gap-1.5" style={{ marginLeft: -12 }}>
@@ -318,6 +305,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                   {port.multi && <span title="Takes a list: several values, or one from each wired node"> ∞</span>}
                 </span>
               </div>
+              {preview && <ResultPreview preview={preview} held={held} />}
             </React.Fragment>
           );
         })}
@@ -346,55 +334,43 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
           </div>
         )}
 
-        {/* Execution output preview */}
-        {executionResult && delivered(executionResult.status) && (
-          <div
-            className="text-xs mt-1 px-1 py-0.5 rounded"
-            style={{ background: 'rgba(34,197,94,0.1)', color: '#86efac', maxHeight: 60, overflow: 'hidden' }}
-          >
-            {JSON.stringify(executionResult.outputs).slice(0, 100)}
-          </div>
-        )}
-        {executionResult?.status === 'error' && (
-          <div
-            className="text-xs mt-1 px-1 py-0.5 rounded"
-            style={{ background: 'rgba(239,68,68,0.1)', color: DANGER_TEXT }}
-          >
-            {executionResult.error?.slice(0, 80)}
-          </div>
-        )}
-        {/* A file dropped here that could not become its example, and why. */}
+        {failure}
+        {/* A file dropped here that could not become its example, and why --
+            whole, since it says what to do instead. */}
         {dropFailed && (
           <div className="text-xs mt-1 px-1 py-0.5 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: DANGER_TEXT }}>
             {dropFailed}
           </div>
         )}
 
-        {/* Outputs */}
+        {/* Outputs, each with what came out of it last */}
         {graphNode.outputs.map((port) => (
-          <div key={port.id} className="relative flex items-center justify-end gap-1.5" style={{ marginRight: -12 }}>
-            <span className="text-xs" style={{ color: MUTED }}>
-              {port.name}
-              {port.multi && <span title="Hands on a list: the next node runs once per item, unless it takes the whole list"> ∞</span>}
-            </span>
-            <Handle
-              type="source"
-              position={Position.Right}
-              id={port.id}
-              style={{
-                background: port.multi ? '#a78bfa' : ACCENT,
-                border: '2px solid #312e81',
-                width: 10,
-                height: 10,
-                position: 'relative',
-                transform: 'none',
-                top: 'auto',
-                right: 'auto',
-                flexShrink: 0,
-              }}
-              title={port.description || port.name}
-            />
-          </div>
+          <React.Fragment key={port.id}>
+            <div className="relative flex items-center justify-end gap-1.5" style={{ marginRight: -12 }}>
+              <span className="text-xs" style={{ color: MUTED }}>
+                {port.name}
+                {port.multi && <span title="Hands on a list: the next node runs once per item, unless it takes the whole list"> ∞</span>}
+              </span>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={port.id}
+                style={{
+                  background: port.multi ? '#a78bfa' : ACCENT,
+                  border: '2px solid #312e81',
+                  width: 10,
+                  height: 10,
+                  position: 'relative',
+                  transform: 'none',
+                  top: 'auto',
+                  right: 'auto',
+                  flexShrink: 0,
+                }}
+                title={port.description || port.name}
+              />
+            </div>
+            {previews?.outputs[port.id] && <ResultPreview preview={previews.outputs[port.id]} held={held} />}
+          </React.Fragment>
         ))}
       </div>
       )}

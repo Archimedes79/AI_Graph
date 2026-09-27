@@ -235,13 +235,16 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     expect(await run(useGraphStore.getState().exportGraph())).toEqual(await run(file));
   });
 
-  it('still starts a node made in the editor per item, and keys its output "Result"', () => {
+  it('still starts a node made in the editor per item, and calls a new output "Result" -- which keys its value', () => {
     loadTestGraph([]);
     const code = useGraphStore.getState().addNode('code', { x: 0, y: 0 });
     const output = useGraphStore.getState().addNode('output', { x: 0, y: 0 });
     const saved = useGraphStore.getState().exportGraph().nodes;
     expect(saved.find((node) => node.id === code)!.config.batch_mode).toBe('per_item');
-    expect(saved.find((node) => node.id === output)!.config).toMatchObject({ output_label: 'Result', write_mode: 'window' });
+    // The run's result, and nothing else: no window, no name beside its label.
+    const made = saved.find((node) => node.id === output)!;
+    expect(made.label).toBe('Result');
+    expect(made.config).toEqual({});
   });
 
   it('writes "once per item" only on the kinds that can run so', () => {
@@ -256,10 +259,10 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
   });
 
   it('labels each new output node its own way, as check asks', () => {
-    // Two outputs sharing a label keep only the last under it, and `check` says so.
-    loadTestGraph([graphNode({ id: 'kept', node_type: 'output', config: { output_label: 'Result 2' } as GraphNode['config'] })]);
+    // Two outputs sharing a label keep only the first under it, and `check` says so.
+    loadTestGraph([graphNode({ id: 'kept', node_type: 'output', label: 'Result 2' })]);
     const labels = [0, 1, 2].map(() => useGraphStore.getState().addNode('output', { x: 0, y: 0 }))
-      .map((id) => useGraphStore.getState().exportGraph().nodes.find((node) => node.id === id)!.config.output_label);
+      .map((id) => useGraphStore.getState().exportGraph().nodes.find((node) => node.id === id)!.label);
     expect(labels).toEqual(['Result', 'Result 3', 'Result 4']);
   });
 
@@ -657,10 +660,10 @@ describe('a graph inside a node', () => {
   it('leaves nothing of the level behind when it swaps', () => {
     loadTestGraph([holder()]);
     useGraphStore.setState({
-      textOutputWindows: [{ nodeId: 'part', label: 'Result', content: 'from the level above' }],
+      executionResult: { status: 'success', node_results: [{ node_id: 'part', status: 'success', inputs: {}, outputs: { x: 'from the level above' } }], outputs: {} },
     });
     store().openSubgraph('part');
-    expect(store().textOutputWindows).toEqual([]);
+    expect(store().executionResult).toBeNull();
   });
 
   it('leaves a graph changed on disk alone while there is unsaved work here', () => {

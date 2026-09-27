@@ -244,7 +244,7 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
         found.push({
           where: `${inside}node "${inner.id}"`,
           problem: 'A page belongs to the graph at the top; a page in here would never be shown.',
-          fix: 'Move the gui node up to the graph that has the interface, and wire this one\'s output to it.',
+          fix: 'Move its blocks up onto the page of the graph at the top, and wire this node\'s output there.',
         });
       }
       if (kind?.runtimeRequirements(inner).length) {

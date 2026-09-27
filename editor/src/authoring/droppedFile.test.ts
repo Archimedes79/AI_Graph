@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
+import { NODE_BUILDERS } from '@/elements/registry';
 import { useGraphStore } from '@/store/graphStore';
 import { readPair } from './examplePair';
 import { dropExample, droppedPath, droppedValue, uriPath, type Dropped } from './droppedFile';
@@ -55,6 +56,17 @@ describe('a file dropped onto a node on the canvas', () => {
     expect(store().editingNodeId).toBe('reader');
     store().undo();
     expect(stored('reader').config.examples ?? '').toBe('');
+  });
+
+  it('is taken where the element says: the one input of a node built in the four steps, and a data node', () => {
+    const takes = (node: GraphNode) => NODE_BUILDERS[node.node_type].dropPort(node);
+    expect(takes(stored('reader'))).toBe('csv');
+    expect(takes(stored('memory'))).toBe('input');
+    const two = NODE_KINDS.code.create('two');
+    two.inputs = [...two.inputs, { ...two.inputs[0], id: 'more', name: 'more' }];
+    expect(takes(two)).toBeUndefined();
+    expect(takes(NODE_KINDS.output.create('sink'))).toBeUndefined();
+    expect(takes(NODE_KINDS.input.create('source'))).toBeUndefined();
   });
 
   it('puts what the file says where the node does not read it, and is what a data node holds', async () => {

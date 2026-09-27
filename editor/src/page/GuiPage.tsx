@@ -7,11 +7,11 @@ import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
 import { DANGER, MUTED } from '@/ui/theme';
-import { showsPage, widgetFiresRun } from '@/document/guiWidgets';
+import { blockShows, showsPage, widgetFiresRun } from '@/document/guiWidgets';
 import type { RunTrigger } from '@/api/client';
 
 /**
- * The page a graph shows: every gui node's blocks, in graph order, on one grid.
+ * The page a graph shows: its blocks, in order, on one grid.
  *
  * **This module is the deployment boundary.** It holds what a *user* of the
  * finished tool sees and nothing else — no selection, no drag handle, no resize
@@ -28,35 +28,35 @@ import type { RunTrigger } from '@/api/client';
  * so the boundary has to be a module boundary — and `runtime.boundary.test.ts`
  * asserts that it stays one.
  *
- * A gui node is a *part* of the interface, not an interface of its own — the
- * same relation a widget already has to its node. Hence one page for the graph,
- * not one window per node.
+ * A graph is one tool with one page: the first node that carries an interface
+ * (the file format calls it `gui`). A second one is a problem `check` names,
+ * and nothing draws it.
  */
 
+/** A block on the page, with the page node that stores it. */
 export interface SurfaceBlock {
   node: GraphNode;
   widget: GuiWidget;
 }
 
-/** The gui nodes contributing to the page, in graph order. */
-export function useGuiNodes(): GraphNode[] {
-  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode)).guiNodes;
+/** The node that is the page, or none yet: the first block makes it. */
+export function usePage(): GraphNode | undefined {
+  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode)).page;
 }
 
-/** Every block on the page, with the node that owns it. */
+/** Every block on the page. */
 export function useSurfaceBlocks(): SurfaceBlock[] {
   return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode)).blocks;
 }
 
 /**
- * The page *nodes* make: the gui nodes in graph order, and every block on
- * them with the node that owns it. The hooks above read it as it was
+ * The page among *nodes*, and its blocks. The hooks above read it as it was
  * rendered; an edit that lands later -- a ✨ result accepted a minute on --
  * reads it from the store as it is then.
  */
-export function pageOf(nodes: GraphNode[]): { guiNodes: GraphNode[]; blocks: SurfaceBlock[] } {
-  const guiNodes = nodes.filter((n) => showsPage(n.node_type));
-  return { guiNodes, blocks: guiNodes.flatMap((node) => node.config.gui_widgets.map((widget) => ({ node, widget }))) };
+export function pageOf(nodes: GraphNode[]): { page: GraphNode | undefined; blocks: SurfaceBlock[] } {
+  const page = nodes.find((n) => showsPage(n.node_type));
+  return { page, blocks: page ? page.config.gui_widgets.map((widget) => ({ node: page, widget })) : [] };
 }
 
 /**
@@ -78,16 +78,9 @@ export function blockValue(
   return incoming !== undefined && overrides?.[block.widget.id] === undefined ? incoming : own;
 }
 
-/**
- * What a run put on one block: the engine's `display`, which is what arrived
- * as the block draws it -- an image's path read into the picture. A block that also hands something on --
- * a chat, a box that is typed into and shows -- is no display, and shows what
- * arrived on its port.
- */
+/** What a run put on one block of the page node *nodeId* (`blockShows`). */
 export function shownOn(result: ExecutionResult | null, nodeId: string, widgetId: string): unknown {
-  const ran = result?.node_results.find((r) => r.node_id === nodeId);
-  const shown = ran?.display?.[widgetId];
-  return shown !== undefined ? shown : ran?.inputs?.[`${widgetId}_in`];
+  return blockShows(result?.node_results.find((r) => r.node_id === nodeId), widgetId);
 }
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */

@@ -10,10 +10,10 @@
 //
 // A plain function beside the designer, as `pageWrite.ts` is, so a test can
 // say what it does.
-import type { OwnedBlock } from './pageWrite';
+import type { SurfaceBlock } from './GuiPage';
 
 /** The typed values that still hold: each one only while its block's stored value is that text. */
-export function liveTypedValues(typed: Record<string, string>, blocks: OwnedBlock[]): Record<string, string> {
+export function liveTypedValues(typed: Record<string, string>, blocks: SurfaceBlock[]): Record<string, string> {
   const held = new Map(blocks.map((block) => [block.widget.id, block.widget.value]));
   return Object.fromEntries(Object.entries(typed).filter(([id, text]) => held.get(id) === text));
 }

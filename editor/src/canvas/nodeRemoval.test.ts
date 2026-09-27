@@ -19,11 +19,11 @@ function node(id: string, blocks: number): GraphNode {
 const remove = (id: string): NodeChange => ({ type: 'remove', id });
 
 describe('removalsToApply', () => {
-  it('asks before a keystroke takes a whole interface', () => {
+  it('asks before a keystroke takes the whole page', () => {
     let asked = '';
     const kept = removalsToApply([remove('a')], () => node('a', 3), (q) => { asked = q; return false; });
     expect(kept).toEqual([]);
-    expect(asked).toMatch(/3 interface blocks/);
+    expect(asked).toBe('Delete the page? Its 3 blocks go with it.');
   });
 
   it('lets it through once the answer is yes', () => {

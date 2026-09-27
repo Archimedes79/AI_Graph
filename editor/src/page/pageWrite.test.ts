@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { insertBlock, moveBlock, patchBlock, removeBlock, routePage } from './pageWrite';
+import { insertBlock, moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { pageOf } from './GuiPage';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import type { GraphNode, GuiWidget } from '@/graph';
@@ -19,72 +19,40 @@ function guiNode(id: string, widgets: GuiWidget[]): GraphNode {
   };
 }
 
-describe('routePage', () => {
-  it('gives the first block to a gui node that is still empty', () => {
-    // The regression: the owner set used to come from the blocks already on the
-    // page. With an empty gui node there were none, every new widget resolved
-    // to no owner, and adding one -- by click or by drag -- silently did
-    // nothing. Dead palette, no error, and only while the page was empty.
-    const node = guiNode('gui1', []);
-    const added = WIDGET_BUILDERS.text.create('Title', 'heading');
-
-    const writes = routePage([node], [], [added]);
-
-    expect(writes).toHaveLength(1);
-    expect(writes[0].node.id).toBe('gui1');
-    expect(writes[0].widgets.map((w) => w.id)).toEqual([added.id]);
-  });
-
-  it('keeps every block on the node that already stores it', () => {
-    const a = WIDGET_BUILDERS.text.create('A');
-    const b = WIDGET_BUILDERS.text.create('B');
-    const first = guiNode('gui1', [a]);
-    const second = guiNode('gui2', [b]);
-    const blocks = [{ node: first, widget: a }, { node: second, widget: b }];
-
-    // Reordered across nodes: B before A on the page, both staying put.
-    const writes = routePage([first, second], blocks, [b, a]);
-
-    expect(writes).toEqual([]);
-  });
-
-  it('inserts a new block on the first node without moving the others', () => {
-    const a = WIDGET_BUILDERS.text.create('A');
-    const b = WIDGET_BUILDERS.text.create('B');
-    const first = guiNode('gui1', [a]);
-    const second = guiNode('gui2', [b]);
-    const blocks = [{ node: first, widget: a }, { node: second, widget: b }];
-    const added = WIDGET_BUILDERS.divider.create('');
-
-    const writes = routePage([first, second], blocks, [added, a, b]);
-
-    expect(writes).toHaveLength(1);
-    expect(writes[0].node.id).toBe('gui1');
-    expect(writes[0].widgets.map((w) => w.id)).toEqual([added.id, a.id]);
-  });
-
-  it('writes the emptied node when its last block is deleted', () => {
-    const a = WIDGET_BUILDERS.text.create('A');
-    const node = guiNode('gui1', [a]);
-
-    const writes = routePage([node], [{ node, widget: a }], []);
-
-    expect(writes).toHaveLength(1);
-    expect(writes[0].widgets).toEqual([]);
-  });
-
-  it('drops nothing on the floor when there is no gui node at all', () => {
-    // The caller creates one in this case; returning an empty list is how it
-    // finds out, and is the only situation where a widget may go unwritten.
-    expect(routePage([], [], [WIDGET_BUILDERS.text.create('A')])).toEqual([]);
-  });
-});
-
-// ── Changing the page as the store holds it ────────────────────────────────
-
 const store = () => useGraphStore.getState();
 const page = () => pageOf(store().rfNodes.map((n) => n.data.graphNode as GraphNode));
 const shown = () => page().blocks.map((b) => b.widget);
+
+describe('the page', () => {
+  beforeEach(() => store().newGraph());
+
+  it('is one node: its first block makes it, and every block after lands on it', () => {
+    insertBlock({ ...WIDGET_BUILDERS.text.create('Title', 'heading'), id: 'title' });
+    const made = page().page!;
+    expect(store().rfNodes).toHaveLength(1);
+    insertBlock({ ...WIDGET_BUILDERS.text_io.create('Answer', 'output'), id: 'answer' });
+    expect(store().rfNodes).toHaveLength(1);
+    expect(page().page!.id).toBe(made.id);
+    expect(shown().map((w) => w.id)).toEqual(['title', 'answer']);
+    // Its ports follow its blocks.
+    expect(page().page!.inputs.map((port) => port.id)).toEqual(['answer_in']);
+  });
+
+  it('is the first one, where a graph has two -- a problem `check` names -- and the second is left as it is', () => {
+    // The page was every gui node's blocks in graph order, and an edit was
+    // routed back to whichever node held the block.
+    const a = { ...WIDGET_BUILDERS.text.create('A'), id: 'a' };
+    const b = { ...WIDGET_BUILDERS.text.create('B'), id: 'b' };
+    store().loadGraph({ metadata: { name: 'Two', description: '', gui_scheme: 'night' }, nodes: [guiNode('first', [a]), guiNode('second', [b])], edges: [] });
+    expect(page().page!.id).toBe('first');
+    expect(shown().map((w) => w.id)).toEqual(['a']);
+    insertBlock({ ...WIDGET_BUILDERS.divider.create(''), id: 'd' }, 0);
+    patchBlock('b', { label: 'not on the page' });
+    const second = store().rfNodes.find((n) => n.id === 'second')!.data.graphNode as GraphNode;
+    expect(second.config.gui_widgets).toEqual([b]);
+    expect(shown().map((w) => w.id)).toEqual(['d', 'a']);
+  });
+});
 
 describe('a block edited on the page', () => {
   beforeEach(() => store().newGraph());
@@ -116,16 +84,17 @@ describe('a block edited on the page', () => {
     expect(shown()[0].tone).toBe('accent');
   });
 
-  it('changes nothing when the block was deleted meanwhile', () => {
+  it('changes nothing when the block was deleted meanwhile: not even an undo step', () => {
     insertBlock({ ...WIDGET_BUILDERS.text.create('A'), id: 'a' });
     const before = JSON.stringify(store().exportGraph());
+    const undo = store().past.length;
     patchBlock('chart', { label: 'x' });
     expect(JSON.stringify(store().exportGraph())).toBe(before);
+    expect(store().past.length).toBe(undo);
   });
 
-  it('makes the page\'s node for the first block, and moves a block by place or onto another', () => {
+  it('moves a block by place or onto another, and empties the page with its last one', () => {
     for (const id of ['a', 'b', 'c']) insertBlock({ ...WIDGET_BUILDERS.text.create(id), id });
-    expect(page().guiNodes).toHaveLength(1);
     moveBlock('c', 0);
     expect(shown().map((w) => w.id)).toEqual(['c', 'a', 'b']);
     moveBlock('c', 'b');
@@ -134,6 +103,7 @@ describe('a block edited on the page', () => {
     expect(shown().map((w) => w.id)).toEqual(['a', 'b', 'c']);
     insertBlock({ ...WIDGET_BUILDERS.divider.create(''), id: 'd' }, 1);
     expect(shown().map((w) => w.id)).toEqual(['a', 'd', 'b', 'c']);
+    for (const id of ['a', 'd', 'b', 'c']) removeBlock(id);
+    expect(page().page!.config.gui_widgets).toEqual([]);
   });
 });
-

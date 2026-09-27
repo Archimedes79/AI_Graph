@@ -85,8 +85,9 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
   /**
    * What this node's outputs are called in the run's result, when it is one:
-   * its id, unless the element keeps a name of its own. The run keys the result
-   * by it and `check` compares it, so both ask here.
+   * its id, unless the element names it otherwise -- an output node by its
+   * label. The run keys the result by it and `check` compares it, so both ask
+   * here.
    */
   resultLabel(node: GraphNode): string {
     return node.id;

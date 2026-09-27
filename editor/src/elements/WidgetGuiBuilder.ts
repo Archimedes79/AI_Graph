@@ -5,6 +5,7 @@ import type { GuiWidget, WidgetKind } from '@/graph';
 import { DEFAULT_WIDGET_SPAN } from '@/document/layout';
 import type { Tone } from '@/ui/tone';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
+import { previewOf, type Preview } from './resultPreview';
 
 /** What the widget editor hands every widget panel: a block has settings, and no body to write. */
 export interface WidgetPanelProps {
@@ -73,12 +74,18 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
    */
   readonly InlineEditor?: ComponentType<InlineEditorProps>;
 
-  /** Drawn on the canvas under the widget's input port: what last arrived there, as the block shows it. */
-  readonly CanvasPreview?: ComponentType<{ data: unknown }>;
+  /**
+   * What the block shows, small, under its port on the graph canvas: *value*
+   * read by its shape (`resultPreview.ts`). A kind that reads a value its own
+   * way says so: a chart reads a list of points as a chart.
+   */
+  preview(value: unknown): Preview | undefined {
+    return previewOf(value);
+  }
 
   /** Said under "⚡ Using this starts the graph", for a widget that can be told to. */
   readonly runOnChangeHint: string =
-    'Choosing a value runs the nodes this widget is wired to, and what follows from them — not the whole graph.';
+    'Choosing a value runs the nodes this block is wired to, and what follows from them — not the whole graph.';
 
   /** The widget is a source whose data nothing describes yet: see `NodeGuiBuilder.missingExample`. */
   missingExample(_widget: GuiWidget): boolean {

@@ -21,7 +21,7 @@ function graph(overrides: { schema?: unknown; template?: string } = {}): Graph {
         id: 'say', node_type: 'ai', label: 'Say', inputs: [port('total', 'input')], outputs: [port('output', 'output')],
         config: { system_prompt: 'Report.', prompt_template: overrides.template ?? 'There are {{total}}.' },
       },
-      { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: { write_mode: 'window' } },
+      { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: {} },
     ],
     edges: [
       { id: 'e1', source_node_id: 'count', source_port_id: 'total', target_node_id: 'say', target_port_id: 'total' },
@@ -62,10 +62,10 @@ describe('what check finds in a graph', () => {
 
   it('finds two output nodes under one label, with the keys the run really uses', () => {
     const made = graph();
-    made.nodes[2].config.output_label = 'Answer';
+    made.nodes[2].label = 'Answer';
     made.nodes.push(
-      { ...made.nodes[2], id: 'clash', config: { write_mode: 'window', output_label: 'Answer (also)' } },
-      { ...made.nodes[2], id: 'also', config: { write_mode: 'window', output_label: 'Answer' } },
+      { ...made.nodes[2], id: 'clash', label: 'Answer (also)' },
+      { ...made.nodes[2], id: 'also', label: 'Answer' },
     );
     made.edges.push(
       { id: 'e3', source_node_id: 'say', source_port_id: 'output', target_node_id: 'also', target_port_id: 'value' },
@@ -74,7 +74,20 @@ describe('what check finds in a graph', () => {
     expect(problemsIn(made)).toEqual([expect.objectContaining({
       where: 'nodes "show", "also"',
       problem: 'These output nodes share the label "Answer", so the run\'s result keeps only the first under it, the rest under "Answer (also) 2".',
-      fix: 'Give every output node its own output_label.',
+      fix: 'Give every output node its own label.',
+    })]);
+  });
+
+  it('finds a second page: a graph is one tool, with one page', () => {
+    const page = (id: string, block: string) => ({ id, node_type: 'gui', label: 'Page', inputs: [], outputs: [],
+      config: { gui_widgets: [{ id: block, kind: 'text_io', mode: 'output', label: block }] } });
+    const made = graph();
+    made.nodes.push(...parseGraph({ metadata: { name: 'x' }, nodes: [page('page', 'answer')], edges: [] }).nodes);
+    expect(problemsIn(made)).toEqual([]);
+    made.nodes.push(...parseGraph({ metadata: { name: 'x' }, nodes: [page('more', 'extra')], edges: [] }).nodes);
+    expect(problemsIn(made)).toEqual([expect.objectContaining({
+      where: 'nodes "page", "more"',
+      problem: 'A graph has one page, and these are 2: only the blocks of "page" are shown.',
     })]);
   });
 });
@@ -266,7 +279,7 @@ describe('a graph inside a node', () => {
   it('says a page in there would never be shown, and a question in there never asked', () => {
     const problems = problemsIn(holder(inner([
       { id: 'page', node_type: 'gui', label: 'Page', inputs: [], outputs: [], config: { gui_widgets: [] } },
-      { id: 'asks', node_type: 'input', label: 'Asks', inputs: [], outputs: [], config: { input_mode: 'file', prompt_at_runtime: true } },
+      { id: 'asks', node_type: 'input', label: 'Asks', inputs: [], outputs: [], config: { input_mode: 'directory', prompt_at_runtime: true } },
       { id: 'out', node_type: 'output', label: 'Out', inputs: [port('value', 'input')], outputs: [], config: {} },
     ])));
     expect(said(problems)).toContainEqual(expect.stringContaining('a page in here would never be shown'));
