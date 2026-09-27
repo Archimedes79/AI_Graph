@@ -1,5 +1,4 @@
 import type React from 'react';
-import type { GraphNode } from '@/graph';
 import GenerationTranscript, { useLiveGeneration } from './GenerationTranscript';
 import LiveGeneration from './LiveGeneration';
 import CodeField from './CodeField';
@@ -7,7 +6,7 @@ import type { ElementGeneration, FieldAccess } from './generation';
 import { ACCENT_FILL, ACCENT_TEXT, MUTED, SUCCESS } from '@/ui/theme';
 
 interface Props {
-  generation: ElementGeneration<GraphNode>;
+  generation: ElementGeneration;
   fields: FieldAccess;
   generating: boolean;
   message?: string;

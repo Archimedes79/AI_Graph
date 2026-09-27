@@ -115,7 +115,7 @@ ElementRunner<Subject, Config>          config() · texts() · logic() · catche
     └── DisplayWidgetRunner      one input, nothing out: shows what arrives, says what it draws
         └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
 
-ElementGuiBuilder<Subject, PanelProps>           Panel · generation
+ElementGuiBuilder<PanelProps>                    Panel · generation
 ├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
 │                                         + the four steps' declarations: stepped · exampleInput · ownsDescription
 │                                           portEditing/portHint · wantsOn · restingValue · publishedDescription

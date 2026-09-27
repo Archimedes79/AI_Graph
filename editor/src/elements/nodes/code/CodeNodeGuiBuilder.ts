@@ -29,7 +29,7 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly advancedSummary = 'failures, how many at once';
 
-  override readonly generation: ElementGeneration<GraphNode> = {
+  override readonly generation: ElementGeneration = {
     ...fromEngine(new CodeNodeRunner().generation()),
     promptLabel: 'What this node should do',
     promptPlaceholder: 'In a sentence or two: what should this node do with what comes in? ✨ Generate writes the code from it.',

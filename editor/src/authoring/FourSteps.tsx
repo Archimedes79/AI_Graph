@@ -1,5 +1,4 @@
 import type React from 'react';
-import type { GraphNode } from '@/graph';
 import Step from './Step';
 import type { ElementGeneration, FieldAccess } from './generation';
 import { DIMMER, FIELD, MUTED } from '@/ui/theme';
@@ -48,7 +47,7 @@ export default function FourSteps({ comesIn, comesOut, task, body }: Props) {
 
 /** Step 3's one field: the node's request, wherever it keeps it. */
 export function TaskField({ generation, fields }: {
-  generation: ElementGeneration<GraphNode>;
+  generation: ElementGeneration;
   fields: FieldAccess;
 }) {
   return (

@@ -41,8 +41,7 @@ export function fromEngine(
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- whatever the element is attached to
-export interface ElementGeneration<S = any> {
+export interface ElementGeneration {
   /**
    * Field holding the user's request. `'description'` means the node's own
    * description rather than a config key -- the ai node's request lives there.
@@ -50,12 +49,6 @@ export interface ElementGeneration<S = any> {
   promptField: string;
   /** Field the generated text is written into. */
   targetField: string;
-  /**
-   * Context only the editor can know: what the user chose in this node's own
-   * config (batch mode, declared output format). Everything about the *graph*
-   * around the node is assembled once by the shell and passed in separately.
-   */
-  context?: (subject: S) => string;
   /** Shown when the prompt field is empty. */
   guard?: string;
   /** Shown when it worked, unless the result has more to say (see probe). */
@@ -135,7 +128,7 @@ export function probeMessage(probe: ProbeReport | undefined, fallback: string, o
 export interface GenerationRequest<S> {
   /** The node type -- the server resolves the rest from it. */
   element: string;
-  generation: ElementGeneration<S>;
+  generation: ElementGeneration;
   subject: S;
   fields: FieldAccess;
   /** The element's real ports, for a snippet that is wired as the node is. */
@@ -235,11 +228,10 @@ function said(notes: Record<string, string> | undefined): Record<string, string>
  * requests.
  */
 export function generateRequest<S>(request: GenerationRequest<S>): GenerateRequest {
-  const { generation: spec, subject, fields } = request;
+  const { generation: spec, fields } = request;
   return {
     element: request.element,
     description: fields.get(spec.promptField).trim(),
-    context: spec.context?.(subject) ?? '',
     inputs: request.ports?.inputs,
     outputs: request.ports?.outputs,
     sample_inputs: request.sampleInputs,

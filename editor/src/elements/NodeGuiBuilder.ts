@@ -70,7 +70,7 @@ export type PortEditing = 'edit' | 'fixed' | 'none';
 /** The folded-away settings most people never touch. */
 export type NodeAdvancedPanelProps = Pick<NodePanelProps, 'node' | 'setConfig'>;
 
-export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePanelProps> {
+export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
   // ── What it is ────────────────────────────────────────────────────────────
 
   abstract readonly nodeType: NodeType;

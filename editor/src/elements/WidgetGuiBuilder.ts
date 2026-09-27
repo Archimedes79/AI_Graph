@@ -38,7 +38,7 @@ export interface InlineEditorProps {
 
 let created = 0;
 
-export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, WidgetPanelProps> {
+export abstract class WidgetGuiBuilder extends ElementGuiBuilder<WidgetPanelProps> {
   // ── What it is ────────────────────────────────────────────────────────────
 
   abstract readonly widgetKind: WidgetKind;

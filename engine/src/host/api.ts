@@ -87,7 +87,6 @@ export interface GenerateRequest {
   /** A node type: whose `Generation` says what is written and how. */
   element: string;
   description: string;
-  context?: string;
   inputs?: string[];
   outputs?: string[];
   /** Real port values from the last run; enables the verify-and-repair pass. */

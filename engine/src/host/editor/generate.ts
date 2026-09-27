@@ -158,20 +158,19 @@ function proseChange(refine: Refine, what: string, tag: string, sample: Sample |
 }
 
 /**
- * Ask for code that maps *inputs* to *outputs*: the task, the brief, whatever
- * else the element or the caller adds, then the skeleton to complete.
- * *evidence* is a failed attempt and what went wrong with it, for the repair --
- * or the function there is and what to change about it (`codeChange`).
+ * Ask for code that maps *inputs* to *outputs*: the task, the brief, then the
+ * skeleton to complete. *evidence* is a failed attempt and what went wrong
+ * with it, for the repair -- or the function there is and what to change about
+ * it (`codeChange`).
  */
 async function generateCode(
-  ai: AiService, target: Target, request: GenerateRequest, context: string, sample?: Sample, evidence = '',
+  ai: AiService, target: Target, request: GenerateRequest, sample?: Sample, evidence = '',
 ): Promise<{ text: string; explanation: string; task?: string }> {
   const inputs = request.inputs ?? [];
   const outputs = request.outputs ?? [];
   const parts = ['Write a JavaScript function for one node of a graph. The node should:', request.description || '(not said yet)'];
   const brief = renderBrief(request, 'code', sample);
   if (brief) parts.push(`\n${brief}`);
-  if (context) parts.push(`\n## Also\n${context}`);
   if (evidence) parts.push(`\n${evidence}`);
   parts.push('\n## The function');
   if (inputs.length || outputs.length) {
@@ -361,12 +360,12 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
  * one (`codeChange`); the task it restated comes back whichever pass is kept.
  */
 async function generateVerifiedCode(
-  ai: AiService, runtime: Runtime, target: Target, request: GenerateRequest, context: string,
+  ai: AiService, runtime: Runtime, target: Target, request: GenerateRequest,
   given: Sample | undefined, change = '',
 ): Promise<{ text: string; explanation: string; task?: string; probe: ProbeReport }> {
   const outputs = request.outputs ?? [];
   const sample = given?.values;
-  const first = await generateCode(ai, target, request, context, given, change);
+  const first = await generateCode(ai, target, request, given, change);
   if (!sample || !Object.keys(sample).length) return { ...first, probe: notProbed() };
   const perItem = runsPerItem(request);
   // A sample that is an example says what must come out of it, and that is
@@ -416,7 +415,7 @@ async function generateVerifiedCode(
   const evidence = repairPrompt(first.text, sample, attempt.error, attempt.missing, outputs, attempt.problems);
   let second: { text: string; explanation: string };
   try {
-    second = await generateCode(ai, target, request, context, given, evidence);
+    second = await generateCode(ai, target, request, given, evidence);
   } catch {
     // The repair pass is a bonus, never a reason to fail the request.
     return { ...first, probe: reportOf(attempt, 'failed') };
@@ -509,7 +508,6 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   const ai = recording(request.preview ? PREVIEW_AI : deps.ai, calls);
   const kind = spec.kind;
 
-  const context = request.context ?? '';
   const values = request.sample_inputs;
   const sample: Sample | undefined = values && Object.keys(values).length
     ? {
@@ -528,7 +526,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     switch (kind) {
       case 'code': {
         const change = refine ? codeChange(refine, sample, request.outputs ?? []) : '';
-        const { text, explanation, task, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, request, context, sample, change);
+        const { text, explanation, task, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, request, sample, change);
         return { result: text, explanation, probe: report, calls, ...restated(task) };
       }
       case 'prompt': {
@@ -538,7 +536,6 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
         const prompt = [
           `Task: ${request.description || '(not said yet)'}`,
           renderBrief(request, 'prompt', sample),
-          context ? `## Also\n${context}` : '',
           refine
             ? proseChange(refine, 'system prompt', 'system_prompt', sample)
             : 'Write the system prompt for the model this node calls. It is sent what is described above, '
