@@ -1,1 +1,11 @@
+Input:
+{Input Needs}
+
+Output Example:
+{Output Example}
+
+Graph Context:
+{Graph}
+
+Prompt:
 Read the CSV (names in the first column, values in the first numeric column) and say what the chart should show: {kind: "bars", title, points: [{label, value}]}, largest first. Do not draw anything -- the chart block draws the figure.

@@ -3,7 +3,7 @@
 ## The largest first, from the first numeric column
 
 ```json input
-{ "csv": "examples/data/three_countries.csv" }
+{ "csv": "example/three_countries.csv" }
 ```
 
 ```json expect
