@@ -71,7 +71,8 @@ import {
   FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
 } from '../../project/folder.ts';
 import { INTERFACE_FILE } from '../../project/interfaceFile.ts';
-import { folderProblems, names, problemsIn, type Problem } from '../../project/check.ts';
+import { names, problemsIn, type Problem } from '../../project/check.ts';
+import { folderProblems } from '../../project/folderCheck.ts';
 
 export type { Problem };
 

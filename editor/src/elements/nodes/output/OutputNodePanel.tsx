@@ -1,6 +1,9 @@
 import PathField from '@/dialogs/PathField';
+import { useGraphStore } from '@/store/graphStore';
 import { DIMMER, FIELD, MUTED } from '@/ui/theme';
 import { OutputNodeRunner } from '@engine/elements/nodes/output/OutputNodeRunner.ts';
+import { resultKeys } from '@engine/elements/NodeRunner.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 const OUTPUT = new OutputNodeRunner();
@@ -10,13 +13,19 @@ const OUTPUT = new OutputNodeRunner();
  *
  * What it is and where it goes are what the node feeding it is told it wants
  * (`OutputNodeGuiBuilder.wantsOn`), so they are asked in those words. What the
- * result is called is what the node is called: the dialog's title. It had a
+ * result is called is what the node is called: the dialog's title -- unless
+ * another output node has that name already, which it then says. It had a
  * second name for that, and a window of its own in the editor; a page is
  * where a result is shown.
  */
 export default function OutputNodePanel({ node, setConfig, fields }: NodePanelProps) {
   const mode = node.config.write_mode;
   const writes = mode === 'file' || mode === 'directory';
+  // The key its value really gets in the run's result: its name, unless an
+  // output node before it has that already (`resultKeys`, as a run asks).
+  const nodes = useGraphStore((s) => s.rfNodes);
+  const label = OUTPUT.resultLabel(node as never);
+  const key = resultKeys(nodes.map((n) => (n.id === node.id ? node : n.data.graphNode)) as never, engineRegistry).get(node.id) ?? label;
 
   return (
     <div className="space-y-4">
@@ -77,7 +86,9 @@ export default function OutputNodePanel({ node, setConfig, fields }: NodePanelPr
         />
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
           The node wired into this one is told this, and where the result goes, when ✨ writes it.
-          The run's result calls it what this node is called: “{OUTPUT.resultLabel(node as never)}”.
+          {key === label
+            ? ` The run's result calls it what this node is called: “${key}”.`
+            : ` “${label}” is another output node's already, so the run's result calls this one “${key}”. Give it a name of its own.`}
         </p>
       </div>
     </div>

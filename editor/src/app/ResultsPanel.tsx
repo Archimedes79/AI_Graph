@@ -1,6 +1,6 @@
 import { useGraphStore } from '@/store/graphStore';
 import { ACCENT, ACCENT_TEXT, DANGER_TEXT, DIM, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
-import { delivered, statusTone } from '@/store/executionStatus';
+import { hasOutputs, statusTone } from '@/store/executionStatus';
 
 export default function ResultsPanel() {
   const result = useGraphStore((s) => s.executionResult);
@@ -127,7 +127,7 @@ export default function ResultsPanel() {
                 </pre>
               </div>
             )}
-            {delivered(nr.status) && Object.keys(nr.outputs).length > 0 && (
+            {hasOutputs(nr) && Object.keys(nr.outputs).length > 0 && (
               <div className="px-3 py-2" style={{ borderTop: `1px solid ${LINE}` }}>
                 <div className="text-xs font-medium mb-1" style={{ color: DIM }}>Outputs</div>
                 <pre

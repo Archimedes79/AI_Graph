@@ -13,7 +13,7 @@
 // The designer's surface, its side panel and `masterExamples.test.ts`, which
 // builds the examples the way a person does, all call these functions.
 import type { GraphNode, GuiWidget } from '@/graph';
-import { useGraphStore } from '@/store/graphStore';
+import { besideTheRest, useGraphStore } from '@/store/graphStore';
 import { syncGuiNodePorts } from '@/document/guiWidgets';
 import { pageOf } from './GuiPage';
 
@@ -22,17 +22,28 @@ function pageNow(): GraphNode | undefined {
   return pageOf(useGraphStore.getState().rfNodes.map((n) => n.data.graphNode as GraphNode)).page;
 }
 
+/** *page* holding *widgets*, its ports following them. */
+function withBlocks(page: GraphNode, widgets: GuiWidget[]): GraphNode {
+  return syncGuiNodePorts({ ...page, config: { ...page.config, gui_widgets: widgets } });
+}
+
 /**
  * The page's blocks as the store holds them now, rewritten by *edit* and
  * stored back, its ports following. Nothing, when the edit changed nothing:
  * no undo step, and no "unsaved".
+ *
+ * A page is its blocks: the last one taken off takes the node with it, as the
+ * first one made it. A page node left with none was a page to a delivered tool
+ * and to a bundle, which drew nothing on it -- not even the run's result.
  */
 function rewrite(edit: (widgets: GuiWidget[]) => GuiWidget[]): void {
   const page = pageNow();
   if (!page) return;
   const widgets = edit(page.config.gui_widgets);
   if (JSON.stringify(widgets) === JSON.stringify(page.config.gui_widgets)) return;
-  useGraphStore.getState().updateNode(page.id, syncGuiNodePorts({ ...page, config: { ...page.config, gui_widgets: widgets } }));
+  const store = useGraphStore.getState();
+  if (widgets.length) store.updateNode(page.id, withBlocks(page, widgets));
+  else store.deleteNode(page.id);
 }
 
 /** Give block *widgetId* *patch*. Nothing, when the block is no longer there. */
@@ -64,12 +75,17 @@ export function removeBlock(widgetId: string): void {
 
 /**
  * Put *widget* on the page at place *at*, at the end without one -- the order
- * is the position. With no page in the graph yet, its first block makes it:
- * the page is the thing being built, and that it needs a node behind it is
- * bookkeeping.
+ * is the position. With no page in the graph yet, its first block makes it,
+ * in the block's own undo step: the page is the thing being built, and that
+ * it needs a node behind it is bookkeeping. The node goes beside what is on
+ * the canvas, not on top of the first node there.
  */
 export function insertBlock(widget: GuiWidget, at?: number): void {
-  if (!pageNow()) useGraphStore.getState().addNode('gui', { x: 240, y: 160 });
+  const store = useGraphStore.getState();
+  if (!pageNow()) {
+    store.addNode('gui', besideTheRest(store.rfNodes), (page) => withBlocks(page, [widget]));
+    return;
+  }
   rewrite((widgets) => {
     const next = [...widgets];
     next.splice(at ?? next.length, 0, widget);

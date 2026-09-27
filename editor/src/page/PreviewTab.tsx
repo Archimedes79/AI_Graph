@@ -78,15 +78,14 @@ export default function PreviewTab() {
         </span>
       </div>
 
-      {blocks.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm" style={{ color: DIMMER }}>
-            No page yet. Add blocks to it on the Page tab.
-          </p>
-        </div>
-      ) : (
-        <GuiSurfacePage onRun={(trigger) => { void delivered.run(trigger); }} />
+      {/* Without blocks the delivered tool shows what it does and what its run
+          hands back, and so does this: it is the same component. */}
+      {blocks.length === 0 && (
+        <p className="px-8 pt-4 text-xs" style={{ color: DIMMER }}>
+          No page yet: until blocks are added on the Page tab, the tool shows this.
+        </p>
       )}
+      <GuiSurfacePage onRun={(trigger) => { void delivered.run(trigger); }} />
 
       <RequirementsDialog
         requirements={delivered.requirements}

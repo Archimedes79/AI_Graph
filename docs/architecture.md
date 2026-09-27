@@ -277,7 +277,8 @@ engine/src                               editor/src
     folder.ts        read · write · watch
     flow.ts          flow.json: nodes and wires
     interfaceFile.ts a node's ports
-    check.ts         what is wrong
+    check.ts         what is wrong: no disk, the page asks it too
+    folderCheck.ts   what a folder gets wrong
   host/              Node and HTTP         api/client.ts       the contract's client
     api.ts           the contract          app/                toolbar, sidebar, dialogs, results
     serve.ts  http.ts  runs.ts             store/              the open graph, runs, undo
@@ -525,7 +526,10 @@ or a page that has them can do the same.
   against. `check` holds an example's inputs to the output interface of the node wired into
   that port.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
-  problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
+  problems: the CLI prints it and CI fails on it, the MCP server returns it before saving, and
+  the editor says it under a graph pasted as JSON before Load (`app/GraphProblems.tsx`). It
+  reads no disk, so the page can ask it; what only a project folder gets wrong -- a folder or a
+  file nothing claims -- is [`folderCheck.ts`](../engine/src/project/folderCheck.ts)'s. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
   that element's `problems()`. A second page is a problem: a graph has one, the first node that

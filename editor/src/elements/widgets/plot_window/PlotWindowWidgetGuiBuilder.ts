@@ -1,6 +1,6 @@
 import { PlotWindowWidgetRunner } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
 import { DisplayWidgetGuiBuilder } from '../DisplayWidgetGuiBuilder';
-import { previewOf, sketchOf, type Preview } from '../../resultPreview';
+import { figurePreview, previewOf, type Preview } from '../../resultPreview';
 import { toFigure } from './PlotChart';
 
 export class PlotWindowWidgetGuiBuilder extends DisplayWidgetGuiBuilder {
@@ -19,6 +19,6 @@ export class PlotWindowWidgetGuiBuilder extends DisplayWidgetGuiBuilder {
   /** On a chart, whatever the chart draws is a chart: a list of `{label, value}` points too, which elsewhere is rows. */
   override preview(value: unknown): Preview | undefined {
     const figure = toFigure(value);
-    return figure ? sketchOf(figure) : previewOf(value);
+    return figure ? figurePreview(figure) : previewOf(value);
   }
 }

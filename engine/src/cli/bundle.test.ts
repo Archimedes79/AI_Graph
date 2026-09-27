@@ -107,6 +107,10 @@ describe('a bundle', () => {
     expect(bundleNeeds(plotter).interface).toBe(true);
     // Hello world is two nodes, no page and no model: Node and nothing else.
     expect(bundleNeeds(hello)).toEqual({ interface: false, ai: false });
+    // A page node whose blocks are all gone draws nothing. Served, the tool
+    // showed an empty page and not the run's result.
+    const blank = { id: 'page', node_type: 'gui', label: 'Page', inputs: [], outputs: [], config: { gui_widgets: [] } };
+    expect(bundleNeeds(parseGraph({ ...hello, nodes: [...hello.nodes, blank] }))).toEqual({ interface: false, ai: false });
 
     // A model called from inside a node that holds a graph is still a model
     // the recipient has to configure.

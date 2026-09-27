@@ -708,7 +708,9 @@ graph is.
 A graph has **one page**: an ordered list of **blocks**. In the file it is the one node of
 type `gui`, its blocks in `config.gui_widgets` — the format's names; on screen it is the
 page and its blocks, and nothing else. It is made on the **Page** tab by its first block,
-not dropped from the palette; a second `gui` node is a problem `check` names, and only the
+not dropped from the palette, and goes with its last: a page is its blocks, and a tool
+whose page has none shows what it does and its run's result, as a tool without a page
+does. A second `gui` node is a problem `check` names, and only the
 first is shown. The page has no name of its own: the tool is called what the graph is, and
 the graph's name and description are edited above the page and shown in the delivered
 tool's header.
@@ -748,7 +750,9 @@ node's message template is the one shown under *AI Nodes* above.
 ### Picking files and folders
 
 Every path field — the picker block, the *Before running…* prompt, and a node's default
-path — has a **Browse…** button that opens a file chooser. It browses the machine the
+path — has a **Browse…** button that opens a file chooser. A text input asked for when the
+run starts is asked for as a file, with the button, when it is wired into an input that
+reads its file. It browses the machine the
 graph runs on, not the one the browser is on, because that is where the engine opens
 files; a native browser file dialog cannot be used here, since browsers reveal only a
 file's name and never its location. Deployed tools get the same picker, but only when
@@ -822,9 +826,12 @@ left out. Axes, gridlines, category and value labels, a legend and the total are
 for you, and because `kind` is a *value* it can come down a wire — a dropdown on a page
 can switch a chart between bars and a donut with no code anywhere. `bars` are horizontal
 and are the right choice when the categories are names, since a name reads along its bar
-instead of being cropped under a column. See
+instead of being cropped under a column. A value may be a number written as text
+(`"1450"`, as a CSV cell arrives when nothing parsed it). A figure with no points shows
+its title where the chart will be: what a node says before there is anything to plot. See
 [examples/population_plotter](../examples/population_plotter/), where the code node
-parses a CSV and writes no SVG at all.
+parses a CSV and writes no SVG at all -- and, with no file chosen, hands on a figure
+titled "Choose a CSV file to plot.".
 
 A figure is laid out for the pixels the block actually has, so a resize redraws it with
 **no run at all**, and a change of the page's colour scheme recolours it. There is no
@@ -839,7 +846,9 @@ chart shows it as it stands, scripts and event handlers stripped. Give it a `vie
 and `currentColor` follow the page's scheme.
 
 A chart has no code of its own, and neither has any other block: what shapes rows into
-points is a code node wired in before it. A **table** shows rows — a list of objects,
+points is a code node wired in before it. What arrives that a chart cannot draw — rows
+whose number is not called `value`, a record — it shows, with what it takes, rather than
+waiting for data that came. A **table** shows rows — a list of objects,
 whose keys become its columns, or a list of lists whose first row is the header. An
 **image** shows a file path, an http(s) URL or a data URL, or a list of them as a contact
 sheet: a run reads a path into the picture, since the machine the graph runs on is not

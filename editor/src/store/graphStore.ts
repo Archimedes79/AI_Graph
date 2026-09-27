@@ -92,10 +92,20 @@ export interface GraphStore {
   editingNodeId: string | null;
 
   // Actions
+  /**
+   * Change what the graph is called, what it does, its page's scheme: a
+   * change like any other, one undo step per field typed into (`commit`).
+   * The tool's name and description took none, so an Undo meant for the
+   * block added before them took them too.
+   */
   setMetadata: (meta: Partial<GraphMetadata>) => void;
   setCurrentFilePath: (path: string | null, isProject?: boolean) => void;
-  /** Add a node and return its id, so a caller can immediately fill it in. */
-  addNode: (nodeType: NodeType, position: { x: number; y: number }) => string;
+  /**
+   * Add a node and return its id, so a caller can immediately fill it in --
+   * or, with *fill*, as it is made, in the same undo step: the page's first
+   * block and the page it makes are one change.
+   */
+  addNode: (nodeType: NodeType, position: { x: number; y: number }, fill?: (node: GraphNode) => GraphNode) => string;
   /**
    * `renamed` maps a port's old id to its new one, per side, so the wires
    * follow the rename instead of being pruned as "a port that vanished" --
@@ -260,6 +270,19 @@ export function edgeStyle(targetPort: string | null | undefined): React.CSSPrope
   return targetPort === RUN_PORT
     ? { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 4' }
     : { stroke: ACCENT, strokeWidth: 2 };
+}
+
+/**
+ * Where a node goes that nobody put anywhere -- a palette click, the page a
+ * first block makes: to the right of what is already there, not on top of it.
+ * A random spot put the second node on the first more often than not, and a
+ * graph reads left to right anyway. The gap is generous because a node widens
+ * once it is configured and must not then cover its neighbour.
+ */
+export function besideTheRest(placed: Node[]): { x: number; y: number } {
+  if (!placed.length) return { x: 200, y: 120 };
+  const right = Math.max(0, ...placed.map((node) => node.position.x + (node.width ?? 240)));
+  return { x: right + 160, y: Math.min(...placed.map((node) => node.position.y)) };
 }
 
 let nodeCounter = 1;
@@ -452,10 +475,13 @@ export const useGraphStore = create<GraphStore>()(
     runProgress: null,
     currentRunId: null,
 
-    setMetadata: (meta) =>
+    setMetadata: (meta) => {
+      // Named without ": ", so it is never taken for a node dialog's change (`nodeId: fields`).
+      get().commit(`metadata.${Object.keys(meta).join('+')}`);
       set((state) => {
         Object.assign(state.metadata, meta);
-      }),
+      });
+    },
 
     setCurrentFilePath: (path, isProject = false) =>
       set((state) => {
@@ -463,7 +489,7 @@ export const useGraphStore = create<GraphStore>()(
         state.isProject = path !== null && isProject;
       }),
 
-    addNode: (nodeType, position) => {
+    addNode: (nodeType, position, fill) => {
       get().commit();
       const id = freeId(nodeType, get().rfNodes.map((existing) => existing.id));
       const kind = NODE_KINDS[nodeType];
@@ -473,7 +499,7 @@ export const useGraphStore = create<GraphStore>()(
         id,
         type: 'graphNode',
         position,
-        data: { graphNode: defaults },
+        data: { graphNode: fill ? fill(defaults) : defaults },
       };
       set((state) => {
         state.rfNodes.push(rfNode as never);

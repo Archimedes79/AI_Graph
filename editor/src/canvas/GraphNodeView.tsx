@@ -5,7 +5,7 @@ import { useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { errorLine } from '@/elements/resultPreview';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
-import { delivered } from '@/store/executionStatus';
+import { hasOutputs } from '@/store/executionStatus';
 import { showsPage, widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
 import { carriesFiles, dropExample, droppedFile } from '@/authoring/droppedFile';
 import { errorText } from '@/api/errorText';
@@ -57,7 +57,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const summary = builder?.canvasSummary?.(graphNode);
   // What it made last, beside the port each value stands at: the element
   // says which port and how the value reads. Faded while it stood still.
-  const previews = executionResult && delivered(executionResult.status) && builder
+  const previews = executionResult && hasOutputs(executionResult) && builder
     ? builder.resultPreviews(graphNode, executionResult) : undefined;
   const held = executionResult?.held;
   const failure = executionResult?.status === 'error'

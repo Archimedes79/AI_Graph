@@ -6,9 +6,10 @@ import { useContainerCell } from './useContainerCell';
 import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from '@/document/layout';
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
-import { DANGER, MUTED } from '@/ui/theme';
+import { DANGER, DIM, MUTED, TEXT } from '@/ui/theme';
 import { blockShows, showsPage, widgetFiresRun } from '@/document/guiWidgets';
 import type { RunTrigger } from '@/api/client';
+import RunResult from './RunResult';
 
 /**
  * The page a graph shows: its blocks, in order, on one grid.
@@ -271,8 +272,32 @@ export function usePageEvents(onRun?: (trigger: RunTrigger) => void) {
 }
 
 /**
+ * What a tool shows when its page has no blocks: what it does, how to start
+ * it, and what its run handed back -- each output node's values under its
+ * name. A page is its blocks; a page node whose last block was removed has
+ * nothing to draw, and drew an empty rectangle where the run's result belongs.
+ */
+function WithoutPage() {
+  const metadata = useGraphStore((s) => s.metadata);
+  const executionResult = useGraphStore((s) => s.executionResult);
+  return (
+    <div className="m-6 max-w-2xl">
+      <p className="text-sm mb-2" style={{ color: TEXT }}>
+        {metadata.description || `${metadata.name} is ready to run.`}
+      </p>
+      <p className="text-xs" style={{ color: DIM }}>
+        Press <strong>▶ Run</strong> above. Anything the tool still needs — a value to start from,
+        a place to write — is asked for first. Results appear here when it finishes.
+      </p>
+      <RunResult result={executionResult} />
+    </div>
+  );
+}
+
+/**
  * The page wired to the graph: what a deployed tool serves, and what the
- * editor's preview tab shows. One component, so a preview cannot flatter.
+ * editor's preview tab shows -- or, with no blocks, the tool without a page.
+ * One component, so a preview cannot flatter.
  */
 export function GuiSurfacePage({ onRun }: {
   /**
@@ -286,7 +311,7 @@ export function GuiSurfacePage({ onRun }: {
   const blocks = useSurfaceBlocks();
   const { setWidgetValue, fire } = usePageEvents(onRun);
 
-  if (blocks.length === 0) return null;
+  if (blocks.length === 0) return <WithoutPage />;
   return (
     <div className="flex-1 overflow-auto px-8 py-6">
       <GuiPage blocks={blocks} onWidgetValue={setWidgetValue} onWidgetTrigger={fire} />
