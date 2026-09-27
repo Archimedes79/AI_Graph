@@ -264,6 +264,8 @@ describe('a node run once per item', () => {
   const request = {
     element: 'code', description: 'Shout each word.', inputs: ['text'], outputs: ['out'],
     input_types: { text: 'text' }, batch_mode: 'per_item' as const,
+    // As the editor sends them: which ports are declared lists (`Port.multi`).
+    multi_inputs: ['text'], multi_outputs: ['out'],
     sample_inputs: { text: ['alpha', 'beta'] },
   };
   const shout = '```js\nfunction run(inputs) { return { out: inputs.text.toUpperCase() }; }\n```';
@@ -348,9 +350,9 @@ describe('a node run once per item', () => {
     const kept = '## One word\n\n```json input\n{"text": ["alpha"]}\n```\n\n```json expect\n{"out": ["ALPHA"]}\n```\n';
     const reply = await generate({ ...request, sample_inputs: undefined, examples: kept }, { ai: scripted([shout]), code: inProcess, generationFor, target });
     expect(reply.probe).toMatchObject({ status: 'ok', problems: [] });
-    // A port declared single hands on the bare answer, and the request cannot say which ports are: that meets it too.
+    // An output declared single hands on the bare answer, and an example that expects it is met by it.
     const typed = '## One word\n\n```json input\n{"text": "alpha"}\n```\n\n```json expect\n{"out": "ALPHA"}\n```\n';
-    const single = await generate({ ...request, sample_inputs: undefined, examples: typed }, { ai: scripted([shout]), code: inProcess, generationFor, target });
+    const single = await generate({ ...request, multi_outputs: [], sample_inputs: undefined, examples: typed }, { ai: scripted([shout]), code: inProcess, generationFor, target });
     expect(single.probe).toMatchObject({ status: 'ok' });
     // And a wrong answer meets neither.
     const lower = '```js\nfunction run(inputs) { return { out: inputs.text }; }\n```';
@@ -383,9 +385,9 @@ describe('a node run once per item', () => {
     expect(whole.probe.status).toBe('repaired');
   });
 
-  it('cuts only the inputs the node declares lists, when the request says which', async () => {
-    // Guessed from the types, a list arriving on a port that is not typed
-    // "list of" was cut as if it fanned out; a run hands it on whole.
+  it('cuts only the inputs the node declares lists', async () => {
+    // Guessed from the types, as it once was, a list arriving on a port that
+    // is not typed "list of" was cut as if it fanned out; a run hands it on whole.
     let tried: Record<string, unknown> = {};
     const code: CodeService = { run: async (body, inputs) => { tried = inputs; return inProcess.run(body, inputs); } };
     await generate({
@@ -413,7 +415,8 @@ describe('a node run once per item', () => {
     const ai = scripted(['<system_prompt>Summarise the story.</system_prompt>']);
     await generate({
       element: 'ai', description: 'Summarise each story.', inputs: ['story'], outputs: ['output'],
-      input_types: { story: 'text' }, batch_mode: 'per_item', sample_inputs: { story: ['Once.', 'Twice.', 'Thrice.'] },
+      input_types: { story: 'text' }, batch_mode: 'per_item', multi_inputs: ['story'], multi_outputs: ['output'],
+      sample_inputs: { story: ['Once.', 'Twice.', 'Thrice.'] },
     }, { ai, code: runner(() => ({})), generationFor, target });
     const prompt = ai.asked[0].prompt;
     expect(prompt).toContain('sample, from the last run, the first of its 3 items: "Once."');

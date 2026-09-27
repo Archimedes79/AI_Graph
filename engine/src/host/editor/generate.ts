@@ -225,16 +225,12 @@ function runsPerItem(request: GenerateRequest, spec: Generation | undefined): bo
  * (`batchItems`): only the ports, which is all it reads.
  *
  * A run fans out over the inputs declared multi, and the request says which
- * those are (`multi_inputs`). A request that does not say -- from a caller
- * older than the field -- is read by what the body is handed on each port
- * (`input_types`): a port it is handed a list on takes lists, so a list
- * arriving on any other port is one the body is handed an item of. That
- * guess cut a list arriving on a single-valued port as if it fanned out.
+ * those are (`multi_inputs`) -- not a guess from what the body is handed on
+ * each port, which cut a list arriving on a single-valued port as if it
+ * fanned out.
  */
 function fannedOut(request: GenerateRequest, sample: Record<string, unknown>): GraphNode {
-  const declared = request.multi_inputs;
-  const takesLists = (id: string) => String(request.input_types?.[id] ?? '').startsWith('list of');
-  const fans = (id: string) => (declared ? declared.includes(id) : !takesLists(id));
+  const fans = (id: string) => request.multi_inputs?.includes(id) ?? false;
   return { inputs: Object.keys(sample).map((id) => port(id, id, 'input', 'any', fans(id))) } as GraphNode;
 }
 
@@ -272,12 +268,10 @@ function oneItem(request: GenerateRequest): { values: Record<string, unknown> | 
  * An output declared multi (`multi_outputs`) is collected as a run collects
  * it: a list one call returns adds its entries, and even a single item is
  * handed on as a list of one -- a run of one item is still a run per item.
- * One declared single keeps a lone answer as it came. A request that does not
- * say counts every output as multi, as the one a code or ai node is created
- * with.
+ * One declared single keeps a lone answer as it came.
  */
 function handedOn(request: GenerateRequest, result: Record<string, unknown>): Record<string, unknown> {
-  const multi = (id: string) => request.multi_outputs?.includes(id) ?? true;
+  const multi = (id: string) => request.multi_outputs?.includes(id) ?? false;
   const node = { outputs: Object.keys(result).map((id) => port(id, id, 'output', 'any', multi(id))) } as GraphNode;
   return mergeBatchOutputs(node, [result]);
 }
@@ -390,16 +384,11 @@ async function generateVerifiedCode(
    * What an example's expectation is short of. It says what the node hands
    * on, which is what `test` holds it to -- for a node run once per item, the
    * one call's answer collected into a list. Held to the bare answer instead,
-   * a correct body failed an example kept from a run of one item. Where the
-   * request does not say which outputs are declared single, which hand the
-   * bare answer on, meeting it either way is meeting it.
+   * a correct body failed an example kept from a run of one item.
    */
-  const gaps = (result: Record<string, unknown>): string[] => {
-    if (!expect) return [];
-    const found = unmet(expect, perItem ? handedOn(request, result) : result);
-    const unsaid = !request.multi_outputs;
-    return found.length && perItem && unsaid && !unmet(expect, result).length ? [] : found;
-  };
+  const gaps = (result: Record<string, unknown>): string[] => (
+    expect ? unmet(expect, perItem ? handedOn(request, result) : result) : []
+  );
 
   /**
    * Run it, then ask three questions in order: did it run, did it return the

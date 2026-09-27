@@ -148,13 +148,13 @@ export interface GenerateRequest {
   /**
    * The input ports declared as lists (`Port.multi`): what a run fans out over
    * when the node runs once per item, so what the sample is cut by for one
-   * call. Absent, it is guessed from `input_types`.
+   * call. Sent with `batch_mode`; absent, nothing fans out.
    */
   multi_inputs?: string[];
   /**
    * The output ports declared as lists: what a run per item collects into a
-   * list, where one declared single hands a lone answer on as it came. Absent,
-   * every output counts as a list, as a new node's does.
+   * list, where one declared single hands a lone answer on as it came. Sent
+   * with `batch_mode`; absent, none is declared a list.
    */
   multi_outputs?: string[];
   /**
