@@ -1,10 +1,10 @@
 // The editor's settings dialog, and the one file behind it.
 //
 // Two questions live here. Which endpoints and keys are configured, and which
-// model a request ends up at when nobody named one. The file is the same one
-// the engine reads at run time (`ai/settings.ts`), so a key saved in the dialog
-// is the key a run uses; the dialog never reads a key back, only whether one is
-// set and where it came from.
+// AI the one setting names. The file is the same one the engine reads at run
+// time (`ai/settings.ts`), so a key or a model saved in the dialog is the one a
+// run uses; the dialog never reads a key back, only whether one is set and
+// where it came from.
 //
 // Editor-only: a deployed tool is configured through its environment, and a
 // page that could write credentials into a file nobody asked for is not a page
@@ -13,8 +13,8 @@
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { candidatePaths, fromFile, readSettingsFile, type SettingsFile } from '../../ai/settings.ts';
-import { CREDENTIALS, DEFAULT_SETTINGS, ENDPOINT_ENV, settingsFromEnv } from '../../ai/providers.ts';
+import { aiSetting, candidatePaths, LOCAL_PROVIDERS, probeLocal, readSettingsFile, type SettingsFile } from '../../ai/settings.ts';
+import { CREDENTIALS, DEFAULT_SETTINGS, ENDPOINT_ENV } from '../../ai/providers.ts';
 import type { ProviderStatus, SettingsPatch, SettingsStatus, Target } from '../api.ts';
 
 type Env = Record<string, string | undefined>;
@@ -22,16 +22,8 @@ type Env = Record<string, string | undefined>;
 /** The providers whose base URL a person may point somewhere else: the ones the environment can point, too. */
 const ENDPOINT_PROVIDERS = Object.keys(ENDPOINT_ENV);
 
-/** A usable model when none was configured, per provider. Empty: only the user knows. */
-export const DEFAULT_MODELS: Record<string, string> = {
-  ollama: 'llama3',
-  openai: 'gpt-4o-mini',
-  anthropic: 'claude-opus-5',
-  google: 'gemini-flash-lite-latest',
-  github_copilot: 'gpt-4o-mini',
-};
-
-export const LOCAL_PROVIDERS = ['ollama', 'lmstudio'] as const;
+/** The variables that are the one AI setting on a machine without the dialog. */
+const AI_ENV = ['AI_GRAPH_AI_PROVIDER', 'AI_GRAPH_AI_MODEL'];
 
 /**
  * The file that is in use, or would be written.
@@ -46,7 +38,7 @@ export function settingsPath(cwd = process.cwd(), env: Env = process.env): strin
   return candidates.find((path) => existsSync(path)) ?? candidates[0];
 }
 
-/** What the dialog shows: endpoints, and whether each credential is set — never the credential. */
+/** What the dialog shows: the AI saved, endpoints, and whether each credential is set — never the credential. */
 export function status(cwd = process.cwd(), env: Env = process.env): SettingsStatus {
   const path = settingsPath(cwd, env);
   const file = readSettingsFile(path);
@@ -63,6 +55,11 @@ export function status(cwd = process.cwd(), env: Env = process.env): SettingsSta
   }
   return {
     settings_file: path,
+    ai: {
+      provider: file.ai?.provider ?? '',
+      model: file.ai?.model ?? '',
+      environment: AI_ENV.filter((variable) => env[variable]?.trim()),
+    },
     endpoints,
     credentials,
   };
@@ -94,161 +91,60 @@ export async function save(patch: SettingsPatch, cwd = process.cwd(), env: Env =
     if (key) delete apiKeys[key];
   }
 
-  // Everything else the file says -- an `ai` or `codegen` section written by
-  // hand, the tool servers -- is kept as it was: the dialog edits keys and
-  // endpoints, and the models are chosen elsewhere.
+  // Everything else the file says -- the tool servers, a key nobody reads any
+  // more -- is kept as it was.
   const next: SettingsFile = {
     ...file,
     api_keys: apiKeys,
     endpoints,
   };
+  if (patch.ai) {
+    // 'default' or nothing is "not set": the entry goes, and `aiSetting` falls
+    // back as it does on a machine nobody configured.
+    const provider = patch.ai.provider && patch.ai.provider !== 'default' ? patch.ai.provider.trim() : '';
+    const model = String(patch.ai.model ?? '').trim();
+    next.ai = { ...(provider ? { provider } : {}), ...(model ? { model } : {}) };
+    if (!provider && !model) delete next.ai;
+  }
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(next, null, 2)}\n`);
   return status(cwd, env);
 }
 
-// ---------------------------------------------------------------------------
-// Which model a request lands at
-// ---------------------------------------------------------------------------
-
 /**
- * Cached per provider, but only for a few seconds.
- *
- * It used to be cached for the life of the process, so swapping the loaded
- * model in LM Studio was invisible until something asked with `refresh` --
- * which only the status route does. A local probe is one request to a machine
- * you are already talking to, so the cache is here to keep a burst of
- * generate calls from making a burst of probes, nothing more.
- */
-const probed = new Map<string, { models: string[] | null; at: number }>();
-const PROBE_TTL_MS = 5_000;
-
-/**
- * The models a local provider serves right now, or null when it is not there.
- *
- * Asked of the provider itself rather than assumed: "configure the AI once"
- * only helps if there is something sensible when nothing was configured, and
- * a machine that runs LM Studio instead of Ollama should not get connection
- * errors out of the box. Cached per process; `refresh` re-asks, which the
- * editor's status route does so starting LM Studio mid-session is noticed.
- */
-export async function probeLocal(
-  provider: string,
-  { refresh = false, timeoutMs = 1500, cwd = process.cwd(), env = process.env as Env } = {},
-): Promise<string[] | null> {
-  if (!(LOCAL_PROVIDERS as readonly string[]).includes(provider)) return null;
-  const cached = probed.get(provider);
-  if (!refresh && cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.models;
-
-  const base = (fromFile(cwd, env).endpoints?.[provider] ?? settingsFromEnv(env).endpoints?.[provider]
-    ?? DEFAULT_SETTINGS.endpoints[provider]).replace(/\/+$/, '');
-  const url = provider === 'ollama' ? `${base}/api/tags` : `${base}/models`;
-  let models: string[] | null = null;
-  try {
-    const reply = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-    const payload = await reply.json() as { models?: { name?: string }[]; data?: { id?: string }[] };
-    models = provider === 'ollama'
-      ? (payload.models ?? []).map((m) => m.name ?? '').filter(Boolean)
-      : (payload.data ?? []).map((m) => m.id ?? '').filter(Boolean);
-  } catch {
-    // Not reachable is a normal answer here, not an error.
-  }
-  probed.set(provider, { models, at: Date.now() });
-  return models;
-}
-
-async function defaultModelFor(provider: string, options: { cwd: string; env: Env }): Promise<string> {
-  const served = await probeLocal(provider, options);
-  return served?.[0] ?? DEFAULT_MODELS[provider] ?? '';
-}
-
-
-/**
- * What a run calls when a node names nothing: the environment, then the file,
- * then whichever local provider is actually running, then Ollama.
- */
-export async function runtimeTarget(cwd = process.cwd(), env: Env = process.env): Promise<Target> {
-  const configured = { ...fromFile(cwd, env), ...settingsFromEnv(env) };
-  let provider = configured.provider ?? '';
-  if (!provider) {
-    for (const local of LOCAL_PROVIDERS) {
-      if (await probeLocal(local, { cwd, env })) { provider = local; break; }
-    }
-  }
-  provider ||= DEFAULT_SETTINGS.provider;
-  const model = configured.model || await defaultModelFor(provider, { cwd, env });
-  return { provider, model };
-}
-
-/**
- * Which AI writes code and prompts — the design-time counterpart, kept apart
- * on purpose: generation deserves a stronger model than the cheap or local one
- * a graph may run on. The editor sends its choice with every request; this
- * fills in the blanks from the environment, the file's `codegen`, then the
- * runtime target.
- */
-export async function generationTarget(
-  provider = '', model = '', cwd = process.cwd(), env: Env = process.env,
-): Promise<Target> {
-  const codegen = readSettingsFile(settingsPath(cwd, env)).codegen ?? {};
-  const chosenProvider = (provider && provider !== 'default' ? provider : '')
-    || env.AI_GRAPH_GEN_PROVIDER || codegen.provider || '';
-  const chosenModel = model || env.AI_GRAPH_GEN_MODEL || codegen.model || '';
-  if (chosenProvider && chosenModel) return { provider: chosenProvider, model: chosenModel };
-
-  // A provider named without a model takes *its own* default. It used to take
-  // the runtime target's model, which is whichever local provider happens to be
-  // running -- so choosing Google in the editor and leaving the model blank
-  // sent Google an LM Studio model name, and Google replied
-  // `404: models/prism-ml/bonsai-27b is not found`.
-  if (chosenProvider) return { provider: chosenProvider, model: await defaultModelFor(chosenProvider, { cwd, env }) };
-
-  const fallback = await runtimeTarget(cwd, env);
-  return { provider: fallback.provider, model: chosenModel || fallback.model };
-}
-
-/**
- * What the editor would use if asked right now, as lines for the terminal it
+ * What the editor would use if asked right now, as a line for the terminal it
  * was started from.
  *
- * Printed at startup because both targets have a default that resolves to
+ * Printed at startup because the setting has a default that resolves to
  * something -- Ollama, whether or not it is running -- so a machine with
  * nothing configured looks configured until the first run fails. Never a key,
  * only whether one is there: this goes to a terminal and into scrollback.
  */
 export async function setupLines(cwd = process.cwd(), env: Env = process.env): Promise<string[]> {
-  const { local, runtime_target: runs, gen_target: generates } = await providerStatus(cwd, env);
+  const { local, target } = await providerStatus(cwd, env);
   const configured = status(cwd, env);
 
-  const trouble = (target: Target): string => {
-    if ((LOCAL_PROVIDERS as readonly string[]).includes(target.provider)) {
-      return local[target.provider]?.reachable
+  const trouble = (chosen: Target): string => {
+    if ((LOCAL_PROVIDERS as readonly string[]).includes(chosen.provider)) {
+      return local[chosen.provider]?.reachable
         ? ''
-        : ` -- not answering at ${configured.endpoints[target.provider] || DEFAULT_SETTINGS.endpoints[target.provider]}`;
+        : ` -- not answering at ${configured.endpoints[chosen.provider] || DEFAULT_SETTINGS.endpoints[chosen.provider]}`;
     }
-    const wanted = CREDENTIALS[target.provider];
-    return wanted && !configured.credentials[target.provider]?.configured
-      ? ` -- no ${target.provider} API key (⚙ Settings, or ${wanted.env})`
+    const wanted = CREDENTIALS[chosen.provider];
+    return wanted && !configured.credentials[chosen.provider]?.configured
+      ? ` -- no ${chosen.provider} API key (⚙ Settings, or ${wanted.env})`
       : '';
   };
 
-  const say = (what: string, target: Target): string =>
-    `${what}: ${target.provider}/${target.model || '(no model)'}${trouble(target)}`;
-
-  return [say('Runs use', runs), say('✨ Generate uses', generates)];
+  return [`AI (✨ Generate, Try it, runs): ${target.provider}/${target.model || '(no model)'}${trouble(target)}`];
 }
 
-/** Which providers are usable right now, and where the two targets resolve to. */
+/** Which providers are usable right now, and what the one AI setting resolves to. */
 export async function providerStatus(cwd = process.cwd(), env: Env = process.env): Promise<ProviderStatus> {
   const local: ProviderStatus['local'] = {};
   await Promise.all(LOCAL_PROVIDERS.map(async (provider) => {
     const models = await probeLocal(provider, { refresh: true, cwd, env });
     local[provider] = { reachable: models !== null, models: models ?? [] };
   }));
-  return {
-    local,
-    runtime_target: await runtimeTarget(cwd, env),
-    gen_target: await generationTarget('', '', cwd, env),
-  };
+  return { local, target: await aiSetting(cwd, env) };
 }
-

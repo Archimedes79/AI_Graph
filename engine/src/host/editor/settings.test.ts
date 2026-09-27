@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { generationTarget, save, settingsPath, setupLines, status } from './settings.ts';
-import { readSettingsFile } from '../../ai/settings.ts';
+import { providerStatus, save, settingsPath, setupLines, status } from './settings.ts';
+import { aiSetting, readSettingsFile } from '../../ai/settings.ts';
 
 /**
  * The settings dialog's contract: what it may see, what a save may change, and
@@ -79,77 +79,75 @@ describe('what a save may change', () => {
     expect(existsSync(nested)).toBe(true);
   });
 
-  it('keeps an ai or codegen section written by hand', async () => {
-    // The dialog saves keys and endpoints only; the models a hand-written file
-    // names are still what a run and ✨ are pointed at.
-    const { file, env } = await own({ ai: { provider: 'openai' }, codegen: { provider: 'anthropic', model: 'c' } });
+  it('writes the one AI setting, and unsets it for "default"', async () => {
+    const { file, env } = await own({ api_keys: { openai: 'keep-me' }, mcp_servers: { fs: { command: 'x' } } });
+    const seen = await save({ ai: { provider: 'openai', model: 'gpt-5' } }, '/nowhere', env);
+    expect(readSettingsFile(file)).toMatchObject({ ai: { provider: 'openai', model: 'gpt-5' }, api_keys: { openai: 'keep-me' }, mcp_servers: { fs: { command: 'x' } } });
+    expect(seen.ai).toEqual({ provider: 'openai', model: 'gpt-5', environment: [] });
+
+    await save({ ai: { provider: 'default', model: '' } }, '/nowhere', env);
+    expect(readSettingsFile(file).ai).toBeUndefined();
+  });
+
+  it('leaves the AI setting alone when a save is about something else', async () => {
+    const { file, env } = await own({ ai: { provider: 'openai' } });
     await save({ api_keys: { openai: 'k' } }, '/nowhere', env);
-    expect(readSettingsFile(file)).toMatchObject({ ai: { provider: 'openai' }, codegen: { provider: 'anthropic', model: 'c' } });
+    expect(readSettingsFile(file).ai).toEqual({ provider: 'openai' });
+  });
+
+  it('says which variables set the AI on this machine instead', async () => {
+    const { env } = await own({ ai: { provider: 'openai', model: 'gpt-5' } });
+    expect(status('/nowhere', { ...env, AI_GRAPH_AI_MODEL: 'other' }).ai)
+      .toEqual({ provider: 'openai', model: 'gpt-5', environment: ['AI_GRAPH_AI_MODEL'] });
   });
 });
 
-describe('which AI writes the code', () => {
-  it('takes what the editor sent, before anything configured', async () => {
-    const { env } = await own({ codegen: { provider: 'openai', model: 'gpt-4o-mini' } });
-    expect(await generationTarget('anthropic', 'claude-opus-5', '/nowhere', env))
-      .toEqual({ provider: 'anthropic', model: 'claude-opus-5' });
-  });
-
-  it('fills a blank from the environment, then the file', async () => {
-    const { env } = await own({ codegen: { provider: 'openai', model: 'gpt-4o-mini' } });
-    expect(await generationTarget('', '', '/nowhere', env)).toEqual({ provider: 'openai', model: 'gpt-4o-mini' });
-    expect(await generationTarget('', '', '/nowhere', { ...env, AI_GRAPH_GEN_PROVIDER: 'google', AI_GRAPH_GEN_MODEL: 'g' }))
+describe('the one AI setting', () => {
+  it('is the file\'s `ai`, and the environment wins over it', async () => {
+    const { env } = await own({ ai: { provider: 'openai', model: 'gpt-4o-mini' } });
+    expect(await aiSetting('/nowhere', env)).toEqual({ provider: 'openai', model: 'gpt-4o-mini' });
+    expect(await aiSetting('/nowhere', { ...env, AI_GRAPH_AI_PROVIDER: 'google', AI_GRAPH_AI_MODEL: 'g' }))
       .toEqual({ provider: 'google', model: 'g' });
   });
 
-  it('treats "default" as nothing named', async () => {
-    const { env } = await own({ codegen: { provider: 'openai', model: 'gpt-4o-mini' } });
-    expect(await generationTarget('default', '', '/nowhere', env)).toEqual({ provider: 'openai', model: 'gpt-4o-mini' });
+  it('is what the editor is told it is now', async () => {
+    const { env } = await own({ ai: { provider: 'anthropic', model: 'claude-x' } });
+    expect((await providerStatus('/nowhere', env)).target).toEqual({ provider: 'anthropic', model: 'claude-x' });
   });
+
 });
 
 describe('a provider named without a model', () => {
   /**
-   * The bug this pins down: choosing Google in the editor and leaving the model
-   * blank used to fall back to the *runtime* target for the model -- and that
-   * one is whichever local provider happens to be running. Google was then sent
-   * an LM Studio model name and answered
+   * The bug this pins down: choosing Google and leaving the model blank used
+   * to fall back to whichever local provider happened to be running for the
+   * model. Google was then sent an LM Studio model name and answered
    *
    *   404: models/prism-ml/bonsai-27b is not found for API version v1main
    *
    * A model belongs to the provider it was chosen for, never to another.
    */
-  it('gets that provider default model, not another provider whatever', async () => {
-    const { env } = await own({ ai: { provider: 'lmstudio', model: 'prism-ml/bonsai-27b' } });
-    expect(await generationTarget('google', '', '/nowhere', env))
-      .toEqual({ provider: 'google', model: 'gemini-flash-lite-latest' });
+  it('gets that provider\'s own default model', async () => {
+    const { env } = await own({ ai: { provider: 'google' } });
+    expect(await aiSetting('/nowhere', env)).toEqual({ provider: 'google', model: 'gemini-flash-lite-latest' });
   });
 
   it('does the same for every hosted provider', async () => {
-    const { env } = await own({ ai: { provider: 'lmstudio', model: 'prism-ml/bonsai-27b' } });
-    expect((await generationTarget('anthropic', '', '/nowhere', env)).model).toBe('claude-opus-5');
-    expect((await generationTarget('openai', '', '/nowhere', env)).model).toBe('gpt-4o-mini');
-  });
-
-  it('still lets a model alone name the target, keeping the configured provider', async () => {
-    const { env } = await own({ ai: { provider: 'openai', model: 'gpt-4o-mini' } });
-    expect(await generationTarget('', 'gpt-5', '/nowhere', env))
-      .toEqual({ provider: 'openai', model: 'gpt-5' });
+    expect((await aiSetting('/nowhere', (await own({ ai: { provider: 'anthropic' } })).env)).model).toBe('claude-opus-5');
+    expect((await aiSetting('/nowhere', (await own({ ai: { provider: 'openai' } })).env)).model).toBe('gpt-4o-mini');
   });
 });
 
 describe('what the terminal is told at startup', () => {
-  it('names both targets, and what is missing, and never a key', async () => {
+  it('names the one AI, and what is missing, and never a key', async () => {
     const { env } = await own({
       ai: { provider: 'anthropic', model: 'claude-opus-5' },
-      codegen: { provider: 'openai', model: 'gpt-4o-mini' },
       api_keys: { openai: 'sk-secret' },
     });
     const lines = await setupLines('/nowhere', env);
 
-    expect(lines[0]).toBe('Runs use: anthropic/claude-opus-5 -- no anthropic API key (⚙ Settings, or ANTHROPIC_API_KEY)');
-    // Configured, so nothing to report but the target itself.
-    expect(lines[1]).toBe('✨ Generate uses: openai/gpt-4o-mini');
+    expect(lines).toEqual(['AI (✨ Generate, Try it, runs): anthropic/claude-opus-5 -- no anthropic API key (⚙ Settings, or ANTHROPIC_API_KEY)']);
     expect(lines.join('\n')).not.toContain('sk-secret');
   });
 });
+

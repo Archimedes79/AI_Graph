@@ -33,7 +33,7 @@ beforeEach(() => {
   const source = NODE_KINDS.input.create('src');
   const reader = NODE_KINDS.code.create('code');
   store().loadGraph({
-    metadata: { name: 'T', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+    metadata: { name: 'T', description: '', gui_scheme: 'night' },
     nodes: [source, reader],
     edges: [{ id: 'e', source_node_id: 'src', source_port_id: 'output', target_node_id: 'code', target_port_id: 'input' }],
   });

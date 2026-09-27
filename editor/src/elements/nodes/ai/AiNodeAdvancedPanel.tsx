@@ -1,7 +1,6 @@
 import type { AIProvider } from '@/graph';
 import BatchAndFileInputOptions from '../../fields/BatchAndFileInputOptions';
 import ProviderModelSelect from '../../fields/ProviderModelSelect';
-import { useGraphStore } from '@/store/graphStore';
 import { DIMMER, FIELD, MUTED } from '@/ui/theme';
 import RunCode from '@/authoring/RunCode';
 import { AI_RUN, LLM_CALLS_PER_RUN, isStandardRun } from '@engine/elements/nodes/ai/runTemplate.ts';
@@ -14,7 +13,6 @@ import type { NodeAdvancedPanelProps } from '../../NodeGuiBuilder';
  * made a node look like it needed eleven decisions before it would run.
  */
 export default function AiNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPanelProps) {
-  const graphDefault = useGraphStore((s) => s.metadata.ai_defaults);
   return (
     <>
       <div>
@@ -26,15 +24,12 @@ export default function AiNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPan
           model={node.config.ai_model}
           onProviderChange={(p) => setConfig('ai_provider', p)}
           onModelChange={(m) => setConfig('ai_model', m)}
-          allowDefault
-          defaultLabel="Use the graph's default (⚙ Settings)"
-          readByRuns
-          graphDefault={graphDefault}
+          defaultLabel={(now) => `Use the setting in ⚙ Settings (now: ${now})`}
+          lendsFromSetting
         />
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
-          Leave this on the graph's default unless this one node must always use a specific
-          provider — then a deployed copy of the graph can be pointed at a different AI
-          without editing every node.
+          Leave this on the setting unless this one node must always use a specific model: a
+          provider and model named here always win, wherever the graph runs.
         </p>
       </div>
 

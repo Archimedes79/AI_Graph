@@ -19,9 +19,8 @@ export function baseNodeConfig(): NodeConfig {
     // which is all the starter it used to hold did -- saved into the graph of
     // every text and file input, which select nothing (B21).
     selector_code: '',
-    // 'default' -> follow the graph's metadata.ai_defaults (and whatever
-    // overrides it at run time). There is no gen_ai_* pair any more: the
-    // code-generation AI is one editor-wide setting, see store/settingsStore.ts.
+    // 'default' -> the one AI setting in ⚙ Settings (engine/src/ai/settings.ts
+    // `aiSetting`), until someone pins this node to a provider of its own.
     ai_provider: 'default',
     ai_model: '',
     system_prompt: '',

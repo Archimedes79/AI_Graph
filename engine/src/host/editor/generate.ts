@@ -314,8 +314,8 @@ async function probe(
   try {
     // Run as a graph runs it (`elements/body.ts`): generated code that asks a
     // model through `node.llm` is tried with a `node` that can be asked.
-    // What it asks is answered by the model that wrote it: there is no graph
-    // here whose default could be meant, and that one is known to answer.
+    // What it asks is answered by the model that wrote it, which is the one
+    // AI setting -- where the same call in a run goes, too.
     const ask = { ...PLAIN_ASK, provider: target.provider, model: target.model };
     const result = await runBody(body, { ...sample }, runtime, { signal: stop.signal, ask });
     if (!result || typeof result !== 'object' || Array.isArray(result)) {

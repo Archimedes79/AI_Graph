@@ -1,6 +1,8 @@
-import { useSettingsStore } from '@/store/settingsStore';
-import { useGraphStore } from '@/store/graphStore';
-import ProviderModelSelect from '@/elements/fields/ProviderModelSelect';
+import { useEffect, useState } from 'react';
+import type { AIProvider } from '@/graph';
+import { call, type SettingsStatus } from '@/api/client';
+import { errorText } from '@/api/errorText';
+import ProviderModelSelect, { nowText, refreshProviderStatus, useProviderStatus } from '@/elements/fields/ProviderModelSelect';
 import AICredentialsSection from './AICredentialsSection';
 import Modal from '@/ui/Modal';
 import { ACCENT_FILL, ACCENT_TEXT, DIM, PRIMARY_BUTTON, TEXT } from '@/ui/theme';
@@ -10,28 +12,75 @@ interface SettingsDialogProps {
 }
 
 /**
- * The one place both AI choices are made.
+ * The one AI setting: which AI ✨ Generate, Try it, ▶ Test and every run call,
+ * wherever a node does not pin its own. This machine's, saved in
+ * `ai-settings.json` beside the keys it needs and never in a graph, so a graph
+ * handed to someone else runs on whatever they chose.
  *
- * They are two genuinely different settings and the dialog says so:
- *
- *  - Code generation AI -- design time, this workstation, never saved into the
- *    graph (see store/settingsStore.ts).
- *  - Runtime AI default -- part of the graph (metadata.ai_defaults), used by
- *    every AI node left on "Use the graph's default", and overridable when the
- *    graph is deployed and run elsewhere.
+ * "Now" is the engine's answer (`aiSetting`, through the status route), not
+ * worked out here: it is what a run will call, environment and all.
  */
+function OneAiSetting() {
+  const status = useProviderStatus();
+  const [saved, setSaved] = useState<SettingsStatus['ai'] | null>(null);
+  const [draft, setDraft] = useState<{ provider: AIProvider; model: string }>({ provider: 'default', model: '' });
+  const [message, setMessage] = useState('');
+
+  const show = (ai: SettingsStatus['ai']) => {
+    setSaved(ai);
+    setDraft({ provider: (ai.provider || 'default') as AIProvider, model: ai.model });
+  };
+
+  useEffect(() => {
+    call('aiSettings').then((data) => show(data.ai)).catch((e) => setMessage(errorText(e, 'Could not read the AI settings file.')));
+  }, []);
+
+  const changed = saved !== null && (draft.provider !== (saved.provider || 'default') || draft.model !== saved.model);
+
+  const save = async () => {
+    setMessage('');
+    try {
+      show((await call('saveAiSettings', { ai: draft })).ai);
+      refreshProviderStatus();
+      setMessage('Saved.');
+    } catch (e) {
+      setMessage(errorText(e, 'Could not save the AI settings file.'));
+    }
+  };
+
+  return (
+    <>
+      <ProviderModelSelect
+        provider={draft.provider}
+        model={draft.model}
+        onProviderChange={(provider) => setDraft((prev) => ({ ...prev, provider }))}
+        onModelChange={(model) => setDraft((prev) => ({ ...prev, model }))}
+        defaultLabel={() => 'Not set (a local model that is running, else Ollama)'}
+      />
+      <div className="flex items-center gap-3 mt-3 text-xs">
+        <button
+          className="px-2.5 py-1.5 rounded-lg"
+          style={{ ...PRIMARY_BUTTON, opacity: changed ? 1 : 0.5 }}
+          disabled={!changed}
+          onClick={save}
+        >
+          Save
+        </button>
+        <span style={{ color: DIM }}>Now: <strong style={{ color: TEXT }}>{nowText(status)}</strong></span>
+        {message && <span style={{ color: ACCENT_TEXT }}>{message}</span>}
+      </div>
+      {saved && saved.environment.length > 0 && (
+        <div className="text-xs rounded-lg px-3 py-2 mt-3" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>
+          {saved.environment.map((variable, i) => <span key={variable}>{i > 0 && ' and '}<code>{variable}</code></span>)}{' '}
+          {saved.environment.length > 1 ? 'are' : 'is'} set where the editor was started. That is the same
+          setting, for a machine without this dialog, and it wins over what is saved here.
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function SettingsDialog({ onClose }: SettingsDialogProps) {
-  const genProvider = useSettingsStore((s) => s.genProvider);
-  const genModel = useSettingsStore((s) => s.genModel);
-  const setGenAI = useSettingsStore((s) => s.setGenAI);
-
-  const metadata = useGraphStore((s) => s.metadata);
-  const setMetadata = useGraphStore((s) => s.setMetadata);
-  const aiDefaults = metadata.ai_defaults ?? { provider: 'default' as const, model: '' };
-
-  const setAiDefaults = (patch: Partial<typeof aiDefaults>) =>
-    setMetadata({ ai_defaults: { ...aiDefaults, ...patch } });
-
   return (
     <Modal
       title="⚙ Settings"
@@ -50,51 +99,16 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
       <div className="p-5 space-y-6">
           <section>
             <h3 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>
-              Code generation AI
+              AI
             </h3>
             <p className="text-xs mb-3" style={{ color: DIM }}>
-              Used by every ✨ Generate action in the editor — code, system prompts, selector
-              code, plot transforms, data formats and whole graphs. Set once here, for this
-              browser; it is never saved into a graph, so a graph you share carries no model
-              choice of yours.
+              What ✨ Generate, Try it, ▶ Test and every run call — for each AI node left on
+              “Use the setting in ⚙ Settings”, and for code that asks a model. A node that names
+              its own provider and model always uses those instead. Saved on this machine in{' '}
+              <code>ai-settings.json</code>, never in a graph: a graph you share runs on whatever
+              its recipient set here.
             </p>
-            <ProviderModelSelect
-              provider={genProvider}
-              model={genModel}
-              onProviderChange={(provider) => setGenAI({ provider })}
-              onModelChange={(model) => setGenAI({ model })}
-              allowDefault
-              defaultLabel="Server default (AI_GRAPH_GEN_PROVIDER / ai-settings.json)"
-              defaultTarget="generation"
-            />
-          </section>
-
-          <section>
-            <h3 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>
-              Runtime AI default — for this graph
-            </h3>
-            <p className="text-xs mb-3" style={{ color: DIM }}>
-              Which AI the graph's AI nodes call when they run. Every AI node left on
-              “Use the graph's default” follows this, so a graph with eight AI nodes is
-              configured once. Saved with the graph as <code>metadata.ai_defaults</code>.
-            </p>
-            <ProviderModelSelect
-              provider={aiDefaults.provider}
-              model={aiDefaults.model}
-              onProviderChange={(provider) => setAiDefaults({ provider })}
-              onModelChange={(model) => setAiDefaults({ model })}
-              allowDefault
-              defaultLabel="Unset (this machine's default)"
-              readByRuns
-            />
-            <div
-              className="text-xs rounded-lg px-3 py-2 mt-3"
-              style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}
-            >
-              When this graph is deployed, whoever runs it can point it somewhere else without
-              editing it — an <code>AI_GRAPH_AI_PROVIDER</code> environment variable or an{' '}
-              <code>ai-settings.json</code> next to the executable both take precedence over this.
-            </div>
+            <OneAiSetting />
           </section>
 
           <section>
@@ -106,8 +120,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               page</strong> — a button, a chat message, a dropdown told to — is one.{' '}
               <strong>The tool starting</strong> and <strong>a clock</strong> are the other two: add
               a <strong>⏱️ Trigger</strong> node from the palette and wire it, or leave it unwired to
-              start the whole graph. A graph saved with the two settings that used to be here has
-              been given that node.
+              start the whole graph.
             </p>
           </section>
 
@@ -116,8 +129,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               Keys and addresses
             </h3>
             <p className="text-xs mb-3" style={{ color: DIM }}>
-              What the providers above need in order to answer. Both choices draw on these,
-              so a key entered once serves generation and execution alike.
+              What the providers need in order to answer: the setting above, and any a node names.
             </p>
             <AICredentialsSection />
           </section>

@@ -2,15 +2,13 @@ import { useEffect, useId, useState } from 'react';
 import type { AIProvider } from '@/graph';
 import { call, type ProviderStatus } from '@/api/client';
 import { LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
-import { lent, type ModelChoice } from '@engine/elements/Runtime.ts';
+import { lent } from '@engine/elements/Runtime.ts';
 
 // Single source of truth for the provider dropdown -- previously duplicated
 // verbatim in AiNodePanel.tsx, CodeNodePanel.tsx, and WidgetEditor.tsx.
 const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
-  // Shown only where `allowDefault` is set; the caller supplies the wording,
-  // because "default" means something different design-time (the server's
-  // generation AI) than at runtime (the graph's own AI default).
-  // Which default it stands for is the caller's `defaultTarget`.
+  // Shown only where the caller names it (`defaultLabel`): on a node it is the
+  // one AI setting, in ⚙ Settings it is that setting left unset.
   default: 'Default',
   ollama: 'Ollama (local)',
   lmstudio: 'LM Studio (local)',
@@ -41,66 +39,63 @@ const AI_PROVIDER_COST: Record<AIProvider, string> = {
   github_copilot: 'free tier',
 };
 
-// One probe per page load, shared by every mounted picker: the status answers
-// "which local providers run, which models do they serve" for the whole
-// editor, not per component instance.
+// One probe shared by every mounted picker: the status answers "which local
+// providers run, which models do they serve, what is the one AI setting now"
+// for the whole editor, not per component instance.
 let statusPromise: Promise<ProviderStatus | null> | null = null;
+const listeners = new Set<(status: ProviderStatus | null) => void>();
 const fetchStatus = () => {
   if (!statusPromise) statusPromise = call('providers').catch(() => null);
   return statusPromise;
 };
 
-function useProviderStatus(): ProviderStatus | null {
+/** Ask the engine again: after the one AI setting is saved, every picker's "now" is stale. */
+export function refreshProviderStatus(): void {
+  statusPromise = null;
+  fetchStatus().then((status) => listeners.forEach((listener) => listener(status)));
+}
+
+/** The engine's answer to what runs where: the one AI setting as it resolves now, and the local providers. */
+export function useProviderStatus(): ProviderStatus | null {
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   useEffect(() => {
     let mounted = true;
     fetchStatus().then((s) => { if (mounted) setStatus(s); });
-    return () => { mounted = false; };
+    listeners.add(setStatus);
+    return () => { mounted = false; listeners.delete(setStatus); };
   }, []);
   return status;
 }
 
-/**
- * The model a run calls when a picker a run reads leaves the model empty, or
- * '' when there is none and the run will refuse.
- *
- * A run fills an empty model from the graph's own default, then from this
- * machine's, each lending its model only where it names the same provider
- * (`lent`, the engine's own rule, applied in the order a run applies it): the
- * engine no longer sends one provider another's model, which it can only
- * answer with a 404 that reads like a broken endpoint.
- */
-export function modelWhenEmpty(provider: string, homes: Array<ModelChoice | undefined>): string {
-  return homes.reduce<ModelChoice>((asked, home) => (home ? lent(asked, home) : asked), { provider, model: '' }).model;
-}
-
-/** Which of the server's two defaults a picker's `default` provider stands for. */
-export type DefaultTarget = 'runtime' | 'generation';
+/** The one AI setting as a person reads it: `provider / model`. */
+export const nowText = (status: ProviderStatus | null): string =>
+  status ? `${status.target.provider} / ${status.target.model || 'no model'}` : '…';
 
 /**
  * What the model box offers: the models served by the provider chosen -- for
- * `default`, by the target it resolves to -- and what it shows while empty.
+ * `default`, by the one AI setting -- and what it shows while empty.
  *
- * The generation picker's `default` is the generation target, which the
- * environment or the file's `codegen` can point elsewhere than a run's: shown
- * the runtime one, it listed a local model while ✨ asked Anthropic.
+ * On a node (`lendsFromSetting`) an empty model is filled by the engine's own
+ * rule (`lent`) from the one setting, and only for the provider it names: left
+ * empty with nothing to fill it, a run refuses, so the box says a model must
+ * be named rather than showing one a run would never send. The setting itself
+ * left empty takes the provider's own default.
  */
 export function modelHints(
-  provider: AIProvider, status: ProviderStatus | null,
-  { readByRuns, graphDefault, defaultTarget = 'runtime' }: { readByRuns?: boolean; graphDefault?: ModelChoice; defaultTarget?: DefaultTarget } = {},
+  provider: AIProvider, status: ProviderStatus | null, { lendsFromSetting }: { lendsFromSetting?: boolean } = {},
 ): { servedModels: string[]; placeholder: string } {
-  const standsFor = defaultTarget === 'generation' ? status?.gen_target : status?.runtime_target;
-  const effectiveProvider = provider === 'default' ? standsFor?.provider : provider;
+  const now = status?.target;
+  const effectiveProvider = provider === 'default' ? now?.provider : provider;
   const servedModels = (effectiveProvider && status?.local?.[effectiveProvider]?.models) || [];
-  const fallback = readByRuns && status ? modelWhenEmpty(provider, [graphDefault, status.runtime_target]) : '';
-  const placeholder = readByRuns && status
-    // Left empty with nothing to fill it, a run refuses: the box says a model
-    // must be named rather than showing one a run would never send.
-    ? fallback || (servedModels[0] ? `required, e.g. ${servedModels[0]}` : 'required: name a model')
-    : provider === 'default'
-      ? (standsFor?.model || 'default model')
-      : servedModels[0] ?? 'model name';
-  return { servedModels, placeholder };
+  if (lendsFromSetting && now) {
+    const lentModel = lent({ provider, model: '' }, now).model;
+    return {
+      servedModels,
+      placeholder: lentModel || (servedModels[0] ? `required, e.g. ${servedModels[0]}` : 'required: name a model'),
+    };
+  }
+  const own = now && (provider === 'default' || provider === now.provider) ? now.model : servedModels[0];
+  return { servedModels, placeholder: own || 'its default model' };
 }
 
 interface ProviderModelSelectProps {
@@ -109,27 +104,16 @@ interface ProviderModelSelectProps {
   onProviderChange: (provider: AIProvider) => void;
   onModelChange: (model: string) => void;
   /**
-   * Offer the `default` provider -- "don't pin this, follow the configured
-   * one". Off by default so a picker that must name a real provider cannot
-   * accidentally offer it.
+   * Offers the `default` provider, called what this returns, handed the one AI
+   * setting as it is now. Left out, a real provider must be named.
    */
-  allowDefault?: boolean;
-  /** Wording for the `default` option; required for it to read sensibly. */
-  defaultLabel?: string;
-  /** Which default `default` stands for: a run's (the default) or ✨'s. */
-  defaultTarget?: DefaultTarget;
-  /**
-   * A run reads this choice (an AI node, the graph's default), so an empty
-   * model means what `modelWhenEmpty` says -- not the provider's own default,
-   * which is what the generation AI takes.
-   */
-  readByRuns?: boolean;
-  /** With `readByRuns`: the graph's own default, which an empty model is filled from first. */
-  graphDefault?: ModelChoice;
+  defaultLabel?: (now: string) => string;
+  /** An empty model is filled from the one AI setting, as a node's is: see `modelHints`. */
+  lendsFromSetting?: boolean;
 }
 
 export default function ProviderModelSelect({
-  provider, model, onProviderChange, onModelChange, allowDefault, defaultLabel, defaultTarget, readByRuns, graphDefault,
+  provider, model, onProviderChange, onModelChange, defaultLabel, lendsFromSetting,
 }: ProviderModelSelectProps) {
   const status = useProviderStatus();
   const listId = useId();
@@ -142,13 +126,13 @@ export default function ProviderModelSelect({
     return detail ? `${label} — ${detail}` : label;
   };
   const options = (Object.entries(AI_PROVIDER_LABELS) as [AIProvider, string][])
-    .filter(([value]) => value !== 'default' || allowDefault)
-    .map(([value, label]) => [value, value === 'default' ? (defaultLabel ?? label) : annotate(value, label)] as const);
+    .filter(([value]) => value !== 'default' || defaultLabel)
+    .map(([value, label]) => [value, value === 'default' ? defaultLabel!(nowText(status)) : annotate(value, label)] as const);
 
   // Models actually served by the selected local provider (or, for `default`,
   // by whatever it resolves to): pick-or-type via a datalist, because typing
   // an LM Studio model id from memory is exactly the friction this removes.
-  const { servedModels, placeholder } = modelHints(provider, status, { readByRuns, graphDefault, defaultTarget });
+  const { servedModels, placeholder } = modelHints(provider, status, { lendsFromSetting });
 
   const boxClass = 'w-full rounded-lg px-3 py-2 text-sm';
   const style = { background: SUNKEN, color: TEXT, border: `1px solid ${LINE}` };

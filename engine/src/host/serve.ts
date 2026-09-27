@@ -20,8 +20,7 @@ import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
 import { registry } from '../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements } from '../execution/runtimeValues.ts';
 import { triggeredNodes } from '../execution/triggers.ts';
-import { candidatePaths, configuredSettings } from '../ai/settings.ts';
-import { DEFAULT_SETTINGS } from '../ai/providers.ts';
+import { aiSetting, candidatePaths } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
   Download, Refusal, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
@@ -212,12 +211,13 @@ function toolRoutes(
     // Read-only on purpose: a deployed tool is configured by whoever runs it,
     // in the file beside it or its environment. A page that wrote credentials
     // would put them in a file nobody asked for.
-    toolAiSettings() {
-      const configured = configuredSettings();
+    async toolAiSettings() {
+      // The function a run asks, so the page says what a run calls.
+      const { provider, model } = await aiSetting();
       const file = candidatePaths().find((path) => existsSync(path)) ?? candidatePaths()[0];
       return {
-        provider: configured.provider ?? DEFAULT_SETTINGS.provider,
-        model: configured.model ?? DEFAULT_SETTINGS.model,
+        provider,
+        model,
         settings_file: file,
         settings_file_exists: existsSync(file),
       };

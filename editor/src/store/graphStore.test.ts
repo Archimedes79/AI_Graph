@@ -34,8 +34,7 @@ function loadTestGraph(nodes: GraphNode[], edges: Graph['edges'] = []) {
   useGraphStore.getState().loadGraph({
     metadata: {
       name: 'Test', description: '',
-      ai_defaults: { provider: 'default', model: '' },
-  gui_scheme: 'night',
+      gui_scheme: 'night',
     },
     nodes,
     edges,
@@ -58,10 +57,10 @@ describe('graphStore.currentFilePath', () => {
 describe('graphStore.newGraph', () => {
   it('starts from the engine\'s defaults, keeping nothing of the graph before it', () => {
     // "New graph" used to merge a name and four other keys into the old
-    // metadata: a pinned AI and a colour scheme were saved into the new one,
-    // and Undo brought the old graph's nodes back.
+    // metadata: a colour scheme was saved into the new one, and Undo brought
+    // the old graph's nodes back.
     loadTestGraph([graphNode({ id: 'old' })]);
-    useGraphStore.getState().setMetadata({ ai_defaults: { provider: 'openai', model: 'gpt' }, gui_scheme: 'paper' });
+    useGraphStore.getState().setMetadata({ gui_scheme: 'paper' });
     useGraphStore.getState().setCurrentFilePath('/tmp/old', true);
     useGraphStore.getState().setRFNodes([]);
     useGraphStore.getState().newGraph();
@@ -216,7 +215,7 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     const text = (id: string, value: string) => ({ ...NODE_KINDS.input.create(id), config: { value } as GraphNode['config'] });
     const show = (id: string) => ({ ...NODE_KINDS.output.create(id), config: {} as GraphNode['config'] });
     const file: Graph = {
-      metadata: { name: 'T', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+      metadata: { name: 'T', description: '', gui_scheme: 'night' },
       nodes: [text('a', 'alpha'), text('b', 'beta'), show('first'), show('second')],
       edges: [
         { id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'first', target_port_id: 'value' },
@@ -517,7 +516,7 @@ describe('a graph inside a node', () => {
   const inner = (nodes: unknown[] = []) => ({
     metadata: {
       name: 'Inner', description: '',
-      ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night',
+      gui_scheme: 'night',
     },
     nodes,
     edges: [],

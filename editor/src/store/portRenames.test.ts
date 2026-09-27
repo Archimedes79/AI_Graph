@@ -47,7 +47,7 @@ const wire = (source: string, target: string, port: string): GraphEdge =>
 
 function load(nodes: GraphNode[], edges: GraphEdge[]) {
   store().loadGraph({
-    metadata: { name: 'T', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+    metadata: { name: 'T', description: '', gui_scheme: 'night' },
     nodes,
     edges,
   });

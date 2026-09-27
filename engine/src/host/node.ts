@@ -10,10 +10,10 @@ import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
-import type { CodeService, FileService, Runtime } from '../elements/Runtime.ts';
+import { lent, type CodeService, type FileService, type Runtime } from '../elements/Runtime.ts';
 import { aiService } from '../ai/providers.ts';
 import { mcpToolService } from '../ai/mcp.ts';
-import { configuredMcpServers, configuredSettings } from '../ai/settings.ts';
+import { aiSetting, configuredMcpServers, configuredSettings } from '../ai/settings.ts';
 
 export const nodeFiles: FileService = {
   resolve: (path: string) => resolve(path),
@@ -263,7 +263,9 @@ function converse(
  * The engine wired to this machine.
  *
  * The model provider is configured from the environment and the settings
- * file, so a double-clicked build is configurable without a terminal.
+ * file, so a double-clicked build is configurable without a terminal. A node
+ * that pins its own provider and model is sent there; everything else goes
+ * where the one AI setting says (`aiSetting`).
  *
  * Tool servers come from the settings file and from nowhere else. A graph
  * names the servers it wants; which program a name starts is this machine's
@@ -271,10 +273,15 @@ function converse(
  * Nothing is started here: a server runs for the length of one node's run.
  */
 export function nodeRuntime(overrides: Partial<Runtime> = {}): Runtime {
+  const ai = aiService(configuredSettings());
   return {
     files: nodeFiles,
     code: nodeCode,
-    ai: aiService(configuredSettings()),
+    // Whatever a request does not name, the one AI setting fills (`lent`) --
+    // the same answer the editor shows as "now: …", because it is the same
+    // function. Asked per call, so a setting saved in ⚙ Settings while the
+    // editor runs is the one the next call uses.
+    ai: { complete: async (request) => ai.complete({ ...request, ...lent(request, await aiSetting()) }) },
     tools: mcpToolService(configuredMcpServers()),
     ...(Number(process.env.AI_GRAPH_MAX_LLM_CALLS) > 0 ? { llmCallsPerBody: Number(process.env.AI_GRAPH_MAX_LLM_CALLS) } : {}),
     ...overrides,

@@ -668,7 +668,7 @@ export function aiService(settings: Partial<ProviderSettings> = {}): AiService {
       if (!model) {
         throw new Error(
           `No model configured for provider '${provider}'. Name one on the AI node, `
-          + 'or set the run-level default.',
+          + 'or in ⚙ Settings.',
         );
       }
 

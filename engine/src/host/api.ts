@@ -18,7 +18,7 @@
 // serves to whoever opens it; an `editor` route exists only while building,
 // and a server without the editor answers it with 404.
 
-import type { ExecutionResult, Graph, GraphMetadata, NodeResult } from '../graph.ts';
+import type { ExecutionResult, Graph, NodeResult } from '../graph.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/changes.ts';
@@ -81,9 +81,6 @@ export interface BlockResult { status: 'success' | 'error'; shown: unknown; erro
 
 /** A model, already resolved: which provider, which of its models. */
 export interface Target { provider: string; model: string }
-
-/** Which model writes a generation, when the browser chose one. Empty means "the configured default". */
-export interface ModelChoice { ai_provider?: string; ai_model?: string }
 
 /** Lets the page watch a generation's transcript while it runs. */
 export interface Watched { progress_id?: string }
@@ -206,22 +203,29 @@ export interface GenerateResponse {
 /** The settings dialog's view of `ai-settings.json`: whether a key is set, never the key. */
 export interface SettingsStatus {
   settings_file: string;
+  /**
+   * The one AI setting as the file saves it, '' for unset; `environment` names
+   * the variables that set it on this machine instead, and win.
+   */
+  ai: { provider: string; model: string; environment: string[] };
   endpoints: Record<string, string>;
   credentials: Record<string, { configured: boolean; source: string }>;
 }
 
 export interface SettingsPatch {
+  /** The one AI setting. A provider of 'default' or '' leaves it unset. */
+  ai?: { provider?: string; model?: string };
   endpoints?: Record<string, string>;
   api_keys?: Record<string, string>;
   /** Providers whose stored key is to be removed -- distinct from "left blank". */
   clear_keys?: string[];
 }
 
-/** Which providers answer right now, and where the two default targets resolve to. */
+/** Which providers answer right now, and what the one AI setting resolves to. */
 export interface ProviderStatus {
   local: Record<string, { reachable: boolean; models: string[] }>;
-  runtime_target: Target;
-  gen_target: Target;
+  /** What the one AI setting resolves to right now: what every call that names no model of its own goes to. */
+  target: Target;
 }
 
 /** A graph file on disk, as Open (and so Reload) and Save return it. */
@@ -290,12 +294,8 @@ export const API = {
   runNode: route<OnNode & { inputs: Record<string, unknown> }, NodeResult>('POST', '/api/execute/node', 'editor'),
   /** What one node would ask a model on the inputs given -- its run, with every answer made up and nothing sent. */
   nodeRequests: route<OnNode & { inputs: Record<string, unknown> }, { requests: SentRequest[]; error: string | null }>('POST', '/api/execute/node/requests', 'editor'),
-  /**
-   * One value through one block's transform, as the page would show it -- with
-   * the graph's metadata, so code that asks a model asks the one a run of this
-   * graph asks (`ai_defaults`), not the machine's.
-   */
-  runBlock: route<{ widget: unknown; value: unknown; metadata?: Partial<GraphMetadata> }, BlockResult>('POST', '/api/execute/block', 'editor'),
+  /** One value through one block's transform, as the page would show it. */
+  runBlock: route<{ widget: unknown; value: unknown }, BlockResult>('POST', '/api/execute/block', 'editor'),
   /** What would arrive at a node: what feeds it is run, the node is not. */
   nodeInputs: route<OnNode, { inputs: Record<string, unknown>; error: string | null }>('POST', '/api/execute/inputs', 'editor'),
   /** Run a node's examples.md: each example's inputs, held to what it expects. */
@@ -314,10 +314,10 @@ export const API = {
   /** The code and prompts of an open project that changed on disk since last asked. */
   projectChanges: route<{ path: string }, { changes: TextChange[] }>('GET', '/api/graphs/file/changes', 'editor'),
 
-  generate: route<GenerateRequest & ModelChoice & Watched, GenerateResponse>('POST', '/api/ai/generate', 'editor'),
+  generate: route<GenerateRequest & Watched, GenerateResponse>('POST', '/api/ai/generate', 'editor'),
   /** What the generation with this id has sent and received so far. */
   generationProgress: route<{ id: string }, { calls: AICall[] }>('GET', '/api/ai/generate/progress', 'editor'),
-  generateGraph: route<{ description: string; context?: string } & ModelChoice & Watched, { graph: Graph; explanation: string }>(
+  generateGraph: route<{ description: string; context?: string } & Watched, { graph: Graph; explanation: string }>(
     'POST', '/api/ai/generate-graph', 'editor'),
 
   /** The graph as a deployable zip, named by the server (`<graph name>_bundle.zip`). */

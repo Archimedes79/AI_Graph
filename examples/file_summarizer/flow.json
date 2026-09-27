@@ -1,10 +1,6 @@
 {
   "name": "File reader & summarizer",
   "description": "Pick a text file, read it, and have a model summarize it. Choosing a file or pressing Summarize starts the graph at the reader; changing the length re-runs only the summary. Paths are relative to the working directory, so run this from the repository root.",
-  "ai_defaults": {
-    "provider": "google",
-    "model": "gemini-flash-lite-latest"
-  },
   "author": "AI-Graph",
   "tags": [
     "example",

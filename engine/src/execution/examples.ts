@@ -25,7 +25,7 @@
 import type { Graph } from '../graph.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import type { Runners } from '../elements/NodeRunner.ts';
-import { executeNode, withGraphDefaults } from './executor.ts';
+import { executeNode } from './executor.ts';
 import { mismatches } from './interface.ts';
 
 export interface NodeExample {
@@ -168,7 +168,7 @@ export async function runExamples(
   const results: ExampleResult[] = problems.map((problem) => ({ title: 'examples.md', status: 'error' as const, details: [problem] }));
   const element = options.registry.node(node.node_type);
   const asksModel = element?.asksModel(node) === true;
-  const runtime = withGraphDefaults(options.runtime, graph);
+  const { runtime } = options;
 
   for (const example of examples) {
     if (options.offline && (asksModel || (example.judge && !example.expect))) {

@@ -5,8 +5,7 @@ import type { Graph } from '@/graph';
 const emptyGraph: Graph = {
   metadata: {
     name: 'Undo test', description: '',
-    ai_defaults: { provider: 'default', model: '' },
-  gui_scheme: 'night',
+    gui_scheme: 'night',
   },
   nodes: [],
   edges: [],

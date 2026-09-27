@@ -62,12 +62,11 @@ import { everyGraphIn, testGraph } from '../../execution/examples.ts';
 import { RUN_PORT, type Trigger } from '../../execution/triggers.ts';
 import { registry } from '../../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';
-import { candidatePaths, configuredMcpServers, configuredSettings, SETTINGS_FILENAME } from '../../ai/settings.ts';
+import { aiSetting, candidatePaths, configuredMcpServers, configuredSettings, SETTINGS_FILENAME } from '../../ai/settings.ts';
 import { message } from '../http.ts';
 import { nodeRuntime } from '../node.ts';
 import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
-import { generationTarget } from './settings.ts';
 import {
   FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
 } from '../../project/folder.ts';
@@ -211,7 +210,7 @@ const SPECS: ToolSpec[] = [
   },
   {
     name: 'generate_graph',
-    description: 'Have the generation model configured on this machine design a whole graph from a description. Returns the '
+    description: 'Have the model configured on this machine design a whole graph from a description. Returns the '
       + 'graph, the model\'s explanation and any problems validation found. With save_as, a graph without problems is also '
       + 'written there. If no model is configured, use authoring_guide and save_graph instead.',
     parameters: {
@@ -513,7 +512,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       const otherwise = 'The other way needs no model here: call authoring_guide, write the graph yourself, then validate_graph and save_graph.';
       const target = await options.target();
       if (!target.provider || !target.model) {
-        throw new Refused(`No generation model is configured on this machine (Settings in the AI-Graph editor, or AI_GRAPH_GEN_PROVIDER and AI_GRAPH_GEN_MODEL). ${otherwise}`);
+        throw new Refused(`No model is configured on this machine (⚙ Settings in the AI-Graph editor, or AI_GRAPH_AI_PROVIDER and AI_GRAPH_AI_MODEL). ${otherwise}`);
       }
 
       let generated: { graph: unknown; explanation: string };
@@ -927,7 +926,7 @@ export async function runMcpServer(options: { root?: string } = {}): Promise<voi
     // server runs is the key the next generation uses.
     ai: { complete: (request) => nodeRuntime().ai.complete(request) },
     runtime: () => nodeRuntime(),
-    target: () => generationTarget('', ''),
+    target: () => aiSetting(),
     secrets: machineSecrets,
   });
 

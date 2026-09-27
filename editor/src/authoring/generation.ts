@@ -1,6 +1,5 @@
 import type { GraphNode, GuiWidget } from '@/graph';
 import { call, type AICall, type GenerateRequest, type GenerateResponse, type ProbeReport } from '@/api/client';
-import { genAI } from '@/store/settingsStore';
 import type { GenerateOptions } from './useGenerate';
 import type { Generation } from '@engine/authoring/generation.ts';
 
@@ -281,7 +280,6 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
     output_targets: request.outputTargets && Object.keys(request.outputTargets).length ? request.outputTargets : undefined,
     output_format: request.outputFormat?.trim() || undefined,
     output_example: request.outputExample?.trim() || undefined,
-    ...genAI(),
   };
 }
 

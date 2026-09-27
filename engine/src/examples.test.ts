@@ -69,10 +69,9 @@ afterAll(() => { model.server.close(); });
 /**
  * An example as a graph in hand.
  *
- * Two things are changed, and neither is the graph. Its paths are made
- * absolute, because they are relative to the repository root and a test does
- * not run from there. And its model is swapped for the stub: these examples
- * name their provider on every node, and a test must not call it.
+ * Its paths are made absolute, because they are relative to the repository
+ * root and a test does not run from there. Nothing else is: its AI nodes
+ * follow the one AI setting, which `runGraph` points at the stub.
  */
 async function load(name: string): Promise<Graph> {
   const graph = await loadGraph(resolve(REPO, 'examples', name));
@@ -82,9 +81,7 @@ async function load(name: string): Promise<Graph> {
     for (const block of (node.config.gui_widgets as { kind: string; value: unknown }[] | undefined) ?? []) {
       if (block.kind === 'input_picker') block.value = rooted(block.value);
     }
-    if (node.node_type === 'ai') { node.config.ai_provider = 'default'; node.config.ai_model = ''; }
   }
-  graph.metadata.ai_defaults = { provider: 'default', model: '' };
   return graph;
 }
 
@@ -107,13 +104,17 @@ const shownOn = (result: Result, nodeId: string) => result.node_results.find((n)
 const blocksOf = (graph: Graph, nodeId: string) =>
   graph.nodes.find((n) => n.id === nodeId)!.config.gui_widgets as { id: string; value: unknown }[];
 
-/** A bundle's own `run`, from its own folder, reaching the stub as "Google" -- the provider the examples name. */
+/**
+ * A bundle's own `run`, from its own folder, reaching the stub as "Google":
+ * the one AI setting, set the way a machine without the editor sets it.
+ */
 function runBundle(dir: string): Promise<{ code: number; out: string; err: string }> {
   return new Promise((fulfil, fail) => {
     const child = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), join(dir, 'graph.json'), '--limit', '1'], {
       cwd: dir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
+        AI_GRAPH_AI_PROVIDER: 'google', AI_GRAPH_AI_MODEL: 'stub-model',
         GOOGLE_BASE_URL: model.url, GOOGLE_API_KEY: 'a-test-key',
         // This machine's own settings file must not decide what a test does.
         AI_GRAPH_SETTINGS: join(dir, 'no-settings-here.json'),

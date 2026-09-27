@@ -38,7 +38,7 @@ export function edge(id: string, from: string, fromPort: string, to: string, toP
 /** *nodes* and *edges* as a graph with the settings a new one has. */
 export function graphOf(nodes: GraphNode[], edges: GraphEdge[] = []): Graph {
   return {
-    metadata: { name: 't', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+    metadata: { name: 't', description: '', gui_scheme: 'night' },
     nodes, edges,
   };
 }
