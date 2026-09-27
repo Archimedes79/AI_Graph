@@ -250,6 +250,74 @@ describe('a node that keeps something of its own', () => {
     expect(result(asked, 'pageB')).toMatchObject({ status: 'success', outputs: { ask_out: true, q_out: 'second question' } });
     expect(result(asked, 'answer')).toMatchObject({ status: 'success', outputs: { out: 'answer to second question' } });
   });
+
+  it('runs when what feeds it had nothing to do, and so does what its own button starts', async () => {
+    // The same two pages, but "Read" has never been pressed: the reader has
+    // nothing to hand on, and page B's own button must still work.
+    const graph = graphOf(
+      [
+        node('pageA', 'gui', { gui_widgets: [{ id: 'read', kind: 'button' }] }),
+        node('pageB', 'gui', { gui_widgets: [
+          { id: 'shown', kind: 'text_io', mode: 'output' },
+          { id: 'ask', kind: 'button' },
+          { id: 'q', kind: 'text_io', mode: 'input', value: 'a question' },
+        ] }),
+        node('reader', 'code', { code: 'function run() { return { text: "the file" }; }' }, { out: ['text'] }),
+        node('answer', 'code', { code: 'function run(i) { return { out: "answer to " + i.q }; }' }, { in: ['q'], out: ['out'] }),
+      ],
+      [
+        edge('gate', 'pageA', 'read_out', 'reader', RUN_PORT),
+        edge('show', 'reader', 'text', 'pageB', 'shown_in'),
+        edge('q', 'pageB', 'q_out', 'answer', 'q'),
+        edge('go', 'pageB', 'ask_out', 'answer', RUN_PORT),
+      ],
+    );
+    const asked = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'pageB', port_id: 'ask_out' } });
+    expect(result(asked, 'pageB')!.status).toBe('success');
+    expect(result(asked, 'answer')).toMatchObject({ status: 'success', outputs: { out: 'answer to a question' } });
+  });
+
+  it('hands on what it kept when the node that updates it had nothing to do', async () => {
+    const graph = graphOf(
+      [
+        node('page', 'gui', { gui_widgets: [{ id: 'read', kind: 'button' }, { id: 'use', kind: 'button' }] }),
+        node('reader', 'code', { code: 'function run() { return { text: "new" }; }' }, { out: ['text'] }),
+        node('keep', 'data', { data_value: 'kept from yesterday' }, { in: ['input'], out: ['output'] }),
+        node('user', 'code', { code: 'function run(i) { return { saw: i.x }; }' }, { in: ['x'], out: ['saw'] }),
+      ],
+      [
+        edge('g1', 'page', 'read_out', 'reader', RUN_PORT),
+        edge('a', 'reader', 'text', 'keep', 'input'),
+        edge('b', 'keep', 'output', 'user', 'x'),
+        edge('g2', 'page', 'use_out', 'user', RUN_PORT),
+      ],
+    );
+    const run = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'page', port_id: 'use_out' } });
+    expect(result(run, 'user')).toMatchObject({ status: 'success', outputs: { saw: 'kept from yesterday' } });
+  });
+
+  it('is not silenced by an AI node upstream that had nothing to ask', async () => {
+    const graph = graphOf(
+      [
+        node('page1', 'gui', { gui_widgets: [{ id: 'msg', kind: 'text_io', mode: 'input', value: '' }] }),
+        node('ask', 'ai', { system_prompt: 'x' }, { in: ['message'], out: ['output'] }),
+        node('page2', 'gui', { gui_widgets: [
+          { id: 'shown', kind: 'text_io', mode: 'output' }, { id: 'export', kind: 'button' },
+          { id: 'file', kind: 'text_io', mode: 'input', value: 'out.txt' },
+        ] }),
+        node('exporter', 'code', { code: 'function run(i) { return { done: i.file }; }' }, { in: ['file'], out: ['done'] }),
+      ],
+      [
+        edge('m', 'page1', 'msg_out', 'ask', 'message'),
+        edge('s', 'ask', 'output', 'page2', 'shown_in'),
+        edge('g', 'page2', 'export_out', 'exporter', RUN_PORT),
+        edge('f', 'page2', 'file_out', 'exporter', 'file'),
+      ],
+    );
+    const run = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'page2', port_id: 'export_out' } });
+    expect(result(run, 'ask')!.status).toBe('skipped');
+    expect(result(run, 'exporter')).toMatchObject({ status: 'success', outputs: { done: 'out.txt' } });
+  });
 });
 
 describe('an event is a moment', () => {

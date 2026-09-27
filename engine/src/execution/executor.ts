@@ -357,8 +357,10 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
 
       // A wired input the node declared it cannot do without, and nothing on
       // it: the node has nothing to do, and neither has what hangs off it.
-      // Sending a model "User:" followed by nothing is not a question.
-      const why = dependsOn(nodeId, idle)
+      // Sending a model "User:" followed by nothing is not a question. Except a
+      // node that keeps something of its own: a page's button, a data node's
+      // value, is news whatever an idle neighbour did not send.
+      const why = dependsOn(nodeId, idle) && !keepsItsOwn(nodeId)
         ? 'What feeds this node had nothing to do, so neither had this.'
         : nothingToDo(element, node, inputs, edges, feedback);
       if (why) {
