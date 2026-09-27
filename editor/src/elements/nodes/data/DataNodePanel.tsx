@@ -1,4 +1,5 @@
-import type { DragEvent } from 'react';
+import { useState, type DragEvent } from 'react';
+import { errorText } from '@/api/errorText';
 import { useTyped } from '@/authoring/useTyped';
 import { carriesFiles, droppedFile, type Dropped } from '@/authoring/droppedFile';
 import { contentValue } from '@/authoring/readAsRun';
@@ -8,10 +9,17 @@ import { asEditableText, convertedValue, dataKind, storedValue, type DataKind } 
 
 /**
  * A file dropped on the box: what the node holds from then on, parsed when it
- * is JSON -- an undo step of its own, not more typing into the box.
+ * is JSON -- an undo step of its own, not more typing into the box. *say* is
+ * told why it could not be read, or '' once one was: a failed read used to
+ * leave the box as it was, with nothing said.
  */
-export async function holdDropped(file: Dropped, setConfig: NodePanelProps['setConfig']): Promise<void> {
-  setConfig('data_value', contentValue(await file.text()), ONCE);
+export async function holdDropped(file: Dropped, setConfig: NodePanelProps['setConfig'], say: (failure: string) => void): Promise<void> {
+  try {
+    setConfig('data_value', contentValue(await file.text()), ONCE);
+    say('');
+  } catch (reason) {
+    say(`“${file.name}” could not be read -- ${errorText(reason, 'no reason was given')}`);
+  }
 }
 
 /**
@@ -45,6 +53,7 @@ export default function DataNodePanel({ node, setConfig }: NodePanelProps) {
   });
   const typed = storedValue(content, kind);
   const contentError = 'error' in typed ? typed.error : '';
+  const [dropFailed, setDropFailed] = useState('');
 
   const switchKind = (next: DataKind) => {
     setConfig('data_format', next);
@@ -66,7 +75,7 @@ export default function DataNodePanel({ node, setConfig }: NodePanelProps) {
     if (!file) return;
     event.preventDefault();
     event.stopPropagation();
-    void holdDropped(file, setConfig);
+    void holdDropped(file, setConfig, setDropFailed);
   };
 
   return (
@@ -96,6 +105,7 @@ export default function DataNodePanel({ node, setConfig }: NodePanelProps) {
         aria-label="What it holds"
       />
       {contentError && <p className="text-xs" style={{ color: DANGER_SOFT }}>{contentError} It is kept once it parses.</p>}
+      {dropFailed && <p className="text-xs" style={{ color: DANGER_SOFT }}>{dropFailed}</p>}
       {kind !== node.config.data_format && (
         <p className="text-xs" style={{ color: DIMMER }}>It holds structured data, so it is edited and described as structure.</p>
       )}

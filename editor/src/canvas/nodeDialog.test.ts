@@ -140,7 +140,7 @@ describe('what is not typing, written into a field just typed into', () => {
     const dialog = nodeDialog('history');
     dialog.setConfig('data_value', 'typed by hand'); vi.advanceTimersByTime(WRITE_AFTER_MS);
     // The drop, as the box takes it.
-    await holdDropped({ name: 'state.json', size: 12, text: async () => '{"count": 3}' }, (key, value, step) => dialog.setConfig(key, value, step));
+    await holdDropped({ name: 'state.json', size: 12, text: async () => '{"count": 3}' }, (key, value, step) => dialog.setConfig(key, value, step), () => {});
     expect(stored('history').config.data_value).toEqual({ count: 3 });
     store().undo();
     expect(stored('history').config.data_value).toBe('typed by hand');

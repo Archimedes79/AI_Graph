@@ -5,7 +5,7 @@ import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { nodeFields } from '@/authoring/generation';
-import DataNodePanel from './DataNodePanel';
+import DataNodePanel, { holdDropped } from './DataNodePanel';
 
 /** A data node's dialog, drawn as the node dialog hands it: nothing but the node and its setters. */
 function panel(node: GraphNode): string {
@@ -42,5 +42,18 @@ describe('a data node\'s dialog', () => {
     const builder = NODE_BUILDERS.data;
     expect(builder.dropPort(node)).toBe('input');
     expect(builder.withExampleValue(node, 'input', { count: 3 }).config.data_value).toEqual({ count: 3 });
+  });
+
+  it('says why a file dropped on its box could not be read, and holds what it held', async () => {
+    const set: unknown[] = [];
+    let said = 'nothing yet';
+    const unreadable = { name: 'locked.json', size: 3, text: () => Promise.reject(new Error('The file is locked by another program.')) };
+    await holdDropped(unreadable, (key, value) => set.push([key, value]), (failure) => { said = failure; });
+    expect(set).toEqual([]);
+    expect(said).toBe('“locked.json” could not be read -- The file is locked by another program.');
+    // The next one that is read says nothing more.
+    await holdDropped({ name: 'state.json', size: 12, text: async () => '{"count": 3}' }, (key, value) => set.push([key, value]), (failure) => { said = failure; });
+    expect(set).toEqual([['data_value', { count: 3 }]]);
+    expect(said).toBe('');
   });
 });
