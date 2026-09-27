@@ -735,7 +735,7 @@ the page.
 
 Every block has a *tone* (plain, raised, sunken, accent) drawn from the page's scheme,
 and on top of that its own frame toggle and background colour — set in the block's
-editor; "Standard" hands the choice back to the tone.
+editor; "Default" hands the choice back to the tone.
 
 ### A chatbot is two nodes
 

@@ -305,8 +305,7 @@ editor asks the registry what a node is. Panels are lazy chunks, so there is no 
 
 **1. An element owns everything about its kind.** Its settings (`config()`), its ports,
 what it does (`execute`), what it shows (`display`), how an AI writes its body
-(`generation()`), and what a good result looks like (`Generation.check`) — in its own
-class. Adding a kind adds one folder on each side and one line in each registry
+(`generation()`) — in its own class. Adding a kind adds one folder on each side and one line in each registry
 (`elements/registry.ts` and `widgets/roster.ts` in the engine, `elements/registry.ts` in
 the editor), and nothing else changes.
 
@@ -527,7 +526,8 @@ or a page that has them can do the same.
   that port.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving, and
-  the editor says it under a graph pasted as JSON before Load (`app/GraphProblems.tsx`). It
+  the editor says it before Load under a graph pasted as JSON and under one ✨ AI Graph
+  designed (`app/GraphProblems.tsx`). It
   reads no disk, so the page can ask it; what only a project folder gets wrong -- a folder or a
   file nothing claims -- is [`folderCheck.ts`](../engine/src/project/folderCheck.ts)'s. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
@@ -605,9 +605,9 @@ engine's own half of "no shell names a kind" (`check.ts`, `executor.finalOutputs
 `project/folder.ts`), the hand-written list of node types in `graphPrompt.ts`, and the editor's
 layer order, now held by `layers.test.ts`. What it left, still true:
 
-- **A few functions and files carry too much at once.** `graphStore.ts` (~960 lines: the
+- **A few functions and files carry too much at once.** `graphStore.ts` (~1000 lines: the
   document, its normalisation, the ReactFlow adapter, run polling and undo), `App.tsx` (~600
-  lines), `Toolbar.tsx` (~550 lines), `mcpServer.ts`'s `createGraphTools`, and `executor.ts`'s
+  lines), `Toolbar.tsx` (~470 lines), `mcpServer.ts`'s `createGraphTools`, and `executor.ts`'s
   `executeGraph`. Nothing in the tests catches a mistake made splitting one of them, which is
   exactly why none has been split yet. Parts of the shell already moved out of `App.tsx` into
   `app/{Sidebar,Toolbar,ResultsPanel,SettingsDialog,ViewTabs,AICredentialsSection,SubgraphTrail}.tsx`,
