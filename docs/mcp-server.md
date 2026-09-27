@@ -9,9 +9,9 @@ Two ways to get a graph out of it, and the difference matters:
 - **The assistant writes it.** It reads `authoring_guide`, writes the JSON itself,
   and hands it to `validate_graph` and `save_graph`. Needs no model on this machine,
   and a strong assistant usually writes a better graph than a small local model.
-- **This machine's model writes it.** `generate_graph` asks the *code generation AI*
-  from ⚙ Settings (see [ai-providers.md](ai-providers.md)) — the same call the
-  editor's "generate a graph" makes.
+- **This machine's model writes it.** `generate_graph` asks the one AI setting from
+  ⚙ Settings (see [ai-providers.md](ai-providers.md)) — the same call the editor's
+  "generate a graph" makes.
 
 It is one process on stdio, started by the client, with no port and no dependencies.
 (Not to be confused with `mcp_servers` in `ai-settings.json`: that is the other
@@ -59,7 +59,7 @@ npx @modelcontextprotocol/inspector --cli --config servers.json --server ai-grap
 | Tool | Arguments | What it does |
 |---|---|---|
 | `authoring_guide` | — | The authoring prompt the editor's own generation uses, plus the node types and block kinds this engine has. Read before writing a graph by hand. |
-| `generate_graph` | `description`, `save_as?` | Has the configured generation model design a graph. Returns the graph, the explanation and any problems; with `save_as`, writes it if there are none. Says so plainly when no model is configured. |
+| `generate_graph` | `description`, `save_as?` | Has the model configured on this machine design a graph. Returns the graph, the explanation and any problems; with `save_as`, writes it if there are none. Says so plainly when no model is configured. |
 | `validate_graph` | `graph` *or* `path` | Lists what is wrong, each with where and how to fix it. Empty list = valid. Advice that is no problem -- two output nodes sharing a label -- comes back as `notes`. |
 | `save_graph` | `path`, `graph` | Validates, then writes pretty JSON. Refuses a graph with problems and returns them; writes one with only `notes`, and returns those. |
 | `run_graph` | `path`, `inputs?`, `trigger?` | Runs once. Reports overall status, each node's status and error, and each node's outputs with every value cut to about 600 characters. |
@@ -84,7 +84,7 @@ remembers; a code node with no `config.code`; and a graph with no `gui` and no
 `run_graph`'s `inputs` are keyed by node id, or `nodeId::blockId` for a block on a
 page — the same keys as `--inputs` on the command line. `trigger` is
 `{ "node_id": "<gui node>", "port_id": "<block id>_out" }` and runs only what that
-button or box would start. A run calls the graph's models and runs its code for real.
+button or box would start. A run calls the configured model (or a node's own) and runs its code for real.
 
 ## What it is confined to
 
@@ -157,7 +157,7 @@ with **`run_graph`** `{ "path": "graphs/count_rows.json" }`:
   "outputs": { "Rows": { "value": 1204 } } }
 ```
 
-With no generation model configured, `generate_graph` answers with that fact and the
+With no model configured, `generate_graph` answers with that fact and the
 way round it; the assistant calls **`authoring_guide`**, writes the same graph itself,
 and the rest of the exchange is unchanged. Open `graphs/count_rows.json` in the editor
 afterwards to see it, lay it out, or bundle it.

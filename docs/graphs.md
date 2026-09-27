@@ -315,8 +315,8 @@ none yet — your format text is never overwritten. A new node's description sta
 what ✨ writes from is what you wrote, never a placeholder.
 
 **It may ask a model.** `run` may be `async` and is handed a second argument, `node`:
-`await node.llm({ prompt: '…' })` resolves to the answer as text, from the graph's default
-model. The body runs sandboxed and never sees this machine's keys — the call is made *for*
+`await node.llm({ prompt: '…' })` resolves to the answer as text, from the model in
+⚙ Settings (see [ai-providers.md](ai-providers.md)). The body runs sandboxed and never sees this machine's keys — the call is made *for*
 it — and may ask at most 25 times each time it runs -- per item, for a node that runs once per item -- (`AI_GRAPH_MAX_LLM_CALLS`). Use it when code has to
 decide what to ask, or ask in a loop; for one question, an AI node is the plainer tool.
 
@@ -496,7 +496,7 @@ the same four steps:
   folder's listing, which is what its code is handed: **⟳ List them** lists the folder the
   way a run does, and it is what ✨ writes the selector against.
 - **▶ Try it**, under the body in step 4, runs just this element on that example, through
-  the same steps a run takes (the graph's default model, wired files read into text, one
+  the same steps a run takes (the same model, wired files read into text, one
   call per item). Nothing is saved and nothing downstream runs. An AI node shows the
   request first, as the model receives it — put together by the engine, one request per
   item, when the node runs per item or reads files; a block *draws* what came back, at

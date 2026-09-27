@@ -57,9 +57,9 @@ Nothing leaves the machine unless the graph itself sends it there.
   (`engine/src/host/serve.ts`).
 - No analytics or phone-home calls exist in the code; the only outbound connections are
   the ones your graph is configured to make.
-- API keys are write-only, and the code-generation AI belongs to your browser rather
-  than to the graph — a graph you hand on carries neither a key nor a model choice of
-  yours.
+- API keys are write-only, and the AI setting belongs to your machine rather than to
+  the graph — a graph you hand on carries neither a key nor a model choice of yours,
+  unless a node names its own.
 - A deploy bundle runs offline: the engine, `graph.json` and a local
   `~/.ai-graph/code-env`. A graph on a local model works with no internet access at all.
 
@@ -151,9 +151,9 @@ along.
 Each is a project folder: `flow.json` for the wiring, and every node's settings, ports,
 code and prompts as files of their own under `nodes/` — open `nodes/chart/code.js` and
 it is plain JavaScript. The ones that
-need a model name Google's `gemini-flash-lite-latest` on the node itself — put a key in
-`ai-settings.json` (see [docs/ai-providers.md](docs/ai-providers.md)), or pick another
-model under the node's *Advanced*; a local LM Studio or Ollama works too.
+need a model call the one you choose in **⚙ Settings → AI** (or in `ai-settings.json`,
+see [docs/ai-providers.md](docs/ai-providers.md)) — Google's free
+`gemini-flash-lite-latest` with a key, or a local LM Studio or Ollama.
 
 A path inside a graph resolves against the working directory, so run the examples from
 the repository root:
@@ -194,7 +194,7 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 |---|---|
 | [docs/install.md](docs/install.md) | Running the editor, working on it, containers, tests and CI |
 | [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, GUI nodes and widgets |
-| [docs/ai-providers.md](docs/ai-providers.md) | Providers, the two AI settings, where the API key goes |
+| [docs/ai-providers.md](docs/ai-providers.md) | Providers, the one AI setting and a node's own, where the API key goes |
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, Docker, the Graph Runner CLI |
 | [docs/mcp-server.md](docs/mcp-server.md) | Letting Claude (or any MCP client) generate, check, save and run graphs |
 | [docs/architecture.md](docs/architecture.md) | How the pieces fit, the rules that hold them together, and what is deliberately left out; diagrams mapped to files in [arch/](arch/overview.md) |

@@ -1,6 +1,6 @@
 # AI providers and configuration
 
-Which model answers a graph, which one writes its code, and where the credentials live.
+Which model answers a graph and writes its code, and where the credentials live.
 
 **AI-Graph is usable without paying anyone.** Run a local model, or use a hosted free
 tier; add a paid provider only where you want the extra quality. The provider picker
@@ -17,22 +17,29 @@ says which is which, so the choice is visible rather than something to look up.
 | OpenAI-compatible endpoint | depends | any compatible model | `OPENAI_COMPATIBLE_BASE_URL`, optional `OPENAI_COMPATIBLE_API_KEY` |
 
 **Mixing free and paid is already how the graph works**, and is worth knowing: set the
-graph's runtime default to a free provider, then pin the one node that needs more to a
-paid one — an AI node left on *"Use the graph's default"* follows the free default, and
-a node that names a provider keeps it. The code-generation AI is a separate setting
-again, so you can author with a strong model and run on a free one.
+one AI setting to a free provider, then pin the one node that needs more to a paid one —
+an AI node left on *"Use the setting in ⚙ Settings"* follows the free one, and a node
+that names a provider and model keeps them.
 
 Set environment variables in a `.env` file or pass them to Docker Compose.
 
 ## Choosing the AI once, not per node
 
-Two separate settings, both behind **⚙ Settings** in the toolbar:
+There are exactly two levels:
 
-- **Code generation AI** – used by every ✨ Generate action. It belongs to your
-  browser, not to the graph, so a graph you share carries no model choice of yours.
-- **Runtime AI default** – what the graph's AI nodes call. Saved with the graph as
-  `metadata.ai_defaults`; every AI node left on *"Use the graph's default"* follows
-  it, so a graph with eight AI nodes is configured once.
+1. **The one AI setting** — **⚙ Settings → AI** in the toolbar. ✨ Generate (and the
+   check and repair it runs on what it wrote), Try it, ▶ Test and `test`, a block's
+   Try it, and every run call it, for every AI call a node does not pin: an AI node
+   left on its default, and code that asks a model through `node.llm`. It belongs to
+   this machine and is saved in `ai-settings.json` (below), never in a graph — so a
+   graph you share runs on whatever its recipient chose.
+2. **A node's own model** — an AI node's *Model for this node* either says *"Use the
+   setting in ⚙ Settings (now: provider / model)"*, which every new node does, or
+   names a provider and model, which always win.
+
+The dialog, the node's picker and the terminal the editor was started from all show
+what the setting resolves to *now*, as the engine answers it — the same function a
+run asks.
 
 ## Where the API key goes
 
@@ -43,17 +50,22 @@ file by hand:
 
 ```json
 {
-  "codegen":  { "provider": "anthropic", "model": "claude-sonnet-4-5" },
   "ai":       { "provider": "lmstudio",  "model": "qwen2.5-coder-7b" },
   "api_keys": { "anthropic": "sk-ant-…", "openai": "", "github": "", "openai_compatible": "" },
-  "endpoints": { "lmstudio_base_url": "http://localhost:1234/v1" }
+  "endpoints": { "lmstudio": "http://localhost:1234/v1" }
 }
 ```
 
-`codegen` is the AI that answers ✨ Generate, `ai` the one the graph calls when it runs —
-so you can generate with a strong hosted model and execute against a local one. The file is looked up in the working directory, next to the executable, at
+`ai` is the one AI setting. A provider without a model takes that provider's own
+default; with no `ai` at all it is whichever local provider is running, else Ollama. The
+file is looked up in the working directory, next to the executable, at
 `$AI_GRAPH_SETTINGS`, and finally `~/.ai-graph/settings.json`. An environment variable of
 the same name always wins over what is stored there.
+
+A `codegen` section, and the `AI_GRAPH_GEN_PROVIDER` / `AI_GRAPH_GEN_MODEL` variables,
+once chose a separate AI for ✨ Generate. They are no longer read: a file or an
+environment that still has them is simply ignored, and ✨ Generate uses the one setting.
+So is a graph's `metadata.ai_defaults`, which older graphs may still carry.
 
 Two provider names are worth spelling out:
 
@@ -69,21 +81,23 @@ Two provider names are worth spelling out:
 Anything else that speaks the OpenAI protocol — a proxy, a gateway, a self-hosted
 server — goes in as **OpenAI-compatible endpoint** with its own base URL and key.
 
-A deployed graph can be re-pointed at a different runtime AI without editing it, highest
-precedence first: `AI_GRAPH_AI_PROVIDER`/`AI_GRAPH_AI_MODEL` → an `ai-settings.json`
-(in the working directory, next to the executable, or `~/.ai-graph/settings.json`; or
-only the one file `AI_GRAPH_SETTINGS` names — it also holds endpoints/API keys, so a
-double-clicked tool needs no environment variables at all) → the graph's own
-`metadata.ai_defaults` → `ollama`/`llama3`. The command line has no flag for this: an
-environment variable set on one command does the same job. The deployed page's
-**⚙ AI settings** shows which of these is in effect, and where the file goes; it does not
-write one, because a page that stored credentials would put a key in a file nobody asked for.
+On a machine without the editor — a deployed tool, a server, a CI job — the same setting
+is set without the dialog: `AI_GRAPH_AI_PROVIDER` / `AI_GRAPH_AI_MODEL`, or the `ai`
+section of an `ai-settings.json` (in the working directory, next to the executable, or
+`~/.ai-graph/settings.json`; or only the one file `AI_GRAPH_SETTINGS` names — it also
+holds endpoints and API keys, so a double-clicked tool needs no environment variables at
+all). The variables are the same setting, not another layer: where both are there, the
+variables win, as they do for every key. The command line has no flag for this: a
+variable set on one command does the same job. The deployed page's **⚙ AI settings**
+shows what the setting resolves to — what a run of the tool calls — and where the file
+goes; it does not write one, because a page that stored credentials would put a key in a
+file nobody asked for.
 
 ## Local models: LM Studio and Ollama
 
 Start LM Studio's server (`lms server start`, or the *Developer* tab) and load a model;
 AI-Graph finds it at `http://localhost:1234/v1` with no key. Name the model as LM Studio
-lists it — `google/gemma-4-26b-a4b-qat` — on the node or as the graph's default.
+lists it — `google/gemma-4-26b-a4b-qat` — in ⚙ Settings or on the node.
 
 **A body that asks a model.** A code node, and an AI node's own `run.js`, ask through
 `node.llm` — the call is made for them, by the process that holds the keys. One run of a

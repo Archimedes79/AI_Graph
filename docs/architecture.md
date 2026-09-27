@@ -508,7 +508,8 @@ or a page that has them can do the same.
 | what every node made last, for rounds its ◆ stays shut | `Latch`, in the process holding the graph; gone at restart | `NodeResult.held` |
 | the last run | the editor's store / the served page / `schedule.ts` | `ExecutionResult` |
 | keys, endpoints, MCP servers that start programs | `ai-settings.json`, machine-side, never in a graph | — |
-| which model writes code for you | the browser (`store/settingsStore.ts`) | request fields (`ModelChoice`) |
+| the one AI setting: what ✨ Generate, Try it, ▶ Test and every run call unless a node pins its own | `ai-settings.json`'s `ai` (or `AI_GRAPH_AI_PROVIDER`/`_MODEL`), read only by `aiSetting` in [`ai/settings.ts`](../engine/src/ai/settings.ts) | `ProviderStatus.target`, for the editor's "now: …" |
+| a node's own model | the node's config (`ai_provider`, `ai_model`) | the graph |
 
 ## Security boundaries
 
