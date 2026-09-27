@@ -306,7 +306,7 @@ export const API = {
    * Reload: the same path opened again, after its `flow.json`, or a node's
    * settings or ports, changed outside the editor.
    */
-  openGraph:route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),
+  openGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),
   /** A `.json` path is written as one file; any other path as a project folder. */
   saveGraph: route<{ path: string; graph: Graph }, GraphFile>('POST', '/api/graphs/file/save', 'editor'),
   /** Project folders with this name under where the editor runs: for a folder dropped onto the page. */

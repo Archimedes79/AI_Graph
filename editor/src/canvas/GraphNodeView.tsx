@@ -55,8 +55,9 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const handleEdit = useCallback(() => setEditingNode(id), [id, setEditingNode]);
   // The ✕ sits a few pixels from ✏️, deleting is immediate, and it silently
   // takes every attached edge with it -- so a node that is wired into the
-  // graph asks first; Ctrl+Z is not where anyone should find that out. An unconnected node deletes straight away,
-  // because that is the case where a confirmation is just noise.
+  // graph asks first; Ctrl+Z is not where anyone should find that out. An
+  // unconnected node deletes straight away, because that is the case where a
+  // confirmation is just noise.
   const connectedEdgeCount = useGraphStore(
     (s) => s.rfEdges.filter((edge) => edge.source === id || edge.target === id).length
   );
