@@ -8,7 +8,8 @@
 //     {Output Definition}  output.js as it is -- or, while there is none, each
 //                          output: where it goes and what the node there wants
 //     {Context}            the graph around the node, as the editor says it
-//     {Example File}       the start of the file ✨ Input is given, and its path
+//     {Example Files}      the files ✨ Input is given: each path, and the start of it
+//     {Output Files}       the files ✨ Output is given, the same way
 //
 // A definition is sent as the file says it: it is what the node was written
 // against, and a second wording of it would be a second thing to disagree.
@@ -23,8 +24,8 @@ import type { GenerateRequest } from '../api.ts';
 
 /** How much of each part is shown, in characters. */
 export const BUDGET = {
-  /** The start of an example file: its shape and a few rows. */
-  exampleFile: 4000,
+  /** The files ✨ Input or ✨ Output is given, together: several small ones whole, a large one cut. */
+  files: 4000,
   /** A value a repair is shown -- what a try returned, what it was handed. */
   preview: 900,
 } as const;
@@ -102,17 +103,32 @@ export function outputDefinition(request: GenerateRequest): string {
   return lines.join('\n');
 }
 
-/** What {Example File} says: the file's path and the start of it, or that there is none. */
-export function exampleFile(file: { path: string; text?: string } | undefined): string {
-  if (!file?.path.trim()) return 'None.';
-  if (file.text === undefined) return `${file.path} (it could not be read)`;
-  return `${file.path}:\n${clip(file.text, BUDGET.exampleFile)}`;
+/**
+ * What {Example Files} and {Output Files} say: each file's path and the start
+ * of it -- or that there are none. They share one budget: the smallest are
+ * given in full first, and what is left is shared by the larger, so several
+ * small files all fit and one big one is cut.
+ */
+export function filesPart(files: { path: string; text?: string }[] | undefined): string {
+  const given = (files ?? []).filter((file) => file.path.trim());
+  if (!given.length) return 'None.';
+  const room = new Map<number, number>();
+  let left = BUDGET.files;
+  const bySize = given.map((file, at) => ({ at, size: file.text?.trim().length ?? 0 })).sort((a, b) => a.size - b.size);
+  bySize.forEach(({ at, size }, index) => {
+    const share = Math.max(0, Math.floor(left / (bySize.length - index)));
+    room.set(at, Math.min(size, share));
+    left -= Math.min(size, share);
+  });
+  return given.map((file, at) => (file.text === undefined
+    ? `${file.path} (it could not be read)`
+    : `${file.path}:\n${clip(file.text, Math.max(room.get(at) ?? 0, 1))}`)).join('\n\n');
 }
 
 /**
  * Every variable, filled from *request*: the node, its definitions or its
- * wiring, the graph, and the example file (read by then). *reads* are the
- * inputs that are handed a file's text.
+ * wiring, the graph, and the files it is given (read by then). *reads* are
+ * the inputs that are handed a file's text.
  */
 export function variables(request: GenerateRequest, reads: string[]): Record<Variable, string> {
   return {
@@ -120,6 +136,7 @@ export function variables(request: GenerateRequest, reads: string[]): Record<Var
     'Input Definition': inputDefinition(request, reads),
     'Output Definition': outputDefinition(request),
     Context: request.context?.trim() || 'Not given.',
-    'Example File': exampleFile(request.example_file),
+    'Example Files': filesPart(request.input_files),
+    'Output Files': filesPart(request.output_files),
   };
 }

@@ -99,10 +99,13 @@ export interface GenerateRequest {
   /** The graph around the node, in words: what {Context} says. Built by the editor. */
   context?: string;
   /**
-   * The file ✨ Input writes the input definition from: {Example File}. Its
-   * text is read here, the start of it, when the request does not bring it.
+   * The files ✨ Input writes the input definition from -- examples, a spec:
+   * {Example Files}. Their text is read here, the start of each, where the
+   * request does not bring it.
    */
-  example_file?: { path: string; text?: string };
+  input_files?: { path: string; text?: string }[];
+  /** The files ✨ Output writes the output definition from, the same way: {Output Files}. */
+  output_files?: { path: string; text?: string }[];
   /**
    * Where each input is wired from and what that node hands on, by port id:
    * {Input Definition} while the node has no input.js.

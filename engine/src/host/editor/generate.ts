@@ -159,6 +159,14 @@ interface Shape {
 
 const quoted = (ids: string[]): string => ids.map((id) => `"${id}"`).join(', ');
 
+/**
+ * What a body is told about the empty window as well as the full one: a page
+ * is drawn before anything was chosen, and a node that fails on nothing shows
+ * an error where a person should see what to do.
+ */
+const EMPTY_INPUT = 'Handle an input that is missing or empty as well as a full one: then the output says what to do instead of failing -- '
+  + 'a chart gets a figure with no points and a title saying what to choose, a text says what it waits for.';
+
 /** The frame after the prompt: the file's format and how to answer. The engine's, not the person's to edit. */
 function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
   const { inputs, outputs, wired, reads, perItem } = shape;
@@ -195,6 +203,7 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
       }
       if (reads.length) lines.push(`${quoted(reads)} ${reads.length > 1 ? 'are' : 'is'} handed the file's text, already read: read no files yourself.`);
       if (perItem) lines.push('`run` is called once per item: `inputs` holds one item, as in the example; what the calls return is collected into lists by themselves.');
+      if (inputs.length) lines.push(EMPTY_INPUT);
       lines.push('Use only what Node has built in. There is no package manager and no `npm install`: `require` '
         + "and `import` of anything outside Node's own standard library will fail at run time.");
       break;
@@ -208,6 +217,7 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
           + `the node description as above, and ${json ? 'its output definition, output.js, as above' : '"None: answer in plain text."'}.`,
         json ? 'The answer is parsed as a JSON object keyed as the output definition\'s example is, and each key handed on its own output: ask for that JSON object and nothing else -- not the file around the example.'
           : 'The answer is plain text, handed on as it is.');
+      if (inputs.length) lines.push(`Say in the instructions how to answer an input that is missing or empty. ${EMPTY_INPUT}`);
       break;
     }
     case 'data': {
@@ -451,16 +461,17 @@ export interface GenerateDeps {
 /** What `GenerateRequest.write` may ask for. */
 const WRITES = ['input', 'output', 'body'] as const;
 
-/** The example file's text, the start of it, read here when the request did not bring it. */
-async function withExampleText(request: GenerateRequest, files: FileService | undefined): Promise<GenerateRequest> {
-  const file = request.example_file;
-  if (!file?.path.trim() || file.text !== undefined || !files) return request;
-  try {
-    const text = await files.read(file.path);
-    return { ...request, example_file: { path: file.path, text: text.slice(0, BUDGET.exampleFile + 1) } };
-  } catch {
-    return request;
-  }
+/** Each file's text, the start of it, read here where the request did not bring it; one that cannot be read, said so. */
+async function withTexts(given: { path: string; text?: string }[] | undefined, files: FileService | undefined): Promise<{ path: string; text?: string }[] | undefined> {
+  if (!given?.length || !files) return given;
+  return Promise.all(given.map(async (file) => {
+    if (file.text !== undefined || !file.path.trim()) return file;
+    try {
+      return { path: file.path, text: (await files.read(file.path)).slice(0, BUDGET.files + 1) };
+    } catch {
+      return file;
+    }
+  }));
 }
 
 /** Write one of a node's files, whatever kind of node it is: its input definition, its output definition, or its body. */
@@ -477,7 +488,8 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   const definitions = element.definitions(node);
   if (write !== 'body' && !definitions) throw new GenerationRefused(`A ${node.node_type} node has no input or output definition.`);
 
-  const request = write === 'input' ? await withExampleText(given, deps.files) : given;
+  const request = write === 'input' ? { ...given, input_files: await withTexts(given.input_files, deps.files) }
+    : write === 'output' ? { ...given, output_files: await withTexts(given.output_files, deps.files) } : given;
   const kind: PromptKind = write === 'body' ? spec.kind : write;
   const shape: Shape = {
     inputs: node.inputs.map((port) => port.id),

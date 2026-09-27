@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseGraph, type GraphNode } from '../../graph.ts';
-import { BUDGET, exampleFile, inputDefinition, outputDefinition, variables } from './brief.ts';
+import { BUDGET, filesPart, inputDefinition, outputDefinition, variables } from './brief.ts';
 
 const port = (id: string, kind: 'input' | 'output', extra: Record<string, unknown> = {}) =>
   ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '', ...extra });
@@ -48,12 +48,17 @@ describe('{Output Definition}', () => {
   });
 });
 
-describe('{Example File}', () => {
-  it('is its path and the start of it -- or that there is none, or that it could not be read', () => {
-    expect(exampleFile(undefined)).toBe('None.');
-    expect(exampleFile({ path: 'a.csv', text: 'x,y\n1,2' })).toBe('a.csv:\nx,y\n1,2');
-    expect(exampleFile({ path: 'gone.csv' })).toBe('gone.csv (it could not be read)');
-    expect(exampleFile({ path: 'big.csv', text: 'z'.repeat(BUDGET.exampleFile + 50) })).toMatch(/… \(50 more characters not shown\)$/);
+describe('{Example Files} and {Output Files}', () => {
+  it('are each path and the start of the file -- or that there are none, or that one could not be read', () => {
+    expect(filesPart(undefined)).toBe('None.');
+    expect(filesPart([{ path: 'a.csv', text: 'x,y\n1,2' }, { path: 'gone.csv' }])).toBe('a.csv:\nx,y\n1,2\n\ngone.csv (it could not be read)');
+  });
+
+  it('share one budget: small files whole, a big one cut to what is left', () => {
+    const big = 'z'.repeat(BUDGET.files * 2);
+    const said = filesPart([{ path: 'big.txt', text: big }, { path: 'small.txt', text: 'tiny' }]);
+    expect(said).toContain('small.txt:\ntiny');
+    expect(said).toMatch(new RegExp(`big\\.txt:\\nz{${BUDGET.files - 4}}… \\(`));
   });
 });
 

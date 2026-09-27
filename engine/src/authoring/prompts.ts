@@ -10,7 +10,8 @@
 //     {Input Definition}   input.js as it is -- or, while there is none, each input
 //     {Output Definition}  output.js as it is -- or, while there is none, each output
 //     {Context}            the graph around the node, in words (the editor builds it)
-//     {Example File}       for ✨ Input: the start of the file it is given, and its path
+//     {Example Files}      for ✨ Input: the files it is given -- examples, a spec -- each path and its start
+//     {Output Files}       for ✨ Output: the files it is given, the same way
 //
 // **These are the standard prompts, and a node may keep its own.** The editor
 // shows each under the ✨ it belongs to, and a node keeps one only when someone
@@ -24,7 +25,7 @@
 // filled at run time with the two that mean something then.
 
 /** What a prompt may name, each filled with what the node and the graph hold. */
-export const VARIABLES = ['Node Description', 'Input Definition', 'Output Definition', 'Context', 'Example File'] as const;
+export const VARIABLES = ['Node Description', 'Input Definition', 'Output Definition', 'Context', 'Example Files', 'Output Files'] as const;
 
 export type Variable = (typeof VARIABLES)[number];
 
@@ -43,10 +44,10 @@ export const STANDARD_PROMPTS: Record<PromptKind, string> = {
 Context:
 {Context}
 
-Example file:
-{Example File}
+Example files:
+{Example Files}
 
-Task: write this node's input definition -- what arrives on each of its inputs, in general: the format any such input has, not only this one example -- and one small, realistic example of it, drawn from the example file where there is one.`,
+Task: write this node's input definition -- what arrives on each of its inputs, in general: the format any such input has, not only these examples -- and one small, realistic example of it, drawn from the example files where there are some.`,
 
   output: `${DESCRIBED}
 
@@ -56,7 +57,10 @@ Input definition:
 Context:
 {Context}
 
-Task: write this node's output definition -- what goes out on each of its outputs, fitting what the nodes it feeds want and the context -- and one example of it: what this node gives for the example input.`,
+Output files:
+{Output Files}
+
+Task: write this node's output definition -- what goes out on each of its outputs, fitting what the nodes it feeds want, the context and the output files where there are some -- and one example of it: what this node gives for the example input.`,
 
   code: `${DESCRIBED}
 

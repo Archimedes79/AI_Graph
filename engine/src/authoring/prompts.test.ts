@@ -6,8 +6,8 @@ const named = (text: string): string[] => VARIABLES.filter((name) => text.includ
 
 describe('the standard prompts', () => {
   it('put the description together with what each ✨ is written from', () => {
-    expect(named(STANDARD_PROMPTS.input)).toEqual(['Node Description', 'Context', 'Example File']);
-    expect(named(STANDARD_PROMPTS.output)).toEqual(['Node Description', 'Input Definition', 'Context']);
+    expect(named(STANDARD_PROMPTS.input)).toEqual(['Node Description', 'Context', 'Example Files']);
+    expect(named(STANDARD_PROMPTS.output)).toEqual(['Node Description', 'Input Definition', 'Context', 'Output Files']);
     expect(named(STANDARD_PROMPTS.code)).toEqual(['Node Description', 'Input Definition', 'Output Definition', 'Context']);
     expect(named(STANDARD_PROMPTS.prompt)).toEqual(['Node Description', 'Input Definition', 'Output Definition', 'Context']);
     expect(named(STANDARD_PROMPTS.data)).toEqual(['Node Description', 'Output Definition', 'Context']);

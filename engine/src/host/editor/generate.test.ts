@@ -67,6 +67,8 @@ describe('code', () => {
     expect(ai.asked[0].prompt).toContain("@param {import('./input.js').Input} inputs");
     expect(ai.asked[0].prompt).toContain('const text = inputs["text"];');
     expect(ai.asked[0].prompt).toContain('The returned object\'s keys must be exactly: ["lines"]');
+    // The empty window as well as the full one: the code is not optional about it.
+    expect(ai.asked[0].prompt).toContain('Handle an input that is missing or empty as well as a full one: then the output says what to do instead of failing');
     expect(reply.calls).toHaveLength(1);
     expect(reply.calls[0]).toMatchObject({ provider: 'test', model: 'm', reply_chars: expect.any(Number) });
   });
@@ -170,10 +172,11 @@ describe('the prompt ✨ is sent', () => {
     expect(ai.asked[0].prompt).toContain(`Output definition:\n${OUTPUT}`);
   });
 
-  it('no longer tells every code node about charts -- only a chart downstream says so', async () => {
+  it('no longer tells every code node what a chart takes -- only a chart downstream says so', async () => {
     const ai = scripted([js('function run() { return { lines: 1 }; }')]);
     await generate({ node: node('code') }, deps(ai));
-    expect(ai.asked[0].prompt).not.toContain('chart');
+    expect(ai.asked[0].prompt).not.toContain('draws at the block');
+    expect(ai.asked[0].prompt).not.toContain('what to plot');
     expect(registry.widget('plot_window')?.receives(parseWidget({ id: 'b', kind: 'plot_window' }))).toContain('draws at the block\'s real size');
   });
 });
@@ -182,10 +185,10 @@ describe('an input definition', () => {
   it('is written from the example file, read here when the request brings only its path, and is not run', async () => {
     const ai = scripted([js('/** @typedef {Object} Input @property {string} text a text */\nmodule.exports = { "text": "a\\nb" };')]);
     const files = { resolve: (p: string) => p, exists: async () => true, read: async () => 'name,age\nAda,36', write: async () => {}, list: async () => [] };
-    const reply = await generate({ node: node('code'), write: 'input', example_file: { path: 'data/people.csv' } }, { ...deps(ai), files });
+    const reply = await generate({ node: node('code'), write: 'input', input_files: [{ path: 'data/people.csv' }] }, { ...deps(ai), files });
     expect(reply.result).toBe('/** @typedef {Object} Input @property {string} text a text */\nmodule.exports = { "text": "a\\nb" };');
     expect(reply.probe.status).toBe('skipped');
-    expect(ai.asked[0].prompt).toContain('Example file:\ndata/people.csv:\nname,age\nAda,36');
+    expect(ai.asked[0].prompt).toContain('Example files:\ndata/people.csv:\nname,age\nAda,36');
     expect(ai.asked[0].prompt).toContain('Answer with the whole file input.js');
     expect(ai.asked[0].prompt).toContain('for each input -- "text" --');
   });
@@ -200,14 +203,20 @@ describe('an input definition', () => {
       .toMatchObject({ status: 'failed', problems: ['It names "txt", which is not among the inputs: "text".'] });
   });
 
-  it('says there is no example file where there is none', async () => {
+  it('says there are no example files where there are none', async () => {
     const ai = scripted([js('module.exports = { "text": "a" };')]);
     await generate({ node: node('code'), write: 'input' }, deps(ai));
-    expect(ai.asked[0].prompt).toContain('Example file:\nNone.');
+    expect(ai.asked[0].prompt).toContain('Example files:\nNone.');
   });
 });
 
 describe('an output definition', () => {
+  it('is written from the files it is given, a spec among them', async () => {
+    const ai = scripted([js('module.exports = { "lines": 2 };')]);
+    await generate({ node: node('code'), write: 'output', output_files: [{ path: 'spec.md', text: 'Lines: a count.' }] }, deps(ai));
+    expect(ai.asked[0].prompt).toContain('Output files:\nspec.md:\nLines: a count.');
+  });
+
   it('is written keeping the outputs other nodes are wired to, and asked again where it drops one', async () => {
     const ai = scripted([js('module.exports = { "count": 2 };'), js('module.exports = { "lines": 2 };')]);
     const reply = await generate({ node: node('code', { input_definition: INPUT }), write: 'output', output_targets: { lines: '"Page"' } }, deps(ai));
