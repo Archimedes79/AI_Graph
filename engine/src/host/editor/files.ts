@@ -48,17 +48,21 @@ export async function findProjects(name: string, root = process.cwd(), depth = 4
 
 const SKIPPED = new Set(['node_modules', 'dist', 'build']);
 
+/** How many levels of folders below the one it starts in `findFiles` looks into. */
+const FOLDERS_BELOW = 3;
+
 /**
- * Files named *name*, of *size* bytes, under *root*, a few levels down.
+ * Files named *name*, of *size* bytes, in *root* and the folders below it, as
+ * far down as `fileSearch` says.
  *
  * For a file dropped onto a node, or onto its example: a browser hands a page
  * a file's name, size and content, never where it is -- and a node that reads
  * the file at a path needs the path. The file dropped is almost always one in
  * the folder the editor was started in; the size tells two of one name apart.
  */
-export async function findFiles(name: string, size: number, root = process.cwd(), depth = 4): Promise<string[]> {
+export async function findFiles(name: string, size: number, root = process.cwd()): Promise<string[]> {
   const found: string[] = [];
-  const walk = async (directory: string, level: number): Promise<void> => {
+  const walk = async (directory: string, below: number): Promise<void> => {
     let entries;
     try {
       entries = await readdir(directory, { withFileTypes: true });
@@ -69,14 +73,23 @@ export async function findFiles(name: string, size: number, root = process.cwd()
       if (entry.name.startsWith('.')) continue;
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (!SKIPPED.has(entry.name) && level < depth) await walk(path, level + 1);
+        if (!SKIPPED.has(entry.name) && below < FOLDERS_BELOW) await walk(path, below + 1);
       } else if (entry.name === name && (await stat(path).catch(() => null))?.size === size) {
         found.push(path);
       }
     }
   };
-  await walk(root, 1);
+  await walk(root, 0);
   return found;
+}
+
+/**
+ * Where `findFiles` looks, in words: what a drop that found nothing says. It
+ * said "under the folder the editor was started in" of a search that goes
+ * three folders down and passes some over.
+ */
+export function fileSearch(root = process.cwd()): string {
+  return `${root} and ${FOLDERS_BELOW} levels of folders below it, leaving out ${[...SKIPPED].join(', ')} and every name that begins with a dot`;
 }
 
 // ---------------------------------------------------------------------------

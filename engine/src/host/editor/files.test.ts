@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findFiles, findProjects } from './files.ts';
+import { fileSearch, findFiles, findProjects } from './files.ts';
 
 /**
  * What the editor's project search and its "open in my editor" get from the machine.
@@ -73,5 +73,15 @@ describe('findFiles', () => {
     expect(await found(10)).toEqual(['examples/data/people.csv']);
     expect(await found(14)).toEqual(['other/people.csv']);
     expect(await found(3)).toEqual([]);
+  });
+
+  it('looks three levels of folders down, passing over build output and dot names -- and says where it looked', async () => {
+    // A drop that found nothing said "not under the folder the editor was started in" of all of these.
+    const root = await mkdtemp(join(tmpdir(), 'ai-graph-find-depth-'));
+    for (const folder of ['a/b/c', 'data/raw/2024/q1', 'build', '.venv']) await mkdir(join(root, folder), { recursive: true });
+    for (const file of ['a/b/c/three.csv', 'data/raw/2024/q1/four.csv', 'build/data.csv', '.env']) await writeFile(join(root, file), 'x');
+    const count = async (name: string) => (await findFiles(name, 1, root)).length;
+    expect([await count('three.csv'), await count('four.csv'), await count('data.csv'), await count('.env')]).toEqual([1, 0, 0, 0]);
+    expect(fileSearch(root)).toBe(`${root} and 3 levels of folders below it, leaving out node_modules, dist, build and every name that begins with a dot`);
   });
 });

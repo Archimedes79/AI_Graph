@@ -12,14 +12,16 @@ import { dropExample, droppedPath, droppedValue, uriPath, type Dropped } from '.
  */
 
 const dropped = (name: string, text: string, uri?: string): Dropped => ({ name, size: text.length, text: async () => text, ...(uri ? { uri } : {}) });
-const one = (path: string) => async () => [path];
+/** The engine's search, finding *paths*, and saying where it looked as `fileSearch` says it. */
+const found = (...paths: string[]) => async () => ({ paths, searched: 'D:\\work and 3 levels of folders below it, leaving out node_modules, dist, build and every name that begins with a dot' });
+const one = (path: string) => found(path);
 const as = async (path: string) => path;
 
 describe('where a dropped file is', () => {
   it('is the path its drop named, where it named one', async () => {
     expect(uriPath('file:///D:/work/data/people%20list.csv')).toBe('D:/work/data/people list.csv');
     expect(uriPath('file:///home/me/a.csv')).toBe('/home/me/a.csv');
-    expect(await droppedPath(dropped('a.csv', 'x', 'file:///home/me/a.csv'), async () => [])).toBe('/home/me/a.csv');
+    expect(await droppedPath(dropped('a.csv', 'x', 'file:///home/me/a.csv'), found())).toBe('/home/me/a.csv');
   });
 
   it('keeps the server of a file on a share: without it, the path named a folder on this machine', () => {
@@ -31,8 +33,15 @@ describe('where a dropped file is', () => {
 
   it('is otherwise the one file of its name and size under the editor\'s folder -- and none, or several, is said', async () => {
     expect(await droppedPath(dropped('a.csv', 'x'), one('D:/work/a.csv'))).toBe('D:/work/a.csv');
-    await expect(droppedPath(dropped('a.csv', 'x'), async () => [])).rejects.toThrow(/choose it with 📂/);
-    await expect(droppedPath(dropped('a.csv', 'x'), async () => ['a', 'b'])).rejects.toThrow(/2 files called “a.csv”/);
+    await expect(droppedPath(dropped('a.csv', 'x'), found())).rejects.toThrow(/choose it with 📂/);
+    await expect(droppedPath(dropped('a.csv', 'x'), found('a', 'b'))).rejects.toThrow(/2 files called “a.csv”/);
+  });
+
+  it('says where it was looked for, when it was found nowhere: "under the folder" was said of a search three folders deep', async () => {
+    await expect(droppedPath(dropped('four.csv', 'x'), found())).rejects.toThrow(
+      'A browser does not say where a dropped file is, and no “four.csv” of that size is in D:\\work and 3 levels of folders below it, '
+      + 'leaving out node_modules, dist, build and every name that begins with a dot: choose it with 📂 From a file….',
+    );
   });
 });
 

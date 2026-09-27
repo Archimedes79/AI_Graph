@@ -53,23 +53,26 @@ export function uriPath(uri: string): string {
   return /^\/[A-Za-z]:\//.test(path) ? path.slice(1) : path;
 }
 
+/** How a dropped file is looked for (`findFile`): the files found, and where it looked, in words. */
+export type FindFile = (name: string, size: number) => Promise<{ paths: string[]; searched: string }>;
+
 /** The files of *name* and *size* under the folder the engine runs in. */
-async function findFile(name: string, size: number): Promise<string[]> {
-  return (await call('findFile', { name, size: String(size) })).paths;
-}
+const findFile: FindFile = (name, size) => call('findFile', { name, size: String(size) });
 
 /**
  * Where *file* is on the machine the graph runs on: the path its drop named,
  * else the one file of its name and size the engine finds. None, or several,
- * is said, with the way that always works.
+ * is said -- none with where the engine looked -- with the way that always
+ * works.
  */
-export async function droppedPath(file: Dropped, find: (name: string, size: number) => Promise<string[]> = findFile): Promise<string> {
+export async function droppedPath(file: Dropped, find: FindFile = findFile): Promise<string> {
   if (file.uri) return uriPath(file.uri);
-  const paths = await find(file.name, file.size);
+  const { paths, searched } = await find(file.name, file.size);
   if (paths.length === 1) return paths[0];
   throw new Error(paths.length
     ? `${paths.length} files called “${file.name}” are that size: choose the one you mean with 📂 From a file….`
-    : `Where “${file.name}” is cannot be told from a drop when it is not under the folder the editor was started in: choose it with 📂 From a file….`);
+    : `A browser does not say where a dropped file is, and no “${file.name}” of that size is in ${searched}: `
+      + 'choose it with 📂 From a file….');
 }
 
 /**
@@ -80,7 +83,7 @@ export async function droppedPath(file: Dropped, find: (name: string, size: numb
 export async function droppedValue(
   file: Dropped,
   reads: boolean,
-  find?: (name: string, size: number) => Promise<string[]>,
+  find?: FindFile,
   kept: (path: string) => Promise<string> = storedPath,
 ): Promise<unknown> {
   if (reads) return kept(await droppedPath(file, find));
@@ -97,7 +100,7 @@ export async function dropExample(
   nodeId: string,
   port: string,
   file: Dropped,
-  find?: (name: string, size: number) => Promise<string[]>,
+  find?: FindFile,
   kept?: (path: string) => Promise<string>,
 ): Promise<void> {
   const started = useGraphStore.getState().document;

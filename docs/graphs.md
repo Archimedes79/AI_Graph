@@ -524,7 +524,9 @@ wrote, what comes out?* — built in the same four steps:
   **Read the file at this path** (read as a run reads it, and kept relative to the folder
   the editor runs in), otherwise what the file says, parsed when it is JSON. A browser
   never says where a dropped file is; the editor finds the one file of that name and size
-  under its folder, and says so when there is none or several. Typing is editing what they
+  in its folder and three levels of folders below it (not in `node_modules`, `dist`,
+  `build` or a name beginning with a dot), and says so, and where it looked, when there is
+  none or several. Typing is editing what they
   filled. A node with no inputs has no example: Try it runs it on nothing.
 - **▶ Try it**, under the body in step 4, runs just this element on that example, through
   the same steps a run takes (the same model, the files of the inputs that say so read
