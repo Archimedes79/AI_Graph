@@ -108,3 +108,28 @@ describe('what a block with a transform shows', () => {
     expect(shown).toEqual([{ a: 1 }]);
   });
 });
+
+/**
+ * What `check` says about a page, before anyone opens it.
+ *
+ * A chart's body is run by the page, which has no model to ask. ✨ will not
+ * write one that asks, but a body written by hand could, and `check` said ✓
+ * until the page was opened and every redraw failed.
+ */
+describe('what check says about a page', () => {
+  const chart = (code: string) => ({ id: 'plot', kind: 'plot_window', label: 'Plot', code });
+  const said = (widgets: Record<string, unknown>[]) =>
+    new GuiNodeRunner().problems(page(widgets), undefined, 'node "page"');
+
+  it('names a chart whose body asks a model, and says where to ask instead', () => {
+    const found = said([chart('async function draw(data) { return [await node.llm("rank these")]; }')]);
+    expect(found).toHaveLength(1);
+    expect(found[0].where).toBe('node "page", block "plot"');
+    expect(found[0].problem).toMatch(/drawn in the page, which cannot ask a model/);
+    expect(found[0].fix).toMatch(/node upstream/);
+  });
+
+  it('has nothing to say about a chart that only draws, or a block of another kind', () => {
+    expect(said([chart('function draw(data) { return data ?? []; }'), box])).toEqual([]);
+  });
+});

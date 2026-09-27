@@ -2,6 +2,7 @@ import { TransformingDisplayRunner } from '../TransformingDisplayRunner.ts';
 import type { DeployNeeds } from '../../ElementRunner.ts';
 import type { Widget } from '../../WidgetRunner.ts';
 import type { Generation } from '../../../authoring/generation.ts';
+import type { Problem } from '../../../execution/wiring.ts';
 import { TRANSFORM_FIELDS } from '../TransformingDisplayRunner.ts';
 import { checkPlot } from './check.ts';
 
@@ -47,6 +48,21 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
    */
   override deployNeeds(_widget: Widget): DeployNeeds {
     return { needsInterface: false, asksAi: false };
+  }
+
+  /**
+   * A body that calls `node.llm` fails on every page, for the reason above.
+   * ✨ refuses to write one (its probe hands the body no `node`), but a body
+   * written by hand, or kept from before charts were drawn by the page, would
+   * otherwise pass `check` and only fail once someone opened the page.
+   */
+  override problems(widget: Widget, where: string): Problem[] {
+    if (!/\bnode\s*\.\s*llm\s*\(/.test(this.config(widget).code)) return [];
+    return [{
+      where: `${where}, block "${widget.id}"`,
+      problem: 'Its code calls node.llm, but a chart is drawn in the page, which cannot ask a model.',
+      fix: 'Ask in a node upstream and wire its answer into the chart.',
+    }];
   }
 
   /**

@@ -3,6 +3,7 @@
 import type { Port, RawConfig, WidgetKind } from '../graph.ts';
 import { ElementRunner } from './ElementRunner.ts';
 import type { Runtime } from './Runtime.ts';
+import type { Problem } from '../execution/wiring.ts';
 
 /**
  * How a block sits on the page. Nothing an element ever reads to decide what
@@ -130,4 +131,15 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
     return undefined;
   }
 
+  /**
+   * What is wrong with this block that only its kind can say, for `check`.
+   *
+   * What any block on a page can get wrong -- no id, a shared id, a kind that
+   * does not exist -- is the page's to say (`GuiNodeRunner.problems`). What
+   * breaks one kind's own contract is said here, in the file that defines it,
+   * so the page never has to ask which kind a block is.
+   */
+  problems(_widget: Widget, _where: string): Problem[] {
+    return [];
+  }
 }
