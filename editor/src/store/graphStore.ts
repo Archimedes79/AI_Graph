@@ -89,9 +89,32 @@ export interface GraphStore {
   currentRunId: string | null;
 
   // UI state
+  /** The node whose panel is open beside the canvas: the one the person is on. */
   editingNodeId: string | null;
+  /**
+   * A change said in the bar under the canvas for one node, waiting for that
+   * node's panel to make it -- with when it was said, so the same words said
+   * twice are two changes. Gone with the graph it was said in.
+   */
+  pendingChange: { nodeId: string; text: string; at: number } | null;
 
   // Actions
+  /** Ask node *nodeId*'s panel to change the node as *text* says (`pendingChange`). */
+  askChange: (nodeId: string, text: string) => void;
+  /** The waiting change was taken up, or is no longer wanted. */
+  clearChange: () => void;
+  /**
+   * Nothing selected: no node's panel open, and nothing marked on the canvas.
+   * What ✕ and Escape on a panel, a click on the empty canvas and the bar's
+   * "on:" do alike, so the canvas never marks a node the bar is not on.
+   */
+  clearSelection: () => void;
+  /**
+   * The graph on the canvas replaced by *graph* -- this graph, changed, its
+   * ids kept -- as one undo step of this document: the file it came from
+   * stays, and so does the panel of a node that is still there.
+   */
+  changeGraph: (graph: Graph) => void;
   /**
    * Change what the graph is called, what it does, its page's scheme: a
    * change like any other, one undo step per field typed into (`commit`).
@@ -467,6 +490,7 @@ export const useGraphStore = create<GraphStore>()(
     ranAs: {},
     isExecuting: false,
     editingNodeId: null,
+    pendingChange: null,
     subgraphStack: [],
     document: 0,
     savedSnapshot: null,
@@ -615,6 +639,35 @@ export const useGraphStore = create<GraphStore>()(
         state.editingNodeId = nodeId;
       }),
 
+    askChange: (nodeId, text) =>
+      set((state) => {
+        state.pendingChange = { nodeId, text, at: Date.now() };
+      }),
+
+    clearChange: () =>
+      set((state) => {
+        state.pendingChange = null;
+      }),
+
+    clearSelection: () => {
+      // The panel first, on its own: a panel closed while the graph stays
+      // writes what still waits in it (`nodeDialog.watch`), and the marks
+      // below are a change to the canvas's nodes.
+      set((state) => {
+        state.editingNodeId = null;
+      });
+      set((state) => {
+        for (const node of state.rfNodes) if (node.selected) node.selected = false;
+        for (const edge of state.rfEdges) if (edge.selected) edge.selected = false;
+      });
+    },
+
+    changeGraph: (graph) => {
+      get().commit();
+      // As an undo step lands: the same document a step on, not another one.
+      get().applyGraphSnapshot(JSON.stringify(graph), true);
+    },
+
     setExecutionResult: (shown, ran) =>
       set((state) => {
         state.executionResult = shown;
@@ -670,6 +723,7 @@ export const useGraphStore = create<GraphStore>()(
         state.future = [];
         state.subgraphStack = [];
         state.editingNodeId = null;
+        state.pendingChange = null;
         state.document += 1;
       });
       // Snapshot through exportGraph() rather than from normalizedGraph: it is
@@ -702,6 +756,8 @@ export const useGraphStore = create<GraphStore>()(
         // Its own level, its own history: an undo in here cannot reach out.
         state.past = [];
         state.future = [];
+        // A change said for a node out there is not for one of the same id in here.
+        state.pendingChange = null;
         state.document += 1;
       });
     },
@@ -725,6 +781,7 @@ export const useGraphStore = create<GraphStore>()(
         // keystroke, and nothing to say it was about to happen.
         state.past = changed ? [...frame.past, before].slice(-HISTORY_LIMIT) : frame.past;
         state.future = changed ? [] : frame.future;
+        state.pendingChange = null;
         state.document += 1;
       });
     },
