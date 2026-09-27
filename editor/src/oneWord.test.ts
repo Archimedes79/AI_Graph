@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createElement, type ReactElement } from 'react';
+import { createElement, type ComponentType, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReactFlowProvider } from 'reactflow';
 import ViewTabs from '@/app/ViewTabs';
@@ -9,9 +9,10 @@ import PageHeading from '@/page/PageHeading';
 import WidgetEditor from '@/page/WidgetEditor';
 import TopGraphOnly from '@/page/TopGraphOnly';
 import GraphNodeView from '@/canvas/GraphNodeView';
-import TextIoWidgetPanel from '@/elements/widgets/text_io/TextIoWidgetPanel';
 import { removalsToApply } from '@/canvas/nodeRemoval';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from '@/elements/registry';
+import type { WidgetGuiBuilder, WidgetPanelProps } from '@/elements/WidgetGuiBuilder';
+import { DisplayWidgetGuiBuilder } from '@/elements/widgets/DisplayWidgetGuiBuilder';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { syncGuiNodePorts } from '@/document/guiWidgets';
 import type { GraphNode } from '@/graph';
@@ -46,6 +47,17 @@ function read(element: ReactElement): string {
 
 const OTHER_WORDS = /\b(widgets?|gui|interfaces?|designer)\b/i;
 
+/**
+ * Each block kind's settings panel, to be drawn by itself: registered lazily,
+ * a panel drawn inside WidgetEditor is its Suspense fallback, and says nothing.
+ */
+const PANELS = import.meta.glob('/src/elements/widgets/**/*WidgetPanel.tsx', { eager: true, import: 'default' }) as Record<string, ComponentType<WidgetPanelProps>>;
+const pascal = (kind: string) => kind.split('_').map((word) => word[0].toUpperCase() + word.slice(1)).join('');
+/** The panel of *builder*'s kind: its own, or -- a chart, a table, an image -- the one the blocks that show share. */
+const panelOf = (builder: WidgetGuiBuilder): ComponentType<WidgetPanelProps> | undefined =>
+  PANELS[`/src/elements/widgets/${builder.widgetKind}/${pascal(builder.widgetKind)}WidgetPanel.tsx`]
+  ?? (builder instanceof DisplayWidgetGuiBuilder ? PANELS['/src/elements/widgets/DisplayWidgetPanel.tsx'] : undefined);
+
 describe('"block" is the one word for what a page is made of', () => {
   it('names the tabs Graph, Page and Preview, and counts the page\'s blocks', () => {
     const html = renderToStaticMarkup(createElement(ViewTabs, { view: 'graph', onChange: () => {} }));
@@ -66,13 +78,17 @@ describe('"block" is the one word for what a page is made of', () => {
       }))),
       'the page node': [NODE_BUILDERS.gui.label, NODE_BUILDERS.gui.hint, NODE_BUILDERS.gui.describeOutput(page), NODE_KINDS.gui.create('p').label].join(' '),
     };
-    for (const builder of Object.values(WIDGET_BUILDERS)) {
+    for (const builder of Object.values(WIDGET_BUILDERS) as WidgetGuiBuilder[]) {
       shown[`the editor of a ${builder.widgetKind}`] = read(createElement(WidgetEditor, { widget: { ...builder.create('Block'), id: 'b' }, onChange: () => {} }));
-    }
-    for (const mode of ['input', 'output', 'both']) {
-      shown[`a text box's settings, ${mode}`] = read(createElement(TextIoWidgetPanel, {
-        builder: WIDGET_BUILDERS.text_io, widget: { ...WIDGET_BUILDERS.text_io.create('Box', mode), id: 'box' }, onUpdate: () => {},
-      }));
+      const Panel = panelOf(builder);
+      // Every kind with settings has its panel read here, not only the one that was.
+      expect(!!Panel, builder.widgetKind).toBe(!!builder.Panel);
+      if (!Panel) continue;
+      for (const { mode } of builder.paletteEntries()) {
+        shown[`the settings of a ${builder.widgetKind}${mode ? `, ${mode}` : ''}`] = read(createElement(Panel, {
+          builder, widget: { ...builder.create('Block', mode), id: 'b' }, onUpdate: () => {},
+        }));
+      }
     }
     open.subgraphStack = [{ nodeId: 'part' }];
     try {
