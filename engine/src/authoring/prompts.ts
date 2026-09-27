@@ -4,14 +4,8 @@
 // A node says what should happen in its heading and its text; everything else
 // is generated. Each ✨ -- the node's input definition, its output definition,
 // its body -- is sent a prompt that puts the text together with what the node
-// and the graph already hold, through variables:
-//
-//     {Node Description}   "# <heading> (ID <id>, <kind> node)", then the text
-//     {Input Definition}   input.js as it is -- or, while there is none, each input
-//     {Output Definition}  output.js as it is -- or, while there is none, each output
-//     {Context}            the graph around the node, in words (the editor builds it)
-//     {Example Files}      for ✨ Input: the files it is given -- examples, a spec -- each path and its start
-//     {Output Files}       for ✨ Output: the files it is given, the same way
+// and the graph already hold, through variables (`VARIABLES` says what each
+// is filled with; the editor lists them under every prompt it shows).
 //
 // **These are the standard prompts, and a node may keep its own.** The editor
 // shows each under the ✨ it belongs to, and a node keeps one only when someone
@@ -24,10 +18,17 @@
 // variable nothing fills stays as written too -- an ai node's prompt.md is
 // filled at run time with the two that mean something then.
 
-/** What a prompt may name, each filled with what the node and the graph hold. */
-export const VARIABLES = ['Node Description', 'Input Definition', 'Output Definition', 'Context', 'Example Files', 'Output Files'] as const;
+/** What a prompt may name, and what each is filled with: what the node and the graph hold. */
+export const VARIABLES = {
+  'Node Description': 'Its heading, id and kind as "# <heading> (ID <id>, <kind> node)", then its text',
+  'Input Definition': 'input.js as it is -- or, while there is none, each input: its type, what it is, where it comes from',
+  'Output Definition': 'output.js as it is -- or, while there is none, each output and where it goes',
+  Context: 'The graph around the node, in words: what it is for, its pages, what is wired to what',
+  'Example Files': 'For ✨ Input: the files it is given -- examples, a spec -- each path and the start of it',
+  'Output Files': 'For ✨ Output: the files it is given, the same way',
+} as const;
 
-export type Variable = (typeof VARIABLES)[number];
+export type Variable = keyof typeof VARIABLES;
 
 /**
  * What a ✨ writes: a node's input definition, its output definition, or its
@@ -99,7 +100,7 @@ Context:
 Task: write the data this node holds, shaped as the nodes it feeds want it.`,
 };
 
-const VARIABLE = new RegExp(`\\{(${VARIABLES.join('|')})\\}`, 'g');
+const VARIABLE = new RegExp(`\\{(${Object.keys(VARIABLES).join('|')})\\}`, 'g');
 
 /** *text* with each variable *values* has replaced by its value; every other `{…}` as it was written. */
 export function fillPrompt(text: string, values: Partial<Record<Variable, string>>): string {

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { STANDARD_PROMPTS, VARIABLES, fillPrompt, nodeDescription, standardRunPrompt, type Variable } from './prompts.ts';
 
 /** The variables *text* names, in the order it names them. */
-const named = (text: string): string[] => VARIABLES.filter((name) => text.includes(`{${name}}`));
+const named = (text: string): string[] => Object.keys(VARIABLES).filter((name) => text.includes(`{${name}}`));
 
 describe('the standard prompts', () => {
   it('put the description together with what each ✨ is written from', () => {
