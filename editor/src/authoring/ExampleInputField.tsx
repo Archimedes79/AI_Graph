@@ -163,6 +163,7 @@ export default function ExampleInputField({ text, onText, ports, reads, fromGrap
         placeholder={`{ ${(ports.length ? ports : [{ id: 'input' }]).map((candidate) => `"${candidate.id}": …`).join(', ')} }`}
         minHeight={72}
         title="Example input"
+        keepFileDropsOut
       />
       {error &&<p className="text-xs" style={{ color: DANGER_TEXT }}>{error}</p>}
       {failure && <p className="text-xs" style={{ color: DANGER_TEXT }}>{failure}</p>}

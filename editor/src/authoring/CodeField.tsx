@@ -14,6 +14,8 @@ interface CodeFieldProps {
   minHeight?: number;
   /** What the enlarged editor is called: "Draw chart — code". */
   title?: string;
+  /** A file dropped on it is taken by what holds the field, not typed in: step 1's example. */
+  keepFileDropsOut?: boolean;
 }
 
 /**
@@ -33,7 +35,7 @@ interface CodeFieldProps {
  * you spend in VS Code.
  */
 export default function CodeField({
-  value, onChange, language, placeholder, minHeight = 160, title,
+  value, onChange, language, placeholder, minHeight = 160, title, keepFileDropsOut,
 }: CodeFieldProps) {
   const [large, setLarge] = useState(false);
 
@@ -68,7 +70,7 @@ export default function CodeField({
       <Suspense fallback={plain}>
         <Surface
           value={value} onChange={onChange} language={language} placeholder={placeholder}
-          height={{ min: minHeight, max: '46vh' }}
+          height={{ min: minHeight, max: '46vh' }} keepFileDropsOut={keepFileDropsOut}
         />
       </Suspense>
       <button
@@ -106,7 +108,7 @@ export default function CodeField({
             <Suspense fallback={plain}>
               <Surface
                 value={value} onChange={onChange} language={language} placeholder={placeholder}
-                height={{ min: 200, fill: true }} autoFocus
+                height={{ min: 200, fill: true }} autoFocus keepFileDropsOut={keepFileDropsOut}
               />
             </Suspense>
           </div>
