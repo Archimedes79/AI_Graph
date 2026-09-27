@@ -677,7 +677,9 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   const whole = exampled ? { ...asked, sample_inputs: exampled.values } : asked;
   // One item of it, for a node run once per item: what its body is called with.
   const cut = runsPerItem(whole) ? oneItem(whole) : undefined;
-  const request = await asReceived(cut ? { ...whole, sample_inputs: cut.values } : whole, files);
+  // An example is written from what the node knows, not copied from a sample of it.
+  const request = write === 'example' ? { ...asked, sample_inputs: null }
+    : await asReceived(cut ? { ...whole, sample_inputs: cut.values } : whole, files);
   const calls: AICall[] = deps.calls ?? [];
   // A preview runs every step a generation does up to the model, and stops
   // there: the request it hands back is the request, not a second rendering

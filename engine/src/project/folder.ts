@@ -284,7 +284,10 @@ async function readExampleFiles(folder: string, nodeId: string, guard?: Guard): 
     try {
       held[name] = TEXT.decode(await readFile(path));
     } catch {
+      // Not ours, even where it was text when last read: a save tidies away
+      // only what it read, and this it did not.
       notText.set(path, signed);
+      seen.delete(path);
       continue;
     }
     notText.delete(path);

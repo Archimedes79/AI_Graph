@@ -266,6 +266,17 @@ describe('a node\'s example files', () => {
     await writeProject(dir, read);
     expect(await readFile(join(dir, 'nodes/count/example/photo.png'))).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]));
     expect(await changesOnDisk(dir)).toEqual([]);
+
+    // One that was text and is a picture now is the person's too: it goes from the node, and stays on disk.
+    await touch(join(dir, 'nodes/count/example/a.csv'), '');
+    await writeFile(join(dir, 'nodes/count/example/a.csv'), Buffer.from([0xff, 0xfe, 0x00]));
+    const [change] = await changesOnDisk(dir);
+    expect(change).toEqual({ node_id: 'count', field: 'example_files', value: {} });
+    const taken = await readProject(dir);
+    countOf(taken).config.example_files = change.value;
+    await writeProject(dir, taken);
+    expect(await readFile(join(dir, 'nodes/count/example/a.csv'))).toEqual(Buffer.from([0xff, 0xfe, 0x00]));
+    expect(await changesOnDisk(dir)).toEqual([]);
   });
 
   it('are refused, before anything is written, when one is named so it could not be', async () => {
