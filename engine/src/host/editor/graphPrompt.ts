@@ -96,7 +96,7 @@ const EXAMPLE = `A complete, working example:
      "position": {"x": 420, "y": 120},
      "inputs": [{"id": "text", "name": "Text", "kind": "input", "data_type": "text", "multi": false, "required": false}],
      "outputs": [{"id": "rows", "name": "Rows", "kind": "output", "data_type": "number", "multi": false, "required": false}],
-     "config": {"code": "function run(inputs) { const lines = String(inputs.text).trim().split('\\\\n'); return { rows: lines.length }; }"}},
+     "config": {"prompt": "Count the lines of the text.", "code": "function run(inputs) { const lines = String(inputs.text).trim().split('\\\\n'); return { rows: lines.length }; }"}},
     {"id": "shown", "node_type": "output", "label": "Rows", "description": "",
      "position": {"x": 760, "y": 120},
      "inputs": [{"id": "value", "name": "Value", "kind": "input", "data_type": "any", "multi": false, "required": false}],
