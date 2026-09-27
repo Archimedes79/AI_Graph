@@ -44,8 +44,8 @@ type EditorView<T> =
 /**
  * Call one route of the contract.
  *
- * GET and DELETE carry the request on the query; POST as a JSON body, or as
- * the bytes themselves for a raw route. `:params` are filled into the path.
+ * GET and DELETE carry the request on the query; POST as a JSON body.
+ * `:params` are filled into the path.
  */
 export async function call<K extends RouteName>(name: K, request?: RequestOf<K>): Promise<EditorView<ResponseOf<K>>> {
   const route = API[name];
@@ -54,12 +54,7 @@ export async function call<K extends RouteName>(name: K, request?: RequestOf<K>)
   let body: BodyInit | undefined;
   const headers: Record<string, string> = {};
 
-  if (route.raw) {
-    const { bytes, ...query } = rest as { bytes: BodyInit };
-    url += `?${new URLSearchParams(query as Record<string, string>)}`;
-    body = bytes;
-    headers['Content-Type'] = 'application/octet-stream';
-  } else if (route.method === 'POST') {
+  if (route.method === 'POST') {
     body = JSON.stringify(rest);
     headers['Content-Type'] = 'application/json';
   } else if (Object.keys(rest).length) {

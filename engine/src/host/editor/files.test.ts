@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deleteAttachment, detectFormat, findProjects, saveAttachment } from './files.ts';
+import { detectFormat, findProjects } from './files.ts';
 
 /**
- * What the editor's attachment box and project search get from the machine.
+ * What the editor's project search and sample reading get from the machine.
  *
  * Browsing is not here: it is the same picker a deployed tool serves, and it
  * is tested in `host/browse.test.ts` beside the code.
@@ -20,26 +19,6 @@ async function sandbox() {
   await writeFile(join(dir, 'blob.bin'), Buffer.from([0xff, 0xfe, 0x00, 0x80]));
   return dir;
 }
-
-
-describe('attachments', () => {
-  it('keeps a file under a unique name and can remove it again', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'attachments-'));
-    const path = await saveAttachment('sample.csv', Buffer.from('a,b'), dir);
-    expect(path.endsWith('_sample.csv')).toBe(true);
-    expect(await readFile(path, 'utf8')).toBe('a,b');
-    await deleteAttachment(path, dir);
-    expect(existsSync(path)).toBe(false);
-  });
-
-  it('refuses to delete outside its own folder', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'attachments-'));
-    const elsewhere = join(await mkdtemp(join(tmpdir(), 'elsewhere-')), 'x');
-    await writeFile(elsewhere, 'keep me');
-    await expect(deleteAttachment(elsewhere, dir)).rejects.toThrow(/outside/);
-    expect(existsSync(elsewhere)).toBe(true);
-  });
-});
 
 describe('what a file holds', () => {
   it('names the format by extension, and text or binary by content', async () => {

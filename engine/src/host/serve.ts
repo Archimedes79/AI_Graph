@@ -24,7 +24,7 @@ import { candidatePaths, configuredSettings } from '../ai/settings.ts';
 import { DEFAULT_SETTINGS } from '../ai/providers.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
-  Download, Refusal, message, readBytes, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
+  Download, Refusal, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
 } from './http.ts';
 import { browse, extensionFilter } from './browse.ts';
 import { NotFound } from '../errors.ts';
@@ -140,7 +140,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
         const asked = {
           ...Object.fromEntries(url.searchParams),
           ...found.params,
-          ...(route.raw ? { bytes: await readBytes(request) } : route.method === 'POST' ? await readJson(request) : {}),
+          ...(route.method === 'POST' ? await readJson(request) : {}),
         };
         const answer = await handler(asked, exchange);
         return answer instanceof Download ? sendDownload(response, answer) : sendJson(response, 200, answer);

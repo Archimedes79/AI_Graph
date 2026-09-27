@@ -146,7 +146,7 @@ export interface GenerateRequest {
   output_format?: string;
   /** An answer or result to imitate (`output.example.md`), when one was kept. */
   output_example?: string;
-  /** Where `sample_inputs` came from, for the model: `the last run`, `the values typed into "Try it"`. */
+  /** Where `sample_inputs` came from, for the model: `the last run`, `the example in step 1`. */
   sample_origin?: string;
   /** How a list on an input arrives: one item per run (`per_item`) or whole (`whole_list`). */
   batch_mode?: 'per_item' | 'whole_list';
@@ -261,14 +261,12 @@ export interface Route<Req, Res> {
   /** `:name` segments are path parameters, handed over as `name`. */
   path: string;
   for: 'tool' | 'editor';
-  /** The body is bytes, not JSON: handed over as `bytes` (and sent as the file itself). */
-  raw?: true;
   /** Phantom: carries the types, never set. */
   readonly types?: { request: Req; response: Res };
 }
 
-function route<Req, Res>(method: Method, path: string, audience: 'tool' | 'editor', raw?: true): Route<Req, Res> {
-  return raw ? { method, path, for: audience, raw } : { method, path, for: audience };
+function route<Req, Res>(method: Method, path: string, audience: 'tool' | 'editor'): Route<Req, Res> {
+  return { method, path, for: audience };
 }
 
 type RunGraph = Graph & { trigger?: RunTrigger | null };
@@ -346,9 +344,6 @@ export const API = {
 
   /** A node's (or block's) body file in a project -- `nodes/<id>/code.js` -- in the person's own editor. Loopback only: it starts a program. */
   openExternal: route<{ graph_path: string; node_id: string; widget_id?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
-  /** The file is the body and its name rides on the query: nothing multipart to get wrong. */
-  attach: route<{ name: string; bytes: Uint8Array | Blob }, { path: string; name: string }>('POST', '/api/files/attachments', 'editor', true),
-  detach: route<{ path: string }, { ok: true }>('DELETE', '/api/files/attachments', 'editor'),
 } as const;
 
 export type Api = typeof API;

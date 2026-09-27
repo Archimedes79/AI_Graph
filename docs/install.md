@@ -108,7 +108,7 @@ docker compose up --build
 ```
 
 Builds the editor, runs it on :8000 beside an Ollama container, and keeps
-`./data` (attachments) outside the image. Pull a model once:
+`./data` (the files your graphs read and write) outside the image. Pull a model once:
 
 ```bash
 docker exec -it ai_graph-ollama-1 ollama pull llama3

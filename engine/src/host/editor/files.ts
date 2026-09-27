@@ -1,5 +1,5 @@
-// The editor's view of the machine's files: attachments, finding projects, and
-// a guess at what a file holds.
+// The editor's view of the machine's files: finding projects, and a guess at
+// what a file holds.
 //
 // Editor-only, on purpose: none of it belongs in a bundle, which is why this
 // folder is skipped by the bundle walk along with every other `editor/`.
@@ -8,9 +8,8 @@
 // a bundle carries.
 
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { basename, extname, join, resolve, sep } from 'node:path';
-import { randomBytes } from 'node:crypto';
 import { platform } from 'node:os';
 
 import { isProjectFolder } from '../../project/folder.ts';
@@ -49,39 +48,6 @@ export async function findProjects(name: string, root = process.cwd(), depth = 4
 
 const SKIPPED = new Set(['node_modules', 'dist', 'build']);
 
-/**
- * Where the example files people attach to a node are kept.
- *
- * Under `data/attachments` in the folder the editor's server was started in
- * -- not beside the project, whatever folder that is: a graph moved or opened
- * from elsewhere keeps a path to a copy that is not there, which is why a
- * sample file that is gone is left out of ✨ rather than refused
- * (`generate.ts`). Overridable for a packaged editor, whose own directory tree
- * is a temp dir that vanishes on exit.
- */
-export function attachmentsDir(root = process.cwd()): string {
-  return process.env.ATTACHMENTS_DIR || join(root, 'data', 'attachments');
-}
-
-/** Keep an uploaded file under a name nothing else will collide with, and say where. */
-export async function saveAttachment(name: string, content: Buffer, dir = attachmentsDir()): Promise<string> {
-  await mkdir(dir, { recursive: true });
-  const target = join(dir, `${randomBytes(16).toString('hex')}_${basename(name) || 'attachment'}`);
-  await writeFile(target, content);
-  return target;
-}
-
-/** Remove one, refusing to touch anything outside the attachments folder. */
-export async function deleteAttachment(path: string, dir = attachmentsDir()): Promise<void> {
-  const target = resolve(path);
-  if (!target.startsWith(resolve(dir) + sep)) {
-    throw new Error('Refusing to delete a path outside the attachments directory');
-  }
-  await unlink(target).catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== 'ENOENT') throw error;
-  });
-}
-
 const KNOWN: Record<string, string> = {
   '.csv': 'csv',
   '.json': 'json',
@@ -97,8 +63,9 @@ const KNOWN: Record<string, string> = {
 };
 
 /**
- * A guess at a port's `format` for this file: a specific name when the
- * extension says so, otherwise `text` or `binary` by whether it decodes.
+ * A guess at what a sample file holds, for the model it is shown to: a
+ * specific name when the extension says so, otherwise `text` or `binary` by
+ * whether it decodes.
  */
 export async function detectFormat(path: string): Promise<string> {
   if (!existsSync(path)) throw new NotFound(`File not found: ${path}`);

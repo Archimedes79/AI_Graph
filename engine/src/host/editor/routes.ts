@@ -242,20 +242,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
         throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));
       }
     },
-
-    async attach(asked) {
-      const name = asked.name || 'attachment';
-      return { path: await files.saveAttachment(name, Buffer.from(asked.bytes as Uint8Array)), name };
-    },
-
-    async detach(asked) {
-      try {
-        await files.deleteAttachment(asked.path ?? '');
-        return { ok: true };
-      } catch (error) {
-        throw new Refusal(400, message(error));
-      }
-    },
   };
 }
 

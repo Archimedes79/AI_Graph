@@ -12,7 +12,7 @@
 // nothing to anyone the file picker was not already for.
 //
 // What stays behind in `editor/files.ts` is what a recipient has no business
-// with: attachments, looking for project folders, guessing a file's format.
+// with: looking for project folders, guessing what a sample file holds.
 
 import { existsSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';

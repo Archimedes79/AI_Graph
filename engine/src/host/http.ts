@@ -66,17 +66,17 @@ export function sendDownload(response: ServerResponse, download: Download): void
 }
 
 /**
- * The most a request may weigh, attachments included.
+ * The most a request may weigh.
  *
  * A body is held whole in memory before a handler sees any of it, so without a
- * ceiling one wrong `Content-Length` -- a truncated upload retried, a file
- * picked by mistake, a graph that went in a loop writing one -- is the server
- * growing until the machine is out of memory. Generous rather than tight: the
- * biggest honest body here is a file someone attached to a node.
+ * ceiling one wrong `Content-Length` -- a truncated request retried, a graph
+ * that went in a loop writing one -- is the server growing until the machine
+ * is out of memory. Generous rather than tight: the biggest honest body here is
+ * a graph that carries a run's values, which can hold whole files.
  */
 const MAX_BODY_BYTES = 128 * 1024 * 1024;
 
-/** The request body as it came: an upload is bytes, not JSON. */
+/** The request body as it came, as bytes, before it is read as JSON. */
 export function readBytes(request: IncomingMessage, limit = MAX_BODY_BYTES): Promise<Buffer> {
   return new Promise((done, fail) => {
     const tooBig = (): void => {
