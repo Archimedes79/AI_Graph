@@ -33,11 +33,16 @@ import type { Generation } from '@engine/authoring/generation.ts';
  * adds only what the engine cannot know: labels, placeholders, and whether the
  * button is offered on this particular node.
  */
-export function fromEngine(generation: Generation | undefined): Pick<ElementGeneration, 'promptField' | 'targetField' | 'guard' | 'success'> {
+export function fromEngine(
+  generation: Generation | undefined,
+): Pick<ElementGeneration, 'promptField' | 'targetField' | 'language' | 'guard' | 'success'> {
   if (!generation) throw new Error('This element declares no generation in the engine; the editor cannot offer one.');
   return {
     promptField: generation.fields.promptOnSubject ? 'description' : generation.fields.prompt,
     targetField: generation.fields.body,
+    // Code is JavaScript; a system prompt and a data format are prose -- the
+    // rule `Logic.extension` gives a file holding the body, from the same kind.
+    language: generation.kind === 'code' ? 'javascript' : 'markdown',
     guard: generation.guard,
     success: generation.success,
   };
@@ -82,10 +87,11 @@ export interface ElementGeneration<S = any> {
   bodyLabel?: string;
   bodyPlaceholder?: string;
   /**
-   * What the body is written in, for the editor it is written with. Omitted:
-   * a body kept in a field called `…prompt` is prose, anything else is code.
+   * What the body is written in, for the editor it is written with: the
+   * engine's generation kind says (`fromEngine`). It was guessed from the
+   * field's name -- a body in a field called `…prompt` was prose.
    */
-  language?: 'javascript' | 'markdown';
+  language: 'javascript' | 'markdown';
   /** How tall the body box starts out; a system prompt needs less than a module. */
   bodyHeight?: number;
   /**

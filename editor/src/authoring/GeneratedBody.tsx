@@ -81,7 +81,7 @@ export default function GeneratedBody({ generation, fields, generating, message,
         <CodeField
           value={fields.get(generation.targetField)}
           onChange={(next) => fields.set(generation.targetField, next)}
-          language={generation.language ?? (generation.targetField.includes('prompt') ? 'markdown' : 'javascript')}
+          language={generation.language}
           placeholder={generation.bodyPlaceholder}
           minHeight={generation.bodyHeight ?? 160}
           title={[title, generation.bodyLabel].filter(Boolean).join(' — ')}
