@@ -11,6 +11,7 @@ import type { Runners } from './NodeRunner.ts';
 /** Reading and writing files, wherever this engine happens to run. */
 export interface FileService {
   read(path: string, mode?: 'text' | 'binary'): Promise<string>;
+  /** Creates the folders the path runs through when they are not there yet. */
   write(path: string, content: string, mode?: 'text' | 'binary'): Promise<void>;
   list(path: string, options?: { recursive?: boolean; extensions?: string[] }): Promise<string[]>;
   resolve(path: string): string;

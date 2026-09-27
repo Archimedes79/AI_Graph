@@ -5,11 +5,11 @@
 // tab, or in a test with three fakes, without knowing the difference — which is
 // the whole reason the services are passed in rather than imported.
 
-import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { extname, join, resolve } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
 import type { CodeService, FileService, Runtime } from '../elements/Runtime.ts';
 import { aiService } from '../ai/providers.ts';
 import { mcpToolService } from '../ai/mcp.ts';
@@ -23,6 +23,10 @@ export const nodeFiles: FileService = {
     return readFile(path, 'utf8');
   },
   async write(path: string, content: string, mode: 'text' | 'binary' = 'text') {
+    // An output node may be pointed at a folder the run is the first to use,
+    // and one file per value is written into it. Saying ENOENT for a folder
+    // the person asked to be written to would make them create it by hand.
+    await mkdir(dirname(path), { recursive: true });
     await writeFile(path, mode === 'binary' ? Buffer.from(content, 'base64') : content);
   },
   async list(path: string, options = {}) {

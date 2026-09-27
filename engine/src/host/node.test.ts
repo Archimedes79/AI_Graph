@@ -1,5 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { nodeCode } from './node.ts';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { nodeCode, nodeFiles } from './node.ts';
+
+describe('the files', () => {
+  it('writes into a folder that does not exist yet, as an output node pointed at one does', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ai-graph-write-'));
+    try {
+      const path = join(root, 'results', 'today', 'item_1.txt');
+      await nodeFiles.write(path, 'first');
+      expect(await readFile(path, 'utf8')).toBe('first');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
 
 /** What a body that does not run says: one sentence a person can act on. */
 describe('the sandbox', () => {
