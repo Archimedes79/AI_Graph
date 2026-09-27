@@ -49,9 +49,10 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   abstract readonly nodeType: NodeType;
 
   // ── Run time ──────────────────────────────────────────────────────────────
-  // What a deployed tool asks of a node: whether it is a page, whether its result opens a window.
-
-
+  // Nothing, on purpose. Whether a node's result opens a window is
+  // `NODE_KINDS[type].showsResultWindow` (document/nodeKinds.ts), which a deployed
+  // tool reads without this class; whether a node is a page of widgets is
+  // `holdsWidgets`, a build-time fact, below.
 
   // ── Build time ────────────────────────────────────────────────────────────
   // The editor: the palette, a new element, its panels, what ✨ Generate is told.
@@ -78,8 +79,12 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   readonly advancedSummary?: string;
 
   /**
-   * How this node declares its output under its panel: `'format'` is the
-   * editable output-format contract (ai, code). Absent: nothing to declare.
+   * How this node declares its output. `'format'` (ai, code): step 2 of the
+   * four steps shows the words field (`output_format_prompt`) under the
+   * derived output spec, and ✨ and the graph sweep send no `graphContext`
+   * sentences, because the node's port facts already describe its
+   * neighbours. Absent: no words field, and the neighbours are described in
+   * sentences.
    */
   readonly outputContract?: 'format';
 
@@ -169,8 +174,8 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   }
 
   /**
-   * The description a saved node publishes (interface.json's "about", the
-   * comment in flow.js). Where the dialog asks what the node should do in a
+   * The description a saved node publishes (the "description" in its
+   * nodes/<id>/node.json). Where the dialog asks what the node should do in a
    * field of its own and draws no description box (`ownsDescription`), that
    * task *is* the description, written into it on every Save: a second text
    * nobody could see or edit went on being published beside the task, and the

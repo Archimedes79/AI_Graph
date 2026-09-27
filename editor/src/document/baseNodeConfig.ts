@@ -2,7 +2,7 @@ import type { NodeConfig } from '@/graph';
 
 /**
  * The one `NodeConfig` shape every node type starts from -- every
- * NodeGuiBuilder.create() spreads and overrides this rather than
+ * `NODE_KINDS[type].create()` spreads and overrides this rather than
  * repeating the full field list. Verbatim extraction of the object literal
  * each create() used to build inline.
  */

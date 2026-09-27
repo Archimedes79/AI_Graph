@@ -32,7 +32,7 @@ function outline(schema: unknown): string {
  * checked against it, and the nodes after this one are generated against it.
  * Shown for reading, folded. Clearing it lets the next run measure it again,
  * which is what to do after changing the node on purpose. In a project it is
- * `output.schema.json`.
+ * `output_schema` in the node's `interface.json`.
  */
 export default function OutputInterface({ node, setConfig }: OutputInterfaceProps) {
   const [note, setNote] = useState('');

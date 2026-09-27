@@ -11,7 +11,7 @@ export type PageWords = Partial<Pick<GraphNode, 'label' | 'description'>>;
  * the one place its name and description can be changed. Before, nowhere could:
  * a new page stayed "GUI Node" for good, and that is what a node wired to one of
  * its blocks was told the page is called ('… on the page "GUI Node"'), what the
- * canvas showed, and what the project's interface.json and flow.js said, beside
+ * canvas showed, and what the page's saved node.json said, beside
  * a description nobody could write.
  *
  * One line per gui node: the page is one, but its blocks may be kept on more
@@ -49,7 +49,7 @@ export default function PageHeading({ nodes, onChange }: {
               value={node.description}
               aria-label="What the page is for"
               placeholder="What this page is for (optional)"
-              title="Written into the project's interface.json and flow.js"
+              title="Written into the page node's node.json (nodes/<id>/node.json)"
               onChange={(e) => onChange(node.id, { description: e.target.value })}
             />
           </label>

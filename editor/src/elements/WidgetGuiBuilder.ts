@@ -97,7 +97,7 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
 
   /**
    * A new widget of this kind, as the palette puts it on a page: the
-   * counterpart of `NodeGuiBuilder.create`. No position -- the order of the list is the
+   * counterpart of `NODE_KINDS[type].create` (document/nodeKinds.ts). No position -- the order of the list is the
    * position, so a new widget simply goes last.
    *
    * What every block has, and then what this kind keeps (`initialSettings`).
