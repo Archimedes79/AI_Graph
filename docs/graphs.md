@@ -1,7 +1,7 @@
 # Building graphs
 
-The graph format, the code and AI nodes that do the work, and the GUI nodes that give a
-graph its own interface.
+The graph format, the code and AI nodes that do the work, and the page of blocks that
+gives a graph a window of its own.
 
 ## Graph DSL
 
@@ -57,25 +57,24 @@ overrides it. In the editor nothing fires by itself — there you press ▶ Run,
 every event as having happened. A clock inside a [subgraph](#subgraph-nodes) never ticks,
 and `check` says so: only the outermost graph is held by something that keeps time.
 
-**▶ Run starts the tool.** For a graph with a page that means opening the page — the
-**Preview** tab, which carries the tool's own header and its own ▶ Run — and then
-leaving it alone, exactly as starting an application does: the window appears, and
-nothing happens until someone uses it. Only when the page has nothing to press does
-▶ Run also run at once, because then running *is* the tool's whole interaction, which is
-what a deployed tool with no interface tells its user in as many words. Once the page is
-up, ▶ Run in the toolbar is the ▶ Run in its header: go, on what is on the page now.
+**▶ Run runs the graph** — one button, in the toolbar, the same on every tab: every node,
+now, on what is set. Anything it still needs — a file nobody chose, a place to write — is
+asked for first. What a block on the page starts is the block's (below), and a delivered
+tool, which has no toolbar, keeps a ▶ Run in its own header.
 
-A graph with no page has only that second meaning, and ▶ Run runs it.
+After a run every node shows what it made, under the port it came out of: a line of text
+or a number, *214 rows* and the first row for a list of records, a small line or bars for
+numbers or a chart's figure, a thumbnail for a picture — and a failed node the first line
+of its error. A page shows, under each block's port, what that block shows.
 
-**🚀 Deploy → Open as a tool** is the same tool *detached*: the graph is handed to the
-server and `runtime.html` opens in a window of its own — the delivered page, the
-delivered entry point, the delivered routes, with no editor around it at all. It sits
-under Deploy rather than beside Run because it answers a deploy question, not a run
-one — what am I about to hand over — next to the zip that hands it over. The
-difference from the Preview tab is what it is attached to: a run there happens in that
-window's own copy of the graph, so the editor's canvas learns nothing from it. Use the
-Preview tab while building, and this to see what you are about to hand over. Nothing is
-written to disk, and the window keeps the graph it was handed until it is opened again.
+The **Preview** tab is the page exactly as delivered, under the tool's own header: the
+graph's name and description. Its **⧉ Open as a tool** is the same tool *detached*: the
+graph is handed to the server and `runtime.html` opens in a window of its own — the
+delivered page, the delivered entry point, the delivered routes, with no editor around it
+at all. A run there happens in that window's own copy of the graph, so the editor's
+canvas learns nothing from it; use the Preview tab while building, and the pop-out to see
+what you are about to hand over. Nothing is written to disk, and the window keeps the
+graph it was handed until it is opened again.
 
 **A node with nothing to do is left alone.** If a port marked *required* is wired and
 brought nothing — or, for an AI node, *every* wired input came up empty — the node is
@@ -654,15 +653,21 @@ graph is.
 
 ---
 
-## GUI Nodes
+## The page
 
-A `gui` node is a composable interface node: it holds an ordered list of **widgets**
-(`config.gui_widgets`), and its ports are *always* derived from that list — you never
-hand-edit a GUI node's inputs/outputs. Add, remove, or reorder widgets and the node's
-ports are regenerated to match. This is the core interface contract: **a GUI node's
-inputs and outputs always reflect exactly what its widgets are capable of.**
+A graph has **one page**: an ordered list of **blocks**. In the file it is the one node of
+type `gui`, its blocks in `config.gui_widgets` — the format's names; on screen it is the
+page and its blocks, and nothing else. It is made on the **Page** tab by its first block,
+not dropped from the palette; a second `gui` node is a problem `check` names, and only the
+first is shown. The page has no name of its own: the tool is called what the graph is, and
+the graph's name and description are edited above the page and shown in the delivered
+tool's header.
 
-| Widget kind | Ports it contributes |
+Its ports are *always* derived from its blocks — you never hand-edit them. Add, remove,
+or reorder blocks and the ports are regenerated to match: **the page's inputs and outputs
+always reflect exactly what its blocks are capable of.**
+
+| Block kind | Ports it contributes |
 |---|---|
 | `input_picker` (mode `file`) | 1 output (file path) |
 | `input_picker` (mode `directory`) | 1 output (list of file paths: the folder's files of the types in `extensions`, its subfolders' too when `recursive`) |
@@ -672,9 +677,9 @@ inputs and outputs always reflect exactly what its widgets are capable of.**
 | `button` | 1 output (a boolean: pressed just now). Pressing it starts the graph where it is wired to — usually a node's ◆ run port |
 | `chat` | 2 outputs (`_out`: the message just sent, `_history`: everything before it) + 1 input (`_in`: the reply) |
 
-Each widget's ports are named `f"{widget.id}_in"` / `f"{widget.id}_out"`, so a widget's
-`id` must stay stable once assigned — that's the only thing keeping existing edges
-attached across GUI edits.
+Each block's ports are named `<id>_in` / `<id>_out`, so a block's `id` must stay stable
+once assigned — that's the only thing keeping existing edges attached across edits of
+the page.
 
 Every block has a *tone* (plain, raised, sunken, accent) drawn from the page's scheme,
 and on top of that its own frame toggle and background colour — set in the block's
@@ -692,7 +697,7 @@ node's message template is the one shown under *AI Nodes* above.
 
 ### Picking files and folders
 
-Every path field — the picker widget, the *Before running…* prompt, and a node's default
+Every path field — the picker block, the *Before running…* prompt, and a node's default
 path — has a **Browse…** button that opens a file chooser. It browses the machine the
 graph runs on, not the one the browser is on, because that is where the engine opens
 files; a native browser file dialog cannot be used here, since browsers reveal only a
@@ -707,14 +712,12 @@ every file it lists, sorted; its dialog shows that list when asked, made the way
 makes it. To use only some of the files, wire a code node after it that returns the ones
 to keep.
 
-### The GUI window and designer
+### Building the page
 
-At runtime, every `gui` node opens its own floating **GUI window** showing *all* of its
-widgets together — a file picker, a text window, a plot, etc. in one interface — with
-each widget fed its live value from the run. Values chosen at runtime are written back
+Every block is fed its live value from the run. Values chosen on the page are written back
 into the graph, so a selected file survives the run and a save/reload.
 
-The page is built on the **GUI editor** tab, and it is built like a document rather than laid
+The page is built on the **Page** tab, and it is built like a document rather than laid
 out like a canvas:
 
 - **Words are typed where they stand.** Click a heading or a paragraph and type.
@@ -729,33 +732,27 @@ out like a canvas:
   folded away under *Look, size & failures* — *Look & size* for a block that only shows,
   which cannot fail.
 
-A block that **starts** the graph is marked `⚡` on the designer canvas, and its port on
+A block that **starts** the graph is marked `⚡` on the page being built, and its port on
 the graph canvas is the amber diamond `◆` the run port wears — the same shape wherever a
 run begins. Every other output is a value: read when something else starts a run, and
 starting nothing by itself.
 
-Blocks are live while you design — a button pressed here runs the graph, a chat sends —
-and the **Preview** tab is the delivered page itself. `x`/`y`/`w`/`h` are presentational only — they never affect ports,
-wiring or execution — and a widget that has never been placed simply stacks below the
-others until it is dragged.
+Blocks are live while you build — a button pressed here runs the graph, a chat sends —
+and the **Preview** tab is the delivered page itself. `w`/`h` are presentational only —
+they never affect ports, wiring or execution.
 
-There is no separate widget list and no small/medium/large size: a gui node used to have
-two-and-a-half ways to say how big a widget is, so the same widget could be described
-three times and disagree. Ports are still derived from the widget list, so nothing done
-on the canvas can detach an edge.
+### Cyclic graphs: page → ai → page
 
-### Cyclic graphs: gui → ai → gui
-
-A `gui` node usually has both outputs (e.g. `input_picker`) and inputs (e.g. `text_io`),
-so the natural "pick a file → process it with AI → show the answer in the text window"
-pattern wires `gui → ai → gui` — a cycle at node level. `data`, `gui`, and `widget`
-nodes are **memory elements**: their output can reflect its own persisted value instead
-of being freshly recomputed each round, so a cycle-closing edge into one of them is
-automatically excluded from execution ordering — no manual "deferred" marking needed —
-and settles into the node's stored value once the round finishes, ready for the *next*
-run. See [examples/file_summarizer](../examples/file_summarizer/)
-for a working file → AI → text window graph, and
-[engine/src/execution/executor.ts](../engine/src/execution/executor.ts) for the underlying algorithm.
+The page usually has both outputs (e.g. a file picker) and inputs (e.g. a text block),
+so the natural "pick a file → process it with AI → show the answer in a text block"
+pattern wires `page → ai → page` — a cycle at node level. The page and `data` nodes are
+**memory elements**: their output can reflect their own persisted value instead of being
+freshly recomputed each round, so a cycle-closing edge into one of them is automatically
+excluded from execution ordering — no manual "deferred" marking needed — and settles into
+the node's stored value once the round finishes, ready for the *next* run. See
+[examples/file_summarizer](../examples/file_summarizer/) for a working file → AI → text
+block graph, and [engine/src/execution/executor.ts](../engine/src/execution/executor.ts)
+for the underlying algorithm.
 
 ### A chart draws itself
 

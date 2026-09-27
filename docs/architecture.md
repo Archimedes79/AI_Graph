@@ -116,13 +116,13 @@ ElementRunner<Subject, Config>          config() · texts() · logic() · catche
         └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
 
 ElementGuiBuilder<Subject, PanelProps>           Panel · generation
-├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary   (builder only)
+├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
 │                                         + the four steps' declarations: stepped · exampleInput · ownsDescription
 │                                           portEditing/portHint · wantsOn · restingValue/restingFile · publishedDescription
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
 │   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
 │   └── GuiNodeGuiBuilder
-└── WidgetGuiBuilder                      create(label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor   (builder only)
+└── WidgetGuiBuilder                      create(label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor · preview   (builder only)
     ├── InputPickerWidgetGuiBuilder   TextIoWidgetGuiBuilder   SelectWidgetGuiBuilder
     ├── SliderWidgetGuiBuilder        ButtonWidgetGuiBuilder   ChatWidgetGuiBuilder
     ├── StaticWidgetGuiBuilder            starts unnamed: page furniture has no ports to name
@@ -134,9 +134,14 @@ ElementGuiBuilder<Subject, PanelProps>           Panel · generation
 The browser half is the same tree with `GuiBuilder` for `Runner`, and
 [`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts) compares the two lineages
 class by class. What each kind knows about its own appearance — its name, icon and colour,
-a new widget's size, tone and first values — is a member of its `GuiBuilder`, not a table in a
-shell. An element is handed its services (`Runtime.ts`: `files`, `code`, `ai`, `tools`)
-rather than reaching for them.
+a new widget's size, tone and first values, how its last result reads on the canvas — is a
+member of its `GuiBuilder`, not a table in a shell. After a run the canvas shows each value a
+node made under the port it stands at, read by its shape (`elements/resultPreview.ts`: a
+line, a count and the first row, a sketch, a thumbnail); `NodeGuiBuilder.resultPreviews` says
+which port, and where the element reads a value its own way it says so — a page shows what
+each block shows, and a chart block reads a list of points as a chart
+(`WidgetGuiBuilder.preview`). An element is handed its services (`Runtime.ts`: `files`,
+`code`, `ai`, `tools`) rather than reaching for them.
 
 ### Build time and run time, in one class
 
@@ -261,10 +266,10 @@ engine/src                               editor/src
     generation.ts    written, where it       FourSteps           Try it, the live transcript, the
     logic.ts         is kept, who runs it    NodeSteps …         page-wide sweep (graphSweep.ts)
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
-    executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor
-    triggers.ts      what starts a run     page/               a gui node's page: GuiPage (drawn by
-    batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike),
-    runtimeValues.ts  images.ts              DesignerTab …       the designer, layout, schemes
+    executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
+    triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
+    batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
+    runtimeValues.ts  images.ts              DesignerTab …       Page tab, the Preview tab, layout, schemes
     reuse.ts  interface.ts  examples.ts
   project/           a graph on disk
     folder.ts        read · write · watch
@@ -489,7 +494,8 @@ or a page that has them can do the same.
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
-  that element's `problems()`. Two output nodes sharing a label are a problem too; until it is
+  that element's `problems()`. A second page is a problem: a graph has one, the first node that
+  `hasInterface`, and the editor and a tool draw only that. Two output nodes sharing a label are a problem too; until it is
   fixed the run's result keeps the first under the label and the others under their ids
   (`NodeRunner.ts`'s `resultKeys`), and `check` names those keys. Ids a folder could not read
   back -- two differing only in case, a number, a "." or "->" -- are problems as well

@@ -25,8 +25,8 @@ the graph is only the default.
 
 The same rule bites once more after deployment: **a bundle ships the tool, not the
 data.** It reads its `graph.json` from its own directory, so a relative data path in the
-graph resolves inside the bundle, where the file is not. Either pick the file in the
-tool's own interface (what a graph with a picker or a `prompt_at_runtime` input is for),
+graph resolves inside the bundle, where the file is not. Either pick the file on the
+tool's own page (what a graph with a picker or a `prompt_at_runtime` input is for),
 or store an absolute path before deploying.
 
 Override an input node:
@@ -58,14 +58,14 @@ There are two, independent kinds of "deploy" in AI-Graph.
 
 ## Deploying a graph
 
-Before any of it: **🚀 Deploy → Open as a tool** opens the graph you are editing as the
-delivered page, in a window of its own — same entry point (`runtime.html`), same routes,
-no editor around it. It answers "what have I actually built" without packing a zip
-first. It is not a deployment: nothing is written, and the window is served by the editor
-you are sitting in. (▶ Run opens the same page in the Preview tab, attached to the
-document, so a run there still lights up the graph canvas.)
+Before any of it: **⧉ Open as a tool**, on the Preview tab, opens the graph you are
+editing as the delivered page, in a window of its own — same entry point (`runtime.html`),
+same routes, no editor around it. It answers "what have I actually built" without packing
+a zip first. It is not a deployment: nothing is written, and the window is served by the
+editor you are sitting in. (The Preview tab shows the same page attached to the document,
+so a run there still lights up the graph canvas.)
 
-From the toolbar, **🚀 Deploy → Download Bundle** gives you a zip holding the vendored
+From the toolbar, **🚀 Deploy** gives you a zip holding the vendored
 engine, your graph as `graph.json`, and a `run.sh` / `run.cmd` that starts it. Nothing in
 it is generated: the engine is a verbatim copy of the one the graph was built and tested
 on, so a bundle runs what was tested rather than a second implementation of it.
@@ -74,17 +74,17 @@ on, so a bundle runs what was tested rather than a second implementation of it.
 ./run.sh          # or run.cmd on Windows
 ```
 
-Without an interface, the result is printed as JSON on stdout and questions and progress
+Without a page, the result is printed as JSON on stdout and questions and progress
 go to stderr, so `./run.sh | jq` works. `--every 5m` schedules it, exactly as above.
 
-**Graphs with a GUI deploy with their GUI.** If the graph contains `gui` nodes and the
-editor has a built editor (`cd editor && npm run build`), the bundle also carries the
-page and serves it: the file pickers, text windows and plots the graph was designed with,
-rendered by the very same components the editor used, copied rather than rebuilt. It
-listens on localhost only, on port 8000 or the next free one — a tool someone was handed
-must not die because that machine already has something on 8000, which is what it used
-to do, with an unhandled `EADDRINUSE` where the window should have been. The address it
-settled on is printed and opened. Without a built editor the graph still deploys, just
+**A graph with a page deploys with its page.** If the graph has one and the editor is
+built (`cd editor && npm run build`), the bundle also carries the page and serves it: the
+file pickers, text blocks and charts the graph was built with, under the graph's name and
+description, rendered by the very same components the editor used, copied rather than
+rebuilt. It listens on localhost only, on port 8000 or the next free one — a tool someone
+was handed must not die because that machine already has something on 8000, which is
+what it used to do, with an unhandled `EADDRINUSE` where the window should have been. The
+address it settled on is printed and opened. Without a built editor the graph still deploys, just
 headless, and the bundle's README says so.
 
 The recipient needs Node, and nothing else — no AI-Graph, no Python, no install step.
