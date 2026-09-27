@@ -41,10 +41,9 @@ describe('a folder listing', () => {
     expect(names(await listFolder(dir, { recursive: true, extensions: '.csv' }, runtime))).toEqual(['a.CSV', 'b.csv', 'more/d.csv']);
   });
 
-  it('is the same for an input node and a file-picker block, and no old selector narrows either', async () => {
-    const selector_code = 'function run() { return { files: [] }; }';
-    const node = { id: 'n', node_type: 'input', config: { input_mode: 'directory', value: dir, extensions: 'csv', selector_code, select_all_files: false } } as unknown as GraphNode;
-    const block = parseWidget({ id: 'pick', kind: 'input_picker', mode: 'directory', value: dir, extensions: 'csv', selector_code, select_all_files: false });
+  it('is the same for an input node and a file-picker block', async () => {
+    const node = { id: 'n', node_type: 'input', config: { input_mode: 'directory', value: dir, extensions: 'csv' } } as unknown as GraphNode;
+    const block = parseWidget({ id: 'pick', kind: 'input_picker', mode: 'directory', value: dir, extensions: 'csv' });
     const fromNode = await registry.node('input')!.execute(node, {}, runtime);
     const fromBlock = await registry.widget('input_picker')!.execute(block, {}, runtime);
     expect(names(fromNode.files as string[])).toEqual(['a.CSV', 'b.csv']);

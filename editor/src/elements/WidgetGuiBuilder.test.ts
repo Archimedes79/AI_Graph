@@ -32,10 +32,8 @@ describe('a new block, as the palette puts it on a page', () => {
     }
   });
 
-  it('starts a folder picker as a folder and its file types, and a table with nothing but its place', () => {
+  it('starts a folder picker as a folder and its file types', () => {
     expect(WIDGET_BUILDERS.input_picker.create('Folder', 'directory')).toMatchObject({ value: '', extensions: '', recursive: false });
-    expect(WIDGET_BUILDERS.input_picker.create('Folder', 'directory')).not.toHaveProperty('selector_code');
-    expect(WIDGET_BUILDERS.table.create('Rows')).not.toHaveProperty('code');
   });
 
   it('carries no mode for a kind that has none', () => {

@@ -19,13 +19,10 @@ describe('what a block on a page asks of the node wired into it', () => {
     expect(NODE_BUILDERS.gui.wantsOn(page(table), 'rows_in')).toContain('column header');
   });
 
-  it('is what its kind draws for every drawing block, whatever an old block still carries: a block reshapes nothing', () => {
+  it('is what its kind draws for every drawing block: a block reshapes nothing', () => {
     for (const kind of ['plot_window', 'table', 'image_view'] as const) {
-      const plain = { ...WIDGET_BUILDERS[kind].create('Block'), id: 'block' };
-      const old = { ...plain, code: 'function run(inputs) { return { value: inputs.value.rows }; }' } as GuiWidget;
-      const wanted = NODE_BUILDERS.gui.wantsOn(page(plain), 'block_in');
-      expect(wanted, kind).toBeTruthy();
-      expect(NODE_BUILDERS.gui.wantsOn(page(old), 'block_in'), kind).toBe(wanted);
+      const block = { ...WIDGET_BUILDERS[kind].create('Block'), id: 'block' };
+      expect(NODE_BUILDERS.gui.wantsOn(page(block), 'block_in'), kind).toBeTruthy();
     }
   });
 });

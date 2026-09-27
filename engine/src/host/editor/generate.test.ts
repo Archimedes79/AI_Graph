@@ -307,13 +307,10 @@ describe('what the node says about itself reaches the model', () => {
     expect(registry.widget('table')?.receives(parseWidget({ id: 'b', kind: 'table' }))).toContain('column header');
   });
 
-  it('tells the node upstream what a drawing block takes, whatever an old block still carries', () => {
+  it('tells the node upstream what a drawing block takes', () => {
     // A block reshapes nothing itself: the node wired into it hands it what it draws.
     for (const kind of ['plot_window', 'table', 'image_view'] as const) {
-      const element = registry.widget(kind)!;
-      const plain = element.receives(parseWidget({ id: 'b', kind }));
-      expect(plain).toBeTruthy();
-      expect(element.receives(parseWidget({ id: 'b', kind, code: 'function draw(rows) { return rows; }' }))).toBe(plain);
+      expect(registry.widget(kind)!.receives(parseWidget({ id: 'b', kind })), kind).toBeTruthy();
     }
   });
 

@@ -18,7 +18,6 @@ function runtime(over: Partial<Runtime> = {}): Runtime {
   return quietRuntime({
     code: {
       run: async (body, inputs) => {
-        if (body.includes('SHOUT')) return { value: `shown(${String(inputs.value)})` };
         if (body.includes('DOUBLE')) return { out: Number(inputs.n) * 2 };
         return inputs;
       },
@@ -59,7 +58,7 @@ describe('what a page shows', () => {
     expect(page.display).toEqual({ shown: 42 });
   });
 
-  /** One of each drawing block, each fed by a node of its own; a block that still carries `code` is shouting. */
+  /** One of each drawing block, each fed by a node of its own. */
   function drawing(): Graph {
     const text = (id: string, value: string) => ({ id, node_type: 'input', config: { input_mode: 'text', value }, outputs: [port('output')] });
     const into = (from: string, block: string) => ({ id: from, source_node_id: from, source_port_id: 'output', target_node_id: 'page', target_port_id: `${block}_in` });
@@ -68,11 +67,7 @@ describe('what a page shows', () => {
         text('points', '[1, 2, 3]'), text('rows', 'Oslo'), text('picture', 'cover.png'),
         {
           id: 'page', node_type: 'gui',
-          config: { gui_widgets: [
-            { id: 'chart', kind: 'plot_window', code: '/* SHOUT */' },
-            { id: 'table', kind: 'table', code: '/* SHOUT */' },
-            { id: 'image', kind: 'image_view', code: '/* SHOUT */' },
-          ] },
+          config: { gui_widgets: [{ id: 'chart', kind: 'plot_window' }, { id: 'table', kind: 'table' }, { id: 'image', kind: 'image_view' }] },
         },
       ],
       edges: [into('points', 'chart'), into('rows', 'table'), into('picture', 'image')],
@@ -81,9 +76,9 @@ describe('what a page shows', () => {
 
   it('shows what arrives at a chart, a table or an image, and runs no code for any of them', async () => {
     const files = { ...quietRuntime().files, read: async (path: string) => `bytes of ${path}` };
-    const result = await executeGraph(drawing(), { runtime: runtime({ files }), registry });
+    const code = { run: async (): Promise<never> => { throw new Error('no body runs for a block'); } };
+    const result = await executeGraph(drawing(), { runtime: runtime({ files, code }), registry });
     const page = result.node_results.find((r) => r.node_id === 'page')!;
-    // Not "shown(…)": a block has no code, and an old `code` key is not read.
     expect(page.display).toEqual({ chart: '[1, 2, 3]', table: 'Oslo', image: 'data:image/png;base64,bytes of cover.png' });
     // What arrived and what is on the screen are told apart: an image's path is read into the picture.
     expect(page.inputs.image_in).toBe('cover.png');

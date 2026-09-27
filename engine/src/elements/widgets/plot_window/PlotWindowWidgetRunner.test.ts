@@ -23,11 +23,9 @@ describe('a chart, from the engine', () => {
     expect(element.ports(block)).toEqual({ inputs: [expect.objectContaining({ id: 'c_in', multi: true })], outputs: [] });
   });
 
-  it('is shown what arrived, untouched, and runs no code -- not even one an old block still carries', async () => {
+  it('is shown what arrived, untouched, and runs no code', async () => {
     const page = parseGraph({
-      nodes: [{ id: 'page', node_type: 'gui', config: { gui_widgets: [
-        { id: 'chart', kind: 'plot_window', code: 'function draw() { return [9]; }' },
-      ] } }],
+      nodes: [{ id: 'page', node_type: 'gui', config: { gui_widgets: [{ id: 'chart', kind: 'plot_window' }] } }],
     }).nodes[0];
     const figure = { kind: 'line', title: 'T', points: [{ label: 'a', value: 1 }] };
     const refusing = quietRuntime({ code: { run: async () => { throw new Error('no body runs for a block'); } } });

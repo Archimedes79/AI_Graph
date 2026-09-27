@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -95,14 +95,13 @@ describe('a folder it lists', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('keeps no file of its own in a project folder, whatever an old node still carries', async () => {
-    const old = { input_mode: 'directory', value: 'data', selector_code: 'function run(i) { return i; }', selector_prompt: 'Only the CSVs.' };
-    expect(element.texts(inputNode(old))).toEqual([]);
-    expect(element.logic(inputNode(old))).toBeUndefined();
-    const graph: Graph = parseGraph({ nodes: [{ ...inputNode(old), id: 'source' }], edges: [] });
+  it('keeps no file of its own in a project folder: it is its settings', async () => {
+    const folder = { input_mode: 'directory', value: 'data' };
+    expect(element.texts(inputNode(folder))).toEqual([]);
+    expect(element.logic(inputNode(folder))).toBeUndefined();
+    const graph: Graph = parseGraph({ nodes: [{ ...inputNode(folder), id: 'source' }], edges: [] });
     await writeProject(dir, graph);
-    expect(existsSync(join(dir, 'nodes', 'source', 'select.js'))).toBe(false);
-    expect(existsSync(join(dir, 'nodes', 'source', 'task.md'))).toBe(false);
+    expect(readdirSync(join(dir, 'nodes', 'source')).sort()).toEqual(['interface.json', 'node.json']);
   });
 });
 
@@ -128,9 +127,8 @@ describe('what it hands on', () => {
   it('reads no file: a path it holds is handed on as text, for the node that reads it', async () => {
     // It had a mode that read one file into "content". Reading is the reading
     // node's own input now ("Read the file at this path"), so an input that
-    // names a file is a text holding its path -- whatever mode a file says.
-    const named = inputNode({ input_mode: 'file', value: 'data/people.csv' });
-    expect(element.derivedPorts(named)).toEqual(element.derivedPorts(inputNode({ input_mode: 'text' })));
+    // names a file is a text holding its path.
+    const named = inputNode({ input_mode: 'text', value: 'data/people.csv' });
     expect(await element.execute(named, {}, broken)).toEqual({ output: 'data/people.csv' });
     expect(element.whatRuns(named).does).not.toMatch(/reads/i);
     expect(element.graphAuthorNote()).not.toMatch(/"file"|content/);

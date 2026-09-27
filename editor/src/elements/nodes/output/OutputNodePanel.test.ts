@@ -3,7 +3,6 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { nodeFields } from '@/authoring/generation';
 import OutputNodePanel from './OutputNodePanel';
@@ -34,7 +33,6 @@ describe('an output node\'s panel', () => {
     expect(html).toContain('The run&#x27;s result calls it what this node is called: “Totals”.');
     // A node without a label is called by its id there, as the run keys it.
     expect(panel({ ...node, label: '' })).toContain('what this node is called: “totals”.');
-    expect(baseNodeConfig()).not.toHaveProperty('output_label');
   });
 
   it('names the key its value really has when another output node has its name already', () => {

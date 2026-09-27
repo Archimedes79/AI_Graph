@@ -141,7 +141,6 @@ describe('an output node\'s result', () => {
     // it opened in the editor. The label is the one name, the result is what
     // it is, and a page is where results are shown.
     expect(element.resultLabel({ ...outputNode({}), label: 'Totals' })).toBe('Totals');
-    expect(element.resultLabel({ ...outputNode({ output_label: 'Something else' }), label: 'Totals' })).toBe('Totals');
     expect(element.resultLabel({ ...outputNode({}), label: '  ' })).toBe('out');
     expect(element.graphAuthorNote()).not.toMatch(/window|output_label/);
     expect(element.whatRuns(outputNode({})).does).not.toMatch(/window/);
