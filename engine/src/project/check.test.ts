@@ -77,6 +77,19 @@ describe('what check finds in a graph', () => {
       fix: 'Give every output node its own output_label.',
     })]);
   });
+
+  it('finds a second page: a graph is one tool, with one page', () => {
+    const page = (id: string, block: string) => ({ id, node_type: 'gui', label: 'Page', inputs: [], outputs: [],
+      config: { gui_widgets: [{ id: block, kind: 'text_io', mode: 'output', label: block }] } });
+    const made = graph();
+    made.nodes.push(...parseGraph({ metadata: { name: 'x' }, nodes: [page('page', 'answer')], edges: [] }).nodes);
+    expect(problemsIn(made)).toEqual([]);
+    made.nodes.push(...parseGraph({ metadata: { name: 'x' }, nodes: [page('more', 'extra')], edges: [] }).nodes);
+    expect(problemsIn(made)).toEqual([expect.objectContaining({
+      where: 'nodes "page", "more"',
+      problem: 'A graph has one page, and these are 2: only the blocks of "page" are shown.',
+    })]);
+  });
 });
 
 describe('what check finds in a setting that would silently do nothing', () => {

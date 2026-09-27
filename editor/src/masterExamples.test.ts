@@ -20,9 +20,9 @@ import type { Runtime } from '@engine/elements/Runtime.ts';
  * The three master examples, built by hand.
  *
  * A plotter, a folder of summaries, a chat: each is a page and one node, and
- * each is put together here the way a person puts it together -- a node dropped
- * on the canvas, blocks added to the page, a setting changed in a dialog, a wire
- * dragged from one port to another. No mouse, no browser, and no copy of what
+ * each is put together here the way a person puts it together -- blocks added
+ * to the page (the first one makes it), a node dropped on the canvas, a setting
+ * changed in a dialog, a wire dragged from one port to another. No mouse, no browser, and no copy of what
  * the editor's handlers do: a block comes from the palette's `newBlock` and
  * reaches the page through `insertBlock` and `patchBlock`, a dialog's draft is
  * edited by `withPorts` and `withSetting` and saved by `saveDraft`, a wire is
@@ -63,6 +63,8 @@ const nodeOf = (id: string): GraphNode => store().rfNodes.find((node) => node.id
 const drop = (type: NodeType, x: number): string => store().addNode(type, { x, y: 160 });
 
 const pageNow = () => pageOf(store().rfNodes.map((node) => node.data.graphNode as GraphNode));
+/** The page's node: there is none to drop, the page's first block made it. */
+const pageId = (): string => pageNow().page!.id;
 
 /**
  * Add a block to the page from the palette, then set what its panel sets: the
@@ -172,8 +174,8 @@ beforeEach(() => {
 
 describe('population plotter: choose a CSV, see the chart', () => {
   const build = () => {
-    const page = drop('gui', 60);
     addBlock('text', 'heading', { value: 'Population plotter' });
+    const page = pageId();
     const file = addBlock('input_picker', 'file', { label: 'CSV file', extensions: '.csv', value: 'data/population.csv', run_on_change: true });
     const plot = addBlock('plot_window', undefined, { label: '' });
     const chart = drop('code', 560);
@@ -199,8 +201,8 @@ describe('population plotter: choose a CSV, see the chart', () => {
 
 describe('summarize a folder: choose a folder, read the summaries', () => {
   const build = () => {
-    const page = drop('gui', 60);
     addBlock('text', 'heading', { value: 'Summarize a folder' });
+    const page = pageId();
     const folder = addBlock('input_picker', 'directory', { label: 'Folder', extensions: '.txt', value: 'stories', run_on_change: true });
     const summaries = addBlock('text_io', 'output', { label: 'Summaries' });
     const summarize = drop('ai', 560);
@@ -227,8 +229,8 @@ describe('summarize a folder: choose a folder, read the summaries', () => {
 
 describe('chat: a page with a chat block, and a model', () => {
   const build = () => {
-    const page = drop('gui', 60);
     addBlock('text', 'heading', { value: 'Chat' });
+    const page = pageId();
     const chat = addBlock('chat', undefined, {});
     const assistant = drop('ai', 560);
     edit(assistant, { label: 'Assistant', input: ['history', 'message'], config: { system_prompt: 'You are a friendly assistant.', prompt_template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}' }, perItem: false, needed: ['message'] });
@@ -266,8 +268,8 @@ describe('chat: a page with a chat block, and a model', () => {
 
 describe('a wire from a picker', () => {
   it('makes the input it ends on one that receives file paths, so nobody has to say it twice', () => {
-    const page = drop('gui', 60);
     const file = addBlock('input_picker', 'file', { label: 'File' });
+    const page = pageId();
     const code = drop('code', 560);
     expect(nodeOf(code).inputs[0].data_type).toBe('any');
     wire(page, `${file}_out`, code, nodeOf(code).inputs[0].id);
@@ -285,8 +287,8 @@ describe('a wire from a picker', () => {
    * alone was handed the file's *name* with "read file contents" ticked.
    */
   it.each(['code', 'ai'] as const)('%s: a new node says nothing about what its input carries, so a file reaches it whole', (kind) => {
-    const page = drop('gui', 60);
     const file = addBlock('input_picker', 'file', { label: 'File' });
+    const page = pageId();
     const node = drop(kind, 560);
     expect(nodeOf(node).inputs[0].data_type).toBe('any');
     wire(page, `${file}_out`, node, nodeOf(node).inputs[0].id);

@@ -239,7 +239,8 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
       const note = element.graphAuthorNote();
       return `  - ${element.widgetKind}${note ? `: ${note}` : ''}`;
     });
-    return 'config.gui_widgets is the list of blocks on the page. A block is {"id", "kind", "label", "w" (1-16 columns), '
+    return 'A graph has at most one gui node: its page, which holds every block. '
+      + 'config.gui_widgets is the list of blocks on the page. A block is {"id", "kind", "label", "w" (1-16 columns), '
       + '"h" (rows), ...}. The page\'s ports are DERIVED from its blocks, not taken from this document: every block '
       + 'contributes "<block id>_out", "<block id>_in", or both, "<id>" standing for its id. A block has no code of its '
       + 'own: what reshapes a value before a block shows it, or keeps only some of the files a folder lists, is a code '

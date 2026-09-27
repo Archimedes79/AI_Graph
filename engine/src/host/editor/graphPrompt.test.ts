@@ -112,6 +112,10 @@ describe('the graph prompt', () => {
     expect(registry.node('input')!.graphAuthorNote()).toContain('to keep only some of the files, wire a code node after it');
   });
 
+  it('says a graph has one page, which holds every block: a second one is a problem check names', () => {
+    expect(GRAPH_SYSTEM).toContain('- gui: A graph has at most one gui node: its page, which holds every block.');
+  });
+
   it('names every node type the registry knows, except the ones that say a graph is not built with them', () => {
     const silent: string[] = [];
     for (const type of registry.nodeTypes()) {
