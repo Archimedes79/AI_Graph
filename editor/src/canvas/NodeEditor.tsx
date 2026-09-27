@@ -7,12 +7,14 @@ import PortsEditor from './PortsEditor';
 import { withPorts, withSetting } from './nodeDraft';
 import { portIdProblems } from './portIds';
 import { NODE_BUILDERS } from '@/elements/registry';
+import type { NodePanelProps } from '@/elements/NodeGuiBuilder';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, nodeFields, type GenerationRequest } from '@/authoring/generation';
 import { useWhatSends } from '@/authoring/WhatSends';
 import { connectedFormatContext, inputSources, lastRunContext, outputTargets, readFilePorts } from '@/authoring/generationContext';
 import { nodeFacts } from '@/authoring/nodeFacts';
+import { fromTheGraph } from '@/authoring/fromTheGraph';
 import { inferInterface } from '@engine/execution/interface.ts';
 import { nodeLogic } from '@/authoring/logic';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
@@ -245,11 +247,21 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // panel to place in its four steps: the port lists inside "what comes in"
   // and "what comes out" where the ports are the person's, and "what ✨ sends"
   // and "open in my editor" beside the body.
-  const steps = generation ? {
+  // And the graph with this draft in it, read when asked: what is tried, tested
+  // and fetched from the graph is the edit as it is then.
+  const graph = () => {
+    const whole = useGraphStore.getState().exportGraph();
+    const current = draft.current ?? node;
+    whole.nodes = whole.nodes.map((candidate) => (candidate.id === current.id ? current : candidate));
+    return whole;
+  };
+  const steps: NodePanelProps['steps'] = generation ? {
     ...(stepped ? { inputs: ports('inputs'), outputs: ports('outputs') } : {}),
     openInEditor,
     preview: sends.preview,
     sent: sends.sent,
+    graph,
+    fromGraph: node.inputs.length ? () => fromTheGraph(node.id, executionResult, graph) : undefined,
   } : undefined;
 
   return (

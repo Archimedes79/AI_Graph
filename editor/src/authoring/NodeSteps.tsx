@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import type { Graph } from '@/graph';
 import { call } from '@/api/client';
 import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { unmet } from '@engine/execution/examples.ts';
@@ -15,7 +16,6 @@ import { readPair, withExpect, withInput, withJudge } from './examplePair';
 import { useTyped } from './useTyped';
 import { derivedOutputWords } from './derivedOutput';
 import { pathPorts } from './generationContext';
-import { fromTheGraph } from './fromTheGraph';
 import { outputFormatText } from './outputFormat';
 import { exampleFor, keptAnswer, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
@@ -27,8 +27,11 @@ type Props = Pick<NodePanelProps,
   body: { title: string; hint: string; beside?: React.ReactNode };
   /** What "Run once per item" calls the node: "this code", "the model". */
   subject: string;
-  /** Drawn in Try it above its button: an ai node's request, as its model will read it. */
-  request?: (example: Record<string, unknown> | undefined) => React.ReactNode;
+  /**
+   * Drawn in Try it above its button: an ai node's request, as its model will
+   * read it -- for the example, in the graph with this draft in it.
+   */
+  request?: (example: Record<string, unknown> | undefined, graph: () => Graph) => React.ReactNode;
   /** What came out of a try, drawn the element's own way. */
   renderResult?: (result: TryResult) => React.ReactNode;
 };
@@ -63,8 +66,6 @@ export default function NodeSteps({
   const generation = builder.generation;
   const nodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
   const edges = useGraphStore((s) => s.rfEdges);
-  const executionResult = useGraphStore((s) => s.executionResult);
-  const exportGraph = useGraphStore((s) => s.exportGraph);
 
   const examples = String(node.config.examples ?? '');
   const pair = readPair(examples);
@@ -100,15 +101,6 @@ export default function NodeSteps({
   if (lists.length) askedPerItem.current = true;
 
   if (!generation || !steps) return null;
-
-  /** The graph on the canvas with this node as the dialog holds it: what is tried is the edit. */
-  const graphWithDraft = () => {
-    const graph = exportGraph();
-    graph.nodes = graph.nodes.map((candidate) => (candidate.id === node.id ? node : candidate));
-    return graph;
-  };
-
-  const fromGraph = () => fromTheGraph(node, executionResult, graphWithDraft);
 
   const words = outputFormatText(node.config);
   const setWords = (text: string) => {
@@ -149,7 +141,7 @@ export default function NodeSteps({
         error={inputError}
         ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
         pathPorts={pathPorts(node, nodes, edges)}
-        fromGraph={node.inputs.length ? fromGraph : undefined}
+        fromGraph={steps.fromGraph}
         earlierFile={!pair.input && node.config.example_file ? node.config.example_file : undefined}
         note={(
           <>
@@ -289,7 +281,7 @@ export default function NodeSteps({
       )}
       {builder.exampleOutput && exampleOutput}
       {judgeField}
-      {testsMore && <TestEveryExample graph={graphWithDraft} nodeId={node.id} count={pair.others + 1} />}
+      {testsMore && <TestEveryExample graph={steps.graph} nodeId={node.id} count={pair.others + 1} />}
       {keepsOutputInterface(node) && (
         <details className="rounded-lg">
           <summary className="text-xs cursor-pointer select-none" style={{ color: MUTED }}>The shape a run kept</summary>
@@ -319,12 +311,12 @@ export default function NodeSteps({
       <TryItInline
         canRun={!!tried && !inputError}
         whyNot={inputError ? 'The example in step 1 is not an object yet.' : 'Fill step 1\'s example first: ⟳ from the graph, or 📂 from a file.'}
-        run={() => call('runNode', { ...graphWithDraft(), node_id: node.id, inputs: tried ?? {} })}
+        run={() => call('runNode', { ...steps.graph(), node_id: node.id, inputs: tried ?? {} })}
         verdict={(outputs) => (expects && pair.expect ? unmet(pair.expect, outputs) : undefined)}
         onKeep={keep}
         renderResult={renderResult}
       >
-        {request?.(pair.input)}
+        {request?.(pair.input, steps.graph)}
       </TryItInline>
       {steps.openInEditor}
     </>

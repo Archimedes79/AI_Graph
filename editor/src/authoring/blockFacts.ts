@@ -2,11 +2,11 @@
 // And what the graph around the block says it is handed: its step 1.
 
 import type { ExecutionResult, Graph, GraphNode, GuiWidget, Wire } from '@/graph';
-import { call } from '@/api/client';
 import { guiWidgetPorts } from '@/document/guiWidgets';
 import { describeScheme } from '@/ui/scheme';
 import type { GenerationRequest } from './generation';
-import { inputSources, lastRunWidgetInput } from './generationContext';
+import { inputSources, lastRunInputs } from './generationContext';
+import { fromTheGraph } from './fromTheGraph';
 import { exampleObject } from './examplePair';
 
 /** What is wired into the block, in words -- `"Rows" (port "rows")` -- or '' while nothing is. */
@@ -16,25 +16,29 @@ export function blockFeeds(nodeId: string, widget: GuiWidget, nodes: GraphNode[]
 }
 
 /**
+ * What arrived at the page *on its ports*, as the block's code is handed it:
+ * `{value: …}` from the block's own input port, or undefined while nothing
+ * arrived there -- whatever arrived for the page's other blocks.
+ */
+function blockInput(widget: GuiWidget, inputs: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  const port = guiWidgetPorts(widget).inputs[0]?.id;
+  const arrived = port ? inputs?.[port] : undefined;
+  return arrived === undefined ? undefined : { value: arrived };
+}
+
+/**
  * ⟳ From the graph, for a block: what arrived at it on the last run, or --
  * before any run, or when the last run did not reach it -- what the nodes
  * that feed its page deliver when they are run now. *graph* is the canvas as
  * it stands; the page itself is not run.
  */
-export async function blockFromTheGraph(
+export function blockFromTheGraph(
   nodeId: string,
   widget: GuiWidget,
   executionResult: ExecutionResult | null,
   graph: () => Graph,
 ): Promise<{ values: Record<string, unknown>; said: string }> {
-  const last = lastRunWidgetInput(nodeId, widget.id, executionResult);
-  if (last) return { values: last, said: 'What arrived here on the last run.' };
-  const port = guiWidgetPorts(widget).inputs[0]?.id;
-  const got = await call('nodeInputs', { ...graph(), node_id: nodeId });
-  if (got.error) throw new Error(`Upstream: ${got.error}`);
-  const arrived = port ? got.inputs[port] : undefined;
-  if (arrived === undefined) throw new Error('Nothing is wired into this block yet, so the graph has nothing to deliver here.');
-  return { values: { value: arrived }, said: 'What the nodes that feed this block delivered, run just now.' };
+  return fromTheGraph(nodeId, executionResult, graph, (inputs) => blockInput(widget, inputs), 'this block');
 }
 
 /**
@@ -75,7 +79,7 @@ export function blockFacts(
   scheme: string | undefined,
 ): Pick<GenerationRequest<GuiWidget>, 'graphContext' | 'sampleInputs' | 'sampleOrigin'> {
   const example = blockExample(widget);
-  const observed = lastRunWidgetInput(nodeId, widget.id, executionResult);
+  const observed = blockInput(widget, lastRunInputs(nodeId, executionResult));
   const sample = example ? { values: example, origin: 'the example in step 1' }
     : observed ? { values: observed, origin: 'the last run' } : undefined;
   const port = guiWidgetPorts(widget).inputs[0]?.id;

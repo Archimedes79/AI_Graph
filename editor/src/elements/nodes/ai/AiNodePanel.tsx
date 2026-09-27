@@ -79,7 +79,7 @@ export default function AiNodePanel(props: NodePanelProps) {
         hint: 'What the model is told with every request, and the message its inputs are laid out in. ✨ Generate writes the instructions from steps 1 to 3; the words and the example answer of step 2 are added after them by themselves.',
         beside: messageBox,
       }}
-      request={(example) => <PromptPreview node={node} example={example} />}
+      request={(example, graph) => <PromptPreview node={node} example={example} graph={graph} />}
       renderResult={(result) => (
         <pre className="text-xs rounded px-2 py-1.5 mt-1 whitespace-pre-wrap overflow-auto" style={{ background: SUNKEN, color: TEXT, maxHeight: 220 }}>
           {promptText(result.outputs?.output)}

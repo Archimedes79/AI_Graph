@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { GraphNode } from '@/graph';
+import type { Graph, GraphNode } from '@/graph';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { SentRequest } from '@engine/host/api.ts';
@@ -41,7 +41,12 @@ export function previewIsLocal(node: GraphNode, example: Record<string, unknown>
  * then said "exactly what the model will receive" over a path where the model
  * gets the file's text, and over all the stories joined where it gets one.
  */
-export default function PromptPreview({ node, example }: { node: GraphNode; example: Record<string, unknown> | undefined }) {
+export default function PromptPreview({ node, example, graph }: {
+  node: GraphNode;
+  example: Record<string, unknown> | undefined;
+  /** The graph with this node as the dialog holds it (`NodePanelProps.steps.graph`). */
+  graph: () => Graph;
+}) {
   const nodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
   const edges = useGraphStore((s) => s.rfEdges);
 
@@ -59,7 +64,7 @@ export default function PromptPreview({ node, example }: { node: GraphNode; exam
 
   if (!previewIsLocal(node, values, readFilePorts(node, nodes, edges))) {
     // Only the example's own values: a placeholder must not be read as a file name.
-    return <EngineRequests node={node} inputs={values} own={!!settings.runCode} />;
+    return <EngineRequests node={node} inputs={values} own={!!settings.runCode} graph={graph} />;
   }
   const shown = assemblePrompt(settings, given);
   return (
@@ -87,15 +92,15 @@ export default function PromptPreview({ node, example }: { node: GraphNode; exam
  * What a run asks, found by running the node -- its own run.js, or the
  * engine's -- with made-up answers: its questions cannot be assembled here.
  */
-function EngineRequests({ node, inputs, own }: { node: GraphNode; inputs: Record<string, unknown>; own: boolean }) {
+function EngineRequests({ node, inputs, own, graph }: {
+  node: GraphNode; inputs: Record<string, unknown>; own: boolean; graph: () => Graph;
+}) {
   const [asked, setAsked] = useState<{ requests: SentRequest[]; error: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const show = async () => {
     setBusy(true);
     try {
-      const graph = useGraphStore.getState().exportGraph();
-      graph.nodes = graph.nodes.map((n) => (n.id === node.id ? node : n));
-      setAsked(await call('nodeRequests', { ...graph, node_id: node.id, inputs }));
+      setAsked(await call('nodeRequests', { ...graph(), node_id: node.id, inputs }));
     } catch (error) {
       setAsked({ requests: [], error: errorText(error, 'It could not be run.') });
     } finally {

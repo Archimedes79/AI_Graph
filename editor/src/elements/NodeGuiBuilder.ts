@@ -1,7 +1,7 @@
 // A node's build-time half, in the browser: the mirror of `engine/src/elements/NodeRunner.ts`.
 
 import type { ComponentType, ReactNode } from 'react';
-import type { GraphNode, NodeType } from '@/graph';
+import type { Graph, GraphNode, NodeType } from '@/graph';
 import type { FieldAccess } from '@/authoring/generation';
 import { describeDeclaredOutput, outputFormatText } from '@/authoring/outputFormat';
 import { readPair } from '@/authoring/examplePair';
@@ -42,8 +42,22 @@ export interface NodePanelProps {
    * steps (`FourSteps`): the "what ✨ sends" button and what it sends, "open
    * in my editor" -- and, where the ports are the person's to name
    * (`stepped`), the two port lists, for "What comes in" and "What comes out".
+   * The mirror of a block's `WidgetSteps`.
    */
-  steps?: { inputs?: ReactNode; outputs?: ReactNode; preview?: ReactNode; sent?: ReactNode; openInEditor?: ReactNode };
+  steps?: {
+    inputs?: ReactNode;
+    outputs?: ReactNode;
+    preview?: ReactNode;
+    sent?: ReactNode;
+    openInEditor?: ReactNode;
+    /**
+     * The graph on the canvas with this node as the dialog holds it: what Try
+     * it, ▶ Test and the model's request are asked of is the edit.
+     */
+    graph: () => Graph;
+    /** ⟳ From the graph: what arrives at the node -- on the last run, else from what feeds it, run now. Absent for a node nothing can feed. */
+    fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
+  };
 }
 
 export type PortEditing = 'edit' | 'fixed' | 'none';

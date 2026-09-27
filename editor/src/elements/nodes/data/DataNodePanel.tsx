@@ -4,9 +4,7 @@ import ExampleInputField from '@/authoring/ExampleInputField';
 import GeneratedBody from '@/authoring/GeneratedBody';
 import Step from '@/authoring/Step';
 import { asExampleText } from '@/authoring/examplePair';
-import { fromTheGraph } from '@/authoring/fromTheGraph';
 import { useTyped } from '@/authoring/useTyped';
-import { useGraphStore } from '@/store/graphStore';
 import { DANGER_SOFT, DIMMER, FIELD, LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 import { asEditableText, convertedValue, dataKind, storedValue, type DataKind } from './dataFormat';
@@ -26,8 +24,6 @@ export default function DataNodePanel({
   builder, node, setConfig, setInvalid, fields, generating, message, onGenerate, steps,
 }: NodePanelProps) {
   const generation = builder.generation;
-  const executionResult = useGraphStore((s) => s.executionResult);
-  const exportGraph = useGraphStore((s) => s.exportGraph);
   const kind = dataKind(node);
   const held = node.config.data_value;
   const shown = asEditableText(held, kind);
@@ -54,12 +50,6 @@ export default function DataNodePanel({
     const retyped = storedValue(content, next);
     if (!contentError) setConfig('data_value', convertedValue(held, next));
     else if (!('error' in retyped)) setConfig('data_value', retyped.value);
-  };
-
-  const graphWithDraft = () => {
-    const graph = exportGraph();
-    graph.nodes = graph.nodes.map((candidate) => (candidate.id === node.id ? node : candidate));
-    return graph;
   };
 
   // Its example is what it holds, so the two ways to fill an example fill that.
@@ -106,7 +96,7 @@ export default function DataNodePanel({
               showField={false}
               ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
               pathPorts={[]}
-              fromGraph={node.inputs.length ? () => fromTheGraph(node, executionResult, graphWithDraft) : undefined}
+              fromGraph={steps.fromGraph}
               earlierFile={!example && node.config.example_file ? node.config.example_file : undefined}
               note={<p className="text-xs" style={{ color: DIMMER }}>These fill what it holds now, below: the example ✨ is shown.</p>}
             />

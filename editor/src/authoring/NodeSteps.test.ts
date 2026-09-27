@@ -16,7 +16,7 @@ function drawn(node: GraphNode): string {
   return renderToStaticMarkup(createElement(Panel, {
     builder, node, setConfig: () => {}, updateNode: () => {},
     fields: nodeFields(node, () => {}, () => {}), generating: false,
-    onGenerate: () => {}, setInvalid: () => {}, steps: {},
+    onGenerate: () => {}, setInvalid: () => {}, steps: { graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }) },
   }));
 }
 
