@@ -71,7 +71,7 @@ import {
   FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
 } from '../../project/folder.ts';
 import { INTERFACE_FILE } from '../../project/interfaceFile.ts';
-import { folderProblems, names, notesIn, problemsIn, type Problem } from '../../project/check.ts';
+import { folderProblems, names, problemsIn, type Problem } from '../../project/check.ts';
 
 export type { Problem };
 
@@ -447,20 +447,11 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
   };
 
   /**
-   * Advice about a graph (`notesIn`), as a key only when there is some: it is
-   * handed back beside a save, and never stops one.
-   */
-  const noted = (graph: Graph): { notes?: Problem[] } => {
-    const notes = notesIn(graph);
-    return notes.length ? { notes } : {};
-  };
-
-  /**
    * Validate, then write. Returns the problems instead of writing when there
    * are any: a graph saved broken is a graph somebody opens later and blames
    * the editor for.
    */
-  const saveGraph = async (given: unknown, argument: string, graph: Graph): Promise<{ saved?: string; problems: Problem[]; notes?: Problem[] }> => {
+  const saveGraph = async (given: unknown, argument: string, graph: Graph): Promise<{ saved?: string; problems: Problem[] }> => {
     const full = await confine(given, argument);
     // Rule 3. Looked at before anything is written, and by reading it: a name
     // says nothing about what a file is.
@@ -479,7 +470,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
     // node to its own folder; anywhere else, one file (`confine` lets only a
     // `.json` path through). The guard holds for the one file too.
     await saveToDisk(full, graph, insideRoot);
-    return { saved: shown(full), problems, ...noted(graph) };
+    return { saved: shown(full), problems };
   };
 
   const tools: Record<string, (args: Record<string, unknown>) => Promise<string>> = {
@@ -526,12 +517,12 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       const graph = graphFrom(generated.graph, 'the generated document');
       const report: Record<string, unknown> = { model: `${target.provider} / ${target.model}` };
       if (args.save_as !== undefined) {
-        const { saved, problems, notes } = await saveGraph(args.save_as, 'save_as', graph);
+        const { saved, problems } = await saveGraph(args.save_as, 'save_as', graph);
         Object.assign(report, saved
-          ? { saved, problems, ...(notes ? { notes } : {}) }
+          ? { saved, problems }
           : { saved: false, why: 'The generated graph has problems, so it was not written. Fix them and hand the result to save_graph.', problems });
       } else {
-        Object.assign(report, { problems: problemsIn(graph), ...noted(graph) });
+        Object.assign(report, { problems: problemsIn(graph) });
       }
       return json({ ...report, explanation: generated.explanation, graph });
     },
@@ -556,7 +547,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
         const folder = projectFolderOf(await confine(args.path, 'path'));
         if (folder) problems.push(...await folderProblems(folder));
       }
-      return json({ valid: problems.length === 0, problems, ...noted(graph) });
+      return json({ valid: problems.length === 0, problems });
     },
 
     async run_node(args) {
@@ -601,9 +592,9 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
 
     async save_graph(args) {
       const graph = graphFrom(args.graph, 'graph');
-      const { saved, problems, notes } = await saveGraph(args.path, 'path', graph);
+      const { saved, problems } = await saveGraph(args.path, 'path', graph);
       if (!saved) throw new Refused(json({ saved: false, why: 'The graph has problems, so nothing was written.', problems }));
-      return json({ saved, nodes: graph.nodes.length, edges: graph.edges.length, ...(notes ? { notes } : {}) });
+      return json({ saved, nodes: graph.nodes.length, edges: graph.edges.length });
     },
 
     async run_graph(args) {

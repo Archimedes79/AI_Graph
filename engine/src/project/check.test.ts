@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { parseGraph, type Graph } from '../graph.ts';
-import { checkPath, notesIn, problemsIn } from './check.ts';
+import { checkPath, problemsIn } from './check.ts';
 import { forgetSeen, writeProject } from './folder.ts';
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
@@ -60,43 +60,21 @@ describe('what check finds in a graph', () => {
     expect(problems).toEqual([expect.objectContaining({ problem: 'Its message template asks for {{totl}}, and it has no input "totl".' })]);
   });
 
-  it('notes two output nodes under one label, of which the run\'s result keys only the last by it', () => {
-    // A note and not a problem: every output node an older editor made was
-    // "Result", such a graph runs, and it passed check and saved over MCP.
+  it('finds two output nodes under one label, with the keys the run really uses', () => {
     const made = graph();
     made.nodes[2].config.output_label = 'Answer';
     made.nodes.push(
-      { ...made.nodes[2], id: 'also', config: { write_mode: 'window', output_label: 'Answer' } },
-      { ...made.nodes[2], id: 'other', config: { write_mode: 'window', output_label: 'Count' } },
-    );
-    made.edges.push(
-      { id: 'e3', source_node_id: 'say', source_port_id: 'output', target_node_id: 'also', target_port_id: 'value' },
-      { id: 'e4', source_node_id: 'count', source_port_id: 'total', target_node_id: 'other', target_port_id: 'value' },
-    );
-    expect(problemsIn(made)).toEqual([]);
-    expect(notesIn(made)).toEqual([expect.objectContaining({
-      where: 'nodes "show", "also"',
-      problem: expect.stringMatching(/share the label "Answer".*only "also" under "Answer": "Answer \(show\)" for the rest/),
-      fix: 'Give every output node its own output_label.',
-    })]);
-  });
-
-  it('names the keys the run really uses, where a label is the key a repeat would be given', () => {
-    // It said the repeat was under the key of the node labelled so, whose own
-    // value the run then dropped.
-    const made = graph();
-    made.nodes[2].config.output_label = 'Answer';
-    made.nodes.push(
-      { ...made.nodes[2], id: 'clash', config: { write_mode: 'window', output_label: 'Answer (show)' } },
+      { ...made.nodes[2], id: 'clash', config: { write_mode: 'window', output_label: 'Answer (also)' } },
       { ...made.nodes[2], id: 'also', config: { write_mode: 'window', output_label: 'Answer' } },
     );
     made.edges.push(
       { id: 'e3', source_node_id: 'say', source_port_id: 'output', target_node_id: 'also', target_port_id: 'value' },
       { id: 'e4', source_node_id: 'say', source_port_id: 'output', target_node_id: 'clash', target_port_id: 'value' },
     );
-    expect(notesIn(made)).toEqual([expect.objectContaining({
+    expect(problemsIn(made)).toEqual([expect.objectContaining({
       where: 'nodes "show", "also"',
-      problem: expect.stringMatching(/only "also" under "Answer": "Answer \(show\) 2" for the rest/),
+      problem: 'These output nodes share the label "Answer", so the run\'s result keeps only the first under it, the rest under "Answer (also) 2".',
+      fix: 'Give every output node its own output_label.',
     })]);
   });
 });

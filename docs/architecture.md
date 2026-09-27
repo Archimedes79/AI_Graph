@@ -495,9 +495,11 @@ or a page that has them can do the same.
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
-  that element's `problems()`. Beside the problems, `notesIn` gives advice that fails nothing: two output nodes sharing a
-  label, as every output an older editor made did. The run's result keeps the last one under
-  the label, as it always did, and the others under their ids (`NodeRunner.ts`'s `resultKeys`).
+  that element's `problems()`. Two output nodes sharing a label are a problem too; until it is
+  fixed the run's result keeps the first under the label and the others under their ids
+  (`NodeRunner.ts`'s `resultKeys`), and `check` names those keys. Ids a folder could not read
+  back -- two differing only in case, a number, a "." or "->" -- are problems as well
+  (`flow.ts`'s `unsavableIds`), and a save refuses them.
 
 ## Where state lives
 

@@ -162,31 +162,18 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       fix: 'End every branch in an "output" node (config.write_mode "window" plus an output_label, or "file"), or in a "gui" node with a block that displays the value.',
     });
   }
+  if (!inside) problems.push(...sharedResultLabels(graph));
 
   return problems;
 }
 
 /**
- * What is worth saying about a graph that runs as it is: advice, which fails
- * neither `check` nor a save over MCP.
- *
- * Two output nodes under one label both reach the run's result, but only the
- * last under that label: whoever reads the result by it gets one of them, and
- * may not know of the other. Every output node an older editor made started
- * as "Result", so this is easy to do and hard to see. It is not a problem,
- * because such a graph runs and always meant this: counted as one, graphs
- * that passed `check` failed it, and save_graph refused to write them back.
- * Only at the top: a graph inside a node hands its outputs up by node id,
- * not by label.
- */
-export function notesIn(graph: Graph): Problem[] {
-  return sharedResultLabels(graph);
-}
-
-/**
  * Output nodes whose result is not handed on under their label: they share
- * it, or it is the key another's result already has. Said with the keys the
- * run really uses (`resultKeys`).
+ * it, or it is the key another's result already has. Whoever reads the run's
+ * result by the label gets one of them and may never know of the other, so
+ * it is a problem to fix, said with the keys the run really uses
+ * (`resultKeys`). Only at the top: a graph inside a node hands its outputs up
+ * by node id, not by label.
  */
 function sharedResultLabels(graph: Graph): Problem[] {
   const keys = resultKeys(graph.nodes, registry);
@@ -200,13 +187,11 @@ function sharedResultLabels(graph: Graph): Problem[] {
   for (const [label, ids] of byLabel) {
     const moved = ids.filter((id) => keys.get(id) !== label);
     if (!moved.length) continue;
-    const holder = ids.find((id) => keys.get(id) === label);
     const elsewhere = moved.map((id) => `"${keys.get(id)}"`).join(', ');
     problems.push({
       where: `${ids.length > 1 ? 'nodes' : 'node'} ${names(ids)}`,
       problem: ids.length > 1
-        ? `These output nodes share the label "${label}". The run's result keeps each, but `
-          + `${holder ? `only "${holder}" under "${label}": ${elsewhere} for the rest.` : `under ${elsewhere}.`}`
+        ? `These output nodes share the label "${label}", so the run's result keeps only the first under it, the rest under ${elsewhere}.`
         : `Its label "${label}" is the key another output's result is handed on under, so the run's result keeps it under ${elsewhere}.`,
       fix: 'Give every output node its own output_label.',
     });
@@ -347,18 +332,18 @@ export async function folderProblems(folder: string): Promise<Problem[]> {
   return found;
 }
 
-/** Everything wrong with the graph or project at *path*, and the advice beside it: the `check` command's answer. */
-export async function checkPath(path: string): Promise<{ problems: Problem[]; notes: Problem[]; graph: Graph | null }> {
+/** Everything wrong with the graph or project at *path*: the `check` command's answer. */
+export async function checkPath(path: string): Promise<{ problems: Problem[]; graph: Graph | null }> {
   let graph: Graph;
   try {
     graph = await loadGraph(path);
   } catch (error) {
-    return { problems: [{ where: path, problem: (error as Error).message, fix: 'Fix the file so it can be read.' }], notes: [], graph: null };
+    return { problems: [{ where: path, problem: (error as Error).message, fix: 'Fix the file so it can be read.' }], graph: null };
   }
   const problems = problemsIn(graph);
   const folder = projectFolderOf(path);
   if (folder) problems.push(...await folderProblems(folder));
-  return { problems, notes: notesIn(graph), graph };
+  return { problems, graph };
 }
 
 /**
