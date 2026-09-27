@@ -14,6 +14,11 @@ export interface FileService {
   /** Creates the folders the path runs through when they are not there yet. */
   write(path: string, content: string, mode?: 'text' | 'binary'): Promise<void>;
   list(path: string, options?: { recursive?: boolean; extensions?: string[] }): Promise<string[]>;
+  /**
+   * Deletes the file at *path*; nothing when there is none. Optional: where a
+   * host cannot delete, what would be deleted stays.
+   */
+  remove?(path: string): Promise<void>;
   resolve(path: string): string;
   exists(path: string): Promise<boolean>;
 }

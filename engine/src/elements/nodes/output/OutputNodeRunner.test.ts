@@ -82,6 +82,35 @@ describe('an output node writing to a folder', () => {
     expect(result).not.toHaveProperty('path');
   });
 
+  it('leaves this run\'s values in the folder and no earlier run\'s, and nothing else of the folder\'s goes', async () => {
+    // Run 2 wrote value_1 and value_3 beside run 1's value_01..value_10, and
+    // with the same count a failed item's slot kept the file of the run before.
+    const files = new Map<string, string>([['/tmp/out/notes.md', 'mine'], ['/tmp/out/value_x.txt', 'mine too']]);
+    const runtime: Runtime = {
+      ...recording().runtime,
+      files: {
+        resolve: (path) => path,
+        exists: async (path) => files.has(path),
+        read: async (path) => files.get(path) ?? '',
+        write: async (path, content) => { files.set(path, content); },
+        list: async (folder) => [...files.keys()].filter((path) => path.startsWith(`${folder}/`)).sort(),
+        remove: async (path) => { files.delete(path); },
+      },
+    };
+    const node = outputNode({ write_mode: 'directory', value: '/tmp/out' });
+    await element.execute(node, { value: Array.from({ length: 10 }, (_, index) => `old ${index + 1}`) }, runtime);
+    expect(files.size).toBe(12);
+
+    await element.execute(node, { value: ['new 1', null, 'new 3'] }, runtime);
+    expect([...files.keys()].sort()).toEqual(['/tmp/out/notes.md', '/tmp/out/value_1.txt', '/tmp/out/value_3.txt', '/tmp/out/value_x.txt']);
+
+    // The same count again, the second failing now: its slot is empty, not last run's.
+    await element.execute(node, { value: ['newer 1', 'newer 2', 'newer 3'] }, runtime);
+    await element.execute(node, { value: ['newest 1', null, 'newest 3'] }, runtime);
+    expect(files.has('/tmp/out/value_2.txt')).toBe(false);
+    expect(files.get('/tmp/out/value_3.txt')).toBe('newest 3');
+  });
+
   it('keeps a Windows folder in its own separator', async () => {
     const { runtime, written } = recording();
     await element.execute(outputNode({ write_mode: 'directory', value: 'C:\\results' }), { value: 'alpha' }, runtime);

@@ -29,6 +29,9 @@ export const nodeFiles: FileService = {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, mode === 'binary' ? Buffer.from(content, 'base64') : content);
   },
+  async remove(path: string) {
+    await rm(path, { force: true });
+  },
   async list(path: string, options = {}) {
     const { recursive = false, extensions } = options;
     const found: string[] = [];

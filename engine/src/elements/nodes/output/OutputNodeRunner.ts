@@ -150,6 +150,13 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
  * when the second failed and left a null, which writes nothing. Numbers are
  * padded to the length of the list so the files sort in its order. Text is
  * written as it is, as `.txt`; anything else as the JSON it is, as `.json`.
+ *
+ * The folder then holds this run's values and no earlier run's. The files an
+ * earlier run wrote under these ports' names that this one did not write again
+ * are removed: a failed item's slot kept the file from the run before, which
+ * looked like a result of this one, and a list of another length left a second
+ * set of numbers beside the first. Only files named the way this writes them
+ * go; whatever else is in the folder stays.
  */
 async function writeEach(folder: string, values: Record<string, unknown>, runtime: Runtime): Promise<string[]> {
   const written: string[] = [];
@@ -165,7 +172,36 @@ async function writeEach(folder: string, values: Record<string, unknown>, runtim
       written.push(path);
     }
   }
+  await removeEarlier(folder, Object.keys(values), written, runtime);
   return written;
+}
+
+/** The last part of *path*, in either separator. */
+const baseName = (path: string): string => path.split(/[\\/]/).pop() ?? path;
+
+/** Whether *file* is a name `writeEach` gives a value of *port*: `value.txt`, `value_03.json`. */
+function namedFor(file: string, port: string): boolean {
+  const stem = file.replace(/\.(txt|json)$/, '');
+  if (stem === file) return false;
+  return stem === port || (stem.startsWith(`${port}_`) && /^\d+$/.test(stem.slice(port.length + 1)));
+}
+
+/** Remove from *folder* the files `writeEach` names after *ports* that are not among *kept*. */
+async function removeEarlier(folder: string, ports: string[], kept: string[], runtime: Runtime): Promise<void> {
+  const { files } = runtime;
+  if (!files.remove || !ports.length) return;
+  const keep = new Set(kept.map(baseName));
+  let present: string[];
+  try {
+    present = await files.list(folder);
+  } catch {
+    // No folder: nothing was written, and nothing was left there before.
+    return;
+  }
+  for (const path of present) {
+    const name = baseName(path);
+    if (!keep.has(name) && ports.some((port) => namedFor(name, port))) await files.remove(path);
+  }
 }
 
 /**
