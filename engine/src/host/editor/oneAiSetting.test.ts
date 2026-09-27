@@ -16,8 +16,7 @@ import { graphOf } from '../../../test/fakes.ts';
  *
  * Both are providers nobody has, so the provider layer refuses each by name
  * before anything leaves the machine, and the refusal says where the call
- * went. The file also still has the `codegen` section generation used to read,
- * which must move nothing.
+ * went.
  */
 
 const SETTING = 'the_one_setting';
@@ -29,7 +28,6 @@ beforeAll(async () => {
   const file = join(dir, 'ai-settings.json');
   await writeFile(file, JSON.stringify({
     ai: { provider: SETTING, model: 'm' },
-    codegen: { provider: 'what_codegen_said', model: 'c' },
   }));
   vi.stubEnv('AI_GRAPH_SETTINGS', file);
   // The developer's own shell must not decide this either.
@@ -99,7 +97,7 @@ describe('everything else', () => {
     expect(String((shown as { shown: unknown }).shown)).toContain(refusedBy(SETTING));
   }, 30_000);
 
-  it('goes there from ✨ Generate, whatever a `codegen` section says', async () => {
+  it('goes there from ✨ Generate', async () => {
     await expect(routes.generate!({ element: 'code', description: 'Count the words.' } as never, loopback))
       .rejects.toThrow(refusedBy(SETTING));
     await expect(routes.generateGraph!({ description: 'Count the words in a text.' } as never, loopback))

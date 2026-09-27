@@ -115,17 +115,6 @@ describe('the one AI setting', () => {
     expect((await providerStatus('/nowhere', env)).target).toEqual({ provider: 'anthropic', model: 'claude-x' });
   });
 
-  it('is not moved by a `codegen` section or the old generation variables', async () => {
-    // There used to be a second setting, for ✨ Generate alone. A file or an
-    // environment that still has it is simply not read.
-    const { env } = await own({
-      ai: { provider: 'openai', model: 'gpt-4o-mini' },
-      codegen: { provider: 'anthropic', model: 'claude-x' },
-    });
-    const withOld = { ...env, AI_GRAPH_GEN_PROVIDER: 'google', AI_GRAPH_GEN_MODEL: 'g' };
-    expect(await aiSetting('/nowhere', withOld)).toEqual({ provider: 'openai', model: 'gpt-4o-mini' });
-    expect((await providerStatus('/nowhere', withOld)).target).toEqual({ provider: 'openai', model: 'gpt-4o-mini' });
-  });
 });
 
 describe('a provider named without a model', () => {

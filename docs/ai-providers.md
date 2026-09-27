@@ -62,11 +62,6 @@ file is looked up in the working directory, next to the executable, at
 `$AI_GRAPH_SETTINGS`, and finally `~/.ai-graph/settings.json`. An environment variable of
 the same name always wins over what is stored there.
 
-A `codegen` section, and the `AI_GRAPH_GEN_PROVIDER` / `AI_GRAPH_GEN_MODEL` variables,
-once chose a separate AI for ✨ Generate. They are no longer read: a file or an
-environment that still has them is simply ignored, and ✨ Generate uses the one setting.
-So is a graph's `metadata.ai_defaults`, which older graphs may still carry.
-
 Two provider names are worth spelling out:
 
 - **Anthropic** needs an API key from [console.anthropic.com](https://console.anthropic.com)
