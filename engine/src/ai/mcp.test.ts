@@ -6,6 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ToolSession } from '../elements/Runtime.ts';
 import { mcpToolService, type McpServerConfig } from './mcp.ts';
+import { executeGraph } from '../execution/executor.ts';
+import { registry } from '../elements/registry.ts';
+import { graphOf, quietRuntime } from '../../test/fakes.ts';
 
 const FIXTURE = join(__dirname, 'fixtures', 'echo-mcp-server.mjs');
 
@@ -153,6 +156,30 @@ describe('a stdio server', () => {
     await expect(tools.open(['mute'])).rejects.toThrow(/"mute" could not be opened.*did not answer initialize within 0\.3 s/s);
   });
 
+  it('lets Stop end a server\'s starting up, rather than waiting out the clock', async () => {
+    const tools = mcpToolService({ mute: echo('--mute') }, { handshakeTimeoutMs: 20_000 });
+    const stop = new AbortController();
+    setTimeout(() => stop.abort(), 200);
+    const started = Date.now();
+    await expect(tools.open(['mute'], stop.signal)).rejects.toThrow(/Stopped/);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it('is stopped by the run\'s Stop while an AI node waits for it to say hello', async () => {
+    const tools = mcpToolService({ mute: echo('--mute') }, { handshakeTimeoutMs: 20_000 });
+    const ask = {
+      id: 'ask', node_type: 'ai' as const, label: 'ask', description: '', position: { x: 0, y: 0 }, inputs: [],
+      outputs: [{ id: 'output', name: 'output', kind: 'output' as const, data_type: 'text' as const, multi: false, required: false, description: '' }],
+      config: { system_prompt: 'hello', mcp_servers: ['mute'] },
+    };
+    const stop = new AbortController();
+    setTimeout(() => stop.abort(), 200);
+    const started = Date.now();
+    const result = await executeGraph(graphOf([ask]), { runtime: quietRuntime({ tools }), registry, signal: stop.signal });
+    expect(result.status).toBe('cancelled');
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
   it('closes the servers that did open when another does not', async () => {
     // All or nothing: a model given half its tools answers confidently without
     // the other half. If the good server were left running, its process would
@@ -278,6 +305,17 @@ describe('an HTTP server', () => {
     http.seen.length = 0;
     await (await tools.open([http.url])).close();
     expect(http.seen.every((request) => request.auth === undefined)).toBe(true);
+  });
+
+  it('leaves no clock running for a call a stopped run makes', async () => {
+    const http = await httpServer();
+    server = http.server;
+    const session = await mcpToolService({}, { callTimeoutMs: 60_000 }).open([http.url]);
+    const clocks = () => process.getActiveResourcesInfo().filter((resource) => resource === 'Timeout').length;
+    const before = clocks();
+    await expect(session.call('add', { a: 1, b: 2 }, AbortSignal.abort())).rejects.toThrow(/Stopped/);
+    expect(clocks()).toBe(before);
+    await session.close();
   });
 
   it('names the server that is not there', async () => {

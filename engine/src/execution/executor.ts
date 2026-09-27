@@ -476,10 +476,12 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
  */
 function stoppable(runtime: Runtime, signal: AbortSignal | undefined): Runtime {
   if (!signal) return runtime;
+  const { tools } = runtime;
   return {
     ...runtime,
     ai: { complete: (request) => runtime.ai.complete({ ...request, signal }) },
     code: { run: (body, inputs, _signal, context) => runtime.code.run(body, inputs, signal, context) },
+    ...(tools ? { tools: { open: (servers) => tools.open(servers, signal) } } : {}),
   };
 }
 

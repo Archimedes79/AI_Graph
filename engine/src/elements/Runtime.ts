@@ -129,7 +129,8 @@ export interface ToolSession extends ToolAccess {
  * must not be able to choose a command line.
  */
 export interface ToolService {
-  open(servers: string[]): Promise<ToolSession>;
+  /** *signal* is the run's: Stop ends the servers' starting up, too. */
+  open(servers: string[], signal?: AbortSignal): Promise<ToolSession>;
 }
 
 /** Progress, for a caller that wants to show it. Ignoring it is valid. */
