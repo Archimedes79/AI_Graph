@@ -179,7 +179,9 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
         break;
       }
       lines.push(`- first a JSDoc comment: \`@typedef {Object} Input\`, then one \`@property {type} <id> <what it is>\` for each input -- ${quoted(inputs)} -- saying its general format, as any value it may be handed has it;`,
-        '- then `module.exports = <example>;`: one small, realistic example of what one call is handed, keyed by exactly those input ids, as plain JSON -- double-quoted keys and strings, no comments, no trailing commas.');
+        '- then `module.exports = <example>;`: one small, realistic example of what one call is handed, keyed by exactly those input ids, as plain JSON -- double-quoted keys and strings, no comments, no trailing commas.',
+        // A model names an input by what it holds -- "text" -- where the node's is "input", and the example then names nothing that arrives.
+        `Those ids are the node's inputs as they are named, and what is wired in arrives under them: keep each as it is -- ${quoted(inputs)} -- even where another name would say more.`);
       if (reads.length) lines.push(`An input that reads a file (${quoted(reads)}) is handed the file's text: its example is text in that file's format -- a few lines of it -- never a path.`);
       if (perItem) lines.push('A list arrives one item at a time: the example is one item.');
       break;
@@ -442,7 +444,7 @@ function definitionFaults(kind: 'input' | 'output', text: string, shape: Shape):
 interface GenerateDeps {
   ai: AiService;
   code: CodeService;
-  /** Reads the example file ✨ Input is given, when the request does not bring its text. */
+  /** Reads the files ✨ Input and ✨ Output are given, where the request does not bring their text. */
   files?: FileService;
   /** The elements, asked what a node's kind writes and whether it has definitions. */
   elements: Runners;
