@@ -36,8 +36,6 @@ export interface TextFile {
   field: string;
   /** Its name in the node's folder. */
   file: string;
-  /** A value kept as JSON rather than as text. */
-  json?: boolean;
   /**
    * What the file says while nobody has written anything of their own. Written
    * out all the same, so the folder shows what the node does.

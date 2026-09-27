@@ -99,7 +99,6 @@ export interface ProjectText {
   field: string;
   /** Relative to the project folder, with `/`. */
   path: string;
-  json: boolean;
   /** The node's config, where the field lives. */
   holder: Record<string, unknown>;
   /** See `TextFile`: what the file says while nobody has written their own. */
@@ -132,7 +131,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
     for (const text of registry.node(node.node_type)?.texts(node) ?? []) {
       found.push({
         node_id: node.id, field: text.field, path: `${folder}/${text.file}`,
-        json: text.json === true, holder: node.config, standard: text.standard,
+        holder: node.config, standard: text.standard,
       });
     }
   }
@@ -176,14 +175,8 @@ function toFile(value: unknown, json: boolean): string {
   return `${json ? JSON.stringify(value, null, 2) : String(value)}\n`;
 }
 
-function fromFile(content: string, json: boolean, path: string): unknown {
-  const text = content.replace(/\r\n/g, '\n').replace(/\n$/, '');
-  if (!json) return text;
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    throw new NotAGraph(`${path} is not valid JSON: ${(error as Error).message}`);
-  }
+function fromFile(content: string): string {
+  return content.replace(/\r\n/g, '\n').replace(/\n$/, '');
 }
 
 /** Nobody's own: nothing, or the text the element itself ships. */
@@ -324,7 +317,7 @@ export async function readProject(folder: string, guard?: Guard): Promise<Graph>
     const signed = await signature(path);
     if (signed !== ABSENT) {
       await guard?.(path);
-      const read = fromFile(await readFile(path, 'utf8'), text.json, text.path);
+      const read = fromFile(await readFile(path, 'utf8'));
       // The element's own text is nobody's setting: the node stays as it was
       // written, and saving writes today's standard back out.
       if (text.standard === undefined || !isStandard(read, text)) text.holder[text.field] = read;
@@ -424,7 +417,7 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
     const written = text.holder[text.field];
     delete text.holder[text.field];
     const value = text.standard !== undefined && isStandard(written, text) ? text.standard : written;
-    files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, text.json));
+    files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, false));
   }
 
   const layout: Record<string, Record<string, number>> = {};
@@ -593,7 +586,7 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
     const known = seen.get(path);
     const now = await signature(path);
     if (known === undefined || known === now) continue;
-    const value = now === ABSENT ? (text.json ? null : '') : fromFile(await readFile(path, 'utf8'), text.json, text.path);
+    const value = now === ABSENT ? '' : fromFile(await readFile(path, 'utf8'));
     seen.set(path, now);
     changes.push({ node_id: text.node_id, field: text.field, value });
   }
