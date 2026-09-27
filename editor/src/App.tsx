@@ -411,7 +411,10 @@ export default function App() {
 
   return (
     <ReactFlowProvider>
-      <div className="flex flex-col h-screen overflow-hidden" style={{ background: SUNKEN }}>
+      {/* Clipped, not hidden: a box that hides its overflow can still be
+          scrolled, and focus moving to a control past the right edge slid
+          the whole page sideways. What does not fit scrolls where it is. */}
+      <div className="flex flex-col h-screen overflow-clip" style={{ background: SUNKEN }}>
         <Toolbar
           onNewGraph={handleNewGraph}
           onSave={handleSave}

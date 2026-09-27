@@ -75,6 +75,20 @@ describe('▶ Run', () => {
   });
 });
 
+describe('the bar in a window 1024 pixels wide', () => {
+  it('fits: its buttons are their icons below 1536 pixels, and what does not fit scrolls inside the bar, never the page', () => {
+    // It was 1470 pixels wide there, and the page slid sideways under it,
+    // palette and tabs out of view.
+    const html = toolbar();
+    expect(html.match(/<header[^>]*>/)?.[0]).toMatch(/class="[^"]*\bmin-w-0\b[^"]*\boverflow-x-auto\b/);
+    const labels = html.match(/<span[^>]*>(New|Open|Save|AI Graph|Generate|Settings|Deploy)<\/span>/g) ?? [];
+    expect(labels).toHaveLength(7);
+    for (const label of labels) expect(label).toContain('hidden 2xl:inline');
+    // Each is still named, for a tooltip and a screen reader.
+    for (const name of ['New', 'Open', 'Save', 'AI Graph', 'Generate', 'Settings', 'Deploy']) expect(button(html, name)).toContain('title=');
+  });
+});
+
 describe('✨ AI Graph\'s Cancel', () => {
   it('leaves the design on its way unwanted, and a new one wanted (B36)', () => {
     // Cancel closed the dialog and let the request run on: opened again, the

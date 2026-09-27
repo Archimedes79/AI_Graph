@@ -206,28 +206,33 @@ export default function Toolbar({
     : DIMMER;
   const statusLabel = executionResult ? executionResult.status : '';
 
+  // The bar fits the window: below 1536 pixels its buttons are their icons
+  // (`ToolbarButton`), and what it says -- the file, a status, a sweep's
+  // progress -- is cut to the room there is, whole in its tooltip. What still
+  // does not fit scrolls inside the bar. It used to overflow into the page,
+  // which then slid sideways and took the palette and the tabs out of view.
   return (
     <>
       <header
-        className="flex items-center gap-4 px-4 h-14 flex-shrink-0"
-        style={{ background: SUNKEN, borderBottom: `1px solid ${LINE}` }}
+        className="flex items-center gap-2 2xl:gap-3 px-3 2xl:px-4 h-14 flex-shrink-0 min-w-0 overflow-x-auto overflow-y-hidden"
+        style={{ background: SUNKEN, borderBottom: `1px solid ${LINE}`, scrollbarWidth: 'thin' }}
       >
         {/* Logo */}
-        <div className="flex items-center gap-2 mr-2">
+        <div className="flex items-center gap-2 mr-1 2xl:mr-2 flex-shrink-0">
           <span className="text-xl">🕸️</span>
-          <span className="text-base font-bold" style={{ color: ACCENT }}>
+          <span className="hidden 2xl:inline text-base font-bold whitespace-nowrap" style={{ color: ACCENT }}>
             AI-Graph
           </span>
         </div>
 
         {/* Graph name */}
         <input
-          className="bg-transparent border-none outline-none text-sm font-medium max-w-xs"
+          className="bg-transparent border-none outline-none text-sm font-medium w-40 min-w-[6rem] flex-shrink"
           style={{ color: TEXT, borderBottom: `1px dashed ${LINE}`, paddingBottom: 2 }}
           value={metadata.name}
           onChange={(e) => setMetadata({ name: e.target.value })}
         />
-        <span className="text-xs truncate max-w-xs" style={{ color: DIMMER }} title={currentFilePath ?? 'Not saved to a file yet'}>
+        <span className="text-xs truncate min-w-[4rem] max-w-xs" style={{ color: DIMMER }} title={currentFilePath ?? 'Not saved to a file yet'}>
           {currentFilePath ?? 'Untitled — not saved'}
         </span>
 
@@ -266,7 +271,7 @@ export default function Toolbar({
             the node before it turned out to return, so only the first one is
             written against a description rather than against data. */}
         <ToolbarButton
-          icon={Wand2}
+          icon={sweep.busy ? Square : Wand2}
           label={sweep.busy ? 'Stop' : 'Generate'}
           title={sweep.busy
             ? 'Stop after the node in flight'
@@ -274,7 +279,7 @@ export default function Toolbar({
           onClick={sweep.busy ? sweep.stop : sweep.run}
         />
         {sweep.message && (
-          <span className="text-xs truncate max-w-md" style={{ color: MUTED }} title={sweep.message}>
+          <span className="text-xs truncate max-w-xs" style={{ color: MUTED }} title={sweep.message}>
             {sweep.message}
           </span>
         )}
@@ -285,12 +290,12 @@ export default function Toolbar({
             what is on disk; it only shows while the graph is actually clean.
             (rfNodes/rfEdges are read above purely to drive this re-render.) */}
         {saveStatus && !isDirty() && (
-          <span className="text-xs" style={{ color: MUTED }}>
+          <span className="text-xs truncate max-w-[14rem]" style={{ color: MUTED }} title={saveStatus}>
             {saveStatus}
           </span>
         )}
         {isDirty() && (rfNodes.length > 0 || rfEdges.length > 0) && (
-          <span className="text-xs" style={{ color: DIM }} title="Unsaved changes">
+          <span className="text-xs whitespace-nowrap" style={{ color: DIM }} title="Unsaved changes">
             ● unsaved
           </span>
         )}
@@ -298,7 +303,7 @@ export default function Toolbar({
         {/* Run, and while running, what it is doing and how to stop it */}
         {isExecuting && runProgress && (
           <span
-            className="text-xs tabular-nums"
+            className="text-xs tabular-nums truncate max-w-[14rem]"
             style={{ color: MUTED }}
             title={
               'Nodes finished, of the total in this graph'
@@ -319,7 +324,7 @@ export default function Toolbar({
         {isExecuting && runProgress && runProgress.idleSeconds !== null
           && runProgress.idleSeconds > STALLED_AFTER_SECONDS && (
           <span
-            className="text-xs tabular-nums"
+            className="text-xs tabular-nums whitespace-nowrap"
             style={{ color: DIM }}
             title="No output from the model since this long. The run is still waiting, not stopped."
           >
@@ -330,7 +335,7 @@ export default function Toolbar({
           <button
             onClick={stopRun}
             title="Stop this run"
-            className="h-8 px-3.5 rounded-md text-xs font-semibold flex items-center gap-1.5"
+            className="h-8 px-3.5 flex-shrink-0 rounded-md text-xs font-semibold flex items-center gap-1.5"
             style={{ background: DANGER, color: 'white' }}
           >
             <Square size={14} strokeWidth={2.5} aria-hidden="true" />
@@ -340,7 +345,7 @@ export default function Toolbar({
           <button
             onClick={handleRun}
             title="Run the whole graph on what is set now. Anything it still needs is asked for first."
-            className="h-8 px-3.5 rounded-md text-xs font-semibold flex items-center gap-1.5"
+            className="h-8 px-3.5 flex-shrink-0 rounded-md text-xs font-semibold flex items-center gap-1.5"
             style={{ background: ACCENT, color: 'white' }}
           >
             <Play size={14} strokeWidth={2.5} aria-hidden="true" />
@@ -372,12 +377,12 @@ export default function Toolbar({
         />
 
         {deployError && (
-          <span className="text-xs font-medium" style={{ color: DANGER_TEXT }}>❌ {deployError}</span>
+          <span className="text-xs font-medium truncate max-w-[14rem]" style={{ color: DANGER_TEXT }} title={deployError}>❌ {deployError}</span>
         )}
 
         {/* Status */}
         {statusLabel && (
-          <span className="text-xs font-medium" style={{ color: statusColor }}>
+          <span className="text-xs font-medium whitespace-nowrap" style={{ color: statusColor }}>
             {statusLabel}
           </span>
         )}
