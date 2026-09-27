@@ -16,7 +16,7 @@ import { readFilePorts } from './generationContext';
 import { outputFormatText } from './outputFormat';
 import type { ChangeAsked } from './generation';
 import {
-  exampleFor, keptExpect, listPorts, ownOutputs, runsPerItem, tryInputs, tryKey, whatCameOf, withPerItem,
+  exampleFor, keptExpect, lastRunOf, listPorts, ownOutputs, runsPerItem, tryInputs, tryKey, whatCameOf, withPerItem,
 } from './nodeStepRules';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED } from '@/ui/theme';
 
@@ -122,8 +122,10 @@ export default function NodeSteps({
   const result = shown?.result;
   const ran = !!result && result.status !== 'error' && result.status !== 'skipped';
   const gaps = ran && expects && pair.expect ? unmet(pair.expect, ownOutputs(result.outputs)) : undefined;
-  const lastRun = useGraphStore((s) => s.executionResult?.node_results.find((one) => one.node_id === node.id));
-  const came = whatCameOf(shown, gaps, lastRun);
+  // The last run's word on the node, while it is a run of the node as it is.
+  const executionResult = useGraphStore((s) => s.executionResult);
+  const ranAs = useGraphStore((s) => s.ranAs);
+  const came = whatCameOf(shown, gaps, lastRunOf(node, executionResult, ranAs, generation?.promptField));
 
   // What ✨ wrote -- anew, changed as said, or fixed -- is tried at once, once
   // the node holds it: the loop is say, see, say again.

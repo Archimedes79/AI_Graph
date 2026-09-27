@@ -540,6 +540,7 @@ or a page that has them can do the same.
 | a run in flight | `RunBoard` on the server | `RunSnapshot`, polled |
 | what every node made last, for rounds its ◆ stays shut | `Latch`, in the process holding the graph; gone at restart | `NodeResult.held` |
 | the last run | the editor's store / the served page / `schedule.ts` | `ExecutionResult` |
+| each node as the last run ran it, so a node changed since is not described by that run | the editor's store (`ranAs`, read by `lastRunOf`) | — |
 | keys, endpoints, MCP servers that start programs | `ai-settings.json`, machine-side, never in a graph | — |
 | the one AI setting: what ✨ Generate, Try it (and its judge) and every run call unless a node pins its own | `ai-settings.json`'s `ai` (or `AI_GRAPH_AI_PROVIDER`/`_MODEL`), read only by `aiSetting` in [`ai/settings.ts`](../engine/src/ai/settings.ts) | `ProviderStatus.target`, for the editor's "now: …" |
 | a node's own model | the node's config (`ai_provider`, `ai_model`) | the graph |

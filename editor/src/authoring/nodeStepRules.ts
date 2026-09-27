@@ -4,7 +4,7 @@
 // asked the same way by the dialog and by `masterExamples.test.ts`, which
 // builds the examples through these steps.
 
-import type { GraphNode, NodeResult, Wire } from '@/graph';
+import type { ExecutionResult, GraphNode, NodeResult, Wire } from '@/graph';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
 import type { ExampleResult } from '@engine/execution/examples.ts';
 import type { Refine } from '@engine/host/api.ts';
@@ -79,12 +79,29 @@ export function tryInputs(node: GraphNode, example: Record<string, unknown> | un
  * What ▶ Try it would try now, as text (`TryItInline`'s `of`): the node as it
  * runs -- its ports and settings -- and *tried*, what it runs on. Not what
  * only describes it: *request*, the field it was written from; the example's
- * expectation and judge; the shape a try may keep.
+ * expectation and judge; the shape a try may keep. The settings are read in
+ * one order, whatever order a node was built or loaded in: the same node
+ * read back from a run is the same node (`lastRunOf`).
  */
 export function tryKey(node: GraphNode, tried: Record<string, unknown> | undefined, request?: string): string {
-  const runs: Record<string, unknown> = { ...node.config };
-  for (const key of ['examples', 'output_schema', request ?? '']) delete runs[key];
+  const skipped = new Set(['examples', 'output_schema', request ?? '']);
+  const runs = Object.entries(node.config).filter(([key]) => !skipped.has(key)).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return JSON.stringify([node.inputs, node.outputs, runs, tried ?? null]);
+}
+
+/**
+ * *node*'s result in the last run (*result*), while it is a result of the
+ * node as it is: the run ran it (*ranAs*, `graphStore.ranAs`) with the same
+ * body, ports and settings. Once one of those changed, "The last run failed
+ * here" described a body that is gone, and ✨ Fix sent the new body with the
+ * old one's error.
+ */
+export function lastRunOf(
+  node: GraphNode, result: ExecutionResult | null, ranAs: Record<string, GraphNode>, request?: string,
+): NodeResult | undefined {
+  const ran = ranAs[node.id];
+  if (!ran || tryKey(ran, undefined, request) !== tryKey(node, undefined, request)) return undefined;
+  return result?.node_results.find((one) => one.node_id === node.id);
 }
 
 /**

@@ -41,6 +41,12 @@ export interface GraphStore {
 
   // Execution state
   executionResult: ExecutionResult | null;
+  /**
+   * Each node that has a result in `executionResult`, as the run that made it
+   * ran it: what that result speaks of. A node changed since -- its body, its
+   * ports, a setting -- is not the node the result is about (`lastRunOf`).
+   */
+  ranAs: Record<string, GraphNode>;
   isExecuting: boolean;
 
   /**
@@ -435,6 +441,7 @@ export const useGraphStore = create<GraphStore>()(
     currentFilePath: null,
     isProject: false,
     executionResult: null,
+    ranAs: {},
     isExecuting: false,
     editingNodeId: null,
     subgraphStack: [],
@@ -617,6 +624,7 @@ export const useGraphStore = create<GraphStore>()(
         state.rfNodes = rfNodes as never;
         state.rfEdges = rfEdges;
         state.executionResult = null;
+        state.ranAs = {};
         // Whoever loaded a graph without going through the file-path flow
         // (Paste JSON, AI Graph, etc.) doesn't know its file path; the caller
         // sets `currentFilePath` explicitly right after loadGraph when it does.
@@ -793,6 +801,7 @@ export const useGraphStore = create<GraphStore>()(
         // them. The node dialog stays for Undo, on a node that is still there:
         // the same graph, a step back.
         state.executionResult = null;
+        state.ranAs = {};
         const stays = keepEditing && graph.nodes.some((node) => node.id === state.editingNodeId);
         if (!stays) state.editingNodeId = null;
       });
@@ -867,6 +876,9 @@ export const useGraphStore = create<GraphStore>()(
       // shows is still true and stays: pressing "Plot" must not blank the
       // summary beside it. A full run starts from a clean slate, as before.
       const previous = trigger ? get().executionResult : null;
+      // Each node as this run runs it, in the form the editor holds a node:
+      // what its result will speak of (`ranAs`).
+      const running = new Map(normalizeGraph(graph).nodes.map((node) => [node.id, node]));
       set((state) => {
         state.isExecuting = true;
       });
@@ -915,6 +927,15 @@ export const useGraphStore = create<GraphStore>()(
         // graph, which is why the result goes through the store rather than
         // being held in a component.
         setExecutionResult(result, fresh);
+        // What each result speaks of: this run's nodes, and for a page event
+        // the earlier run's where their results were kept.
+        set((state) => {
+          if (!previous) state.ranAs = {};
+          for (const ran of fresh.node_results) {
+            const node = running.get(ran.node_id);
+            if (node) state.ranAs[ran.node_id] = node as never;
+          }
+        });
         get().clearSentValues(fresh, graph);
       } catch (error) {
         if (stillOpen()) setExecutionResult({
