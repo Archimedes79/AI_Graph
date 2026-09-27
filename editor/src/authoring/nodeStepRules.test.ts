@@ -3,7 +3,7 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import { parseExamples } from '@engine/execution/examples.ts';
 import { formatInstruction } from '@engine/elements/nodes/ai/prompt.ts';
 import { AiNodeRunner } from '@engine/elements/nodes/ai/AiNodeRunner.ts';
-import { keptAnswer, keptExpect, listPorts, runsPerItem, withPerItem } from './nodeStepRules';
+import { keptAnswer, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
 import { readPair, withExpect, withInput } from './examplePair';
 
 describe('"Keep this result"', () => {
@@ -72,5 +72,21 @@ describe('"Run once per item"', () => {
     expect(listPorts(node, undefined, [source, node], [
       { source: 'source', sourceHandle: 'output', target: 'worker', targetHandle: 'words' },
     ])).toEqual(['words']);
+  });
+});
+
+describe('▶ Try it', () => {
+  it('runs on step 1\'s example, and waits for one', () => {
+    const node = NODE_KINDS.code.create('worker');
+    expect(tryInputs(node, undefined)).toBeUndefined();
+    expect(tryInputs(node, { input: 'x' })).toEqual({ input: 'x' });
+  });
+
+  it('runs a node with no inputs on nothing, where no example can be filled', () => {
+    // It said "Fill step 1's example first: ⟳ from the graph, or 📂 from a
+    // file" -- neither of which a node without inputs offers.
+    const node = NODE_KINDS.code.create('maker');
+    node.inputs = [];
+    expect(tryInputs(node, undefined)).toEqual({});
   });
 });

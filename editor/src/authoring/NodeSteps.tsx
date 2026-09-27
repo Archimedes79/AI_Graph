@@ -9,14 +9,15 @@ import OutputWordsField from './OutputWordsField';
 import OutputInterface from './OutputInterface';
 import GeneratedBody from './GeneratedBody';
 import TryItInline, { clip, type TryResult } from './TryItInline';
+import TestEveryExample from './TestEveryExample';
 import CodeField from './CodeField';
-import { readPair, withExpect, withInput } from './examplePair';
+import { readPair, withExpect, withInput, withJudge } from './examplePair';
 import { useTyped } from './useTyped';
 import { derivedOutputWords } from './derivedOutput';
 import { pathPorts } from './generationContext';
 import { fromTheGraph } from './fromTheGraph';
 import { outputFormatText } from './outputFormat';
-import { keptAnswer, keptExpect, listPorts, runsPerItem, withPerItem } from './nodeStepRules';
+import { keptAnswer, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 type Props = Pick<NodePanelProps,
@@ -73,6 +74,11 @@ export default function NodeSteps({
     setConfig('examples', next);
     return shownExpect(readPair(next).expectText);
   });
+  const [judgeTyped, typeJudge] = useTyped(pair.judge ?? '', (text) => {
+    const next = withJudge(examples, text);
+    setConfig('examples', next);
+    return readPair(next).judge ?? '';
+  });
   const lists = listPorts(node, pair.input, nodes, edges);
   // Once asked, the question stays while the dialog is open: unticked, no
   // input is declared a list any more, and the box would vanish under the click.
@@ -98,10 +104,14 @@ export default function NodeSteps({
     setConfig('output_format_prompt', text);
   };
 
+  // A node that takes nothing in has no example to fill, unless one was written before.
+  const exampled = node.inputs.length > 0 || !!pair.inputText.trim();
+  const tried = tryInputs(node, pair.input);
+
   const comesIn = (
     <>
       {steps.inputs}
-      <ExampleInputField
+      {exampled && <ExampleInputField
         text={pair.inputText}
         onText={(text) => {
           const next = withInput(examples, text);
@@ -116,10 +126,10 @@ export default function NodeSteps({
         note={pair.others > 0 && (
           <p className="text-xs" style={{ color: DIMMER }}>
             Its examples.md holds {pair.others} more example{pair.others > 1 ? 's' : ''} after this one: kept there as
-            {pair.others > 1 ? ' they are' : ' it is'}, and still run by <code>test</code>. This is the first.
+            {pair.others > 1 ? ' they are' : ' it is'}, and still run by <code>test</code> and by ▶ Test in step 2. This is the first.
           </p>
         )}
-      />
+      />}
       {askedPerItem.current && (
         <RunOncePerItem
           checked={runsPerItem(node)}
@@ -167,9 +177,6 @@ export default function NodeSteps({
         title="Example output"
       />
       {expectError && <p className="text-xs mt-1" style={{ color: DANGER_TEXT }}>{expectError}</p>}
-      {pair.judge && (
-        <p className="text-xs mt-1" style={{ color: DIMMER }}>A model also judges it: “{pair.judge}”</p>
-      )}
       {/* A result to imitate, kept by "Example of the output" in an older
           version: still told to ✨, so shown, and dropped here by whoever no
           longer wants it said. */}
@@ -186,6 +193,35 @@ export default function NodeSteps({
     </div>
   );
 
+  // What `test` holds the example's answer to, in a sentence a model judges:
+  // how an answer that is never the same twice is checked. Asked of an ai
+  // node; a code node's is shown where its file has one. The examples.md
+  // editor that was the one place to write it is gone.
+  const judgeField = (answers || pair.judge) && (
+    <div>
+      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }} htmlFor="example-judge">
+        Judged by a model{answers ? ' (optional)' : ''}
+      </label>
+      <p className="text-xs mb-1" style={{ color: DIMMER }}>
+        A sentence a model holds the answer to the example to, when the example is tested.
+        {answers ? ' Empty: testing it only runs it.' : ' Empty: only the example output is compared.'}
+      </p>
+      <input
+        id="example-judge"
+        className="w-full rounded-lg px-2 py-1.5 text-sm"
+        style={FIELD}
+        value={judgeTyped}
+        onChange={(event) => typeJudge(event.target.value)}
+        placeholder="e.g. Two sentences, and no judgement of the story."
+        aria-label="Judged by a model"
+      />
+    </div>
+  );
+
+  // What Try it cannot check -- a judge, the examples after the first -- is
+  // checked as `test` checks it.
+  const testsMore = pair.others > 0 || !!pair.judge;
+
   const comesOut = (
     <>
       {steps.outputs}
@@ -198,6 +234,8 @@ export default function NodeSteps({
         />
       )}
       {builder.exampleOutput && exampleOutput}
+      {judgeField}
+      {testsMore && <TestEveryExample graph={graphWithDraft} nodeId={node.id} count={pair.others + 1} />}
       {keepsOutputInterface(node) && (
         <details className="rounded-lg">
           <summary className="text-xs cursor-pointer select-none" style={{ color: MUTED }}>The shape a run kept</summary>
@@ -225,9 +263,9 @@ export default function NodeSteps({
       />
       {body.beside}
       <TryItInline
-        canRun={!!pair.input && !inputError}
+        canRun={!!tried && !inputError}
         whyNot={inputError ? 'The example in step 1 is not an object yet.' : 'Fill step 1\'s example first: ⟳ from the graph, or 📂 from a file.'}
-        run={() => call('runNode', { ...graphWithDraft(), node_id: node.id, inputs: pair.input ?? {} })}
+        run={() => call('runNode', { ...graphWithDraft(), node_id: node.id, inputs: tried ?? {} })}
         verdict={answers ? undefined : (outputs) => (pair.expect && Object.keys(pair.expect).length ? unmet(pair.expect, outputs) : undefined)}
         onKeep={keep}
         renderResult={renderResult}

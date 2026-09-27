@@ -61,6 +61,16 @@ export function withPerItem(node: GraphNode, perItem: boolean, lists: string[] =
 }
 
 /**
+ * What ▶ Try it runs *node* on: step 1's *example*, or undefined while there
+ * is none. A node with no inputs -- one that makes its data rather than
+ * taking it -- is run on nothing: there is no example to fill, and neither
+ * way of filling one has anything to fill it with.
+ */
+export function tryInputs(node: GraphNode, example: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  return example ?? (node.inputs.length ? undefined : {});
+}
+
+/**
  * What came out of a try, as step 2's expected output: every output the node
  * hands on, as JSON -- what `test` then holds each later version to. Trimming
  * it to the fields that matter is the person's to do.

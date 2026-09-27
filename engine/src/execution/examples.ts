@@ -84,11 +84,6 @@ export function parseExamples(text: string): { examples: NodeExample[]; problems
   return { examples, problems };
 }
 
-/** One example, written the way `parseExamples` reads it: for "add this run as an example". */
-export function formatExample(title: string, inputs: Record<string, unknown>, expect: Record<string, unknown>): string {
-  return `## ${title}\n\n\`\`\`json input\n${JSON.stringify(inputs, null, 2)}\n\`\`\`\n\n\`\`\`json expect\n${JSON.stringify(expect, null, 2)}\n\`\`\`\n`;
-}
-
 /**
  * Where *actual* falls short of *expected*, as sentences naming the place.
  * An object expects its listed keys and ignores the rest; a list expects the

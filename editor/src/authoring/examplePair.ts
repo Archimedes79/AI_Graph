@@ -36,7 +36,9 @@ export interface ExamplePair {
   complete: boolean;
 }
 
-interface Block { role: 'input' | 'expect' | 'judge' | ''; start: number; end: number; body: string }
+type Role = 'input' | 'expect' | 'judge';
+
+interface Block { role: Role | ''; start: number; end: number; body: string }
 
 /** The file cut into what comes before the first section, the first section, and the rest. */
 function cut(text: string): { before: string; first: string; after: string; others: number } {
@@ -89,9 +91,26 @@ export function readPair(text: string | undefined): ExamplePair {
   return pair;
 }
 
-function block(role: 'input' | 'expect', body: string): string {
-  return `\`\`\`json ${role}\n${body.trim() || '{}'}\n\`\`\``;
+function block(role: Role, body: string): string {
+  // A judge is a sentence, not JSON: `parseExamples` reads a bare `judge` block.
+  return role === 'judge' ? `\`\`\`judge\n${body.trim()}\n\`\`\`` : `\`\`\`json ${role}\n${body.trim() || '{}'}\n\`\`\``;
 }
+
+/** The file again, from its parts: the first section ends in a newline, and a blank line parts it from the next. */
+function assemble(before: string, section: string, after: string): string {
+  const ended = `${section.trimEnd()}\n`;
+  return `${before}${ended}${after ? '\n' : ''}${after}`;
+}
+
+/** *first* without its *role* block, the blank lines around it closed up. */
+function without(first: string, role: Role): string {
+  const own = blocksOf(first).find((candidate) => candidate.role === role);
+  if (!own) return first;
+  return `${first.slice(0, own.start).trimEnd()}\n${first.slice(own.end).replace(/^\n+/, '\n')}`;
+}
+
+/** An expect block that names nothing: "only that it runs". */
+const checksNothing = (candidate: Block): boolean => candidate.role === 'expect' && candidate.body.replace(/\s/g, '') === '{}';
 
 /**
  * *text* with its first pair's *role* block set to *body*: replaced where it
@@ -102,24 +121,26 @@ function block(role: 'input' | 'expect', body: string): string {
  * block: "it runs on this" is a check, and without one `check` reports the
  * section as unreadable and `test` and ✨ pass it over.
  */
-function withBlock(text: string | undefined, role: 'input' | 'expect', body: string): string {
+function withBlock(text: string | undefined, role: Role, body: string): string {
   const { before, first, after } = cut(text ?? '');
   if (!first) {
     const lead = before.trim() ? `${before.trimEnd()}\n\n` : '';
     const input = role === 'input' ? body : '{}';
-    const expect = role === 'expect' ? body : '{}';
-    return `${lead}## ${PAIR_TITLE}\n\n${block('input', input)}\n\n${block('expect', expect)}\n`;
+    const checked = role === 'input' ? block('expect', '{}') : block(role, body);
+    return `${lead}## ${PAIR_TITLE}\n\n${block('input', input)}\n\n${checked}\n`;
   }
   const blocks = blocksOf(first);
   const own = blocks.find((candidate) => candidate.role === role);
   let section: string;
   if (own) {
     section = `${first.slice(0, own.start)}${block(role, body)}${first.slice(own.end)}`;
-  } else if (role === 'expect') {
-    // After the input, where a reader looks for it.
+  } else if (role !== 'input') {
+    // After the input -- a judge after the expectation too -- where a reader looks for it.
     const input = blocks.find((candidate) => candidate.role === 'input');
-    const at = input ? input.end : first.trimEnd().length;
-    section = `${first.slice(0, at)}\n\n${block('expect', body)}${first.slice(at)}`;
+    const expect = role === 'judge' ? blocks.find((candidate) => candidate.role === 'expect') : undefined;
+    const anchor = expect ?? input;
+    const at = anchor ? anchor.end : first.trimEnd().length;
+    section = `${first.slice(0, at)}\n\n${block(role, body)}${first.slice(at)}`;
   } else {
     // Under the title line.
     const at = first.indexOf('\n') < 0 ? first.length : first.indexOf('\n');
@@ -130,8 +151,7 @@ function withBlock(text: string | undefined, role: 'input' | 'expect', body: str
     const input = blocksOf(section).find((candidate) => candidate.role === 'input')!;
     section = `${section.slice(0, input.end)}\n\n${block('expect', '{}')}${section.slice(input.end)}`;
   }
-  if (!section.endsWith('\n')) section += '\n';
-  return `${before}${section}${after && !section.endsWith('\n\n') ? '\n' : ''}${after}`;
+  return assemble(before, section, after);
 }
 
 /** *text* with the first pair's input set to *body*, the JSON as typed. */
@@ -142,6 +162,29 @@ export function withInput(text: string | undefined, body: string): string {
 /** *text* with the first pair's expected output set to *body*; empty means "only that it runs". */
 export function withExpect(text: string | undefined, body: string): string {
   return withBlock(text, 'expect', body);
+}
+
+/**
+ * *text* with the first pair's judge set to *sentence*: what a model holds
+ * the node's answer to when `test` runs the example -- the check for an answer
+ * that is never the same twice. Empty takes it away.
+ *
+ * An expect block that names nothing makes way for a judge, and comes back
+ * when the judge goes: the pair always checks something, and a judged example
+ * is not run offline only to check that it runs.
+ */
+export function withJudge(text: string | undefined, sentence: string): string {
+  if (sentence.trim()) {
+    const { before, first, after } = cut(withBlock(text, 'judge', sentence));
+    const empty = blocksOf(first).some(checksNothing);
+    return assemble(before, empty ? without(first, 'expect') : first, after);
+  }
+  const { before, first, after } = cut(text ?? '');
+  if (!blocksOf(first).some((candidate) => candidate.role === 'judge')) return text ?? '';
+  const section = without(first, 'judge');
+  const unchecked = !blocksOf(section).some((candidate) => candidate.role === 'expect');
+  const judged = assemble(before, section, after);
+  return unchecked ? withExpect(judged, '{}') : judged;
 }
 
 /** A value as the example holds it: JSON, two spaces, as it is read back. */

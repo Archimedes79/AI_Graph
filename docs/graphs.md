@@ -470,9 +470,11 @@ its own business. A model's answer is never the same twice, so an AI node's exam
 have a ````judge` block instead — a sentence (*"about two sentences, in prose"*) that a
 model holds the answer to. In the node's dialog the first example is steps 1 and 2: ⟳
 From the graph fills its input with what really arrives, **Keep this result** makes what
-▶ Try it gave its expected output, and Try it says whether a result meets it. A file with
-more examples keeps them as they are, and `test` runs them all; the dialog edits the
-first and says so.
+▶ Try it gave its expected output, and Try it says whether a result meets it. An AI node's
+step 2 asks for the judge's sentence too. A file with more examples keeps them as they
+are, and `test` runs them all; the dialog edits the first and says so, and where there is
+more to check than Try it can — a judge, the other examples — **▶ Test** in step 2 runs
+them the way `test` does.
 
 `node engine/src/main.ts test my_tool` runs every node's examples; `--offline` asks no
 model and skips what needs one, which is how CI runs this repository's examples.
@@ -500,10 +502,11 @@ the same four steps:
   fills it with what really arrives — the last run's values, or, before one, what the
   nodes that *feed* this element deliver when they are run now (the file picked, the CSV
   parsed, the page's fields read), not the element itself. **📂 From a file…** fills one
-  input from a file: its path, where the node reads the file itself (a file path input,
-  or one wired from something that hands on paths, with *read file contents* on) — kept
-  relative to the folder the editor runs in — and otherwise what the file says, parsed
-  when it is JSON. Typing is editing what they filled.
+  input from a file: its path, where a path is what arrives (a file path input, or one
+  wired from something that hands on paths — read as a run reads it when *read file
+  contents* is on) — kept relative to the folder the editor runs in — and otherwise what
+  the file says, parsed when it is JSON. Typing is editing what they filled. A node with
+  no inputs has no example: Try it runs it on nothing.
 - **▶ Try it**, under the body in step 4, runs just this element on that example, through
   the same steps a run takes (the graph's default model, wired files read into text, one
   call per item). Nothing is saved and nothing downstream runs. An AI node shows the

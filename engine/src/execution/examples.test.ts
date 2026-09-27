@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatExample, parseExamples, runExamples, unmet } from './examples.ts';
+import { parseExamples, runExamples, unmet } from './examples.ts';
 import { registry } from '../elements/registry.ts';
 import { parseGraph } from '../graph.ts';
 import type { AiRequest, Runtime } from '../elements/Runtime.ts';
@@ -37,11 +37,6 @@ describe('parseExamples', () => {
       '"A list": its input block must be an object keyed by port, like {"input": "…"}.',
       '"A list": no ```json input block.',
     ]);
-  });
-
-  it('reads back what formatExample writes', () => {
-    const written = formatExample('From a run', { input: 'x' }, { output: [1, 2] });
-    expect(parseExamples(written).examples).toEqual([{ title: 'From a run', inputs: { input: 'x' }, expect: { output: [1, 2] } }]);
   });
 });
 
