@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import PreviewTab from './PreviewTab';
 import DeliveredHeader from './DeliveredHeader';
+import { NODE_KINDS } from '@/document/nodeKinds';
 
 // Rendered to a string, a component reads the store's first state, not the
 // one a test has since moved it to -- so what the tab asks is answered here: a
@@ -30,6 +31,26 @@ describe('the Preview tab', () => {
     expect(html).toContain('Population plotter');
     expect(html).not.toContain('▶ Run</button>');
     expect(html).toMatch(/<button[^>]*title="A window of its own[^"]*"[^>]*>⧉ Open as a tool<\/button>/);
+  });
+
+  it('shows a graph without a page as it is delivered: the result of the toolbar\'s ▶ Run', () => {
+    // It said "No page yet" and nothing else, where the delivered tool shows
+    // what the run handed back.
+    const page = open.rfNodes;
+    open.rfNodes = [{ id: 'count', data: { graphNode: { ...NODE_KINDS.output.create('count'), label: 'Words' } } }] as never;
+    open.executionResult = {
+      status: 'success',
+      node_results: [{ node_id: 'count', status: 'success', inputs: { value: 'forty-two words' }, outputs: { value: 'forty-two words' } }],
+      outputs: { Words: { value: 'forty-two words' } },
+    } as never;
+    try {
+      const html = renderToStaticMarkup(createElement(PreviewTab));
+      expect(html).toContain('No page yet');
+      expect(html).toContain('forty-two words');
+    } finally {
+      open.rfNodes = page;
+      open.executionResult = null;
+    }
   });
 
   it('keeps the delivered tool\'s ▶ Run: a tool someone was handed has no toolbar', () => {

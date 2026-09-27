@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { showsPage } from '@/document/guiWidgets';
 import { mergeResults, useGraphStore } from '@/store/graphStore';
 import { GuiSurfacePage } from '@/page/GuiPage';
 import { useDeliveredRun } from '@/page/useDeliveredRun';
@@ -7,11 +6,10 @@ import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import DeliveredHeader from '@/page/DeliveredHeader';
 import RuntimeAISettings from './RuntimeAISettings';
-import RunResult from './RunResult';
 import { watchSchedule } from './watchSchedule';
 import { call, type ScheduleState } from '@/api/client';
 import { errorText } from '@/api/errorText';
-import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
+import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
 
 /**
  * The deployed graph's front-end.
@@ -28,7 +26,6 @@ import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
  */
 export default function RuntimeApp() {
   const loadGraph = useGraphStore((s) => s.loadGraph);
-  const rfNodes = useGraphStore((s) => s.rfNodes);
   const metadata = useGraphStore((s) => s.metadata);
   // A deployed tool looks like the thing that was designed, scheme included.
   useSchemeOnRoot(metadata.gui_scheme);
@@ -80,9 +77,6 @@ export default function RuntimeApp() {
   // A backend error can be several lines long; it belongs in the body, not
   // squeezed into a header span next to the buttons.
   const runError = executionResult?.status === 'error' ? executionResult.error : '';
-  const hasWidgets = rfNodes.some(
-    (n) => showsPage(n.data.graphNode.node_type),
-  );
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: SUNKEN }}>
@@ -127,24 +121,9 @@ export default function RuntimeApp() {
           </div>
         )}
 
-        {/* A graph with no page has nothing to draw, so without this the
-            page is an empty dark rectangle and the user has no idea what the
-            tool does or that ▶ Run is the whole interaction -- and what a run
-            hands back, its output nodes' values, is what it shows. */}
-        {ready && !hasWidgets && !runError && (
-          <div className="m-6 max-w-2xl">
-            <p className="text-sm mb-2" style={{ color: TEXT }}>
-              {metadata.description || `${metadata.name} is ready to run.`}
-            </p>
-            <p className="text-xs" style={{ color: DIM }}>
-              Press <strong>▶ Run</strong> above. Anything the tool still needs — a value to start from,
-              a place to write — is asked for first. Results appear here when it finishes.
-            </p>
-            <RunResult result={executionResult} />
-          </div>
-        )}
-
-        <GuiSurfacePage onRun={(trigger) => { void delivered.run(trigger); }} />
+        {/* The page -- or, when it has no blocks, what the tool does and what
+            its run hands back: the Preview tab draws the same. */}
+        {ready && <GuiSurfacePage onRun={(trigger) => { void delivered.run(trigger); }} />}
         <RequirementsDialog
           requirements={delivered.requirements}
           onSubmit={delivered.submit}
