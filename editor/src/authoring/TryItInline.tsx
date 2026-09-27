@@ -25,6 +25,13 @@ export interface Tried {
   judged?: string;
   /** The examples after the first, as `test` ran them beside it. */
   others?: ExampleResult[];
+  /**
+   * What `judged` and `others` speak of: the judge's sentence, and the
+   * examples after the first, as they were when ▶ was pressed. Neither is
+   * the node, so a try stays when they change -- and those two words go
+   * (`stillSaid`).
+   */
+  of?: { judge: string; later: string };
 }
 
 /**
@@ -52,12 +59,33 @@ export function currentTry<T>(held: { of: string; value: T } | null, now: string
 }
 
 /**
+ * *tried*, saying only what is still true of the examples as they are now
+ * (*pair*): the judge's word while its sentence is the one it judged by, how
+ * the other examples did while they are the ones that ran. What came out stays,
+ * a try of the node as it is (`tryKey`): "✓ Judged by a model: it meets this"
+ * stood under a sentence the model had never seen, and ✨ Fix was told it.
+ */
+export function stillSaid(tried: Tried | null, pair: ExamplePair): Tried | null {
+  if (!tried?.of) return tried;
+  const judge = tried.of.judge === (pair.judge ?? '');
+  const later = tried.of.later === pair.later;
+  if (judge && later) return tried;
+  const { judged, others, ...rest } = tried;
+  return {
+    ...rest,
+    ...(judge && judged !== undefined ? { judged } : {}),
+    ...(later && others ? { others } : {}),
+  };
+}
+
+/**
  * A try made the way `test` runs a node's examples (`testNode`): the first is
  * step 1's example, so what came out is its outputs and the judge's word is
- * on that answer; the rest are the other examples. A broken output interface
- * is said beside what came out, as a run says it.
+ * on that answer; the rest are the other examples -- those of *pair*, which
+ * the try speaks of (`stillSaid`). A broken output interface is said beside
+ * what came out, as a run says it.
  */
-export function triedFromExamples(results: ExampleResult[], judge?: string): Tried {
+export function triedFromExamples(results: ExampleResult[], pair: ExamplePair): Tried {
   const [first, ...others] = results;
   if (!first) return { failure: 'Its examples.md holds no example that can be run.' };
   const failed = first.status === 'error';
@@ -69,8 +97,9 @@ export function triedFromExamples(results: ExampleResult[], judge?: string): Tri
       error: failed ? first.details.join('\n') : null,
       messages: first.details.filter((line) => line.startsWith('breaks its output interface')),
     },
-    ...(judge && !failed ? { judged: verdict ? verdict.slice('judged: '.length) : '' } : {}),
+    ...(pair.judge && !failed ? { judged: verdict ? verdict.slice('judged: '.length) : '' } : {}),
     others,
+    of: { judge: pair.judge ?? '', later: pair.later },
   };
 }
 
@@ -83,7 +112,7 @@ export function triedFromExamples(results: ExampleResult[], judge?: string): Tri
  */
 export async function tryNode(graph: Graph, node: GraphNode, inputs: Record<string, unknown>, pair: ExamplePair): Promise<Tried> {
   if (pair.complete && (!!pair.judge || pair.others > 0)) {
-    return triedFromExamples((await call('testNode', { ...graph, node_id: node.id })).results, pair.judge);
+    return triedFromExamples((await call('testNode', { ...graph, node_id: node.id })).results, pair);
   }
   return { result: await call('runNode', { ...graph, node_id: node.id, inputs }) };
 }

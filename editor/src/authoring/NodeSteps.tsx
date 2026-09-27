@@ -8,7 +8,7 @@ import ExampleInputField from './ExampleInputField';
 import OutputWordsField from './OutputWordsField';
 import OutputInterface from './OutputInterface';
 import GeneratedBody from './GeneratedBody';
-import TryItInline, { ChangeIt, tryNode, useTry, type TryResult } from './TryItInline';
+import TryItInline, { ChangeIt, stillSaid, tryNode, useTry, type TryResult } from './TryItInline';
 import { readPair, withExpect, withInput, withJudge } from './examplePair';
 import { useTyped } from './useTyped';
 import { derivedOutputWords } from './derivedOutput';
@@ -114,13 +114,16 @@ export default function NodeSteps({
     tryKey(node, tried, generation?.promptField),
     () => tryNode(steps!.graph(), node, tried ?? {}, pair),
   );
+  // What the try says that is still true of the examples: the judge's word
+  // and the others' line go when what they were given changed.
+  const shown = stillSaid(trying.tried, pair);
   // An expectation that names something: "only that it runs" is `{}`.
   const expects = !!pair.expect && Object.keys(pair.expect).length > 0;
-  const result = trying.tried?.result;
+  const result = shown?.result;
   const ran = !!result && result.status !== 'error' && result.status !== 'skipped';
   const gaps = ran && expects && pair.expect ? unmet(pair.expect, ownOutputs(result.outputs)) : undefined;
   const lastRun = useGraphStore((s) => s.executionResult?.node_results.find((one) => one.node_id === node.id));
-  const came = whatCameOf(trying.tried, gaps, lastRun);
+  const came = whatCameOf(shown, gaps, lastRun);
 
   // What ✨ wrote -- anew, changed as said, or fixed -- is tried at once, once
   // the node holds it: the loop is say, see, say again.
@@ -251,7 +254,7 @@ export default function NodeSteps({
         whyNot={broken ? 'The example in step 1 is not an object keyed by input port.' : 'Fill step 1\'s example first: ⟳ from the graph, 📂 from a file, or drop a file on it.'}
         busy={trying.busy}
         onTry={() => void trying.start()}
-        tried={trying.tried}
+        tried={shown}
         gaps={gaps}
         expected={expects ? {
           text: pair.expectText,
@@ -269,7 +272,7 @@ export default function NodeSteps({
           <ChangeIt
             busy={generating}
             fix={came?.failed ? () => void write(change()) : undefined}
-            failure={!trying.tried && came?.failed ? came.said.error : undefined}
+            failure={!shown && came?.failed ? came.said.error : undefined}
             onSay={(said) => write(change(said))}
             body={bodyWord}
           />
