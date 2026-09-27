@@ -4,9 +4,10 @@ import { computeAxisRange } from '@/elements/widgets/plot_window/PlotChart';
 import { statusTone } from '@/store/executionStatus';
 
 /**
- * One value a node made, under the port it stands at: a line, a count and its
- * first row, a sketch, or a thumbnail -- never more than a small picture high,
- * so a run does not push the graph apart. What the value *is* was decided
+ * One value a node made, on its card by the port it stands at -- on the page's
+ * card, under its block's row: a line, a count and its first row, a sketch, or
+ * a thumbnail -- never more than a small picture high, so a run does not push
+ * the graph apart. What the value *is* was decided
  * before this (`elements/resultPreview.ts`, and the element that reads it);
  * this only draws it, in the colours of the run that made it (`statusTone`):
  * green, or amber where it lost items. Faded when the node stood still this
