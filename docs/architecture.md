@@ -552,12 +552,29 @@ or a page that has them can do the same.
 
 ## Settled debt, and what is deliberately not there
 
-- **Open, and measured:** what the last review left undone, and why, is in
-  [review-2026-09-20.md](review-2026-09-20.md#not-done-and-why) — the shells that grew into one
-  long function, `AI_RUN_TEMPLATES` as a list of one, `clamp` on both sides of the wire, the
-  engine's untyped node config, `elements`/`authoring` as one tier, editor tests that mostly
-  guard structure, and comments that narrate history — with numbers and an order to do it in.
-  There are no import cycles through values, and none between the engine and the editor.
+A review on 2026-09-20 measured the rules above against the source and fixed what it found: the
+engine's own half of "no shell names a kind" (`check.ts`, `executor.finalOutputs`,
+`project/folder.ts`), the hand-written list of node types in `graphPrompt.ts`, and the editor's
+layer order, now held by `layers.test.ts`. What it left, still true:
+
+- **A few functions and files carry too much at once.** `graphStore.ts` (~960 lines: the
+  document, its normalisation, the ReactFlow adapter, run polling and undo), `App.tsx` (~600
+  lines), `Toolbar.tsx` (~550 lines), `mcpServer.ts`'s `createGraphTools`, and `executor.ts`'s
+  `executeGraph`. Nothing in the tests catches a mistake made splitting one of them, which is
+  exactly why none has been split yet. Parts of the shell already moved out of `App.tsx` into
+  `app/{Sidebar,Toolbar,ResultsPanel,SettingsDialog,ViewTabs,AICredentialsSection,SubgraphTrail}.tsx`,
+  so this can be done piece by piece.
+- **The engine has no typed `NodeConfig`.** `config: Record<string, unknown>` is read through an
+  `as` cast at each use (~630 of them); each element's own `config()` is meant to be the one
+  reader that pays that price, but nothing holds other callers to asking it first.
+  `mcpServer.ts` still validates `config.gui_widgets` entries by name, on a document that has
+  not been parsed yet.
+- **Editor tests are thin outside the structural ones.** `app/`, `canvas/` and `page/` have
+  tests only for the rules pulled out of their components (`nodeDraft`, `portIds`, `pageWrite`,
+  `typedValues`, `DesignerPalette`, …); the suite has no DOM, so a component is at most drawn
+  once with `renderToStaticMarkup` (`NodePanels.test.ts`), never clicked.
+
+There are no import cycles through values, and none between the engine and the editor.
 
 - **A saved node carries its own settings only.** In memory every node has the full
   `NodeConfig`, so a panel can read any field with a type. Each node type names the `settings`

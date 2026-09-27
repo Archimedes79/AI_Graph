@@ -6,8 +6,8 @@ its files: [the whole](#the-whole), [elements](#elements), [server](#server),
 [browser](#browser); [node runners](#class-diagram-node-runners),
 [widget runners](#class-diagram-widget-runners), [the builder side](#class-diagram-the-builder-side),
 [runs and their state](#class-diagram-runs-and-their-state). The prose that explains them
-is [docs/architecture.md](../docs/architecture.md); where the code does not yet keep its own
-rules is [docs/review-2026-09-20.md](../docs/review-2026-09-20.md).
+is [docs/architecture.md](../docs/architecture.md), whose last section names where the code
+does not yet keep its own rules.
 
 ## The whole
 
@@ -373,9 +373,8 @@ classDiagram
 | `Latch` | [`engine/src/execution/latch.ts`](../engine/src/execution/latch.ts) | what every node made last, for rounds its ◆ stays shut; gone at restart |
 | `LastOutputs` | [`engine/src/execution/reuse.ts`](../engine/src/execution/reuse.ts) | outputs a page event may hand back for context-only nodes; the file is not named after the class |
 
-Not drawn: the 15 error classes (`Refusal`, `NotFound`, `NotAGraph`, `FileChanged`, …), spread over eight files;
-`NotFound` and `NotAGraph` live once, in [`errors.ts`](../engine/src/errors.ts) (see the review's
-[measurements](../docs/review-2026-09-20.md#measured-before-and-after)).
+Not drawn: the error classes (`Refusal`, `NotFound`, `NotAGraph`, `FileChanged`, …), spread over the
+files that throw them; `errors.ts` holds `NotFound` and `NotAGraph`, the two more than one file needs.
 
 ## Server
 
