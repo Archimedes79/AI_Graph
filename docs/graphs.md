@@ -739,7 +739,9 @@ node's message template is the one shown under *AI Nodes* above.
 ### Picking files and folders
 
 Every path field — the picker block, the *Before running…* prompt, and a node's default
-path — has a **Browse…** button that opens a file chooser. It browses the machine the
+path — has a **Browse…** button that opens a file chooser. A text input asked for when the
+run starts is asked for as a file, with the button, when it is wired into an input that
+reads its file. It browses the machine the
 graph runs on, not the one the browser is on, because that is where the engine opens
 files; a native browser file dialog cannot be used here, since browsers reveal only a
 file's name and never its location. Deployed tools get the same picker, but only when
