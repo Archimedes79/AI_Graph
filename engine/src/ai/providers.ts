@@ -640,7 +640,11 @@ export function aiService(settings: Partial<ProviderSettings> = {}): AiService {
       const provider = request.provider && request.provider !== 'default'
         ? request.provider
         : config.provider;
-      const model = request.model || config.model;
+      // The machine's default model belongs to the machine's default provider.
+      // A node that names another provider and no model would otherwise send
+      // that provider a model it has never heard of, and the 404 it answers
+      // with reads like a broken endpoint. Asked for nothing, it is told so.
+      const model = request.model || (provider === config.provider ? config.model : '');
       if (!model) {
         throw new Error(
           `No model configured for provider '${provider}'. Name one on the AI node, `
