@@ -139,15 +139,28 @@ export function applyMemory(
   }
 }
 
-const DEFAULT_METADATA: GraphMetadata = {
-  name: 'Untitled Graph',
-  version: '1.0.0',
-  description: '',
-  author: '',
-  tags: [],
-  ai_defaults: { provider: 'default', model: '' },
-  gui_scheme: 'night',
-};
+/**
+ * A graph's settings when nothing says otherwise: a new graph's, and what an
+ * older file that leaves one out means. The one statement of them -- the
+ * editor starts a new graph from it, and `flow.json` leaves out what equals
+ * it. A fresh object each call, so no two graphs share an `ai_defaults`.
+ */
+export function defaultMetadata(): GraphMetadata {
+  return {
+    name: 'Untitled Graph',
+    version: '1.0.0',
+    description: '',
+    author: '',
+    tags: [],
+    // Which AI this graph's AI nodes call when they run, set once for the
+    // whole graph (⚙ Settings) instead of once per node. 'default' means
+    // unset, which the running engine resolves to its own fallback; whoever
+    // runs a deployed copy can override it without editing the graph -- see
+    // ai/settings.ts.
+    ai_defaults: { provider: 'default', model: '' },
+    gui_scheme: 'night',
+  };
+}
 
 /**
  * Read a graph from parsed JSON, filling in what an older file omits.
@@ -165,7 +178,7 @@ export function parseGraph(raw: unknown): Graph {
   const edges = Array.isArray(source.edges) ? source.edges : [];
 
   return {
-    metadata: { ...DEFAULT_METADATA, ...(source.metadata as object ?? {}) },
+    metadata: { ...defaultMetadata(), ...(source.metadata as object ?? {}) },
     nodes: nodes.map(parseNode),
     edges: edges.map(parseEdge),
   };

@@ -31,8 +31,7 @@ export default function App() {
   // Saving and exporting are about the whole document, whichever level of it
   // the canvas is showing; running is about the level you are looking at.
   const rootGraph = useGraphStore((s) => s.rootGraph);
-  const setRFNodes = useGraphStore((s) => s.setRFNodes);
-  const setRFEdges = useGraphStore((s) => s.setRFEdges);
+  const newGraph = useGraphStore((s) => s.newGraph);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const currentFilePath = useGraphStore((s) => s.currentFilePath);
   const setCurrentFilePath = useGraphStore((s) => s.setCurrentFilePath);
@@ -225,11 +224,7 @@ export default function App() {
 
   const handleNewGraph = () => {
     if (!confirmDiscard('Start a new graph?')) return;
-    setRFNodes([]);
-    setRFEdges([]);
-    setMetadata({ name: 'Untitled Graph', description: '', author: '', tags: [], version: '1.0.0' });
-    setCurrentFilePath(null);
-    markSaved();
+    newGraph();
   };
 
   // Path-based Load/Save/Save As -- a small modal collects the absolute

@@ -54,6 +54,25 @@ describe('graphStore.currentFilePath', () => {
   });
 });
 
+describe('graphStore.newGraph', () => {
+  it('starts from the engine\'s defaults, keeping nothing of the graph before it', () => {
+    // "New graph" used to merge a name and four other keys into the old
+    // metadata: a pinned AI and a colour scheme were saved into the new one,
+    // and Undo brought the old graph's nodes back.
+    loadTestGraph([graphNode({ id: 'old' })]);
+    useGraphStore.getState().setMetadata({ ai_defaults: { provider: 'openai', model: 'gpt' }, gui_scheme: 'paper' });
+    useGraphStore.getState().setCurrentFilePath('/tmp/old', true);
+    useGraphStore.getState().setRFNodes([]);
+    useGraphStore.getState().newGraph();
+    const state = useGraphStore.getState();
+    expect(state.metadata).toEqual(parseGraph({ nodes: [], edges: [] }).metadata);
+    expect(state.rfNodes).toEqual([]);
+    expect(state.past).toEqual([]);
+    expect(state.currentFilePath).toBeNull();
+    expect(state.isDirty()).toBe(false);
+  });
+});
+
 describe('graphStore.updateNode edge pruning', () => {
   it('removes edges attached to ports no longer present after an update', () => {
     const w1 = WIDGET_BUILDERS.input_picker.create('A');

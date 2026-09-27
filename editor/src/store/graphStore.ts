@@ -12,7 +12,7 @@ import { delivered } from './executionStatus';
 import { NODE_KINDS, savedNode, whenMissing } from '@/document/nodeKinds';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 import type React from 'react';
-import { applyMemory } from '@engine/graph.ts';
+import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { inferInterface } from '@engine/execution/interface.ts';
@@ -116,6 +116,12 @@ export interface GraphStore {
   setTextOutputWindows: (windows: { nodeId: string; label: string; content: string }[]) => void;
   closeTextOutputWindow: (nodeId: string) => void;
   loadGraph: (graph: Graph) => void;
+  /**
+   * An empty graph with the engine's default settings, as a document of its
+   * own: nothing of the one before it -- its pinned AI, its colour scheme,
+   * its undo steps -- carries over.
+   */
+  newGraph: () => void;
   exportGraph: () => Graph;
   /** Go into the graph a node holds. It becomes the open document. */
   openSubgraph: (nodeId: string) => void;
@@ -335,19 +341,8 @@ function normalizeGraph(graph: Graph): Graph {
   };
 }
 
-const defaultMetadata = (): GraphMetadata => ({
-  name: 'Untitled Graph',
-  version: '1.0.0',
-  description: '',
-  author: '',
-  tags: [],
-  // Which AI this graph's AI nodes call when they run, set once for the whole
-  // graph (⚙ Settings) instead of once per node. 'default' means unset, which
-  // the backend resolves to its own fallback; whoever runs a deployed copy can
-  // override it without editing the graph -- see engine/src/ai/settings.ts.
-  ai_defaults: { provider: 'default', model: '' },
-  gui_scheme: 'night',
-});
+/** The engine's defaults (`defaultMetadata`), in the editor's typed view of them. */
+const defaultMetadata = (): GraphMetadata => engineDefaults() as GraphMetadata;
 
 // How often a run in flight is polled. Fast enough that the node name keeps up
 // with a quick graph, slow enough not to flood a local server during a long one.
@@ -666,6 +661,8 @@ export const useGraphStore = create<GraphStore>()(
       // graph is guaranteed to read as clean.
       get().markSaved();
     },
+
+    newGraph: () => get().loadGraph({ metadata: defaultMetadata(), nodes: [], edges: [] }),
 
     openSubgraph: (nodeId) => {
       // Not while a run is in flight: its result is about to arrive, and it
