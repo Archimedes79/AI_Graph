@@ -257,7 +257,8 @@ engine/src                               editor/src
   main.ts            the entry point       main.tsx  App.tsx   the editor's entry and shell
   graph.ts           the document          graph.ts            the document, as the editor holds it
   errors.ts          NotFound · NotAGraph  document/           what a graph is to the editor: nodeKinds,
-                                             guiWidgets (a page's ports), layout (the grid)
+                                             guiWidgets (a page's ports), layout (the grid),
+                                             wires (a canvas wire as the saved edge)
   elements/          see above             elements/           see above
   authoring/         how a body is         authoring/          writing a body in four steps: ✨ Generate,
     generation.ts    written, where it       FourSteps           Try it, the live transcript, the

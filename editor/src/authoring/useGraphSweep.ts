@@ -9,6 +9,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
 import type { GenerateResponse } from '@/api/client';
 import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
+import { graphEdge } from '@/document/wires';
 import { inferInterface } from '@engine/execution/interface.ts';
 import { nodeFacts } from './nodeFacts';
 import { blockFacts } from './blockFacts';
@@ -38,13 +39,7 @@ export function useGraphSweep(): SweepState {
     const live = () => useGraphStore.getState();
     const nodesOf = () => live().rfNodes.map((item) => item.data.graphNode);
     const rfEdges = () => live().rfEdges;
-    const dslEdges = (): GraphEdge[] => rfEdges().map((edge) => ({
-      id: edge.id,
-      source_node_id: edge.source,
-      target_node_id: edge.target,
-      source_port_id: edge.sourceHandle ?? '',
-      target_port_id: edge.targetHandle ?? '',
-    } as GraphEdge));
+    const dslEdges = (): GraphEdge[] => rfEdges().map(graphEdge);
 
     const missing = missingExamples(nodesOf(), dslEdges());
     if (missing.length) {

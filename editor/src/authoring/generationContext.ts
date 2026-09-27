@@ -2,6 +2,7 @@ import type { ExecutionResult, GraphNode, Wire } from '@/graph';
 // This module reads the element registry, so no element's `…GuiBuilder.ts` may import
 // it: that would be a cycle through the registry (see `outputFormat.ts`).
 import { NODE_BUILDERS } from '@/elements/registry';
+import { graphEdge } from '@/document/wires';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { filePorts, type FileGraph } from '@engine/execution/fileInputs.ts';
 
@@ -84,16 +85,7 @@ function preview(value: unknown): string {
  * is what a run hands the node there, read or not.
  */
 export function pathPorts(node: GraphNode, nodes: GraphNode[] = [], edges: Wire[] = []): string[] {
-  const graph: FileGraph = {
-    nodes: nodes as FileGraph['nodes'],
-    edges: edges.map((edge, at) => ({
-      id: `e${at}`,
-      source_node_id: edge.source,
-      source_port_id: edge.sourceHandle ?? '',
-      target_node_id: edge.target,
-      target_port_id: edge.targetHandle ?? '',
-    })),
-  };
+  const graph: FileGraph = { nodes: nodes as FileGraph['nodes'], edges: edges.map(graphEdge) };
   return filePorts(node, graph, engineRegistry);
 }
 

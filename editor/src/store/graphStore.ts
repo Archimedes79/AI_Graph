@@ -19,6 +19,7 @@ import { inferInterface } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 import { freeId } from '@/document/ids';
+import { graphEdge } from '@/document/wires';
 import { wireOf } from '@engine/project/flow.ts';
 
 type RFNode = Node<RFNodeData>;
@@ -466,10 +467,7 @@ export const useGraphStore = create<GraphStore>()(
     connect: (wire) => {
       // Named the way flow.json writes a wire, and known by its two ends: a wire
       // read from an older file keeps the id it was saved with.
-      const id = wireOf({
-        id: '', source_node_id: wire.source, source_port_id: wire.sourceHandle ?? '',
-        target_node_id: wire.target, target_port_id: wire.targetHandle ?? '',
-      });
+      const id = wireOf(graphEdge(wire));
       const joins = (edge: Edge): boolean => edge.source === wire.source && edge.target === wire.target
         && (edge.sourceHandle ?? '') === (wire.sourceHandle ?? '') && (edge.targetHandle ?? '') === (wire.targetHandle ?? '');
       if (get().rfEdges.some(joins)) return;
@@ -717,13 +715,7 @@ export const useGraphStore = create<GraphStore>()(
         });
       });
 
-      const edges: GraphEdge[] = rfEdges.map((rfe) => ({
-        id: rfe.id,
-        source_node_id: rfe.source,
-        source_port_id: rfe.sourceHandle ?? 'output',
-        target_node_id: rfe.target,
-        target_port_id: rfe.targetHandle ?? 'input',
-      }));
+      const edges: GraphEdge[] = rfEdges.map(graphEdge);
 
       return { metadata, nodes, edges };
     },
