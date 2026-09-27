@@ -13,6 +13,7 @@
 // what exists.
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { parseGraph, type Graph } from '../graph.ts';
@@ -23,7 +24,7 @@ import { triggeredNodes } from '../execution/triggers.ts';
 import { aiSetting, candidatePaths } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
-  Download, Refusal, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
+  Download, Refusal, foreignRequest, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
 } from './http.ts';
 import { browse, extensionFilter } from './browse.ts';
 import { NotFound } from '../errors.ts';
@@ -125,6 +126,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const url = new URL(request.url ?? '/', `http://${host}`);
     const path = url.pathname;
+    const foreign = foreignRequest(request, { loopback, port: (server.address() as AddressInfo).port }, path.startsWith('/api/'));
+    if (foreign) return sendJson(response, 403, { detail: foreign });
 
     if (path.startsWith('/api/')) {
       // Watching and stopping still answer while the runs wind down; nothing new starts.

@@ -514,6 +514,11 @@ or a page that has them can do the same.
 ## Security boundaries
 
 - Everything binds to loopback; file browsing and "open in my editor" switch off otherwise.
+- The server answers its own page, not every page in the browser: on loopback a request must
+  name 127.0.0.1, localhost or [::1] with the server's port (no DNS rebinding); an API call
+  that says where it comes from must come from the server's own origin, one the browser
+  marks cross-site is refused, and a body is read only when it is sent as `application/json`
+  (`foreignRequest` and `readJson` in `host/http.ts`).
 - The `for` column of the contract is the line between a deployed tool and the editor: a
   deployed tool answers its graph, run/watch/stop, a file picker and a read-only view of
   its AI settings — no generation, no editing, no writing settings.
