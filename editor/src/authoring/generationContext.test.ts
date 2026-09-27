@@ -157,7 +157,7 @@ describe('duplicate neighbours', () => {
     const wire = { source: 'worker', sourceHandle: 'output', target: 'sink', targetHandle: 'value' };
 
     expect(outputTargets('worker', [code, out], [wire, { ...wire }], true).output)
-      .toBe('"Result" (port "Value"), which wants shown as text in a window');
+      .toBe('"Result" (port "Value"), which wants the run\'s result');
   });
 });
 

@@ -1,7 +1,4 @@
 {
   "label": "Numbers",
-  "config": {
-    "output_label": "Numbers",
-    "write_mode": "window"
-  }
+  "config": {}
 }

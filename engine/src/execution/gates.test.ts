@@ -427,7 +427,7 @@ describe('a graph inside a node', () => {
       [
         node('open', 'input', { input_mode: 'text' }, { out: ['output'] }),
         node('made', 'code', { code: 'function run() { return { out: "made" }; }' }, { out: ['out'] }),
-        node('result', 'output', { output_label: 'Result' }, { in: ['value'] }),
+        node('result', 'output', {}, { in: ['value'] }),
       ],
       [
         edge('g', 'open', 'output', 'made', RUN_PORT),

@@ -159,7 +159,7 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
     } : {
       where: 'graph',
       problem: 'Nothing a person can see: there is no gui node and no output node, so a run computes its answer and shows nobody.',
-      fix: 'End every branch in an "output" node (config.write_mode "window" plus an output_label, or "file"), or in a "gui" node with a block that displays the value.',
+      fix: 'End every branch in an "output" node -- the run\'s result, under its label; config.write_mode "file" or "directory" writes it too -- or in a "gui" node with a block that displays the value.',
     });
   }
   if (!inside) problems.push(...sharedResultLabels(graph), ...secondPages(graph));
@@ -208,7 +208,7 @@ function sharedResultLabels(graph: Graph): Problem[] {
       problem: ids.length > 1
         ? `These output nodes share the label "${label}", so the run's result keeps only the first under it, the rest under ${elsewhere}.`
         : `Its label "${label}" is the key another output's result is handed on under, so the run's result keeps it under ${elsewhere}.`,
-      fix: 'Give every output node its own output_label.',
+      fix: 'Give every output node its own label.',
     });
   }
   return problems;

@@ -87,7 +87,6 @@ export type NodeConfig = {
   subgraph?: unknown;
   /** What a node is meant to do, written before it is filled in: `task.md` in a project. */
   task: string;
-  output_label: string;
   prompt_at_runtime: boolean;
   read_file_inputs: boolean;
   recursive: boolean;
@@ -96,7 +95,8 @@ export type NodeConfig = {
   /** Unset: the model's own default -- current Claude models refuse one at all. */
   temperature?: number;
   value?: string | null;
-  write_mode: 'none' | 'file' | 'directory' | 'window';
+  /** An output node: also write the run's result to a file, or one file per value into a folder. */
+  write_mode: 'none' | 'file' | 'directory';
 };
 
 /**

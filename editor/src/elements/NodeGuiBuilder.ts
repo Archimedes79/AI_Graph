@@ -71,10 +71,9 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   abstract readonly nodeType: NodeType;
 
   // ── Run time ──────────────────────────────────────────────────────────────
-  // Nothing, on purpose. Whether a node's result opens a window is
-  // `NODE_KINDS[type].showsResultWindow` (document/nodeKinds.ts), which a deployed
-  // tool reads without this class; whether a node is a page of widgets is the
-  // engine's `hasInterface`, asked through `showsPage` (document/guiWidgets.ts).
+  // Nothing, on purpose. Whether a node is a page of widgets is the engine's
+  // `hasInterface`, asked through `showsPage` (document/guiWidgets.ts), which a
+  // deployed tool reads without this class.
 
   // ── Build time ────────────────────────────────────────────────────────────
   // The editor: the palette, a new element, its panels, what ✨ Generate is told.

@@ -239,9 +239,9 @@ describe('executeGraph', () => {
     node('a', 'input', { input_mode: 'text', value: 'alpha' }),
     node('b', 'input', { input_mode: 'text', value: 'beta' }),
     node('c', 'input', { input_mode: 'text', value: 'gamma' }),
-    node('first', 'output', { output_label: 'Result' }),
-    node('clash', 'output', { output_label: 'Result (second)' }),
-    node('second', 'output', { output_label: 'Result' }),
+    { ...node('first', 'output'), label: 'Result' },
+    { ...node('clash', 'output'), label: 'Result (second)' },
+    { ...node('second', 'output'), label: 'Result' },
   ], [
     edge('e1', 'a', 'output', 'first', 'value'),
     edge('e2', 'b', 'output', 'second', 'value'),

@@ -2,19 +2,18 @@ import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 
-/** Where a result is sent, in words, for the node that makes it. */
+/** Where a result goes, in words, for the node that makes it. */
 function destination(node: GraphNode): string {
   const path = String(node.config.value ?? '').trim();
   const named = path ? ` "${path}"` : '';
   switch (node.config.write_mode) {
-    case 'file': return `written to the file${named}: a text as it is, anything else as JSON`;
-    case 'directory': return `written into the folder${named}, one file per value`;
-    case 'window': return 'shown as text in a window';
-    default: return 'shown in the results';
+    case 'file': return `the run's result, also written to the file${named}: a text as it is, anything else as JSON`;
+    case 'directory': return `the run's result, also written into the folder${named}, one file per value`;
+    default: return 'the run\'s result';
   }
 }
 
-/** Ends a branch: shows the result in a window, or writes it to a file or directory. */
+/** Ends a branch: what arrives is the run's result, under the node's name -- and, if asked, a file or a folder of it. */
 export class OutputNodeGuiBuilder extends NodeGuiBuilder {
   readonly nodeType = 'output';
 
@@ -22,7 +21,7 @@ export class OutputNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly label = 'Output';
 
-  readonly hint = 'Show the result in a window, or write it to a file or directory';
+  readonly hint = 'The run\'s result, under this node\'s name -- also written to a file or a folder, if asked';
 
   readonly icon = '📤';
 
@@ -39,7 +38,7 @@ export class OutputNodeGuiBuilder extends NodeGuiBuilder {
 
   override portHint(side: 'inputs' | 'outputs'): string | undefined {
     return side === 'inputs'
-      ? 'Every input but “path” is shown or written. A wired “path” overrides the one set above.'
+      ? 'Every input but “path” is the result. A wired “path” overrides the one set above.'
       : undefined;
   }
 

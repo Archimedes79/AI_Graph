@@ -52,9 +52,8 @@ ${[...AUTHORED.map(([type, note]) => `- ${type}: ${note}`), FILE_WORK].join('\n'
  * A generated graph that computes correctly and ends in nothing shows the
  * person who ran it a blank screen, and reads as "the tool does not work".
  */
-const MUST_SHOW = `Every graph must end in something a person can see. A run computes values and then stops; unless a node displays them, the answer exists only inside the run and the tool looks broken. So the last node of every branch must be one of:
-- an "output" node with config.write_mode = "window" and a config.output_label, which pops the result up in a window; or
-- an "output" node with config.write_mode = "file" or "directory", when the point is to write a file; or
+const MUST_SHOW = `Every graph must end in something a person can see. A run computes values and then stops; unless a node hands them on, the answer exists only inside the run and the tool looks broken. So the last node of every branch must be one of:
+- an "output" node: what arrives there is the run's result, shown to whoever ran the graph under the node's label -- give each output node a label of its own; with config.write_mode = "file" or "directory" it is also written to a file; or
 - a "gui" node, when the graph is meant to be a small application with its own page.
 Never leave a code or ai node as the end of a branch: its result would go nowhere.`;
 
@@ -98,11 +97,11 @@ const EXAMPLE = `A complete, working example:
      "inputs": [{"id": "text", "name": "Text", "kind": "input", "data_type": "text", "multi": false, "required": false}],
      "outputs": [{"id": "rows", "name": "Rows", "kind": "output", "data_type": "number", "multi": false, "required": false}],
      "config": {"code": "function run(inputs) { const lines = String(inputs.text).trim().split('\\\\n'); return { rows: lines.length }; }"}},
-    {"id": "shown", "node_type": "output", "label": "Result", "description": "",
+    {"id": "shown", "node_type": "output", "label": "Rows", "description": "",
      "position": {"x": 760, "y": 120},
      "inputs": [{"id": "value", "name": "Value", "kind": "input", "data_type": "any", "multi": false, "required": false}],
      "outputs": [],
-     "config": {"write_mode": "window", "output_label": "Rows"}}
+     "config": {}}
   ],
   "edges": [
     {"id": "e1", "source_node_id": "source", "source_port_id": "output", "target_node_id": "rows", "target_port_id": "text"},

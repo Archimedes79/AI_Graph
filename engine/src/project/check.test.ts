@@ -21,7 +21,7 @@ function graph(overrides: { schema?: unknown; template?: string } = {}): Graph {
         id: 'say', node_type: 'ai', label: 'Say', inputs: [port('total', 'input')], outputs: [port('output', 'output')],
         config: { system_prompt: 'Report.', prompt_template: overrides.template ?? 'There are {{total}}.' },
       },
-      { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: { write_mode: 'window' } },
+      { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: {} },
     ],
     edges: [
       { id: 'e1', source_node_id: 'count', source_port_id: 'total', target_node_id: 'say', target_port_id: 'total' },
@@ -62,10 +62,10 @@ describe('what check finds in a graph', () => {
 
   it('finds two output nodes under one label, with the keys the run really uses', () => {
     const made = graph();
-    made.nodes[2].config.output_label = 'Answer';
+    made.nodes[2].label = 'Answer';
     made.nodes.push(
-      { ...made.nodes[2], id: 'clash', config: { write_mode: 'window', output_label: 'Answer (also)' } },
-      { ...made.nodes[2], id: 'also', config: { write_mode: 'window', output_label: 'Answer' } },
+      { ...made.nodes[2], id: 'clash', label: 'Answer (also)' },
+      { ...made.nodes[2], id: 'also', label: 'Answer' },
     );
     made.edges.push(
       { id: 'e3', source_node_id: 'say', source_port_id: 'output', target_node_id: 'also', target_port_id: 'value' },
@@ -74,7 +74,7 @@ describe('what check finds in a graph', () => {
     expect(problemsIn(made)).toEqual([expect.objectContaining({
       where: 'nodes "show", "also"',
       problem: 'These output nodes share the label "Answer", so the run\'s result keeps only the first under it, the rest under "Answer (also) 2".',
-      fix: 'Give every output node its own output_label.',
+      fix: 'Give every output node its own label.',
     })]);
   });
 

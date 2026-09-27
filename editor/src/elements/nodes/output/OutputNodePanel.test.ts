@@ -16,16 +16,16 @@ function panel(node: GraphNode): string {
   }));
 }
 
-/** An output node as a graph file that names nothing loads: its id keys the result. */
-function unnamed(): GraphNode {
-  const node = NODE_KINDS.output.create('totals');
-  return { ...node, config: baseNodeConfig() };
-}
-
 describe('an output node\'s panel', () => {
-  it('says that an empty name is the node\'s id, rather than show a name that looks lost (B57)', () => {
-    const html = panel(unnamed());
-    expect(html).toContain('placeholder="Empty: the node’s id, “totals”, names the result" aria-label="Name of the result" value=""');
+  it('is the run\'s result under the node\'s own name: no window to open, and no second name to give it', () => {
+    const node = { ...NODE_KINDS.output.create('totals'), label: 'Totals' };
+    const html = panel(node);
+    expect(html).toMatch(/<select[^>]*aria-label="Where the result goes"[^>]*><option value="none"[^>]*>Into the run&#x27;s result only<\/option><option value="file">[^<]*<\/option><option value="directory">[^<]*<\/option><\/select>/);
+    expect(html).not.toMatch(/window|Name of the result/i);
+    expect(html).toContain('The run&#x27;s result calls it what this node is called: “Totals”.');
+    // A node without a label is called by its id there, as the run keys it.
+    expect(panel({ ...node, label: '' })).toContain('what this node is called: “totals”.');
+    expect(baseNodeConfig()).not.toHaveProperty('output_label');
   });
 
   it('asks what the result is, which the node feeding it is told, in its own words', () => {

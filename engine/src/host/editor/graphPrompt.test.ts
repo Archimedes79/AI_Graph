@@ -141,9 +141,10 @@ describe('a graph that shows nothing', () => {
    * ended there, so running it showed a blank screen and the tool looked
    * broken. Ending in something visible is a rule, not a matter of taste.
    */
-  it('is ruled out in words', () => {
+  it('is ruled out in words: an output node is the run\'s result, under its label, and opens no window', () => {
     expect(GRAPH_SYSTEM).toContain('must end in something a person can see');
-    expect(GRAPH_SYSTEM).toContain('"window"');
+    expect(GRAPH_SYSTEM).toContain('what arrives there is the run\'s result, shown to whoever ran the graph under the node\'s label');
+    expect(GRAPH_SYSTEM).not.toMatch(/"window"|output_label/);
   });
 
   it('and the worked example obeys its own rule', () => {

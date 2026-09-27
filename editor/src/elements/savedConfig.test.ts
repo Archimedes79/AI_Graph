@@ -54,7 +54,7 @@ describe('NodeGuiBuilder.saved', () => {
     expect(saved.data).toEqual({});
     expect(saved.gui).toEqual({});
     expect(saved.trigger).toEqual({});
-    expect(saved.output).toEqual({ output_label: 'Result', write_mode: 'window' });
+    expect(saved.output).toEqual({});
     expect(Object.keys(saved.ai).sort()).toEqual(['batch_mode', 'system_prompt']);
     expect(Object.keys(saved.code).sort()).toEqual(['batch_mode', 'code']);
     expect(Object.keys(saved.subgraph)).toEqual(['subgraph']);

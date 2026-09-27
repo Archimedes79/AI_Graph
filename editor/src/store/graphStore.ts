@@ -43,9 +43,6 @@ export interface GraphStore {
   executionResult: ExecutionResult | null;
   isExecuting: boolean;
 
-  // Text Output node windows shown after a run
-  textOutputWindows: { nodeId: string; label: string; content: string }[];
-
   /**
    * The graphs this one is inside, outermost first: one frame per node that
    * was opened, each with the undo history of its own level.
@@ -121,7 +118,6 @@ export interface GraphStore {
    * conversation a second time.
    */
   setExecutionResult: (result: ExecutionResult | null, ran?: ExecutionResult) => void;
-  closeTextOutputWindow: (nodeId: string) => void;
   loadGraph: (graph: Graph) => void;
   /**
    * An empty graph with the engine's default settings, as a document of its
@@ -234,31 +230,6 @@ export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult):
       : r;
   });
   return { ...fresh, node_results: [...kept, ...merged], outputs: { ...previous.outputs, ...fresh.outputs } };
-}
-
-/**
- * The content of every `output` node set to `write_mode: "window"`, ready to
- * show in a floating window.
- */
-function collectTextOutputWindows(
-  graph: Graph,
-  result: ExecutionResult,
-): { nodeId: string; label: string; content: string }[] {
-  return graph.nodes
-    .filter((node) => NODE_KINDS[node.node_type]?.showsResultWindow?.(node) ?? false)
-    .map((node) => {
-      const nodeResult = result.node_results.find((r) => r.node_id === node.id);
-      if (!nodeResult || !delivered(nodeResult.status)) return null;
-      // Text as text; anything else as the JSON it is -- String() of an object
-      // is "[object Object]", which says nothing about the result it replaced.
-      const content = Object.values(nodeResult.outputs)
-        .flatMap((value) => (Array.isArray(value) ? value : [value]))
-        .filter((value) => value !== null && value !== undefined)
-        .map((value) => (typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)))
-        .join('\n');
-      return { nodeId: node.id, label: node.config.output_label || node.label, content };
-    })
-    .filter((w): w is { nodeId: string; label: string; content: string } => w !== null);
 }
 
 /**
@@ -444,7 +415,6 @@ export const useGraphStore = create<GraphStore>()(
     isProject: false,
     executionResult: null,
     isExecuting: false,
-    textOutputWindows: [],
     editingNodeId: null,
     subgraphStack: [],
     document: 0,
@@ -615,11 +585,6 @@ export const useGraphStore = create<GraphStore>()(
         }
       }),
 
-    closeTextOutputWindow: (nodeId) =>
-      set((state) => {
-        state.textOutputWindows = state.textOutputWindows.filter((w) => w.nodeId !== nodeId);
-      }),
-
     loadGraph: (graph) => {
       const normalizedGraph = normalizeGraph(graph);
       const { rfNodes, rfEdges } = buildReactFlowGraph(normalizedGraph);
@@ -641,7 +606,6 @@ export const useGraphStore = create<GraphStore>()(
         state.future = [];
         state.subgraphStack = [];
         state.editingNodeId = null;
-        state.textOutputWindows = [];
         state.document += 1;
       });
       // Snapshot through exportGraph() rather than from normalizedGraph: it is
@@ -794,11 +758,9 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges = rfEdges;
         // Everything that names a node of the graph that was here. Left
         // standing, each points at something that may not exist any more: a
-        // result against ids that now mean other nodes, a window from another
-        // graph's run floating over this one.
+        // result against ids that now mean other nodes, a dialog on one of them.
         state.executionResult = null;
         state.editingNodeId = null;
-        state.textOutputWindows = [];
       });
     },
 
@@ -873,7 +835,6 @@ export const useGraphStore = create<GraphStore>()(
       const previous = trigger ? get().executionResult : null;
       set((state) => {
         state.isExecuting = true;
-        if (!trigger) state.textOutputWindows = [];
       });
       if (!trigger) setExecutionResult(null);
       try {
@@ -906,7 +867,7 @@ export const useGraphStore = create<GraphStore>()(
         }
 
         // Another graph is open now. Its nodes may share this one's ids, and
-        // what this run made -- a shape, a remembered value, a window -- is
+        // what this run made -- a shape, a remembered value, a result -- is
         // not theirs.
         if (!stillOpen()) return;
         const fresh: ExecutionResult = snapshot.result ?? {
@@ -921,16 +882,6 @@ export const useGraphStore = create<GraphStore>()(
         // being held in a component.
         setExecutionResult(result, fresh);
         get().clearSentValues(fresh, graph);
-        // Only what this round made opens a window. A node that stood still, or
-        // was not asked, keeps the window it has -- or keeps it closed, if the
-        // person closed it.
-        const opened = collectTextOutputWindows(graph, fresh);
-        const again = new Set(opened.map((w) => w.nodeId));
-        set((state) => {
-          state.textOutputWindows = previous
-            ? [...state.textOutputWindows.filter((w) => !again.has(w.nodeId)), ...opened]
-            : opened;
-        });
       } catch (error) {
         if (stillOpen()) setExecutionResult({
           status: 'error',

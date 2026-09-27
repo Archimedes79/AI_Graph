@@ -5,9 +5,9 @@ import { GuiSurfacePage } from '@/page/GuiPage';
 import { useDeliveredRun } from '@/page/useDeliveredRun';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
-import OutputWindows from '@/dialogs/OutputWindows';
 import DeliveredHeader from '@/page/DeliveredHeader';
 import RuntimeAISettings from './RuntimeAISettings';
+import RunResult from './RunResult';
 import { watchSchedule } from './watchSchedule';
 import { call, type ScheduleState } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -127,18 +127,20 @@ export default function RuntimeApp() {
           </div>
         )}
 
-        {/* A graph with no GUI node has nothing to draw, so without this the
+        {/* A graph with no page has nothing to draw, so without this the
             page is an empty dark rectangle and the user has no idea what the
-            tool does or that ▶ Run is the whole interaction. */}
+            tool does or that ▶ Run is the whole interaction -- and what a run
+            hands back, its output nodes' values, is what it shows. */}
         {ready && !hasWidgets && !runError && (
           <div className="m-6 max-w-2xl">
             <p className="text-sm mb-2" style={{ color: TEXT }}>
               {metadata.description || `${metadata.name} is ready to run.`}
             </p>
             <p className="text-xs" style={{ color: DIM }}>
-              Press <strong>▶ Run</strong> above. Anything the tool still needs — a file to read,
+              Press <strong>▶ Run</strong> above. Anything the tool still needs — a value to start from,
               a place to write — is asked for first. Results appear here when it finishes.
             </p>
+            <RunResult result={executionResult} />
           </div>
         )}
 
@@ -148,7 +150,6 @@ export default function RuntimeApp() {
           onSubmit={delivered.submit}
           onCancel={delivered.cancel}
         />
-        <OutputWindows />
       </div>
 
       {showSettings && <RuntimeAISettings onClose={() => setShowSettings(false)} />}
