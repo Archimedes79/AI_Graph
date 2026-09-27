@@ -484,14 +484,19 @@ or a page that has them can do the same.
 - **Examples are tests, and the one sample.** A node's optional `examples.md`
   ([`execution/examples.ts`](../engine/src/execution/examples.ts)) is run by `test` and the
   MCP server's `test_graph`, through its one `testGraph`, at every depth of the graph; one node
-  alone is run by `executor.ts`'s `runNodeAlone`, behind `run-node` and `run_node` alike. Its first section is the node dialog's example, which Try it
-  runs and ✨ is written and checked against. `check` holds an example's inputs to the
-  output interface of the node wired into that port.
+  alone is run by `executor.ts`'s `runNodeAlone`, behind `run-node` and `run_node` alike. Its
+  first section is the node dialog's example, which Try it runs and ✨ is written and checked
+  against. `check` holds an example's inputs to the output interface of the node wired into
+  that port.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
-  that element's `problems()`.
+  that element's `problems()`. Which files a project's nodes read is asked of the folder's
+  structure before any text is read in (`folder.ts`'s `readStructure`), as the loader asks it.
+  Beside the problems, `notesIn` gives advice that fails nothing: two output nodes sharing a
+  label, as every output an older editor made did. The run's result keeps the last one under
+  the label, as it always did, and the others under their ids (`NodeRunner.ts`'s `resultKeys`).
 
 ## Where state lives
 
