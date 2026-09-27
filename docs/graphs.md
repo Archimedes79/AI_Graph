@@ -515,8 +515,9 @@ the same four steps:
   request first, as the model receives it — put together by the engine, one request per
   item, when the node runs per item or reads files; a block *draws* what came back, at
   the block's own proportions — the chart, looked at, before the graph has ever run.
-  What came out is set against step 2's example output, and **Keep this result** makes
-  it that.
+  A node's result is set against step 2's example output, and **Keep this result** makes
+  it that; a block's step 2 is the one thing its kind shows, so what it draws is looked
+  at, not held to an example.
 - **What ✨ sends**, beside the button, shows the request word for word: the brief above,
   and — for a block — the page's colour scheme. The example is the sample the generated
   body is then run against and, for a chart, *looked at* (viewBox, NaN, an empty frame,
