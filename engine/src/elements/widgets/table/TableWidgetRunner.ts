@@ -1,5 +1,4 @@
 import { TransformingDisplayRunner } from '../TransformingDisplayRunner.ts';
-import type { Widget } from '../../WidgetRunner.ts';
 import type { Generation } from '../../../authoring/generation.ts';
 import { TRANSFORM_FIELDS } from '../TransformingDisplayRunner.ts';
 
@@ -9,13 +8,8 @@ export class TableWidgetRunner extends TransformingDisplayRunner {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  /**
-   * Rows -- unless the table has a transform of its own, which takes whatever
-   * it was written to read and makes the rows itself. A block handed over
-   * without its settings (`config`) counts as one without a transform.
-   */
-  override receives(widget: Widget): string | undefined {
-    if (String(widget.config?.code ?? '').trim()) return undefined;
+  /** Rows, whose keys become the columns. */
+  protected override receivesAsItIs(): string {
     return 'rows: a list of objects with the same keys -- each key becomes a column header, in the '
       + 'order the first row has them -- or a list of lists whose first row is the header.';
   }

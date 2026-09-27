@@ -2,7 +2,18 @@ import type { GraphNode, GuiWidget } from '@/graph';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 import { WIDGET_BUILDERS } from '../../widgets/roster';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { widgetOfPort } from '@/document/guiWidgets';
+
+/**
+ * What *widget* wants handed to it, asked of the engine's element with the
+ * block as the engine holds one: its settings under `config`. Handed the flat
+ * block the editor stores, the element found no code on it, so a chart whose
+ * own draw() reads rows still told the node feeding it to send points.
+ */
+function receives(widget: GuiWidget): string | undefined {
+  return engineRegistry.widget(widget.kind)?.receives(parseWidget(widget));
+}
 
 /**
  * A composite: it holds widgets, generates nothing itself, and emits what its widgets emit.
@@ -51,14 +62,14 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
   override describeAsTarget(node: GraphNode, port?: string): string {
     const widget = port ? widgetOfPort(node, port) : undefined;
     if (!widget) return super.describeAsTarget(node, port);
-    const wants = engineRegistry.widget(widget.kind)?.receives(widget as never);
+    const wants = receives(widget);
     const where = `Output goes to the "${widget.label || widget.kind}" block (${widget.kind}) on the page "${node.label}".`;
     return wants ? `${where} It wants ${wants}` : where;
   }
 
   override wantsOn(node: GraphNode, port: string): string | undefined {
     const widget = widgetOfPort(node, port);
-    return widget ? engineRegistry.widget(widget.kind)?.receives(widget as never) : super.wantsOn(node, port);
+    return widget ? receives(widget) : super.wantsOn(node, port);
   }
 
   override describeOutput(): string {

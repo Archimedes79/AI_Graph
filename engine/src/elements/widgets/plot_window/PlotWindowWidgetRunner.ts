@@ -26,15 +26,8 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  /**
-   * Points -- unless the chart has a `draw()` of its own, which takes
-   * whatever it was written to read. Told "points" regardless, the node
-   * upstream was generated to pre-shape rows into points that the chart's
-   * body then read as rows. A block handed over without its settings
-   * (`config`) counts as one without a body.
-   */
-  override receives(widget: Widget): string | undefined {
-    if (String(widget.config?.code ?? '').trim()) return undefined;
+  /** The data to plot, which the page draws -- a `draw()` of its own takes whatever it was written to read. */
+  protected override receivesAsItIs(): string {
     return 'the data to plot, NOT a drawing: a list of points -- numbers, or {"label": string, '
       + '"value": number} -- or an object {"kind": "bars"|"columns"|"line"|"donut", "title": string, '
       + '"points": [...]}. The chart draws it at the block\'s real size and in the page\'s colours, '

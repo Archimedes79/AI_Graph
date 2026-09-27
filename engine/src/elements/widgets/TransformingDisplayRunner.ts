@@ -47,4 +47,23 @@ export abstract class TransformingDisplayRunner extends DisplayWidgetRunner<Tran
   override logic(widget: Widget): Logic {
     return logicFrom(widget, 'code', TRANSFORM_FIELDS);
   }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  /**
+   * What this kind draws as it arrives -- unless the block has code of its
+   * own, which takes whatever it was written to read and shapes it itself.
+   * Told the kind's shape regardless, the node upstream was generated to
+   * pre-shape rows into points that the block's own code then read as rows.
+   *
+   * Once, here: each of the three kinds carried the same test for its code
+   * in front of its own sentence. A block handed over without its settings
+   * (`config`) counts as one without code.
+   */
+  override receives(widget: Widget): string | undefined {
+    return String(widget.config?.code ?? '').trim() ? undefined : this.receivesAsItIs();
+  }
+
+  /** What a node wired into this kind of block should hand it, while the block has no code of its own. */
+  protected abstract receivesAsItIs(): string;
 }
