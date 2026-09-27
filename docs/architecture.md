@@ -267,12 +267,13 @@ engine/src                               editor/src
   authoring/         how a body is         authoring/          writing a body in four steps: ✨ Generate,
     generation.ts    written, where it       FourSteps           Try it, the live transcript, the
     logic.ts         is kept, who runs it    NodeSteps …         page-wide sweep (graphSweep.ts)
+    promptFile.ts    prompt.md: template + request
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
     executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
     triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
     batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
     runtimeValues.ts  images.ts              DesignerTab …       Page tab, the Preview tab, layout, schemes
-    reuse.ts  interface.ts  examples.ts
+    reuse.ts  interface.ts  examples.ts  exampleFiles.ts
   project/           a graph on disk
     folder.ts        read · write · watch
     flow.ts          flow.json: nodes and wires
@@ -413,8 +414,42 @@ the node that wants its text.
 The example is one thing, kept once: the first section of the node's `examples.md`
 (`authoring/examplePair.ts`). It is the sample ✨ is written and
 checked against (`nodeFacts`), what Try it runs, what an AI node's request is shown for,
-and what `test` runs. Where the file holds a judge's sentence or more examples, Try it runs
-them the way `test` does (`testNode`), so the answer shown is the answer judged.
+what `test` runs, and what `run-node` runs when it is given no inputs. Where the file holds
+a judge's sentence or more examples, Try it runs them the way `test` does (`testNode`), so
+the answer shown is the answer judged.
+
+**An example's files are the node's.** An example whose input reads a file names one of
+the node's own -- `"example/rows.csv"` -- kept in `nodes/<id>/example/`, and in the graph as
+the setting `example_files` (`execution/exampleFiles.ts`). Wherever a node runs on its
+example -- Try it, `test`, `run-node`, ✨'s probe -- a name of that shape is read from them
+first (`withExampleFiles`, in `executeNode`); a run of the graph never looks there. So an
+example runs wherever the project goes, and not only while the file it was taken from stays
+where it was.
+
+**What ✨ is sent is a file.** A code or AI node's request ends its `prompt.md`
+(`authoring/promptFile.ts`): a template naming `{Input Needs}`, `{Output Example}` and
+`{Graph}`, a line `Prompt:`, and the request in the person's words. The engine fills the
+three from what the node holds (`host/editor/brief.ts`): each input -- its type, where it
+is wired from and what that node hands on, whether its file is read, a sample; each output
+-- where it goes and what the node there wants, the output definition (`output.md`), the
+kept shape, what the examples must give; and the graph around the node. After it comes the
+engine's own frame, which says what makes an answer usable and not what anyone asks: the
+skeleton to complete and the keys to return, for code; for an AI node, its instructions
+and its message layout in tags of their own, and that `output.md` is added at run time. A
+text with neither the `Prompt:` line nor a variable is a bare request, sent in the standard
+template -- which is what a graph written by a model gives a node (`config.prompt`). Step 3
+edits the request and leaves the template as the file has it.
+
+**Three things are written from it** (`GenerateRequest.write`): the body; one example of
+what arrives, with the file each file-reading input reads (`example`), which become the
+example's input and the node's example files; and the output definition (`output`), what
+goes out and in what format, with an example. Only the body is run. An AI node's body is its
+instructions and its message template, written together.
+
+**A fixed format.** An AI node whose output port is typed `json` hands on the answer
+parsed (a ```` ```json ```` fence around it taken off), and fails, saying how the answer
+began, when it is not JSON -- so a node that maps a file it cannot know onto rows hands on
+rows, like the code node beside it.
 
 An AI node and a code node have the same sections in the same order and the same buttons;
 only the body differs. Where an element keeps a result differently, its panel hands that to
@@ -442,10 +477,11 @@ node holds. It is one undo step, and opens the node's dialog (`authoring/dropped
 **Changing what there is.** "Say what to change" and ✨ Fix go through the one generate path
 with `refine`: the body as it is, what came of it (the try on screen, else the last run) and
 the words -- none for a fix, which is the repair step made of the body there is. The answer
-brings the task back restated, and the dialog writes both as one step and tries it at once.
-A change is not held to the example's expectation, written before it, and its repair is
-written from the restated task and the change: held to the old one, the repair turned the
-change back while the task said it was made.
+brings the request back restated, and the dialog writes both as one step -- the request
+after `Prompt:` -- and tries it at once. A change is not held to the example's
+expectation, written before it, and its repair is written from the restated request and
+the change: held to the old one, the repair turned the change back while the request said
+it was made.
 
 **One way to run a body — on Node.** A code node's `code.js` and an ai node's or a
 subgraph node's changed `run.js` are one kind of thing, and `elements/body.ts` (`runBody`)
@@ -491,7 +527,24 @@ A graph is a folder, and **each fact is in one place**:
 - Every piece of writing is a file of its own beside them — `code.js`, `system.md`. Which
   fields become which files is element knowledge, so each element declares it
   (`NodeRunner.texts`). A page's blocks write nothing: they are settings, in its
-  `node.json`.
+  `node.json`. A code or AI node keeps the same files, in the order it is built:
+
+  ```
+  nodes/<id>/
+    examples.md          1  the example: its input (the first section), what must come out
+    example/<name>       1  a file an example reads, named there "example/<name>"
+    output.md            2  the output definition: what goes out, its format, an example
+    prompt.md            3  what ✨ is sent: the template, then "Prompt:" and the request
+    prompt.history.md    3  the requests sent before, newest first
+    code.js              3  the code                                  (code node)
+    system.md            3  the instructions the model is given       (AI node)
+    message.md           3  how the inputs are laid out for it, {{port}}
+    run.js                  the standard call, while nobody changed it
+  ```
+
+  `prompt.md` and `run.js` are written out while they are still the element's own
+  (`TextFile.standard`), so a folder shows what a node is sent and does; `example/` is the
+  setting `example_files`, one file each, byte for byte.
 - `layout.json` — positions only.
 
 [`project/folder.ts`](../engine/src/project/folder.ts) reads and writes a folder for everyone —
@@ -515,15 +568,16 @@ or a page that has them can do the same.
   which nodes keep one is `NodeRunner.keepsOutputInterface`) is inferred from what
   its first successful run produced ([`execution/interface.ts`](../engine/src/execution/interface.ts)),
   checked against on every later run (a message, not a failure), and handed to the next
-  node's generation. An AI node's `output.md` -- its words, an answer's shape kept there too --
-  is also sent to the model.
+  node's generation. Its `output.md` -- the output definition in words, an answer's shape
+  kept there too -- is told to ✨, and an AI node's is also sent to the model.
 - **Examples are tests, and the one sample.** A node's optional `examples.md`
   ([`execution/examples.ts`](../engine/src/execution/examples.ts)) is run by `test` and the
   MCP server's `test_graph`, through its one `testGraph`, at every depth of the graph; one node
-  alone is run by `executor.ts`'s `runNodeAlone`, behind `run-node` and `run_node` alike. Its
-  first section is the node dialog's example, which Try it runs and ✨ is written and checked
-  against. `check` holds an example's inputs to the output interface of the node wired into
-  that port.
+  alone is run by `executor.ts`'s `runNodeAlone`, behind `run-node` -- on the node's example
+  when it is given no inputs -- and `run_node`, on what feeds it. Its first section is the
+  node dialog's example, which Try it runs and ✨ is written and checked against. `check`
+  holds an example's inputs to the output interface of the node wired into that port, and
+  is content with whatever is in a node's `example/` folder.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving, and
   the editor says it before Load under a graph pasted as JSON and under one ✨ AI Graph

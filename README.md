@@ -123,7 +123,7 @@ Nothing leaves the machine unless the graph itself sends it there.
   in, what comes out, what it should do, and the body. Get the example from the graph
   (⟳), a file (📂), or drop a file on the node; press ▶ Try it and see what comes out,
   whether it is the expected output, and how the node's other examples did. Then say
-  what to change in one line — ✨ changes the task and the body together and tries it
+  what to change in one line — ✨ changes the request and the body together and tries it
   again — or press ✨ Fix where it failed. There is no Save in the dialog: a change is in
   the graph at once, and Undo takes it back.
 - **An MCP server** — `--mcp` lets Claude Code or Claude Desktop generate, validate, save

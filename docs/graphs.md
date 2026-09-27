@@ -255,6 +255,12 @@ same structure with new content, and its neighbours are generated against it. No
 checks the answer afterwards unless its example has a judge; a model that ignores the
 format is caught by a Code node, not by this setting.
 
+**An answer in a fixed format.** An AI node whose output is typed `json` (`"type": "json"`
+in its `interface.json`) hands on the answer parsed -- a ```` ```json ```` fence around it
+taken off -- and fails, saying how the answer began, when it is not JSON. So an AI node can
+map a file whose layout nobody knows onto the rows a table or a code node takes, the way a
+code node would, and like a code node it reads a file on an input that says so.
+
 Everything else — model, temperature, tools, vision, batching, failures — has a default
 that is right for most nodes and sits folded under **Advanced**. For tools, see
 [ai-providers.md](ai-providers.md#tools-connecting-a-prompt-to-an-mcp-server).
@@ -307,35 +313,72 @@ words the node runs over.
 
 The example is kept as the first section of the node's `examples.md`: its input block is
 step 1, its expect block what Try it holds the result to. It is the one sample everything
-uses — ✨ Generate and its verify pass, Try it, the AI node's request, and `test`.
+uses — ✨ Generate and its verify pass, Try it, the AI node's request, `test` and `run-node`.
 
 **Say what to change.** Under the result, one line: say what to change and press Enter.
 ✨ changes the body there is -- from the body, what came of it (the try, else the last run)
-and your words -- restates the task to match, writes both as one undo step and tries it at
-once. A change is not held to the expected output, which was written before it: the try
+and your words -- restates the request to match, writes both as one undo step and tries it
+at once. A change is not held to the expected output, which was written before it: the try
 shows whether it still gives it, and **Keep** makes what it gives the new one. Where the
 try or the last run failed, or fell short of the expected output or the judge, **✨ Fix**
 repairs the body from the error, the input and the body.
 
-**What ✨ Generate is told** is the same for a code node and an AI node: one brief, built
-from steps 1–3, each fact said once and everything long cut to a budget (about 8 000
-characters at most), so a small local model still has room to answer:
+**What ✨ Generate is told** is the node's `prompt.md`: a template, then a line `Prompt:`
+and your request -- step 3 is that request. The template names three variables, which the
+engine fills from steps 1 and 2 and the graph, each fact said once and everything long cut
+to a budget (about 8 000 characters at most), so a small local model still has room to
+answer. A new node's is the standard one:
 
 ```
-<what it should do>
+Input:
+{Input Needs}         each input: its type, where it is wired from and what that node
+                      hands on, whether its file is read, and a sample (≤ 700 characters)
+Output Example:
+{Output Example}      each output: where it goes and what the node there wants; output.md;
+                      the shape a run kept; the first 3 examples, what must come out
+Graph Context:
+{Graph}               the graph around the node ("Not given." until something says it)
 
-## What comes in
+Prompt:
+<what it should do>
+```
+
+Filled, it reads like this -- followed by what the engine adds: for code, the typed
+signature to complete and the keys it must return; for an AI node, where to put its
+instructions and its message layout:
+
+```
+Input:
 - `csv` (text): one row per customer
   from "Export" (port "Output"), which hands on: text
-  sample, from the last run: "name,email\nAnna,anna@…"        ≤ 700 characters each
-## What goes out
+  sample, from the last run: "name,email\nAnna,anna@…"
+
+Output Example:
 - `rows`: one object per customer
   to "Table" (port "Rows"), which wants rows: a list of objects with the same keys…
-Format: <the format, in your words>
+Its output definition (output.md):
+<what comes out, in your words>
 The shape it returned so far … keep it: { rows: list of { name: text, email: text } }
-## Examples -- the result is checked against these          the first 3
-## The function   (code)  the typed signature to complete    /   (AI) "write the system prompt…"
+Examples -- the result is checked against these:
+…
+
+Graph Context:
+Not given.
+
+Prompt:
+One row per customer, the e-mail in lower case.
+
+## The function
+…
 ```
+
+The template is yours as much as the request: change it in `prompt.md` and ✨ sends it as
+written, the three variables filled by their exact names and any other `{…}` -- JSON in an
+instruction -- left as it is. A request with neither the `Prompt:` line nor a variable is
+sent in the standard template, so one written anywhere -- by ✨ AI Graph, in a graph file's
+`config.prompt` -- is sent with what the node knows. An AI node is written its
+instructions and its message template together, and told that `output.md` is added to them
+at run time.
 
 The **sample** is step 1's example; without one, the last run's value on that port, else
 what the wired node holds (an Input's text — the file it names, where the input it is
@@ -368,14 +411,20 @@ my_tool/
     count/                one folder per node, named by its id
       node.json           its name and its settings
       interface.json      what goes in, what comes out, and the shape a run kept
+      examples.md         its example (the first section), and what must come out
+      example/rows.csv    a file its example reads -- the example names it "example/rows.csv"
+      output.md           what goes out: each output, its format, and an example
+      prompt.md           what ✨ Generate is sent: the template, then "Prompt:" and the request
+      prompt.history.md   the requests sent before, newest first
       code.js             the code
-      task.md             what ✨ Generate was asked for
     summarize/
       node.json
       interface.json
+      output.md           what the answer must look like, sent to the model
+      prompt.md
       system.md           the instructions sent to the model
       message.md          the message template, with {{port}} placeholders
-      output.md           what the answer must look like, sent to the model
+      run.js              the one model call they make
     page/
       node.json           its settings are its blocks
       interface.json
@@ -403,13 +452,18 @@ starts from, and what ✨ Generate is told.
 | Node | Files |
 |---|---|
 | Every node | `node.json` — its name, description and settings. `interface.json` — its ports: id, type, whether a list, whether required; and `output_schema`, the shape a run kept, for a node that keeps one |
-| Code | `code.js`, `task.md`, `examples.md` |
-| AI | `run.js`, `system.md`, `message.md`, `output.md`, `examples.md` |
+| Code | `examples.md`, `example/`, `output.md`, `prompt.md`, `prompt.history.md`, `code.js` |
+| AI | `examples.md`, `example/`, `output.md`, `prompt.md`, `prompt.history.md`, `system.md`, `message.md`, `run.js` |
 
-An input, a data node, an output, a trigger and a page keep no writing: all they are is
-settings — a data node's value too — and a page's blocks are settings as well. An empty
-text has no file — except `run.js`, below. Settings — the model, the temperature, a node's
-mode — are in
+A code node and an AI node keep the same files in the order they are built -- what comes
+in, what goes out, what ✨ is asked -- and differ only in the body. An input, a data node,
+an output, a trigger and a page keep no writing: all they are is settings — a data node's
+value too — and a page's blocks are settings as well. An empty text has no file — except
+`prompt.md` and `run.js`, which say the standard while nobody has written their own, so the
+folder shows what a node is sent and does. `example/` holds the files the node's example
+reads, as they are: a file the example names `"example/rows.csv"` is read from there by ▶ Try
+it, `test`, `run-node` and ✨, never by a run of the graph, so the example goes where the
+project goes. Settings — the model, the temperature, a node's mode — are in
 its `node.json`, and positions in `layout.json`, so moving a node on the canvas is not a
 change to what the graph does, and an unchanged save changes no file. Renaming a node
 renames nothing on disk: folders are named by id. A new node's id is its type — `code`,
@@ -439,9 +493,9 @@ match its output interface: output.rows[3].Population is string; the interface s
 integer*, rather than the node three steps later failing on the wrong shape — and the
 nodes after it are generated against it; ✨'s verify pass sets it too, from what the code
 returned on the sample. It is shown in step 2 of the node's dialog, to read, and not
-typed: **Clear** there lets the next run measure it again after a deliberate change. An
-AI node also keeps `output.md` (a description of the answer, and the shape of an answer
-you kept), which is sent to the model with every request.
+typed: **Clear** there lets the next run measure it again after a deliberate change. A
+code or AI node also keeps `output.md`, its output definition in words (and the shape of an
+answer you kept): ✨ is told it, and an AI node sends it to the model with every request.
 
 **Examples: a node's own tests.** A code or AI node can keep `examples.md` — inputs, and
 what must come out. Optional; they check what was written, whoever wrote it, and ✨
@@ -471,16 +525,20 @@ keeps them as they are, and `test` runs them all; where there is a judge or more
 ▶ Try it runs them the way `test` does and says how the others did in one line — *and 2
 more: pass*.
 
+**Without the editor.** Every file in a node's folder is plain text named for what it is,
+so a node can be read, changed and run with nothing but the engine.
 `node engine/src/main.ts test my_tool` runs every node's examples; `--offline` asks no
 model and skips what needs one, which is how CI runs this repository's examples.
-`node engine/src/main.ts run-node my_tool count` runs one node by itself — on what the
-nodes feeding it produce, or on inputs given as JSON — and prints what it returned.
+`node engine/src/main.ts run-node my_tool count` runs one node by itself on its example --
+the first in its `examples.md`, the files it names read from its `example/` folder -- or on
+inputs given as JSON (`run-node my_tool count '{"csv": "data/rows.csv"}'`), and prints what
+came out. A node with no example says so, and what to do.
 
 **Checking a project.** `node engine/src/main.ts check my_tool other_tool` says what is
 wrong without running anything: edges to ports that do not exist, cycles, a code node
 without code, a message placeholder no input fills, an interface naming an output the
 node does not have, a folder under `nodes/` that belongs to no node, a file there that
-nothing reads (`prompt.md` where an AI node reads `system.md`), and examples that no
+nothing reads (`instructions.md` where an AI node reads `system.md`), and examples that no
 longer fit — an input or output the node does not have, or an input that the node wired
 into that port does not give according to its output interface. That last one is where a
 need meets a supply: either the example asks for the wrong thing, or the node before it
@@ -629,7 +687,7 @@ nested_statistics/
     statistics/
       node.json            the node's own settings
       interface.json       its ports: the graph's input and output nodes
-      task.md              what this part is for
+      prompt.md            what this part is for: its request, a sentence or two
       run.js               how the graph is run: once, unless you change it
       flow.json            the graph it holds
       layout.json
