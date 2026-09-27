@@ -147,10 +147,31 @@ export interface GenerateRequest {
    */
   multi_outputs?: string[];
   /**
+   * Change the body there is, instead of writing one from nothing: "Say what
+   * to change" and ✨ Fix in a node's dialog. The answer brings the task along
+   * when there was something to change (`GenerateResponse.task`), restated to
+   * say what the changed body does, so the two are changed together.
+   */
+  refine?: Refine;
+  /**
    * Build the request and hand it back without sending it: what ✨ *would*
    * send, through the same code that sends it, so the preview cannot differ.
    */
   preview?: boolean;
+}
+
+/** A body to change, what it did on the sample, and what to change about it (`GenerateRequest.refine`). */
+export interface Refine {
+  /** The body as it is now. */
+  body: string;
+  /** What to change, in the person's words. Absent: repair it from how it failed (✨ Fix). */
+  change?: string;
+  /** What it gave on the sample: its outputs as JSON, or a model's answer. */
+  outcome?: string;
+  /** The error it raised on the sample. */
+  error?: string;
+  /** What its result falls short of: an example's expected output, a judge's word. */
+  problems?: string[];
 }
 
 /** One request to a model, as it happened: for looking at when an answer is wrong or missing. */
@@ -189,6 +210,8 @@ export interface ProbeReport {
 export interface GenerateResponse {
   /** The generated text. Which field it belongs in is the caller's business. */
   result: string;
+  /** The node's task, restated to fit a body changed as asked (`GenerateRequest.refine`). */
+  task?: string;
   explanation: string;
   probe: ProbeReport;
   /** Every model call this generation made, in order. For a preview, the one request, unsent. */

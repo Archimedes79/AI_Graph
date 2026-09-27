@@ -113,6 +113,59 @@ describe('code', () => {
   });
 });
 
+describe('changing a body there is (refine)', () => {
+  it('writes code from the function as it is, what it returned and what to change -- and restates the task with it', async () => {
+    const ai = scripted(['```js\nfunction run(i) { return { out: i.a * 3 }; }\n```\nNow triples.\n<task>Triple the number.</task>']);
+    const reply = await generate(
+      {
+        element: 'code', description: 'Double the number.', inputs: ['a'], outputs: ['out'], sample_inputs: { a: 2 },
+        refine: { body: 'function run(i) { return { out: i.a * 2 }; }', outcome: '{"out": 4}', change: 'Triple it instead.' },
+      },
+      { ai, code: runner(() => ({ out: 6 })), generationFor, target },
+    );
+    const asked = ai.asked[0].prompt;
+    expect(asked).toContain('--- the function as it is now ---\nfunction run(i) { return { out: i.a * 2 }; }');
+    expect(asked).toContain('--- what it returned on the last run ---\n{"out": 4}');
+    expect(asked).toContain('--- what to change ---\nTriple it instead.');
+    expect(asked).toContain('<task></task>');
+    expect(reply).toMatchObject({ result: 'function run(i) { return { out: i.a * 3 }; }', task: 'Triple the number.', explanation: 'Now triples.' });
+    // Tried on the sample like any body written, with the one repair behind it.
+    expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 6 } });
+  });
+
+  it('fixes code from how it failed, the inputs it failed on and the body: the repair step, and the task stays', async () => {
+    const ai = scripted(['```js\nfunction run(i) { return { out: String(i.a).length }; }\n```']);
+    const reply = await generate(
+      {
+        element: 'code', description: 'Count the characters.', inputs: ['a'], outputs: ['out'], sample_inputs: { a: 12345 },
+        refine: { body: 'function run(i) { return { out: i.a.length }; }', error: 'Cannot read properties of undefined' },
+      },
+      { ai, code: runner(() => ({ out: 5 })), generationFor, target },
+    );
+    const asked = ai.asked[0].prompt;
+    expect(asked).toContain('--- your previous attempt ---\nfunction run(i) { return { out: i.a.length }; }');
+    expect(asked).toContain('inputs["a"]: number = 12345');
+    expect(asked).toContain('--- the error it raised ---\nCannot read properties of undefined');
+    expect(asked).not.toContain('<task>');
+    expect(reply.task).toBeUndefined();
+    expect(reply.probe.status).toBe('ok');
+  });
+
+  it('writes a system prompt from the one there is, what the model answered and what to change, with the task restated', async () => {
+    const ai = scripted(['<system_prompt>Answer in one word.</system_prompt>\nShorter now.\n<task>Name the capital, in one word.</task>']);
+    const reply = await generate(
+      {
+        element: 'ai', description: 'Name the capital.', inputs: ['prompt'], outputs: ['output'],
+        refine: { body: 'Name the capital of the country.', outcome: 'The capital of France is Paris.', change: 'One word only.' },
+      },
+      { ai, code: runner(() => ({})), generationFor, target },
+    );
+    expect(ai.asked[0].prompt).toContain('## The system prompt as it is now\n\nName the capital of the country.');
+    expect(ai.asked[0].prompt).toContain('## What to change\n\nOne word only.');
+    expect(reply).toMatchObject({ result: 'Answer in one word.', task: 'Name the capital, in one word.', explanation: 'Shorter now.' });
+  });
+});
+
 describe('the code in a model\'s answer', () => {
   const fence = '```';
   it('is found behind any info string, with Windows line ends too', () => {

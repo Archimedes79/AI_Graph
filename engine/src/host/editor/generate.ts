@@ -6,6 +6,12 @@
 // plus authoring a whole graph, which shares neither the request nor the
 // answer and so stands apart.
 //
+// A body can also be changed rather than written anew (`refine`): "Say what to
+// change" in a node's dialog sends the body there is, what came of it and what
+// to change, and gets the body back with the task restated to fit it; ✨ Fix
+// sends how it failed, and gets the repair a generation makes of its own first
+// attempt. Same brief, same verify-and-repair: not a second generator.
+//
 // Code is not one call. It is generated, run once against real data when the
 // caller has some, and repaired once with the evidence when that run fails —
 // because a wrong output key is the single most common way generated code
@@ -26,11 +32,11 @@ import { batchItems, mergeBatchOutputs } from '../../execution/batching.ts';
 import { readPorts } from '../../execution/fileInputs.ts';
 import type { GraphNode } from '../../graph.ts';
 import { renderSkeleton } from './skeleton.ts';
-import { BUDGET, exampleSample, renderBrief, shown, type Sample } from './brief.ts';
+import { BUDGET, clip, exampleSample, renderBrief, shown, type Sample } from './brief.ts';
 import { unmet } from '../../execution/examples.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
-import type { AICall, GenerateRequest, GenerateResponse, ProbeReport, Target } from '../api.ts';
+import type { AICall, GenerateRequest, GenerateResponse, ProbeReport, Refine, Target } from '../api.ts';
 
 export class GenerationRefused extends Error {}
 
@@ -104,17 +110,66 @@ export function firstCodeBlock(text: string): string {
   return block?.[1].trim() ?? '';
 }
 
+// ---------------------------------------------------------------------------
+// Changing what there is
+// ---------------------------------------------------------------------------
+
+/** Said last in a request to change a body, so the task changes with it. */
+const RESTATE = 'After that, restate the node\'s task in one or two sentences, inside <task></task> tags: what it does now, '
+  + 'with the change. It replaces the task given above.';
+
+/** The task a refined answer restated, and the answer without it. */
+function taskIn(raw: string): { task?: string; rest: string } {
+  const match = /<task>([\s\S]*?)<\/task>/.exec(raw);
+  if (!match) return { rest: raw };
+  const task = match[1].trim();
+  return { ...(task ? { task } : {}), rest: `${raw.slice(0, match.index)}${raw.slice(match.index + match[0].length)}`.trim() };
+}
+
+/**
+ * What changing a function is written from: the function as it is, what it
+ * did on the sample, and what to change -- or, with nothing to change, how it
+ * failed, in the repair step's own words (`repairPrompt`): ✨ Fix is the repair
+ * a generation makes of its own first attempt, made of the body there is.
+ */
+function codeChange(refine: Refine, sample: Sample | undefined, outputs: string[]): string {
+  const change = refine.change?.trim();
+  if (!change) return repairPrompt(refine.body, sample?.values ?? {}, refine.error?.trim() ?? '', [], outputs, refine.problems ?? []);
+  const on = sample ? ` on ${sample.origin}` : '';
+  const parts = ['You are changing an existing function, not writing a new one.', '', '--- the function as it is now ---', refine.body.trim() || '(none yet)'];
+  if (refine.outcome?.trim()) parts.push('', `--- what it returned${on} ---`, clip(refine.outcome, BUDGET.preview));
+  if (refine.error?.trim()) parts.push('', `--- the error it raised${on} ---`, refine.error.trim());
+  if (refine.problems?.length) parts.push('', '--- what is wrong with what it returned ---', ...refine.problems.map((problem) => `- ${problem}`));
+  parts.push('', '--- what to change ---', change, '',
+    `Change the function that way and keep everything else it does. Return the complete function, not a patch. ${RESTATE}`);
+  return parts.join('\n');
+}
+
+/** The same for a body that is prose -- a system prompt, a data format -- asked for inside `<tag>`. */
+function proseChange(refine: Refine, what: string, tag: string, sample: Sample | undefined): string {
+  const change = refine.change?.trim();
+  const on = sample ? ` on ${sample.origin}` : '';
+  const parts = [`## The ${what} as it is now`, refine.body.trim() || '(none yet)'];
+  if (refine.outcome?.trim()) parts.push(`## What came of it${on}`, clip(refine.outcome, BUDGET.preview));
+  if (refine.error?.trim()) parts.push(`## How it failed${on}`, refine.error.trim());
+  if (refine.problems?.length) parts.push('## What is wrong with what came of it', refine.problems.map((problem) => `- ${problem}`).join('\n'));
+  parts.push('## What to change', change || 'Only what makes it fail, or fall short, as said above.');
+  parts.push(`Write the whole ${what} again with that change, keeping what it does not touch, inside <${tag}> tags.${change ? ` ${RESTATE}` : ''}`);
+  return parts.join('\n\n');
+}
+
 /**
  * Ask for code that maps *inputs* to *outputs*: the task, the brief, whatever
  * else the element or the caller adds, then the skeleton to complete.
- * *evidence* is a failed attempt and what went wrong with it, for the repair.
+ * *evidence* is a failed attempt and what went wrong with it, for the repair --
+ * or the function there is and what to change about it (`codeChange`).
  */
 async function generateCode(
   ai: AiService, target: Target, request: GenerateRequest, context: string, sample?: Sample, evidence = '',
-): Promise<{ text: string; explanation: string }> {
+): Promise<{ text: string; explanation: string; task?: string }> {
   const inputs = request.inputs ?? [];
   const outputs = request.outputs ?? [];
-  const parts = ['Write a JavaScript function for one node of a graph. The node should:', request.description];
+  const parts = ['Write a JavaScript function for one node of a graph. The node should:', request.description || '(not said yet)'];
   const brief = renderBrief(request, 'code', sample);
   if (brief) parts.push(`\n${brief}`);
   if (context) parts.push(`\n## Also\n${context}`);
@@ -131,21 +186,22 @@ async function generateCode(
   }
   parts.push('Use only what Node has built in. There is no package manager and no `npm install`: `require` '
     + "and `import` of anything outside Node's own standard library will fail at run time.");
-  const raw = await ai.complete({ prompt: parts.join('\n'), system: CODE_SYSTEM, ...target });
-  const code = firstCodeBlock(raw);
-  const explanation = code ? raw.slice(raw.lastIndexOf('```') + 3).trim() : raw.replace(/```(?:javascript|js)?/g, '').trim();
-  return { text: code || raw, explanation };
+  const { task, rest } = taskIn(await ai.complete({ prompt: parts.join('\n'), system: CODE_SYSTEM, ...target }));
+  const code = firstCodeBlock(rest);
+  const explanation = code ? rest.slice(rest.lastIndexOf('```') + 3).trim() : rest.replace(/```(?:javascript|js)?/g, '').trim();
+  return { text: code || rest, explanation, ...(task ? { task } : {}) };
 }
 
-/** One piece of text wrapped in `<tag>…</tag>`, and the explanation after it. */
+/** One piece of text wrapped in `<tag>…</tag>`, the explanation after it, and the task where one was restated. */
 async function generateTagged(
   ai: AiService, target: Target, system: string, tag: string, prompt: string,
-): Promise<{ text: string; explanation: string }> {
-  const raw = await ai.complete({ prompt, system, ...target });
-  const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(raw);
-  if (match) return { text: match[1].trim(), explanation: raw.slice(match.index + match[0].length).trim() };
+): Promise<{ text: string; explanation: string; task?: string }> {
+  const { task, rest } = taskIn(await ai.complete({ prompt, system, ...target }));
+  const restated = task ? { task } : {};
+  const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(rest);
+  if (match) return { text: match[1].trim(), explanation: rest.slice(match.index + match[0].length).trim(), ...restated };
   // A model that ignores the tags falls back to the whole reply, which beats nothing.
-  return { text: raw.trim(), explanation: '' };
+  return { text: rest.trim(), explanation: '', ...restated };
 }
 
 const PROMPT_SYSTEM =
@@ -321,15 +377,17 @@ function repairPrompt(body: string, sample: Record<string, unknown>, error: stri
  *
  * The code handed back is always the best one obtained: pass 2's if it improved
  * things, pass 1's otherwise -- a failed repair never leaves the user with
- * something worse than the first attempt.
+ * something worse than the first attempt. *change* is what the first pass is
+ * written from beside the brief, when it changes a body rather than writing
+ * one (`codeChange`); the task it restated comes back whichever pass is kept.
  */
 async function generateVerifiedCode(
   ai: AiService, runtime: Runtime, target: Target, request: GenerateRequest, context: string,
-  given: Sample | undefined,
-): Promise<{ text: string; explanation: string; probe: ProbeReport }> {
+  given: Sample | undefined, change = '',
+): Promise<{ text: string; explanation: string; task?: string; probe: ProbeReport }> {
   const outputs = request.outputs ?? [];
   const sample = given?.values;
-  const first = await generateCode(ai, target, request, context, given);
+  const first = await generateCode(ai, target, request, context, given, change);
   if (!sample || !Object.keys(sample).length) return { ...first, probe: notProbed() };
   const perItem = runsPerItem(request);
   // A sample that is an example says what must come out of it, and that is
@@ -384,12 +442,14 @@ async function generateVerifiedCode(
     // The repair pass is a bonus, never a reason to fail the request.
     return { ...first, probe: reportOf(attempt, 'failed') };
   }
+  // The repair is asked for code alone: what the change made of the task stands.
+  const repaired = { text: second.text, explanation: second.explanation, ...(first.task ? { task: first.task } : {}) };
   const again = await judge(second.text);
-  if (again.reached === 3) return { ...second, probe: reportOf(again, 'repaired') };
+  if (again.reached === 3) return { ...repaired, probe: reportOf(again, 'repaired') };
   // Still not right. Keep the attempt that got further -- one that misses an
   // example beats one that does not run -- and say what remains.
   return again.reached >= attempt.reached
-    ? { ...second, probe: reportOf(again, 'failed') }
+    ? { ...repaired, probe: reportOf(again, 'failed') }
     : { ...first, probe: reportOf(attempt, 'failed') };
 }
 
@@ -479,37 +539,44 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     }
     : undefined;
 
+  // A change to a body is written from the same brief as a body from nothing,
+  // with the body there is, what came of it and what to change beside it.
+  const { refine } = request;
   try {
     switch (kind) {
       case 'code': {
-        const { text, explanation, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, request, context, sample);
-        return { result: text, explanation, probe: report, calls };
+        const change = refine ? codeChange(refine, sample, request.outputs ?? []) : '';
+        const { text, explanation, task, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, request, context, sample, change);
+        return { result: text, explanation, probe: report, calls, ...(task ? { task } : {}) };
       }
       case 'prompt': {
         // The same brief a code node's body is written from: a system prompt
         // is written for a model that is sent these inputs, and whose answer
         // goes where the outputs go.
         const prompt = [
-          `Task: ${request.description}`,
+          `Task: ${request.description || '(not said yet)'}`,
           renderBrief(request, 'prompt', sample),
           context ? `## Also\n${context}` : '',
-          'Write the system prompt for the model this node calls. It is sent what is described above, '
-          + 'every time the node runs, and its answer goes where the outputs go.',
+          refine
+            ? proseChange(refine, 'system prompt', 'system_prompt', sample)
+            : 'Write the system prompt for the model this node calls. It is sent what is described above, '
+              + 'every time the node runs, and its answer goes where the outputs go.',
         ].filter(Boolean).join('\n\n');
-        const { text, explanation } = await generateTagged(ai, deps.target, PROMPT_SYSTEM, 'system_prompt', prompt);
-        return { result: text, explanation, probe: notProbed(), calls };
+        const { text, explanation, task } = await generateTagged(ai, deps.target, PROMPT_SYSTEM, 'system_prompt', prompt);
+        return { result: text, explanation, probe: notProbed(), calls, ...(task ? { task } : {}) };
       }
       case 'data_format': {
         // Written against what the node is wired to and what it holds, told
         // as a body's brief tells them: the one rendering of a node's
         // neighbours and its sample, whoever is written from them.
         const prompt = [
-          `Task description: ${request.description}`,
+          `Task description: ${request.description || '(not said yet)'}`,
           renderBrief(request, 'format', sample),
           context ? `Additional context: ${context}` : '',
+          refine ? proseChange(refine, 'format', 'data_format', sample) : '',
         ].filter(Boolean).join('\n\n');
-        const { text, explanation } = await generateTagged(ai, deps.target, DATA_FORMAT_SYSTEM, 'data_format', prompt);
-        return { result: text, explanation, probe: notProbed(), calls };
+        const { text, explanation, task } = await generateTagged(ai, deps.target, DATA_FORMAT_SYSTEM, 'data_format', prompt);
+        return { result: text, explanation, probe: notProbed(), calls, ...(task ? { task } : {}) };
       }
       default:
         throw new GenerationRefused(`Unknown generation kind '${String(kind)}'`);
