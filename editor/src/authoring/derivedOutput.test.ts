@@ -11,7 +11,7 @@ describe('what comes out, as the graph already says it', () => {
   it('carries a Text data node\'s format details, which "Use this format" dropped for "Plain text."', () => {
     const words = NODE_KINDS.data.create('words');
     words.label = 'Words';
-    words.config.data_format_prompt = 'one word per line, lowercase';
+    words.description = 'one word per line, lowercase';
     const code = NODE_KINDS.code.create('split');
 
     const derived = derivedOutputWords(code, [code, words], [wire('split', 'words')]);
@@ -29,7 +29,7 @@ describe('what comes out, as the graph already says it', () => {
   it('is what ✨ is told, whether or not anyone writes a word', () => {
     const words = NODE_KINDS.data.create('words');
     words.label = 'Words';
-    words.config.data_format_prompt = 'one word per line, lowercase';
+    words.description = 'one word per line, lowercase';
     const code = NODE_KINDS.code.create('split');
     const facts = nodeFacts(code, [code, words], [wire('split', 'words')], null);
     expect(facts.outputTargets?.output).toContain('text: one word per line, lowercase');

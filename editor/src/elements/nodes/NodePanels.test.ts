@@ -9,11 +9,10 @@ import { nodeFields } from '@/authoring/generation';
 import { withExpect, withInput } from '@/authoring/examplePair';
 import CodeNodePanel from './code/CodeNodePanel';
 import AiNodePanel from './ai/AiNodePanel';
-import DataNodePanel from './data/DataNodePanel';
 
 /**
- * A code, an ai and a data node's dialog, drawn: the four steps, and what each
- * panel decides to put in them.
+ * A code and an ai node's dialog, drawn: the four steps, and what each panel
+ * decides to put in them.
  *
  * The rules behind them are tested on their own (`nodeStepRules.test.ts`,
  * `examplePair.test.ts`, `ExampleInputField.test.ts`); this is where a panel
@@ -26,7 +25,6 @@ import DataNodePanel from './data/DataNodePanel';
 const PANELS: Partial<Record<NodeType, ComponentType<NodePanelProps>>> = {
   code: CodeNodePanel,
   ai: AiNodePanel,
-  data: DataNodePanel,
 };
 
 /** What only the node dialog hands a panel in steps; here nothing is run or asked. */
@@ -56,7 +54,7 @@ function panel(node: GraphNode): string {
 const input = (id: string, multi = false): Port => ({ id, name: id, kind: 'input', data_type: 'any', multi, required: false, description: '' });
 
 /** A new node of *type*, with *config* set on top of what it starts with. */
-function made(type: 'code' | 'ai' | 'data', config: Record<string, unknown> = {}, inputs?: Port[]): GraphNode {
+function made(type: 'code' | 'ai', config: Record<string, unknown> = {}, inputs?: Port[]): GraphNode {
   const node = NODE_KINDS[type].create(type);
   return { ...node, inputs: inputs ?? node.inputs, config: { ...node.config, ...config } };
 }
@@ -67,12 +65,11 @@ const example = (inputText: string) => withExpect(withInput('', inputText), '{ "
 describe.each([
   ['code', 'Code'],
   ['ai', 'Instructions'],
-  ['data', 'Its format'],
 ] as const)('a %s node, built in the four steps', (type, body) => {
   it('draws the four steps, and both ways to fill its example', () => {
     const html = panel(made(type));
     for (const step of ['What comes in', 'What comes out', body]) expect(html, step).toContain(`aria-label="${step}"`);
-    expect(html).toMatch(/aria-label="What (should it do|should it hold)\?"/);
+    expect(html).toContain('aria-label="What should it do?"');
     expect(html).toContain('⟳ From the graph');
     expect(html).toContain('📂 From a file…');
     expect(html).toContain('What ✨ sends');

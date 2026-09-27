@@ -59,9 +59,9 @@ export type NodeConfig = {
   catch_errors: boolean;
   code: string;
   code_prompt: string;
+  /** A data node: what kind of value it holds. */
   data_format: 'text' | 'structure';
-  data_format_prompt: string;
-  data_prompt: string;
+  /** A data node: the value it holds, and hands on until something arrives. */
   data_value?: unknown;
   extensions: string;
   gui_widgets: GuiWidget[];

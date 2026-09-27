@@ -12,10 +12,11 @@ describe('what a saved node publishes as its description', () => {
     expect(NODE_BUILDERS.code.publishedDescription(node)).toBe('Pass the file\'s text on, and describe the file in one line.');
   });
 
-  it('is what a data node is asked to hold', () => {
+  it('is a data node\'s own description: what it holds is its value, and nothing else asks what it should hold', () => {
     const node = NODE_KINDS.data.create('memory');
-    node.config.data_prompt = '  The running total, a number.  ';
+    node.description = 'The running total, a number.';
     expect(NODE_BUILDERS.data.publishedDescription(node)).toBe('The running total, a number.');
+    expect(NODE_BUILDERS.data.ownsDescription).toBeFalsy();
   });
 
   it('keeps what was there while no task is written, and leaves an ai node\'s -- its task -- alone', () => {

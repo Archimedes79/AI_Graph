@@ -160,7 +160,7 @@ export abstract class ElementRunner<S extends { id: string; config: RawConfig },
 
   /**
    * How an AI writes this element's body, or undefined if none does: a code
-   * node, an ai node and a data node's format are written; a block never is.
+   * node and an ai node are written; a data node and a block never are.
    */
   generation(): Generation | undefined {
     return undefined;

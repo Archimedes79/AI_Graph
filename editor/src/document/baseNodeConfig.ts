@@ -32,8 +32,6 @@ export function baseNodeConfig(): NodeConfig {
     code_prompt: '',
     data_value: null,
     data_format: 'text',
-    data_prompt: '',
-    data_format_prompt: '',
     output_format_prompt: '',
     // No label is the node's id as the key of the run's result.
     output_label: '',

@@ -110,8 +110,7 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    * The dialog is laid out as the four steps of building the node -- what
    * comes in, what comes out, what it should do, and how, tried right there --
    * with the ports inside those steps rather than in a list of their own. For
-   * the nodes whose body is written against its ports -- ai and code -- and
-   * for a data node, whose format is written against what it takes and hands on.
+   * the nodes whose body is written against its ports: ai and code.
    */
   readonly stepped: boolean = false;
 
@@ -229,7 +228,7 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    * What this node wants on one of its input ports, in words, for a node
    * wired into it: its ✨ is told, beside the output that feeds it. The
    * port's own description by default; a node whose port wants something
-   * more particular -- a chart block, a data node's format -- says that.
+   * more particular -- a chart block, what a data node stores -- says that.
    */
   wantsOn(node: GraphNode, port: string): string | undefined {
     return node.inputs.find((p) => p.id === port)?.description?.trim() || undefined;
