@@ -1,7 +1,6 @@
 import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
-import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { AiNodeRunner } from '@engine/elements/nodes/ai/AiNodeRunner.ts';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 
@@ -58,9 +57,5 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
     return side === 'inputs'
       ? 'Each input is put into the message in step 4 where its {{name}} stands -- or, with no message, sent one after another.'
       : 'The model\'s answer. What it should look like is said below.';
-  }
-
-  override describeOutput(node: GraphNode): string {
-    return describeDeclaredOutput(node.config);
   }
 }

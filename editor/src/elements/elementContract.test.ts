@@ -108,11 +108,11 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
     }
   });
 
-  it('describes what it emits, or is a node with nothing to say', () => {
+  it('describes what it emits', () => {
     const node = kind.create(`${nodeType}-out`);
-    // An output node ends the graph, so it has no downstream to describe to.
-    const expected = nodeType === 'output' ? undefined : expect.any(String);
-    expect(element.describeOutput?.(node)).toEqual(expected);
+    // Its declared output by default. An output node ends the graph and is
+    // never asked, since nothing is wired out of it; it answers all the same.
+    expect(element.describeOutput(node)).toEqual(expect.any(String));
   });
 });
 

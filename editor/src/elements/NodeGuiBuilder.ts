@@ -3,7 +3,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { GraphNode, NodeType } from '@/graph';
 import type { FieldAccess } from '@/authoring/generation';
-import { outputFormatText } from '@/authoring/outputFormat';
+import { describeDeclaredOutput, outputFormatText } from '@/authoring/outputFormat';
 import { readPair } from '@/authoring/examplePair';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
 
@@ -159,8 +159,15 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   /** What step 2's words mean for this kind of node, said above them: who reads them, and when. */
   readonly outputFormatHint?: string;
 
-  /** What this node emits, in one line, for its neighbours' generation context. */
-  describeOutput?(node: GraphNode): string;
+  /**
+   * What this node emits, in one line, for its neighbours' generation context.
+   * The node's declared output by default -- its words, an example, and the
+   * shape a run kept, which is the best description there is of what the next
+   * node will be handed. A node whose output is something else says that.
+   */
+  describeOutput(node: GraphNode): string {
+    return describeDeclaredOutput(node.config);
+  }
 
   /**
    * The format in words that ✨ is told this node's *own* body must return.

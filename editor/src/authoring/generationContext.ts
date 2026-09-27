@@ -32,7 +32,7 @@ const SAMPLE_BUDGET = 1200;
  * changes.
  */
 export function describeNodeOutput(node: GraphNode): string {
-  return NODE_BUILDERS[node.node_type]?.describeOutput?.(node) ?? '';
+  return NODE_BUILDERS[node.node_type]?.describeOutput(node) ?? '';
 }
 
 /**

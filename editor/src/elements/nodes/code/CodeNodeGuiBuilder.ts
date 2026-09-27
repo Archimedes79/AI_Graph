@@ -1,7 +1,6 @@
 import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
-import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { CodeNodeRunner } from '@engine/elements/nodes/code/CodeNodeRunner.ts';
 import { CODE_STARTER } from '@/document/nodeKinds';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
@@ -57,11 +56,5 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
     }
     const keys = node.outputs.filter((port) => port.id !== 'error').map((port) => `${port.id}: …`);
     return `run() returns one key per output: { ${keys.join(', ') || 'output: …'} }.`;
-  }
-
-  override describeOutput(node: GraphNode): string {
-    // The kept interface is part of it: what a run actually produced is the
-    // best description there is of what the next node will be handed.
-    return describeDeclaredOutput(node.config);
   }
 }
