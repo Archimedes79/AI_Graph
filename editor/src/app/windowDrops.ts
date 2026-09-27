@@ -21,7 +21,7 @@ export function landedInCodeField(target: EventTarget | null): boolean {
 }
 
 /** How a dropped folder is looked for (`findProjects`): the projects found, and where it looked, in words. */
-export type FindProjects = (name: string) => Promise<{ paths: string[]; searched: string }>;
+type FindProjects = (name: string) => Promise<{ paths: string[]; searched: string }>;
 
 const findProjects: FindProjects = (name) => call('findProjects', { name });
 

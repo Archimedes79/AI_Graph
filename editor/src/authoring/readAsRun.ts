@@ -118,7 +118,7 @@ export function relativeTo(home: string, path: string): string {
 let home: Promise<string> | null = null;
 
 /** A picked path as it is stored: see `relativeTo`. The engine's folder is asked once. */
-export async function storedPath(path: string): Promise<string> {
+async function storedPath(path: string): Promise<string> {
   // A failed answer is not kept: the next pick asks again.
   home ??= call('browse', { path: '' }).then((page) => page.path).catch(() => { home = null; return ''; });
   return relativeTo(await home, path);
