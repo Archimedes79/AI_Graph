@@ -35,8 +35,6 @@ export const BUDGET = {
   outputExample: 900,
   schema: 700,
   template: 800,
-  /** An attached sample file. */
-  file: 2000,
 } as const;
 
 /** *text*, cut to *limit* characters, saying how much was left out. */

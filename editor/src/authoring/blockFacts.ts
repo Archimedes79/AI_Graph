@@ -68,6 +68,11 @@ export function blockExample(widget: GuiWidget): Record<string, unknown> | undef
  *                     element fixes
  *     the sample      step 1's example; else what arrived on the last run
  *     the page        its colour scheme, which the code cannot see
+ *
+ * An example file the 📎 of an older version attached is not a second sample
+ * beside these, as it is not for a node (`nodeFacts`): it was only ever pasted
+ * into the prompt as text, never tried the code on. Step 1 offers to take it
+ * in as the example, and then it is both.
  */
 export function blockFacts(
   nodeId: string,
@@ -76,7 +81,7 @@ export function blockFacts(
   edges: Wire[],
   executionResult: ExecutionResult | null,
   scheme: string | undefined,
-): Pick<GenerationRequest<GuiWidget>, 'exampleFile' | 'graphContext' | 'sampleInputs' | 'sampleOrigin'> {
+): Pick<GenerationRequest<GuiWidget>, 'graphContext' | 'sampleInputs' | 'sampleOrigin'> {
   const example = blockExample(widget);
   const observed = lastRunWidgetInput(nodeId, widget.id, executionResult);
   const sample = example ? { values: example, origin: 'the example in step 1' }
@@ -84,9 +89,6 @@ export function blockFacts(
   const port = guiWidgetPorts(widget).inputs[0]?.id;
   const feeds = port ? inputOrigins(nodeId, nodes, edges)[port] : undefined;
   return {
-    // A file attached by an older version of the block editor, while there is
-    // no example to have taken it in yet: see step 1's "Use the example file from before".
-    exampleFile: example ? undefined : String(widget.example_file ?? '').trim() || undefined,
     graphContext: [
       feeds ? `What arrives at this block -- its "value" -- comes from ${feeds}.` : '',
       // What a block shows is seen on this page, in this scheme -- and the

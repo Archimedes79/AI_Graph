@@ -17,7 +17,6 @@
 // Every call a generation makes is recorded and handed back, so the editor can
 // show what was sent when the answer is "the model returned nothing".
 
-import { readFile } from 'node:fs/promises';
 import type { AiRequest, AiService, CodeService, FileService, Runtime } from '../../elements/Runtime.ts';
 import { runBody } from '../../elements/body.ts';
 import { port } from '../../elements/port.ts';
@@ -27,11 +26,10 @@ import { batchItems, mergeBatchOutputs } from '../../execution/batching.ts';
 import { readPorts } from '../../execution/fileInputs.ts';
 import type { GraphNode } from '../../graph.ts';
 import { renderSkeleton } from './skeleton.ts';
-import { BUDGET, clip, exampleSample, renderBrief, type Sample } from './brief.ts';
+import { exampleSample, renderBrief, type Sample } from './brief.ts';
 import { unmet } from '../../execution/examples.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
-import { detectFormat } from './files.ts';
 import type { AICall, GenerateRequest, GenerateResponse, ProbeReport, Target } from '../api.ts';
 
 export class GenerationRefused extends Error {}
@@ -79,63 +77,6 @@ export function recording(ai: AiService, calls: AICall[]): AiService {
       }
     },
   };
-}
-
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
-
-/** A structured peek at a sample file, so the model can reason about its shape. */
-function parsedPreview(content: string, format: string): string {
-  try {
-    if (format === 'csv') {
-      const [head, ...rows] = content.split(/\r?\n/).filter((line) => line.trim());
-      if (!head) return '';
-      const columns = head.split(',');
-      const records = rows.slice(0, 5).map((row) => Object.fromEntries(row.split(',').map((cell, i) => [columns[i] ?? String(i), cell])));
-      return JSON.stringify(records, null, 2);
-    }
-    if (format === 'json') {
-      const parsed = JSON.parse(content);
-      return JSON.stringify(Array.isArray(parsed) ? parsed.slice(0, 5) : parsed, null, 2);
-    }
-  } catch {
-    return '';
-  }
-  return '';
-}
-
-/**
- * *context* with a sample file's content, and a parsed peek at it, appended.
- *
- * A sample file that is no longer there is said and left out, not refused. It
- * only ever added to what the model is told, and a stored path goes stale on
- * its own: the project opened from somewhere else, the copy removed. Refusing
- * made the node's ✨ unusable until someone found the setting to clear -- a
- * file that is there and cannot be read is still refused, since that is a
- * mistake worth hearing about.
- */
-export async function withContextFile(context: string, path?: string): Promise<string> {
-  if (!path) return context;
-  let content: string;
-  let format: string;
-  try {
-    content = await readFile(path, 'utf8');
-    format = await detectFormat(path);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
-      const gone = `The sample file ${path} is no longer there, so it is not shown.`;
-      return context ? `${context}\n\n${gone}` : gone;
-    }
-    throw new GenerationRefused(`Could not read context file: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  // Cut to a budget: a sample file is attached to show what arrives, and the
-  // first rows of a 40 MB CSV show that as well as all of it -- which would
-  // not fit in a local model's window at all.
-  let block = `Sample file (${path}, format=${format}):\n${clip(content, BUDGET.file)}`;
-  const preview = parsedPreview(content, format);
-  if (preview) block += `\n\nParsed, the first records:\n${clip(preview, BUDGET.file / 2)}`;
-  return context ? `${context}\n\n${block}` : block;
 }
 
 // ---------------------------------------------------------------------------
@@ -611,10 +552,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
 
   // An element that calls the body itself says in its contract how: that is
   // the function to complete, said where the function is, not beside it.
-  const context = await withContextFile(
-    [framedByElement(spec) ? '' : spec?.contract ?? '', request.context ?? ''].filter(Boolean).join('\n\n'),
-    request.context_file,
-  );
+  const context = [framedByElement(spec) ? '' : spec?.contract ?? '', request.context ?? ''].filter(Boolean).join('\n\n');
   const fixedPorts = Boolean(spec?.inputs);
   const fits = fixedPorts && request.sample_inputs
     && Object.keys(request.sample_inputs).every((key) => spec!.inputs!.includes(key));

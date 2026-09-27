@@ -20,6 +20,7 @@ vi.mock('@/api/client', async (original) => ({
 
 const { blockFacts } = await import('./blockFacts');
 const { useGraphSweep } = await import('./useGraphSweep');
+const { generateRequest, widgetFields } = await import('./generation');
 
 const rows = { ...WIDGET_BUILDERS.table.create('Rows'), id: 'rows' } as GuiWidget;
 
@@ -61,10 +62,15 @@ describe('what ✨ is told about a block', () => {
     expect(blockFacts('page', rows, [], [], null, 'night').sampleInputs).toBeUndefined();
   });
 
-  it('takes in an example file attached before, only while there is no example', () => {
+  it('sends no example file attached before as a second sample: step 1 takes it in as the example', () => {
+    // It was pasted into ✨'s prompt as text beside the sample and never tried
+    // the code on -- as a node's was, which no longer sends it either.
     const attached = { ...rows, example_file: 'data/rows.json' };
-    expect(blockFacts('page', attached, [], [], null, 'night').exampleFile).toBe('data/rows.json');
-    expect(blockFacts('page', { ...attached, example: '{"value": 1}' }, [], [], null, 'night').exampleFile).toBeUndefined();
+    const sent = generateRequest({
+      element: 'table', generation: WIDGET_BUILDERS.table.generation!, subject: attached,
+      fields: widgetFields(attached, () => {}), ...blockFacts('page', attached, [], [], null, 'night'),
+    });
+    expect(JSON.stringify(sent)).not.toContain('data/rows.json');
   });
 });
 

@@ -172,8 +172,6 @@ export interface GenerationRequest<S> {
    * call and hands its answer on.
    */
   lists?: { inputs: string[]; outputs: string[] };
-  /** The one example-input path this element carries. */
-  exampleFile?: string;
   /** Neighbours' declared formats and the last run's values, from the shell. */
   graphContext?: string;
   /** Raw last-run values, for the backend's verify-and-repair pass. */
@@ -253,7 +251,6 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
     element: request.element,
     description: fields.get(spec.promptField).trim(),
     context: [spec.context?.(subject), request.graphContext].filter(Boolean).join('\n\n'),
-    context_file: request.exampleFile || undefined,
     inputs: request.ports?.inputs,
     outputs: request.ports?.outputs,
     sample_inputs: request.sampleInputs,

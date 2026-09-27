@@ -1,8 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { AiRequest, AiService, CodeService } from '../../elements/Runtime.ts';
 import { registry } from '../../elements/registry.ts';
 import { parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
@@ -10,7 +6,7 @@ import { port } from '../../elements/port.ts';
 import { executeNode } from '../../execution/executor.ts';
 import { inferInterface } from '../../execution/interface.ts';
 import { parseGraph } from '../../graph.ts';
-import { GenerationFailed, GenerationRefused, generate, generateGraph, withContextFile } from './generate.ts';
+import { GenerationFailed, GenerationRefused, generate, generateGraph } from './generate.ts';
 import { nodeCode } from '../node.ts';
 
 /**
@@ -518,46 +514,6 @@ describe('refusals and failures', () => {
       .catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(GenerationFailed);
     expect((failure as GenerationFailed).calls[0]).toMatchObject({ error: 'no content', reply: null });
-  });
-});
-
-describe('a sample file in the context', () => {
-  it('appends the content and a parsed peek at it', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'ctx-'));
-    const file = join(dir, 'rows.csv');
-    await writeFile(file, 'a,b\n1,2\n3,4\n');
-    const context = await withContextFile('Given.', file);
-    expect(context).toContain('Given.');
-    expect(context).toContain('format=csv');
-    expect(context).toContain('"a": "1"');
-  });
-
-  it('says a sample file that is gone and leaves it out -- it used to refuse, and ✨ never asked the model', async () => {
-    const gone = join(tmpdir(), `gone-${Date.now()}.csv`);
-    const context = await withContextFile('Given.', gone);
-    expect(context).toContain('Given.');
-    expect(context).toContain(`The sample file ${gone} is no longer there`);
-
-    const ai = scripted(['```js\nfunction run(i) { return { out: 1 }; }\n```']);
-    const reply = await generate(
-      { element: 'code', description: 'x', inputs: ['a'], outputs: ['out'], context_file: gone },
-      { ai, code: runner(() => ({})), generationFor, target },
-    );
-    expect(ai.asked).toHaveLength(1);
-    expect(reply.result).toContain('out: 1');
-  });
-
-  it('still refuses a file that is there and cannot be read, by name', async () => {
-    const folder = await mkdtemp(join(tmpdir(), 'not-a-file-'));
-    await expect(withContextFile('', folder)).rejects.toThrow(/Could not read context file/);
-  });
-
-  it('cuts a large sample file to a budget -- the first rows show its shape as well as all of it', async () => {
-    const file = join(tmpdir(), `big-${Date.now()}.csv`);
-    writeFileSync(file, `a,b\n${'1,2\n'.repeat(20000)}`);
-    const context = await withContextFile('', file);
-    expect(context.length).toBeLessThan(4000);
-    expect(context).toContain('more characters not shown');
   });
 });
 

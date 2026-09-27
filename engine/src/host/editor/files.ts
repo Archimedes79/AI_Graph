@@ -1,5 +1,5 @@
-// The editor's view of the machine's files: finding projects, and a guess at
-// what a file holds.
+// The editor's view of the machine's files: finding projects, and handing a
+// node's file to the editor the person works in.
 //
 // Editor-only, on purpose: none of it belongs in a bundle, which is why this
 // folder is skipped by the bundle walk along with every other `editor/`.
@@ -8,7 +8,7 @@
 // a bundle carries.
 
 import { existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { basename, extname, join, resolve, sep } from 'node:path';
 import { platform } from 'node:os';
 
@@ -47,38 +47,6 @@ export async function findProjects(name: string, root = process.cwd(), depth = 4
 }
 
 const SKIPPED = new Set(['node_modules', 'dist', 'build']);
-
-const KNOWN: Record<string, string> = {
-  '.csv': 'csv',
-  '.json': 'json',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.pdf': 'application/pdf',
-  '.zip': 'application/zip',
-  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-};
-
-/**
- * A guess at what a sample file holds, for the model it is shown to: a
- * specific name when the extension says so, otherwise `text` or `binary` by
- * whether it decodes.
- */
-export async function detectFormat(path: string): Promise<string> {
-  if (!existsSync(path)) throw new NotFound(`File not found: ${path}`);
-  const known = KNOWN[extname(path).toLowerCase()];
-  if (known) return known;
-  const head = (await readFile(path)).subarray(0, 8192);
-  try {
-    new TextDecoder('utf-8', { fatal: true }).decode(head);
-    return 'text';
-  } catch {
-    return 'binary';
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Handing a node's file to the person's own editor

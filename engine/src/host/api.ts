@@ -100,8 +100,6 @@ export interface GenerateRequest {
   kind?: string;
   description: string;
   context?: string;
-  /** A file whose content is appended to the context, read on the server. */
-  context_file?: string;
   inputs?: string[];
   outputs?: string[];
   /** Real port values from the last run; enables the verify-and-repair pass. */

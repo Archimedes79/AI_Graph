@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { detectFormat, findProjects } from './files.ts';
+import { findProjects } from './files.ts';
 
 /**
- * What the editor's project search and sample reading get from the machine.
+ * What the editor's project search and its "open in my editor" get from the machine.
  *
  * Browsing is not here: it is the same picker a deployed tool serves, and it
  * is tested in `host/browse.test.ts` beside the code.
@@ -19,16 +19,6 @@ async function sandbox() {
   await writeFile(join(dir, 'blob.bin'), Buffer.from([0xff, 0xfe, 0x00, 0x80]));
   return dir;
 }
-
-describe('what a file holds', () => {
-  it('names the format by extension, and text or binary by content', async () => {
-    const dir = await sandbox();
-    expect(await detectFormat(join(dir, 'a.md'))).toBe('text');
-    expect(await detectFormat(join(dir, 'blob.bin'))).toBe('binary');
-    await writeFile(join(dir, 'rows.csv'), 'a,b');
-    expect(await detectFormat(join(dir, 'rows.csv'))).toBe('csv');
-  });
-});
 
 describe('openExternal', () => {
   // Only the refusals are tested: the acceptance starts a program on whatever
