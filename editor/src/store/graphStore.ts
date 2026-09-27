@@ -160,6 +160,16 @@ export interface GraphStore {
   /** Record the current graph as saved (after a successful write to disk). */
   markSaved: () => void;
   /**
+   * Write the whole document to *path* -- the one it was opened from or last
+   * saved to, when none is given -- and be at the path it was written to.
+   *
+   * What counts as saved is the graph that was sent, not the one there is when
+   * the write comes back: an edit made while it was on its way is not on disk,
+   * and must still read as unsaved. Save, Save As and both "Open in my editor"
+   * buttons each wrote this out, and each marked the later graph saved.
+   */
+  save: (path?: string) => Promise<{ path: string }>;
+  /**
    * Take in code and prompts that changed in the project folder on disk.
    *
    * One undo step, so a change from another editor can be taken back like any
@@ -825,6 +835,17 @@ export const useGraphStore = create<GraphStore>()(
       set((state) => {
         state.savedSnapshot = snapshot;
       });
+    },
+
+    save: async (path = get().currentFilePath ?? undefined) => {
+      if (!path) throw new Error('This graph has no file yet: use Save As.');
+      const graph = get().rootGraph();
+      const result = await call('saveGraph', { path, graph });
+      set((state) => {
+        state.savedSnapshot = JSON.stringify(graph);
+      });
+      get().setCurrentFilePath(result.path, result.project);
+      return { path: result.path };
     },
 
     runGraph: async (graph, trigger = null) => {

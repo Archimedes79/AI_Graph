@@ -36,7 +36,7 @@ export default function App() {
   const currentFilePath = useGraphStore((s) => s.currentFilePath);
   const setCurrentFilePath = useGraphStore((s) => s.setCurrentFilePath);
   const isDirty = useGraphStore((s) => s.isDirty);
-  const markSaved = useGraphStore((s) => s.markSaved);
+  const save = useGraphStore((s) => s.save);
   const isProject = useGraphStore((s) => s.isProject);
   const insideSubgraph = useGraphStore((s) => s.subgraphStack.length > 0);
   const takeDiskChanges = useGraphStore((s) => s.takeDiskChanges);
@@ -314,9 +314,8 @@ export default function App() {
     }
     setSaveStatus('Saving\u2026');
     try {
-      await call('saveGraph', { path: currentFilePath, graph: rootGraph() });
-      markSaved();
-      setSaveStatus(`\u2705 Saved to ${currentFilePath}`);
+      const saved = await save();
+      setSaveStatus(`\u2705 Saved to ${saved.path}`);
     } catch (error) {
       setSaveStatus(`\u274c ${errorText(error, 'Save failed')}`);
     }
@@ -376,10 +375,8 @@ export default function App() {
         if (useGraphStore.getState().metadata.name === 'Untitled Graph') {
           setMetadata({ name: (path.split(/[\\/]/).filter(Boolean).pop() ?? '').replace(/\.json$/i, '') || 'Untitled Graph' });
         }
-        const result = await call('saveGraph', { path, graph: rootGraph() });
-        setCurrentFilePath(result.path, result.project);
-        markSaved();
-        setSaveStatus(`\u2705 Saved to ${result.path}`);
+        const saved = await save(path);
+        setSaveStatus(`\u2705 Saved to ${saved.path}`);
       }
       setFilePrompt(null);
     } catch (error) {

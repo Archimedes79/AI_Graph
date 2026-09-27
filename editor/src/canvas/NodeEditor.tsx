@@ -18,8 +18,7 @@ import OutputInterface from '@/authoring/OutputInterface';
 import { nodeLogic } from '@/authoring/logic';
 import GenerationTranscript, { GenerationReport } from '@/authoring/GenerationTranscript';
 import WhatRuns from '@/elements/fields/WhatRuns';
-import { call } from '@/api/client';
-import { errorText } from '@/api/errorText';
+import OpenInMyEditor from '@/authoring/OpenInMyEditor';
 import { ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, TEXT } from '@/ui/theme';
 
 interface NodeEditorProps {
@@ -36,10 +35,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // it was sitting in the store unused.
   const executionResult = useGraphStore((s) => s.executionResult);
 
-  const isProject = useGraphStore((s) => s.isProject);
-
   const [node, setNode] = useState<GraphNode | null>(null);
-  const [externalStatus, setExternalStatus] = useState('');
   // The store's copy of this node as the draft last matched it, and a newer
   // one that arrived while the draft held edits of its own.
   const baseline = useRef('');
@@ -147,33 +143,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
    * used to discard it without a word, so "✅ Transform generated!" followed by
    * Escape lost the code and left no trace of why.
    */
-  /**
-   * Hand this node's file to the person's own editor.
-   *
-   * The draft is taken and the project saved first, so the file holds what
-   * the dialog shows. What is saved there comes back by itself: the editor
-   * watches the project folder (see App.tsx).
-   */
-  const openInOwnEditor = async () => {
-    const state = useGraphStore.getState();
-    if (!state.currentFilePath || !state.isProject) return;
-    try {
-      setExternalStatus('Saving, then opening…');
-      storeDraft();
-      // What is stored now is what the ports are called: a later Save must
-      // follow them from here, not from when the dialog opened.
-      setNode(trackPorts(node!));
-      baseline.current = JSON.stringify(node);
-      const after = useGraphStore.getState();
-      await call('saveGraph', { path: state.currentFilePath, graph: after.rootGraph() });
-      after.markSaved();
-      const opened = await call('openExternal', { graph_path: state.currentFilePath, node_id: nodeId });
-      setExternalStatus(`Opened in ${opened.with}: ${opened.path}. What you save there appears here by itself.`);
-    } catch (error) {
-      setExternalStatus(errorText(error, 'Could not open the file.'));
-    }
-  };
-
   const closeWithGuard = () => {
     const stored = rfNode ? JSON.stringify(rfNode.data.graphNode) : '';
     // Something typed that could not be stored yet is an edit too, though the
@@ -259,28 +228,27 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       caught={caught}
     />
   );
-  const openInEditor = isProject && nodeLogic(node) && (
-    <div>
-      <button
-        onClick={openInOwnEditor}
-        className="text-xs px-3 py-1.5 rounded-lg"
-        style={NEUTRAL_BUTTON}
-        title="Saves the project, then opens this node's file — in VS Code when it is installed"
-      >
-        ↗ Open in my editor
-      </button>
-      {externalStatus && (
-        <p className="text-xs mt-1" style={{ color: MUTED }}>{externalStatus}</p>
-      )}
-    </div>
-  );
+  // The draft goes into the store before the project is saved, so the file
+  // holds what the dialog shows -- and what is stored now is what the ports
+  // are called: a later Save must follow them from here, not from when the
+  // dialog opened.
+  const openInEditor = nodeLogic(node) ? (
+    <OpenInMyEditor
+      nodeId={nodeId}
+      before={() => {
+        storeDraft();
+        setNode(trackPorts(node));
+        baseline.current = JSON.stringify(node);
+      }}
+    />
+  ) : undefined;
   // For an element that authors a body, what only this shell has, for the
   // panel to place in its four steps: the port lists inside "what comes in"
   // and "what comes out" where the ports are the person's, and "what ✨ sends"
   // and "open in my editor" beside the body.
   const steps = generation ? {
     ...(stepped ? { inputs: ports('inputs'), outputs: ports('outputs') } : {}),
-    openInEditor: openInEditor || undefined,
+    openInEditor,
     preview: sends.preview,
     sent: sends.sent,
   } : undefined;

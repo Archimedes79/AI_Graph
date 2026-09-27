@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react';
+import { Suspense } from 'react';
 import { BLOCKS } from './blocks';
 import type { GuiWidget } from '@/graph';
 import { guiWidgetPorts, widgetFiresRun } from '@/document/guiWidgets';
@@ -7,7 +7,6 @@ import { buildGeneration, widgetFields, type GenerationRequest } from '@/authori
 import { widgetLogic } from '@/authoring/logic';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import type { WidgetSteps } from '@/elements/WidgetGuiBuilder';
-import { errorText } from '@/api/errorText';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
 import { useWhatSends } from '@/authoring/WhatSends';
 import { useGraphStore } from '@/store/graphStore';
@@ -15,9 +14,9 @@ import { GUI_GRID_COLUMNS } from '@/document/layout';
 import { schemeVars } from '@/ui/scheme';
 import { blockFacts, blockFeeds, blockFromTheGraph } from '@/authoring/blockFacts';
 import { tryBlock } from '@/authoring/blockStepRules';
-import { call } from '@/api/client';
+import OpenInMyEditor from '@/authoring/OpenInMyEditor';
 import { TONES, TONE_LABELS, type Tone } from '@/ui/tone';
-import { DANGER, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, NEUTRAL_BUTTON, WELL } from '@/ui/theme';
+import { DANGER, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, WELL } from '@/ui/theme';
 
 interface WidgetEditorProps {
   widget: GuiWidget | null;
@@ -44,8 +43,6 @@ export default function WidgetEditor({
   widget, nodeId, onChange, onRemove,
 }: WidgetEditorProps) {
   const executionResult = useGraphStore((s) => s.executionResult);
-  const isProject = useGraphStore((s) => s.isProject);
-  const [externalStatus, setExternalStatus] = useState('');
   const generate = useGenerate();
 
   /**
@@ -92,32 +89,12 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
     if (asked) generate.run(buildGeneration(asked), widget.id);
   };
 
-  const openInEditor = logic && isProject ? (
-    // In a project, a block's code is a file of its own, one folder below its page's.
-    <div>
-      <button
-        className="text-xs px-3 py-1.5 rounded-lg"
-        style={NEUTRAL_BUTTON}
-        title="Saves the project, then opens this block's file — in VS Code when it is installed"
-        onClick={async () => {
-          const state = useGraphStore.getState();
-          if (!state.currentFilePath) return;
-          try {
-            setExternalStatus('Saving, then opening…');
-            await call('saveGraph', { path: state.currentFilePath, graph: state.rootGraph() });
-            state.markSaved();
-            const opened = await call('openExternal', { graph_path: state.currentFilePath, node_id: nodeId, widget_id: widget.id });
-            setExternalStatus(`Opened in ${opened.with}: ${opened.path}. What you save there appears here by itself.`);
-          } catch (error) {
-            setExternalStatus(errorText(error, 'Could not open the file.'));
-          }
-        }}
-      >
-        ↗ Open in my editor
-      </button>
-      {externalStatus && <p className="text-xs mt-1" style={{ color: MUTED }}>{externalStatus}</p>}
-    </div>
-  ) : undefined;
+  // In a project, a block's code is a file of its own, one folder below its
+  // page's. Keyed by the block, so one block's "Opened in …" is not said of
+  // the next one selected.
+  const openInEditor = logic
+    ? <OpenInMyEditor key={widget.id} nodeId={nodeId} widgetId={widget.id} />
+    : undefined;
 
   // What only this shell knows, for a block that authors a body: the page it
   // sits on, and the page it is drawn in. The panel places each in its step.
