@@ -403,10 +403,10 @@ asked) — their dialogs are those settings, and a file is read nowhere but at t
 the node that wants its text.
 
 ```
-1 what comes in:  ports ("read the file at this path") + ONE example   ⟳ · 📂 · a file dropped · "run once per item"
+1 what comes in:  ports ("read the file at this path", "whole list") + ONE example   ⟳ · 📂 · a file dropped · "run once per item"
 2 what comes out: ports, where each goes and what it wants (read only) + ONE words field + kept shape
 3 what it should do ──✨──▶ 4 body ──▶ ▶ Try it ──▶ what came out · ✓/✗ expected · judge · "and 2 more"
-                             ▲                        │  Keep as expected output
+                             ▲                        │  Keep (as expected output / this answer's shape)
                              └── "Say what to change" ┘  ✨ Fix (where it failed)
 ```
 
@@ -419,9 +419,10 @@ them the way `test` does (`testNode`), so the answer shown is the answer judged.
 An AI node and a code node have the same sections in the same order and the same buttons;
 only the body differs. Where an element keeps a result differently, its panel hands that to
 `NodeSteps` rather than `NodeSteps` asking what it draws: an AI node's answer is never the
-same twice, so its "Keep as expected output" writes "Answer in this shape: …" into its words
-(`keep`, with `elements/nodes/ai/keptAnswer.ts`); a code node's writes the example's expect
-block. Each panel says what its words in step 2 are for (`wordsHint`).
+same twice, so its "Keep this answer's shape" writes "Answer in this shape: …" into its words
+(`keep`, `keepAnswerShape` in `elements/nodes/ai/keptAnswer.ts`, with the button's words); a
+code node's "Keep as expected output" writes the example's expect block. Each panel says
+what its words in step 2 are for (`wordsHint`).
 
 **No Save.** What a node's dialog changes is written into the graph a moment later
 (`canvas/nodeDialog.ts`), one undo step per field typed into (`graphStore.commit`'s

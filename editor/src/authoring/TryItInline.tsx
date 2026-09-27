@@ -155,9 +155,10 @@ export function useTry(of: string, run: () => Promise<Tried>): { busy: boolean; 
  * -- the body repaired from how it failed, the input it failed on and the body
  * as it is -- and "Say what to change": a sentence, Enter, and ✨ changes the
  * task and the body together from the body there is, what came of it and the
- * sentence; what it wrote is tried at once, and one Undo takes it back.
+ * sentence; what it wrote is tried at once where there is something to try it
+ * on (*tries*), and one Undo takes it back.
  */
-export function ChangeIt({ busy, fix, failure, onSay, body }: {
+export function ChangeIt({ busy, fix, failure, onSay, body, tries }: {
   busy: boolean;
   /** ✨ Fix, where something failed. */
   fix?: () => void;
@@ -167,6 +168,8 @@ export function ChangeIt({ busy, fix, failure, onSay, body }: {
   onSay: (change: string) => Promise<boolean>;
   /** What the body is called: "the code", "the instructions". */
   body: string;
+  /** What ✨ writes is tried at once: step 1 holds an example it can run on. */
+  tries: boolean;
 }) {
   const [said, setSaid] = useState('');
   const say = async () => {
@@ -195,12 +198,24 @@ export function ChangeIt({ busy, fix, failure, onSay, body }: {
           disabled={busy}
           onChange={(event) => setSaid(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void say(); } }}
-          placeholder={`e.g. “Also count the words” -- Enter: ✨ changes the task and ${body} together, and tries it`}
+          placeholder={`e.g. “Also count the words” -- Enter: ✨ changes the task and ${body} together${tries ? ', and tries it' : ''}`}
           aria-label="Say what to change"
         />
       </div>
     </div>
   );
+}
+
+/**
+ * Keeping what came out of a try, as the node keeps it: its button's words,
+ * a sentence of what it does, and doing it. A code node makes it the
+ * example's expected output; an ai node, whose answer is never the same
+ * twice, keeps its shape in the words it is sent -- and says so.
+ */
+export interface Keep {
+  label: string;
+  says: string;
+  onKeep: (result: TryResult) => void;
 }
 
 interface Props {
@@ -220,8 +235,8 @@ interface Props {
   gaps?: string[];
   /** The expected output the example keeps, to see and to drop; absent while it keeps none. */
   expected?: { text: string; onForget: () => void; note?: React.ReactNode };
-  /** "Keep as expected output", and what it does for this node, in a sentence. */
-  keep?: { onKeep: (result: TryResult) => void; says: string };
+  /** What "Keep" does with what came out, for this node (`Keep`). */
+  keep?: Keep;
   /** What came out, drawn the element's own way. Default: each output, as JSON. */
   renderResult?: (result: TryResult) => React.ReactNode;
   /** The sentence a model judges the answer by: its field, drawn under the verdict. */
@@ -236,8 +251,8 @@ interface Props {
  * ▶ Try it, right under the body it tries: the element run by itself on step
  * 1's example, the way a run runs it -- per item when step 1 says so, files
  * read as a run reads them -- and everything said about what came out, in one
- * place: whether it gives the expected output, "Keep as expected output", the
- * judge's word, and how the other examples in examples.md did. Those used to
+ * place: whether it gives the expected output, "Keep" (`Keep`), the judge's
+ * word, and how the other examples in examples.md did. Those used to
  * be step 2's -- an example output box, a judge, an example answer and a
  * ▶ Test of their own -- while what they were about showed down here.
  */
@@ -312,7 +327,7 @@ export default function TryItInline({ canRun, whyNot, busy, onTry, tried, gaps, 
           {ran && keep && (
             <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} title={keep.says}
               onClick={() => keep.onKeep(result)}>
-              Keep as expected output
+              {keep.label}
             </button>
           )}
         </div>

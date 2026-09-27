@@ -8,7 +8,7 @@ import ExampleInputField from './ExampleInputField';
 import OutputWordsField from './OutputWordsField';
 import OutputInterface from './OutputInterface';
 import GeneratedBody from './GeneratedBody';
-import TryItInline, { ChangeIt, stillSaid, tryNode, useTry, type TryResult } from './TryItInline';
+import TryItInline, { ChangeIt, stillSaid, tryNode, useTry, type Keep, type TryResult } from './TryItInline';
 import { readPair, withExpect, withInput, withJudge } from './examplePair';
 import { useTyped } from './useTyped';
 import { derivedOutputWords } from './derivedOutput';
@@ -37,13 +37,14 @@ type Props = Pick<NodePanelProps,
   /** What step 2's words mean for this node, said above them: who reads them, and when. */
   wordsHint: string;
   /**
-   * What "Keep as expected output" does with a result, where it does not make
-   * it the example's expected output -- and says so: an ai node's answer is
+   * What "Keep" does with a result, where it does not make it the example's
+   * expected output -- and says so, on its button: an ai node's answer is
    * never the same twice, so it is kept as a shape to answer in, in step 2's
-   * words (`keptAnswer.withAnswerShape`). Absent, it is the example's expect
-   * block, checked by Try it and `test`.
+   * words ("Keep this answer's shape", `keptAnswer.keepAnswerShape`). Absent,
+   * it is "Keep as expected output": the example's expect block, checked by
+   * Try it and `test`.
    */
-  keep?: { onKeep: (result: TryResult) => void; says: string };
+  keep?: Keep;
 };
 
 /**
@@ -68,9 +69,9 @@ const noExpectation = (examples: string): string => {
  *      run kept
  *   3  the task
  *   4  the body, and ▶ Try it on the example under it: what came out, whether
- *      it is what the example expects, "Keep as expected output", the judge's
- *      word, and how the other examples did -- then ✨ Fix where it failed, and
- *      "Say what to change". What ✨ writes is tried at once.
+ *      it is what the example expects, "Keep", the judge's word, and how the
+ *      other examples did -- then ✨ Fix where it failed, and "Say what to
+ *      change". What ✨ writes is tried at once, where there is an example.
  *
  * The same pair is what ✨ is written and tried against (`nodeFacts`), what
  * the model's request is shown for, and what `test` runs: one example,
@@ -232,9 +233,10 @@ export default function NodeSteps({
     </>
   );
 
-  const keep = keepOwn ?? {
-    onKeep: (result: TryResult) => editExamples((current) => withExpect(exampleFor(node, current), keptExpect(result.outputs)), ONCE),
+  const keep: Keep = keepOwn ?? {
+    label: 'Keep as expected output',
     says: 'Make what came out the output the example must give: Try it and test hold every later version to it',
+    onKeep: (result: TryResult) => editExamples((current) => withExpect(exampleFor(node, current), keptExpect(result.outputs)), ONCE),
   };
 
   // What a model holds the answer to when the example is tried: how an answer
@@ -295,6 +297,7 @@ export default function NodeSteps({
             failure={!shown && came?.failed ? came.said.error : undefined}
             onSay={(said) => write(change(said))}
             body={bodyWord}
+            tries={canTry}
           />
         )}
       >

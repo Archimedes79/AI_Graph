@@ -3,8 +3,8 @@ import NodeSteps from '@/authoring/NodeSteps';
 import { promptText } from '@engine/elements/nodes/ai/prompt.ts';
 import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, MUTED, SUNKEN, TEXT } from '@/ui/theme';
 import PromptPreview from './PromptPreview';
-import { keptAnswer, withAnswerShape } from './keptAnswer';
-import { ONCE, type NodePanelProps } from '../../NodeGuiBuilder';
+import { keepAnswerShape } from './keptAnswer';
+import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 /**
  * An ai node: the four steps, its body the instructions the model gets, with
@@ -78,10 +78,7 @@ export default function AiNodePanel(props: NodePanelProps) {
       wordsHint="Only needed when something reads the answer. Sent to the model after its instructions on every run, and to ✨ Generate here and in the nodes this one feeds."
       // An answer is never the same twice: what is kept of one is its shape,
       // in the words every request is sent with -- not an output to check.
-      keep={{
-        onKeep: (result) => setConfig('output_format_prompt', (current: unknown) => withAnswerShape(String(current ?? ''), keptAnswer(node, result.outputs)), ONCE),
-        says: 'Put “Answer in this shape: …” with this answer into the words of step 2: the model is sent them with every request',
-      }}
+      keep={keepAnswerShape(node, setConfig)}
       body={{
         title: 'Instructions',
         hint: 'What the model is told with every request, and the message its inputs are laid out in. ✨ Generate writes the instructions from steps 1 to 3; the words of step 2 are added after them by themselves.',

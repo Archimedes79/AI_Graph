@@ -249,7 +249,7 @@ downstream has to *parse* the answer, and what the nodes it is wired to want is 
 already: step 2's words field shows it greyed while it is empty, and it is what ✨ is told
 either way. To say more, there is that one field, sent whenever it says anything: write it
 (“a JSON list of {title, score}”), or show it — press ▶ Try it, and if the answer has the
-shape you want, **Keep as expected output** puts “Answer in this shape: …” with that answer
+shape you want, **Keep this answer's shape** puts “Answer in this shape: …” with that answer
 into the words (in place of a shape kept before). The node is then told to answer in that
 same structure with new content, and its neighbours are generated against it. Nothing
 checks the answer afterwards unless its example has a judge; a model that ignores the
@@ -291,9 +291,10 @@ same buttons for an AI node -- only the body differs:
 3  What should it do?   a sentence or two, in your words
 4  Code                 the code (an AI node's instructions and message), with ✨ Generate
                         -- and ▶ Try it on step 1's example, under it: what came out,
-                        ✓/✗ against the expected output, Keep as expected output, the
-                        judge's sentence, "and 2 more: pass" -- then ✨ Fix where it
-                        failed, and "Say what to change"
+                        ✓/✗ against the expected output, Keep as expected output (an
+                        AI node: Keep this answer's shape), the judge's sentence,
+                        "and 2 more: pass" -- then ✨ Fix where it failed, and "Say
+                        what to change"
 ```
 
 There is no Save and no Cancel: a change is in the graph a moment after it is made, one
@@ -537,10 +538,12 @@ wrote, what comes out?* — built in the same four steps:
   into text, one call per item). Nothing downstream runs. An AI node shows the request
   first, as the model receives it — put together by the engine, one request per item,
   when the node runs per item or reads files. The result is set against the example's
-  expected output, and **Keep as expected output** makes it that.
+  expected output, and **Keep as expected output** makes it that -- on an AI node, whose
+  answer is never the same twice, **Keep this answer's shape** puts its shape into step 2's
+  words instead.
 - **Say what to change**, under the result, and **✨ Fix** where it failed: the body
   changed or repaired from what came of it, written as one undo step and tried again at
-  once.
+  once where there is an example to try it on.
 - **What ✨ sends**, beside the button, shows the request word for word: the brief above.
   The example is the sample the generated body is then run against, and what it expects
   is checked before you see it; what falls short goes back to the model for one repair.

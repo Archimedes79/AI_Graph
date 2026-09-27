@@ -75,6 +75,14 @@ describe.each(['code', 'ai'] as const)('a %s node\'s step 2', (type) => {
     expect(tryIt).toContain('aria-label="Say what to change"');
     expect(tryIt).not.toContain('✨ Fix');
   });
+
+  it('says that what ✨ changes is tried at once only where there is an example to try it on', () => {
+    const say = (html: string) => html.match(/placeholder="([^"]*)"[^>]*aria-label="Say what to change"/)?.[1] ?? '';
+    const bare = NODE_KINDS[type].create(type);
+    expect(say(drawn(bare))).not.toContain('tries it');
+    const input = type === 'ai' ? '{"prompt": "France?"}' : '{"input": "a"}';
+    expect(say(drawn({ ...bare, config: { ...bare.config, examples: withInput('', input) } }))).toContain('together, and tries it');
+  });
 });
 
 describe('a file dropped on a node, and a wire drawn to it after, that reads the file', () => {
@@ -114,7 +122,7 @@ describe('"Run once per item"', () => {
 describe('what can be done about what came out', () => {
   it('is ✨ Fix where something failed, beside "Say what to change"', () => {
     const drawnWith = (fix?: () => void, failure?: string) => renderToStaticMarkup(createElement(ChangeIt, {
-      busy: false, fix, failure, onSay: async () => true, body: 'the code',
+      busy: false, fix, failure, onSay: async () => true, body: 'the code', tries: true,
     }));
     expect(drawnWith(() => {})).toContain('✨ Fix');
     expect(drawnWith(() => {}, 'boom')).toContain('The last run failed here: boom');

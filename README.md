@@ -113,7 +113,7 @@ Nothing leaves the machine unless the graph itself sends it there.
   button, a chat message or a dropdown starts the graph *at the node it is wired to*, so
   one page can hold several tools.
 - **A prompt you can see** — an AI node shows the exact request the model will get,
-  tries it with ▶ Try it, and **Keep as expected output** puts an answer you liked into
+  tries it with ▶ Try it, and **Keep this answer's shape** puts an answer you liked into
   its words ("Answer in this shape: …"), which the model is sent every time.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
 - **A real editor** — code and prompts are written in CodeMirror, full-window on ⤢, or
