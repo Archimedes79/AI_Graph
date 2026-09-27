@@ -330,8 +330,8 @@ export const API = {
   saveAiSettings: route<SettingsPatch, SettingsStatus>('POST', '/api/ai/settings', 'editor'),
   providers: route<void, ProviderStatus>('GET', '/api/ai/providers', 'editor'),
 
-  /** A node's (or block's) body file in a project -- `nodes/<id>/code.js` -- in the person's own editor. Loopback only: it starts a program. */
-  openExternal: route<{ graph_path: string; node_id: string; widget_id?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
+  /** A node's body file in a project -- `nodes/<id>/code.js` -- in the person's own editor. Loopback only: it starts a program. */
+  openExternal: route<{ graph_path: string; node_id: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
 } as const;
 
 export type Api = typeof API;

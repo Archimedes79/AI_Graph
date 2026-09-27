@@ -398,8 +398,8 @@ describe('graphStore, a project open on disk', () => {
     useGraphStore.getState().markSaved();
 
     useGraphStore.getState().takeDiskChanges([
-      { node_id: 'count', widget_id: '', field: 'code', value: 'function run() { return { total: 2 }; }' },
-      { node_id: 'gone', widget_id: '', field: 'code', value: 'ignored' },
+      { node_id: 'count', field: 'code', value: 'function run() { return { total: 2 }; }' },
+      { node_id: 'gone', field: 'code', value: 'ignored' },
     ]);
     expect(nodeById('count').config.code).toContain('total: 2');
     expect(useGraphStore.getState().isDirty()).toBe(false);
@@ -412,7 +412,7 @@ describe('graphStore, a project open on disk', () => {
     loadTestGraph([codeNode()]);
     useGraphStore.getState().markSaved();
     useGraphStore.getState().updateNode('count', { label: 'Renamed here' });
-    useGraphStore.getState().takeDiskChanges([{ node_id: 'count', widget_id: '', field: 'code_prompt', value: 'Count.' }]);
+    useGraphStore.getState().takeDiskChanges([{ node_id: 'count', field: 'code_prompt', value: 'Count.' }]);
     expect(useGraphStore.getState().isDirty()).toBe(true);
     expect(nodeById('count').label).toBe('Renamed here');
   });
@@ -589,7 +589,6 @@ describe('a graph inside a node', () => {
     // holds, whole. An output node appeared in there while we were away.
     store().takeDiskChanges([{
       node_id: 'part',
-      widget_id: '',
       field: NESTED_GRAPH_FIELD,
       value: inner([graphNode({ id: 'result', node_type: 'output', label: 'Result' })]),
     }]);
@@ -670,7 +669,7 @@ describe('a graph inside a node', () => {
     store().addNode('output', { x: 0, y: 0 });   // unsaved work, out here
 
     const refused = store().takeDiskChanges([{
-      node_id: 'part', widget_id: '', field: NESTED_GRAPH_FIELD, value: inner([graphNode({ id: 'theirs' })]),
+      node_id: 'part', field: NESTED_GRAPH_FIELD, value: inner([graphNode({ id: 'theirs' })]),
     }]);
 
     // Taking it would have replaced that whole graph without a word.

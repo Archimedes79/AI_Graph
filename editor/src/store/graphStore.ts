@@ -834,10 +834,7 @@ export const useGraphStore = create<GraphStore>()(
             Object.assign(node, derivedNodePorts(node) ?? {});
             continue;
           }
-          const holder: Record<string, unknown> | undefined = change.widget_id
-            ? (node.config.gui_widgets ?? []).find((widget) => widget.id === change.widget_id)
-            : node.config;
-          if (holder) holder[change.field] = change.value;
+          (node.config as unknown as Record<string, unknown>)[change.field] = change.value;
         }
       });
       if (wasClean) get().markSaved();

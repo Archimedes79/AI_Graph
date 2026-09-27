@@ -234,7 +234,7 @@ describe('what a folder could write and not read back', () => {
     await expect(writeProject(dir, graph)).rejects.toThrow(/is a number/);
   });
 
-  it('refuses two blocks of one page with one id: one folder, one body left', async () => {
+  it('keeps a page\'s blocks in its node.json, with no folder of their own -- two of one id are check\'s to name', async () => {
     const graph = parseGraph({
       metadata: { name: 'Blocks' },
       nodes: [{
@@ -246,7 +246,11 @@ describe('what a folder could write and not read back', () => {
       }],
       edges: [],
     });
-    await expect(writeProject(dir, graph)).rejects.toThrow(/called "page\/chart"/);
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'nodes/page/chart'))).toBe(false);
+    const blocks = (await readProject(dir)).nodes[0].config.gui_widgets as { value: string }[];
+    expect(blocks.map((block) => block.value)).toEqual(['first', 'second']);
+    expect(problemsIn(graph)).toEqual([expect.objectContaining({ problem: 'More than one block has the id "chart".' })]);
   });
 
   it('says a node.json that is not an object is not a graph, rather than failing somewhere else', async () => {
@@ -341,11 +345,11 @@ describe('two editors on one folder', () => {
     expect(await changesOnDisk(dir)).toEqual([]);
 
     await touch(join(dir, 'nodes/say/system.md'), 'You count carefully.\n');
-    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'say', widget_id: '', field: 'system_prompt', value: 'You count carefully.' }]);
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'say', field: 'system_prompt', value: 'You count carefully.' }]);
     expect(await changesOnDisk(dir)).toEqual([]);
 
     await rm(join(dir, 'nodes/count/task.md'));
-    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', widget_id: '', field: 'code_prompt', value: '' }]);
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'code_prompt', value: '' }]);
 
     // A change taken in is no conflict for the next save.
     const graph = await readProject(dir);
@@ -458,7 +462,7 @@ describe('a graph inside a node', () => {
     await touch(join(dir, 'nodes/part/nodes/shorten/code.js'), 'function run() { return { short: "hi" }; }\n');
     const [change, ...rest] = await changesOnDisk(dir);
     expect(rest).toEqual([]);
-    expect(change).toMatchObject({ node_id: 'part', widget_id: '', field: 'nested_graph' });
+    expect(change).toMatchObject({ node_id: 'part', field: 'nested_graph' });
     expect((change.value as Graph).nodes[0].config.code).toContain('"hi"');
     // Once, like every other change.
     expect(await changesOnDisk(dir)).toEqual([]);

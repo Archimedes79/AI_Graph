@@ -8,8 +8,6 @@
 /** A piece of writing someone changed outside the editor. */
 export interface TextChange {
   node_id: string;
-  /** The block inside a page, or `''` for the node's own. */
-  widget_id: string;
   field: string;
   /** What the file says now; empty when it was deleted. */
   value: unknown;

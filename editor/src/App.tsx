@@ -284,8 +284,7 @@ export default function App() {
         const changes = disk.current.due(currentFilePath);
         if (!changes.length) return;
         const refused = takeDiskChanges(changes);
-        const what = changes.filter((c) => !refused.includes(c.node_id))
-          .map((c) => (c.widget_id ? `${c.node_id}/${c.widget_id}` : c.node_id));
+        const what = changes.filter((c) => !refused.includes(c.node_id)).map((c) => c.node_id);
         if (what.length) setSaveStatus(`↻ From disk: ${[...new Set(what)].join(', ')}`);
         // A graph inside a node changed on disk while there is unsaved work
         // here. Taking it would replace that graph whole, so it waits.
