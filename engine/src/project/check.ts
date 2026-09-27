@@ -293,7 +293,7 @@ function exampleProblems(graph: Graph, node: GraphNode, where: string): Problem[
   const inputs = new Set(node.inputs.map((port) => port.id));
   const outputs = new Set(node.outputs.map((port) => port.id));
   // A port whose path is read into text arrives as the text; the producer's interface describes the path.
-  const read = new Set(registry.node(node.node_type)?.readsFileInputs ? filePorts(node) : []);
+  const read = new Set(filePorts(node, registry));
 
   for (const example of examples) {
     const at = `${where}, example "${example.title}"`;

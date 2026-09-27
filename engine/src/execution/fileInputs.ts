@@ -16,10 +16,17 @@
 // the editor saying it once, not the run guessing it every time.
 
 import type { GraphNode } from '../graph.ts';
-import type { FileService, Runtime } from '../elements/Runtime.ts';
+import type { FileService } from '../elements/Runtime.ts';
+import type { Runners } from '../elements/NodeRunner.ts';
 
-/** The input ports of *node* that are read: the ones typed `file_path`. */
-export function filePorts(node: GraphNode): string[] {
+/**
+ * The input ports of *node* that are read: the ones typed `file_path`, on a
+ * node whose kind reads its files (`readsFileInputs`) -- every other kind is
+ * handed the path, whatever its port says. Asked by the run, by `check`, by
+ * what a run asks for first and by the editor, so none of them can disagree.
+ */
+export function filePorts(node: GraphNode, elements: Runners): string[] {
+  if (!elements.node(node.node_type)?.readsFileInputs) return [];
   return node.inputs.filter((port) => port.data_type === 'file_path').map((port) => port.id);
 }
 
@@ -48,12 +55,4 @@ export async function readPorts(
     resolved[key] = Array.isArray(value) ? await Promise.all(value.map(read)) : await read(value);
   }
   return resolved;
-}
-
-export function readFileInputs(
-  node: GraphNode,
-  inputs: Record<string, unknown>,
-  runtime: Runtime,
-): Promise<Record<string, unknown>> {
-  return readPorts(inputs, filePorts(node), runtime.files);
 }

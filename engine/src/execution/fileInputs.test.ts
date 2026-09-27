@@ -22,7 +22,13 @@ const node = (inputs: Port[], type: GraphNode['node_type'] = 'code'): GraphNode 
 
 describe('which inputs are read', () => {
   it('takes the ports that say so themselves, and only those', () => {
-    expect(filePorts(node([port('csv', 'file_path'), port('kind', 'text'), port('input', 'any')]))).toEqual(['csv']);
+    expect(filePorts(node([port('csv', 'file_path'), port('kind', 'text'), port('input', 'any')]), registry)).toEqual(['csv']);
+  });
+
+  it('takes none on a node whose kind takes a path as a path, whatever its port says', () => {
+    // Said once, here: the run, check, what a run asks for first and the
+    // editor each put the kind's rule beside the port's themselves.
+    expect(filePorts(node([port('path', 'file_path')], 'output'), registry)).toEqual([]);
   });
 });
 

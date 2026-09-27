@@ -34,8 +34,8 @@ export function describeNodeOutput(node: GraphNode): string {
 /**
  * The input ports a running node is handed a file's text on: the ones step 1
  * ticks "Read the file at this path", of a kind that reads its files -- the
- * engine's own rule (`fileInputs.ts#filePorts`), asked of its element, so the
- * two cannot disagree on which.
+ * engine's own rule (`fileInputs.ts#filePorts`), so the two cannot disagree
+ * on which.
  *
  * A sample holds what came off the wire -- the path. The server reads these
  * before it shows the sample to the model or tries the code on it, as a run
@@ -43,7 +43,7 @@ export function describeNodeOutput(node: GraphNode): string {
  * kept as its path, which is what a run hands the node there.
  */
 export function readFilePorts(node: GraphNode): string[] {
-  return engineRegistry.node(node.node_type)?.readsFileInputs ? filePorts(node) : [];
+  return filePorts(node, engineRegistry);
 }
 
 /**

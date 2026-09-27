@@ -38,8 +38,8 @@ export function runtimeRequirements(graph: Graph, registry: Runners): RuntimeReq
 
 /**
  * Whether what *nodeId* hands on is the path of a file to read: it is wired
- * into an input the node there reads the file at (`filePorts`, of an element
- * that `readsFileInputs`). A text asked for when the run starts is then asked
+ * into an input the node there reads the file at (`filePorts`). A text asked
+ * for when the run starts is then asked
  * for as a file, with the file browser -- a text input is the one way left to
  * name a file from outside a page, and it was asked for in a bare text box.
  * Only the graph knows the wire, so it is asked here and not of the element.
@@ -48,7 +48,7 @@ function readAsFile(graph: Graph, nodeId: string, registry: Runners): boolean {
   return graph.edges.some((edge) => {
     if (edge.source_node_id !== nodeId) return false;
     const target = graph.nodes.find((node) => node.id === edge.target_node_id);
-    return !!target && !!registry.node(target.node_type)?.readsFileInputs && filePorts(target).includes(edge.target_port_id);
+    return !!target && filePorts(target, registry).includes(edge.target_port_id);
   });
 }
 

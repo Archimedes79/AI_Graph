@@ -25,7 +25,7 @@ import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeRes
 import { resultKeys, type NodeRunner, type Runners } from '../elements/NodeRunner.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
-import { readFileInputs } from './fileInputs.ts';
+import { filePorts, readPorts } from './fileInputs.ts';
 import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
 import type { LastOutputs } from './reuse.ts';
 import type { Latch } from './latch.ts';
@@ -397,7 +397,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         // What the run reports having received is what came off the wires --
         // the paths, not the megabytes behind them. Only the element sees the
         // contents.
-        const arrived = await readInputs(element, node, inputs, runtime);
+        const arrived = await readInputs(node, inputs, runtime, registry);
         // An event is a moment: `true` handed back from an earlier round would
         // open gates for a press that is over.
         const key = element.eventPorts(node).length ? undefined : options.reuse?.key(node, arrived);
@@ -640,7 +640,7 @@ export async function executeNode(
   if (why) return { node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [why] };
   const { runtime } = options;
   try {
-    const arrived = await readInputs(element, node, inputs, runtime);
+    const arrived = await readInputs(node, inputs, runtime, options.registry);
     const { produced, failures } = await runNode(
       element, node, arrived, withSubgraph(runtime, options, node, options.depth ?? 0),
     );
@@ -737,14 +737,15 @@ export function nodeName(node: GraphNode): string {
  * body went looking for one.
  */
 async function readInputs(
-  element: NodeRunner,
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,
+  registry: Runners,
 ): Promise<Record<string, unknown>> {
-  if (!element.readsFileInputs) return inputs;
+  const ports = filePorts(node, registry);
+  if (!ports.length) return inputs;
   try {
-    return await readFileInputs(node, inputs, runtime);
+    return await readPorts(inputs, ports, runtime.files);
   } catch (error) {
     throw new Error(`Reading its input files: ${error instanceof Error ? error.message : String(error)}`);
   }
