@@ -14,7 +14,7 @@ vi.mock('@/api/client', async (original) => ({
   ...(await original<typeof import('@/api/client')>()),
   call: vi.fn(async (_route: string, body: GenerateRequest) => {
     sent.push(body);
-    return { result: 'function run(inputs) { return inputs; }', explanation: '', calls: [], probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [] } };
+    return { result: 'function run(inputs) { return inputs; }', explanation: '', calls: [], probe: { status: 'skipped', error: '', missing_outputs: [] } };
   }),
 }));
 

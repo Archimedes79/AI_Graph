@@ -65,7 +65,7 @@ describe('code', () => {
     );
     expect(ai.asked[0].prompt).toContain('The returned object\'s keys must be exactly: ["output"]');
     expect(ai.asked[0].prompt).not.toMatch(/"error"/);
-    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1, missing_outputs: [] });
+    expect(reply.probe).toMatchObject({ status: 'ok', missing_outputs: [] });
   });
 
   it('verifies against the sample and reports what the code returned, whole', async () => {
@@ -74,7 +74,7 @@ describe('code', () => {
       { element: 'code', description: 'double', inputs: ['a'], outputs: ['out'], sample_inputs: { a: 21 } },
       { ai, code: runner(() => ({ out: 42 })), generationFor, target },
     );
-    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1, outputs: { out: 42 } });
+    expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 42 } });
   });
 
   it('repairs once with the evidence when the first attempt misses a key', async () => {
@@ -87,7 +87,6 @@ describe('code', () => {
       { ai, code: runner((body) => (body.includes('wrong') ? { wrong: 1 } : { out: 1 })), generationFor, target },
     );
     expect(reply.probe.status).toBe('repaired');
-    expect(reply.probe.attempts).toBe(2);
     expect(reply.result).toContain('out: 1');
     expect(ai.asked[1].prompt).toContain('--- wrong result keys ---');
     expect(ai.asked[1].prompt).toContain('missing ["out"]');
@@ -156,7 +155,7 @@ describe('generated code that asks a model', () => {
       { element: 'code', description: 'classify the row with the model', inputs: ['row'], outputs: ['label'], sample_inputs: { row: 'apple' } },
       { ai, code: nodeCode, generationFor, target },
     );
-    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1, outputs: { label: 'fruit' } });
+    expect(reply.probe).toMatchObject({ status: 'ok', outputs: { label: 'fruit' } });
     expect(ai.asked[1].prompt).toContain('Classify: apple');
   }, 30_000);
 });
@@ -281,7 +280,7 @@ describe('a node run once per item', () => {
     // of two is not read as what one call must return.
     expect(prompt).toContain('What the calls return is collected into one list per output');
     expect(tried).toEqual(['alpha']);
-    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1 });
+    expect(reply.probe).toMatchObject({ status: 'ok' });
   });
 
   it('turns away a body written for the list, which the probe used to pass and every item of a run failed', async () => {
@@ -348,11 +347,11 @@ describe('a node run once per item', () => {
     // to the bare answer, the probe failed a correct body and asked for a repair.
     const kept = '## One word\n\n```json input\n{"text": ["alpha"]}\n```\n\n```json expect\n{"out": ["ALPHA"]}\n```\n';
     const reply = await generate({ ...request, sample_inputs: undefined, examples: kept }, { ai: scripted([shout]), code: inProcess, generationFor, target });
-    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1, problems: [] });
+    expect(reply.probe).toMatchObject({ status: 'ok', problems: [] });
     // A port declared single hands on the bare answer, and the request cannot say which ports are: that meets it too.
     const typed = '## One word\n\n```json input\n{"text": "alpha"}\n```\n\n```json expect\n{"out": "ALPHA"}\n```\n';
     const single = await generate({ ...request, sample_inputs: undefined, examples: typed }, { ai: scripted([shout]), code: inProcess, generationFor, target });
-    expect(single.probe).toMatchObject({ status: 'ok', attempts: 1 });
+    expect(single.probe).toMatchObject({ status: 'ok' });
     // And a wrong answer meets neither.
     const lower = '```js\nfunction run(inputs) { return { out: inputs.text }; }\n```';
     const wrong = await generate({ ...request, sample_inputs: undefined, examples: kept }, { ai: scripted([lower, lower]), code: inProcess, generationFor, target });
@@ -430,7 +429,7 @@ describe('a preview', () => {
       { ai, code: runner(() => { throw new Error('nothing may run'); }), generationFor, target },
     );
     expect(ai.asked).toHaveLength(0);
-    expect(reply.preview).toBe(true);
+    expect(reply.result).toBe('');
     expect(reply.calls).toHaveLength(1);
     expect(reply.calls[0].error).toBeNull();
     expect(reply.calls[0].prompt).toContain('const a = inputs["a"];');
@@ -537,7 +536,7 @@ describe('a block\'s snippet is looked at before anyone sees it', () => {
       { element: 'plot_window', description: 'a line', sample_inputs: sample },
       { ai, code: runner(() => ({ value: drawn })), generationFor, target },
     );
-    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1 });
+    expect(reply.probe).toMatchObject({ status: 'ok' });
   });
 
   it('hands a drawing full of NaN back with the reason, and keeps the repair', async () => {
@@ -549,7 +548,7 @@ describe('a block\'s snippet is looked at before anyone sees it', () => {
       { element: 'plot_window', description: 'a line', sample_inputs: sample },
       { ai, code: runner((body) => ({ value: body.includes('SECOND') ? drawn : blank })), generationFor, target },
     );
-    expect(reply.probe).toMatchObject({ status: 'repaired', attempts: 2, problems: [] });
+    expect(reply.probe).toMatchObject({ status: 'repaired', problems: [] });
     expect(reply.result).toContain('SECOND');
     // The second request carries what was found, in words the model can act on.
     expect(ai.asked[1].prompt).toContain('what is wrong with what it produced');

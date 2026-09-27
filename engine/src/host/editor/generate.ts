@@ -289,6 +289,9 @@ function handedOn(request: GenerateRequest, result: Record<string, unknown>): Re
 /** A probe is a smoke test, not a run: longer than this on one sample is not something a repair fixes. */
 const PROBE_TIMEOUT_MS = 25_000;
 
+/** The report of a probe that did not run: no sample to try on, or a body no probe tries. A fresh one each time. */
+const notProbed = (): ProbeReport => ({ status: 'skipped', error: '', missing_outputs: [] });
+
 /** A short, faithful rendering of a value for the model and the user: the brief's own, so one prompt cuts values one way. */
 const preview = (value: unknown): string => jsonClip(value, BUDGET.preview);
 
@@ -373,8 +376,7 @@ async function generateVerifiedCode(
   const probeWith = spec?.probeWith;
   const frame = framedByElement(spec) ? spec?.contract ?? '' : undefined;
   const first = await generateCode(ai, target, request, context, given, '', frame);
-  const report: ProbeReport = { status: 'skipped', attempts: 0, error: '', missing_outputs: [] };
-  if (!sample || !Object.keys(sample).length) return { ...first, probe: report };
+  if (!sample || !Object.keys(sample).length) return { ...first, probe: notProbed() };
   const perItem = runsPerItem(request, spec);
   // A sample that is an example says what must come out of it, and that is
   // checked too -- an example is a test, and a body that returns the right
@@ -421,12 +423,11 @@ async function generateVerifiedCode(
     // the next node is generated against, and a run checks itself against it.
     const outputs = verdict.result && perItem ? handedOn(request, verdict.result) : verdict.result ?? undefined;
     return {
-      ...report, status, error: verdict.error, missing_outputs: verdict.missing, problems: verdict.problems,
+      status, error: verdict.error, missing_outputs: verdict.missing, problems: verdict.problems,
       ...(outputs ? { outputs } : {}),
     };
   };
 
-  report.attempts = 1;
   const attempt = await judge(first.text);
   if (attempt.reached === 3) return { ...first, probe: reportOf(attempt, 'ok') };
 
@@ -438,7 +439,6 @@ async function generateVerifiedCode(
     // The repair pass is a bonus, never a reason to fail the request.
     return { ...first, probe: reportOf(attempt, 'failed') };
   }
-  report.attempts = 2;
   const again = await judge(second.text);
   if (again.reached === 3) return { ...second, probe: reportOf(again, 'repaired') };
   // Still not right. Keep the attempt that got further -- a chart with one
@@ -576,12 +576,12 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
           + 'every time the node runs, and its answer goes where the outputs go.',
         ].filter(Boolean).join('\n\n');
         const { text, explanation } = await generateTagged(ai, deps.target, PROMPT_SYSTEM, 'system_prompt', prompt);
-        return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [] }, calls };
+        return { result: text, explanation, probe: notProbed(), calls };
       }
       case 'data_format': {
         const prompt = `Task description: ${request.description}${context ? `\n\nAdditional context: ${context}` : ''}`;
         const { text, explanation } = await generateTagged(ai, deps.target, DATA_FORMAT_SYSTEM, 'data_format', prompt);
-        return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [] }, calls };
+        return { result: text, explanation, probe: notProbed(), calls };
       }
       default:
         throw new GenerationRefused(`Unknown generation kind '${String(kind)}'`);
@@ -591,7 +591,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
       // Recorded as a failure by `recording`; it is not one.
       const last = calls.at(-1);
       if (last) last.error = null;
-      return { result: '', explanation: '', probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [] }, calls, preview: true };
+      return { result: '', explanation: '', probe: notProbed(), calls };
     }
     if (error instanceof GenerationRefused) throw error;
     // The failing generation is the one whose transcript is worth reading.

@@ -78,7 +78,6 @@ describe('what a deployed tool serves', () => {
       total,
       error: null,
     });
-    expect(snapshot).toHaveProperty('running');
     expect(snapshot).toHaveProperty('current_label');
     expect(snapshot).toHaveProperty('item_done');
     expect(snapshot).toHaveProperty('item_total');

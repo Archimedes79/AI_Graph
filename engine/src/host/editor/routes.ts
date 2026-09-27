@@ -170,7 +170,8 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       });
     }),
 
-    generationProgress: (asked) => ({ calls: generating.get(asked.id) ?? [], done: !generating.has(asked.id) }),
+    // Whether it ended is the generate call's own answer arriving, not this.
+    generationProgress: (asked) => ({ calls: generating.get(asked.id) ?? [] }),
 
     generateGraph: (asked) => watched(asked.progress_id, async (calls) => {
       const target = await settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? '');

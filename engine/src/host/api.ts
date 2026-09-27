@@ -46,7 +46,6 @@ export interface RunSnapshot {
   cancelled: boolean;
   completed: number;
   total: number;
-  running: string[];
   current_label: string;
   item_done: number;
   item_total: number;
@@ -179,10 +178,12 @@ export interface AICall {
   error: string | null;
 }
 
-/** What running generated code against real data revealed. `skipped`: no sample, one pass. */
+/**
+ * What running generated code against real data revealed. `skipped`: no
+ * sample, one pass; `ok` passed the first try, `repaired` the second.
+ */
 export interface ProbeReport {
   status: 'skipped' | 'ok' | 'repaired' | 'failed';
-  attempts: number;
   error: string;
   missing_outputs: string[];
   /** What the element itself found wrong with a result that ran: a chart off its frame, NaN in the markup. */
@@ -201,10 +202,8 @@ export interface GenerateResponse {
   result: string;
   explanation: string;
   probe: ProbeReport;
-  /** Every model call this generation made, in order. */
+  /** Every model call this generation made, in order. For a preview, the one request, unsent. */
   calls: AICall[];
-  /** Set when the request asked for a preview: `calls` holds the one request, unsent. */
-  preview?: boolean;
 }
 
 /** The settings dialog's view of `ai-settings.json`: whether a key is set, never the key. */
@@ -320,7 +319,7 @@ export const API = {
 
   generate: route<GenerateRequest & ModelChoice & Watched, GenerateResponse>('POST', '/api/ai/generate', 'editor'),
   /** What the generation with this id has sent and received so far. */
-  generationProgress: route<{ id: string }, { calls: AICall[]; done: boolean }>('GET', '/api/ai/generate/progress', 'editor'),
+  generationProgress: route<{ id: string }, { calls: AICall[] }>('GET', '/api/ai/generate/progress', 'editor'),
   generateGraph: route<{ description: string; context?: string } & ModelChoice & Watched, { graph: Graph; explanation: string }>(
     'POST', '/api/ai/generate-graph', 'editor'),
 
