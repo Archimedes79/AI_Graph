@@ -92,11 +92,11 @@ export function portRenames(before: GraphNode | undefined, after: GraphNode): Po
  * *after* -- *before* with its ports edited once, in the ports editor -- with
  * every port new to it known from here on, and what became of the name of
  * each port of *before*: for what is keyed by a port's name rather than wired
- * to it, the values of its examples (`examplePair.examplesFollowPorts`).
+ * to it, the keys of its input.js and output.js (`definitionPorts.ts`).
  *
  * `portRenames` answers the same question from the node as it is stored, for
- * the wires, when the dialog writes; this answers it edit by edit, so the example the dialog
- * tries and ✨ is written against says the name the port has now. A name
+ * the wires, when the dialog writes; this answers it edit by edit, so the
+ * definitions ▶ Try and ✨ read say the name the port has now. A name
  * another port still has belongs to that port, and has no fate here.
  */
 export function renamedPorts(before: GraphNode, after: GraphNode): { node: GraphNode; names: PortRenames } {

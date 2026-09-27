@@ -1,20 +1,22 @@
 import type { AIProvider } from '@/graph';
 import RunOptions from '../../fields/RunOptions';
+import RunOncePerItem from '../../fields/RunOncePerItem';
 import ProviderModelSelect from '../../fields/ProviderModelSelect';
 import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
-import RunCode from '@/authoring/RunCode';
-import { AI_RUN, LLM_CALLS_PER_RUN, isStandardRun } from '@engine/elements/nodes/ai/runTemplate.ts';
 import type { NodeAdvancedPanelProps } from '../../NodeGuiBuilder';
 
 /**
- * The knobs: which model, how freely, pictures or not, one call or one per
- * item, which tools. Every one of them has a default that is right for most
- * nodes, which is the reason they are folded away -- eleven controls in a row
- * made a node look like it needed eleven decisions before it would run.
+ * The knobs: its ports, which model, how freely, pictures or not, one call or
+ * one per item, which tools. Every one of them has a default that is right for
+ * most nodes, which is the reason they are folded away -- eleven controls in a
+ * row made a node look like it needed eleven decisions before it would run.
  */
-export default function AiNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPanelProps) {
+export default function AiNodeAdvancedPanel({ node, setConfig, updateNode, ports }: NodeAdvancedPanelProps) {
   return (
     <>
+      {ports}
+      <RunOncePerItem node={node} updateNode={updateNode} subject="the model" />
+
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           Model for this node
@@ -90,18 +92,11 @@ export default function AiNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPan
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
           An input that is an image file is sent to the model as a picture instead of as a path
           in the prompt. Needs a model that can see. Leave &ldquo;Read the file at this path&rdquo;
-          unticked for those inputs in step 1.
+          unticked for those inputs, above.
         </p>
       </div>
 
       <RunOptions node={node} setConfig={setConfig} subject="prompt" />
-
-      <RunCode code={String(node.config.run_code ?? '')} standard={AI_RUN} isStandard={isStandardRun} onChange={(code) => setConfig('run_code', code)}>
-        One call to the model, with <code>system.md</code> and <code>message.md</code>. Change it for a loop, a
-        second call or a check of the answer: <code>await node.llm(&#123; prompt &#125;)</code> asks for a call, at
-        most {LLM_CALLS_PER_RUN} times a run. Your version runs sandboxed and never sees this machine's keys.
-        {!isStandardRun(String(node.config.run_code ?? '')) && ' "Try it" shows what your version asks, found by running it with made-up answers.'}
-      </RunCode>
     </>
   );
 }

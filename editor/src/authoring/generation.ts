@@ -1,323 +1,217 @@
-import type { GraphNode } from '@/graph';
+// ✨ for one node: what its buttons ask the engine, and what comes back, written in.
+//
+// A node's ✨ writes one of its files -- its input definition (input.js), its
+// output definition (output.js), or its body: code.js, prompt.md, or what a
+// data node holds -- through one route (`generate`), from one request built
+// here: the node as the panel holds it, the graph around it in words
+// ({Context}, `graphContext.ts`), what feeds each input and what each output
+// feeds, and the files ✨ Input and ✨ Output are given. The node dialog,
+// the toolbar's sweep and "what ✨ sends" all build it here, so none of them
+// can tell the model less than the others. What comes back is written into the
+// node by one pure function (`writtenInto`), and the exchange into its
+// history.md.
+
+import type { Graph, GraphNode, Port, Wire } from '@/graph';
 import { call, type AICall, type GenerateRequest, type GenerateResponse, type ProbeReport } from '@/api/client';
-import type { GenerateOptions } from './useGenerate';
-import type { Generation } from '@engine/authoring/generation.ts';
-import { requestOf, withRequest } from '@engine/authoring/promptFile.ts';
 import type { Refine } from '@engine/host/api.ts';
+import { definitionExample, definitionKeys } from '@engine/authoring/definition.ts';
+import { exchangeEntry, withExchange } from '@engine/authoring/history.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { ERROR_PORT } from '@engine/execution/wiring.ts';
+import { inputSources, outputTargets } from './generationContext';
+import { graphContext } from './graphContext';
+import { filesOf } from '@/document/givenFiles';
+
+/** What one ✨ writes: a node's input definition, its output definition, or its body. */
+export type Write = 'input' | 'output' | 'body';
+
+export type { Refine };
+
+/** Where a node keeps its body, and what the body is: the engine element's own answer (`NodeRunner.generation`). */
+export function bodyOf(node: GraphNode): { field: string; kind: 'code' | 'prompt' | 'data' } | undefined {
+  const generation = engineRegistry.node(node.node_type)?.generation();
+  return generation && { field: generation.fields.body, kind: generation.kind };
+}
+
+/** Whether a ✨ of *node*'s writes definitions as well as a body: a code or an ai node's. */
+export function hasDefinitions(node: GraphNode): boolean {
+  return engineRegistry.node(node.node_type)?.definitions(node as never) !== undefined;
+}
+
+/** *node*'s definitions as the engine reads them: '' for one it has none of. */
+function definitionsOf(node: GraphNode): { input: string; output: string } {
+  return engineRegistry.node(node.node_type)?.definitions(node as never) ?? { input: '', output: '' };
+}
+
+/** What *write*'s ✨ writes into, as the node holds it: the definition, or the body as text. */
+export function heldBy(node: GraphNode, write: Write): string {
+  if (write !== 'body') return definitionsOf(node)[write];
+  const field = bodyOf(node)?.field;
+  const value = field ? (node.config as Record<string, unknown>)[field] : undefined;
+  return typeof value === 'string' ? value : value === undefined || value === null ? '' : JSON.stringify(value, null, 2);
+}
 
 /**
- * The ✨ Generate button, declared by the element instead of written out by the
- * shell that draws it.
- *
- * There were five hand-written call sites, passed to every Panel so each could
- * pick the one prop it recognised -- and an element one of them forgot had a
- * body and no button at all.
- *
- * What is NOT here is as important as what is. The generator kind lives on the
- * *engine* element (`Generation`, declared by each element under
- * `engine/src/elements/`) and is resolved server-side from the element's name:
- * a sentence about engine behaviour copied into the editor is a second copy,
- * and a prompt that exists twice is a prompt that will drift.
+ * Whether the node holds what *write*'s ✨ writes: something, where its file
+ * would otherwise be the stub. A sweep writes what is not, and leaves alone
+ * what somebody wrote.
  */
+export function isWritten(node: GraphNode, write: Write): boolean {
+  return !!heldBy(node, write).trim();
+}
+
 /**
- * The half of a generation the engine already declared, in the editor's words.
- *
- * Which field holds the request, which the body, and what to say when the
- * request is missing or the answer arrived -- an element's `Generation` says
- * all of it, beside its `Logic`, from one constant. The editor's definition
- * adds only what the engine cannot know: labels and placeholders.
+ * What one press on *write*'s ✨ writes, in order: for the body of a node that
+ * has definitions, what is missing first -- its input definition where it
+ * takes something in and has none, its output definition where it has none --
+ * so one press does the whole node.
  */
-export function fromEngine(
-  generation: Generation | undefined,
-): Pick<ElementGeneration, 'promptField' | 'targetField' | 'messageField' | 'language' | 'guard' | 'success'> {
-  if (!generation) throw new Error('This element declares no generation in the engine; the editor cannot offer one.');
+export function writesFor(node: GraphNode, write: Write): Write[] {
+  if (write !== 'body' || !hasDefinitions(node)) return [write];
+  return [
+    ...(node.inputs.length && !isWritten(node, 'input') ? ['input' as const] : []),
+    ...(!isWritten(node, 'output') ? ['output' as const] : []),
+    'body',
+  ];
+}
+
+/**
+ * Why a definition ✨ wrote does not fit the node -- its example names no
+ * input it has, or leaves out an output wired on -- or undefined. It is
+ * written all the same, to be seen and changed; what a press would write
+ * after it waits, since it would be written against it.
+ */
+export function unfitDefinition(write: Write, probe: ProbeReport | undefined): string | undefined {
+  if (write === 'body' || probe?.status !== 'failed') return undefined;
+  return lowerFirst([probe.error, ...probe.problems].filter(Boolean).join(' ')) || 'it does not fit the node.';
+}
+
+const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
+
+/** What a ✨ is called: on its button, in a message, in history.md. */
+export function writeName(node: GraphNode, write: Write): string {
+  if (write === 'input') return '✨ Input';
+  if (write === 'output') return '✨ Output';
+  const kind = bodyOf(node)?.kind;
+  return kind === 'prompt' ? '✨ Prompt' : kind === 'data' ? '✨ Data' : '✨ Code';
+}
+
+/** What an exchange is called in history.md: which ✨, the change asked for, or a fix. */
+export function exchangeName(node: GraphNode, write: Write, refine?: Refine): string {
+  if (!refine) return writeName(node, write);
+  return refine.change?.trim() ? `Change: ${refine.change.trim()}` : '✨ Fix';
+}
+
+/** Why ✨ cannot write for *node* yet, or undefined: everything is written from its text. */
+export function generationGuard(node: GraphNode): string | undefined {
+  return node.description.trim() ? undefined : 'Say what this node should do first: its text is what ✨ writes from.';
+}
+
+/** The graph a node sits in, as ✨ is told it. */
+interface Around {
+  nodes: GraphNode[];
+  edges: Wire[];
+  metadata: Graph['metadata'];
+}
+
+/**
+ * The request *write*'s ✨ sends for *node*, exactly -- built in one place,
+ * so "what ✨ sends" and the real button cannot describe two different
+ * requests. Its history is not sent: nothing is written from it.
+ */
+export function generateRequest(node: GraphNode, write: Write, around: Around, inputFiles: string[] = [], refine?: Refine): GenerateRequest {
+  const config = { ...node.config } as Record<string, unknown>;
+  delete config.history;
   return {
-    promptField: generation.fields.prompt,
-    targetField: generation.fields.body,
-    ...(generation.fields.message ? { messageField: generation.fields.message } : {}),
-    // Code is JavaScript; a system prompt is prose, as the file that keeps it
-    // says (`code.js`, `system.md`).
-    language: generation.kind === 'code' ? 'javascript' : 'markdown',
-    guard: generation.guard,
-    success: generation.success,
+    node: { ...node, config } as GenerateRequest['node'],
+    write,
+    context: graphContext(node.id, around),
+    ...(write === 'input' && inputFiles.length ? { input_files: inputFiles.map((path) => ({ path })) } : {}),
+    ...(write === 'output' && filesOf(node, 'output').length ? { output_files: filesOf(node, 'output').map((path) => ({ path })) } : {}),
+    input_sources: inputSources(node.id, around.nodes, around.edges, true),
+    output_targets: outputTargets(node.id, around.nodes, around.edges, true),
+    ...(refine ? { refine } : {}),
   };
 }
 
-export interface ElementGeneration {
-  /**
-   * Field holding what ✨ is sent: the node's `prompt.md`, a template and the
-   * person's request after its `Prompt:` line. A request box edits only the
-   * request (`requestOf`, `withRequest`).
-   */
-  promptField: string;
-  /** Field the generated text is written into. */
-  targetField: string;
-  /** Field the message layout ✨ writes beside the body goes into, where it writes one: an ai node's. */
-  messageField?: string;
-  /** Shown when the prompt field is empty. */
-  guard?: string;
-  /** Shown when it worked, unless the result has more to say (see probe). */
-  success?: string;
-
-  // ---- how the block is labelled -------------------------------------------
-  // Seven editors drew the same controls -- a prompt box, an example, the ✨
-  // button and the body box -- and differed only in their wording. The wording
-  // belongs to the element; the drawing belongs to `FourSteps` and
-  // `GeneratedBody`, which is why these live here rather than as props
-  // somebody has to remember to pass.
-  promptLabel?: string;
-  promptPlaceholder?: string;
-  bodyLabel?: string;
-  bodyPlaceholder?: string;
-  /**
-   * What the body is written in, for the editor it is written with: the
-   * engine's generation kind says (`fromEngine`). It was guessed from the
-   * field's name -- a body in a field called `…prompt` was prose.
-   */
-  language: 'javascript' | 'markdown';
-  /** How tall the body box starts out; a system prompt needs less than a module. */
-  bodyHeight?: number;
-}
-
-/** Reading and writing one element's fields, wherever they happen to live. */
-export interface FieldAccess {
-  get(field: string): string;
-  set(field: string, value: string): void;
-}
-
-/** A node's fields: config keys, plus `description` on the node itself. */
-export function nodeFields(
-  node: GraphNode,
-  setConfig: (key: string, value: unknown) => void,
-  setDescription: (value: string) => void,
-): FieldAccess {
-  const config = node.config as unknown as Record<string, unknown>;
-  return {
-    get: (field) => String((field === 'description' ? node.description : config[field]) ?? ''),
-    set: (field, value) => (field === 'description' ? setDescription(value) : setConfig(field, value)),
-  };
-}
-
-
-/**
- * What to say after generating.
- *
- * When a sample was available -- the example, the last run's values, what a
- * wired node holds -- the backend ran the function before handing it over, so
- * there is more to report than "done", and it says on *what*: "the last run's
- * data" was said whatever the sample had been. When it still does not run,
- * saying so now is kinder than letting the next ▶ Run say it; when it runs and
- * only the element's own check or the example's expected output found fault
- * with the result, it says that, and not that it does not run.
- *
- * *held*: whether the probe held it to what the example expects. A change is
- * not (`generate.ts`): the example was written before it, so a change that
- * runs has run on it, and Try it says whether it gives what that expects.
- */
-export function probeMessage(probe: ProbeReport | undefined, fallback: string, origin?: string, done = 'Generated', held = true): string {
-  const on = origin ?? 'the sample';
-  switch (probe?.status) {
-    case 'ok':
-      return held ? `✅ ${done} and verified against ${on}.` : `✅ ${done}, and it runs on ${on}.`;
-    case 'repaired':
-      return `✅ ${done}. The first attempt failed on ${on}; this one runs.`;
-    case 'failed': {
-      if (probe.error) return `⚠️ ${done}, but it does not run yet: ${probe.error}`;
-      if (probe.missing_outputs.length) return `⚠️ ${done}, but it does not return ${probe.missing_outputs.join(', ')} yet.`;
-      const problems = probe.problems ?? [];
-      return problems.length
-        ? `⚠️ ${done} and it runs on ${on}, but the result is not right yet: ${problems.join('; ')}`
-        : `⚠️ ${done}, but it could not be verified against ${on}.`;
-    }
-    default:
-      return fallback;
-  }
-}
-
-export interface GenerationRequest {
-  /** The node type -- the server resolves the rest from it. */
-  element: string;
-  generation: ElementGeneration;
-  fields: FieldAccess;
-  /** The element's real ports, for a snippet that is wired as the node is. */
-  ports?: { inputs: string[]; outputs: string[] };
-  /**
-   * The ports declared as lists (`Port.multi`): what a run per item fans out
-   * over and collects into lists, and so how ✨'s probe cuts the sample to one
-   * call and hands its answer on.
-   */
-  lists?: { inputs: string[]; outputs: string[] };
-  /** Raw last-run values, for the backend's verify-and-repair pass. */
-  sampleInputs?: Record<string, unknown>;
-  /**
-   * Which node feeds each input port, by label. Only the editor knows the
-   * wiring, and it is what lets the generated skeleton say where a value came
-   * from -- the part no type annotation can express.
-   */
-  inputSources?: Record<string, string>;
-  /** Ports whose sample is a path the running node gets the text of (`readFilePorts`). */
-  readFilePorts?: string[];
-  /**
-   * What the person wrote about each port, by port id: the one place a port's
-   * meaning is said in words, and so the first thing the model should read
-   * about it. Empty descriptions are left out.
-   */
-  portNotes?: { inputs?: Record<string, string>; outputs?: Record<string, string> };
-  /** The output interface this node keeps (in its `interface.json`): the shape a body must go on returning. */
-  outputSchema?: unknown;
-  /** The node's examples (`examples.md`): what it is checked against, so what it is written to satisfy. */
-  examples?: string;
-  /** The files its example reads (`example/` in a project): a sample that names one is read from them. */
-  exampleFiles?: Record<string, string>;
-  /** An ai node's message template: how its inputs are laid out for the model. */
-  messageTemplate?: string;
-  /**
-   * Where the sample came from, in words: the example, the last run, what a
-   * wired node holds. Sent with `sampleInputs`, and said in the message after
-   * ✨ -- also when the sample is the node's example, which the engine reads
-   * from `examples` itself so that it checks what the example expects.
-   */
-  sampleOrigin?: string;
-  /** Each input's declared type as the body sees it: `text`, `list of text`. */
-  inputTypes?: Record<string, string>;
-  /** How a list input arrives: one item per run, or whole. */
-  batchMode?: 'per_item' | 'whole_list';
-  /** Where each output goes, and what the node there wants of it. */
-  outputTargets?: Record<string, string>;
-  /** The output format, in the person's words (`output.md`) -- sent whenever it says anything. */
-  outputFormat?: string;
-  /**
-   * Change the body there is instead of writing one anew: "Say what to
-   * change", or ✨ Fix with nothing to change but how it failed. What comes
-   * back brings the task along, restated to fit, and both are written.
-   */
-  refine?: Refine;
-  /**
-   * Keep what the generated body actually returned, as the node's output
-   * shape, when it has none yet.
-   *
-   * The backend ran it on a sample before handing it over, so this is a
-   * measurement -- and exactly what the *next* node is generated against. It
-   * used to be written into the node's format description as a sentence,
-   * over the one field that is the person's own words; the shape is where a
-   * measurement belongs (the node's `interface.json`), and a run would put it there
-   * anyway.
-   */
-  recordShape?: (outputs: Record<string, unknown>) => void;
-}
-
-/**
- * What a panel asks of ✨ beyond writing the body anew (`NodePanelProps.onGenerate`):
- * a change to the body there is -- and the inputs what came of it came from,
- * where those are not step 1's example: a run's.
- */
-export interface ChangeAsked {
-  refine: Refine;
-  sample?: { values: Record<string, unknown>; origin: string };
-}
-
-/** *request*, asked to change its body as *change* says, on the inputs that change came of. */
-export function withChange(request: GenerationRequest, change: ChangeAsked | undefined): GenerationRequest {
-  if (!change) return request;
-  return {
-    ...request,
-    refine: change.refine,
-    ...(change.sample ? { sampleInputs: change.sample.values, sampleOrigin: change.sample.origin } : {}),
-  };
-}
-
-/** Only the entries that say something: an empty description is not a note. */
-function said(notes: Record<string, string> | undefined): Record<string, string> | undefined {
-  const kept = Object.entries(notes ?? {}).filter(([, text]) => text?.trim());
-  return kept.length ? Object.fromEntries(kept) : undefined;
-}
-
-/**
- * The request ✨ Generate sends, exactly -- built in one place, so "show what
- * ✨ sends" (`preview`) and the real button cannot describe two different
- * requests.
- */
-export function generateRequest(request: GenerationRequest): GenerateRequest {
-  const { generation: spec, fields } = request;
-  return {
-    element: request.element,
-    // All of prompt.md: the template is the person's as much as the request is.
-    prompt: fields.get(spec.promptField),
-    example_files: request.exampleFiles && Object.keys(request.exampleFiles).length ? request.exampleFiles : undefined,
-    inputs: request.ports?.inputs,
-    outputs: request.ports?.outputs,
-    sample_inputs: request.sampleInputs,
-    input_sources: request.inputSources,
-    read_file_ports: request.readFilePorts?.length ? request.readFilePorts : undefined,
-    input_notes: said(request.portNotes?.inputs),
-    output_notes: said(request.portNotes?.outputs),
-    output_schema: request.outputSchema ?? undefined,
-    examples: request.examples?.trim() || undefined,
-    message_template: request.messageTemplate?.trim() || undefined,
-    sample_origin: request.sampleInputs ? request.sampleOrigin : undefined,
-    input_types: request.inputTypes,
-    batch_mode: request.batchMode,
-    multi_inputs: request.lists?.inputs,
-    multi_outputs: request.lists?.outputs,
-    output_targets: request.outputTargets && Object.keys(request.outputTargets).length ? request.outputTargets : undefined,
-    output_format: request.outputFormat?.trim() || undefined,
-    refine: request.refine,
-  };
-}
-
-/**
- * What ✨ Generate would send, without sending it: the server builds the same
- * request and stops at the first model call (`preview`). The answer is that
- * call -- system and prompt, as the model would read them.
- */
-export async function previewGeneration(request: GenerationRequest): Promise<AICall[]> {
-  const response = await call('generate', { ...generateRequest(request), preview: true });
+/** What ✨ would send, without sending it: the engine builds the same request and stops at the model. */
+export async function previewGeneration(request: GenerateRequest): Promise<AICall[]> {
+  const response = await call('generate', { ...request, preview: true });
   return response.calls ?? [];
 }
 
-/**
- * Why *request* cannot be sent yet, or undefined. A body is written from the
- * request; a change needs something to change -- words, or how it failed --
- * and no request: the request comes back with it.
- */
-export function generationGuard(request: GenerationRequest): string | undefined {
-  const { refine, generation: spec } = request;
-  if (refine) return refine.change?.trim() || refine.error?.trim() || refine.problems?.length ? undefined : 'Say what to change first.';
-  return requestOf(request.fields.get(spec.promptField)).trim() ? undefined : (spec.guard ?? 'Say what this node should do first.');
+/** A value's port type, as an output definition's example shows it. */
+function typeOf(value: unknown): Port['data_type'] {
+  if (typeof value === 'string') return 'text';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (Array.isArray(value)) return 'list';
+  return value && typeof value === 'object' ? 'json' : 'any';
 }
 
 /**
- * Turn an element's declaration into the options `useGenerate().run` takes.
- * A node's dialog and the graph sweep both call exactly this, so a button and
- * a sweep generate through one code path -- and a change to the body there is
- * goes the same way, with its request written beside the body it came with.
+ * *node*'s outputs as an output definition names them: its example's keys are
+ * the outputs. A port already there keeps what it is; a new one is typed by
+ * its example, and hands on a list where the node runs once per item. The
+ * executor's error port stays while the node catches its failures.
  */
-export function buildGeneration(request: GenerationRequest): GenerateOptions<GenerateResponse> {
-  const { generation: spec, fields, refine } = request;
-  const change = !!refine?.change?.trim();
-  // What it did, in a word: written anew, changed as said, or repaired.
-  const done = !refine ? 'Generated' : change ? 'Changed' : 'Fixed';
+export function outputsFrom(node: GraphNode, definition: string): Port[] {
+  const read = definitionExample(definition);
+  if (!('example' in read)) return node.outputs;
+  const perItem = node.config.batch_mode === 'per_item' && node.inputs.some((port) => port.multi);
+  const ports: Port[] = Object.entries(read.example).map(([id, value]) => node.outputs.find((port) => port.id === id) ?? {
+    id, name: id, kind: 'output', data_type: typeOf(value), multi: perItem, required: false, description: '',
+  });
+  const error = node.outputs.find((port) => port.id === ERROR_PORT);
+  return error ? [...ports, error] : ports;
+}
 
+/**
+ * *node* with what *write*'s ✨ brought back written in: the file it wrote --
+ * an output definition setting the outputs too -- the text restated where a
+ * change was asked, and the exchange at the end of its history.
+ */
+export function writtenInto(node: GraphNode, write: Write, response: Pick<GenerateResponse, 'result' | 'description' | 'calls'>, name: string, at = new Date()): GraphNode {
+  const config = { ...node.config } as Record<string, unknown>;
+  let outputs = node.outputs;
+  if (write === 'input') config.input_definition = response.result;
+  else if (write === 'output') {
+    config.output_definition = response.result;
+    if (definitionKeys(response.result).length) outputs = outputsFrom(node, response.result);
+  } else {
+    const body = bodyOf(node);
+    if (body) config[body.field] = body.kind === 'data' && node.config.data_format === 'structure' ? JSON.parse(response.result) : response.result;
+  }
+  config.history = withHistory(node, name, response.calls, at);
   return {
-    guard: () => generationGuard(request),
-    pending: refine ? 'Changing…' : 'Generating…',
-    success: (result) => probeMessage(result.probe, refine ? `✅ ${done}.` : spec.success ?? '✅ Generated!', request.sampleOrigin, done, !change),
-    failure: refine ? 'The change failed' : 'Generation failed',
-    run: (progressId?: string) => call('generate', {
-      ...generateRequest(request),
-      // Only a single ✨ button passes one; a sweep runs unattended.
-      ...(progressId ? { progress_id: progressId } : {}),
-    }),
-    apply: (result) => {
-      fields.set(spec.targetField, result.result);
-      // How what is wired in reaches the model, written with the instructions for it.
-      if (spec.messageField && result.message_template !== undefined) fields.set(spec.messageField, result.message_template);
-      // What it does now, said with the body that does it: the two change
-      // together. After `Prompt:`, where the request is; the template stays.
-      if (result.request?.trim()) fields.set(spec.promptField, withRequest(fields.get(spec.promptField), result.request.trim()));
-
-      const outputs = result.probe?.outputs;
-      if (request.recordShape && outputs && Object.keys(outputs).length) request.recordShape(outputs);
-    },
+    ...node,
+    ...(response.description?.trim() ? { description: response.description.trim() } : {}),
+    outputs,
+    config: config as GraphNode['config'],
   };
+}
+
+/** *node*'s history.md with one more exchange at its end: *calls*, under *name*. */
+export function withHistory(node: GraphNode, name: string, calls: AICall[], at = new Date()): string {
+  return withExchange(String(node.config.history ?? ''), exchangeEntry(name, calls, at));
+}
+
+/**
+ * What to say once *write*'s ✨ is done: that it was written -- and, where the
+ * engine tried it, on what and how that went, so a body that does not fit its
+ * output.js is said now rather than by the next run.
+ */
+export function resultMessage(name: string, probe: ProbeReport | undefined, changed: boolean): string {
+  const done = changed ? `${name}: changed` : `${name}: written`;
+  switch (probe?.status) {
+    case 'ok':
+      return `✅ ${done}, and it fits output.js on the example in input.js.`;
+    case 'repaired':
+      return `✅ ${done}. The first attempt did not fit output.js on the example; this one does.`;
+    case 'failed':
+      if (probe.error) return `⚠️ ${done}, but it fails on the example in input.js: ${probe.error}`;
+      return `⚠️ ${done}, but ${lowerFirst(probe.problems.join('; '))}`;
+    default:
+      return `✅ ${done}.`;
+  }
 }

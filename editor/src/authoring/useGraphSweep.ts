@@ -1,20 +1,21 @@
-// The ✨ Generate-all button's state machine.
+// The toolbar's Generate: every node of the graph written, front to back.
 //
 // `graphSweep.ts` decides the order and the rules; this assembles one node's
-// generation the way the node editor does — through `buildGeneration`, so the
-// button in the main window and the button in the editor send the same request
-// — and writes what comes back into the store.
+// writing the way the node's panel does -- the same request (`generateRequest`),
+// the same answer written in (`writtenInto`), what is missing first
+// (`writesFor`) -- and writes what comes back into the store, file by file.
 
 import { useCallback, useRef, useState } from 'react';
 import type { GraphEdge, GraphNode } from '@/graph';
-import type { GenerateResponse } from '@/api/client';
-import { shapeToKeep, useGraphStore } from '@/store/graphStore';
+import { ApiError, call } from '@/api/client';
+import { useGraphStore } from '@/store/graphStore';
+import { portRenames } from '@/store/portRenames';
 import { graphEdge } from '@/document/wires';
-import { nodeFacts } from './nodeFacts';
-import { readPair } from './examplePair';
-import { NODE_BUILDERS } from '@/elements/registry';
-import { buildGeneration, nodeFields } from './generation';
-import { missingExamples, sampleFromPredecessors, sweep, writtenBody, type SweepUnit } from './graphSweep';
+import {
+  bodyOf, exchangeName, generateRequest, generationGuard, hasDefinitions, isWritten, unfitDefinition, withHistory, writtenInto, type Write,
+} from './generation';
+import { inputFilesOf } from './exampleFile';
+import { missingExamples, sweep, type SweepUnit } from './graphSweep';
 
 export interface SweepState {
   run: () => Promise<void>;
@@ -27,10 +28,21 @@ export interface SweepState {
 export const ANOTHER_GRAPH = 'another graph was opened, and what came back is not written into it';
 
 /**
- * Write every empty node of the open graph, front to back, saying how it goes
- * through *say*. Written into the graph that was open when it started, and
- * only while it still is: node ids repeat from graph to graph, and a body
- * that came back for one graph's `code` is not the next graph's.
+ * What a sweep writes of *node*: what it is missing -- its input definition
+ * where it takes something in, its output definition, its body -- and never
+ * what somebody wrote.
+ */
+export function missingOf(node: GraphNode): Write[] {
+  if (!bodyOf(node)) return [];
+  const writes: Write[] = hasDefinitions(node) ? ['input', 'output', 'body'] : ['body'];
+  return writes.filter((write) => !isWritten(node, write) && (write !== 'input' || node.inputs.length > 0));
+}
+
+/**
+ * Write every node of the open graph that is missing something, front to back,
+ * saying how it goes through *say*. Written into the graph that was open when
+ * it started, and only while it still is: node ids repeat from graph to graph,
+ * and a body that came back for one graph's node is not the next graph's.
  */
 export async function sweepGraph({ say, stopped }: { say: (message: string) => void; stopped: () => boolean }): Promise<void> {
   // Read through `getState` rather than a subscription: the sweep writes into
@@ -40,8 +52,8 @@ export async function sweepGraph({ say, stopped }: { say: (message: string) => v
   const started = live().document;
   const stillOpen = () => live().document === started;
   const nodesOf = () => live().rfNodes.map((item) => item.data.graphNode);
-  const rfEdges = () => live().rfEdges;
-  const dslEdges = (): GraphEdge[] => rfEdges().map(graphEdge);
+  const dslEdges = (): GraphEdge[] => live().rfEdges.map(graphEdge);
+  const nodeNow = (id: string) => nodesOf().find((node) => node.id === id);
 
   const missing = missingExamples(nodesOf(), dslEdges());
   if (missing.length) {
@@ -50,78 +62,48 @@ export async function sweepGraph({ say, stopped }: { say: (message: string) => v
     return;
   }
 
-  // What each generated node returned in its verify pass, so the node after
-  // it is generated against real values even when the graph has never run.
-  const produced = new Map<string, Record<string, unknown>>();
+  /** *node* with *next* written in, its wires following its outputs. */
+  const put = (before: GraphNode, next: GraphNode) => live().updateNode(before.id, next, portRenames(before, next));
 
-  /**
-   * One unit, written only into the graph it was asked for: refused, which
-   * stops the sweep and says why, once another graph is open.
-   */
-  const inThisGraph = (unit: SweepUnit<GenerateResponse>, nodeId: string): SweepUnit<GenerateResponse> => ({
-    ...unit,
-    apply: (result) => {
-      if (!stillOpen()) throw new Error(ANOTHER_GRAPH);
-      unit.apply(result);
-      // So the node after it is generated against what this one really returned.
-      if (result.probe?.outputs) produced.set(nodeId, result.probe.outputs);
-    },
-  });
-
-  const unitFor = (node: GraphNode): SweepUnit<GenerateResponse> | undefined => {
-    const element = NODE_BUILDERS[node.node_type];
-    const spec = element?.generation;
-    if (!spec) return undefined;
-
-    const current = nodesOf().find((n) => n.id === node.id) ?? node;
-
-    // Never overwrite a body somebody already has. A sweep fills a graph in;
-    // rewriting working code because a button was pressed is not that. What
-    // a new node of the kind starts with is nobody's work, though.
-    if (writtenBody(current, spec.targetField)) return undefined;
-
-    const setConfig = (key: string, value: unknown) => {
-      const node_ = nodesOf().find((n) => n.id === current.id);
-      if (!node_) return;
-      useGraphStore.getState().updateNode(current.id, {
-        config: { ...node_.config, [key]: value } as GraphNode['config'],
-      });
-    };
-    const fields = nodeFields(
-      current, setConfig,
-      (value) => useGraphStore.getState().updateNode(current.id, { description: value }),
-    );
-
-    const facts = nodeFacts(current, nodesOf(), rfEdges(), live().executionResult);
-    // Its own example wins, as in its dialog; what the nodes before it just
-    // returned stands in only where the node has nothing else to go on.
-    const ownSample = facts.sampleInputs || readPair(current.config.examples).input;
-    const predecessors = ownSample ? undefined : sampleFromPredecessors(node.id, rfEdges(), produced);
-    return inThisGraph(buildGeneration({
-      element: node.node_type,
-      generation: spec,
-      fields,
-      // The same facts the node's dialog sends: a sweep must not tell the
-      // model less than the ✨ button on the node would.
-      ...facts,
-      // Before a run, what the nodes before it produced in this sweep.
-      ...(predecessors ? { sampleInputs: predecessors, sampleOrigin: 'what the nodes before it just returned' } : {}),
-      // What it turns out to return is kept as this node's shape, which is
-      // what the next node is then generated against.
-      recordShape: (outputs) => {
-        const now = nodesOf().find((n) => n.id === current.id);
-        const kept = now && shapeToKeep(now, outputs);
-        if (kept) setConfig('output_schema', kept);
+  const unitFor = (node: GraphNode): SweepUnit | undefined => {
+    const current = nodeNow(node.id) ?? node;
+    const writes = missingOf(current);
+    if (!writes.length) return undefined;
+    return {
+      guard: () => generationGuard(current),
+      write: async () => {
+        for (const write of writes) {
+          const now = nodeNow(node.id);
+          if (!now || !stillOpen()) throw new Error(ANOTHER_GRAPH);
+          const around = { nodes: nodesOf(), edges: live().rfEdges, metadata: live().metadata };
+          const request = generateRequest(now, write, around, inputFilesOf(now, around.nodes, around.edges, live().executionResult));
+          const name = exchangeName(now, write);
+          try {
+            const response = await call('generate', request);
+            const latest = nodeNow(node.id);
+            if (!latest || !stillOpen()) throw new Error(ANOTHER_GRAPH);
+            put(latest, writtenInto(latest, write, response, name));
+            // Written, to be seen; the rest of the node would be written against it.
+            const unfit = unfitDefinition(write, response.probe);
+            if (unfit) throw new Error(`${name}: ${unfit}`);
+          } catch (error) {
+            // A failed exchange is history too, where it is still this graph's.
+            const calls = error instanceof ApiError ? error.body.calls : undefined;
+            const latest = nodeNow(node.id);
+            if (calls?.length && latest && stillOpen()) {
+              live().updateNode(node.id, { config: { ...latest.config, history: withHistory(latest, `${name} (failed)`, calls) } });
+            }
+            throw error;
+          }
+        }
       },
-    }), node.id);
+    };
   };
 
   let written = 0;
   const held: string[] = [];
   try {
-    for await (const step of sweep<GenerateResponse>(nodesOf(), dslEdges(), {
-      unitFor, stopped: () => stopped() || !stillOpen(),
-    })) {
+    for await (const step of sweep(nodesOf(), dslEdges(), { unitFor, stopped: () => stopped() || !stillOpen() })) {
       if (step.status === 'failed') {
         say(`⚠️ Stopped at ${step.label}: ${step.message}`);
         return;

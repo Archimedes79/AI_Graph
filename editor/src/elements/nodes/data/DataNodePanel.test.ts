@@ -4,43 +4,39 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
-import { nodeFields } from '@/authoring/generation';
 import DataNodePanel, { holdDropped } from './DataNodePanel';
 
-/** A data node's dialog, drawn as the node dialog hands it: nothing but the node and its setters. */
+/** A data node's dialog, drawn as the node dialog hands it: the node, its setters, and what only the dialog has. */
 function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(DataNodePanel, {
-    builder: NODE_BUILDERS.data, node, setConfig: () => {}, updateNode: () => {},
-    fields: nodeFields(node, () => {}, () => {}), generating: false, onGenerate: async () => false,
+    builder: NODE_BUILDERS.data, node, setConfig: () => {}, updateNode: () => {}, setDescription: () => {},
+    generating: false, onGenerate: async () => false,
+    shell: { graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }), preview: async () => [], graphFile: async () => undefined, flush: () => {} },
   }));
 }
 
 describe('a data node\'s dialog', () => {
-  it('is its value, in one place: the kind and what it holds, with no steps and no ✨', () => {
+  it('is its text, what it holds -- its kind and the value -- and ✨ Data, which writes the value: no definitions, no ▶ Try', () => {
     const node = NODE_KINDS.data.create('memory');
     node.config.data_format = 'structure';
     node.config.data_value = { count: 2 };
     const html = panel(node);
-    expect(html).toContain('aria-label="Kind"');
+    const at = ['aria-label="What it should do"', 'aria-label="Kind"', 'aria-label="What it holds"', '>✨ Data</button>', 'data.json ↗', 'history.md ↗']
+      .map((mark) => html.indexOf(mark));
+    expect(at.every((index) => index >= 0), String(at)).toBe(true);
+    expect(at).toEqual([...at].sort((a, b) => a - b));
     expect(html).toMatch(/<textarea[^>]*aria-label="What it holds"[^>]*>\{\n {2}&quot;count&quot;: 2\n\}<\/textarea>/);
-    // It used to be drawn only inside the four steps: without them it drew nothing.
-    for (const gone of ['What should it hold?', 'Its format', 'What comes in', '✨', 'From the graph', 'From a file']) {
-      expect(html, gone).not.toContain(gone);
-    }
-  });
-
-  it('is not written and not generated: the node dialog lays out no steps for it, and a sweep passes it by', () => {
-    const builder = NODE_BUILDERS.data;
-    expect(builder.stepped).toBe(false);
-    expect(builder.generation).toBeUndefined();
+    for (const gone of ['✨ Input', '✨ Output', 'input.js', 'output.js', '▶ Try', 'From the graph']) expect(html, gone).not.toContain(gone);
+    // A text it holds is kept in data.txt.
+    expect(panel(NODE_KINDS.data.create('note'))).toContain('data.txt ↗');
   });
 
   it('holds what a file dropped on it says -- on its box, or on the node on the canvas', () => {
     const node = NODE_KINDS.data.create('memory');
     expect(panel(node)).toContain('or drop a file here');
     const builder = NODE_BUILDERS.data;
-    expect(builder.dropPort(node)).toBe('input');
-    expect(builder.withExampleValue(node, 'input', { count: 3 }).config.data_value).toEqual({ count: 3 });
+    expect(builder.dropPort(node)).toBe('text');
+    expect(builder.withDropped(node, { count: 3 }).config.data_value).toEqual({ count: 3 });
   });
 
   it('says why a file dropped on its box could not be read, and holds what it held', async () => {

@@ -22,7 +22,7 @@ describe('a ✨ sweep that ends after another graph was opened', () => {
   it('writes nothing into the graph open now, whose node shares the id, and says why (B30)', async () => {
     store().newGraph();
     const id = store().addNode('code', { x: 0, y: 0 });
-    store().updateNode(id, { config: { ...nodeOf(id).config, prompt: 'Count the words.' } });
+    store().updateNode(id, { description: 'Count the words.' });
 
     const said: string[] = [];
     const sweeping = sweepGraph({ say: (message) => said.push(message), stopped: () => false });
@@ -36,13 +36,12 @@ describe('a ✨ sweep that ends after another graph was opened', () => {
     });
 
     answers[0]({
-      result: 'function run(inputs) { return { output: "mine" }; }', calls: [],
-      probe: { status: 'ok', outputs: { output: 'mine' }, missing_outputs: [] } as never,
+      result: 'module.exports = { "input": "mine" };', calls: [], probe: { status: 'skipped', error: '', problems: [] },
     });
     await sweeping;
 
     expect(nodeOf(id).config.code).toBe(theirs);
-    expect(nodeOf(id).config.output_schema).toBeUndefined();
+    expect(nodeOf(id).config.input_definition).toBeUndefined();
     expect(store().isDirty()).toBe(false);
     expect(said[said.length - 1]).toContain(ANOTHER_GRAPH);
   });

@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
-import { nodeFields } from '@/authoring/generation';
 import OutputNodePanel from './OutputNodePanel';
 
 // Rendered to a string, a component reads the store's first state, not the
@@ -19,8 +18,7 @@ vi.mock('@/store/graphStore', async (actual) => ({
 function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(OutputNodePanel, {
     builder: NODE_BUILDERS.output, node, setConfig: () => {}, updateNode: () => {},
-    fields: nodeFields(node, () => {}, () => {}), generating: false,
-    onGenerate: async () => false,
+    setDescription: () => {}, generating: false, onGenerate: async () => false,
   }));
 }
 

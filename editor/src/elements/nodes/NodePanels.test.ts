@@ -1,119 +1,104 @@
 import { describe, it, expect } from 'vitest';
 import { createElement, type ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { GraphNode, NodeType, Port } from '@/graph';
+import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import type { NodePanelProps } from '@/elements/NodeGuiBuilder';
-import { nodeFields } from '@/authoring/generation';
-import { withExpect, withInput } from '@/authoring/examplePair';
 import CodeNodePanel from './code/CodeNodePanel';
 import AiNodePanel from './ai/AiNodePanel';
 
 /**
- * A code and an ai node's dialog, drawn: the four steps, and what each panel
- * decides to put in them.
+ * A code and an ai node's panel, drawn: its kind and id, its text, a row per
+ * ✨ -- the button, the file it writes, the prompt it is written with -- the
+ * files ✨ Input and ✨ Output write from, ▶ Try, and its history. Nothing
+ * else: its ports, once per item, failures and the model are folded away under
+ * Advanced, which the dialog draws. The heading is the dialog's too.
  *
- * The rules behind them are tested on their own (`nodeStepRules.test.ts`,
- * `examplePair.test.ts`, `ExampleInputField.test.ts`); this is where a panel
- * is held to handing them on -- which a refactor of the panel could otherwise
- * break with every one of those still green. The panels are imported
- * directly, because the builders register them lazily; everything else a
- * panel is handed comes from the builder, as the node dialog hands it.
+ * The panels are imported directly, because the builders register them
+ * lazily; everything else a panel is handed comes from the builder, as the
+ * node dialog hands it. Drawn with no project open, as a new graph is.
  */
 
-const PANELS: Partial<Record<NodeType, ComponentType<NodePanelProps>>> = {
-  code: CodeNodePanel,
-  ai: AiNodePanel,
-};
-
-/** What only the node dialog hands a panel in steps; here nothing is run or asked. */
-const steps = (node: GraphNode): NonNullable<NodePanelProps['steps']> => ({
-  inputs: createElement('div', null, 'the input ports'),
-  outputs: createElement('div', null, 'the output ports'),
-  preview: createElement('button', null, 'What ✨ sends'),
-  sent: null,
-  openInEditor: null,
-  graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }),
-  fromGraph: async () => ({ values: {}, said: '' }),
-});
+const PANELS: Record<'code' | 'ai', ComponentType<NodePanelProps>> = { code: CodeNodePanel, ai: AiNodePanel };
 
 function panel(node: GraphNode): string {
-  const builder = NODE_BUILDERS[node.node_type];
-  const html = renderToStaticMarkup(createElement(PANELS[node.node_type]!, {
-    builder, node, setConfig: () => {}, updateNode: () => {},
-    fields: nodeFields(node, () => {}, () => {}), generating: false, onGenerate: async () => false,
-    steps: steps(node),
+  return renderToStaticMarkup(createElement(PANELS[node.node_type as 'code' | 'ai'], {
+    builder: NODE_BUILDERS[node.node_type], node, setConfig: () => {}, updateNode: () => {}, setDescription: () => {},
+    generating: false, onGenerate: async () => false,
+    shell: { graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }), preview: async () => [], graphFile: async () => undefined, flush: () => {} },
   }));
-  // A panel draws nothing when it is not handed what it needs: every
-  // assertion below would then hold on an empty page.
-  expect(html).toContain('aria-label="What comes in"');
-  return html;
 }
-
-const input = (id: string, multi = false): Port => ({ id, name: id, kind: 'input', data_type: 'any', multi, required: false, description: '' });
 
 /** A new node of *type*, with *config* set on top of what it starts with. */
-function made(type: 'code' | 'ai', config: Record<string, unknown> = {}, inputs?: Port[]): GraphNode {
+function made(type: 'code' | 'ai', config: Record<string, unknown> = {}): GraphNode {
   const node = NODE_KINDS[type].create(type);
-  return { ...node, inputs: inputs ?? node.inputs, config: { ...node.config, ...config } };
+  return { ...node, config: { ...node.config, ...config } };
 }
 
-/** One example, as the dialog writes it. */
-const example = (inputText: string) => withExpect(withInput('', inputText), '{ "output": 1 }');
-
 describe.each([
-  ['code', 'Code'],
-  ['ai', 'Instructions'],
-] as const)('a %s node, built in the four steps', (type, body) => {
-  it('draws the four steps, and both ways to fill its example', () => {
+  ['code', 'CODE', '✨ Code', 'code.js'],
+  ['ai', 'AI', '✨ Prompt', 'prompt.md'],
+] as const)('a %s node\'s panel', (type, kind, body, file) => {
+  it('is its kind and id, its text, a row per ✨, ▶ Try and its history -- in that order, which is the order Tab takes', () => {
     const html = panel(made(type));
-    for (const step of ['What comes in', 'What comes out', body]) expect(html, step).toContain(`aria-label="${step}"`);
-    expect(html).toContain('aria-label="What should it do?"');
-    expect(html).toContain('⟳ From the graph');
-    expect(html).toContain('📂 From a file…');
-    expect(html).toContain('What ✨ sends');
-  });
-});
-
-describe.each(['code', 'ai'] as const)('a %s node\'s step 1', (type) => {
-  const port = () => made(type).inputs[0].id;
-
-  it('says how many more examples its examples.md keeps after the one shown', () => {
-    const one = example(`{ "${port()}": "a" }`);
-    expect(panel(made(type, { examples: one }))).not.toContain('more example');
-    expect(panel(made(type, { examples: `${one}\n${one}` }))).toContain('holds 1 more example after this one');
-  });
-
-  it('asks "Run once per item" only where a list arrives', () => {
-    const scalar = [input(port())];
-    expect(panel(made(type, { examples: example(`{ "${port()}": "a" }`) }, scalar))).not.toContain('Run once per item');
-    // An example that holds a list on the port, and a port declared one. A
-    // list wired to the port is `listPorts`' to find (`nodeStepRules.test.ts`):
-    // drawn statically, a panel sees the store as it starts, with no wires.
-    expect(panel(made(type, { examples: example(`{ "${port()}": ["a", "b"] }`) }, scalar))).toContain('Run once per item');
-    expect(panel(made(type, {}, [input(port(), true)]))).toContain('Run once per item');
-  });
-
-  it('has no example to fill when it takes nothing in and none was written before', () => {
-    const html = panel(made(type, {}, []));
-    expect(html).not.toContain('⟳ From the graph');
-    expect(html).not.toContain('📂 From a file…');
-  });
-});
-
-describe('a code and an ai node', () => {
-  it('are laid out alike: the same sections in the same order, and only the body differs', () => {
-    // Everything but the body's own words, in the order the page draws it.
-    const landmarks = (html: string) => [
-      'aria-label="What comes in"', 'the input ports', 'Example input', 'aria-label="What comes out"', 'the output ports',
-      'What comes out, in words', 'Shape kept from a run', 'aria-label="What should it do?"',
-      '>✨ Generate</button>', 'aria-label="Try it"', '▶ Try it', 'aria-label="Judged by a model"',
+    const at = [
+      `>${kind}</span>`, `>${type}</code>`, 'aria-label="What it should do"',
+      '>✨ Input</button>', 'input.js ↗', 'aria-label="✨ Input prompt"', 'Example files:', '⟳ From the graph', '📂 Add a file…',
+      '>✨ Output</button>', 'output.js ↗', 'aria-label="✨ Output prompt"', 'Output files:',
+      `>${body}</button>`, `${file} ↗`, `aria-label="${body} prompt"`,
+      '▶ Try', 'history.md ↗',
     ].map((mark) => html.indexOf(mark));
-    for (const type of ['code', 'ai'] as const) {
-      const at = landmarks(panel(made(type, { examples: example(`{ "${made(type).inputs[0].id}": "a" }`) })));
-      expect(at.every((index) => index >= 0), `${type}: ${at}`).toBe(true);
-      expect(at, type).toEqual([...at].sort((a, b) => a - b));
+    expect(at.every((index) => index >= 0), String(at)).toBe(true);
+    expect(at).toEqual([...at].sort((a, b) => a - b));
+  });
+
+  it('draws nothing else: its ports, once per item, failures and its model are under Advanced', () => {
+    const html = panel(made(type));
+    for (const gone of ['Takes in', 'Hands out', 'Run once per item', 'Catch', 'aria-label="Model"', 'aria-label="input type"', 'Items at once']) {
+      expect(html, gone).not.toContain(gone);
     }
+  });
+
+  it('shows each prompt, the standard one until it is changed, naming what it is filled with', () => {
+    const html = panel(made(type));
+    expect(html.match(/The standard prompt/g)).toHaveLength(3);
+    expect(html).not.toContain('>Reset</button>');
+    expect(html).toContain('{Example Files}');
+    expect(html).toContain('{Output Files}');
+    const changed = panel(made(type, { prompts: { input: 'Mine, as typed ' } }));
+    expect(changed).toContain('Its prompt, changed');
+    expect(changed).toContain('>Reset</button>');
+    expect(changed).toMatch(/<textarea[^>]*>Mine, as typed <\/textarea>/);
+  });
+
+  it('shows each file before it is written: greyed, saying when it will be', () => {
+    const html = panel(made(type));
+    // Four chips -- input.js, output.js, the body, history.md -- none a file yet in a graph not saved as a project.
+    expect(html.match(/written when the graph is saved as a project/g)).toHaveLength(4);
+    expect(html.match(/<button[^>]*disabled=""[^>]*aria-label="Open [^"]+"/g)).toHaveLength(4);
+  });
+
+  it('gives every button a title that says what it does', () => {
+    const html = panel(made(type, { input_files: ['data/people.csv'], output_files: ['spec.md'], prompts: { body: 'Mine.' } }));
+    const untitled = (html.match(/<button[^>]*>/g) ?? []).filter((button) => !/ title="[^"]+"/.test(button));
+    expect(untitled).toEqual([]);
+  });
+
+  it('shows the files ✨ Input and ✨ Output write from, a chip each with ✕ -- and says so where there are none', () => {
+    const empty = panel(made(type));
+    expect(empty).toContain('none -- it reads the file the graph hands it, where there is one');
+    expect(empty).toMatch(/Output files:<\/span><span[^>]*>none<\/span>/);
+    const given = panel(made(type, { input_files: ['data/people.csv', 'spec.md'], output_files: ['out/spec.md'] }));
+    for (const path of ['data/people.csv', 'spec.md', 'out/spec.md']) expect(given).toContain(`aria-label="Let ${path} go"`);
+    // ⟳ takes the file the graph hands the node: an input's, so under ✨ Input alone.
+    expect(given.match(/⟳ From the graph/g)).toHaveLength(1);
+    expect(given.match(/📂 Add a file…/g)).toHaveLength(2);
+  });
+
+  it('says why ▶ Try waits while there is no input.js, and tries a node that takes nothing in', () => {
+    expect(panel(made(type))).toContain('Write its input.js first (✨ Input): its example is what it is tried on.');
+    expect(panel(made(type, { input_definition: 'module.exports = { "input": "a" };' }))).not.toContain('Write its input.js first');
+    expect(panel({ ...made(type), inputs: [] })).not.toContain('Write its input.js first');
   });
 });

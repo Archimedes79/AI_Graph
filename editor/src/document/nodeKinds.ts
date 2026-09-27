@@ -23,22 +23,22 @@ import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNode
 import { TriggerNodeRunner } from '@engine/elements/nodes/trigger/TriggerNodeRunner.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { baseNodeConfig } from './baseNodeConfig';
+import { numberedHeading } from './heading';
 
 const SUBGRAPH = new SubgraphNodeRunner();
 const TRIGGER = new TriggerNodeRunner();
 
 // A new node's description starts empty. It used to be the type's blurb --
 // "Send a prompt to an AI model" -- which, on an ai or code node, is the
-// request ✨ Generate writes the body from: pressing ✨ on a fresh node wrote
-// code for the blurb. What the type is for is the field's placeholder instead
-// (`NodeGuiBuilder.hint`).
+// text ✨ writes the body from: pressing ✨ on a fresh node wrote code for the
+// blurb. What the type is for is the field's placeholder instead
+// (`NodeGuiBuilder.hint`). Its heading is never empty: its kind and a number,
+// the lowest one no node beside it has (`numbered`).
 
-/**
- * The code a new code node starts with. The code dialog shows the same text as
- * its placeholder, and the graph sweep counts it as nobody's work: one text,
- * so the three cannot drift apart.
- */
-export const CODE_STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
+/** A node of a kind whose heading is its kind and a number: the lowest one *others* leave free. */
+const numbered = (kind: string) => (node: GraphNode, others: GraphNode[]): GraphNode => (
+  { ...node, label: numberedHeading(kind, others.map((other) => other.label)) }
+);
 
 export interface NodeKind {
   /**
@@ -78,7 +78,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
     create: (id) => ({
       id,
       node_type: 'ai',
-      label: 'AI Node',
+      label: 'AI 1',
       description: '',
       position: { x: 0, y: 0 },
       // One input, one output. There used to be a second, "Context", on every
@@ -93,37 +93,41 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
         { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'any', multi: true, required: false, description: 'What to ask. A list asks once per item.' },
       ],
       outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: true, required: false, description: 'The answer. One per item when the prompt was a list.' }],
-      // Once per item, and a system prompt to show where one goes.
-      config: { ...baseNodeConfig(), batch_mode: 'per_item', system_prompt: 'You are a helpful assistant.' },
+      // Once per item: a list that arrives is asked about an item at a time.
+      config: { ...baseNodeConfig(), batch_mode: 'per_item' },
     }),
+    placedAmong: numbered('AI'),
   },
 
   code: {
     create: (id) => ({
       id,
       node_type: 'code',
-      label: 'Code Node',
+      label: 'Code 1',
       description: '',
       position: { x: 0, y: 0 },
       inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
       // No description on the output: "one result per item" was true only while
-      // step 1 said "Run once per item", and ✨ is told that by the brief itself.
+      // "Run once per item" was ticked, and ✨ is told that by the brief itself.
       outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
-      config: { ...baseNodeConfig(), batch_mode: 'per_item', code: CODE_STARTER },
+      // No code: its code.js is the stub until ✨ Code writes it from the text.
+      config: { ...baseNodeConfig(), batch_mode: 'per_item' },
     }),
+    placedAmong: numbered('Code'),
   },
 
   data: {
     create: (id) => ({
       id,
       node_type: 'data',
-      label: 'Data Node',
+      label: 'Data 1',
       description: '',
       position: { x: 0, y: 0 },
       inputs: [{ id: 'input', name: 'Update', kind: 'input', data_type: 'any', multi: false, required: false, description: 'Optional new value' }],
       outputs: [{ id: 'output', name: 'Value', kind: 'output', data_type: 'any', multi: false, required: false, description: 'Persisted value' }],
       config: baseNodeConfig(),
     }),
+    placedAmong: numbered('Data'),
   },
 
   output: {

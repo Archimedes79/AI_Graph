@@ -15,8 +15,8 @@ interface Props {
  * They mean the same thing for an AI node and a Code node -- `catch_errors`
  * and `batch_concurrency` are handled by the executor, not by the element --
  * so the controls and their explanations live once, here. What comes in is
- * not among them: whether a list is taken item by item, and whether a file is
- * read, are questions about the inputs, asked in step 1.
+ * not among them: whether a file is read is asked of each input in its ports,
+ * and whether a list is taken item by item by "Run once per item".
  */
 export default function RunOptions({ node, setConfig, subject }: Props) {
   return (

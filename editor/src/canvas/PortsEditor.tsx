@@ -1,7 +1,7 @@
 import type { DataType, Port } from '@/graph';
 import { ONCE, type PortEditing, type UndoStep } from '@/elements/NodeGuiBuilder';
 import { useTyped } from '@/authoring/useTyped';
-import { wholeList } from '@/authoring/nodeStepRules';
+import { wholeList } from '@/authoring/perItem';
 import { caughtErrorAt, portIdProblems } from './portIds';
 import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
@@ -24,12 +24,12 @@ import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/th
  * is why it is the field that is edited, and why renaming one carries its wires
  * (`graphStore.updateNode`).
  *
- * What a port carries is not written here for a node built in the four steps
- * (`stepped`). An input's is what is wired into it, said on the line under it,
- * and whether its file is read; an output's is said once, in step 2's words.
- * A type box per port said it a second time, and a "list" box was half of a
- * setting whose other half was folded away: a list follows step 1's "Run once
- * per item", on both sides -- and while the node runs per item, an input can
+ * What a port carries is not written here for a node that defines itself
+ * (`compact`: a code or ai node). An input's is what is wired into it, said on
+ * the line under it, and whether its file is read; what each holds is said in
+ * its input.js and output.js. A type box per port said it a second time, and a
+ * "list" box was half of a setting whose other half was folded away: a list
+ * follows "Run once per item", on both sides -- and while the node runs per item, an input can
  * be taken whole instead ("whole list"), a stop-word list beside the words it
  * runs over. Only a node without the steps -- an output node -- still has a
  * type and a "list" per port.
@@ -68,7 +68,7 @@ interface SideProps {
   wiring: Record<string, string>;
   /** Offer "Read the file at this path" on each input: the node is handed the file's text there. */
   readsFiles: boolean;
-  /** Offer a type and "list" on each port: see `PortsEditor.stepped`. */
+  /** Offer a type and "list" on each port: see `PortsEditor.compact`. */
   perPort: boolean;
   /** The node runs once per item: see `PortsEditor.perItem`. */
   perItem: boolean;
@@ -226,9 +226,11 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, pe
         <label className="text-xs font-medium" style={{ color: MUTED }}>{title}</label>
         {editable && (
           <button
+            type="button"
             className="text-xs px-2 py-0.5 rounded"
             style={NEUTRAL_BUTTON}
             onClick={() => onChange([...ports, fresh(kind, new Set(ports.map((p) => p.id)))], ONCE)}
+            title={`Add an ${kind}: name it, and wire it on the canvas`}
           >
             + {kind}
           </button>
@@ -274,8 +276,6 @@ interface PortsEditorProps {
   inputs: Port[];
   outputs: Port[];
   onChange: (ports: { inputs: Port[]; outputs: Port[] }, step?: UndoStep) => void;
-  /** Which side to draw; both, by default. The stepped dialog draws them in separate steps. */
-  side?: 'inputs' | 'outputs' | 'both';
   /** How much of each side is the person's to change: the element says (`NodeGuiBuilder.portEditing`). */
   editing?: { inputs: PortEditing; outputs: PortEditing };
   /** One line under each side's title, from the element. */
@@ -285,11 +285,11 @@ interface PortsEditorProps {
   /** Offer "Read the file at this path" on each input: the node's kind reads its files (`readsFileInputs`). */
   readsFiles?: boolean;
   /**
-   * The node is built in the four steps (`NodeGuiBuilder.stepped`): no type
-   * and no "list" per port. A list follows step 1's "Run once per item", which
-   * sets it together with what it does nothing without, on both sides.
+   * The node defines itself (`NodeGuiBuilder.definesItself`): no type and no
+   * "list" per port. A list follows "Run once per item", which sets it
+   * together with what it does nothing without, on both sides.
    */
-  stepped?: boolean;
+  compact?: boolean;
   /**
    * The node runs once per item (`runsPerItem`): an input can be handed its
    * list whole instead ("whole list", `wholeList`), where another fans out.
@@ -303,7 +303,7 @@ const EDIT_BOTH = { inputs: 'edit', outputs: 'edit' } as const;
 const NO_WIRES = { inputs: {}, outputs: {} };
 
 export default function PortsEditor({
-  inputs, outputs, onChange, side = 'both', editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, readsFiles = false, stepped = false,
+  inputs, outputs, onChange, editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, readsFiles = false, compact = false,
   perItem = false, caught = false,
 }: PortsEditorProps) {
   // The Error output belongs to the catch-failures switch, which adds and
@@ -311,15 +311,15 @@ export default function PortsEditor({
   const errorAt = caughtErrorAt(outputs, caught);
   const ownOutputs = outputs.filter((_, at) => at !== errorAt);
   const fixedOutputs = outputs.filter((_, at) => at === errorAt);
-  const showInputs = side !== 'outputs' && editing.inputs !== 'none';
-  const showOutputs = side !== 'inputs' && editing.outputs !== 'none';
+  const showInputs = editing.inputs !== 'none';
+  const showOutputs = editing.outputs !== 'none';
 
   return (
     <div className="space-y-3">
       {showInputs && (
         <Side
           title="Takes in" kind="input" ports={inputs} fixed={[]} editing={editing.inputs}
-          hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} perPort={!stepped} perItem={perItem}
+          hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} perPort={!compact} perItem={perItem}
           problemOf={(next) => portIdProblems(next, outputs, caught).inputs}
           onChange={(next, step) => onChange({ inputs: next, outputs }, step)}
         />
@@ -327,7 +327,7 @@ export default function PortsEditor({
       {showOutputs && (
         <Side
           title="Hands out" kind="output" ports={ownOutputs} fixed={fixedOutputs} editing={editing.outputs}
-          hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} perPort={!stepped} perItem={false}
+          hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} perPort={!compact} perItem={false}
           problemOf={(next) => portIdProblems(inputs, [...next, ...fixedOutputs], caught).outputs}
           onChange={(next, step) => onChange({ inputs, outputs: [...next, ...fixedOutputs] }, step)}
         />

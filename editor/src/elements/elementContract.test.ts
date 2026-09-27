@@ -12,7 +12,7 @@ import { BLOCKS } from '@/page/blocks';
 import { guiWidgetPorts, showsPage } from '@/document/guiWidgets';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from './registry';
 import type { GraphNode, GuiWidget } from '@/graph';
-import { nodeLogic } from '@/authoring/logic';
+import { bodyOf, hasDefinitions } from '@/authoring/generation';
 
 /**
  * A widget as the app really creates one, with a fixed id so assertions can name
@@ -58,32 +58,14 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
     if (element.AdvancedPanel) expect(isLazy(element.AdvancedPanel)).toBe(true);
   });
 
-  it('declares a generation whose fields exist, or declares none at all', () => {
+  it('draws its own text where ✨ writes for it, and defines itself exactly where the engine keeps its definitions', () => {
     const node = kind.create(`${nodeType}-gen`);
-    const spec = element.generation;
-    if (!spec) {
-      // Nothing to generate also means nothing to author: the two answers are
-      // the same question, which is what stopped image_view's missing button
-      // from happening again one level down.
-      expect(nodeLogic(node)).toBeFalsy();
-      return;
-    }
-    const fields = spec.promptField === 'description'
-      ? { ...(node.config as unknown as Record<string, unknown>), description: node.description }
-      : (node.config as unknown as Record<string, unknown>);
-    expect(spec.promptField in fields).toBe(true);
-    expect(spec.targetField in (node.config as unknown as Record<string, unknown>)).toBe(true);
-    expect(spec.guard && spec.success).toBeTruthy();
-
-    // The button writes into the field the *engine* says holds the body. Two
-    // answers here means ✨ Generate filling a config key nothing ever runs,
-    // which is the one failure this pair of declarations can produce and
-    // nothing else would notice. Offered and authored are the same question,
-    // so they are asserted to agree even when the answer is "not for this node".
-    const logic = nodeLogic(node);
-    expect(logic).toBeTruthy();
-    expect(logic!.fields.body).toBe(spec.targetField);
-    expect(logic!.fields.prompt).toBe(spec.promptField);
+    // Its panel draws the text ✨ writes from above the ✨ rows: the dialog's
+    // own box above that would be a second text.
+    if (bodyOf(node)) expect(element.ownsDescription).toBe(true);
+    // Its ports folded away, its input.js and output.js in its panel: the
+    // dialog's answer and the engine's are one.
+    expect(element.definesItself).toBe(hasDefinitions(node));
   });
 
   it('describes what it emits', () => {

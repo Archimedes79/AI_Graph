@@ -16,7 +16,6 @@ import type React from 'react';
 import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
-import { inferInterface, type Schema } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 import { freeId } from '@/document/ids';
@@ -41,12 +40,6 @@ export interface GraphStore {
 
   // Execution state
   executionResult: ExecutionResult | null;
-  /**
-   * Each node that has a result in `executionResult`, as the run that made it
-   * ran it: what that result speaks of. A node changed since -- its body, its
-   * ports, a setting -- is not the node the result is about (`lastRunOf`).
-   */
-  ranAs: Record<string, GraphNode>;
   isExecuting: boolean;
 
   /**
@@ -90,6 +83,13 @@ export interface GraphStore {
 
   // UI state
   editingNodeId: string | null;
+  /**
+   * "Say what to change", asked of one node from the bar under the canvas:
+   * its panel takes it, when it is open for that node, and clears it.
+   */
+  pendingChange: { nodeId: string; text: string; at: number } | null;
+  askChange: (nodeId: string, text: string) => void;
+  clearChange: () => void;
 
   // Actions
   /**
@@ -438,24 +438,6 @@ function buildReactFlowGraph(graph: Graph) {
   return { rfNodes, rfEdges };
 }
 
-/** Whether this node keeps an output interface (in its `interface.json`). */
-export function keepsOutputInterface(node: GraphNode): boolean {
-  return engineRegistry.node(node.node_type)?.keepsOutputInterface ?? false;
-}
-
-/**
- * The output interface *node* is to keep, measured from *outputs* it just
- * produced -- by a run, or by ✨'s probe -- or undefined: when it keeps none,
- * already keeps one, or nothing came out. Kept once, the first time; after
- * that it is the contract the next runs are held to, until its Clear in the
- * node's dialog lets the next one measure it again. One rule for the run, the
- * dialog's ✨ and the sweep's, which each write it where their node is.
- */
-export function shapeToKeep(node: GraphNode, outputs: Record<string, unknown> | undefined): Schema | undefined {
-  if (!keepsOutputInterface(node) || node.config.output_schema) return undefined;
-  return outputs && Object.keys(outputs).length ? inferInterface(outputs) : undefined;
-}
-
 export const useGraphStore = create<GraphStore>()(
   immer((set, get) => ({
     rfNodes: [],
@@ -464,9 +446,9 @@ export const useGraphStore = create<GraphStore>()(
     currentFilePath: null,
     isProject: false,
     executionResult: null,
-    ranAs: {},
     isExecuting: false,
     editingNodeId: null,
+    pendingChange: null,
     subgraphStack: [],
     document: 0,
     savedSnapshot: null,
@@ -521,7 +503,7 @@ export const useGraphStore = create<GraphStore>()(
         // A wire from a port that carries file paths -- a picker, a folder --
         // ticks "Read the file at this path" on the input it ends on: the port
         // is typed `file_path`, and a code or AI node is handed the file's
-        // text there. Step 1 can untick it; this is so that nobody has to say
+        // text there. Its ports can untick it; this is so that nobody has to say
         // it, because the wire already did and a graph wired without it
         // summarised the file's *name*. The run itself asks only the port.
         const portOf = (nodeId: string, side: 'inputs' | 'outputs', portId: string) => state.rfNodes
@@ -610,6 +592,16 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges = edges;
       }),
 
+    askChange: (nodeId, text) =>
+      set((state) => {
+        state.pendingChange = { nodeId, text, at: Date.now() };
+      }),
+
+    clearChange: () =>
+      set((state) => {
+        state.pendingChange = null;
+      }),
+
     setEditingNode: (nodeId) =>
       set((state) => {
         state.editingNodeId = nodeId;
@@ -635,16 +627,6 @@ export const useGraphStore = create<GraphStore>()(
           result.memory,
           (node, portId, value) => engineRegistry.node(node.node_type)?.settleMemory(node, portId, value),
         );
-
-        // A run is where an output interface comes from: nodes are wired, the
-        // graph runs, and what a node actually produced is the first honest
-        // statement of its outputs (`shapeToKeep`), the first time it succeeds.
-        for (const rfNode of state.rfNodes) {
-          const node = rfNode.data.graphNode;
-          const ran = result.node_results.find((r) => r.node_id === node.id && r.status === 'success');
-          const kept = shapeToKeep(node, ran?.outputs);
-          if (kept) node.config.output_schema = kept;
-        }
       }),
 
     loadGraph: (graph) => {
@@ -657,7 +639,6 @@ export const useGraphStore = create<GraphStore>()(
         state.rfNodes = rfNodes as never;
         state.rfEdges = rfEdges;
         state.executionResult = null;
-        state.ranAs = {};
         // Whoever loaded a graph without going through the file-path flow
         // (Paste JSON, AI Graph, etc.) doesn't know its file path; the caller
         // sets `currentFilePath` explicitly right after loadGraph when it does.
@@ -834,7 +815,6 @@ export const useGraphStore = create<GraphStore>()(
         // them. The node dialog stays for Undo, on a node that is still there:
         // the same graph, a step back.
         state.executionResult = null;
-        state.ranAs = {};
         const stays = keepEditing && graph.nodes.some((node) => node.id === state.editingNodeId);
         if (!stays) state.editingNodeId = null;
       });
@@ -909,9 +889,6 @@ export const useGraphStore = create<GraphStore>()(
       // shows is still true and stays: pressing "Plot" must not blank the
       // summary beside it. A full run starts from a clean slate, as before.
       const previous = trigger ? get().executionResult : null;
-      // Each node as this run runs it, in the form the editor holds a node:
-      // what its result will speak of (`ranAs`).
-      const running = new Map(normalizeGraph(graph).nodes.map((node) => [node.id, node]));
       set((state) => {
         state.isExecuting = true;
       });
@@ -946,8 +923,7 @@ export const useGraphStore = create<GraphStore>()(
         }
 
         // Another graph is open now. Its nodes may share this one's ids, and
-        // what this run made -- a shape, a remembered value, a result -- is
-        // not theirs.
+        // what this run made -- a remembered value, a result -- is not theirs.
         if (!stillOpen()) return;
         const fresh: ExecutionResult = snapshot.result ?? {
           status: snapshot.cancelled ? 'cancelled' : 'error',
@@ -960,15 +936,6 @@ export const useGraphStore = create<GraphStore>()(
         // graph, which is why the result goes through the store rather than
         // being held in a component.
         setExecutionResult(result, fresh);
-        // What each result speaks of: this run's nodes, and for a page event
-        // the earlier run's where their results were kept.
-        set((state) => {
-          if (!previous) state.ranAs = {};
-          for (const ran of fresh.node_results) {
-            const node = running.get(ran.node_id);
-            if (node) state.ranAs[ran.node_id] = node as never;
-          }
-        });
         get().clearSentValues(fresh, graph);
       } catch (error) {
         if (stillOpen()) setExecutionResult({

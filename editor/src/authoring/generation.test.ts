@@ -1,145 +1,153 @@
 import { describe, it, expect } from 'vitest';
+import type { GraphNode, Port } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { NODE_BUILDERS } from '@/elements/registry';
-import type { ProbeReport } from '@/api/client';
-import { STANDARD_PROMPT, withRequest } from '@engine/authoring/promptFile.ts';
-import { buildGeneration, generateRequest, nodeFields, probeMessage, withChange } from './generation';
-import { nodeFacts } from './nodeFacts';
+import {
+  exchangeName, generateRequest, generationGuard, isWritten, outputsFrom, resultMessage, unfitDefinition, writeName, writesFor, writtenInto,
+} from './generation';
 
-describe('the request ✨ Generate sends', () => {
-  const node = NODE_KINDS.code.create('worker');
-  node.config.prompt = withRequest('', 'Sum the sizes');
-  node.config.example_files = { 'example/sizes.csv': 'name,size\na,1' };
-  node.inputs[0].description = 'one file per row, with a size';
-  node.outputs[0].description = '';
-  node.config.examples = '## one\n```json input\n{"input": 1}\n```';
-  node.config.output_schema = { type: 'object' };
-  const fields = nodeFields(node, () => {}, () => {});
+/**
+ * What a node's ✨ asks and what it writes in: the request built in one place
+ * for the dialog, the sweep and "what ✨ sends", and the answer written into
+ * the node by one pure function.
+ */
 
-  const request = generateRequest({
-    element: 'code',
-    generation: NODE_BUILDERS.code.generation!,
-    fields,
-    portNotes: {
-      inputs: Object.fromEntries(node.inputs.map((p) => [p.id, p.description])),
-      outputs: Object.fromEntries(node.outputs.map((p) => [p.id, p.description])),
-    },
-    outputSchema: node.config.output_schema,
-    examples: node.config.examples,
-    exampleFiles: node.config.example_files,
+/** A new node of *type*, with *config* set on top of what it starts with. */
+function made(type: 'code' | 'ai' | 'data', config: Record<string, unknown> = {}, inputs?: Port[]): GraphNode {
+  const node = NODE_KINDS[type].create(type);
+  return { ...node, inputs: inputs ?? node.inputs, config: { ...node.config, ...config } };
+}
+
+const INPUT = 'module.exports = { "input": "a" };';
+const OUTPUT = 'module.exports = { "output": 1 };';
+const answer = (result: string, description?: string) => ({ result, calls: [], ...(description === undefined ? {} : { description }) });
+const around = (node: GraphNode) => ({ nodes: [node], edges: [], metadata: { name: 'Words', description: '', gui_scheme: 'night' } as never });
+
+describe('what one press of ✨ writes', () => {
+  it('is, for the body, what is missing first -- input.js where it takes something in, output.js -- so one press does the whole node', () => {
+    expect(writesFor(made('code'), 'body')).toEqual(['input', 'output', 'body']);
+    expect(writesFor(made('code', { input_definition: INPUT }), 'body')).toEqual(['output', 'body']);
+    expect(writesFor(made('code', { input_definition: INPUT, output_definition: OUTPUT }), 'body')).toEqual(['body']);
+    expect(writesFor(made('code', {}, []), 'body')).toEqual(['output', 'body']);
+    // A stub is nothing written.
+    expect(writesFor(made('ai', { input_definition: 'module.exports = null;' }), 'body')).toEqual(['input', 'output', 'body']);
   });
 
-  it('carries what the dialog says about the ports, leaving out the empty ones', () => {
-    expect(request.input_notes).toEqual({ input: 'one file per row, with a size' });
-    expect(request.output_notes).toBeUndefined();
+  it('is only itself for ✨ Input and ✨ Output, and for a data node, which has no definitions', () => {
+    expect(writesFor(made('code'), 'input')).toEqual(['input']);
+    expect(writesFor(made('code'), 'output')).toEqual(['output']);
+    expect(writesFor(made('data'), 'body')).toEqual(['body']);
   });
 
-  it('carries the kept shape, the examples and the files they read', () => {
-    expect(request.output_schema).toEqual({ type: 'object' });
-    expect(request.examples).toContain('## one');
-    expect(request.example_files).toEqual({ 'example/sizes.csv': 'name,size\na,1' });
+  it('is named on its button, in a message and in history.md -- a change and a fix by what they were', () => {
+    expect(['input', 'output', 'body'].map((write) => writeName(made('code'), write as never))).toEqual(['✨ Input', '✨ Output', '✨ Code']);
+    expect(writeName(made('ai'), 'body')).toBe('✨ Prompt');
+    expect(writeName(made('data'), 'body')).toBe('✨ Data');
+    expect(exchangeName(made('code'), 'body', { change: '  also count the words ' })).toBe('Change: also count the words');
+    expect(exchangeName(made('code'), 'body', { error: 'x is not defined' })).toBe('✨ Fix');
   });
 
-  it('is what the preview asks for too: the preview only adds the flag', () => {
-    // All of prompt.md: the template is the person's as much as the request is.
-    expect(request.prompt).toBe(`${STANDARD_PROMPT}Sum the sizes`);
-    expect('preview' in request).toBe(false);
-  });
-
-  it('carries the files the node\'s example reads, as the node holds them', () => {
-    const facts = nodeFacts(node, [node], [], null);
-    expect(generateRequest({ element: 'code', generation: NODE_BUILDERS.code.generation!, fields, ...facts }).example_files)
-      .toEqual({ 'example/sizes.csv': 'name,size\na,1' });
-  });
-
-  it('says which ports are declared lists, so the probe cuts and collects as a run does', () => {
-    const worker = NODE_KINDS.code.create('worker');
-    worker.inputs.push({ ...worker.inputs[0], id: 'stop', name: 'stop', multi: false });
-    worker.outputs.push({ ...worker.outputs[0], id: 'count', name: 'count', multi: false });
-    const sent = generateRequest({
-      element: 'code', generation: NODE_BUILDERS.code.generation!, fields: nodeFields(worker, () => {}, () => {}),
-      ...nodeFacts(worker, [worker], [], null),
-    });
-    expect(sent.multi_inputs).toEqual(['input']);
-    expect(sent.multi_outputs).toEqual(['output']);
+  it('waits for the node\'s text: everything is written from it', () => {
+    expect(generationGuard(made('code'))).toMatch(/Say what this node should do first/);
+    expect(generationGuard({ ...made('code'), description: 'Count the words.' })).toBeUndefined();
   });
 });
 
-describe('what is said after ✨', () => {
-  const report = (probe: Partial<ProbeReport>): ProbeReport => ({ status: 'failed', error: '', missing_outputs: [], ...probe });
-
-  it('names the sample it was verified on, which was always said to be "the last run\'s data"', () => {
-    expect(probeMessage(report({ status: 'ok' }), 'done', 'the example in step 1')).toBe('✅ Generated and verified against the example in step 1.');
-    expect(probeMessage(report({ status: 'repaired' }), 'done', 'what "Rows" holds now')).toContain('failed on what "Rows" holds now');
-  });
-
-  it('says what is wrong with a result that runs, instead of "missing " with nothing after it', () => {
-    const said = probeMessage(report({ problems: ['a label runs off the chart'] }), 'done', 'the last run');
-    expect(said).toBe('⚠️ Generated and it runs on the last run, but the result is not right yet: a label runs off the chart');
-    expect(probeMessage(report({ missing_outputs: ['figure'] }), 'done')).toBe('⚠️ Generated, but it does not return figure yet.');
-    expect(probeMessage(report({ error: 'x is not defined' }), 'done')).toBe('⚠️ Generated, but it does not run yet: x is not defined');
+describe('what ✨ sends', () => {
+  it('is the node without its history, the graph around it, what it is wired to -- and the files each ✨ is given', () => {
+    const node = { ...made('code', { history: '## old', input_files: ['data/a.csv'], output_files: ['spec.md'] }), description: 'Count.' };
+    const input = generateRequest(node, 'input', around(node), ['data/a.csv', 'data/b.csv']);
+    expect(input.node.config.history).toBeUndefined();
+    expect(input.context).toContain('Graph: Words');
+    expect(input.input_files).toEqual([{ path: 'data/a.csv' }, { path: 'data/b.csv' }]);
+    expect(input.output_files).toBeUndefined();
+    const output = generateRequest(node, 'output', around(node), ['data/a.csv']);
+    expect(output.output_files).toEqual([{ path: 'spec.md' }]);
+    expect(output.input_files).toBeUndefined();
+    const body = generateRequest(node, 'body', around(node), ['data/a.csv'], { change: 'shout' });
+    expect(body).toMatchObject({ write: 'body', refine: { change: 'shout' }, input_sources: {}, output_targets: {} });
+    expect(body.input_files).toBeUndefined();
   });
 });
 
-describe('a change to the body there is ("Say what to change", ✨ Fix)', () => {
-  /** A code node's request, its fields written into *written*. */
-  const asked = (written: Record<string, string>, task = 'Count the words.') => {
-    const node = NODE_KINDS.code.create('worker');
-    node.config.prompt = withRequest('', task);
-    const fields = {
-      get: (field: string) => written[field] ?? String((node.config as Record<string, unknown>)[field] ?? ''),
-      set: (field: string, value: string) => { written[field] = value; },
-    };
-    return { element: 'code', generation: NODE_BUILDERS.code.generation!, fields };
-  };
-  const refine = { body: 'function run(i) { return { output: 1 }; }', change: 'Also count the lines.', outcome: '1' };
+describe('what comes back, written in', () => {
+  const at = new Date(2026, 8, 28, 9, 30);
 
-  it('is sent through the one generate request, with the body there is, what came of it and what to change', () => {
-    expect(generateRequest({ ...asked({}), refine }).refine).toEqual(refine);
+  it('is the file ✨ wrote, and the exchange at the end of history.md', () => {
+    const node = made('code');
+    const input = writtenInto(node, 'input', answer(INPUT), '✨ Input', at);
+    expect(input.config.input_definition).toBe(INPUT);
+    expect(input.config.history).toBe('## 2026-09-28 09:30 · ✨ Input\n\nNothing was sent.');
+    expect(input.outputs).toBe(node.outputs);
+    expect(writtenInto(node, 'body', answer('function run() { return { output: 1 }; }'), '✨ Code', at).config.code)
+      .toBe('function run() { return { output: 1 }; }');
   });
 
-  it('writes the request it comes back with beside the body, after Prompt:, so the two say the same thing', () => {
-    const written: Record<string, string> = {};
-    buildGeneration({ ...asked(written), refine }).apply({
-      result: 'function run(i) { return { output: 1, lines: 1 }; }', request: 'Count the words and the lines.',
-      probe: { status: 'ok', error: '', missing_outputs: [] }, calls: [],
-    });
-    expect(written).toEqual({
-      code: 'function run(i) { return { output: 1, lines: 1 }; }', prompt: `${STANDARD_PROMPT}Count the words and the lines.`,
-    });
+  it('is, for an output definition, the outputs too: its example\'s keys are the node\'s outputs', () => {
+    const written = writtenInto(made('code', {}, []), 'output', answer('module.exports = { "rows": [], "count": 2, "title": "t" };'), '✨ Output', at);
+    expect(written.outputs.map((port) => [port.id, port.data_type])).toEqual([['rows', 'list'], ['count', 'number'], ['title', 'text']]);
   });
 
-  it('writes an ai node\'s message with its instructions, where the answer brings one', () => {
-    const written: Record<string, string> = {};
-    const node = NODE_KINDS.ai.create('ask');
-    const fields = { get: (field: string) => written[field] ?? String((node.config as Record<string, unknown>)[field] ?? ''), set: (field: string, value: string) => { written[field] = value; } };
-    const apply = (reply: { result: string; message_template?: string }) => buildGeneration({ element: 'ai', generation: NODE_BUILDERS.ai.generation!, fields })
-      .apply({ ...reply, probe: { status: 'skipped', error: '', missing_outputs: [] }, calls: [] });
-    apply({ result: 'Summarise.', message_template: 'Story:\n{{prompt}}' });
-    expect(written).toEqual({ system_prompt: 'Summarise.', message_template: 'Story:\n{{prompt}}' });
-    apply({ result: 'Summarise briefly.' });
-    expect(written.message_template).toBe('Story:\n{{prompt}}');
+  it('is what a data node holds, as what it is: structure parsed, text as it is', () => {
+    const structure = made('data', { data_format: 'structure' });
+    expect(writtenInto(structure, 'body', answer('{ "count": 3 }'), '✨ Data', at).config.data_value).toEqual({ count: 3 });
+    expect(writtenInto(made('data'), 'body', answer('three'), '✨ Data', at).config.data_value).toBe('three');
   });
 
-  it('needs something to change -- words, or how it failed -- and no task, which comes back with it', () => {
-    expect(buildGeneration({ ...asked({}, ''), refine }).guard?.()).toBeUndefined();
-    expect(buildGeneration({ ...asked({}, ''), refine: { body: 'x', error: 'boom' } }).guard?.()).toBeUndefined();
-    expect(buildGeneration({ ...asked({}), refine: { body: 'x' } }).guard?.()).toBe('Say what to change first.');
-    // Written anew, a body still needs its task.
-    expect(buildGeneration(asked({}, '')).guard?.()).toBeTruthy();
+  it('restates the node\'s text where a change was asked, and leaves it where nothing came back for it', () => {
+    const node = { ...made('code'), description: 'Count the words.' };
+    expect(writtenInto(node, 'body', answer('x', '  Count the words, and the lines. '), 'Change: lines', at).description).toBe('Count the words, and the lines.');
+    expect(writtenInto(node, 'body', answer('x', '  '), '✨ Code', at).description).toBe('Count the words.');
   });
 
-  it('says what it did: changed as said -- run on the example, which a change is not held to -- or fixed', () => {
-    const ok = { result: 'x', probe: { status: 'ok' as const, error: '', missing_outputs: [] }, calls: [] };
-    const said = (options: ReturnType<typeof buildGeneration>) => (typeof options.success === 'function' ? options.success(ok) : options.success);
-    // "Verified against the example" said of a change that no longer gives what the example expects.
-    expect(said(buildGeneration({ ...asked({}), refine, sampleOrigin: 'the example in step 1' }))).toBe('✅ Changed, and it runs on the example in step 1.');
-    expect(said(buildGeneration({ ...asked({}), refine: { body: 'x', error: 'boom' }, sampleOrigin: 'the last run' }))).toBe('✅ Fixed and verified against the last run.');
+  it('says whether the file is written: its stub is not', () => {
+    expect(isWritten(made('code'), 'input')).toBe(false);
+    expect(isWritten(made('code', { input_definition: 'module.exports = null;' }), 'input')).toBe(false);
+    expect(isWritten(made('code', { input_definition: INPUT }), 'input')).toBe(true);
+    expect(isWritten(made('data', { data_value: { count: 1 } }), 'body')).toBe(true);
+    expect(isWritten(made('data'), 'body')).toBe(false);
+  });
+});
+
+describe('the outputs an output definition names', () => {
+  const port = (id: string, extra: Partial<Port> = {}): Port => ({ id, name: id.toUpperCase(), kind: 'output', data_type: 'text', multi: false, required: false, description: 'kept', ...extra });
+
+  it('keeps a port that is there as it is, types a new one by its example, and keeps the error port last', () => {
+    const node = { ...made('code', {}, []), outputs: [port('summary'), port('error')] };
+    const outputs = outputsFrom(node, 'module.exports = { "flag": true, "summary": "s", "parts": { "a": 1 } };');
+    expect(outputs.map((one) => [one.id, one.data_type, one.name])).toEqual([
+      ['flag', 'boolean', 'flag'], ['summary', 'text', 'SUMMARY'], ['parts', 'json', 'parts'], ['error', 'text', 'ERROR'],
+    ]);
   });
 
-  it('is tried on what it came of: a run\'s inputs, where it came of a run', () => {
-    const request = withChange(asked({}), { refine: { body: 'x', error: 'boom' }, sample: { values: { input: 'a' }, origin: 'the last run' } });
-    expect(request).toMatchObject({ sampleInputs: { input: 'a' }, sampleOrigin: 'the last run', refine: { error: 'boom' } });
-    expect(withChange(asked({}), undefined).refine).toBeUndefined();
+  it('hands on a list from a new port where the node runs once per item', () => {
+    const perItem = made('code');
+    expect(perItem.config.batch_mode).toBe('per_item');
+    expect(outputsFrom(perItem, OUTPUT)[0].multi).toBe(true);
+    expect(outputsFrom(made('code', { batch_mode: 'whole_list' }), 'module.exports = { "total": 1 };')[0].multi).toBe(false);
+  });
+
+  it('leaves the outputs alone for a definition without an example -- a stub, or one that cannot be read', () => {
+    const node = made('code');
+    expect(outputsFrom(node, 'module.exports = null;')).toBe(node.outputs);
+    expect(outputsFrom(node, 'module.exports = { oops')).toBe(node.outputs);
+  });
+});
+
+describe('what is said once ✨ is done', () => {
+  it('says it was written, and how the try on the example went', () => {
+    expect(resultMessage('✨ Code', { status: 'ok', error: '', problems: [] }, false)).toBe('✅ ✨ Code: written, and it fits output.js on the example in input.js.');
+    expect(resultMessage('✨ Code', { status: 'repaired', error: '', problems: [] }, true)).toMatch(/^✅ ✨ Code: changed\. The first attempt did not fit/);
+    expect(resultMessage('✨ Code', { status: 'failed', error: 'boom', problems: [] }, false)).toBe('⚠️ ✨ Code: written, but it fails on the example in input.js: boom');
+    expect(resultMessage('✨ Code', { status: 'failed', error: '', problems: ['"count" is missing'] }, false)).toBe('⚠️ ✨ Code: written, but "count" is missing');
+    expect(resultMessage('✨ Input', { status: 'skipped', error: '', problems: [] }, false)).toBe('✅ ✨ Input: written.');
+  });
+
+  it('stops a press at a definition that does not fit the node: what comes after would be written against it', () => {
+    const names = { status: 'failed' as const, error: '', problems: ['It names "text", which is not among the inputs: "input".'] };
+    expect(unfitDefinition('input', names)).toBe('it names "text", which is not among the inputs: "input".');
+    expect(resultMessage('✨ Input', names, false)).toBe('⚠️ ✨ Input: written, but it names "text", which is not among the inputs: "input".');
+    expect(unfitDefinition('output', { status: 'skipped', error: '', problems: [] })).toBeUndefined();
+    // A body that fails its try is written and said: nothing comes after it.
+    expect(unfitDefinition('body', { status: 'failed', error: 'boom', problems: [] })).toBeUndefined();
   });
 });

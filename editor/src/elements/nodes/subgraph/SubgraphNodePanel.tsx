@@ -26,7 +26,7 @@ export function enterGraphOf(nodeId: string): void {
  * palette and the same undo as any other node. A second way to edit them here
  * would be a second place for them to live.
  */
-export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
+export default function SubgraphNodePanel({ node, setConfig, setDescription }: NodePanelProps) {
   // No level opens while a run is going: its result is for the graph on the
   // canvas (`openSubgraph`). Pressed then, the button closed the dialog and
   // opened nothing, and said nothing.
@@ -64,12 +64,13 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
           className="w-full rounded-lg px-3 py-2 text-sm"
           style={FIELD}
           rows={3}
-          value={node.config.prompt ?? ''}
-          onChange={(e) => setConfig('prompt', e.target.value)}
+          value={node.description}
+          onChange={(e) => setDescription(e.target.value)}
           placeholder="e.g. Take a paper, and give back a one-paragraph summary and a verdict"
+          aria-label="What this part is meant to do"
         />
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
-          A subgraph may be nothing but this sentence to begin with; the graph comes later.
+          Its text. A subgraph may be nothing but this sentence to begin with; the graph comes later.
         </p>
       </div>
 

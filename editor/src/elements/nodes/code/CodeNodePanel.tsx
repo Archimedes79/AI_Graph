@@ -1,17 +1,7 @@
-import NodeSteps from '@/authoring/NodeSteps';
+import NodeDefinition from '@/authoring/NodeDefinition';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
-/** A code node: the four steps, its body the function `run(inputs)`. */
+/** A code node: its text, and what ✨ writes from it -- input.js, output.js, code.js. */
 export default function CodeNodePanel(props: NodePanelProps) {
-  return (
-    <NodeSteps
-      {...props}
-      subject="this code"
-      wordsHint="Told to ✨ Generate, here and in the nodes this one feeds. Nothing reads it when the graph runs."
-      body={{
-        title: 'Code',
-        hint: 'A JavaScript function run(inputs) that returns the outputs. ✨ Generate writes it from steps 1 to 3, runs it on the example in step 1 -- or, while there is none, on what arrived last -- and repairs it once if it fails.',
-      }}
-    />
-  );
+  return <NodeDefinition {...props} />;
 }

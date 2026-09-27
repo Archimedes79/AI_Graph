@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { generationOrder, missingExamples, sampleFromPredecessors, sweep, writtenBody, type SweepStep, type SweepUnit } from './graphSweep';
-import { NODE_BUILDERS } from '@/elements/registry';
+import { generationOrder, missingExamples, sweep, type SweepStep, type SweepUnit } from './graphSweep';
+import { missingOf } from './useGraphSweep';
+import { bodyOf } from './generation';
 import type { GraphEdge, GraphNode } from '@/graph';
 
 /**
@@ -13,7 +14,7 @@ import type { GraphEdge, GraphNode } from '@/graph';
  */
 
 function node(id: string, type = 'code'): GraphNode {
-  return NODE_KINDS[type as keyof typeof NODE_BUILDERS].create(id);
+  return NODE_KINDS[type as GraphNode['node_type']].create(id);
 }
 
 function edge(from: string, to: string): GraphEdge {
@@ -25,8 +26,8 @@ function edge(from: string, to: string): GraphEdge {
 }
 
 /** A unit that always succeeds, recording the order it was run in. */
-function ok(seen: string[], id: string): SweepUnit<string> {
-  return { run: async () => { seen.push(id); return `${id}-result`; }, apply: () => {} };
+function ok(seen: string[], id: string): SweepUnit {
+  return { write: async () => { seen.push(id); } };
 }
 
 async function collect(gen: AsyncGenerator<SweepStep>): Promise<SweepStep[]> {
@@ -75,7 +76,7 @@ describe('sweeping a graph', () => {
     const nodes = [node('a'), node('b')];
     const steps = await collect(sweep(nodes, [edge('a', 'b')], {
       unitFor: (n) => (n.id === 'a'
-        ? { guard: () => 'Please add a code generation prompt first.', run: async () => '', apply: () => {} }
+        ? { guard: () => 'Say what this node should do first.', write: async () => {} }
         : ok(seen, n.id)),
     }));
 
@@ -89,7 +90,7 @@ describe('sweeping a graph', () => {
     const nodes = [node('a'), node('b'), node('c')];
     const steps = await collect(sweep(nodes, [edge('a', 'b'), edge('b', 'c')], {
       unitFor: (n) => (n.id === 'b'
-        ? { run: async () => { throw new Error('the model refused'); }, apply: () => {} }
+        ? { write: async () => { throw new Error('the model refused'); } }
         : ok(seen, n.id)),
     }));
 
@@ -133,26 +134,6 @@ describe('what a sweep would have to guess at', () => {
     const fed = node('b');
     expect(missingExamples([source, fed], [edge('src', 'b')]).map((n) => n.id)).toEqual(['src']);
     expect(missingExamples([fed], [edge('src', 'b')])).toEqual([]);
-  });
-});
-
-describe('what the next node is generated against', () => {
-  const wire = (source: string, sourceHandle: string, target: string, targetHandle: string) => ({ source, sourceHandle, target, targetHandle });
-
-  it('is what the node before it returned, port by port', () => {
-    const produced = new Map([['a', { out: 'text from a', count: 3 }]]);
-    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'text'), wire('a', 'count', 'b', 'n')], produced))
-      .toEqual({ text: 'text from a', n: 3 });
-  });
-
-  it('collects several sources into a list, as a run would', () => {
-    const produced = new Map([['a', { out: 1 }], ['c', { out: 2 }]]);
-    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'items'), wire('c', 'out', 'b', 'items')], produced))
-      .toEqual({ items: [1, 2] });
-  });
-
-  it('is nothing at all when no predecessor has produced anything yet', () => {
-    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'text')], new Map())).toBeUndefined();
   });
 });
 
@@ -220,16 +201,27 @@ describe('a page in the order', () => {
     expect(generationOrder(nodes, edges).map((n) => n.id)).toEqual(['panel', 'points']);
     const seen: string[] = [];
     const steps = await collect(sweep(nodes, edges, {
-      unitFor: (n) => (NODE_BUILDERS[n.node_type].generation ? ok(seen, n.id) : undefined),
+      unitFor: (n) => (bodyOf(n) ? ok(seen, n.id) : undefined),
     }));
     expect(steps.map((s) => [s.nodeId, s.status])).toEqual([['panel', 'skipped'], ['points', 'generated']]);
     expect(seen).toEqual(['points']);
   });
 });
 
-describe('what a sweep counts as already written', () => {
-  it('is a code node\'s code, but not its starter', () => {
-    expect(writtenBody(node('c'), 'code')).toBe(false);
-    expect(writtenBody({ ...node('c'), config: { ...node('c').config, code: 'function run() { return {}; }' } }, 'code')).toBe(true);
+describe('what a sweep writes of a node', () => {
+  it('is what it is missing, in order -- input.js where it takes something in, output.js, its body -- and never what somebody wrote', () => {
+    const fresh = node('c');
+    expect(missingOf(fresh)).toEqual(['input', 'output', 'body']);
+    expect(missingOf({ ...fresh, inputs: [] })).toEqual(['output', 'body']);
+    const written = { ...fresh, config: { ...fresh.config, input_definition: 'module.exports = { "input": "a" };', output_definition: 'module.exports = { "output": 1 };' } };
+    expect(missingOf(written)).toEqual(['body']);
+    expect(missingOf({ ...written, config: { ...written.config, code: 'function run() { return { output: 1 }; }' } })).toEqual([]);
+    // A stub is nothing written: a folder read back holds `module.exports = null;` until ✨ writes it.
+    expect(missingOf({ ...fresh, config: { ...fresh.config, input_definition: 'module.exports = null;' } })).toEqual(['input', 'output', 'body']);
+  });
+
+  it('is its data for a data node, and nothing for a node ✨ writes nothing for', () => {
+    expect(missingOf(node('d', 'data'))).toEqual(['body']);
+    expect(missingOf(node('o', 'output'))).toEqual([]);
   });
 });

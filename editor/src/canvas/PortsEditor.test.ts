@@ -8,7 +8,7 @@ import PortsEditor from './PortsEditor';
 const needed = (input: Port): Port => ({ ...input, required: true });
 
 describe('the ports editor', () => {
-  it('offers "needed" on each input, where step 1 asks "Run once per item" too', () => {
+  it('offers "needed" on each input, of a code or an ai node too', () => {
     // The chat example's model is not asked with the history alone because
     // nobody typed a message: its `message` input is needed. Nothing in the
     // editor could say so, so the example could not be built by hand.
@@ -16,7 +16,7 @@ describe('the ports editor', () => {
       inputs: [port('history', 'history', 'input', 'text'), needed(port('message', 'message', 'input', 'text'))],
       outputs: [port('output', 'output', 'output', 'text')],
       onChange: () => {},
-      stepped: true,
+      compact: true,
     }));
     const boxes = html.match(/<input type="checkbox"[^>]*aria-label="input needed"[^>]*>/g) ?? [];
     expect(boxes).toHaveLength(2);
@@ -39,14 +39,14 @@ describe('the ports editor', () => {
     expect(drawn(false)).not.toContain('Read the file at this path');
   });
 
-  it('has no type and no "list" per port for a node built in the four steps -- a list follows "Run once per item"', () => {
-    const drawn = (stepped: boolean) => renderToStaticMarkup(createElement(PortsEditor, {
-      inputs: [port('csv', 'csv', 'input', 'file_path')], outputs: [port('rows', 'rows', 'output', 'json')], onChange: () => {}, stepped,
+  it('has no type and no "list" per port for a code or an ai node -- its input.js and output.js say them', () => {
+    const drawn = (compact: boolean) => renderToStaticMarkup(createElement(PortsEditor, {
+      inputs: [port('csv', 'csv', 'input', 'file_path')], outputs: [port('rows', 'rows', 'output', 'json')], onChange: () => {}, compact,
     }));
     expect(drawn(true)).not.toContain('aria-label="input type"');
     expect(drawn(true)).not.toContain('aria-label="output type"');
     expect(drawn(true)).not.toContain('list</label>');
-    // A node without the steps -- an output node -- still says them per port.
+    // Any other node -- an output node -- still says them per port.
     expect(drawn(false)).toContain('aria-label="input type"');
     expect(drawn(false).match(/list<\/label>/g)).toHaveLength(2);
   });
@@ -56,7 +56,7 @@ describe('the ports editor', () => {
     const words = { ...port('words', 'words', 'input', 'any'), multi: true };
     const stop = port('stop', 'stop', 'input', 'any');
     const drawn = (perItem: boolean, inputs: Port[]) => renderToStaticMarkup(createElement(PortsEditor, {
-      inputs, outputs: [], onChange: () => {}, stepped: true, perItem,
+      inputs, outputs: [], onChange: () => {}, compact: true, perItem,
     }));
     const ticks = drawn(true, [words, stop]).match(/<input type="checkbox"[^>]*aria-label="whole list"[^>]*>/g) ?? [];
     // The stop words are handed whole; the words, the one list left to run over, are not offered it.

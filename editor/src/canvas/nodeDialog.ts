@@ -4,16 +4,16 @@
 // shows at once, and is written into the graph a moment later (`write`) -- as
 // one undo step with what was typed into the same field just before
 // (`graphStore.commit`), so a word typed is one step and not one per keystroke.
-// A field is what was typed into, not the setting it writes: the example and
-// the judge's sentence are both the node's examples (`UndoStep`). What is not
-// typing -- a file dropped in, a result kept, a box ticked -- is a step of its
+// A field is what was typed into, not the setting it writes: ✨ Input's prompt
+// and ✨ Output's are both the node's prompts (`UndoStep`). What is not
+// typing -- a file dropped in, what ✨ wrote, a box ticked -- is a step of its
 // own, written at once after what was typed before it. Undo takes it back, and
 // the dialog shows what Undo left. Closing it writes what is still waiting:
 // nothing is lost, and nothing asks.
 //
-// What cannot be stored yet -- an example that is not JSON, a port name
-// another port has -- is never handed to it: the field holds what was typed and
-// says why (`useTyped`).
+// What cannot be stored yet -- data that is not JSON, a port name another port
+// has -- is never handed to it: the field holds what was typed and says why
+// (`useTyped`).
 //
 // Plain functions, and a hook around them: what the dialog does with a change
 // is what a test does with one (`masterExamples.test.ts`).

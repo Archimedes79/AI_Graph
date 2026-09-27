@@ -1,22 +1,23 @@
 import type { ExecutionResult, GraphNode, Wire } from '@/graph';
 // This module reads the element registry, so no element's `…GuiBuilder.ts` may import
-// it: that would be a cycle through the registry (see `outputFormat.ts`).
+// it: that would be a cycle through the registry (see `document/givenFiles.ts`).
 import { NODE_BUILDERS } from '@/elements/registry';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { filePorts } from '@engine/execution/fileInputs.ts';
 
 /**
- * What the ✨ Generate buttons tell the AI about the world around a node.
+ * What ✨ tells the model about the world around a node.
  *
- * A node's own description says what the user wants; these say what the node is
- * actually wired to and what really flowed through it. Without them a model has
- * to guess the shape of its inputs, and a small local model guesses badly.
+ * A node's text says what the person wants; these say what the node is wired
+ * to and what really flowed through it. Without them a model has to guess what
+ * arrives, and a small local model guesses badly.
  *
  * They are facts, not sentences: which node feeds each input and what it hands
  * on (`inputSources`), where each output goes and what the node there wants
  * (`outputTargets`), what arrived on the last run (`lastRunInputs`). The
  * engine's brief (`engine/src/host/editor/brief.ts`) is the one place they are
- * put into words, for a body and a system prompt alike.
+ * put into words: {Input Definition} and {Output Definition} while a node has
+ * none of its own.
  */
 
 /**
@@ -32,26 +33,20 @@ export function describeNodeOutput(node: GraphNode): string {
 }
 
 /**
- * The input ports a running node is handed a file's text on: the ones step 1
- * ticks "Read the file at this path", of a kind that reads its files -- the
- * engine's own rule (`fileInputs.ts#filePorts`), so the two cannot disagree
- * on which.
- *
- * A sample holds what came off the wire -- the path. The server reads these
- * before it shows the sample to the model or tries the code on it, as a run
- * does. And a file picked or dropped as step 1's example for one of them is
- * kept as its path, which is what a run hands the node there.
+ * The input ports a running node is handed a file's text on: the ones ticked
+ * "Read the file at this path", of a kind that reads its files -- the engine's
+ * own rule (`fileInputs.ts#filePorts`), so the two cannot disagree on which.
+ * What the graph hands one of them is the file ✨ Input writes from while the
+ * node has none of its own (`exampleFile.ts`).
  */
 export function readFilePorts(node: GraphNode): string[] {
   return filePorts(node, engineRegistry);
 }
 
 /**
- * The raw values this node's input ports received on the last run: shown to
- * the model as the sample, and what the server runs the generated function
- * against, repairing the code if it fails (see
- * engine/src/host/editor/generate.ts). Undefined when the node has never run, which turns the
- * verification pass off rather than inventing a sample.
+ * The raw values this node's input ports received on the last run -- a path,
+ * where one was read -- or undefined when it has not run: where the file ✨
+ * Input writes from may come from (`exampleFile.ts`).
  */
 export function lastRunInputs(
   nodeId: string,

@@ -18,7 +18,7 @@ const OUTPUT = new OutputNodeRunner();
  * second name for that, and a window of its own in the editor; a page is
  * where a result is shown.
  */
-export default function OutputNodePanel({ node, setConfig, fields }: NodePanelProps) {
+export default function OutputNodePanel({ node, setConfig, setDescription }: NodePanelProps) {
   const mode = node.config.write_mode;
   const writes = mode === 'file' || mode === 'directory';
   // The key its value really gets in the run's result: its name, unless an
@@ -80,7 +80,7 @@ export default function OutputNodePanel({ node, setConfig, fields }: NodePanelPr
           className="w-full rounded-lg px-3 py-2 text-sm resize-y"
           style={{ ...FIELD, minHeight: 56 }}
           value={node.description}
-          onChange={(e) => fields.set('description', e.target.value)}
+          onChange={(e) => setDescription(e.target.value)}
           placeholder="e.g. one row per country, with its population"
           aria-label="What the result is"
         />

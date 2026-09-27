@@ -59,13 +59,22 @@ export type NodeConfig = {
   catch_errors: boolean;
   code: string;
   /**
-   * What ✨ Generate is sent -- the template, then the request after its
-   * `Prompt:` line (`@engine/authoring/promptFile.ts`): `prompt.md` in a
-   * project. A subgraph node's is a bare request: what the part is for.
+   * An ai node's instructions, with {Node Description} and {Output Definition}
+   * filled in when it runs: `prompt.md` in a project. Empty: the standard ones.
    */
   prompt: string;
-  /** The requests sent before, newest first: `prompt.history.md` in a project. */
-  prompt_history?: string;
+  /** What one call of a code or ai node is handed: `input.js`, a JSDoc typedef and one example. See engine `authoring/definition.ts`. */
+  input_definition?: string;
+  /** What one call of a code or ai node returns: `output.js`. Its example's keys are the outputs. */
+  output_definition?: string;
+  /** Every exchange with the model about the node: `history.md`. See engine `authoring/history.ts`. */
+  history?: string;
+  /** The ✨ prompts someone changed, by what they write; the others are the standard ones (`authoring/prompts.ts`). */
+  prompts?: Partial<Record<'input' | 'output' | 'body', string>>;
+  /** The files ✨ Input writes a code or ai node's input definition from -- examples, a spec; none: the one the graph hands it. */
+  input_files?: string[];
+  /** The files ✨ Output writes its output definition from, where it is given some. */
+  output_files?: string[];
   /** A data node: what kind of value it holds. */
   data_format: 'text' | 'structure';
   /** A data node: the value it holds, and hands on until something arrives. */
@@ -73,18 +82,6 @@ export type NodeConfig = {
   extensions: string;
   gui_widgets: GuiWidget[];
   input_mode: 'text' | 'directory';
-  /** The output format in words: `output.md` in a project. */
-  output_format_prompt: string;
-  /** The message an ai node sends, with `{{port}}` where a port's value goes: `message.md`. Empty: send what arrived. */
-  message_template?: string;
-  /** An ai node's `run.js` when somebody changed it; absent or empty for the standard one. */
-  run_code?: string;
-  /** Inputs and what must come out, as Markdown: `examples.md` in a project. See engine `execution/examples.ts`. */
-  examples?: string;
-  /** The files an example reads, by the name it gives them ("example/rows.csv"): `example/` in a project. See engine `execution/exampleFiles.ts`. */
-  example_files?: Record<string, string>;
-  /** A code node's output interface (JSON Schema), set from a run: in its `interface.json` in a project. */
-  output_schema?: unknown;
   /** Tool servers an ai node may call, one per line: a URL, or a name this machine configured. */
   mcp_servers?: string;
   /** A trigger node: fire when the tool starts, and again this often (`5m`). */
@@ -95,7 +92,6 @@ export type NodeConfig = {
   prompt_at_runtime: boolean;
   recursive: boolean;
   send_images: boolean;
-  system_prompt: string;
   /** Unset: the model's own default -- current Claude models refuse one at all. */
   temperature?: number;
   value?: string | null;

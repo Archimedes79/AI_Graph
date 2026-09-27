@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shapeToKeep, useGraphStore } from './graphStore';
+import { useGraphStore } from './graphStore';
 import type { Graph, GraphNode } from '@/graph';
 import { guiWidgetPorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
@@ -415,31 +415,20 @@ describe('graphStore, a project open on disk', () => {
     loadTestGraph([codeNode()]);
     useGraphStore.getState().markSaved();
     useGraphStore.getState().updateNode('count', { label: 'Renamed here' });
-    useGraphStore.getState().takeDiskChanges([{ node_id: 'count', field: 'prompt', value: 'Count.' }]);
+    useGraphStore.getState().takeDiskChanges([{ node_id: 'count', field: 'input_definition', value: 'module.exports = null;' }]);
     expect(useGraphStore.getState().isDirty()).toBe(true);
     expect(nodeById('count').label).toBe('Renamed here');
   });
 
-  it('sets a code node\'s output interface from its first successful run, and keeps it after', () => {
+  it('keeps nothing of a run in the node: what goes out is what its output.js says', () => {
     loadTestGraph([codeNode()]);
-    const ran = (total: unknown) => useGraphStore.getState().setExecutionResult({
+    const before = nodeById('count');
+    useGraphStore.getState().setExecutionResult({
       status: 'success', outputs: {}, error: null,
-      node_results: [{ node_id: 'count', status: 'success', inputs: {}, outputs: { total }, error: null }],
+      node_results: [{ node_id: 'count', status: 'success', inputs: {}, outputs: { total: 7 }, error: null }],
     });
-    ran(7);
-    expect(nodeById('count').config.output_schema).toEqual({ type: 'object', properties: { total: { type: 'integer' } }, required: ['total'] });
-    ran('seven');
-    expect(nodeById('count').config.output_schema).toMatchObject({ properties: { total: { type: 'integer' } } });
-  });
-
-  it('keeps a measured shape by one rule, whoever measured it: once, of something, for a node that keeps one', () => {
-    // The run, the dialog's ✨ and the sweep's each wrote their own copy of it.
-    const code = NODE_KINDS.code.create('c');
-    expect(shapeToKeep(code, { total: 1 })).toMatchObject({ properties: { total: { type: 'integer' } } });
-    expect(shapeToKeep(code, {})).toBeUndefined();
-    expect(shapeToKeep(code, undefined)).toBeUndefined();
-    expect(shapeToKeep({ ...code, config: { ...code.config, output_schema: { type: 'object' } } }, { total: 1 })).toBeUndefined();
-    expect(shapeToKeep(NODE_KINDS.data.create('d'), { output: 1 })).toBeUndefined();
+    expect(nodeById('count')).toBe(before);
+    expect(useGraphStore.getState().isDirty()).toBe(false);
   });
 });
 

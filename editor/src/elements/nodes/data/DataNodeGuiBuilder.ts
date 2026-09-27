@@ -11,7 +11,7 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  readonly label = 'Data Node';
+  readonly label = 'Data';
 
   readonly hint = 'Remember a value between runs, so a loop can build on its own last result';
 
@@ -20,8 +20,11 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
   readonly color = 'var(--ui-node-data, #183b3b)';
 
   // A data node IS the graph's register: it holds its value between runs,
-  // which is what lets a feedback edge into it close a cycle. Its dialog is
-  // that value -- its kind and what it holds -- and nothing to write or generate.
+  // which is what lets a feedback edge into it close a cycle. Its panel is its
+  // text, that value -- its kind and what it holds -- and ✨ Data, which writes
+  // the value from the text.
+  override readonly ownsDescription = true;
+
   override readonly Panel = lazy(() => import('./DataNodePanel'));
 
   // The node reads "input" and hands on "output" by those names.
@@ -33,16 +36,16 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
       : 'What it holds: what arrived last, or the value above until something does.';
   }
 
-  /** A file dropped on it on the canvas is what it holds from now on (`withExampleValue`). */
-  override dropPort(node: GraphNode): string | undefined {
-    return node.inputs[0]?.id;
+  /** A file dropped on it on the canvas is what it holds from now on: what the file says. */
+  override dropPort(): 'text' {
+    return 'text';
   }
 
-  override withExampleValue(node: GraphNode, _port: string, value: unknown): GraphNode {
+  override withDropped(node: GraphNode, value: unknown): GraphNode {
     return { ...node, config: { ...node.config, data_value: value } };
   }
 
-  /** Its kind, and what its description says it holds: what the nodes wired to it are told it hands on. */
+  /** Its kind, and what its text says it holds: what the nodes wired to it are told it hands on. */
   override describeOutput(node: GraphNode): string {
     return describeDataFormat(node);
   }
@@ -56,9 +59,7 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
 
   /**
    * What it stores is what it hands on, until something new arrives: asked of
-   * the engine's element, which a run asks. A structure node that holds
-   * nothing hands on null, and ✨ was shown nothing where the next node is
-   * handed null; an empty text is still nothing to write code against.
+   * the engine's element, which a run asks. An empty text is nothing to hand on.
    */
   override restingValue(node: GraphNode): unknown {
     const handed = DATA.config(node as never).value;

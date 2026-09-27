@@ -1,21 +1,18 @@
 // A node's build-time half, in the browser: the mirror of `engine/src/elements/NodeRunner.ts`.
 
 import type { ComponentType, ReactNode } from 'react';
+import type { AICall } from '@/api/client';
 import type { Graph, GraphNode, NodeResult, NodeType } from '@/graph';
-import type { ChangeAsked, ElementGeneration, FieldAccess } from '@/authoring/generation';
-import { describeDeclaredOutput } from '@/authoring/outputFormat';
-import { asExampleText, readPair, withInput } from '@/authoring/examplePair';
-import { requestOf } from '@engine/authoring/promptFile.ts';
+import type { Refine, Write } from '@/authoring/generation';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
 import { previewOf, type PortPreviews } from './resultPreview';
 
 /**
  * Which undo step a change made in a node's dialog is (`canvas/nodeDialog.ts`).
  * Typing is one step with what was typed into the same field a moment before:
- * the setting's own field, unless `{ field }` names the one typed into -- the
- * example and the judge's sentence are both the node's examples, and two
- * fields. `ONCE` is what is not typing -- a file dropped in, a result kept, a
- * box ticked -- written at once, as a step of its own.
+ * the setting's own field, unless `{ field }` names the one typed into. `ONCE`
+ * is what is not typing -- a file dropped in, a box ticked, what ✨ wrote --
+ * written at once, as a step of its own.
  */
 export const ONCE = 'once';
 export type UndoStep = typeof ONCE | { field: string };
@@ -42,46 +39,38 @@ export interface NodePanelProps {
   setConfig: (key: string, value: unknown, step?: UndoStep) => void;
   /** Changes the node as a whole, for a setting that is a port and a key at once ("Run once per item"). */
   updateNode: (change: (node: GraphNode) => GraphNode, step?: UndoStep) => void;
-  /**
-   * The node's settings and description by name: what ✨ fills in, and what a
-   * panel writes the description through. Whether the element authors a body
-   * at all is its own `builder.generation`.
-   */
-  fields: FieldAccess;
+  /** Writes the node's text -- what it should do, in words -- as typed. */
+  setDescription: (text: string) => void;
+  /** ✨ is writing now. */
   generating: boolean;
+  /** What the last ✨ said. */
   message?: string;
   /**
-   * ✨: write the body anew -- or, asked with *change*, change the body there
-   * is ("Say what to change", ✨ Fix). Resolves to whether something was
-   * written, as one undo step.
+   * ✨: write *write* -- for the body of a node with definitions, what is
+   * missing first -- or, asked with *refine*, change the body there is
+   * ("Say what to change", ✨ Fix). Resolves to whether something was written.
    */
-  onGenerate: (change?: ChangeAsked) => Promise<boolean>;
-  /**
-   * What only the dialog has, for a panel that authors a body in the four
-   * steps (`FourSteps`): the "what ✨ sends" button and what it sends, "open
-   * in my editor" -- and, where the ports are the person's to name
-   * (`stepped`), the two port lists, for "What comes in" and "What comes out".
-   */
-  steps?: {
-    inputs?: ReactNode;
-    outputs?: ReactNode;
-    preview?: ReactNode;
-    sent?: ReactNode;
-    openInEditor?: ReactNode;
-    /**
-     * The graph on the canvas with this node as the dialog shows it: what Try
-     * it and the model's request are asked of is the edit.
-     */
+  onGenerate: (write: Write, refine?: Refine) => Promise<boolean>;
+  /** What only the dialog has, for a panel of a node ✨ writes for. */
+  shell?: {
+    /** The graph on the canvas with this node as the dialog shows it: what ▶ Try is asked of is the edit. */
     graph: () => Graph;
-    /** ⟳ From the graph: what arrives at the node -- on the last run, else from what feeds it, run now. Absent for a node nothing can feed. */
-    fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
+    /** What *write*'s ✨ would send, filled in, without sending it. */
+    preview: (write: Write) => Promise<AICall[]>;
+    /** The file the graph hands one of this node's file-reading inputs -- a picker's value, a path the last run brought -- or undefined. */
+    graphFile: () => Promise<string | undefined>;
+    /** Write what the dialog still holds into the graph now: before a project is saved to open one of its files. */
+    flush: () => void;
   };
 }
 
 export type PortEditing = 'edit' | 'fixed' | 'none';
 
-/** The folded-away settings most people never touch. */
-export type NodeAdvancedPanelProps = Pick<NodePanelProps, 'node' | 'setConfig'>;
+/** The folded-away settings most people never touch -- and, where they are the node's own to edit, its ports. */
+export type NodeAdvancedPanelProps = Pick<NodePanelProps, 'node' | 'setConfig' | 'updateNode'> & {
+  /** The ports editor, drawn by the dialog, for a node that keeps its ports among these settings (`definesItself`). */
+  ports?: ReactNode;
+};
 
 export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
   // ── What it is ────────────────────────────────────────────────────────────
@@ -94,10 +83,10 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
   // deployed tool reads without this class.
 
   // ── Build time ────────────────────────────────────────────────────────────
-  // The editor: the palette, a new element, its panels, what ✨ Generate is told.
+  // The editor: the palette, a new element, its panels, what ✨ is told.
   // It travels into a tool with the class, and no tool calls it (`runtime/boundary.test.ts`).
 
-  /** What the palette and the node's header call it. */
+  /** What the palette calls it, and what a new one's heading starts with: "Code 1". */
   abstract readonly label: string;
 
   /** Shown on hover in the palette: what the node is for, in one line. */
@@ -109,13 +98,6 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
   abstract readonly color: string;
 
   /**
-   * The ✨ Generate button this node offers, mirroring the engine's
-   * `NodeRunner.generation()`. Absent for a node that authors nothing, which
-   * is what decides whether a button is drawn at all.
-   */
-  readonly generation?: ElementGeneration;
-
-  /**
    * The settings most people never touch, drawn folded away under everything
    * else, so that opening a node shows what it *does* and not a form.
    */
@@ -125,26 +107,24 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
   readonly advancedSummary?: string;
 
   /**
-   * The panel already covers what the node is for -- a prompt box, a code
-   * body -- so the shell draws no separate "Description" field above it.
+   * The panel draws the node's text itself -- what it should do, the text ✨
+   * writes from -- so the dialog draws no description box of its own above it.
    */
   readonly ownsDescription?: boolean;
 
   /**
-   * The dialog is laid out as the four steps of building the node -- what
-   * comes in, what comes out, what it should do, and how, tried right there --
-   * with the ports inside those steps rather than in a list of their own. For
-   * the nodes whose body is written against its ports: ai and code.
+   * A node that says what its ports carry in its definitions (input.js,
+   * output.js): a code or an ai node. Its ports are edited among its Advanced
+   * settings, without a type per port -- an input's follows its wire -- and
+   * its outputs follow its output definition.
    */
-  readonly stepped: boolean = false;
+  readonly definesItself: boolean = false;
 
   /**
    * How much of each side's ports is the person's to change.
    * `edit`: add, remove, rename, type. `fixed`: the node reads them by name,
    * so they are shown and not changed. `none`: the side is not shown; the
-   * node has no such ports. What a port carries is not written per port: an
-   * input's comes from what is wired into it, an output's is said once, in
-   * step 2's words. Only asked where the ports are not derived (`derivedNodePorts`).
+   * node has no such ports. Only asked where the ports are not derived (`derivedNodePorts`).
    */
   readonly portEditing: { inputs: PortEditing; outputs: PortEditing } = { inputs: 'edit', outputs: 'edit' };
 
@@ -154,48 +134,27 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
   }
 
   /**
-   * What this node emits, in one line, for its neighbours' generation context.
-   * The node's declared output by default -- its words, and the shape a run
-   * kept, which is the best description there is of what the next
-   * node will be handed. A node whose output is something else says that.
+   * What this node hands on, in words, for the nodes it feeds: their ✨ is
+   * told it beside the wire. Nothing by default; a node whose output
+   * definition says it, or whose kind does, says that.
    */
-  describeOutput(node: GraphNode): string {
-    return describeDeclaredOutput(node.config);
+  describeOutput(_node: GraphNode): string {
+    return '';
   }
 
   /**
-   * *node* with step 1's example holding *value* on *port*, beside what else
-   * it holds there: what a file dropped on the node on the canvas does. The
-   * first pair of `examples.md` by default, which is the example.
+   * What a file dropped on the node on the canvas gives it, or undefined where
+   * a drop means nothing to it: a code or an ai node takes the file as its
+   * example file (by *path*), a data node what the file says (*text*), as what
+   * it holds. Only the one that is used is asked for.
    */
-  withExampleValue(node: GraphNode, port: string, value: unknown): GraphNode {
-    const examples = withInput(node.config.examples, asExampleText({ ...readPair(node.config.examples).input, [port]: value }));
-    return { ...node, config: { ...node.config, examples } };
+  dropPort(_node: GraphNode): 'path' | 'text' | undefined {
+    return undefined;
   }
 
-  /**
-   * The input a file dropped on the node on the canvas fills
-   * (`withExampleValue`), or undefined where a drop means nothing: by default
-   * the one input of a node built in the four steps, whose example it becomes.
-   */
-  dropPort(node: GraphNode): string | undefined {
-    return this.stepped && node.inputs.length === 1 ? node.inputs[0].id : undefined;
-  }
-
-  /**
-   * The description a saved node publishes (the "description" in its
-   * nodes/<id>/node.json). Where the dialog asks what the node should do in a
-   * field of its own and draws no description box (`ownsDescription`), that
-   * request *is* the description, written into it whenever the dialog writes: a
-   * second text nobody could see or edit went on being published beside the
-   * request, and the two drifted apart. The request alone, not the template
-   * of the `prompt.md` it ends; an empty one leaves what was there.
-   */
-  publishedDescription(node: GraphNode): string {
-    const field = this.generation?.promptField;
-    if (!this.ownsDescription || !field) return node.description;
-    const request = requestOf(String((node.config as unknown as Record<string, unknown>)[field] ?? '')).trim();
-    return request || node.description;
+  /** *node* holding *value* from a file dropped on it: see `dropPort`. */
+  withDropped(node: GraphNode, _value: unknown): GraphNode {
+    return node;
   }
 
   /** A line of what the node holds, shown on the canvas under its ports. Nothing, for most. */
@@ -219,8 +178,8 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
   }
 
   /**
-   * The node is a source whose data nothing describes yet -- no sample, no
-   * contract -- so a generation sweep would be written against a guess.
+   * The node is a source whose data nothing describes yet -- no file or
+   * folder to read -- so a generation sweep would be written against a guess.
    * `fed`: something upstream feeds it.
    */
   missingExample(_node: GraphNode, _fed: boolean): boolean {
@@ -229,8 +188,8 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
 
   /**
    * What this node hands on from one output port without running anything --
-   * a typed text, a stored value -- or undefined. A node wired to it is shown
-   * this as its sample before the graph has ever run, rather than nothing.
+   * a typed text, a picked file -- or undefined: where a node wired to it
+   * finds the file its example is taken from before the graph has ever run.
    */
   restingValue(_node: GraphNode, _port: string): unknown {
     return undefined;

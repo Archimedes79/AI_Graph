@@ -23,6 +23,8 @@ export interface GenerateOptions<T> {
    */
   success: string | ((result: T) => string);
   failure?: string;
+  /** Told the calls of a generation that failed, which are worth keeping as much as those of one that worked. */
+  failed?: (calls: AICall[]) => void;
 }
 
 /**
@@ -74,6 +76,7 @@ export function useGenerate() {
     } catch (error) {
       const calls = error instanceof ApiError ? error.body.calls : undefined;
       if (calls) setTranscript(calls);
+      if (calls?.length) options.failed?.(calls);
       setMessage(`❌ ${errorText(error, options.failure ?? 'Generation failed')}`);
       return false;
     } finally {

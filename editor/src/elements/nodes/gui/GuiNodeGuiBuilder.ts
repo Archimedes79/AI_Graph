@@ -71,6 +71,16 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
     return wants ? `${wants}; ${[size, text].filter(Boolean).join(', ')}` : [text, size].filter(Boolean).join(', ');
   }
 
+  /**
+   * What a block hands on before anything has run: the file a picker is set
+   * to, the text typed into a box. What a folder picker lists, a run lists.
+   */
+  override restingValue(node: GraphNode, port: string): unknown {
+    const widget = widgetOfPort(node, port);
+    if (!widget || widget.mode === 'directory' || port !== `${widget.id}_out`) return undefined;
+    return typeof widget.value === 'string' && widget.value.trim() ? widget.value : undefined;
+  }
+
   override describeOutput(): string {
     return 'values from its blocks';
   }

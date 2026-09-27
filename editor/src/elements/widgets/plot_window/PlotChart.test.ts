@@ -174,7 +174,7 @@ describe('a chart on the page, handed what it cannot draw', () => {
   });
 
   it('shows the title of a figure with no points: population_plotter before a file is chosen', () => {
-    // Its examples.md promises "the chart says what to do"; it said "Waiting for data".
+    // Its code promises "the chart says what to do" (its output.js title); it said "Waiting for data".
     const html = chart({ kind: 'bars', title: 'Choose a CSV file to plot.', points: [] });
     expect(html).toContain('Choose a CSV file to plot.');
     expect(html).not.toContain('Waiting for data');
