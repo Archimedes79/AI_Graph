@@ -8,6 +8,7 @@ import { inferInterface } from '../../execution/interface.ts';
 import { parseGraph } from '../../graph.ts';
 import { GenerationFailed, GenerationRefused, generate, generateGraph } from './generate.ts';
 import { nodeCode } from '../node.ts';
+import type { GenerateRequest } from '../api.ts';
 
 /**
  * Writing a body with a model, without a model.
@@ -493,19 +494,14 @@ describe('prose', () => {
     const reply = await generate({ element: 'data', description: 'x' }, { ai, code: runner(() => ({})), generationFor, target });
     expect(reply.result).toBe('Just text.');
   });
-
-  it('answers an output-format request that belongs to no element', async () => {
-    const ai = scripted(['<output_format>{ total: number }</output_format>']);
-    const reply = await generate({ kind: 'output_format', description: 'x' }, { ai, code: runner(() => ({})), generationFor, target });
-    expect(reply.result).toBe('{ total: number }');
-  });
 });
 
 describe('refusals and failures', () => {
-  it('refuses an element that generates nothing, and an unknown kind', async () => {
+  it('refuses an element that generates nothing, and a request that names no element', async () => {
     const deps = { ai: scripted([]), code: runner(() => ({})), generationFor, target };
     await expect(generate({ element: 'output', description: 'x' }, deps)).rejects.toBeInstanceOf(GenerationRefused);
-    await expect(generate({ kind: 'nope', description: 'x' }, deps)).rejects.toBeInstanceOf(GenerationRefused);
+    // What arrives over the wire is not held to the type: a body without one.
+    await expect(generate({ description: 'x' } as GenerateRequest, deps)).rejects.toBeInstanceOf(GenerationRefused);
   });
 
   it('hands the transcript back with a failure, since that is when it is worth reading', async () => {

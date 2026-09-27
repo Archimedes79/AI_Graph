@@ -2,9 +2,9 @@
 //
 // One entry point, for every element that generates anything: the element
 // says what kind of body it wants (`Generation`), and this says how to ask for
-// it. Four kinds — code, a system prompt, an output-format description, a data
-// node's format contract — plus authoring a whole graph, which shares neither
-// the request nor the answer and so stands apart.
+// it. Three kinds — code, a system prompt, a data node's format contract —
+// plus authoring a whole graph, which shares neither the request nor the
+// answer and so stands apart.
 //
 // Code is not one call. It is generated, run once against real data when the
 // caller has some, and repaired once with the evidence when that run fails —
@@ -186,13 +186,6 @@ const PROMPT_SYSTEM =
   'You are an expert prompt engineer. Given a natural language description of a task, generate a '
   + 'concise, effective system prompt for an AI assistant. Output the system prompt as plain text '
   + 'inside <system_prompt> tags, then a brief explanation.';
-
-const OUTPUT_FORMAT_SYSTEM =
-  'You are an expert at specifying data output formats/shapes for software functions. Given a natural '
-  + 'language description of a task, produce a concise, unambiguous description of the exact output '
-  + 'format/shape the function should return (field names, types, nesting). This text is injected into '
-  + 'other AI generation prompts verbatim -- it is descriptive, not executable code. Output the format '
-  + 'description as plain text inside <output_format> tags, then a brief explanation.';
 
 const DATA_FORMAT_SYSTEM =
   'You are an expert at designing the data format/schema a graph "data" node should persist. Given a task '
@@ -528,8 +521,11 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   // run would read it (`asReceived`), shown in the brief and tried the code on.
   const ran = asked.sample_inputs && Object.keys(asked.sample_inputs).length;
   const exampled = ran ? undefined : exampleSample(asked.examples);
-  const spec = asked.element ? deps.generationFor(asked.element) : undefined;
-  if (asked.element && !spec) throw new GenerationRefused(`'${asked.element}' is not an element that generates anything`);
+  // What is written, and how, is the element's to say: a request that names
+  // none has nobody to ask.
+  if (!asked.element) throw new GenerationRefused('A generation names the element it writes for.');
+  const spec = deps.generationFor(asked.element);
+  if (!spec) throw new GenerationRefused(`'${asked.element}' is not an element that generates anything`);
   const whole = exampled ? { ...asked, sample_inputs: exampled.values } : asked;
   // One item of it, for a node run once per item: what its body is called with.
   const cut = runsPerItem(whole, spec) ? oneItem(whole) : undefined;
@@ -539,7 +535,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   // there: the request it hands back is the request, not a second rendering
   // of it that could differ.
   const ai = recording(request.preview ? PREVIEW_AI : deps.ai, calls);
-  const kind = spec?.kind ?? request.kind ?? '';
+  const kind = spec.kind;
 
   // An element that calls the body itself says in its contract how: that is
   // the function to complete, said where the function is, not beside it.
@@ -582,15 +578,13 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
         const { text, explanation } = await generateTagged(ai, deps.target, PROMPT_SYSTEM, 'system_prompt', prompt);
         return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [] }, calls };
       }
-      case 'output_format':
       case 'data_format': {
-        const system = kind === 'output_format' ? OUTPUT_FORMAT_SYSTEM : DATA_FORMAT_SYSTEM;
         const prompt = `Task description: ${request.description}${context ? `\n\nAdditional context: ${context}` : ''}`;
-        const { text, explanation } = await generateTagged(ai, deps.target, system, kind, prompt);
+        const { text, explanation } = await generateTagged(ai, deps.target, DATA_FORMAT_SYSTEM, 'data_format', prompt);
         return { result: text, explanation, probe: { status: 'skipped', attempts: 0, error: '', missing_outputs: [] }, calls };
       }
       default:
-        throw new GenerationRefused(`Unknown generation kind '${kind}'`);
+        throw new GenerationRefused(`Unknown generation kind '${String(kind)}'`);
     }
   } catch (error) {
     if (error instanceof PreviewReached) {

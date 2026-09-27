@@ -94,10 +94,8 @@ export interface Watched { progress_id?: string }
 
 /** One element's body to write. The element's own `Generation` decides the rest. */
 export interface GenerateRequest {
-  /** A node type or block kind. */
-  element?: string;
-  /** For the one generation that belongs to no element: an output-format description. */
-  kind?: string;
+  /** A node type or block kind: whose `Generation` says what is written and how. */
+  element: string;
   description: string;
   context?: string;
   inputs?: string[];
