@@ -56,6 +56,24 @@ describe('the graph prompt', () => {
     }
   });
 
+  it('says which derived input ports carry a number, not text', () => {
+    // A port named without its type reads as text, and a graph built on that
+    // reading adds "3" to "4" and gets "34". Every derived number port is
+    // named with what it holds, so a directory's count is used as a count.
+    const element = new InputNodeRunner();
+    const node = (mode: string): GraphNode => ({
+      id: 'i', node_type: 'input', label: '', description: '', position: { x: 0, y: 0 },
+      inputs: [], outputs: [], config: { input_mode: mode },
+    });
+    const numbers = ['text', 'file', 'directory']
+      .flatMap((mode) => element.derivedPorts(node(mode))!.outputs)
+      .filter((port) => port.data_type === 'number');
+    expect(numbers.map((port) => port.id)).toContain('count');
+    for (const port of numbers) {
+      expect(GRAPH_SYSTEM, `${port.id} is said to be a number`).toContain(`"${port.id}" (a number`);
+    }
+  });
+
   it('names every node type the registry knows, except the ones that say a graph is not built with them', () => {
     const silent: string[] = [];
     for (const type of registry.nodeTypes()) {

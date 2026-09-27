@@ -68,7 +68,7 @@ Never leave a code or ai node as the end of a branch: its result would go nowher
 const DERIVED_PORTS = `The ports of an input node and of a gui node are DERIVED by the engine from their settings, not taken from this document. Declare exactly these or the edges will carry nothing:
 - input with input_mode "text": one output "output".
 - input with input_mode "file": outputs "content" (the file's text) and "path"; one input "path" that overrides the configured one.
-- input with input_mode "directory": outputs "files" (a list of paths, multi) and "count"; one input "path".
+- input with input_mode "directory": outputs "files" (a list of paths, multi) and "count" (a number, how many files were listed); one input "path".
 - trigger: one output "fired", a boolean that is true in the round the trigger started. Wire it into a node's "__run", or into a named boolean input of a code node.
 - gui: every block contributes "<block id>_out", "<block id>_in", or both. A block is {"id", "kind", "label", "w" (1-16 columns), "h" (rows), ...}; kinds are text (mode heading|body|caption, value = the words), divider, input_picker (mode file|directory, value = path), text_io (mode input|output), select (options = one per line), slider (min, max, step), button, chat, table, plot_window, image_view.
 - a "chat" block keeps the conversation itself and contributes "<id>_out" (the message just sent), "<id>_history" (everything before it) and "<id>_in" (the reply). A chatbot is therefore TWO nodes: a gui node with one chat block, and an ai node with inputs "history" and "message" wired from it and its "output" wired back to "<id>_in". Do not add data or code nodes to hold the conversation.
