@@ -28,10 +28,15 @@ export function exampleProblem(text: string | undefined): string {
  * sent or run: what the block hands on, made the way a run makes it. A folder
  * picker lists its folder and runs its selector here exactly as it does on the
  * page, through the same element.
+ *
+ * A failure is said, not caught: a block told to catch its failures put the
+ * reason on its error port and handed on nothing, so a folder that does not
+ * exist was listed as "0 files" and handed to ✨ as an empty listing. An input
+ * node read for its example is read the same way (`readAsRun`).
  */
 export async function runBlockAlone(widget: GuiWidget): Promise<TryResult> {
   const blank = NODE_KINDS.gui.create('page');
-  const page = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [widget] } });
+  const page = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [{ ...widget, catch_errors: false }] } });
   const graph = { metadata: useGraphStore.getState().metadata, nodes: [page], edges: [] };
   const result = await call('runNode', { ...graph, node_id: page.id, inputs: {} });
   return { status: result.status, shown: result.outputs?.[`${widget.id}_out`], error: result.error, messages: result.messages };

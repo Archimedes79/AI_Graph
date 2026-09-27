@@ -13,7 +13,7 @@ vi.mock('@/api/client', async (original) => ({
   }),
 }));
 
-const { tryBlock } = await import('./blockStepRules');
+const { runBlockAlone, tryBlock } = await import('./blockStepRules');
 
 describe('a block tried by itself', () => {
   it('is sent with the graph it belongs to: code that asks a model asks the graph\'s', async () => {
@@ -29,5 +29,17 @@ describe('a block tried by itself', () => {
       route: 'runBlock',
       body: { value: [{ city: 'Oslo' }], metadata: { ai_defaults: { provider: 'anthropic', model: 'the-graphs-model' } } },
     });
+  });
+
+  it('says a failure rather than catching it, even where the block catches its failures in a run', async () => {
+    // A folder picker told to catch listed a folder that does not exist as
+    // "0 files", and ✨ was handed that empty listing.
+    const picker = { ...WIDGET_BUILDERS.input_picker.create('Source', 'directory'), id: 'pick', catch_errors: true } as GuiWidget;
+    await runBlockAlone(picker);
+    const sent = posted[posted.length - 1];
+    expect(sent.route).toBe('runNode');
+    const page = (sent.body.nodes as { config: { gui_widgets: GuiWidget[] }; outputs: { id: string }[] }[])[0];
+    expect(page.config.gui_widgets[0].catch_errors).toBe(false);
+    expect(page.outputs.map((port) => port.id)).not.toContain('pick_error');
   });
 });
