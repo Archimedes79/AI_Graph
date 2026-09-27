@@ -40,7 +40,7 @@ import RunResult from './RunResult';
  * -- and its blocks, as they were drawn. An edit that lands later reads the
  * page from the store as it is then (`pageWrite.ts`).
  */
-export function usePage(): { page: GraphNode | undefined; widgets: GuiWidget[] } {
+export function usePage(): ReturnType<typeof pageOf> {
   return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode));
 }
 
