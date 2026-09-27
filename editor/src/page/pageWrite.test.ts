@@ -38,6 +38,37 @@ describe('the page', () => {
     expect(page().page!.inputs.map((port) => port.id)).toEqual(['answer_in']);
   });
 
+  it('is made by its first block in that block\'s undo step, and one Undo takes both', () => {
+    // Two steps, and one Undo left a page node with no blocks: a page to a
+    // delivered tool and a bundle, which drew nothing on it.
+    const chart = { ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' };
+    insertBlock(chart);
+    expect(store().past).toHaveLength(1);
+    expect(shown()).toEqual([chart]);
+    store().undo();
+    expect(store().rfNodes).toEqual([]);
+    store().redo();
+    expect(shown()).toEqual([chart]);
+  });
+
+  it('goes with its last block', () => {
+    insertBlock({ ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' });
+    removeBlock('chart');
+    expect(store().rfNodes).toEqual([]);
+    // Undo brings the block back, and the page with it.
+    store().undo();
+    expect(shown().map((w) => w.id)).toEqual(['chart']);
+  });
+
+  it('is made beside the nodes on the canvas, not on top of the first', () => {
+    // The palette's first node lands at (200, 120); the page went to (240, 160).
+    const code = store().addNode('code', { x: 200, y: 120 });
+    insertBlock({ ...WIDGET_BUILDERS.text.create('Title', 'heading'), id: 'title' });
+    const at = (id: string) => store().rfNodes.find((n) => n.id === id)!.position;
+    expect(at(page().page!.id).x).toBeGreaterThanOrEqual(at(code).x + 240);
+    expect(at(page().page!.id).y).toBe(at(code).y);
+  });
+
   it('is the first one, where a graph has two -- a problem `check` names -- and the second is left as it is', () => {
     // The page was every gui node's blocks in graph order, and an edit was
     // routed back to whichever node held the block.
@@ -93,7 +124,7 @@ describe('a block edited on the page', () => {
     expect(store().past.length).toBe(undo);
   });
 
-  it('moves a block by place or onto another, and empties the page with its last one', () => {
+  it('moves a block by place or onto another, and takes the page away with its last one', () => {
     for (const id of ['a', 'b', 'c']) insertBlock({ ...WIDGET_BUILDERS.text.create(id), id });
     moveBlock('c', 0);
     expect(shown().map((w) => w.id)).toEqual(['c', 'a', 'b']);
@@ -104,6 +135,6 @@ describe('a block edited on the page', () => {
     insertBlock({ ...WIDGET_BUILDERS.divider.create(''), id: 'd' }, 1);
     expect(shown().map((w) => w.id)).toEqual(['a', 'd', 'b', 'c']);
     for (const id of ['a', 'd', 'b', 'c']) removeBlock(id);
-    expect(page().page!.config.gui_widgets).toEqual([]);
+    expect(page().page).toBeUndefined();
   });
 });

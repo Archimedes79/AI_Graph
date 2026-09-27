@@ -697,7 +697,9 @@ graph is.
 A graph has **one page**: an ordered list of **blocks**. In the file it is the one node of
 type `gui`, its blocks in `config.gui_widgets` — the format's names; on screen it is the
 page and its blocks, and nothing else. It is made on the **Page** tab by its first block,
-not dropped from the palette; a second `gui` node is a problem `check` names, and only the
+not dropped from the palette, and goes with its last: a page is its blocks, and a tool
+whose page has none shows what it does and its run's result, as a tool without a page
+does. A second `gui` node is a problem `check` names, and only the
 first is shown. The page has no name of its own: the tool is called what the graph is, and
 the graph's name and description are edited above the page and shown in the delivered
 tool's header.

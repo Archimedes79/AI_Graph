@@ -18,7 +18,7 @@ import { DiskChanges } from '@/app/diskChanges';
 import Modal from '@/ui/Modal';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 
-import { useGraphStore } from '@/store/graphStore';
+import { besideTheRest, useGraphStore } from '@/store/graphStore';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { NodeType, Graph } from '@/graph';
@@ -197,19 +197,9 @@ export default function App() {
     };
   }, [handleGraphFileDrop, handleProjectFolderDrop]);
 
-  // Add a node from a palette click
+  // Add a node from a palette click: beside what is already there.
   const handleAddNode = useCallback(
-    (nodeType: NodeType) => {
-      // To the right of what is already there, not somewhere at random: a
-      // random spot inside a 200px square put the second node on top of the
-      // first more often than not, and a graph reads left to right anyway. The
-      // gap is generous because a node widens once it is configured (a file
-      // input grows a path field) and must not then cover its neighbour.
-      const placed = useGraphStore.getState().rfNodes;
-      const right = Math.max(0, ...placed.map((node) => node.position.x + (node.width ?? 240)));
-      const top = placed.length ? Math.min(...placed.map((node) => node.position.y)) : 120;
-      addNode(nodeType, placed.length ? { x: right + 160, y: top } : { x: 200, y: 120 });
-    },
+    (nodeType: NodeType) => { addNode(nodeType, besideTheRest(useGraphStore.getState().rfNodes)); },
     [addNode]
   );
 
