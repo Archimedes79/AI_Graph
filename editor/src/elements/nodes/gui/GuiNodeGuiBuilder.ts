@@ -59,14 +59,6 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
    * points to plot, a table rows whose keys become columns. The block says so
    * itself (`WidgetRunner.receives`); the node only finds which block it is.
    */
-  override describeAsTarget(node: GraphNode, port?: string): string {
-    const widget = port ? widgetOfPort(node, port) : undefined;
-    if (!widget) return super.describeAsTarget(node, port);
-    const wants = receives(widget);
-    const where = `Output goes to the "${widget.label || widget.kind}" block (${widget.kind}) on the page "${node.label}".`;
-    return wants ? `${where} It wants ${wants}` : where;
-  }
-
   override wantsOn(node: GraphNode, port: string): string | undefined {
     const widget = widgetOfPort(node, port);
     return widget ? receives(widget) : super.wantsOn(node, port);

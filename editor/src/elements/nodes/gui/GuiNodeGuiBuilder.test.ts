@@ -12,14 +12,13 @@ function page(widget: GuiWidget): GraphNode {
 const DRAWING_BLOCKS = ['plot_window', 'table', 'image_view'] as const;
 
 /**
- * What a node wired into a block is told to hand it (`wantsOn`,
- * `describeAsTarget`): what goes into that node's ✨ as where its output goes.
+ * What a node wired into a block is told to hand it (`wantsOn`): what goes
+ * into that node's ✨ as where its output goes.
  */
 describe('what a block on a page asks of the node wired into it', () => {
   it('is what its kind draws, while it has no code of its own', () => {
     const table = { ...WIDGET_BUILDERS.table.create('Rows'), id: 'rows' };
     expect(NODE_BUILDERS.gui.wantsOn(page(table), 'rows_in')).toContain('column header');
-    expect(NODE_BUILDERS.gui.describeAsTarget(page(table), 'rows_in')).toContain('It wants rows');
   });
 
   it('is nothing to pre-shape once its own code reads what arrives', () => {
@@ -29,7 +28,6 @@ describe('what a block on a page asks of the node wired into it', () => {
     for (const kind of DRAWING_BLOCKS) {
       const block = { ...WIDGET_BUILDERS[kind].create('Block'), id: 'block', code: 'function run(inputs) { return { value: inputs.value.rows }; }' };
       expect(NODE_BUILDERS.gui.wantsOn(page(block), 'block_in'), kind).toBeUndefined();
-      expect(NODE_BUILDERS.gui.describeAsTarget(page(block), 'block_in'), kind).not.toContain('It wants');
     }
   });
 });

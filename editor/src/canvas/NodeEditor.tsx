@@ -12,7 +12,7 @@ import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, nodeFields, type GenerationRequest } from '@/authoring/generation';
 import { useWhatSends } from '@/authoring/WhatSends';
-import { connectedFormatContext, inputSources, lastRunContext, outputTargets, readFilePorts } from '@/authoring/generationContext';
+import { inputSources, outputTargets, readFilePorts } from '@/authoring/generationContext';
 import { nodeFacts } from '@/authoring/nodeFacts';
 import { fromTheGraph } from '@/authoring/fromTheGraph';
 import { inferInterface } from '@engine/execution/interface.ts';
@@ -157,16 +157,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     setNode((prev) => (prev ? withSetting(prev, rfNode?.data.graphNode, key, value) : prev));
   };
 
-  /**
-   * Everything the generator should know beyond the user's own description:
-   * what the neighbours declare, and what actually flowed through this node the
-   * last time the graph ran.
-   */
-  const surroundingContext = () => [
-    connectedFormatContext(node.id, graphNodes, graphEdges),
-    lastRunContext(node.id, executionResult, readFilePorts(node, graphNodes, graphEdges)),
-  ].filter(Boolean).join('\n\n');
-
   const setDescription = (value: string) =>
     setNode((prev) => (prev ? { ...prev, description: value } : prev));
 
@@ -190,10 +180,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // What the node says about itself -- ports, samples, wiring, format,
       // shape, examples -- as facts the engine writes one brief from.
       ...nodeFacts(node, graphNodes, graphEdges, executionResult),
-      // A node whose body is written against its ports -- ai and code -- says
-      // everything in those facts. The others (a data node's format, an
-      // input's file selector) are still told their neighbours in sentences.
-      graphContext: element.outputContract === 'format' ? undefined : surroundingContext(),
       recordShape: keepsOutputInterface(node)
         ? (outputs) => { if (!draft.current?.config.output_schema) setConfig('output_schema', inferInterface(outputs)); }
         : undefined,

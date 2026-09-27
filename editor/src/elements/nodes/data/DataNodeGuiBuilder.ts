@@ -5,9 +5,6 @@ import { DataNodeRunner } from '@engine/elements/nodes/data/DataNodeRunner.ts';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 import { dataKind, describeDataFormat } from './dataFormat';
 
-/** How much of what it holds ✨ is shown: enough for its shape and a few records. */
-const HELD_BUDGET = 1200;
-
 const DATA = new DataNodeRunner();
 
 /** What it holds, or undefined when it holds nothing. */
@@ -56,14 +53,10 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
     bodyLabel: 'Format',
     bodyPlaceholder: 'Field names, types, dimensions, constraints, and a representative example.',
     bodyHeight: 140,
-    // What it holds now is its example -- the most concrete one there is, and
-    // it was never sent to its own ✨ at all.
-    context: (node) => {
-      const value = held(node);
-      const text = value === undefined ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-      const shown = text.length > HELD_BUDGET ? `${text.slice(0, HELD_BUDGET)}\n… (${text.length - HELD_BUDGET} more characters)` : text;
-      return [`Standard format family: ${dataKind(node)}.`, shown && `What it holds now:\n${shown}`].filter(Boolean).join('\n\n');
-    },
+    // What it holds now is its example (`exampleInput`) -- the most concrete
+    // one there is -- and reaches its ✨ as the sample, in the brief with what
+    // it is wired to. It was also pasted here a second time.
+    context: (node) => `Standard format family: ${dataKind(node)}.`,
   };
 
   /** What it holds is step 1's example: a value of what arrives on its input. */
@@ -83,12 +76,6 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
     return typeof value === 'string' ? value : JSON.stringify(value);
   }
 
-  // The wording for a data node is kept verbatim: its format is the one
-  // contract a user writes deliberately, and existing prompts were tuned to it.
-  override describeAsSource(node: GraphNode, emits: string): string {
-    return `Source data format from "${node.label}": ${emits}`;
-  }
-
   /**
    * What it stores is what it hands on, until something new arrives: asked of
    * the engine's element, which a run asks. A structure node that holds
@@ -102,10 +89,6 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
 
   override wantsOn(node: GraphNode): string {
     return `what it stores: ${describeDataFormat(node)}`;
-  }
-
-  override describeAsTarget(node: GraphNode): string {
-    return `Target data format required by "${node.label}": ${describeDataFormat(node)}`;
   }
 
 }

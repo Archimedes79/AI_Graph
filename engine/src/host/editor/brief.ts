@@ -1,5 +1,5 @@
-// What ✨ Generate is told about a node: one brief, the same for code and for a
-// system prompt.
+// What ✨ Generate is told about a node: one brief, the same for code, for a
+// system prompt and for a data node's format.
 //
 // A body is written against four things, and a node already holds all four:
 //
@@ -99,9 +99,17 @@ export function exampleSample(examples: string | undefined): Sample | undefined 
   return first ? { values: first.inputs, origin: `the example "${first.title}"`, expect: first.expect } : undefined;
 }
 
-function inputsSection(request: GenerateRequest, kind: 'code' | 'prompt', sample?: Sample): string {
+/**
+ * What the brief is for: a body that runs (`code`), a system prompt a model
+ * is sent (`prompt`), or the format a data node holds (`format`) -- which is
+ * written against the same neighbours and sample as code, and is itself the
+ * format, so it is told none.
+ */
+export type BriefKind = 'code' | 'prompt' | 'format';
+
+function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
   const inputs = request.inputs ?? [];
-  const lines = [kind === 'code' ? '## What comes in' : '## What the model is sent'];
+  const lines = [kind === 'prompt' ? '## What the model is sent' : '## What comes in'];
   if (!inputs.length) {
     lines.push('Nothing is wired in.');
     return lines.join('\n');
@@ -136,7 +144,7 @@ function inputsSection(request: GenerateRequest, kind: 'code' | 'prompt', sample
   // two was written for the list.
   if (request.batch_mode) {
     const perItem = request.batch_mode !== 'whole_list';
-    lines.push(kind === 'code'
+    lines.push(kind !== 'prompt'
       ? (perItem
         ? 'A list arrives one item at a time: `run` is called once per item, with one value from each list input. '
           + 'What the calls return is collected into one list per output: a shape or an example below describes '
@@ -156,8 +164,8 @@ function inputsSection(request: GenerateRequest, kind: 'code' | 'prompt', sample
   return lines.join('\n');
 }
 
-function outputsSection(request: GenerateRequest, kind: 'code' | 'prompt'): string {
-  const lines = [kind === 'code' ? '## What goes out' : '## What the answer is for'];
+function outputsSection(request: GenerateRequest, kind: BriefKind): string {
+  const lines = [kind === 'prompt' ? '## What the answer is for' : '## What goes out'];
   // Without the executor's error port: `generate` drops it where a request comes in.
   for (const port of request.outputs ?? []) {
     const said = oneLine(request.output_notes?.[port]);
@@ -165,6 +173,9 @@ function outputsSection(request: GenerateRequest, kind: 'code' | 'prompt'): stri
     const target = request.output_targets?.[port];
     if (target) lines.push(`  to ${target}`);
   }
+  // A format is what is being written: what the node says of its output is
+  // that format, not a given to write it against.
+  if (kind === 'format') return lines.length > 1 ? lines.join('\n') : '';
   const format = request.output_format?.trim();
   if (format) lines.push(`Format: ${clip(format, BUDGET.format)}`);
   const example = request.output_example?.trim();
@@ -197,7 +208,7 @@ function examplesSection(text: string | undefined): string {
  * Everything the node says about itself, in the order a body is written from
  * it. The task goes first and the element's fixed text last, by the caller.
  */
-export function renderBrief(request: GenerateRequest, kind: 'code' | 'prompt', sample?: Sample): string {
+export function renderBrief(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
   return [inputsSection(request, kind, sample), outputsSection(request, kind), examplesSection(request.examples)]
     .filter(Boolean).join('\n\n');
 }

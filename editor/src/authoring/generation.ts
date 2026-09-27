@@ -179,7 +179,12 @@ export interface GenerationRequest<S> {
    * call and hands its answer on.
    */
   lists?: { inputs: string[]; outputs: string[] };
-  /** Neighbours' declared formats and the last run's values, from the shell. */
+  /**
+   * Sentences beside the facts, for a block on a page (`blockFacts`): what
+   * feeds it, which the engine leaves out for a snippet whose ports the
+   * element fixes, and the page's colour scheme. A node is told its
+   * neighbours as facts alone, which the engine's brief puts into words.
+   */
   graphContext?: string;
   /** Raw last-run values, for the backend's verify-and-repair pass. */
   sampleInputs?: Record<string, unknown>;

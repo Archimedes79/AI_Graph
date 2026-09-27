@@ -55,9 +55,4 @@ export class OutputNodeGuiBuilder extends NodeGuiBuilder {
     return [super.wantsOn(node, port), node.description?.trim(), destination(node)].filter(Boolean).join('; ');
   }
 
-  override describeAsTarget(node: GraphNode, port?: string): string {
-    const wants = this.wantsOn(node, port ?? 'value');
-    return `Output goes to "${node.label}" (output node)${wants ? `: ${wants}` : ''}.`;
-  }
-
 }

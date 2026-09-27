@@ -496,6 +496,25 @@ describe('prose', () => {
     const reply = await generate({ element: 'data', description: 'x' }, { ai, code: runner(() => ({})), generationFor, target });
     expect(reply.result).toBe('Just text.');
   });
+
+  it('writes a data node\'s format against what feeds it, what reads it and what it holds, told as a body is told them', async () => {
+    // A data node's neighbours reached its ✨ only as sentences the editor
+    // wrote beside the brief; the facts it sent were dropped for this kind.
+    const ai = scripted(['<data_format>A list of names.</data_format>']);
+    await generate({
+      element: 'data', description: 'the names seen so far', inputs: ['input'], outputs: ['output'],
+      input_sources: { input: '"Reader" (port "Names"), which hands on: one name per line' },
+      output_targets: { output: '"Greeter" (port "Names"), which wants a list of names' },
+      output_format: 'not given: this is what is written',
+      sample_inputs: { input: ['Ada', 'Bo'] }, sample_origin: 'the example in step 1',
+    }, { ai, code: runner(() => ({})), generationFor, target });
+    const prompt = ai.asked[0].prompt;
+    expect(prompt).toContain('Task description: the names seen so far');
+    expect(prompt).toContain('## What comes in\n- `input`\n  from "Reader" (port "Names"), which hands on: one name per line');
+    expect(prompt).toContain('sample, from the example in step 1: a list of 2: ["Ada","Bo"]');
+    expect(prompt).toContain('## What goes out\n- `output`\n  to "Greeter" (port "Names"), which wants a list of names');
+    expect(prompt).not.toContain('not given');
+  });
 });
 
 describe('refusals and failures', () => {

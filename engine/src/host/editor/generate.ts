@@ -570,7 +570,14 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
         return { result: text, explanation, probe: notProbed(), calls };
       }
       case 'data_format': {
-        const prompt = `Task description: ${request.description}${context ? `\n\nAdditional context: ${context}` : ''}`;
+        // Written against what the node is wired to and what it holds, told
+        // as a body's brief tells them: the one rendering of a node's
+        // neighbours and its sample, whoever is written from them.
+        const prompt = [
+          `Task description: ${request.description}`,
+          renderBrief(request, 'format', sample),
+          context ? `Additional context: ${context}` : '',
+        ].filter(Boolean).join('\n\n');
         const { text, explanation } = await generateTagged(ai, deps.target, DATA_FORMAT_SYSTEM, 'data_format', prompt);
         return { result: text, explanation, probe: notProbed(), calls };
       }

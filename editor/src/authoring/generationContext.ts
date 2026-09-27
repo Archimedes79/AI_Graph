@@ -13,16 +13,14 @@ import { filePorts, type FileGraph } from '@engine/execution/fileInputs.ts';
  * actually wired to and what really flowed through it. Without them a model has
  * to guess the shape of its inputs, and a small local model guesses badly.
  *
- * Two independent sources, both optional and both cheap:
- *
- *  - `connectedFormatContext` — the *declared* contracts of the neighbours, from
- *    the graph itself.
- *  - `lastRunContext` — the *observed* values from the most recent run. Run once,
- *    then generate, and the model sees real data instead of a description of it.
+ * They are facts, not sentences: which node feeds each input and what it hands
+ * on (`inputSources`), where each output goes and what the node there wants
+ * (`outputTargets`), what arrived on the last run (`lastRunInputs`). The
+ * engine's brief (`engine/src/host/editor/brief.ts`) is the one place they are
+ * put into words, for a body, a system prompt and a data node's format alike.
+ * They used to reach a data node's and a file selector's ✨ a second time, as
+ * sentences written here, beside the brief.
  */
-
-/** How many characters of a sampled value to include before truncating. */
-const SAMPLE_BUDGET = 1200;
 
 /**
  * What a node emits, in one line.
@@ -34,47 +32,6 @@ const SAMPLE_BUDGET = 1200;
  */
 export function describeNodeOutput(node: GraphNode): string {
   return NODE_BUILDERS[node.node_type]?.describeOutput(node) ?? '';
-}
-
-/**
- * The declared contracts of everything wired directly to *nodeId*.
- *
- * This used to consider `data` nodes only, so a code node fed by a file input or
- * by another code node was generated with no idea what it would receive -- which
- * is most graphs.
- */
-export function connectedFormatContext(
-  nodeId: string,
-  nodes: GraphNode[],
-  edges: Wire[],
-): string {
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  // A Set, because two ports wired to the same neighbour are two edges but one
-  // fact: repeating it only spends the model's attention on nothing.
-  const lines = new Set<string>();
-
-  for (const edge of edges) {
-    if (edge.target === nodeId) {
-      const source = nodeById.get(edge.source);
-      if (!source) continue;
-      const described = describeNodeOutput(source);
-      if (!described) continue;
-      lines.add(NODE_BUILDERS[source.node_type].describeAsSource(source, described));
-    }
-    if (edge.source === nodeId) {
-      const target = nodeById.get(edge.target);
-      if (!target) continue;
-      lines.add(NODE_BUILDERS[target.node_type].describeAsTarget(target, edge.targetHandle ?? undefined));
-    }
-  }
-  return [...lines].join('\n');
-}
-
-function preview(value: unknown): string {
-  if (value === null || value === undefined) return 'null';
-  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-  if (text === undefined) return String(value);
-  return text.length > SAMPLE_BUDGET ? `${text.slice(0, SAMPLE_BUDGET)}\n… (truncated)` : text;
 }
 
 /**
@@ -108,11 +65,9 @@ export function readFilePorts(node: GraphNode, nodes: GraphNode[] = [], edges: W
 }
 
 /**
- * The raw values this node's input ports received on the last run.
- *
- * `lastRunContext` below renders the same values as prose for the model to read.
- * This is the machine-readable half: the server runs the generated function
- * against it and repairs the code if it fails (see
+ * The raw values this node's input ports received on the last run: shown to
+ * the model as the sample, and what the server runs the generated function
+ * against, repairing the code if it fails (see
  * engine/src/host/editor/generate.ts). Undefined when the node has never run, which turns the
  * verification pass off rather than inventing a sample.
  */
@@ -123,34 +78,6 @@ export function lastRunInputs(
   const inputs = result?.node_results?.find((r) => r.node_id === nodeId)?.inputs;
   if (!inputs || Object.keys(inputs).length === 0) return undefined;
   return inputs;
-}
-
-/**
- * What actually arrived on this node's input ports the last time the graph ran.
- *
- * The single most informative thing available, and it was going unused: the
- * store already holds it, and a description of a CSV is a poor substitute for
- * eight of its rows. Absent before the first run, which is exactly when there is
- * nothing to say.
- *
- * *asFiles* names the ports the node is handed a file's text on: what the run
- * recorded there is the path, and quoting it as "the value received" tells the
- * model to expect a filename where the code will get the content.
- */
-export function lastRunContext(nodeId: string, result: ExecutionResult | null, asFiles: string[] = []): string {
-  const nodeResult = result?.node_results?.find((r) => r.node_id === nodeId);
-  const inputs = nodeResult?.inputs;
-  if (!inputs || Object.keys(inputs).length === 0) return '';
-
-  const lines = Object.entries(inputs).map(([port, value]) => {
-    if (asFiles.includes(port)) {
-      const what = Array.isArray(value) ? `a list of ${value.length} texts, one per file` : 'the text of one file';
-      return `- ${port}: ${what}, already read -- the node is handed the text, never a path.`;
-    }
-    const shape = Array.isArray(value) ? `list of ${value.length}` : typeof value;
-    return `- ${port} (${shape}):\n${preview(value)}`;
-  });
-  return `Actual values this node received on its last run -- generate against these, not against a guess:\n${lines.join('\n')}`;
 }
 
 /**

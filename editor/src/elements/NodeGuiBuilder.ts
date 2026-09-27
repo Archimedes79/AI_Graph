@@ -229,11 +229,6 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
     return false;
   }
 
-  /** How a neighbour's generation is told this node feeds it. */
-  describeAsSource(node: GraphNode, emits: string): string {
-    return `Input from "${node.label}" (${node.node_type} node): ${emits}`;
-  }
-
   /**
    * What this node hands on from one output port without running anything --
    * a typed text, a stored value -- or undefined. A node wired to it is shown
@@ -261,15 +256,6 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    */
   wantsOn(node: GraphNode, port: string): string | undefined {
     return node.inputs.find((p) => p.id === port)?.description?.trim() || undefined;
-  }
-
-  /**
-   * How a neighbour's generation is told this node receives its output.
-   * `port`: the input port the wire lands on, for a node whose ports differ
-   * in what they want -- a page's blocks do.
-   */
-  describeAsTarget(node: GraphNode, _port?: string): string {
-    return `Output goes to "${node.label}" (${node.node_type} node).`;
   }
 
 }

@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { connectedFormatContext, lastRunContext, describeNodeOutput, inputSources, outputTargets, pathPorts, readFilePorts } from './generationContext';
+import { describeNodeOutput, inputSources, lastRunInputs, outputTargets, pathPorts, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
 import { nodeFacts } from './nodeFacts';
 import { NODE_BUILDERS } from '@/elements/registry';
 
-const edge = (source: string, target: string) => ({ source, target });
+const edge = (source: string, target: string) => ({ source, target, sourceHandle: 'output', targetHandle: 'input' });
 
-describe('connectedFormatContext', () => {
-  it('still describes data nodes on both sides, in the wording prompts were tuned to', () => {
+describe('what ✨ is told of a node\'s neighbours', () => {
+  it('describes data nodes on both sides by their format', () => {
     const source = NODE_KINDS.data.create('source');
     source.label = 'Input records';
     source.config.data_format = 'structure';
@@ -17,13 +17,12 @@ describe('connectedFormatContext', () => {
     const target = NODE_KINDS.data.create('target');
     target.label = 'Result map';
     target.config.data_format = 'structure';
+    const nodes = [source, processor, target];
+    const wires = [edge('source', 'processor'), edge('processor', 'target')];
 
-    const context = connectedFormatContext('processor', [source, processor, target], [
-      edge('source', 'processor'), edge('processor', 'target'),
-    ]);
-
-    expect(context).toContain('Source data format from "Input records": structure: columns: id integer, name text');
-    expect(context).toContain('Target data format required by "Result map": structure');
+    expect(inputSources('processor', nodes, wires, true).input)
+      .toContain('"Input records" (port "Value"), which hands on: Persisted value; structure: columns: id integer, name text');
+    expect(outputTargets('processor', nodes, wires, true).output).toContain('"Result map" (port "Update"), which wants what it stores: structure');
   });
 
   it('describes a non-data upstream node too', () => {
@@ -34,9 +33,8 @@ describe('connectedFormatContext', () => {
     input.config.input_mode = 'directory';
     const code = NODE_KINDS.code.create('worker');
 
-    const context = connectedFormatContext('worker', [input, code], [edge('src', 'worker')]);
-
-    expect(context).toContain('Input from "Reports folder" (input node): port "Files" carries a list of file paths');
+    expect(inputSources('worker', [input, code], [edge('src', 'worker')], true).input)
+      .toContain('port "Files" carries a list of file paths');
   });
 
   it('carries an upstream ai node\'s declared output format', () => {
@@ -45,13 +43,14 @@ describe('connectedFormatContext', () => {
     ai.config.output_format = 'json';
     const code = NODE_KINDS.code.create('worker');
 
-    const context = connectedFormatContext('worker', [ai, code], [edge('classifier', 'worker')]);
-    expect(context).toContain('Input from "Classifier" (ai node): Respond with JSON and nothing else.');
+    expect(inputSources('worker', [ai, code], [edge('classifier', 'worker')], true).input)
+      .toContain('Respond with JSON and nothing else.');
   });
 
   it('is empty for an unconnected node rather than noise', () => {
     const code = NODE_KINDS.code.create('lonely');
-    expect(connectedFormatContext('lonely', [code], [])).toBe('');
+    expect(inputSources('lonely', [code], [], true)).toEqual({});
+    expect(outputTargets('lonely', [code], [], true)).toEqual({});
   });
 });
 
@@ -80,30 +79,23 @@ describe('describeNodeOutput', () => {
   });
 });
 
-describe('lastRunContext', () => {
+describe('what a node received on the last run', () => {
   const resultWith = (inputs: Record<string, unknown>): ExecutionResult => ({
     status: 'success',
     node_results: [{ node_id: 'worker', status: 'success', inputs, outputs: {} }],
     outputs: {},
   } as ExecutionResult);
 
-  it('reports the values a node actually received', () => {
-    const context = lastRunContext('worker', resultWith({ rows: [{ id: 1 }, { id: 2 }] }));
-    expect(context).toContain('Actual values this node received on its last run');
-    expect(context).toContain('rows (list of 2)');
-    expect(context).toContain('"id": 1');
+  it('is the sample ✨ is shown, said to be the last run\'s -- the engine cuts it to size', () => {
+    const facts = nodeFacts(NODE_KINDS.code.create('worker'), [], [], resultWith({ rows: [{ id: 1 }, { id: 2 }] }));
+    expect(facts.sampleInputs).toEqual({ rows: [{ id: 1 }, { id: 2 }] });
+    expect(facts.sampleOrigin).toBe('the last run');
   });
 
-  it('truncates a large value instead of sending the whole file', () => {
-    const context = lastRunContext('worker', resultWith({ text: 'x'.repeat(5000) }));
-    expect(context).toContain('… (truncated)');
-    expect(context.length).toBeLessThan(2000);
-  });
-
-  it('says nothing before the first run, or for another node', () => {
-    expect(lastRunContext('worker', null)).toBe('');
-    expect(lastRunContext('someone-else', resultWith({ a: 1 }))).toBe('');
-    expect(lastRunContext('worker', resultWith({}))).toBe('');
+  it('is nothing before the first run, or for another node', () => {
+    expect(lastRunInputs('worker', null)).toBeUndefined();
+    expect(lastRunInputs('someone-else', resultWith({ a: 1 }))).toBeUndefined();
+    expect(lastRunInputs('worker', resultWith({}))).toBeUndefined();
   });
 });
 
@@ -146,30 +138,29 @@ describe('a node that is handed the text of a file', () => {
     expect(pathPorts(node)).toEqual(['csv']);
   });
 
-  it('does not quote the recorded path as the value the code will receive', () => {
+  it('names the recorded path\'s port to be read, so the engine shows the model the text', () => {
+    // What the run recorded there is the path; the server reads it before it
+    // shows the sample (`generate.ts#asReceived`).
     const result = {
       status: 'success', outputs: {},
       node_results: [{ node_id: 'worker', status: 'success', inputs: { csv: 'data/people.csv', top: '5' }, outputs: {} }],
     } as ExecutionResult;
-    const context = lastRunContext('worker', result, readFilePorts(reader()));
-    expect(context).not.toContain('people.csv');
-    expect(context).toContain('- csv: the text of one file, already read');
-    expect(context).toContain('- top (string)');
+    const facts = nodeFacts(reader(), [], [], result);
+    expect(facts.sampleInputs).toEqual({ csv: 'data/people.csv', top: '5' });
+    expect(facts.readFilePorts).toEqual(['csv']);
   });
 });
 
 describe('duplicate neighbours', () => {
   it('states a shared neighbour once, not once per wire', () => {
-    // Two output ports into the same Output node is two edges and one fact.
+    // Two wires into the same port of the same node are two edges and one fact.
     const code = NODE_KINDS.code.create('worker');
     const out = NODE_KINDS.output.create('sink');
     out.label = 'Result';
+    const wire = { source: 'worker', sourceHandle: 'output', target: 'sink', targetHandle: 'value' };
 
-    const context = connectedFormatContext('worker', [code, out], [
-      edge('worker', 'sink'), edge('worker', 'sink'),
-    ]);
-
-    expect(context).toBe('Output goes to "Result" (output node): shown as text in a window.');
+    expect(outputTargets('worker', [code, out], [wire, { ...wire }], true).output)
+      .toBe('"Result" (port "Value"), which wants shown as text in a window');
   });
 });
 
@@ -219,18 +210,11 @@ describe('what a node is wired to, as the dialog and ✨ say it', () => {
     const page = NODE_KINDS.gui.create('page');
     page.label = 'Dashboard';
     page.config.gui_widgets = [{ id: 'w1', kind: 'plot_window', label: 'Sizes' } as never];
-    const context = connectedFormatContext('worker', [code, page], [
-      { source: 'worker', target: 'page', targetHandle: 'w1_in' },
-    ]);
-    expect(context).toContain('the "Sizes" block (plot_window) on the page "Dashboard"');
-    expect(context).toContain('NOT a drawing');
-  });
-
-  it('says a read file arrives as text for any node, not only as a function signature', () => {
-    const result = { node_results: [{ node_id: 'n', inputs: { doc: 'a.txt' } }] } as unknown as ExecutionResult;
-    const text = lastRunContext('n', result, ['doc']);
-    expect(text).toContain('the text of one file, already read');
-    expect(text).not.toContain('signature');
+    const told = outputTargets('worker', [code, page], [
+      { source: 'worker', sourceHandle: 'output', target: 'page', targetHandle: 'w1_in' },
+    ], true);
+    expect(told.output).toContain('"Dashboard"');
+    expect(told.output).toContain('NOT a drawing');
   });
 });
 

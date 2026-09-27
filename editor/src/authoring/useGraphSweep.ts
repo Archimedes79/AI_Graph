@@ -15,9 +15,6 @@ import { nodeFacts } from './nodeFacts';
 import { blockFacts } from './blockFacts';
 import { WIDGET_BUILDERS, NODE_BUILDERS } from '@/elements/registry';
 import { buildGeneration, nodeFields, widgetFields } from './generation';
-import {
-  connectedFormatContext, lastRunContext, readFilePorts,
-} from './generationContext';
 import { missingExamples, sampleFromPredecessors, sweep, writtenBody, type SweepTarget, type SweepUnit } from './graphSweep';
 
 export interface SweepState {
@@ -158,10 +155,6 @@ export function useGraphSweep(): SweepState {
         ...facts,
         // Before a run, what the nodes before it produced in this sweep.
         ...(predecessors ? { sampleInputs: predecessors, sampleOrigin: 'what the nodes before it just returned' } : {}),
-        graphContext: NODE_BUILDERS[current.node_type]?.outputContract === 'format' ? undefined : [
-          connectedFormatContext(current.id, nodesOf(), rfEdges()),
-          lastRunContext(current.id, live().executionResult, readFilePorts(current, nodesOf(), rfEdges())),
-        ].filter(Boolean).join('\n\n'),
         // What it turns out to return is kept as this node's shape, which is
         // what the next node is then generated against.
         recordShape: keepsOutputInterface(current)

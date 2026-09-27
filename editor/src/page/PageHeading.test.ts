@@ -5,7 +5,9 @@ import PageHeading, { type PageWords } from './PageHeading';
 import { useGraphStore } from '@/store/graphStore';
 import { syncGuiNodePorts } from '@/document/guiWidgets';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
-import { NODE_BUILDERS, WIDGET_BUILDERS } from '@/elements/registry';
+import { WIDGET_BUILDERS } from '@/elements/registry';
+import { NODE_KINDS } from '@/document/nodeKinds';
+import { outputTargets } from '@/authoring/generationContext';
 import type { GraphNode } from '@/graph';
 
 /** The field of *element* that says it is *name*: what a person types into. */
@@ -50,6 +52,10 @@ describe('a page\'s own name and description, in the GUI editor', () => {
     field(PageHeading({ nodes: [stored()], onChange: change }), 'What the page is for')!.onChange({ target: { value: 'Plots a CSV' } });
 
     expect(stored()).toMatchObject({ label: 'Plotter', description: 'Plots a CSV' });
-    expect(NODE_BUILDERS.gui.describeAsTarget(stored(), `${plot.id}_in`)).toContain('on the page "Plotter"');
+    const feeding = NODE_KINDS.code.create('src');
+    const told = outputTargets('src', [feeding, stored()], [
+      { source: 'src', sourceHandle: 'output', target: 'gui1', targetHandle: `${plot.id}_in` },
+    ], true);
+    expect(told.output).toMatch(/^"Plotter" \(port "[^"]+"\), which wants /);
   });
 });
