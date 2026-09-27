@@ -4,7 +4,8 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { useGraphStore } from '@/store/graphStore';
 import { readPair } from './examplePair';
-import { dropExample, droppedPath, droppedValue, uriPath, type Dropped } from './droppedFile';
+import { dropExample, droppedPath, uriPath, type Dropped } from './droppedFile';
+import { fileValue } from './readAsRun';
 
 /**
  * A file dropped onto a node, or onto step 1's example field, is the example:
@@ -45,11 +46,15 @@ describe('where a dropped file is', () => {
   });
 });
 
-describe('what a dropped file puts into the example', () => {
+describe('what a file puts into the example, dropped or picked', () => {
+  const nowhere = async (): Promise<string> => { throw new Error('asked where a file is whose text is wanted'); };
+  const unread = async (): Promise<string> => { throw new Error('read a file whose path is wanted'); };
+
   it('is its path where the node reads the file, and what it says -- parsed when JSON -- where it does not', async () => {
-    expect(await droppedValue(dropped('a.csv', 'name\nAnna'), true, one('D:/work/a.csv'), as)).toBe('D:/work/a.csv');
-    expect(await droppedValue(dropped('a.csv', 'name\nAnna'), false)).toBe('name\nAnna');
-    expect(await droppedValue(dropped('a.json', '{"rows": [1, 2]}'), false)).toEqual({ rows: [1, 2] });
+    const file = dropped('a.csv', 'name\nAnna');
+    expect(await fileValue(true, () => droppedPath(file, one('D:/work/a.csv')), unread, as)).toBe('D:/work/a.csv');
+    expect(await fileValue(false, nowhere, file.text, as)).toBe('name\nAnna');
+    expect(await fileValue(false, nowhere, dropped('a.json', '{"rows": [1, 2]}').text, as)).toEqual({ rows: [1, 2] });
   });
 });
 

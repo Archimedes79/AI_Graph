@@ -2,10 +2,11 @@
 // it becomes the example, with no browse dialog on the way (📂 stays for who
 // would rather look).
 //
-// What it puts there is what 📂 From a file puts there: the file's path on an
-// input that reads the file -- kept relative to the folder the editor runs in,
-// as a graph keeps paths -- and otherwise what the file says, parsed when it is
-// JSON. A browser hands a page a dropped file's name, size and content, never
+// What it puts there is what 📂 From a file puts there, by the one rule
+// (`fileValue`): the file's path on an input that reads the file -- kept
+// relative to the folder the editor runs in, as a graph keeps paths -- and
+// otherwise what the file says, parsed when it is JSON. A browser hands a page
+// a dropped file's name, size and content, never
 // where it is: the path comes from the drop where it names one (a `file:` URI),
 // and otherwise the engine is asked for the one file of that name and size under
 // the folder it runs in (`findFile`).
@@ -13,7 +14,7 @@
 import { call } from '@/api/client';
 import { useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS } from '@/elements/registry';
-import { contentValue, storedPath } from './readAsRun';
+import { fileValue } from './readAsRun';
 import { readFilePorts } from './generationContext';
 
 /** A dropped file, as far as a browser says what it is. */
@@ -76,21 +77,6 @@ export async function droppedPath(file: Dropped, find: FindFile = findFile): Pro
 }
 
 /**
- * What *file* puts into the example on an input: its path where the node
- * *reads* the file there (as a graph keeps a path: `storedPath`), otherwise
- * what it says, parsed when it is JSON.
- */
-export async function droppedValue(
-  file: Dropped,
-  reads: boolean,
-  find?: FindFile,
-  kept: (path: string) => Promise<string> = storedPath,
-): Promise<unknown> {
-  if (reads) return kept(await droppedPath(file, find));
-  return contentValue(await file.text());
-}
-
-/**
  * *file*, dropped on node *nodeId* on the canvas, as the example on its
  * *port* (`NodeGuiBuilder.withExampleValue`): one undo step, written into the
  * graph that was open when it was dropped -- and the node's dialog opened on
@@ -107,7 +93,7 @@ export async function dropExample(
   const node = () => useGraphStore.getState().rfNodes.find((item) => item.id === nodeId)?.data.graphNode;
   const dropped = node();
   if (!dropped) return;
-  const value = await droppedValue(file, readFilePorts(dropped).includes(port), find, kept);
+  const value = await fileValue(readFilePorts(dropped).includes(port), () => droppedPath(file, find), file.text, kept);
   const store = useGraphStore.getState();
   const now = node();
   if (store.document !== started || !now) return;

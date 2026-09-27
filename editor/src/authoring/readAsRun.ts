@@ -83,6 +83,23 @@ export function contentValue(text: string): unknown {
 }
 
 /**
+ * What a file -- picked with 📂 or dropped -- puts into the example on an
+ * input: its *path* where the node *reads* the file there, kept as a graph
+ * keeps a path (`storedPath`), so the example holds what a run hands the node;
+ * and otherwise what it says (*text*), parsed when it is JSON. Only the one
+ * that is used is asked for: a dropped file's path is looked for, a picked
+ * file's text read.
+ */
+export async function fileValue(
+  reads: boolean,
+  path: () => Promise<string>,
+  text: () => Promise<string>,
+  kept: (path: string) => Promise<string> = storedPath,
+): Promise<unknown> {
+  return reads ? kept(await path()) : contentValue(await text());
+}
+
+/**
  * *path* as a graph keeps it: relative to *home* -- the folder the engine
  * runs in, which is what a run resolves a relative path against -- when it is
  * inside it, with forward slashes, so the graph opens the same on another

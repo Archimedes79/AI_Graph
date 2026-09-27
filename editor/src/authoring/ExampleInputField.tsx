@@ -3,21 +3,10 @@ import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 import { errorText } from '@/api/errorText';
 import CodeField from './CodeField';
 import { asExampleText, exampleObject } from './examplePair';
-import { contentValue, readFileAsRun, storedPath } from './readAsRun';
-import { carriesFiles, droppedFile, droppedValue } from './droppedFile';
+import { fileValue, readFileAsRun } from './readAsRun';
+import { carriesFiles, droppedFile, droppedPath } from './droppedFile';
 import { useTyped } from './useTyped';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
-
-/**
- * What a picked file puts on *port*: its path where the node reads the file
- * there -- the example then holds what a run hands the node, and it is read
- * exactly as a run reads it, every time -- and otherwise the file's content,
- * parsed when it is JSON.
- */
-export async function pickedValue(path: string, port: string, reads: string[]): Promise<unknown> {
-  if (reads.includes(port)) return storedPath(path);
-  return contentValue(await readFileAsRun(path));
-}
 
 /** The example text with *port* set to *value*. */
 export function withPortValue(text: string, port: string, value: unknown): string {
@@ -122,7 +111,7 @@ export default function ExampleInputField({ text, onText, ports, reads, fromGrap
     if (!file) return;
     event.preventDefault();
     event.stopPropagation();
-    void take((port) => droppedValue(file, reads.includes(port)));
+    void take((port) => fileValue(reads.includes(port), () => droppedPath(file), file.text));
   };
 
   return (
@@ -172,7 +161,11 @@ export default function ExampleInputField({ text, onText, ports, reads, fromGrap
       {browsing && (
         <FileBrowserDialog
           mode="file"
-          onPick={(path) => { setBrowsing(false); void take((port) => pickedValue(path, port, reads)); }}
+          onPick={(path) => {
+            setBrowsing(false);
+            // Read as a run reads it, where it is the file's text that goes in.
+            void take((port) => fileValue(reads.includes(port), async () => path, () => readFileAsRun(path)));
+          }}
           onClose={() => setBrowsing(false)}
         />
       )}
