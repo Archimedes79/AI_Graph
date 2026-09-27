@@ -3,6 +3,7 @@ import type { WidgetViewProps } from '../WidgetView';
 import { asText } from '@engine/elements/widgets/text_io/text.ts';
 import { textIoRole } from '@engine/elements/widgets/text_io/role.ts';
 import { DIMMER, FIELD, LINE, SUNKEN, TEXT } from '@/ui/theme';
+import { widgetFiresRun } from '@/document/guiWidgets';
 
 /** Runtime text_io widget.
  * - "input": text area the user types in (drives graph via output port)
@@ -14,7 +15,8 @@ export default function TextIoWidgetView({ widget, value, incoming, onChange, on
   const text = asText(value);
   // In a box that sends, Enter sends and Shift+Enter is the newline -- what
   // every messenger does. In one that does not, Enter is just a newline.
-  const sends = widget.run_on_change === true;
+  // Whether it sends is the engine's answer, the one the page acts on.
+  const sends = widgetFiresRun(widget);
   const sendOnEnter = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!sends || event.key !== 'Enter' || event.shiftKey) return;
     event.preventDefault();
