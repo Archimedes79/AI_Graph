@@ -21,7 +21,7 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
     'Picking a file or folder (or Enter in the path box) runs the nodes this picker is wired to.';
 
   /**
-   * A picker is a source like an input node in file mode, with no input port:
+   * A picker is a source like an input node listing a folder, with no input port:
    * nothing upstream can feed it, and nothing describes what it holds until a
    * person gives it a default path.
    */

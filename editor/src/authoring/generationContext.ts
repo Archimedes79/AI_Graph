@@ -16,9 +16,7 @@ import { filePorts } from '@engine/execution/fileInputs.ts';
  * on (`inputSources`), where each output goes and what the node there wants
  * (`outputTargets`), what arrived on the last run (`lastRunInputs`). The
  * engine's brief (`engine/src/host/editor/brief.ts`) is the one place they are
- * put into words, for a body, a system prompt and a data node's format alike.
- * They used to reach a data node's and a file selector's ✨ a second time, as
- * sentences written here, beside the brief.
+ * put into words, for a body and a system prompt alike.
  */
 
 /**
@@ -70,9 +68,9 @@ export function lastRunInputs(
  * The wiring is the one thing a generation request cannot otherwise carry, and
  * it is what turns a skeleton line from `files: list[str]` into
  * `files: list[str]  // from "Folder" (port "Files")` — provenance, which no
- * type expresses. The port matters as much as the node: an Input in file mode
- * offers both the file's content and its path, and code written against the
- * wrong one reads a CSV as a file name.
+ * type expresses. The port matters as much as the node: a page hands on each
+ * of its blocks on a port of its own -- a file picked, a text typed -- and
+ * code written against the wrong one reads a file name as the text.
  *
  * A port fed by several nodes (fan-in) names them all: that a value is a list
  * *because two nodes write into it* is exactly the case generated code gets

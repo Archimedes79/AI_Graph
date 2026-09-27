@@ -7,9 +7,9 @@
 // kept shape), so a person writes only what the graph cannot say -- and "Use
 // this" copies it in to start from.
 //
-// It replaced a button that copied one wired data node's format into the
-// field: a copy that went stale when the data node changed, dropped a text
-// node's details, and said once more what ✨ was told anyway.
+// It replaced a button that copied the format a wired data node kept then into
+// the field: a copy that went stale when that node changed, and said once more
+// what ✨ was told anyway. A data node keeps no format now: it is its value.
 
 import type { GraphNode, Wire } from '@/graph';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';

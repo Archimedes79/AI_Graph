@@ -16,9 +16,9 @@ interface Props {
 }
 
 /**
- * Building a node that authors a body, in four steps, the same for every
- * kind: what comes in, what comes out, what it should do, and how -- tried
- * right there.
+ * Building a node that authors a body -- an AI node, a code node -- in four
+ * steps, the same for both: what comes in, what comes out, what it should do,
+ * and how -- tried right there.
  *
  * The order is the explanation. What comes in and what comes out are what the
  * graph already knows, or can find out by running; the task is what only the

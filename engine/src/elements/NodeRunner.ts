@@ -337,7 +337,7 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
   /**
    * Files and folders this node names as its own defaults: the CSV a picker
-   * starts on, the folder an input node reads.
+   * starts on, the folder an input node lists.
    *
    * A bundle carries them. A tool handed to someone with its default file left
    * behind opens on an error, and the person it was handed to has no way to

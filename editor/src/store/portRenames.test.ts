@@ -6,7 +6,7 @@ import { saveDraft } from '@/canvas/nodeDraft';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 
 /**
- * The node dialog, saved: which wire ends up on which port.
+ * The node dialog, written into the graph: which wire ends up on which port.
  *
  * A port's id is the name a body reads it by -- `inputs.csv`, `{ figure }` --
  * so the ports editor edits exactly that, and a rename must not cut the wire
@@ -14,8 +14,8 @@ import { baseNodeConfig } from '@/document/baseNodeConfig';
  *
  * The three edits below are the ones the ports editor makes (`PortsEditor`):
  * a row is edited by spreading it with the change, removed by filtering it
- * out, and a new one is appended. Each test edits a draft that way, saves it
- * the way `NodeEditor` does (`saveDraft`), and looks at the wires.
+ * out, and a new one is appended. Each test edits a draft that way, writes it
+ * the way the dialog does (`saveDraft`, from `nodeDialog`), and looks at the wires.
  */
 const edit = (ports: Port[], at: number, patch: Partial<Port>) => ports.map((port, i) => (i === at ? { ...port, ...patch } : port));
 const remove = (ports: Port[], at: number) => ports.filter((_, i) => i !== at);

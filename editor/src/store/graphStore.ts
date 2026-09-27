@@ -199,8 +199,7 @@ export interface GraphStore {
   takeDiskChanges: (changes: TextChange[]) => string[];
   /**
    * Execute *graph* and put the whole outcome into the store: the result, the
-   * text-output windows, the busy flag, and a synthesised error result if the
-   * request itself fails.
+   * busy flag, and a synthesised error result if the request itself fails.
    *
    * Lives here rather than in a component because the store already owns every
    * piece of state it touches, and because two front-ends need it -- the

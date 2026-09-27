@@ -2,8 +2,8 @@
 //
 // A port's id is the name a body reads it by -- `inputs.csv`, `{ figure }` --
 // so it is the field the ports editor edits, and it is also what a wire points
-// at. When the node dialog is saved, `updateNode` has to be told which id each
-// port had before, or a renamed port loses its wires to the pruning.
+// at. When the node dialog writes a change, `updateNode` has to be told which
+// id each port had before, or a renamed port loses its wires to the pruning.
 //
 // That used to be worked out by position: row 2 before is row 2 now. It is
 // true of a rename and false of a removal. Remove the first of `prompt` and
@@ -12,8 +12,9 @@
 // two -- the ✕ that promises "remove this port, and any wire on it" handed the
 // wire to its neighbour instead.
 //
-// So each port carries the id it had when the dialog opened, and a port is
-// followed by that, not by where it stands. It is kept under a symbol: an edit
+// So each port carries the id it has in the graph (`trackPorts`, which the
+// dialog puts on the node as stored), and a port is followed by that, not by
+// where it stands. It is kept under a symbol: an edit
 // that spreads a port (`{ ...port, id }`, which is how the ports editor renames
 // one) carries it along, and JSON never sees it, so the draft still compares
 // equal to the stored node and nothing of it is ever saved.

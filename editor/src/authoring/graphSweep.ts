@@ -157,7 +157,7 @@ export function writtenBody(node: GraphNode, field: string): boolean {
 export function missingExamples(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
   const fed = new Set(edges.map((edge) => edge.target_node_id));
   // Which nodes are sources, and what describes them, is each element's answer
-  // (`NodeGuiBuilder.missingExample`): an input in file mode, a page's file picker.
+  // (`NodeGuiBuilder.missingExample`): an input listing a folder, a page's file picker.
   return nodes.filter((node) => NODE_BUILDERS[node.node_type]?.missingExample(node, fed.has(node.id)) ?? false);
 }
 
