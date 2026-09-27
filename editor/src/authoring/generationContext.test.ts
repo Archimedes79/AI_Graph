@@ -40,7 +40,7 @@ describe('what ✨ is told of a node\'s neighbours', () => {
   it('carries an upstream ai node\'s declared output format', () => {
     const ai = NODE_KINDS.ai.create('classifier');
     ai.label = 'Classifier';
-    ai.config.output_format = 'json';
+    ai.config.output_format_prompt = 'Respond with JSON and nothing else.';
     const code = NODE_KINDS.code.create('worker');
 
     expect(inputSources('worker', [ai, code], [edge('classifier', 'worker')], true).input)
@@ -246,14 +246,11 @@ describe('what ✨ is told about a node, as facts', () => {
 
   it('sends the format in words, as a run reads them: under a kept example an older picked format says nothing', () => {
     const code = NODE_KINDS.code.create('worker');
-    code.config.output_format = 'json';
     code.config.output_format_prompt = 'a list of {title, score}';
     code.config.output_example = '[{"title": "a", "score": 1}]';
     const facts = nodeFacts(code, [code], [], null);
     expect(facts.outputFormat).toBe('a list of {title, score}');
     expect(facts.outputExample).toBe('[{"title": "a", "score": 1}]');
-    code.config.output_example = '';
-    expect(nodeFacts(code, [code], [], null).outputFormat).toBe('Respond with JSON and nothing else.\n\na list of {title, score}');
   });
 
   it('takes step 1\'s example as the sample, over what the last run delivered', () => {

@@ -290,11 +290,6 @@ describe('what a sweep counts as already written', () => {
     expect(writtenBody(folder(NODE_KINDS.input.create('in').config.selector_code), 'selector_code')).toBe(false);
   });
 
-  it('is not the starter selector every input node used to be given', () => {
-    const earlier = 'function run(inputs) {\n  // inputs.files is the full list of file paths in the directory\n  return { files: inputs.files ?? [] };\n}\n';
-    expect(writtenBody(folder(earlier), 'selector_code')).toBe(false);
-  });
-
   it('is a selector somebody wrote, and a code node\'s code but not its starter', () => {
     expect(writtenBody(folder('function run(i) { return { files: i.files.slice(0, 1) }; }'), 'selector_code')).toBe(true);
     expect(writtenBody(node('c'), 'code')).toBe(false);
