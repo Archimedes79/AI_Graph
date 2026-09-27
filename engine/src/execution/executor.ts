@@ -287,6 +287,9 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
     return !!node && !!element && (element.isMemory || element.hasInterface || element.eventPorts(node).length > 0);
   };
 
+  /** Where the latch keeps what this node made: see `latch.ts`. */
+  const latchKey = (node: GraphNode): string => options.latch!.key(graph, node, (from) => keepsItsOwn(from.id));
+
   /**
    * Why this node stands still this round, or '' when it runs.
    *
@@ -362,7 +365,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
       // for a node fed only by nodes that stood still: nothing new reached it.
       const shut = standsStill(nodeId);
       if (shut) {
-        const kept = options.latch?.get(graph, node, keepsItsOwn(nodeId));
+        const kept = options.latch?.get(latchKey(node));
         if (kept) {
           held.add(nodeId);
           outputs.set(nodeId, kept);
@@ -402,7 +405,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         if (kept) {
           outputs.set(nodeId, kept);
           // What it hands on now is what it made last, for a later round its ◆ stays shut in.
-          options.latch?.set(graph, node, kept, keepsItsOwn(nodeId));
+          options.latch?.set(latchKey(node), kept);
           results.push({
             node_id: nodeId, status: 'success', inputs, outputs: kept, error: null,
             messages: ['Reused from an earlier run: nothing it depends on has changed.'],
@@ -415,7 +418,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         );
         if (signal?.aborted) throw new Error('Stopped.');
         outputs.set(nodeId, produced);
-        if (!failures.length) options.latch?.set(graph, node, produced, keepsItsOwn(nodeId));
+        if (!failures.length) options.latch?.set(latchKey(node), produced);
         // Kept only when it went through whole: a partial result is not one to hand back.
         if (key && !failures.length) options.reuse!.set(key, produced);
         // Some items failed and the rest went through: the node is partial and

@@ -358,6 +358,44 @@ describe('a result handed back from an earlier run', () => {
   });
 });
 
+describe('what a node holds belongs to its own graph', () => {
+  it('is never handed to another graph of the same name', async () => {
+    // Two projects, both "Untitled Graph", with the same node `c`: the second
+    // never ran it, and must not be handed what the first one's `c` made.
+    const latch = new Latch();
+    const build = (secret: string, open: boolean) => graphOf(
+      [
+        node('src', 'code', { code: `function run() { return { v: "${secret}" }; }` }, { out: ['v'] }),
+        node('flag', 'code', { code: `function run() { return { open: ${open} }; }` }, { out: ['open'] }),
+        node('c', 'code', { code: 'function run(i) { return { out: i.x }; }' }, { in: ['x'], out: ['out'] }),
+      ],
+      [edge('s', 'src', 'v', 'c', 'x'), edge('g', 'flag', 'open', 'c', RUN_PORT)],
+    );
+    await executeGraph(build('project A data', true), { runtime, registry, latch });
+    const second = await executeGraph(build('project B data', false), { runtime, registry, latch });
+    expect(result(second, 'c')).toMatchObject({ outputs: {} });
+    expect(result(second, 'c')!.held).toBeUndefined();
+    // The same graph again is handed what it made.
+    const again = await executeGraph(build('project A data', false), { runtime, registry, latch });
+    expect(result(again, 'c')).toMatchObject({ held: true, outputs: { out: 'project A data' } });
+  });
+
+  it('is kept by a data node of another graph neither, whose settings are not part of the key', async () => {
+    const latch = new Latch();
+    const build = (other: string, open: boolean) => graphOf(
+      [
+        node('flag', 'code', { code: `function run() { return { open: ${open} }; }` }, { out: ['open'] }),
+        node('keep', 'data', { data_value: 'mine' }, { in: ['input'], out: ['output'] }),
+        node(other, 'code', {}, { in: ['v'], out: ['v'] }),
+      ],
+      [edge('g', 'flag', 'open', 'keep', RUN_PORT)],
+    );
+    await executeGraph(build('first', true), { runtime, registry, latch });
+    const second = await executeGraph(build('second', false), { runtime, registry, latch });
+    expect(result(second, 'keep')!.held).toBeUndefined();
+  });
+});
+
 describe('an event is a moment', () => {
   it('is never handed back from an earlier round by the reuse cache', async () => {
     const latch = new Latch();

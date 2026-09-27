@@ -30,6 +30,17 @@ describe('Rounds', () => {
     expect(seen).toEqual(['quick', 'slow']);
   });
 
+  it('does not make two different graphs of one name wait for each other', async () => {
+    const rounds = new Rounds();
+    const seen: string[] = [];
+    const untitled = (id: string) => parseGraph({ metadata: { name: 'Untitled Graph' }, nodes: [{ id, node_type: 'code' }], edges: [] });
+    await Promise.all([
+      rounds.turn(untitled('slow'), async () => { await wait(40); seen.push('slow'); }),
+      rounds.turn(untitled('quick'), async () => { seen.push('quick'); }),
+    ]);
+    expect(seen).toEqual(['quick', 'slow']);
+  });
+
   it('goes on after a round that failed', async () => {
     const rounds = new Rounds();
     await expect(rounds.turn(named('a'), async () => { throw new Error('no'); })).rejects.toThrow('no');
