@@ -4,6 +4,7 @@ import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { portRenames, trackPorts, untracked } from '@/store/portRenames';
 import { derivedNodePorts } from '@/document/guiWidgets';
 import PortsEditor from './PortsEditor';
+import { withSetting } from './nodeDraft';
 import { NODE_BUILDERS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
@@ -24,17 +25,6 @@ interface NodeEditorProps {
   nodeId: string;
   onClose: () => void;
 }
-
-/** The output a node grows when it is told to catch its own failures. */
-const ERROR_OUTPUT: Port = {
-  id: 'error',
-  name: 'Error',
-  kind: 'output',
-  data_type: 'text',
-  multi: false,
-  required: false,
-  description: 'Why this node failed. Optional to wire: unwired, the run simply carries on.',
-};
 
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const rfNode = useGraphStore((s) => s.rfNodes.find((n) => n.id === nodeId));
@@ -181,26 +171,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   };
 
   const setConfig = (key: string, value: unknown) => {
-    setNode((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, config: { ...prev.config, [key]: value } };
-      // A setting an element derives its ports from has just changed, so the
-      // ports follow it here and now. They used to follow only on the next
-      // load, which is why ticking "catch failures" on an input node grew its
-      // error port sometime later, to a person who had gone looking for it.
-      // A derived port that carries on an old one's work takes its wires,
-      // where the element says so (`continuePorts`).
-      const derived = derivedNodePorts(next);
-      if (derived) return element.continuePorts(prev, { ...next, ...derived });
-      // Ticking "catch failures" is what puts the port on the node. Nobody
-      // should have to add an output by hand and guess that it must be called
-      // `error` for the executor to fill it.
-      if (key === 'catch_errors') {
-        const without = next.outputs.filter((port) => port.id !== 'error');
-        next.outputs = value ? [...without, ERROR_OUTPUT] : without;
-      }
-      return next;
-    });
+    setNode((prev) => (prev ? withSetting(prev, rfNode?.data.graphNode, key, value) : prev));
   };
 
   /**
