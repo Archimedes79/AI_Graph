@@ -81,8 +81,9 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
     // The same trap, one setting over: "once per item" fans out over the inputs
     // declared as lists. With none, the node runs once, on the whole list, and
     // nothing says it was asked to do otherwise.
-    // Only where a list really arrives: "once per item" is what every node is
-    // created with, and on a node no list reaches it means nothing.
+    // Only where a list really arrives: the editor creates every node "once per
+    // item" (a graph file that leaves batch_mode out means the whole list), and
+    // on a node no list reaches it means nothing.
     const listArrives = graph.edges.some((edge) => {
       if (edge.target_node_id !== node.id) return false;
       const source = graph.nodes.find((candidate) => candidate.id === edge.source_node_id);
