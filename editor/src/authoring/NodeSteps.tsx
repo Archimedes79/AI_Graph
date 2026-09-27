@@ -18,7 +18,7 @@ import { useTyped } from './useTyped';
 import { derivedOutputWords } from './derivedOutput';
 import { pathPorts } from './generationContext';
 import { outputFormatText } from './outputFormat';
-import { exampleFor, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
+import { exampleFor, keptExpect, listPorts, runsPerItem, tryInputs, tryKey, withPerItem } from './nodeStepRules';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 type Props = Pick<NodePanelProps,
@@ -302,6 +302,7 @@ export default function NodeSteps({
       />
       {body.beside}
       <TryItInline
+        of={tryKey(node, tried, generation.promptField)}
         canRun={!!tried && !inputError}
         whyNot={inputError ? 'The example in step 1 is not an object yet.' : 'Fill step 1\'s example first: ⟳ from the graph, or 📂 from a file.'}
         run={() => call('runNode', { ...steps.graph(), node_id: node.id, inputs: tried ?? {} })}
