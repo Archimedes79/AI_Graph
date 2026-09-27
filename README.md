@@ -67,8 +67,9 @@ Nothing leaves the machine unless the graph itself sends it there.
 
 ## What's in it
 
-- **Visual graph editor** — a ReactFlow canvas with undo/redo; drop a graph `.json` on
-  the window to open it, the way the files in `examples/` load.
+- **Visual graph editor** — a ReactFlow canvas with undo/redo; drop a graph `.json` file
+  or a project folder on the window to open it, or use **Open**; every example in
+  `examples/` is a project folder.
 - **Eight node types** — Input (text/file/directory), AI, Code (JavaScript), Data,
   GUI, Output, Trigger (the tool starting, a clock), and Subgraph: a node that holds a
   graph of its own, so a graph grows in depth as well as in width.
@@ -84,9 +85,10 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **AI generation** — a node's code or system prompt, a plot transform, or an entire
   graph, written from a plain-language description and left visible and editable. Code
   generation starts from a typed skeleton of the node's real ports — the types and
-  example values come from the last run — and the result is executed once and repaired
+  example values come from the node's example (step 1), or, without one, from the last
+  run — and the result is executed once and repaired
   before you ever see it.
-- **Graph DSL** — versioned JSON with typed ports (`data_type`, `multi`, `format`), so a
+- **Graph DSL** — versioned JSON with typed ports (`data_type`, `multi`, `required`), so a
   node's inputs and outputs are never ambiguous.
 - **Execution engine** — topological order with per-node status, batch items run
   concurrently, a failed item is reported as `partial` while the rest continue, transient
@@ -94,9 +96,9 @@ Nothing leaves the machine unless the graph itself sends it there.
   The toolbar counts items *within* the running node and says when a model has gone quiet,
   so a long batch is never mistaken for a hang — and a model that answers with nothing at
   all fails the node instead of quietly passing an empty string on.
-- **A project is a graph plus one file per node** — code, prompts and format contracts
-  live in `.js`/`.md` files beside the graph, so a language server and `git diff`
-  both work on them.
+- **A project is a folder** — `flow.json` plus one folder per node under `nodes/`: code,
+  prompts and format contracts live there in `.js`/`.md` files, so a language server and
+  `git diff` both work on them.
 - **GUI nodes** — a page built like a document: type headings in place, press `/` to
   insert a chat, a file picker, a dropdown, a chart or a table, and deploy it together
   with the graph.
@@ -104,14 +106,17 @@ Nothing leaves the machine unless the graph itself sends it there.
   button, a chat message or a dropdown starts the graph *at the node it is wired to*, so
   one page can hold several tools.
 - **A prompt you can see** — an AI node shows the exact request the model will get,
-  tries it with ▶ Test, and can learn its output format from an answer you liked.
+  tries it with ▶ Try it, and **Keep this result** makes an answer you liked the example
+  it imitates.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
 - **A real editor** — code and prompts are written in CodeMirror, full-window on ⤢, or
   in your own editor with one click.
-- **Try it, the same way everywhere** — an AI node, a code node and a chart's transform
-  are each tried in the same panel: get the inputs from the graph, press ▶ Test, see what
-  comes out (a chart is drawn). The same values are what ✨ Generate is written and
-  verified against.
+- **Four steps, the same way everywhere** — an AI node, a code node and a chart's
+  transform are each built in the same four steps: one example of what comes in, what
+  comes out, what it should do, and the body. Get the example from the graph (⟳) or a
+  file (📂), press ▶ Try it, see what comes out (a chart is drawn). The same values are
+  what ✨ Generate is written and verified against, and ▶ Test runs every example the
+  node keeps, a judge's included.
 - **An MCP server** — `--mcp` lets Claude Code or Claude Desktop generate, validate, save
   and run graphs, confined to one folder.
 - **Deployment** — a self-contained bundle, a Docker Compose stack, or one executable.
@@ -205,9 +210,9 @@ AI-Graph/
 │   └── host/  ai/  cli/    #   the server and its contract, model providers, the command line
 ├── editor/src/             # The page: React + ReactFlow, built on the engine
 │   ├── elements/           #   the same folders: <Kind>NodeGuiBuilder.ts, <Kind>WidgetView.tsx, <Kind>…Panel.tsx
-│   ├── authoring/          #   ✨ Generate, Try it, the live transcript
+│   ├── authoring/          #   the four steps of a dialog, ✨ Generate, Try it, the live transcript
 │   └── app/  canvas/  page/  store/  api/  runtime/  ui/
-├── examples/               # Example graph JSON files
+├── examples/               # Example projects, one folder each: flow.json + nodes/
 ├── docs/                   # The documents linked above
 ├── arch/                   # Architecture diagrams, every box mapped to its files
 ├── scripts/dev.mjs         # npm run dev: engine and Vite in one terminal
