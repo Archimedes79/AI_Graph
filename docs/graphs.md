@@ -80,13 +80,15 @@ written to disk, and the window keeps the graph it was handed until it is opened
 **A node with nothing to do is left alone.** If a port marked *required* is wired and
 brought nothing — or, for an AI node, *every* wired input came up empty — the node is
 skipped, what hangs off it is skipped, and the run is still a success. ▶ Run on a chat
-nobody has typed into asks no model and changes no conversation.
+nobody has typed into asks no model and changes no conversation. A page or a data node is
+never skipped for that: its own button, or the value it keeps, is news by itself.
 
 The third is the one worth understanding. A page event names the port it fired on, and
 what runs is
 
 - the nodes that port is wired to, and everything downstream of them;
-- everything upstream that those nodes need an input from;
+- everything upstream that those nodes need an input from, and whatever computes the ◆ of
+  one of them that the event does not open itself;
 - and nothing else.
 
 So a page with a *Summarize* button and a *Plot* button is two tools in one window, and
