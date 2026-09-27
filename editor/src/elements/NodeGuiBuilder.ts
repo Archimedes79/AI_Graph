@@ -131,6 +131,17 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
     return undefined;
   }
 
+  /**
+   * *after* -- the draft once a setting re-derived its ports -- with each new
+   * port that carries on what a port of *before* carried marked as that one
+   * (`continuing`), so its wires follow it on Save. By default none does: a
+   * derived port is the port of its name, or new, and a port that is gone
+   * takes its wires with it.
+   */
+  continuePorts(_before: GraphNode, after: GraphNode): GraphNode {
+    return after;
+  }
+
   /** What step 2's words mean for this kind of node, said above them: who reads them, and when. */
   readonly outputFormatHint?: string;
 

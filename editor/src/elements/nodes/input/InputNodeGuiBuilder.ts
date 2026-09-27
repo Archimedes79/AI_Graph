@@ -2,10 +2,14 @@ import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { listAsRun } from '@/authoring/readAsRun';
+import { continuing } from '@/store/portRenames';
 import { InputNodeRunner } from '@engine/elements/nodes/input/InputNodeRunner.ts';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 
 const mode = (node: GraphNode): string => String(node.config.input_mode ?? 'text');
+
+/** The port each mode hands its text on: what was typed, or what the file says. A folder hands on none. */
+const TEXT_PORT: Record<string, string> = { text: 'output', file: 'content' };
 
 /**
  * The file a file input reads, as a sample: the path it is set to, or else
@@ -77,6 +81,19 @@ export class InputNodeGuiBuilder extends NodeGuiBuilder {
   /** A file input's content is the text of its file: what every node after it is shown before any run. */
   override restingFile(node: GraphNode, port: string): string | undefined {
     return mode(node) === 'file' && port === 'content' ? fileRead(node) || undefined : undefined;
+  }
+
+  /**
+   * Switched between text and one file, the text it hands on is still text --
+   * typed, or read from the file -- so the wire from one mode's text port moves
+   * onto the other's. It moved by accident once, when ports were matched by
+   * position, and a person switching to a file meant the same nodes to read it.
+   * A folder hands on paths, which is a different thing: no wire follows there.
+   */
+  override continuePorts(before: GraphNode, after: GraphNode): GraphNode {
+    const was = TEXT_PORT[mode(before)];
+    const now = TEXT_PORT[mode(after)];
+    return was && now && was !== now ? continuing(before, after, { outputs: { [now]: was } }) : after;
   }
 
   /** Its old words describe what the files hold, not what the selector returns. */

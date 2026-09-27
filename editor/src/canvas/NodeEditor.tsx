@@ -188,8 +188,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // ports follow it here and now. They used to follow only on the next
       // load, which is why ticking "catch failures" on an input node grew its
       // error port sometime later, to a person who had gone looking for it.
+      // A derived port that carries on an old one's work takes its wires,
+      // where the element says so (`continuePorts`).
       const derived = derivedNodePorts(next);
-      if (derived) return { ...next, ...derived };
+      if (derived) return element.continuePorts(prev, { ...next, ...derived });
       // Ticking "catch failures" is what puts the port on the node. Nobody
       // should have to add an output by hand and guess that it must be called
       // `error` for the executor to fill it.

@@ -50,12 +50,36 @@ export function untracked(node: GraphNode): GraphNode {
 }
 
 /**
+ * *after* with each port named in *continues* (its id -> the id of the port of
+ * *before* it continues) taking that port's place, so a Save moves the old
+ * port's wires onto it. For ports an element derives from a setting, which no
+ * editor spread: they are otherwise the port of their name, or new
+ * (`NodeGuiBuilder.continuePorts`).
+ */
+export function continuing(
+  before: GraphNode,
+  after: GraphNode,
+  continues: { inputs?: Record<string, string>; outputs?: Record<string, string> },
+): GraphNode {
+  const carry = (was: Tracked[], now: Port[], map: Record<string, string> = {}): Port[] => now.map((port) => {
+    const old = port.id in map ? was.find((candidate) => candidate.id === map[port.id]) : undefined;
+    return old ? { ...port, [WAS]: old[WAS] ?? old.id } : port;
+  });
+  return {
+    ...after,
+    inputs: carry(before.inputs, after.inputs, continues.inputs),
+    outputs: carry(before.outputs, after.outputs, continues.outputs),
+  };
+}
+
+/**
  * What became of each port of *before* in *after*, for `updateNode`.
  *
  * A port that went through the ports editor says which one it was. One that
  * did not -- added with "+", or put there by the element because a setting
  * changed (a page's blocks, an input's mode, "catch failures") -- is the port
- * of its name, if there was one and no edited port already says it is that one.
+ * of its name, if there was one and no edited port already says it is that one
+ * -- unless the element said which port it continues (`continuing`).
  */
 export function portRenames(before: GraphNode | undefined, after: GraphNode): PortRenames {
   const side = (was: Port[] = [], now: Tracked[]): Record<string, string | null> => {
