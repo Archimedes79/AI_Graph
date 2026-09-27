@@ -15,7 +15,7 @@ import type React from 'react';
 import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
-import { inferInterface } from '@engine/execution/interface.ts';
+import { inferInterface, type Schema } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 import { freeId } from '@/document/ids';
@@ -417,6 +417,19 @@ export function keepsOutputInterface(node: GraphNode): boolean {
   return engineRegistry.node(node.node_type)?.keepsOutputInterface ?? false;
 }
 
+/**
+ * The output interface *node* is to keep, measured from *outputs* it just
+ * produced -- by a run, or by ✨'s probe -- or undefined: when it keeps none,
+ * already keeps one, or nothing came out. Kept once, the first time; after
+ * that it is the contract the next runs are held to, until its Clear in the
+ * node's dialog lets the next one measure it again. One rule for the run, the
+ * dialog's ✨ and the sweep's, which each write it where their node is.
+ */
+export function shapeToKeep(node: GraphNode, outputs: Record<string, unknown> | undefined): Schema | undefined {
+  if (!keepsOutputInterface(node) || node.config.output_schema) return undefined;
+  return outputs && Object.keys(outputs).length ? inferInterface(outputs) : undefined;
+}
+
 export const useGraphStore = create<GraphStore>()(
   immer((set, get) => ({
     rfNodes: [],
@@ -587,14 +600,12 @@ export const useGraphStore = create<GraphStore>()(
 
         // A run is where an output interface comes from: nodes are wired, the
         // graph runs, and what a node actually produced is the first honest
-        // statement of its outputs. Kept once, the first time it succeeds;
-        // after that it is the contract the next runs are held to, until its
-        // Clear in the node's dialog lets the next run measure it again.
+        // statement of its outputs (`shapeToKeep`), the first time it succeeds.
         for (const rfNode of state.rfNodes) {
           const node = rfNode.data.graphNode;
-          if (!keepsOutputInterface(node) || node.config.output_schema) continue;
           const ran = result.node_results.find((r) => r.node_id === node.id && r.status === 'success');
-          if (ran && Object.keys(ran.outputs ?? {}).length) node.config.output_schema = inferInterface(ran.outputs);
+          const kept = shapeToKeep(node, ran?.outputs);
+          if (kept) node.config.output_schema = kept;
         }
       }),
 

@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
-import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
+import { shapeToKeep, useGraphStore } from '@/store/graphStore';
 import { portRenames, trackPorts, untracked } from '@/store/portRenames';
 import { derivedNodePorts } from '@/document/guiWidgets';
 import PortsEditor from './PortsEditor';
@@ -15,7 +15,6 @@ import { useWhatSends } from '@/authoring/WhatSends';
 import { inputSources, outputTargets, readFilePorts } from '@/authoring/generationContext';
 import { nodeFacts } from '@/authoring/nodeFacts';
 import { fromTheGraph } from '@/authoring/fromTheGraph';
-import { inferInterface } from '@engine/execution/interface.ts';
 import { nodeLogic } from '@/authoring/logic';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
 import WhatRuns from '@/elements/fields/WhatRuns';
@@ -180,9 +179,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // What the node says about itself -- ports, samples, wiring, format,
       // shape, examples -- as facts the engine writes one brief from.
       ...nodeFacts(node, graphNodes, graphEdges, executionResult),
-      recordShape: keepsOutputInterface(node)
-        ? (outputs) => { if (!draft.current?.config.output_schema) setConfig('output_schema', inferInterface(outputs)); }
-        : undefined,
+      // Asked of the draft as it is when the answer comes back.
+      recordShape: (outputs) => {
+        const kept = draft.current && shapeToKeep(draft.current, outputs);
+        if (kept) setConfig('output_schema', kept);
+      },
     });
   const handleGenerate = () => {
     const request = generationRequest.current();

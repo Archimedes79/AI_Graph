@@ -8,9 +8,8 @@
 import { useCallback, useRef, useState } from 'react';
 import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
 import type { GenerateResponse } from '@/api/client';
-import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
+import { shapeToKeep, useGraphStore } from '@/store/graphStore';
 import { graphEdge } from '@/document/wires';
-import { inferInterface } from '@engine/execution/interface.ts';
 import { nodeFacts } from './nodeFacts';
 import { blockFacts } from './blockFacts';
 import { WIDGET_BUILDERS, NODE_BUILDERS } from '@/elements/registry';
@@ -157,12 +156,11 @@ export function useGraphSweep(): SweepState {
         ...(predecessors ? { sampleInputs: predecessors, sampleOrigin: 'what the nodes before it just returned' } : {}),
         // What it turns out to return is kept as this node's shape, which is
         // what the next node is then generated against.
-        recordShape: keepsOutputInterface(current)
-          ? (outputs) => {
-            const now = nodesOf().find((n) => n.id === current.id);
-            if (now && !now.config.output_schema) setConfig('output_schema', inferInterface(outputs));
-          }
-          : undefined,
+        recordShape: (outputs) => {
+          const now = nodesOf().find((n) => n.id === current.id);
+          const kept = now && shapeToKeep(now, outputs);
+          if (kept) setConfig('output_schema', kept);
+        },
       });
       return {
         ...unit,
