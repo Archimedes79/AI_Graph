@@ -341,11 +341,6 @@ const RUN_POLL_INTERVAL_MS = 400;
 /** How many undo steps are kept. Each entry is a whole serialised graph. */
 const HISTORY_LIMIT = 50;
 
-interface NodeCallbacks {
-  onEdit: (nodeId: string) => void;
-  onDelete: (nodeId: string) => void;
-}
-
 /** The size a node was given, if it was given one, as ReactFlow lays it out. */
 function sizeStyle(node: GraphNode): { style: { width: number; height: number } } | Record<string, never> {
   return typeof node.width === 'number' && typeof node.height === 'number'
@@ -376,7 +371,7 @@ function setSize(rfn: Node<RFNodeData>): Pick<GraphNode, 'width' | 'height'> {
  * undo/redo's `applyGraphSnapshot`, so restoring a snapshot can never drift from
  * loading a file -- they were the same twenty lines twice.
  */
-function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
+function buildReactFlowGraph(graph: Graph) {
   const rfNodes: Node<RFNodeData>[] = graph.nodes.map((gn) => ({
     id: gn.id,
     type: 'graphNode',
@@ -389,7 +384,7 @@ function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
     // contents happened to measure -- and the measurement then read as an edit
     // to a graph nobody had touched.
     ...sizeStyle(gn),
-    data: { graphNode: gn, ...callbacks },
+    data: { graphNode: gn },
   }));
 
   const rfEdges: Edge[] = graph.edges.map((ge) => ({
@@ -450,11 +445,7 @@ export const useGraphStore = create<GraphStore>()(
         id,
         type: 'graphNode',
         position,
-        data: {
-          graphNode: defaults,
-          onEdit: (nid) => get().setEditingNode(nid),
-          onDelete: (nid) => get().deleteNode(nid),
-        },
+        data: { graphNode: defaults },
       };
       set((state) => {
         state.rfNodes.push(rfNode as never);
@@ -606,12 +597,7 @@ export const useGraphStore = create<GraphStore>()(
 
     loadGraph: (graph) => {
       const normalizedGraph = normalizeGraph(graph);
-      const callbacks = {
-        onEdit: (nid: string) => get().setEditingNode(nid),
-        onDelete: (nid: string) => get().deleteNode(nid),
-      };
-
-      const { rfNodes, rfEdges } = buildReactFlowGraph(normalizedGraph, callbacks);
+      const { rfNodes, rfEdges } = buildReactFlowGraph(normalizedGraph);
 
       set((state) => {
         state.metadata = normalizedGraph.metadata;
@@ -777,10 +763,7 @@ export const useGraphStore = create<GraphStore>()(
      */
     applyGraphSnapshot: (json) => {
       const graph = normalizeGraph(JSON.parse(json) as Graph);
-      const { rfNodes, rfEdges } = buildReactFlowGraph(graph, {
-        onEdit: (nid: string) => get().setEditingNode(nid),
-        onDelete: (nid: string) => get().deleteNode(nid),
-      });
+      const { rfNodes, rfEdges } = buildReactFlowGraph(graph);
       set((state) => {
         state.metadata = graph.metadata;
         state.rfNodes = rfNodes as never;

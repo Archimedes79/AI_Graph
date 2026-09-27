@@ -34,7 +34,9 @@ const statusStyles: Record<string, { color: string; glyph: string }> = {
 };
 
 const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
-  const { graphNode, onEdit, onDelete } = data;
+  const { graphNode } = data;
+  const setEditingNode = useGraphStore((s) => s.setEditingNode);
+  const deleteNode = useGraphStore((s) => s.deleteNode);
   const executionResult = useGraphStore((s) =>
     s.executionResult?.node_results.find((r) => r.node_id === id)
   );
@@ -50,10 +52,10 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const isGuiLike = builder?.holdsWidgets ?? false;
   const summary = builder?.canvasSummary?.(graphNode);
 
-  const handleEdit = useCallback(() => onEdit(id), [id, onEdit]);
-  // The ✕ sits a few pixels from ✏️, deleting is immediate, it silently takes
-  // every attached edge with it, and there is no undo -- so a node that is
-  // wired into the graph asks first. An unconnected node deletes straight away,
+  const handleEdit = useCallback(() => setEditingNode(id), [id, setEditingNode]);
+  // The ✕ sits a few pixels from ✏️, deleting is immediate, and it silently
+  // takes every attached edge with it -- so a node that is wired into the
+  // graph asks first; Ctrl+Z is not where anyone should find that out. An unconnected node deletes straight away,
   // because that is the case where a confirmation is just noise.
   const connectedEdgeCount = useGraphStore(
     (s) => s.rfEdges.filter((edge) => edge.source === id || edge.target === id).length
@@ -65,9 +67,9 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
         const wires = `${connectedEdgeCount} connection${connectedEdgeCount === 1 ? '' : 's'}`;
         if (!window.confirm(`Delete "${graphNode.label}"? Its ${wires} will be removed too.`)) return;
       }
-      onDelete(id);
+      deleteNode(id);
     },
-    [connectedEdgeCount, graphNode.label, id, onDelete]
+    [connectedEdgeCount, graphNode.label, id, deleteNode]
   );
 
   return (
