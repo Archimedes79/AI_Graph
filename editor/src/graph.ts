@@ -18,6 +18,13 @@ import type {
 
 export type { DataType, EngineGraph, ExecutionResult, GraphEdge, NodeResult, NodeType, Port, PortKind, WidgetKind };
 
+/**
+ * An edge as the canvas holds it, which port of which node feeds which: the
+ * loose shape a ReactFlow edge satisfies, handles possibly null. Not the saved
+ * `GraphEdge`, whose fields are named for the file.
+ */
+export type Wire = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
+
 export type AIProvider =
   'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
 

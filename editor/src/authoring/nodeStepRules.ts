@@ -4,7 +4,7 @@
 // asked the same way by the dialog and by `masterExamples.test.ts`, which
 // builds the examples through these steps.
 
-import type { GraphNode } from '@/graph';
+import type { GraphNode, Wire } from '@/graph';
 import { promptText } from '@engine/elements/nodes/ai/prompt.ts';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
 import { asExampleText } from './examplePair';
@@ -13,8 +13,6 @@ import { asExampleText } from './examplePair';
 export function ownOutputs(outputs: Record<string, unknown> | undefined): Record<string, unknown> {
   return Object.fromEntries(Object.entries(outputs ?? {}).filter(([port]) => port !== ERROR_PORT));
 }
-
-type Wire = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
 
 /**
  * An input typed `list` takes a list whole, whatever else does: a stop-word

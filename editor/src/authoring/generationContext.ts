@@ -1,4 +1,4 @@
-import type { ExecutionResult, GraphNode } from '@/graph';
+import type { ExecutionResult, GraphNode, Wire } from '@/graph';
 // This module reads the element registry, so no element's `…GuiBuilder.ts` may import
 // it: that would be a cycle through the registry (see `outputFormat.ts`).
 import { NODE_BUILDERS } from '@/elements/registry';
@@ -45,7 +45,7 @@ export function describeNodeOutput(node: GraphNode): string {
 export function connectedFormatContext(
   nodeId: string,
   nodes: GraphNode[],
-  edges: Array<{ source: string; target: string; targetHandle?: string | null }>,
+  edges: Wire[],
 ): string {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   // A Set, because two ports wired to the same neighbour are two edges but one
@@ -75,8 +75,6 @@ function preview(value: unknown): string {
   if (text === undefined) return String(value);
   return text.length > SAMPLE_BUDGET ? `${text.slice(0, SAMPLE_BUDGET)}\n… (truncated)` : text;
 }
-
-type Wire = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
 
 /**
  * The input ports a path arrives on: typed `file_path`, or `any` and wired
@@ -198,7 +196,7 @@ export function lastRunContext(nodeId: string, result: ExecutionResult | null, a
 export function inputSources(
   nodeId: string,
   nodes: GraphNode[],
-  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+  edges: Wire[],
 ): Record<string, string> {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byPort: Record<string, string[]> = {};
@@ -223,7 +221,7 @@ export function inputSources(
 export function outputTargets(
   nodeId: string,
   nodes: GraphNode[],
-  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+  edges: Wire[],
   withWants = false,
 ): Record<string, string> {
   const byId = new Map(nodes.map((node) => [node.id, node]));
@@ -251,7 +249,7 @@ export function outputTargets(
 export function inputOrigins(
   nodeId: string,
   nodes: GraphNode[],
-  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+  edges: Wire[],
 ): Record<string, string> {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byPort: Record<string, string[]> = {};

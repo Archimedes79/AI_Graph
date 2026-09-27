@@ -1,14 +1,12 @@
 // What ✨ Generate is told about a block on a page: the mirror of `nodeFacts`.
 // And what the graph around the block says it is handed: its step 1.
 
-import type { ExecutionResult, Graph, GraphNode, GuiWidget } from '@/graph';
+import type { ExecutionResult, Graph, GraphNode, GuiWidget, Wire } from '@/graph';
 import { call } from '@/api/client';
 import { guiWidgetPorts } from '@/document/guiWidgets';
 import { describeScheme } from '@/ui/scheme';
 import type { GenerationRequest } from './generation';
 import { inputOrigins, inputSources, lastRunWidgetInput } from './generationContext';
-
-type Wire = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
 
 /** What is wired into the block, in words -- `"Rows" (port "rows")` -- or '' while nothing is. */
 export function blockFeeds(nodeId: string, widget: GuiWidget, nodes: GraphNode[], edges: Wire[]): string {

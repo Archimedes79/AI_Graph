@@ -20,7 +20,7 @@
 import { memoryFeedbackEdges, topologicalLevels } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
 import { shippedText } from '@engine/elements/ElementRunner.ts';
-import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
+import type { GraphEdge, GraphNode, GuiWidget, Wire } from '@/graph';
 import { guiWidgetPorts } from '@/document/guiWidgets';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
@@ -282,9 +282,6 @@ export function missingExamples(nodes: GraphNode[], edges: GraphEdge[]): GraphNo
   return nodes.filter((node) => NODE_BUILDERS[node.node_type]?.missingExample(node, fed.has(node.id)) ?? false);
 }
 
-/** An edge as ReactFlow holds it: which port feeds which. */
-export interface WiredEdge { source: string; sourceHandle?: string | null; target: string; targetHandle?: string | null }
-
 /**
  * What *nodeId* would receive, assembled from what its predecessors returned
  * when they were generated.
@@ -298,7 +295,7 @@ export interface WiredEdge { source: string; sourceHandle?: string | null; targe
  */
 export function sampleFromPredecessors(
   target: SweepTarget,
-  edges: WiredEdge[],
+  edges: Wire[],
   produced: Map<string, Record<string, unknown>>,
   guiNodes: Set<string> = new Set(),
 ): Record<string, unknown> | undefined {

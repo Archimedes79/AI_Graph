@@ -11,12 +11,10 @@
 // field: a copy that went stale when the data node changed, dropped a text
 // node's details, and said once more what ✨ was told anyway.
 
-import type { GraphNode } from '@/graph';
+import type { GraphNode, Wire } from '@/graph';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
 import { readInterface, schemaOutline } from '@engine/execution/interface.ts';
 import { outputTargets } from './generationContext';
-
-type Wire = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
 
 /** The derived output spec of *node*, one line per wired output and one for the kept shape; '' when the graph says nothing. */
 export function derivedOutputWords(node: GraphNode, nodes: GraphNode[], edges: Wire[]): string {
