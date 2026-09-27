@@ -77,15 +77,15 @@ export const ENDPOINT_ENV: Record<string, string> = {
 
 /**
  * The providers that want a credential: which slot of `apiKeys` (and of the
- * settings file's `api_keys`) holds it, and the env var that can supply it
- * instead. GitHub's slot is `github`, older than the provider's name.
+ * settings file's `api_keys`) holds it -- the provider's own name -- and the
+ * env var that can supply it instead.
  */
 export const CREDENTIALS: Record<string, { key: string; env: string }> = {
   openai: { key: 'openai', env: 'OPENAI_API_KEY' },
   anthropic: { key: 'anthropic', env: 'ANTHROPIC_API_KEY' },
   openai_compatible: { key: 'openai_compatible', env: 'OPENAI_COMPATIBLE_API_KEY' },
   google: { key: 'google', env: 'GOOGLE_API_KEY' },
-  github_copilot: { key: 'github', env: 'GITHUB_TOKEN' },
+  github_copilot: { key: 'github_copilot', env: 'GITHUB_TOKEN' },
 };
 
 /** A provider that speaks the OpenAI chat-completions API. Its credential slot, if any, is in `CREDENTIALS`. */

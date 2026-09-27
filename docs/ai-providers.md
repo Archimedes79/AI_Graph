@@ -51,7 +51,7 @@ file by hand:
 ```json
 {
   "ai":       { "provider": "lmstudio",  "model": "qwen2.5-coder-7b" },
-  "api_keys": { "anthropic": "sk-ant-…", "openai": "", "github": "", "openai_compatible": "" },
+  "api_keys": { "anthropic": "sk-ant-…", "openai": "", "github_copilot": "", "openai_compatible": "" },
   "endpoints": { "lmstudio": "http://localhost:1234/v1" }
 }
 ```
@@ -71,7 +71,7 @@ Two provider names are worth spelling out:
   models accept no temperature: leave a node's temperature unset for them (below).
 - **GitHub Copilot** in the provider list means the [GitHub Models](https://models.github.ai)
   API, which is OpenAI-compatible. It authenticates with a GitHub personal access token
-  (`GITHUB_TOKEN`, or `api_keys.github`) that has the `models:read` scope — not with a
+  (`GITHUB_TOKEN`, or `api_keys.github_copilot`) that has the `models:read` scope — not with a
   Copilot editor subscription, which exposes no API of its own.
 
 Anything else that speaks the OpenAI protocol — a proxy, a gateway, a self-hosted

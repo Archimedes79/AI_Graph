@@ -18,7 +18,7 @@ export interface ChatValue {
   pending: string;
 }
 
-/** The block's stored value, whatever state an older file or an empty block left it in. */
+/** The block's stored value, whatever state an empty or hand-edited block left it in. */
 export function chatValue(raw: unknown): ChatValue {
   const stored = (raw && typeof raw === 'object' ? raw : {}) as { messages?: unknown; pending?: unknown };
   const messages = Array.isArray(stored.messages) ? stored.messages : [];

@@ -18,8 +18,8 @@
 // two lists to each other, class for class.
 //
 // **The element owns its config.** `config(subject)` reads the stored record
-// and returns this element's own settings, with defaults applied and old field
-// names accepted. Nothing else reads another element's fields.
+// and returns this element's own settings, with defaults applied. Nothing else
+// reads another element's fields.
 //
 // **Services arrive as a `Runtime`** (`Runtime.ts`), never as an import.
 //
@@ -115,7 +115,7 @@ export abstract class ElementRunner<S extends { id: string; config: RawConfig },
   // ── What it is ────────────────────────────────────────────────────────────
   // Asked whenever the graph is read: by a run, by the editor, by a project folder.
 
-  /** This element's settings, defaulted and migrated. The only reader of `S.config`. */
+  /** This element's settings, defaulted. The only reader of `S.config`. */
   abstract config(subject: S): C;
 
   /**

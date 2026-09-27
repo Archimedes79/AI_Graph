@@ -67,6 +67,12 @@ describe('the OpenAI-style providers', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('finds each provider\'s key in the slot named after it, GitHub Models\' included', async () => {
+    const calls = stubFetch([openAiReply('hi')]);
+    await aiService({ provider: 'github_copilot', model: 'gpt-x', apiKeys: { github_copilot: 'ghp_token' } }).complete({ prompt: 'x' });
+    expect(calls[0].headers.Authorization).toBe('Bearer ghp_token');
+  });
+
   it('still gives the machine\'s model to a node that names the machine\'s own provider', async () => {
     const calls = stubFetch([openAiReply('the answer')]);
     const ai = aiService({ provider: 'lmstudio', model: 'local' });

@@ -1,12 +1,6 @@
 {
   "name": "Chat",
   "description": "A chatbot is two nodes: a page with a chat block, and a model. Sending a message starts the graph at the AI node; the answer comes back into the conversation, and the conversation goes out again as history with the next message.",
-  "tags": [
-    "example",
-    "ai",
-    "chat",
-    "gui"
-  ],
   "nodes": {
     "page": "gui",
     "assistant": "ai"

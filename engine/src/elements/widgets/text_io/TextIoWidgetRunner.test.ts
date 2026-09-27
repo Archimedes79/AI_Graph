@@ -102,11 +102,6 @@ describe('what a text box keeps from a loop', () => {
     await executeGraph(graph, { runtime, registry });
     expect(asked).toEqual(['my question', 'my question']);
   });
-
-  it('sends an object an older graph holds as the text the box shows', async () => {
-    const out = await element.execute(box({ mode: 'input', value: { answer: 42 } }), {});
-    expect(out).toEqual({ box_out: JSON.stringify({ answer: 42 }, null, 2) });
-  });
 });
 
 describe('what an empty box that also shows hands on', () => {

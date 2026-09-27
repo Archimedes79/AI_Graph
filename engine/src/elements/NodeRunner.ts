@@ -191,9 +191,8 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   /**
    * This kind can be set to run once per item (`config.batch_mode`): its body
    * is written by a person or ✨ for one item, and "Run once per item" is its
-   * setting. Every other kind takes what arrives whole, whatever an older file
-   * says -- the editor used to write `per_item` on every node, and an output
-   * node that fanned out wrote each item over the same file.
+   * setting. Every other kind takes what arrives whole, whatever its config
+   * says: an output node that fanned out wrote each item over the same file.
    */
   readonly fansOut: boolean = false;
 

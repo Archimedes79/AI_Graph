@@ -1,14 +1,6 @@
 {
   "name": "Paper review panel",
   "description": "A pre-submission review panel: five AI reviewers — scientific soundness, an adversarial referee, evidence and claims, references, figures and tables — read the same manuscript in parallel, and a judge consolidates their findings into one ranked list with a recommendation. The AI advises; the researcher decides. The sample paper is fictional and has problems planted in it. Paths are relative to the working directory, so run this from the repository root.",
-  "author": "AI-Graph",
-  "tags": [
-    "example",
-    "gui",
-    "ai",
-    "multi-agent",
-    "review"
-  ],
   "nodes": {
     "page": "gui",
     "read": "code",
