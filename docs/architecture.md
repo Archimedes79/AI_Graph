@@ -279,7 +279,7 @@ engine/src                               editor/src
     schedule.ts  node.ts                   runtime/            the deployed tool's page
     lifecycle.ts     what is stopped, in order
     editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal
-                                           dialogs/            FileBrowserDialog, RequirementsDialog
+                                           dialogs/            FileBrowserDialog, RequirementsDialog, OutputWindows
   ai/                providers · MCP · settings
   cli/               cli.ts  bundle.ts
 ```

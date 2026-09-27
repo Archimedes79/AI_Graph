@@ -16,6 +16,7 @@ import ResultsPanel from '@/app/ResultsPanel';
 import SettingsDialog from '@/app/SettingsDialog';
 import Modal from '@/ui/Modal';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
+import OutputWindows from '@/dialogs/OutputWindows';
 
 import { useGraphStore } from '@/store/graphStore';
 import { call } from '@/api/client';
@@ -446,6 +447,9 @@ export default function App() {
             build or try, and these would act on the graph in there. */}
         {view === 'design' && <TopGraphOnly><DesignerTab /></TopGraphOnly>}
         {view === 'preview' && <TopGraphOnly><PreviewTab /></TopGraphOnly>}
+
+        {/* What a run opened, over whichever view is showing: once, here. */}
+        <OutputWindows />
 
         {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
 

@@ -5,6 +5,7 @@ import { GuiSurfacePage } from '@/page/GuiPage';
 import { useDeliveredRun } from '@/page/useDeliveredRun';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
+import OutputWindows from '@/dialogs/OutputWindows';
 import DeliveredHeader from '@/page/DeliveredHeader';
 import RuntimeAISettings from './RuntimeAISettings';
 import { call, type ScheduleState } from '@/api/client';
@@ -158,6 +159,7 @@ export default function RuntimeApp() {
           onSubmit={delivered.submit}
           onCancel={delivered.cancel}
         />
+        <OutputWindows />
       </div>
 
       {showSettings && <RuntimeAISettings onClose={() => setShowSettings(false)} />}

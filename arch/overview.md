@@ -522,7 +522,7 @@ flowchart TD
 | `Graph types` | [`editor/src/graph.ts`](../editor/src/graph.ts) | the engine's types plus the typed `NodeConfig` view |
 
 Not drawn: [`ui/`](../editor/src/ui/) (theme, `tone.ts`, `scheme.ts`, `Modal`, `Markdown`) and
-[`dialogs/`](../editor/src/dialogs/) (`FileBrowserDialog`, `RequirementsDialog`), used from several
+[`dialogs/`](../editor/src/dialogs/) (`FileBrowserDialog`, `RequirementsDialog`, `OutputWindows`), used from several
 layers; and the store's and `guiWidgets.ts`'s direct imports
 of engine code (`@engine/graph.ts`, `@engine/elements/registry.ts`,
 `@engine/execution/triggers.ts`) — ports and triggers are the engine's answer, computed in
