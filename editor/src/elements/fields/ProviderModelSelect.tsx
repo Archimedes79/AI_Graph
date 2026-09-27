@@ -10,6 +10,7 @@ const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
   // Shown only where `allowDefault` is set; the caller supplies the wording,
   // because "default" means something different design-time (the server's
   // generation AI) than at runtime (the graph's own AI default).
+  // Which default it stands for is the caller's `defaultTarget`.
   default: 'Default',
   ollama: 'Ollama (local)',
   lmstudio: 'LM Studio (local)',
@@ -73,6 +74,35 @@ export function modelWhenEmpty(provider: string, homes: Array<ModelChoice | unde
   return homes.reduce<ModelChoice>((asked, home) => (home ? lent(asked, home) : asked), { provider, model: '' }).model;
 }
 
+/** Which of the server's two defaults a picker's `default` provider stands for. */
+export type DefaultTarget = 'runtime' | 'generation';
+
+/**
+ * What the model box offers: the models served by the provider chosen -- for
+ * `default`, by the target it resolves to -- and what it shows while empty.
+ *
+ * The generation picker's `default` is the generation target, which the
+ * environment or the file's `codegen` can point elsewhere than a run's: shown
+ * the runtime one, it listed a local model while ✨ asked Anthropic.
+ */
+export function modelHints(
+  provider: AIProvider, status: ProviderStatus | null,
+  { readByRuns, graphDefault, defaultTarget = 'runtime' }: { readByRuns?: boolean; graphDefault?: ModelChoice; defaultTarget?: DefaultTarget } = {},
+): { servedModels: string[]; placeholder: string } {
+  const standsFor = defaultTarget === 'generation' ? status?.gen_target : status?.runtime_target;
+  const effectiveProvider = provider === 'default' ? standsFor?.provider : provider;
+  const servedModels = (effectiveProvider && status?.local?.[effectiveProvider]?.models) || [];
+  const fallback = readByRuns && status ? modelWhenEmpty(provider, [graphDefault, status.runtime_target]) : '';
+  const placeholder = readByRuns && status
+    // Left empty with nothing to fill it, a run refuses: the box says a model
+    // must be named rather than showing one a run would never send.
+    ? fallback || (servedModels[0] ? `required, e.g. ${servedModels[0]}` : 'required: name a model')
+    : provider === 'default'
+      ? (standsFor?.model || 'default model')
+      : servedModels[0] ?? 'model name';
+  return { servedModels, placeholder };
+}
+
 interface ProviderModelSelectProps {
   provider: AIProvider;
   model: string;
@@ -88,6 +118,8 @@ interface ProviderModelSelectProps {
   allowDefault?: boolean;
   /** Wording for the `default` option; required for it to read sensibly. */
   defaultLabel?: string;
+  /** Which default `default` stands for: a run's (the default) or ✨'s. */
+  defaultTarget?: DefaultTarget;
   /**
    * A run reads this choice (an AI node, the graph's default), so an empty
    * model means what `modelWhenEmpty` says -- not the provider's own default,
@@ -99,7 +131,7 @@ interface ProviderModelSelectProps {
 }
 
 export default function ProviderModelSelect({
-  provider, model, onProviderChange, onModelChange, compact, allowDefault, defaultLabel, readByRuns, graphDefault,
+  provider, model, onProviderChange, onModelChange, compact, allowDefault, defaultLabel, defaultTarget, readByRuns, graphDefault,
 }: ProviderModelSelectProps) {
   const status = useProviderStatus();
   const listId = useId();
@@ -118,16 +150,7 @@ export default function ProviderModelSelect({
   // Models actually served by the selected local provider (or, for `default`,
   // by whatever it resolves to): pick-or-type via a datalist, because typing
   // an LM Studio model id from memory is exactly the friction this removes.
-  const effectiveProvider = provider === 'default' ? status?.runtime_target?.provider : provider;
-  const servedModels = (effectiveProvider && status?.local?.[effectiveProvider]?.models) || [];
-  const fallback = readByRuns && status ? modelWhenEmpty(provider, [graphDefault, status.runtime_target]) : '';
-  const placeholder = readByRuns && status
-    // Left empty with nothing to fill it, a run refuses: the box says a model
-    // must be named rather than showing one a run would never send.
-    ? fallback || (servedModels[0] ? `required, e.g. ${servedModels[0]}` : 'required: name a model')
-    : provider === 'default'
-      ? (status?.runtime_target?.model || 'default model')
-      : servedModels[0] ?? 'model name';
+  const { servedModels, placeholder } = modelHints(provider, status, { readByRuns, graphDefault, defaultTarget });
 
   const selectClass = compact ? 'rounded px-2 py-1 text-xs' : 'w-full rounded-lg px-3 py-2 text-sm';
   const inputClass = compact ? 'rounded px-2 py-1 text-xs w-24' : 'w-full rounded-lg px-3 py-2 text-sm';

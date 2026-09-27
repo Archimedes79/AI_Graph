@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modelWhenEmpty } from './ProviderModelSelect';
+import { modelHints, modelWhenEmpty } from './ProviderModelSelect';
 import { lent } from '@engine/elements/Runtime.ts';
 import { withGraphDefaults } from '@engine/execution/executor.ts';
 
@@ -57,5 +57,26 @@ describe('modelWhenEmpty', () => {
         expect(modelWhenEmpty(provider, [graph, machine]), `${provider} under ${JSON.stringify(graph)}`).toBe(sent[0]);
       }
     }
+  });
+});
+
+/**
+ * The generation picker's `default` is ✨'s target, which the environment or
+ * the file's `codegen` can put elsewhere than a run's. Shown the run's, the box
+ * offered a local model while ✨ asked Anthropic.
+ */
+describe('modelHints', () => {
+  const status = {
+    local: { lmstudio: { reachable: true, models: ['qwen', 'phi'] }, ollama: { reachable: false, models: [] } },
+    runtime_target: { provider: 'lmstudio', model: 'qwen' },
+    gen_target: { provider: 'anthropic', model: 'claude-x' },
+  };
+
+  it('shows the generation target for the generation picker\'s default', () => {
+    expect(modelHints('default', status, { defaultTarget: 'generation' })).toEqual({ servedModels: [], placeholder: 'claude-x' });
+  });
+
+  it('shows the runtime target, and what it serves, for everyone else\'s default', () => {
+    expect(modelHints('default', status)).toEqual({ servedModels: ['qwen', 'phi'], placeholder: 'qwen' });
   });
 });

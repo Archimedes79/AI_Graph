@@ -54,7 +54,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
             </h3>
             <p className="text-xs mb-3" style={{ color: DIM }}>
               Used by every ✨ Generate action in the editor — code, system prompts, selector
-              code, plot transforms, output formats and whole graphs. Set once here, for this
+              code, plot transforms, data formats and whole graphs. Set once here, for this
               browser; it is never saved into a graph, so a graph you share carries no model
               choice of yours.
             </p>
@@ -65,6 +65,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               onModelChange={(model) => setGenAI({ model })}
               allowDefault
               defaultLabel="Server default (AI_GRAPH_GEN_PROVIDER / ai-settings.json)"
+              defaultTarget="generation"
             />
           </section>
 
@@ -83,7 +84,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               onProviderChange={(provider) => setAiDefaults({ provider })}
               onModelChange={(model) => setAiDefaults({ model })}
               allowDefault
-              defaultLabel="Unset (falls back to Ollama / llama3)"
+              defaultLabel="Unset (this machine's default)"
               readByRuns
             />
             <div
