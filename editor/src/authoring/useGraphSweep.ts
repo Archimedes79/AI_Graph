@@ -161,7 +161,7 @@ export function useGraphSweep(): SweepState {
         ...(predecessors ? { sampleInputs: predecessors, sampleOrigin: 'what the nodes before it just returned' } : {}),
         graphContext: NODE_BUILDERS[current.node_type]?.outputContract === 'format' ? undefined : [
           connectedFormatContext(current.id, nodesOf(), rfEdges()),
-          lastRunContext(current.id, live().executionResult, readFilePorts(current)),
+          lastRunContext(current.id, live().executionResult, readFilePorts(current, nodesOf(), rfEdges())),
         ].filter(Boolean).join('\n\n'),
         // What it turns out to return is kept as this node's shape, which is
         // what the next node is then generated against.

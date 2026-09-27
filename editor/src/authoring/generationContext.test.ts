@@ -124,6 +124,20 @@ describe('a node that is handed the text of a file', () => {
     expect(readFilePorts(node)).toEqual([]);
   });
 
+  it('asks with the wiring, as the run does: an input that says nothing, wired from a path, is read', () => {
+    // A graph written by hand, by the MCP server or by a model keeps the port
+    // `any`; the run reads it, and ✨ was told a path and tried code on a filename.
+    const node = NODE_KINDS.code.create('worker');
+    node.config.read_file_inputs = true;
+    const source = NODE_KINDS.input.create('file');
+    source.config.input_mode = 'file';
+    source.outputs = [{ id: 'path', name: 'Path', kind: 'output', data_type: 'file_path', multi: false, required: false, description: '' }];
+    const wired = [{ source: 'file', sourceHandle: 'path', target: 'worker', targetHandle: 'input' }];
+    expect(node.inputs[0].data_type).toBe('any');
+    expect(readFilePorts(node, [source, node], wired)).toEqual(['input']);
+    expect(readFilePorts(node)).toEqual([]);
+  });
+
   it('does not quote the recorded path as the value the code will receive', () => {
     const result = {
       status: 'success', outputs: {},

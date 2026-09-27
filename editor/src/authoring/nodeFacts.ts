@@ -62,7 +62,7 @@ export function nodeFacts(
     sampleInputs: tried ?? resting?.values,
     sampleOrigin: tried ? sampleOrigin(node.id, inputs, observed) : resting?.origin,
     inputSources: inputOrigins(node.id, nodes, edges),
-    readFilePorts: readFilePorts(node),
+    readFilePorts: readFilePorts(node, nodes, edges),
     // What a body is handed on each port: one item of a list input, unless the
     // node takes lists whole.
     inputTypes: Object.fromEntries(node.inputs.map((port) => {

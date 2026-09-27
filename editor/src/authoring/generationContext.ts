@@ -3,7 +3,7 @@ import type { ExecutionResult, GraphNode } from '@/graph';
 // it: that would be a cycle through the registry (see `outputFormat.ts`).
 import { NODE_BUILDERS } from '@/elements/registry';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import { filePorts } from '@engine/execution/fileInputs.ts';
+import { filePorts, type FileGraph } from '@engine/execution/fileInputs.ts';
 
 /**
  * What the ✨ Generate buttons tell the AI about the world around a node.
@@ -99,9 +99,30 @@ function preview(value: unknown): string {
  * A sample holds what came off the wire -- the path. The server reads these
  * before it shows the sample to the model or tries the code on it, as a run
  * does; asked of the engine's element, so the two cannot disagree on which.
+ *
+ * With the wiring, because the run asks with it: a port typed `any` is read
+ * when what is wired into it declares a path (`fileInputs.ts`). Asked without
+ * it, such a port -- in a graph written by hand, by the MCP server or by a
+ * model, which the editor's wiring never retyped -- was told to ✨ as a path,
+ * and the code was tried on a filename while the run handed it the text.
  */
-export function readFilePorts(node: GraphNode): string[] {
-  return engineRegistry.node(node.node_type)?.readsFileInputs(node) ? filePorts(node) : [];
+export function readFilePorts(
+  node: GraphNode,
+  nodes: GraphNode[] = [],
+  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }> = [],
+): string[] {
+  if (!engineRegistry.node(node.node_type)?.readsFileInputs(node)) return [];
+  const graph: FileGraph = {
+    nodes: nodes as FileGraph['nodes'],
+    edges: edges.map((edge, at) => ({
+      id: `e${at}`,
+      source_node_id: edge.source,
+      source_port_id: edge.sourceHandle ?? '',
+      target_node_id: edge.target,
+      target_port_id: edge.targetHandle ?? '',
+    })),
+  };
+  return filePorts(node, graph, engineRegistry);
 }
 
 export function lastRunInputs(

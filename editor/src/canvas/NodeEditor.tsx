@@ -194,7 +194,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
    */
   const surroundingContext = () => [
     connectedFormatContext(node.id, graphNodes, graphEdges),
-    lastRunContext(node.id, executionResult, readFilePorts(node)),
+    lastRunContext(node.id, executionResult, readFilePorts(node, graphNodes, graphEdges)),
   ].filter(Boolean).join('\n\n');
 
   const setDescription = (value: string) =>
