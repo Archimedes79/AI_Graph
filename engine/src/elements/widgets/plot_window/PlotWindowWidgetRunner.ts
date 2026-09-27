@@ -159,25 +159,23 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
        * that follows knows it: it reads the viewBox the body itself declared,
        * not these.
        *
-       * It is called the way the page's worker calls it (`plot_window/draw.ts`),
-       * whatever it defines. A body that still defines `run` -- every chart
-       * written before `draw` -- is handed `({ value }, window)`, never the
-       * sandbox's `node`: one that asks `node.llm` passed the probe with a
-       * real node and then failed on every page. The body gets a scope of its
-       * own, so its `run` is not the wrapper's, and no `require`, which a
-       * worker does not have either. It starts on the wrapper's first line:
-       * an error is reported by the line it is on, and the repair is shown the
-       * body, whose line 3 must be the line 3 it is told about.
+       * It is called the way the page's worker calls it (`plot_window/draw.ts`):
+       * `draw(data, window)`, never with the sandbox's `node` -- a body that
+       * asks `node.llm` would pass the probe and fail on every page. The body
+       * gets a scope of its own and no `require`, which a worker does not have
+       * either. It starts on the wrapper's first line: an error is reported by
+       * the line it is on, and the repair is shown the body, whose line 3 must
+       * be the line 3 it is told about.
        */
       probeWith: (body) => [
-        `const __probe = run; const __chart = ((require) => { ${body}`,
+        `const __draw = ((require) => { ${body}`,
         ';',
-        "  return { draw: typeof draw === 'function' ? draw : undefined, run: typeof run === 'function' && run !== __probe ? run : undefined };",
+        "  return typeof draw === 'function' ? draw : undefined;",
         '})();',
         'async function run(inputs) {',
         "  const window = { width: 640, height: 360, scheme: 'night', dark: true };",
-        "  if (!__chart.draw && !__chart.run) throw new Error(\"This chart's code defines neither draw(data, window) nor run(inputs).\");",
-        '  const drawn = await (__chart.draw ? __chart.draw(inputs.value, window) : __chart.run({ value: inputs.value }, window));',
+        "  if (!__draw) throw new Error(\"This chart's code defines no draw(data, window).\");",
+        '  const drawn = await __draw(inputs.value, window);',
         "  return { value: drawn && typeof drawn === 'object' && 'value' in drawn ? drawn.value : drawn };",
         '}',
       ].join('\n'),

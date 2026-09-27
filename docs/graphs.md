@@ -798,8 +798,6 @@ SVG out. A graph travels, and a body that draws a bar chart has no business with
 page's origin. A body that will not finish is given four seconds and then destroyed, and
 the block says so where the chart would be. A chart with no body draws whatever arrived.
 
-`run(inputs)` is still accepted, so every chart written before this keeps working.
-
 A **table** or an **image** is different: its transform reshapes data, has no use for the
 window, and still runs once per run where its result can be reused. Same snippet contract
 as a code node: `run(inputs) -> {"value": …}`.

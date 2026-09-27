@@ -605,10 +605,10 @@ describe('a block\'s snippet is looked at before anyone sees it', () => {
   });
 
   it('tries a chart the way its page draws it: a body asking node.llm fails here, and a figure passes', async () => {
-    // The page's worker hands run() a window, not a node. With a node here, the
+    // The page's worker hands draw() a window, not a node. With a node here, the
     // question was answered, the probe and `check` said ✓, and the page failed.
     const ai = scripted([
-      '```js\nasync function run(inputs, node) { return { value: await node.llm({ prompt: "chart it" }) }; }\n```',
+      '```js\nasync function draw(data, node) { return await node.llm({ prompt: "chart it" }); }\n```',
       '```js\nfunction draw(data, window) { return { kind: "line", title: "Temperature", points: data.map((row) => ({ label: row.t, value: row.temp })) }; }\n```',
     ]);
     const reply = await generate({ element: 'plot_window', description: 'a line', sample_inputs: sample }, { ai, code: nodeCode, generationFor, target });
