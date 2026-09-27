@@ -28,7 +28,7 @@ export function useGenerationReview(): Review {
  * `useGenerate` down to the one that draws the message runs through eight
  * element editors that do nothing with it but pass it on. That row of
  * forwarding props is what let the ✨ button drift apart in the first place --
- * see AuthoredBodyEditor.
+ * see `GeneratedBody`, the one drawing of it now.
  */
 export function GenerationReport(
   { calls, live = NOTHING, review = NO_REVIEW, children }:

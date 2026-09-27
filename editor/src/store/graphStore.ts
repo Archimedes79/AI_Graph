@@ -429,11 +429,6 @@ export function keepsOutputInterface(node: GraphNode): boolean {
   return keepsText(node, 'output_schema');
 }
 
-/** Whether this node can keep examples (`examples.md`). */
-export function keepsExamples(node: GraphNode): boolean {
-  return keepsText(node, 'examples');
-}
-
 export const useGraphStore = create<GraphStore>()(
   immer((set, get) => ({
     rfNodes: [],

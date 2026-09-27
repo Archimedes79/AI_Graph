@@ -21,6 +21,7 @@ import { memoryFeedbackEdges, topologicalLevels } from '@engine/execution/execut
 import { registry } from '@engine/elements/registry.ts';
 import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
 import { guiWidgetPorts } from '@/document/guiWidgets';
+import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 
 /** What happened to one node. */
@@ -250,14 +251,26 @@ export async function* sweep<T>(
 }
 
 /**
+ * Whether *node* holds a body of its own in *field*: something, and not what a
+ * new node of its kind starts with -- the starter selector every input node
+ * carries, the starter code of a code node. A sweep writes what nobody wrote,
+ * and leaves alone what somebody did.
+ */
+export function writtenBody(node: GraphNode, field: string): boolean {
+  const text = (value: unknown): string => String(value ?? '').trim();
+  const written = text((node.config as unknown as Record<string, unknown>)[field]);
+  const starter = text((NODE_KINDS[node.node_type]?.create(node.id).config as unknown as Record<string, unknown> | undefined)?.[field]);
+  return !!written && written !== starter;
+}
+
+/**
  * The nodes a sweep would have to guess at, before it starts.
  *
  * A node at the head of the graph has no predecessor to describe its data, so
- * it has to say what it holds: an attached sample (the strong form — the model
- * sees the real thing) or a stated contract (the weak one). With neither, the
- * first generation is written against nothing and the mistake is carried the
- * whole way down. Saying so before ten model calls start is cheaper than
- * reading it in the results.
+ * it has to have something real to read: a default file or folder, which the
+ * nodes after it are then shown. Without one, the first generation is written
+ * against nothing and the mistake is carried the whole way down. Saying so
+ * before ten model calls start is cheaper than reading it in the results.
  */
 export function missingExamples(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
   const fed = new Set(edges.map((edge) => edge.target_node_id));

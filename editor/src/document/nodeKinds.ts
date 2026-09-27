@@ -74,7 +74,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
   input: {
     settings: [
       'input_mode', 'value', 'prompt_at_runtime', 'recursive', 'extensions', 'select_all_files',
-      'selector_prompt', 'selector_code', 'example_file', 'output_format_prompt', 'catch_errors',
+      'selector_prompt', 'selector_code', 'output_format_prompt', 'catch_errors',
     ],
     create(id) {
       // A new input starts in text mode, and its ports follow from that -- asked
@@ -97,7 +97,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
     settings: [
       'ai_provider', 'ai_model', 'system_prompt', 'temperature', 'prompt_template',
       'output_format', 'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
-      'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors', 'examples', 'run_code',
+      'read_file_inputs', 'batch_concurrency', 'catch_errors', 'examples', 'run_code',
     ],
     // A new node starts with a system prompt to show where one goes; a file
     // without one sends none, and a Save must not start sending ours.
@@ -127,7 +127,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
   code: {
     settings: [
       'code', 'code_prompt', 'output_schema', 'examples', 'output_format', 'output_format_prompt',
-      'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
+      'read_file_inputs', 'batch_concurrency', 'catch_errors',
     ],
     // The starter body is for a node made here. A file without code is a node
     // with no code -- which `check` says -- not one that quietly hands its
@@ -146,7 +146,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
   },
 
   data: {
-    settings: ['data_value', 'data_format', 'data_prompt', 'data_format_prompt', 'example_file'],
+    settings: ['data_value', 'data_format', 'data_prompt', 'data_format_prompt'],
     create: (id) => ({
       id,
       node_type: 'data',

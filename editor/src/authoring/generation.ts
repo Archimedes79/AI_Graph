@@ -71,26 +71,29 @@ export interface ElementGeneration<S = any> {
   success?: string;
 
   // ---- how the block is labelled -------------------------------------------
-  // Seven editors drew the same five controls -- a prompt box, the 📎 example,
-  // an optional language picker, the ✨ button and the body box -- and differed
-  // only in their wording. The wording belongs to the element; the drawing
-  // belongs to `AuthoredBodyEditor`, which is why these live here rather than
-  // as props somebody has to remember to pass.
+  // Seven editors drew the same controls -- a prompt box, an example, the ✨
+  // button and the body box -- and differed only in their wording. The wording
+  // belongs to the element; the drawing belongs to `FourSteps` and
+  // `GeneratedBody`, which is why these live here rather than as props
+  // somebody has to remember to pass.
   promptLabel?: string;
   promptPlaceholder?: string;
   bodyLabel?: string;
   bodyPlaceholder?: string;
-  /** Wording for the 📎 attachment, when "Example input" is not specific enough. */
-  exampleLabel?: string;
   /**
    * What the body is written in, for the editor it is written with. Omitted:
    * a body kept in a field called `…prompt` is prose, anything else is code.
    */
   language?: 'javascript' | 'markdown';
-  /** Render the body in a monospace box: true wherever the body is real code. */
-  mono?: boolean;
   /** How tall the body box starts out; a system prompt needs less than a module. */
   bodyHeight?: number;
+  /**
+   * A sample only the engine can produce, asked for when ✨ is pressed: a
+   * folder's listing, which is what a file selector is handed and what no
+   * field of the node holds. It wins over the node's own sample, which is keyed
+   * by ports the snippet does not have.
+   */
+  fetchSample?: (subject: S) => Promise<{ values: Record<string, unknown>; origin: string } | undefined>;
 }
 
 /** Reading and writing one element's fields, wherever they happen to live. */
@@ -127,18 +130,29 @@ export function widgetFields(
 /**
  * What to say after generating.
  *
- * When a sample from the last run was available the backend ran the function
- * before handing it over, so there is more to report than "done" -- and when it
- * still does not run, saying so now is kinder than letting the next ▶ Run say it.
+ * When a sample was available -- the example, the last run's values, what a
+ * wired node holds -- the backend ran the function before handing it over, so
+ * there is more to report than "done", and it says on *what*: "the last run's
+ * data" was said whatever the sample had been. When it still does not run,
+ * saying so now is kinder than letting the next ▶ Run say it; when it runs and
+ * only the element's own check or the example's expected output found fault
+ * with the result, it says that, and not that it does not run.
  */
-function probeMessage(probe: ProbeReport | undefined, fallback: string): string {
+export function probeMessage(probe: ProbeReport | undefined, fallback: string, origin?: string): string {
+  const on = origin ?? 'the sample';
   switch (probe?.status) {
     case 'ok':
-      return '✅ Generated and verified against the last run\'s data.';
+      return `✅ Generated and verified against ${on}.`;
     case 'repaired':
-      return '✅ Generated. The first attempt failed on your data; this one runs.';
-    case 'failed':
-      return `⚠️ Generated, but it does not run yet: ${probe.error || `missing ${probe.missing_outputs.join(', ')}`}`;
+      return `✅ Generated. The first attempt failed on ${on}; this one runs.`;
+    case 'failed': {
+      if (probe.error) return `⚠️ Generated, but it does not run yet: ${probe.error}`;
+      if (probe.missing_outputs.length) return `⚠️ Generated, but it does not return ${probe.missing_outputs.join(', ')} yet.`;
+      const problems = probe.problems ?? [];
+      return problems.length
+        ? `⚠️ Generated and it runs on ${on}, but the result is not right yet: ${problems.join('; ')}`
+        : `⚠️ Generated, but it could not be verified against ${on}.`;
+    }
     default:
       return fallback;
   }
@@ -152,6 +166,12 @@ export interface GenerationRequest<S> {
   fields: FieldAccess;
   /** The element's real ports, for a snippet that is wired as the node is. */
   ports?: { inputs: string[]; outputs: string[] };
+  /**
+   * The ports declared as lists (`Port.multi`): what a run per item fans out
+   * over and collects into lists, and so how ✨'s probe cuts the sample to one
+   * call and hands its answer on.
+   */
+  lists?: { inputs: string[]; outputs: string[] };
   /** The one example-input path this element carries. */
   exampleFile?: string;
   /** Neighbours' declared formats and the last run's values, from the shell. */
@@ -178,7 +198,12 @@ export interface GenerationRequest<S> {
   examples?: string;
   /** An ai node's message template: how its inputs are laid out for the model. */
   messageTemplate?: string;
-  /** Where `sampleInputs` came from, in words: the last run, or values typed into "Try it". */
+  /**
+   * Where the sample came from, in words: the example, the last run, what a
+   * wired node holds. Sent with `sampleInputs`, and said in the message after
+   * ✨ -- also when the sample is the node's example, which the engine reads
+   * from `examples` itself so that it checks what the example expects.
+   */
   sampleOrigin?: string;
   /** Each input's declared type as the body sees it: `text`, `list of text`. */
   inputTypes?: Record<string, string>;
@@ -242,6 +267,8 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
     sample_origin: request.sampleInputs ? request.sampleOrigin : undefined,
     input_types: request.inputTypes,
     batch_mode: request.batchMode,
+    multi_inputs: request.lists?.inputs,
+    multi_outputs: request.lists?.outputs,
     output_targets: request.outputTargets && Object.keys(request.outputTargets).length ? request.outputTargets : undefined,
     output_format: request.outputFormat?.trim() || undefined,
     output_example: request.outputExample?.trim() || undefined,
@@ -250,29 +277,53 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
 }
 
 /**
+ * The request with the sample its element can only get by asking the engine
+ * (`ElementGeneration.fetchSample`), when it declares one. Asked at the moment
+ * ✨ is pressed, so it is what is there now; one that cannot be had leaves the
+ * request as it was, and the verify pass is simply off.
+ */
+async function withFetchedSample<S>(request: GenerationRequest<S>): Promise<GenerationRequest<S>> {
+  const fetch = request.generation.fetchSample;
+  if (!fetch) return request;
+  try {
+    const fetched = await fetch(request.subject);
+    return fetched ? { ...request, sampleInputs: fetched.values, sampleOrigin: fetched.origin } : request;
+  } catch {
+    return request;
+  }
+}
+
+/**
  * What ✨ Generate would send, without sending it: the server builds the same
  * request and stops at the first model call (`preview`). The answer is that
  * call -- system and prompt, as the model would read them.
  */
 export async function previewGeneration<S>(request: GenerationRequest<S>): Promise<AICall[]> {
-  const response = await call('generate', { ...generateRequest(request), preview: true });
+  const response = await call('generate', { ...generateRequest(await withFetchedSample(request)), preview: true });
   return response.calls ?? [];
 }
 
 export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
   const { generation: spec, fields } = request;
   const prompt = fields.get(spec.promptField).trim();
+  // What the verify pass ran it on, as the message after it says: set once the
+  // request is sent, since a fetched sample is only known then.
+  let origin = request.sampleOrigin;
 
   return {
     guard: () => (prompt ? undefined : (spec.guard ?? 'Please add a prompt first.')),
     pending: 'Generating…',
-    success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!'),
+    success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!', origin),
     failure: 'Generation failed',
-    run: (progressId?: string) => call('generate', {
-      ...generateRequest(request),
-      // Only a single ✨ button passes one; a sweep runs unattended.
-      ...(progressId ? { progress_id: progressId } : {}),
-    }),
+    run: async (progressId?: string) => {
+      const sent = await withFetchedSample(request);
+      origin = sent.sampleOrigin;
+      return call('generate', {
+        ...generateRequest(sent),
+        // Only a single ✨ button passes one; a sweep runs unattended.
+        ...(progressId ? { progress_id: progressId } : {}),
+      });
+    },
     apply: (result) => {
       fields.set(spec.targetField, result.result);
 

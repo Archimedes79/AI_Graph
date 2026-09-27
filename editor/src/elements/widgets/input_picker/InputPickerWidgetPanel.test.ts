@@ -9,15 +9,22 @@ import type { GuiWidget } from '@/graph';
 
 const builder = WIDGET_BUILDERS.input_picker as InputPickerWidgetGuiBuilder;
 
+/** What only the block editor can hand a panel in steps: here, nothing is run. */
+const steps = {
+  feeds: '',
+  tryIt: async () => ({ status: 'success' }),
+  renderResult: () => null,
+};
+
 function panel(widget: GuiWidget): string {
   return renderToStaticMarkup(createElement(InputPickerWidgetPanel, {
     builder, widget, onUpdate: () => {}, generation: builder.generation, fields: widgetFields(widget, () => {}),
-    generating: false, onGenerate: () => {}, canGenerate: true, expanded: true, onToggleExpand: () => {},
+    generating: false, onGenerate: () => {}, canGenerate: true, steps,
   }));
 }
 
-/** The "Select all files" box, as drawn. */
-const selectAllBox = (html: string) => /<input type="checkbox"[^>]*>(?=Select all files)/.exec(html)?.[0] ?? '';
+/** The "every file it lists" box, as drawn. */
+const selectAllBox = (html: string) => /<input type="checkbox"[^>]*>(?=Every file it lists)/.exec(html)?.[0] ?? '';
 
 describe('a folder picker\'s selector, in its panel', () => {
   it('reads a picker that does not say as one that takes every file, as a run does', () => {

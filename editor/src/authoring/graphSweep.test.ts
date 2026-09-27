@@ -112,21 +112,32 @@ describe('sweeping a graph', () => {
 });
 
 describe('what a sweep would have to guess at', () => {
-  it('names a file input with no example attached', () => {
+  it('names a file input with nothing to read, and not one with a file set', () => {
     const source = node('src', 'input');
     source.config.input_mode = 'file';
     expect(missingExamples([source], []).map((n) => n.id)).toEqual(['src']);
 
+    source.config.value = 'data/sample.csv';
+    expect(missingExamples([source], [])).toEqual([]);
+  });
+
+  it('takes the example file an older version attached, which the nodes after it are shown', () => {
+    const source = node('src', 'input');
+    source.config.input_mode = 'file';
     source.config.example_file = '/data/sample.csv';
     expect(missingExamples([source], [])).toEqual([]);
   });
 
-  it('takes a stated contract instead, when no file can be handed over', () => {
+  it('does not take words about the files for a folder to read: no node after it was ever told them', () => {
+    // The sweep used to be satisfied by "what these files contain", a box
+    // that reached no generation downstream: the first node was written
+    // against nothing all the same.
     const source = node('src', 'input');
     source.config.input_mode = 'directory';
+    source.config.output_format_prompt = 'UTF-8 CSV: date, amount, description';
     expect(missingExamples([source], [])).toHaveLength(1);
 
-    source.config.output_format_prompt = 'UTF-8 CSV: date, amount, description';
+    source.config.value = 'data/statements';
     expect(missingExamples([source], [])).toEqual([]);
   });
 

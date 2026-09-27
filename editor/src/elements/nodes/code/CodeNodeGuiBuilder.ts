@@ -20,27 +20,29 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-code, #1a3a2a)';
 
+  // Step 3 asks what it should do, and that answer is published as its
+  // description (`publishedDescription`): a second box would be a second text.
   override readonly ownsDescription = true;
 
   override readonly outputContract = 'format';
 
-  override readonly outputFormatLabel = 'Result format';
+  // What its example must give, checked: a code node returns the same for the
+  // same input, so its example output is a test, not a style to imitate.
+  override readonly exampleOutput = 'expect';
 
-  override readonly outputFormatHint = 'Told to ✨ Generate, here and in the nodes this one feeds. Once the node has run, the shape it really produced is kept below and checked on every later run.';
+  override readonly outputFormatHint = 'Told to ✨ Generate, here and in the nodes this one feeds. Nothing reads it when the graph runs.';
 
   override readonly Panel = lazy(() => import('./CodeNodePanel'));
 
   override readonly AdvancedPanel = lazy(() => import('./CodeNodeAdvancedPanel'));
 
-  override readonly advancedSummary = 'batching, files, failures';
+  override readonly advancedSummary = 'files, failures, how many at once';
 
   override readonly generation: ElementGeneration<GraphNode> = {
     ...fromEngine(new CodeNodeRunner().generation()),
     promptLabel: 'What this node should do',
     promptPlaceholder: 'In a sentence or two: what should this node do with what comes in? ✨ Generate writes the code from it.',
     bodyLabel: 'Code',
-    exampleLabel: 'Sample of what arrives (optional file) — ✨ Generate is shown it',
-    mono: true,
     bodyPlaceholder: STARTER.trimEnd(),
     bodyHeight: 220,
     // Batch mode and the declared output reach ✨ as the node's facts
@@ -52,7 +54,7 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
   override portHint(side: 'inputs' | 'outputs', node: GraphNode): string {
     if (side === 'inputs') {
       const first = node.inputs[0]?.id ?? 'name';
-      return `The code reads each one as inputs.${first}. A description tells ✨ Generate what it holds.`;
+      return `The code reads each one as inputs.${first}.`;
     }
     const keys = node.outputs.filter((port) => port.id !== 'error').map((port) => `${port.id}: …`);
     return `run() returns one key per output: { ${keys.join(', ') || 'output: …'} }.`;

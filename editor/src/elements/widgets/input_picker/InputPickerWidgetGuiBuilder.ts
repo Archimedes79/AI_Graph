@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import type { GuiWidget } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
+import { runBlockAlone } from '@/authoring/blockStepRules';
 import { InputPickerWidgetRunner } from '@engine/elements/widgets/input_picker/InputPickerWidgetRunner.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { WidgetGuiBuilder } from '../../WidgetGuiBuilder';
@@ -25,11 +26,20 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
     ...fromEngine(new InputPickerWidgetRunner().generation()),
     // Only a folder is selected from, and only when not every file is taken.
     available: (widget) => widget.mode === 'directory' && !this.selectsAll(widget),
-    promptLabel: 'Prompt text',
-    promptPlaceholder: 'Select Markdown files that contain API documentation',
-    mono: true,
-    bodyLabel: 'Code window (editable) — run(inputs) receives {"files"} and must return {"files"}',
+    promptLabel: 'Which files to keep',
+    promptPlaceholder: 'e.g. the Markdown files that document an API',
+    bodyLabel: 'Code — run(inputs) receives {"files"} and must return {"files"}',
     bodyHeight: 100,
+    // The selector is handed the folder's listing, and that listing is its
+    // example: the block's own, made by the block run by itself, the way a
+    // run makes it -- fetched when it is asked for.
+    fetchSample: async (widget) => {
+      const folder = String(widget.value ?? '').trim();
+      if (!folder) return undefined;
+      const listed = await runBlockAlone({ ...widget, mode: 'directory', select_all_files: true });
+      if (listed.status === 'error') throw new Error(listed.error || `${folder} could not be listed.`);
+      return { values: { files: Array.isArray(listed.shown) ? listed.shown : [] }, origin: `the listing of ${folder}` };
+    },
   };
 
   /**

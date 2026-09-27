@@ -20,6 +20,11 @@ import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
  * `{ figure }`, so the id is the contract with the body, not decoration -- which
  * is why it is the field that is edited, and why renaming one carries its wires
  * (`graphStore.updateNode`).
+ *
+ * What a port carries is not written here. An input's is what is wired into it,
+ * said on the line under it; an output's is said once, in step 2's words. A box
+ * per port said it a second time, and "list" on an input was half of a
+ * setting whose other half was folded away: it is step 1's "Run once per item".
  */
 
 /** Every type a port can carry, with what each one means for the value on the wire. */
@@ -53,10 +58,14 @@ interface SideProps {
   editing: PortEditing;
   /** What each port is wired to, by port id, in words: `"Folder" (port "Files")`. */
   wiring: Record<string, string>;
+  /** The inputs a run hands the text of a file on, rather than its path. */
+  reads: string[];
+  /** Offer "list" on each port: see `PortsEditor.inputLists`. */
+  lists: boolean;
   onChange: (ports: Port[]) => void;
 }
 
-function Side({ title, hint, kind, ports, fixed, editing, wiring, onChange }: SideProps) {
+function Side({ title, hint, kind, ports, fixed, editing, wiring, reads, lists, onChange }: SideProps) {
   const set = (at: number, patch: Partial<Port>) => {
     onChange(ports.map((port, i) => (i === at ? { ...port, ...patch } : port)));
   };
@@ -113,11 +122,16 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, onChange }: Si
                   >
                     {TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                   </select>
-                  <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
-                    title={kind === 'input' ? 'Arrives as a list -- several values, or one per wired node' : 'Hands on a list: the next node runs once per item unless it takes the whole list'}>
-                    <input type="checkbox" checked={port.multi} onChange={(e) => set(at, { multi: e.target.checked })} />
-                    list
-                  </label>
+                  {/* An output that hands on a list says so: the node it feeds
+                      then runs once per item unless it takes the list whole. An
+                      input says it only where no step 1 asks "Run once per item". */}
+                  {lists && (
+                    <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
+                      title={kind === 'input' ? 'Arrives as a list -- several values, or one per wired node' : 'Hands on a list: the next node runs once per item unless it takes the whole list'}>
+                      <input type="checkbox" checked={port.multi} onChange={(e) => set(at, { multi: e.target.checked })} />
+                      list
+                    </label>
+                  )}
                   <button
                     className="text-xs px-1.5 py-1 rounded"
                     style={NEUTRAL_BUTTON}
@@ -130,19 +144,24 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, onChange }: Si
                 </>
               )}
             </div>
-            <input
-              className="w-full rounded px-2 py-1 text-xs"
-              style={FIELD}
-              value={port.description ?? ''}
-              aria-label={`${kind} ${port.id} description`}
-              onChange={(e) => set(at, { description: e.target.value })}
-              placeholder={kind === 'input'
-                ? 'What arrives here, in words — e.g. “one row per customer, with name and email”'
-                : 'What goes out here, in words — e.g. “the three largest files, biggest first”'}
-            />
+            {/* Written by hand before, in a box that is gone: kept, still told
+                to ✨, and dropped here by the one who no longer wants it said. */}
+            {port.description?.trim() && (
+              <p className="text-xs pl-1 flex items-start gap-1.5" style={{ color: DIMMER }}>
+                <span className="flex-1 min-w-0">“{port.description.trim()}”</span>
+                <button className="text-xs px-1 rounded flex-shrink-0" style={NEUTRAL_BUTTON}
+                  title="This was written about the port before; ✨ is still told it. Drop it."
+                  aria-label={`Drop what was written about ${kind} ${port.id}`}
+                  onClick={() => set(at, { description: '' })}>
+                  ✕
+                </button>
+              </p>
+            )}
             <p className="text-xs pl-1" style={{ color: DIMMER }}>
               {wiring[port.id]
-                ? (kind === 'input' ? `← from ${wiring[port.id]}` : `→ to ${wiring[port.id]}`)
+                ? (kind === 'input'
+                  ? `← from ${wiring[port.id]}${reads.includes(port.id) ? ', read as its content' : ''}`
+                  : `→ to ${wiring[port.id]}`)
                 : (kind === 'input' ? '← not wired yet: drag a wire onto it on the canvas' : '→ not wired yet')}
             </p>
           </div>
@@ -175,13 +194,20 @@ interface PortsEditorProps {
   hints?: { inputs?: string; outputs?: string };
   /** What each port is wired to, by port id. */
   wiring?: { inputs: Record<string, string>; outputs: Record<string, string> };
+  /** The inputs a run hands the text of a file on (`readFilePorts`). */
+  reads?: string[];
+  /**
+   * Offer "list" on each input. Only where no step 1 asks "Run once per item",
+   * which sets it together with what it does nothing without.
+   */
+  inputLists?: boolean;
 }
 
 const EDIT_BOTH = { inputs: 'edit', outputs: 'edit' } as const;
 const NO_WIRES = { inputs: {}, outputs: {} };
 
 export default function PortsEditor({
-  inputs, outputs, onChange, side = 'both', editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES,
+  inputs, outputs, onChange, side = 'both', editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, reads = [], inputLists = false,
 }: PortsEditorProps) {
   // The Error output belongs to the catch-failures switch, which adds and
   // removes it. Editing it here would let the two disagree.
@@ -195,14 +221,14 @@ export default function PortsEditor({
       {showInputs && (
         <Side
           title="Takes in" kind="input" ports={inputs} fixed={[]} editing={editing.inputs}
-          hint={hints.inputs} wiring={wiring.inputs}
+          hint={hints.inputs} wiring={wiring.inputs} reads={reads} lists={inputLists}
           onChange={(next) => onChange({ inputs: next, outputs })}
         />
       )}
       {showOutputs && (
         <Side
           title="Hands out" kind="output" ports={ownOutputs} fixed={fixedOutputs} editing={editing.outputs}
-          hint={hints.outputs} wiring={wiring.outputs}
+          hint={hints.outputs} wiring={wiring.outputs} reads={[]} lists
           onChange={(next) => onChange({ inputs, outputs: [...next, ...fixedOutputs] })}
         />
       )}

@@ -1,22 +1,21 @@
 import { useRef } from 'react';
-import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
-import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, MUTED } from '@/ui/theme';
+import NodeSteps from '@/authoring/NodeSteps';
+import { promptText } from '@engine/elements/nodes/ai/prompt.ts';
+import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, MUTED, SUNKEN, TEXT } from '@/ui/theme';
 import PromptPreview from './PromptPreview';
-import Step from '@/authoring/Step';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 /**
- * What someone writes for an ai node, in the order the request is built:
- * what it should do, the instructions that became, the message its inputs are
- * laid out in -- and then the request itself, as the model will read it.
+ * An ai node: the four steps, its body the instructions the model gets, with
+ * the message its inputs are laid out in beside them -- both are how the
+ * request is written -- and, in Try it, that request as the model receives it
+ * for the example, then its answer.
  *
  * Everything that is a knob rather than a sentence lives in `AiNodeAdvancedPanel`,
  * folded away below: a node works without anyone opening it.
  */
-export default function AiNodePanel({
-  node, setConfig, generation, fields, generating, message, onGenerate,
-  contextFile, onContextFileChange, steps,
-}: NodePanelProps) {
+export default function AiNodePanel(props: NodePanelProps) {
+  const { node, setConfig } = props;
   const template = useRef<HTMLTextAreaElement | null>(null);
 
   /** Put `{{port}}` where the cursor is, the way clicking a field name should. */
@@ -64,7 +63,7 @@ export default function AiNodePanel({
           style={{ ...FIELD, minHeight: 96 }}
           value={String(node.config.prompt_template ?? '')}
           onChange={(e) => setConfig('prompt_template', e.target.value)}
-          placeholder={laidOut || 'Add an input above, then place it here as {{name}}.'}
+          placeholder={laidOut || 'Add an input in step 1, then place it here as {{name}}.'}
           spellCheck={false}
           aria-label="Message template"
         />
@@ -72,27 +71,20 @@ export default function AiNodePanel({
   );
 
   return (
-    <>
-      <AuthoredBodyEditor
-        generation={generation}
-        fields={fields}
-        exampleFile={contextFile}
-        onExampleFileChange={onContextFileChange}
-        generating={generating}
-        message={message}
-        onGenerate={onGenerate}
-        title={node.label}
-        steps={steps && {
-          ...steps,
-          bodyHint: 'The instructions the model gets with every request. ✨ Generate writes them from steps 1 to 3; the answer format from step 3 is added after them by itself.',
-        }}
-      >
-        {messageBox}
-      </AuthoredBodyEditor>
-
-      {steps
-        ? <Step n={5} title="Try it" hint="Exactly what the model will receive, and its answer on sample values."><PromptPreview node={node} setConfig={setConfig} /></Step>
-        : <PromptPreview node={node} setConfig={setConfig} />}
-    </>
+    <NodeSteps
+      {...props}
+      subject="the model"
+      body={{
+        title: 'Instructions',
+        hint: 'What the model is told with every request, and the message its inputs are laid out in. ✨ Generate writes the instructions from steps 1 to 3; the words and the example answer of step 2 are added after them by themselves.',
+        beside: messageBox,
+      }}
+      request={(example) => <PromptPreview node={node} example={example} />}
+      renderResult={(result) => (
+        <pre className="text-xs rounded px-2 py-1.5 mt-1 whitespace-pre-wrap overflow-auto" style={{ background: SUNKEN, color: TEXT, maxHeight: 220 }}>
+          {promptText(result.outputs?.output)}
+        </pre>
+      )}
+    />
   );
 }

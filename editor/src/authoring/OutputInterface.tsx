@@ -1,23 +1,12 @@
 import { useState } from 'react';
-import type { ExecutionResult, GraphNode } from '@/graph';
-import { inferInterface } from '@engine/execution/interface.ts';
+import type { GraphNode } from '@/graph';
 import { DIMMER, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
 
 interface OutputInterfaceProps {
   node: GraphNode;
   setConfig: (key: string, value: unknown) => void;
-  executionResult: ExecutionResult | null;
 }
 
-/**
- * What this node's outputs look like, as a JSON Schema: its output interface.
- *
- * Not designed here. Nodes are wired, the graph runs, and the first successful
- * run writes down what came out (see `graphStore.setExecutionResult`); from
- * then on every run is checked against it, and the nodes after this one are
- * generated against it. "Set from last run" is for when the node was changed
- * on purpose. In a project it is `output.schema.json`, for editing by hand.
- */
 /** The kept shape in one line -- `output: list of text` -- with the JSON Schema a click away. */
 interface SchemaPart { type?: string; items?: SchemaPart; properties?: Record<string, SchemaPart> }
 
@@ -34,19 +23,20 @@ function outline(schema: unknown): string {
   return Object.entries(properties).map(([port, part]) => `${port}: ${type(part)}`).join(' · ');
 }
 
-export default function OutputInterface({ node, setConfig, executionResult }: OutputInterfaceProps) {
+/**
+ * What this node's outputs look like, as a JSON Schema: its output interface.
+ *
+ * Not designed here, and not typed: measured. The first successful run writes
+ * down what came out (see `graphStore.setExecutionResult`), and so does ✨'s
+ * verify pass when it tried the code on a sample; from then on every run is
+ * checked against it, and the nodes after this one are generated against it.
+ * Shown for reading, folded. Clearing it lets the next run measure it again,
+ * which is what to do after changing the node on purpose. In a project it is
+ * `output.schema.json`.
+ */
+export default function OutputInterface({ node, setConfig }: OutputInterfaceProps) {
   const [note, setNote] = useState('');
   const schema = node.config.output_schema;
-  const ran = executionResult?.node_results.find((r) => r.node_id === node.id && r.status === 'success');
-
-  const setFromRun = () => {
-    if (!ran || !Object.keys(ran.outputs ?? {}).length) {
-      setNote('Run the graph first: the interface is what a successful run of this node produced.');
-      return;
-    }
-    setConfig('output_schema', inferInterface(ran.outputs));
-    setNote('Set from the last run.');
-  };
 
   return (
     <div>
@@ -54,18 +44,13 @@ export default function OutputInterface({ node, setConfig, executionResult }: Ou
         <label className="text-xs font-medium" style={{ color: MUTED }}>
           Shape kept from a run
         </label>
-        <div className="flex items-center gap-2">
-          <button className="text-xs px-2 py-1 rounded" style={NEUTRAL_BUTTON} onClick={setFromRun}
-            title="Describe this node's outputs as the last successful run produced them">
-            Set from last run
+        {schema != null && (
+          <button className="text-xs px-2 py-1 rounded" style={NEUTRAL_BUTTON}
+            title="Forget it: the next successful run, or ✨'s next try of the code, measures it again"
+            onClick={() => { setConfig('output_schema', null); setNote('Cleared: the next successful run sets it again.'); }}>
+            Clear
           </button>
-          {schema != null && (
-            <button className="text-xs px-2 py-1 rounded" style={NEUTRAL_BUTTON}
-              onClick={() => { setConfig('output_schema', null); setNote('Cleared: the next successful run sets it again.'); }}>
-              Clear
-            </button>
-          )}
-        </div>
+        )}
       </div>
       {schema != null ? (
         <details>

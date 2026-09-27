@@ -263,9 +263,9 @@ engine/src                               editor/src
   errors.ts          NotFound · NotAGraph  document/           what a graph is to the editor: nodeKinds,
                                              guiWidgets (a page's ports), layout (the grid)
   elements/          see above             elements/           see above
-  authoring/         how a body is         authoring/          writing a body: ✨ Generate, Try it,
-    generation.ts    written, where it       AuthoredBodyEditor  the live transcript, the page-wide
-    logic.ts         is kept, who runs it    TryItPanel …        sweep (graphSweep.ts)
+  authoring/         how a body is         authoring/          writing a body in four steps: ✨ Generate,
+    generation.ts    written, where it       FourSteps           Try it, the live transcript, the
+    logic.ts         is kept, who runs it    NodeSteps …         page-wide sweep (graphSweep.ts)
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
     executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor
     triggers.ts      what starts a run     page/               a gui node's page: GuiPage (drawn by
@@ -378,20 +378,28 @@ other knows, it imports it or replays its result:
    once. `serve()` itself installs no signal handler: it is a library function.
 
 `executeNode` (one node on given inputs) and `inputsFor` (run what feeds a node, not the
-node) are the same machinery, and are what the editor's **Try it** panel uses.
+node) are the same machinery, and are what the editor's **Try it** and **⟳ From the
+graph** use.
 
 ## Authoring: one loop for every element
 
-Every element that has a body — an AI node's prompt, a code node, a chart's transform, a
-file selector — is written the same way, in `authoring/AuthoredBodyEditor` +
-`authoring/TryItPanel`:
+Every element that has a body — an AI node's prompt, a code node, a data node's format, a
+chart's transform, a file selector — is written the same way, in four steps
+(`authoring/FourSteps`; `NodeSteps` for a node, the block panels and `SelectorSteps` for
+the rest):
 
 ```
-what it should do ──✨──▶ body ──▶ Try it: [values] ⟳ from the graph · ▶ Test ──▶ what came out
-                            ▲                │
-                            └── verified ────┘   the same values are the sample ✨ is
-                                                 written and checked against (tryValues.ts)
+1 what comes in:  ports + ONE example   ⟳ from the graph · 📂 from a file · "run once per item"
+2 what comes out: ports + words (greyed: what the graph already says) + example output + kept shape
+3 what it should do ──✨──▶ 4 body ──▶ ▶ Try it on the example ──▶ what came out ── Keep this result ─▶ 2
+                             ▲                                        │
+                             └────────────── verified ────────────────┘
 ```
+
+The example is one thing, kept once: the first section of the node's `examples.md`
+(`authoring/examplePair.ts`), a block's `example`. It is the sample ✨ is written and
+checked against (`nodeFacts`), what Try it runs, what an AI node's request is shown for,
+and what `test` runs.
 
 **One way to run a body — on Node.** A code node's `code.js`, an ai node's changed `run.js`,
 the `select.js` that picks files and the code a table or an image block shapes its value
@@ -445,10 +453,11 @@ learns what a code node is.
   its first successful run produced ([`execution/interface.ts`](../engine/src/execution/interface.ts)),
   checked against on every later run (a message, not a failure), and handed to the next
   node's generation. An AI node's `output.md` is sent to the model instead.
-- **Examples are tests, not prompts.** A node's optional `examples.md`
-  ([`execution/examples.ts`](../engine/src/execution/examples.ts)) is run by `test`, the
-  node dialog and the MCP server's `test_graph`; nothing generates from it. `check` holds
-  an example's inputs to the output interface of the node wired into that port.
+- **Examples are tests, and the one sample.** A node's optional `examples.md`
+  ([`execution/examples.ts`](../engine/src/execution/examples.ts)) is run by `test` and the
+  MCP server's `test_graph`; its first section is the node dialog's example, which Try it
+  runs and ✨ is written and checked against. `check` holds an example's inputs to the
+  output interface of the node wired into that port.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a

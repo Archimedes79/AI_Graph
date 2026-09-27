@@ -1,11 +1,33 @@
 // A widget's build-time half, in the browser: the mirror of `engine/src/elements/WidgetRunner.ts`.
 
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { GuiWidget, WidgetKind } from '@/graph';
 import type { ElementGeneration, FieldAccess } from '@/authoring/generation';
+import type { TryResult } from '@/authoring/TryItInline';
 import { DEFAULT_WIDGET_SPAN } from '@/document/layout';
 import type { Tone } from '@/ui/tone';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
+
+/**
+ * What only the shell can hand a panel laid out in the four steps: the page
+ * the block sits on, and the page it is drawn in. The panel places each where
+ * its step is.
+ */
+export interface WidgetSteps {
+  /** What is wired into the block, in words -- `"Rows" (port "rows")` -- or '' while nothing is. */
+  feeds: string;
+  /** ⟳ From the graph: what arrives at the block -- on the last run, else from what feeds it, run now. Absent for a block nothing can feed. */
+  fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
+  /** The block run by itself on *values*, the way a run runs it. */
+  tryIt: (values: Record<string, unknown>) => Promise<TryResult>;
+  /** What came out, drawn by the block itself, at its own proportions. */
+  renderResult: (result: TryResult) => ReactNode;
+  /** "What ✨ sends", beside ✨, and what it sends, under it. */
+  preview?: ReactNode;
+  sent?: ReactNode;
+  /** "Open in my editor", under the body, in a project. */
+  openInEditor?: ReactNode;
+}
 
 /** What the widget editor hands every widget panel. */
 export interface WidgetPanelProps {
@@ -20,9 +42,8 @@ export interface WidgetPanelProps {
   message?: string;
   onGenerate: () => void;
   canGenerate: boolean;
-  /** The panel's authored body is unfolded. */
-  expanded: boolean;
-  onToggleExpand: () => void;
+  /** For a block that authors a body: see `WidgetSteps`. */
+  steps?: WidgetSteps;
 }
 
 let created = 0;

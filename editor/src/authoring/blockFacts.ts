@@ -1,12 +1,42 @@
 // What ✨ Generate is told about a block on a page: the mirror of `nodeFacts`.
+// And what the graph around the block says it is handed: its step 1.
 
-import type { ExecutionResult, GraphNode, GuiWidget } from '@/graph';
+import type { ExecutionResult, Graph, GraphNode, GuiWidget } from '@/graph';
+import { call } from '@/api/client';
 import { guiWidgetPorts } from '@/document/guiWidgets';
 import { describeScheme } from '@/ui/scheme';
 import type { GenerationRequest } from './generation';
-import { inputOrigins, lastRunWidgetInput } from './generationContext';
+import { inputOrigins, inputSources, lastRunWidgetInput } from './generationContext';
 
 type Wire = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
+
+/** What is wired into the block, in words -- `"Rows" (port "rows")` -- or '' while nothing is. */
+export function blockFeeds(nodeId: string, widget: GuiWidget, nodes: GraphNode[], edges: Wire[]): string {
+  const port = guiWidgetPorts(widget).inputs[0]?.id;
+  return (port && inputSources(nodeId, nodes, edges)[port]) || '';
+}
+
+/**
+ * ⟳ From the graph, for a block: what arrived at it on the last run, or --
+ * before any run, or when the last run did not reach it -- what the nodes
+ * that feed its page deliver when they are run now. *graph* is the canvas as
+ * it stands; the page itself is not run.
+ */
+export async function blockFromTheGraph(
+  nodeId: string,
+  widget: GuiWidget,
+  executionResult: ExecutionResult | null,
+  graph: () => Graph,
+): Promise<{ values: Record<string, unknown>; said: string }> {
+  const last = lastRunWidgetInput(nodeId, widget.id, executionResult);
+  if (last) return { values: last, said: 'What arrived here on the last run.' };
+  const port = guiWidgetPorts(widget).inputs[0]?.id;
+  const got = await call('nodeInputs', { ...graph(), node_id: nodeId });
+  if (got.error) throw new Error(`Upstream: ${got.error}`);
+  const arrived = port ? got.inputs[port] : undefined;
+  if (arrived === undefined) throw new Error('Nothing is wired into this block yet, so the graph has nothing to deliver here.');
+  return { values: { value: arrived }, said: 'What the nodes that feed this block delivered, run just now.' };
+}
 
 /**
  * A block's example input as it is kept (`example`, the text of step 1): an

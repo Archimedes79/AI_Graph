@@ -3,6 +3,8 @@ import { useGraphStore } from '@/store/graphStore';
 import type { Graph, GraphNode, GuiWidget, NodeType, WidgetKind } from '@/graph';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { syncGuiNodePorts } from '@/document/guiWidgets';
+import { listPorts, withPerItem } from '@/authoring/nodeStepRules';
+import { readPair } from '@/authoring/examplePair';
 import { executeGraph } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
 import { problemsIn } from '@engine/project/check.ts';
@@ -52,16 +54,32 @@ function addBlock(pageId: string, kind: WidgetKind, mode: string | undefined, se
   return block.id;
 }
 
-/** Save a node's dialog: its name, what its ports are called, its settings. Port *types* no dialog sets. */
-function edit(nodeId: string, changes: { label: string; input?: string[]; output?: string; config?: Record<string, unknown> }): void {
+/**
+ * Save a node's dialog: its name, what its ports are called, its settings --
+ * and step 1's "Run once per item", ticked or not, which sets how the node
+ * runs and which inputs fan out, together (`withPerItem`), for the lists step
+ * 1 sees arriving. Port *types* no dialog sets.
+ */
+function edit(nodeId: string, changes: {
+  label: string; input?: string[]; output?: string; config?: Record<string, unknown>; perItem?: boolean;
+}): void {
   const node = nodeOf(nodeId);
   const renamed = (ports: GraphNode['inputs'], names: string[]) => names.map((name, index) => ({ ...(ports[index] ?? ports[0]), id: name, name }));
-  store().updateNode(nodeId, {
+  const saved: GraphNode = {
+    ...node,
     label: changes.label,
     inputs: changes.input ? renamed(node.inputs, changes.input) : node.inputs,
     outputs: changes.output ? renamed(node.outputs, [changes.output]) : node.outputs,
     config: { ...node.config, ...changes.config },
-  });
+  };
+  if (changes.perItem === undefined) {
+    store().updateNode(nodeId, saved);
+    return;
+  }
+  const lists = listPorts(saved, readPair(saved.config.examples).input, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
+  // The box is there only when a list arrives; a new code or ai node's input is declared one.
+  expect(lists.length).toBeGreaterThan(0);
+  store().updateNode(nodeId, withPerItem(saved, changes.perItem, lists));
 }
 
 /** Drag a wire from one handle to another. */
@@ -71,7 +89,7 @@ const wire = (source: string, sourceHandle: string, target: string, targetHandle
 // ── What is compared, and what runs ───────────────────────────────────────
 
 /** A graph as its shape: ids are made up on the spot, so blocks and wires are named by what they are. */
-function shapeOf(graph: Graph): { nodes: string[]; blocks: string[]; wires: string[] } {
+function shapeOf(graph: Graph): { nodes: string[]; blocks: string[]; wires: string[]; lists: string[] } {
   const name = new Map<string, string>();
   for (const node of graph.nodes) name.set(node.id, node.node_type);
   const portName = (nodeId: string, portId: string): string => {
@@ -83,6 +101,9 @@ function shapeOf(graph: Graph): { nodes: string[]; blocks: string[]; wires: stri
     nodes: graph.nodes.map((node) => node.node_type).sort(),
     blocks: graph.nodes.flatMap((node) => (node.config.gui_widgets ?? []).map((widget: GuiWidget) => `${widget.kind}${widget.mode ? `/${widget.mode}` : ''}${widget.run_on_change ? ' ⚡' : ''}`)),
     wires: graph.edges.map((edge) => `${name.get(edge.source_node_id)}.${portName(edge.source_node_id, edge.source_port_id)} -> ${name.get(edge.target_node_id)}.${portName(edge.target_node_id, edge.target_port_id)}`).sort(),
+    // How each node that authors a body takes a list: what "Run once per item" sets.
+    lists: graph.nodes.filter((node) => node.node_type === 'code' || node.node_type === 'ai')
+      .map((node) => `${node.node_type} ${node.config.batch_mode}: ${node.inputs.filter((port) => port.multi).map((port) => port.id).join(', ') || 'none fan out'}`).sort(),
   };
 }
 
@@ -126,7 +147,7 @@ describe('population plotter: choose a CSV, see the chart', () => {
     const file = addBlock(page, 'input_picker', 'file', { label: 'CSV file', extensions: '.csv', value: 'data/population.csv', run_on_change: true });
     const plot = addBlock(page, 'plot_window', undefined, { label: '' });
     const chart = drop('code', 560);
-    edit(chart, { label: 'What to plot', input: ['csv'], output: 'figure', config: { code: bodyOf('population_plotter', 'chart'), read_file_inputs: true, batch_mode: 'whole_list' } });
+    edit(chart, { label: 'What to plot', input: ['csv'], output: 'figure', config: { code: bodyOf('population_plotter', 'chart'), read_file_inputs: true }, perItem: false });
     wire(page, `${file}_out`, chart, 'csv');
     wire(chart, 'figure', page, `${plot}_in`);
     return { graph: store().rootGraph(), page, file, plot };
@@ -153,7 +174,7 @@ describe('summarize a folder: choose a folder, read the summaries', () => {
     const folder = addBlock(page, 'input_picker', 'directory', { label: 'Folder', extensions: '.txt', value: 'stories', run_on_change: true });
     const summaries = addBlock(page, 'text_io', 'output', { label: 'Summaries' });
     const summarize = drop('ai', 560);
-    edit(summarize, { label: 'Each file', input: ['story'], config: { system_prompt: 'Summarize the story in two sentences.', prompt_template: '{{story}}', read_file_inputs: true, batch_mode: 'per_item' } });
+    edit(summarize, { label: 'Each file', input: ['story'], config: { system_prompt: 'Summarize the story in two sentences.', prompt_template: '{{story}}', read_file_inputs: true }, perItem: true });
     wire(page, `${folder}_out`, summarize, 'story');
     wire(summarize, 'output', page, `${summaries}_in`);
     return { graph: store().rootGraph(), page, folder, summaries };
@@ -180,7 +201,7 @@ describe('chat: a page with a chat block, and a model', () => {
     addBlock(page, 'text', 'heading', { value: 'Chat' });
     const chat = addBlock(page, 'chat', undefined, {});
     const assistant = drop('ai', 560);
-    edit(assistant, { label: 'Assistant', input: ['history', 'message'], config: { system_prompt: 'You are a friendly assistant.', prompt_template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}', batch_mode: 'whole_list' } });
+    edit(assistant, { label: 'Assistant', input: ['history', 'message'], config: { system_prompt: 'You are a friendly assistant.', prompt_template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}' }, perItem: false });
     wire(page, `${chat}_out`, assistant, 'message');
     wire(page, `${chat}_history`, assistant, 'history');
     wire(assistant, 'output', page, `${chat}_in`);

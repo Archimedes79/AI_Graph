@@ -205,8 +205,9 @@ User: {{message}}
   says that too.
 - A list becomes paragraphs, not `["…","…"]`.
 
-**▶ Test** runs this one node — without saving and without running the graph — in the
-*Try it* panel described [below](#trying-an-element-out-the-same-way-everywhere).
+**▶ Try it** runs this one node on its example — without saving and without running the
+graph — and shows first what the model receives, described
+[below](#trying-an-element-out-the-same-way-everywhere).
 
 **`run.js`: what the node does with all that.** In a project folder an AI node keeps
 `run.js` beside its prompts — a few lines that make the one call:
@@ -232,15 +233,16 @@ keys, asking for each call (25 each time it runs, at most). The panel shows it u
 this node runs*, with the way back to the standard.
 
 **Do you have to describe the output format?** No. It only matters when something
-downstream has to *parse* the answer, and then there are two ways, and both are sent
-whenever they say anything: say it in words under *Answer format* (“a JSON list of
-{title, score}”), or show it — press ▶ Test, and if the answer has the shape you want,
-**Keep this as the format to follow** (or *Use the last result* under the format). The
-node is then told to answer in that same structure with new content, and its neighbours
-are generated against it. (There used to be a menu of formats — JSON, CSV, custom,
-example — and only *custom* sent your words; a graph that picked JSON still says so, in
-front of them.) Nothing checks the answer afterwards; a model
-that ignores the format is caught by a Code node, not by this setting.
+downstream has to *parse* the answer, and what the nodes it is wired to want is said
+already: step 2's words field shows it greyed while it is empty, and it is what ✨ is told
+either way. Then there are two ways to say more, and both are sent whenever they say
+anything: in words (“a JSON list of {title, score}”), or shown — press ▶ Try it, and if
+the answer has the shape you want, **Keep this result** makes it step 2's example answer.
+The node is then told to answer in that same structure with new content, and its
+neighbours are generated against it. (There used to be a menu of formats — JSON, CSV,
+custom, example — and only *custom* sent your words; a graph that picked JSON still says
+so, in front of them.) Nothing checks the answer afterwards; a model that ignores the
+format is caught by a Code node, not by this setting.
 
 Everything else — model, temperature, tools, vision, batching, failures — has a default
 that is right for most nodes and sits folded under **Advanced**. For tools, see
@@ -262,17 +264,25 @@ function run(inputs) {
 
 The AI can generate this function for you: just describe what the node should do.
 
-**The node's dialog is the order the work is done in**, the same for an AI node:
+**The node's dialog is the order the work is done in**, the same for an AI node and a
+Data node — and for every block on a page that has code of its own:
 
 ```
-1  What should it do?   a sentence or two, in your words
-2  What comes in        each input: its name, what it holds (a description), where it is wired from
-                        + an optional sample file; an AI node's message template
-3  What comes out       each output: what it hands on, where it is wired to
-                        + the result format, and the shape a run kept (output.schema.json)
-4  How it does it       the code (or an AI node's system prompt), with ✨ Generate
-5  Try it               run the node alone on sample values; its examples
+1  What comes in        each input: its name, and where it is wired from
+                        + ONE example of what arrives: ⟳ From the graph, or 📂 From a file…
+                        + "Run once per item", when a list arrives
+2  What comes out       each output: its name, and where it is wired to
+                        + what comes out, in words -- greyed, what the graph already says
+                        + the example output (an AI node: the answer to imitate)
+                        + the shape a run kept (output.schema.json), to read
+3  What should it do?   a sentence or two, in your words
+4  Code                 the code (an AI node's instructions and message; a Data node's format),
+                        with ✨ Generate -- and ▶ Try it on step 1's example, under it
 ```
+
+The example is kept as the first section of the node's `examples.md`: its input block is
+step 1, its expect block step 2. It is the one sample everything uses — ✨ Generate and its
+verify pass, Try it, the AI node's request, and `test`.
 
 **What ✨ Generate is told** is the same for a code node and an AI node: one brief, built
 from steps 1–3, each fact said once and everything long cut to a budget (about 8 000
@@ -292,14 +302,15 @@ Format: <the format, in your words>
 An example of what it returns: <the example, if you kept one>
 The shape it returned so far … keep it: { rows: list of { name: text, email: text } }
 ## Examples -- the result is checked against these          the first 3
-## Also                                                      an attached sample file, first 2 000 characters
 ## The function   (code)  the typed signature to complete    /   (AI) "write the system prompt…"
 ```
 
-The **sample** is the last run's value on that port; before any run, the values in *Try
-it*, else what the wired node holds (an Input's text, a Data node's value), else the first
-example's inputs. Code is then run on that sample; when the sample is an example, what it
-must return is checked too, and a body that falls short is sent back once to be repaired.
+The **sample** is step 1's example; without one, the last run's value on that port, else
+what the wired node holds (an Input's text or the file it reads, a Data node's value).
+Code is then run on that sample — for a node that runs per item, on one item, as a run
+calls it; files read the way a run reads them — and when the sample is the example, what
+it must return is checked too, and a body that falls short is sent back once to be
+repaired.
 **What ✨ sends** beside the button shows the request word for word, without sending it.
 After ✨ has run the code, what it returned becomes the node's kept shape when it has
 none yet — your format text is never overwritten. A new node's description starts empty:
@@ -368,9 +379,11 @@ first successful run sets it from what the node produced. From then on every run
 checked against it — a node that breaks its interface says so on its result, *Does not
 match its output interface: output.rows[3].Population is string; the interface says
 integer*, rather than the node three steps later failing on the wrong shape — and the
-nodes after it are generated against it. **Set from last run** (under *Shape kept from a
-run*, in the node's dialog) replaces it after a deliberate change. An AI node has `output.md` instead: a description
-of the answer that is sent to the model with every request.
+nodes after it are generated against it; ✨'s verify pass sets it too, from what the code
+returned on the sample. It is shown in step 2 of the node's dialog, to read, and not
+typed: **Clear** there lets the next run measure it again after a deliberate change. An
+AI node has `output.md` instead: a description of the answer that is sent to the model
+with every request.
 
 **Examples: a node's own tests.** A code or AI node can keep `examples.md` — inputs, and
 what must come out. Optional; they check what was written, whoever wrote it, and ✨
@@ -455,9 +468,11 @@ this table cannot drift apart without a test noticing the class or method is gon
 An `expect` block names only the fields it cares about; anything else the node returns is
 its own business. A model's answer is never the same twice, so an AI node's example can
 have a ````judge` block instead — a sentence (*"about two sentences, in prose"*) that a
-model holds the answer to. In the node's dialog, **+ Add from last run** writes down what
-the last successful run gave the node and what it returned, and **▶ Run examples** runs
-them on the node as it stands in the dialog.
+model holds the answer to. In the node's dialog the first example is steps 1 and 2: ⟳
+From the graph fills its input with what really arrives, **Keep this result** makes what
+▶ Try it gave its expected output, and Try it says whether a result meets it. A file with
+more examples keeps them as they are, and `test` runs them all; the dialog edits the
+first and says so.
 
 `node engine/src/main.ts test my_tool` runs every node's examples; `--offline` asks no
 model and skips what needs one, which is how CI runs this repository's examples.
@@ -478,35 +493,41 @@ graph; this repository checks its examples that way.
 ### Trying an element out: the same way everywhere
 
 An AI node, a code node and a block's transform (a chart, a table, a file selector) are
-the same loop — *here is what arrives, here is what I wrote, what comes out?* — and they
-share one panel for it:
+the same loop — *here is what arrives, here is what I wrote, what comes out?* — built in
+the same four steps:
 
-- **The values**, one box per input. They come from the last run; **⟳ Inputs from the
-  graph** gets them without one, by running what *feeds* this element (the file picked,
-  the CSV parsed, the page's fields read) and not the element itself; or you type your own
-  — text, or JSON for a list or an object.
-- **▶ Test** runs just this element on those values, through the same steps a run takes
-  (the graph's default model, wired files read into text, one call per item). Nothing is
-  saved and nothing downstream runs. An AI node shows the exact request first; a block
-  *draws* what came back, at the block's own proportions — the chart, looked at, before
-  the graph has ever run.
-- **What ✨ Generate is told** unfolds the graph context that is sent with a generation:
-  the neighbours' declared formats, the values above, and — for a block — the page's
-  colour scheme. The values in the panel are the sample the generated body is then run
-  against and, for a chart, *looked at* (viewBox, NaN, an empty frame, labels outside the
-  box) before you see it; what is found goes back to the model for one repair.
+- **The example**, in step 1: one set of values, keyed by input. **⟳ From the graph**
+  fills it with what really arrives — the last run's values, or, before one, what the
+  nodes that *feed* this element deliver when they are run now (the file picked, the CSV
+  parsed, the page's fields read), not the element itself. **📂 From a file…** fills one
+  input from a file: its path, where the node reads the file itself (a file path input,
+  or one wired from something that hands on paths, with *read file contents* on) — kept
+  relative to the folder the editor runs in — and otherwise what the file says, parsed
+  when it is JSON. Typing is editing what they filled.
+- **▶ Try it**, under the body in step 4, runs just this element on that example, through
+  the same steps a run takes (the graph's default model, wired files read into text, one
+  call per item). Nothing is saved and nothing downstream runs. An AI node shows the
+  request first, as the model receives it — put together by the engine, one request per
+  item, when the node runs per item or reads files; a block *draws* what came back, at
+  the block's own proportions — the chart, looked at, before the graph has ever run.
+  What came out is set against step 2's example output, and **Keep this result** makes
+  it that.
+- **What ✨ sends**, beside the button, shows the request word for word: the brief above,
+  and — for a block — the page's colour scheme. The example is the sample the generated
+  body is then run against and, for a chart, *looked at* (viewBox, NaN, an empty frame,
+  labels outside the box) before you see it; what is found goes back to the model for one
+  repair.
 
 ### Every element works the same way
 
 A node and a GUI widget are the same kind of thing, and they are configured the same
-way: a name, one file behind it, one 📎 *example input* — a path to a sample file whose
-content is shown to the model — and one ✨ **Generate** button that writes the body from
-your prompt plus what the graph around it says (the neighbours' declared formats, and
-the values the node actually received on the last run).
+way: a name, one file behind it, one example input, and one ✨ **Generate** button that
+writes the body from your words plus what the graph around it says (what the neighbours
+hand on and want, and the example).
 
-What the element emits is declared in the same panel, under the body: a format contract
-you write for a Code or AI node, the output interface a run set for a Code node, a derived
-summary for a GUI node. There is no separate Output tab.
+What the element emits is said in the same dialog, in step 2: what the next nodes want
+and the shape a run kept, and your words for what they leave out — for a block, the one
+thing its kind shows. There is no separate Output tab.
 
 ### Writing a body: two editors
 

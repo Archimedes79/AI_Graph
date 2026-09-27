@@ -60,6 +60,7 @@ export type NodeConfig = {
   data_format_prompt: string;
   data_prompt: string;
   data_value?: unknown;
+  /** An example file the 📎 of an older version attached: step 1 offers to take it in, and it is never written anew. */
   example_file: string;
   extensions: string;
   gui_widgets: GuiWidget[];

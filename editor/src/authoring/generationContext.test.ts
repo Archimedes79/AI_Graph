@@ -231,4 +231,32 @@ describe('what ✨ is told about a node, as facts', () => {
     expect(facts.outputFormat).toBe('JSON. a list of {title, score}');
     expect(facts.outputExample).toBe('[{"title": "a", "score": 1}]');
   });
+
+  it('takes step 1\'s example as the sample, over what the last run delivered', () => {
+    const code = NODE_KINDS.code.create('worker');
+    code.config.examples = '## Mine\n\n```json input\n{"input": "typed"}\n```\n';
+    const ran = { status: 'success', outputs: {}, node_results: [{ node_id: 'worker', status: 'success', inputs: { input: 'last run' }, outputs: {} }] } as ExecutionResult;
+    const facts = nodeFacts(code, [code], [], ran);
+    expect(facts.sampleInputs).toEqual({ input: 'typed' });
+    expect(facts.sampleOrigin).toBe('the example in step 1');
+    // An example the engine reads in full, with what it expects, is left to it.
+    code.config.examples = '## Mine\n\n```json input\n{"input": "typed"}\n```\n\n```json expect\n{}\n```\n';
+    expect(nodeFacts(code, [code], [], ran).sampleInputs).toBeUndefined();
+  });
+
+  it('shows a node fed by a file input that file, read as a run reads it, before the graph has run', () => {
+    // A file input's example file and its "what these files contain" reached
+    // no generation downstream; its file now does, as a path the engine reads.
+    const input = NODE_KINDS.input.create('src');
+    input.config.input_mode = 'file';
+    input.config.value = 'data/people.csv';
+    input.outputs = [
+      { id: 'content', name: 'Content', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
+      { id: 'path', name: 'Path', kind: 'output', data_type: 'file_path', multi: false, required: false, description: '' },
+    ];
+    const code = NODE_KINDS.code.create('worker');
+    const facts = nodeFacts(code, [input, code], [{ id: 'a', source: 'src', target: 'worker', sourceHandle: 'content', targetHandle: 'input' }] as never, null);
+    expect(facts.sampleInputs).toEqual({ input: 'data/people.csv' });
+    expect(facts.readFilePorts).toEqual(['input']);
+  });
 });
