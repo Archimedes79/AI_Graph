@@ -10,13 +10,8 @@
 // never which edges lead to it.
 
 import type { Graph, GraphNode, Port } from '../../../graph.ts';
-import type { NodeRunner } from '../../NodeRunner.ts';
+import type { Runners } from '../../NodeRunner.ts';
 import { port } from '../../port.ts';
-
-/** The one question this file asks about a node, asked of whoever owns it. */
-export interface Runners {
-  node(type: string): NodeRunner<unknown> | undefined;
-}
 
 const withRole = (graph: Graph, elements: Runners, role: 'in' | 'out'): GraphNode[] =>
   graph.nodes.filter((node) => elements.node(node.node_type)?.boundaryRole(node) === role);

@@ -24,7 +24,7 @@
 
 import type { Graph } from '../graph.ts';
 import type { Runtime } from '../elements/Runtime.ts';
-import type { Registry } from './executor.ts';
+import type { Runners } from '../elements/NodeRunner.ts';
 import { executeNode, withGraphDefaults } from './executor.ts';
 import { mismatches } from './interface.ts';
 
@@ -138,7 +138,7 @@ const JUDGE_SYSTEM = 'You check whether an answer meets a criterion. Reply with 
 export async function runExamples(
   graph: Graph,
   nodeId: string,
-  options: { runtime: Runtime; registry: Registry; offline?: boolean },
+  options: { runtime: Runtime; registry: Runners; offline?: boolean },
 ): Promise<ExampleResult[]> {
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node) return [{ title: nodeId, status: 'error', details: [`No node "${nodeId}".`] }];

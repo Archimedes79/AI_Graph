@@ -1,10 +1,10 @@
-import { NodeRunner } from '../../NodeRunner.ts';
+import { NodeRunner, type Runners } from '../../NodeRunner.ts';
 import type { DeployNeeds, TextFile, WhatRuns } from '../../ElementRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
 import { port } from '../../port.ts';
 import type { Problem } from '../../../execution/wiring.ts';
-import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedUp, type Runners } from './boundary.ts';
+import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedUp } from './boundary.ts';
 import { runBody } from '../../body.ts';
 import { GRAPH_RUNS_PER_BODY, SUBGRAPH_RUN, SUBGRAPH_RUN_TEMPLATES, isStandardGraphRun } from './runTemplate.ts';
 

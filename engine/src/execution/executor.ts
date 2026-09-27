@@ -32,15 +32,11 @@ import type { Latch } from './latch.ts';
 import { mismatches } from './interface.ts';
 import { ERROR_PORT, fatalProblems, unrunnable } from './wiring.ts';
 
-export interface Registry {
-  node(type: string): NodeRunner<unknown> | undefined;
-}
-
 /** Ids of the fewest edges that must be ignored to make the graph acyclic. */
 export function memoryFeedbackEdges(
   nodes: GraphNode[],
   edges: GraphEdge[],
-  registry: Registry,
+  registry: Runners,
 ): Set<string> {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const feedback = new Set<string>();
@@ -200,7 +196,7 @@ export function collectInputs(
 export interface RunOptions {
   /** Wired file paths are read into text for elements that asked. */
   runtime: Runtime;
-  registry: Registry;
+  registry: Runners;
   /**
    * The page event that started this run. With one, only what that event is
    * wired to runs, plus whatever those nodes need -- see `triggers.ts`.
@@ -839,7 +835,7 @@ function settleMemory(
   feedback: Set<string>,
   outputs: Map<string, Record<string, unknown>>,
   results: NodeResult[],
-  registry: Registry,
+  registry: Runners,
 ): MemoryWrite[] {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const written: MemoryWrite[] = [];
@@ -882,7 +878,7 @@ function settleMemory(
 async function showDisplays(
   graph: Graph,
   results: NodeResult[],
-  registry: Registry,
+  registry: Runners,
   runtime: Runtime,
 ): Promise<void> {
   for (const result of results) {
@@ -912,7 +908,7 @@ async function showDisplays(
 function finalOutputs(
   nodes: GraphNode[],
   outputs: Map<string, Record<string, unknown>>,
-  registry: Registry,
+  registry: Runners,
 ): Record<string, unknown> {
   const final: Record<string, unknown> = {};
   const taken = new Set<string>();

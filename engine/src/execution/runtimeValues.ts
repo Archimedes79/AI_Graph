@@ -9,7 +9,7 @@
 // element that wants to prompt says so in its own file and nothing here changes.
 
 import type { Graph, GraphNode } from '../graph.ts';
-import type { NodeRunner } from '../elements/NodeRunner.ts';
+import type { Runners } from '../elements/NodeRunner.ts';
 
 export interface RuntimeRequirement {
   /** `nodeId`, or `nodeId::widgetId` for a block inside a page. */
@@ -22,11 +22,7 @@ export interface RuntimeRequirement {
   current: string;
 }
 
-export interface Registry {
-  node(type: string): NodeRunner<unknown> | undefined;
-}
-
-export function runtimeRequirements(graph: Graph, registry: Registry): RuntimeRequirement[] {
+export function runtimeRequirements(graph: Graph, registry: Runners): RuntimeRequirement[] {
   const asked: RuntimeRequirement[] = [];
   for (const node of graph.nodes) {
     const element = registry.node(node.node_type);
@@ -46,7 +42,7 @@ export function runtimeRequirements(graph: Graph, registry: Registry): RuntimeRe
 export function applyRuntimeValues(
   graph: Graph,
   values: Record<string, string>,
-  registry: Registry,
+  registry: Runners,
 ): void {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   for (const [key, value] of Object.entries(values)) {
