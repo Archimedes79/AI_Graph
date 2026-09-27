@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { NodeChange } from 'reactflow';
-import { removalsToApply } from './nodeRemoval';
+import { deleteKeys, removalsToApply } from './nodeRemoval';
 import type { GraphNode } from '@/graph';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
@@ -43,5 +43,15 @@ describe('removalsToApply', () => {
   it('leaves everything that is not a removal alone', () => {
     const moves: NodeChange[] = [{ type: 'position', id: 'a', position: { x: 1, y: 2 } }];
     expect(removalsToApply(moves, () => node('a', 5), () => false)).toEqual(moves);
+  });
+});
+
+describe('the keys that delete on the canvas', () => {
+  it('delete nothing while a node\'s dialog is open over it -- Backspace deleted the node behind it', () => {
+    expect(deleteKeys(true, false)).toEqual(['Delete', 'Backspace']);
+    // A button that went away under the focus -- ✨ Fix, once it fixed -- leaves the key to the page.
+    expect(deleteKeys(true, true)).toBeNull();
+    // Another view on screen: the canvas stays mounted behind it, and its keys are not the view's.
+    expect(deleteKeys(false, false)).toBeNull();
   });
 });

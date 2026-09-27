@@ -2,6 +2,18 @@ import type { NodeChange } from 'reactflow';
 import type { GraphNode } from '@/graph';
 
 /**
+ * The keys that delete what is selected on the canvas: Delete and Backspace --
+ * while the canvas is the view on screen (*active*), and no node's dialog is
+ * open over it (*editing*). A key pressed inside any dialog is the dialog's,
+ * and says so to ReactFlow (`Modal`'s `nokey`); but a button that goes away
+ * under the focus -- ✨ Fix, once it has fixed -- hands the key to the page,
+ * and Backspace deleted the node the dialog was open on, behind it.
+ */
+export function deleteKeys(active: boolean, editing: boolean): string[] | null {
+  return active && !editing ? ['Delete', 'Backspace'] : null;
+}
+
+/**
  * Which removals to let through, and which to ask about first.
  *
  * Pressing Delete with the page's node selected removes the graph's entire

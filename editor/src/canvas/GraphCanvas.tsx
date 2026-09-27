@@ -15,7 +15,7 @@ import 'reactflow/dist/style.css';
 
 import { useGraphStore } from '@/store/graphStore';
 import GraphNodeView from './GraphNodeView';
-import { removalsToApply } from './nodeRemoval';
+import { deleteKeys, removalsToApply } from './nodeRemoval';
 import type { NodeType } from '@/graph';
 import { ACCENT, LINE, PANEL, SUNKEN, SURFACE } from '@/ui/theme';
 
@@ -45,6 +45,7 @@ export default function GraphCanvas({ active = true }: { active?: boolean }) {
   const addNode = useGraphStore((s) => s.addNode);
   const connect = useGraphStore((s) => s.connect);
   const commit = useGraphStore((s) => s.commit);
+  const editing = useGraphStore((s) => s.editingNodeId !== null);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
@@ -140,7 +141,7 @@ export default function GraphCanvas({ active = true }: { active?: boolean }) {
         onInit={setRfInstance}
         onDrop={onDrop}
         onDragOver={onDragOver}
-        deleteKeyCode={active ? ['Delete', 'Backspace'] : null}
+        deleteKeyCode={deleteKeys(active, editing)}
         style={{ background: SUNKEN }}
       >
         <Background
