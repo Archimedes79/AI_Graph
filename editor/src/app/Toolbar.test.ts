@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import Toolbar, { graphBusy } from './Toolbar';
+import Toolbar, { graphBusy, lastAsked } from './Toolbar';
 
 // Rendered to a string, a component reads the store's first state, not the
 // one a test has since moved it to -- so what the toolbar asks is answered
@@ -49,5 +49,20 @@ describe('opening another graph', () => {
     expect(graphBusy(false, false)).toBeNull();
     expect(graphBusy(true, false)).toMatch(/run/);
     expect(graphBusy(false, true)).toMatch(/✨/);
+  });
+});
+
+describe('✨ AI Graph\'s Cancel', () => {
+  it('leaves the design on its way unwanted, and a new one wanted (B36)', () => {
+    // Cancel closed the dialog and let the request run on: opened again, the
+    // dialog offered the old design as the answer to a new, empty description.
+    const asked = lastAsked();
+    const first = asked.ask();
+    expect(first()).toBe(true);
+    asked.cancel();
+    expect(first()).toBe(false);
+    const second = asked.ask();
+    expect(second()).toBe(true);
+    expect(first()).toBe(false);
   });
 });

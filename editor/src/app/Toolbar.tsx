@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2, Wand2,
 } from 'lucide-react';
@@ -35,6 +35,26 @@ export function graphBusy(running: boolean, sweeping: boolean): string | null {
   if (running) return 'A run is going: stop it, or wait for it, before opening another graph.';
   if (sweeping) return '✨ Generate is writing this graph: stop it, or wait for it, before opening another.';
   return null;
+}
+
+/**
+ * Numbered requests of which only the last is still wanted: `ask` hands out
+ * what tells a request whether it still is, and `cancel` makes none of them.
+ *
+ * ✨ AI Graph's Cancel closed the dialog and left the request running; opened
+ * again, the dialog showed the old design as the answer to a new, empty
+ * description, ready to load.
+ */
+export function lastAsked(): { ask: () => () => boolean; cancel: () => void } {
+  let last = 0;
+  return {
+    ask: () => {
+      last += 1;
+      const mine = last;
+      return () => mine === last;
+    },
+    cancel: () => { last += 1; },
+  };
 }
 
 interface ToolbarProps {
@@ -109,6 +129,7 @@ export default function Toolbar({
   // What the one long call has sent so far, so designing a graph is not five
   // minutes of a spinning button with nothing behind it.
   const [aiCalls, setAiCalls] = useState<AICall[]>([]);
+  const aiAsked = useRef(lastAsked());
 
   /** Why another graph cannot be opened now, or null when it can. */
   const busyWith = graphBusy(isExecuting, sweep.busy);
@@ -202,6 +223,9 @@ export default function Toolbar({
   };
 
   const handleCloseAiGraph = () => {
+    // What is still on its way is no longer wanted: nothing it brings is shown.
+    aiAsked.current.cancel();
+    setAiGenerating(false);
     setShowAiGraph(false);
     setAiResult(null);
     setAiError('');
@@ -213,22 +237,24 @@ export default function Toolbar({
       setAiError('Please describe the graph you want first.');
       return;
     }
+    const wanted = aiAsked.current.ask();
     setAiGenerating(true);
     setAiError('');
     setAiResult(null);
     try {
       const result = await watchGeneration(
         (progressId) => call('generateGraph', { description: aiDescription, progress_id: progressId }),
-        setAiCalls,
+        (calls) => { if (wanted()) setAiCalls(calls); },
       );
-      setAiResult(result);
+      if (wanted()) setAiResult(result);
     } catch (e) {
+      if (!wanted()) return;
       setAiError(errorText(e, 'Failed to generate graph.'));
       // The whole failing exchange, replies included, as a node's ✨ keeps it:
       // the failing case is the one where what was asked matters.
       if (e instanceof ApiError && e.body.calls) setAiCalls(e.body.calls);
     } finally {
-      setAiGenerating(false);
+      if (wanted()) setAiGenerating(false);
     }
   };
 
