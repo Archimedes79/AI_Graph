@@ -1,10 +1,13 @@
 import { lazy } from 'react';
 import type { GuiWidget } from '@/graph';
-import { fromEngine, type ElementGeneration } from '@/authoring/generation';
+import type { ElementGeneration } from '@/authoring/generation';
+import { selectorGeneration } from '@/authoring/selectorGeneration';
 import { runBlockAlone } from '@/authoring/blockStepRules';
 import { InputPickerWidgetRunner } from '@engine/elements/widgets/input_picker/InputPickerWidgetRunner.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { WidgetGuiBuilder } from '../../WidgetGuiBuilder';
+
+const PICKER = new InputPickerWidgetRunner();
 
 export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
   readonly widgetKind = 'input_picker';
@@ -22,13 +25,9 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
 
   // The same declaration the input node carries, because it is the same
   // behaviour one level down -- the engine returns literally the same object.
-  override readonly generation: ElementGeneration<GuiWidget> = {
-    ...fromEngine(new InputPickerWidgetRunner().generation()),
-    // Only a folder is selected from, and only when not every file is taken.
-    available: (widget) => widget.mode === 'directory' && !this.selectsAll(widget),
-    promptLabel: 'Which files to keep',
-    promptPlaceholder: 'e.g. the Markdown files that document an API',
-    bodyLabel: 'Code — run(inputs) receives {"files"} and must return {"files"}',
+  override readonly generation: ElementGeneration<GuiWidget> = selectorGeneration(PICKER.generation(), {
+    isFolder: (widget) => widget.mode === 'directory',
+    selectsAll: (widget) => this.selectsAll(widget),
     bodyHeight: 100,
     // The selector is handed the folder's listing, and that listing is its
     // example: the block's own, made by the block run by itself, the way a
@@ -40,7 +39,7 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
       if (listed.status === 'error') throw new Error(listed.error || `${folder} could not be listed.`);
       return { values: { files: Array.isArray(listed.shown) ? listed.shown : [] }, origin: `the listing of ${folder}` };
     },
-  };
+  });
 
   /**
    * A picker is a source like an input node in file mode, with no input port:
@@ -59,7 +58,7 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
    * emitting the whole folder.
    */
   selectsAll(widget: GuiWidget): boolean {
-    return new InputPickerWidgetRunner().config(parseWidget(widget)).selectAll;
+    return PICKER.config(parseWidget(widget)).selectAll;
   }
 
   protected override defaultSpan() {

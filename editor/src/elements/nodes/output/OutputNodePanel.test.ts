@@ -5,7 +5,7 @@ import type { GraphNode } from '@/graph';
 import { NODE_KINDS, whenMissing } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { nodeFields } from '@/authoring/generation';
-import OutputNodePanel, { browseFor } from './OutputNodePanel';
+import OutputNodePanel from './OutputNodePanel';
 
 function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(OutputNodePanel, {
@@ -42,12 +42,5 @@ describe('an output node\'s panel', () => {
     expect(html).toContain('📂 Browse…');
     expect(html).toContain('Each value that arrives becomes a file of its own in this folder.');
     expect(panel(NODE_KINDS.output.create('o'))).not.toContain('📂 Browse…');
-  });
-
-  it('browses for a file with its current name filled in, so choosing a folder keeps it', () => {
-    expect(browseFor('file', 'out/report.txt')).toEqual({ mode: 'save', initialPath: 'out/report.txt', defaultName: 'report.txt' });
-    expect(browseFor('file', 'C:\\data\\sum.json').defaultName).toBe('sum.json');
-    expect(browseFor('file', '')).toEqual({ mode: 'save', initialPath: '' });
-    expect(browseFor('directory', 'out/results')).toEqual({ mode: 'directory', initialPath: 'out/results' });
   });
 });

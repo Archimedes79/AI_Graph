@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
+import PathField, { FileTypesField } from '@/dialogs/PathField';
 import SelectorSteps from '@/authoring/SelectorSteps';
-import { FIELD_ON_SURFACE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
+import { FIELD_ON_SURFACE, MUTED } from '@/ui/theme';
 import type { WidgetPanelProps } from '../../WidgetGuiBuilder';
 import { InputPickerWidgetGuiBuilder } from './InputPickerWidgetGuiBuilder';
 
@@ -15,7 +14,6 @@ export default function InputPickerWidgetPanel({
   builder, widget, fields, onUpdate, generating, message, onGenerate, steps,
 }: WidgetPanelProps) {
   const generation = builder.generation;
-  const [browsing, setBrowsing] = useState(false);
   if (!(builder instanceof InputPickerWidgetGuiBuilder)) return null;
   const mode = widget.mode || 'file';
   const directory = mode === 'directory';
@@ -41,28 +39,15 @@ export default function InputPickerWidgetPanel({
       <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
         {directory ? 'Folder' : 'Default path'}
       </label>
-      <div className="flex items-center gap-2">
-        <input
-          className="flex-1 min-w-0 rounded-lg px-2 py-1.5 text-sm"
-          style={FIELD_ON_SURFACE}
-          value={path}
-          onChange={(e) => onUpdate({ value: e.target.value })}
-          placeholder={directory ? '/path/to/directory' : '/path/to/file'}
-          aria-label={directory ? 'Folder' : 'Default path'}
-        />
-        <button type="button" className="text-xs px-2 py-1.5 rounded-lg flex-shrink-0" style={NEUTRAL_BUTTON} onClick={() => setBrowsing(true)}>
-          📂 Browse…
-        </button>
-      </div>
-      {browsing && (
-        <FileBrowserDialog
-          mode={directory ? 'directory' : 'file'}
-          initialPath={path}
-          extensions={widget.extensions ?? ''}
-          onPick={(picked) => { onUpdate({ value: picked }); setBrowsing(false); }}
-          onClose={() => setBrowsing(false)}
-        />
-      )}
+      <PathField
+        value={path}
+        onChange={(picked) => onUpdate({ value: picked })}
+        mode={directory ? 'directory' : 'file'}
+        extensions={widget.extensions ?? ''}
+        placeholder={directory ? '/path/to/directory' : '/path/to/file'}
+        ariaLabel={directory ? 'Folder' : 'Default path'}
+        onSurface
+      />
     </div>
   );
 
@@ -71,18 +56,7 @@ export default function InputPickerWidgetPanel({
   // used the setting either way and the page printed "Allowed: .csv"
   // underneath it.
   const typesField = (
-    <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-        File types (e.g. .md, .txt)
-      </label>
-      <input
-        className="w-full rounded-lg px-2 py-1.5 text-sm"
-        style={FIELD_ON_SURFACE}
-        value={widget.extensions ?? ''}
-        onChange={(e) => onUpdate({ extensions: e.target.value })}
-        placeholder="Leave empty for all file types"
-      />
-    </div>
+    <FileTypesField value={widget.extensions ?? ''} onChange={(extensions) => onUpdate({ extensions })} onSurface />
   );
 
   if (!directory || !generation || !steps) {

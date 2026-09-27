@@ -1,19 +1,6 @@
-import React from 'react';
-import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
-import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
+import PathField from '@/dialogs/PathField';
+import { DIMMER, FIELD, MUTED } from '@/ui/theme';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
-
-/**
- * How 📂 Browse… opens for where the result goes: a file is saved, so the
- * dialog starts in the file's folder with its name filled in -- choosing
- * another folder must not lose the name, which it did -- and a folder is
- * chosen as it is.
- */
-export function browseFor(mode: string, value: string): { mode: 'save' | 'directory'; initialPath: string; defaultName?: string } {
-  if (mode !== 'file') return { mode: 'directory', initialPath: value };
-  const name = value.split(/[\\/]/).pop() ?? '';
-  return { mode: 'save', initialPath: value, ...(name ? { defaultName: name } : {}) };
-}
 
 /**
  * An output node: where the result goes, what it is, and what it is called.
@@ -25,7 +12,6 @@ export function browseFor(mode: string, value: string): { mode: 'save' | 'direct
 export default function OutputNodePanel({ node, setConfig, fields }: NodePanelProps) {
   const mode = node.config.write_mode;
   const writes = mode === 'file' || mode === 'directory';
-  const [browsing, setBrowsing] = React.useState(false);
 
   return (
     <div className="space-y-4">
@@ -49,31 +35,14 @@ export default function OutputNodePanel({ node, setConfig, fields }: NodePanelPr
             <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
               {mode === 'file' ? 'File' : 'Folder'}
             </label>
-            <div className="flex items-center gap-2">
-              <input
-                className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm"
-                style={FIELD}
-                value={node.config.value ?? ''}
-                onChange={(e) => setConfig('value', e.target.value)}
-                placeholder={mode === 'file' ? 'output/result.txt' : 'output/results'}
-                aria-label={mode === 'file' ? 'File' : 'Folder'}
-              />
-              <button
-                type="button"
-                className="text-xs px-3 py-2 rounded-lg flex-shrink-0"
-                style={NEUTRAL_BUTTON}
-                onClick={() => setBrowsing(true)}
-              >
-                📂 Browse…
-              </button>
-            </div>
-            {browsing && (
-              <FileBrowserDialog
-                {...browseFor(mode, String(node.config.value ?? ''))}
-                onPick={(picked) => { setConfig('value', picked); setBrowsing(false); }}
-                onClose={() => setBrowsing(false)}
-              />
-            )}
+            {/* A file is saved, so 📂 Browse… starts with its name filled in; a folder is chosen as it is. */}
+            <PathField
+              mode={mode === 'file' ? 'save' : 'directory'}
+              value={String(node.config.value ?? '')}
+              onChange={(path) => setConfig('value', path)}
+              placeholder={mode === 'file' ? 'output/result.txt' : 'output/results'}
+              ariaLabel={mode === 'file' ? 'File' : 'Folder'}
+            />
             <p className="text-xs mt-1" style={{ color: DIMMER }}>
               {mode === 'file'
                 ? 'A text is written as it is, anything else as JSON.'

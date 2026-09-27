@@ -1,11 +1,12 @@
 import React from 'react';
-import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
+import PathField, { FileTypesField } from '@/dialogs/PathField';
 import SelectorSteps from '@/authoring/SelectorSteps';
 import { clip } from '@/authoring/TryItInline';
 import { readFileAsRun, runAlone } from '@/authoring/readAsRun';
 import { errorText } from '@/api/errorText';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
+import { InputNodeGuiBuilder } from './InputNodeGuiBuilder';
 
 /**
  * What a file input hands on, read the way a run reads it: the text every
@@ -58,10 +59,9 @@ export default function InputNodePanel({
   builder, node, setConfig, fields, generating, message, onGenerate, steps,
 }: NodePanelProps) {
   const generation = builder.generation;
-  const mode: 'text' | 'file' | 'directory' =
+  if (!(builder instanceof InputNodeGuiBuilder)) return null;
+  const mode:'text' | 'file' | 'directory' =
     (node.config.input_mode || 'text') as 'text' | 'file' | 'directory';
-
-  const [browsing, setBrowsing] = React.useState(false);
 
   const isText = mode === 'text';
   const isDirectory = mode === 'directory';
@@ -91,46 +91,25 @@ export default function InputNodePanel({
       <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
         {isText ? 'Text' : isDirectory ? 'Directory' : 'File'}
       </label>
-      <div className="flex items-center gap-2">
-        {/* Text in a box that keeps its line breaks: a one-line field dropped
-            them at the first edit of a text pasted in. */}
-        {isText ? (
-          <textarea
-            className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm resize-y"
-            style={{ ...FIELD, minHeight: 72 }}
-            value={path}
-            onChange={(e) => setConfig('value', e.target.value)}
-            placeholder="Enter default text…"
-            aria-label="Text"
-          />
-        ) : (
-          <input
-            className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm"
-            style={FIELD}
-            value={path}
-            onChange={(e) => setConfig('value', e.target.value)}
-            placeholder={isDirectory ? '/path/to/directory' : '/path/to/file'}
-            aria-label={isDirectory ? 'Directory' : 'File'}
-          />
-        )}
-        {!isText && (
-          <button
-            type="button"
-            className="text-xs px-3 py-2 rounded-lg flex-shrink-0"
-            style={NEUTRAL_BUTTON}
-            onClick={() => setBrowsing(true)}
-          >
-            📂 Browse…
-          </button>
-        )}
-      </div>
-      {browsing && (
-        <FileBrowserDialog
+      {/* Text in a box that keeps its line breaks: a one-line field dropped
+          them at the first edit of a text pasted in. */}
+      {isText ? (
+        <textarea
+          className="w-full rounded-lg px-3 py-2 text-sm resize-y"
+          style={{ ...FIELD, minHeight: 72 }}
+          value={path}
+          onChange={(e) => setConfig('value', e.target.value)}
+          placeholder="Enter default text…"
+          aria-label="Text"
+        />
+      ) : (
+        <PathField
+          value={path}
+          onChange={(picked) => setConfig('value', picked)}
           mode={isDirectory ? 'directory' : 'file'}
-          initialPath={path}
           extensions={node.config.extensions ?? ''}
-          onPick={(picked) => { setConfig('value', picked); setBrowsing(false); }}
-          onClose={() => setBrowsing(false)}
+          placeholder={isDirectory ? '/path/to/directory' : '/path/to/file'}
+          ariaLabel={isDirectory ? 'Directory' : 'File'}
         />
       )}
       {/* An example file the 📎 of an older version attached: what the nodes
@@ -205,19 +184,7 @@ export default function InputNodePanel({
   // folder's listing keeps only these. It was shown for a folder alone, while
   // the browser for one file filtered by it all the same.
   const typesField = !isText && (
-    <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-        File types (comma-separated, e.g. .md, .txt)
-      </label>
-      <input
-        className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-        style={FIELD}
-        value={node.config.extensions ?? ''}
-        onChange={(e) => setConfig('extensions', e.target.value)}
-        placeholder="Leave empty for all file types"
-        aria-label="File types"
-      />
-    </div>
+    <FileTypesField value={node.config.extensions ?? ''} onChange={(extensions) => setConfig('extensions', extensions)} />
   );
 
   if (!isDirectory || !generation || !steps) {
@@ -248,7 +215,8 @@ export default function InputNodePanel({
           </div>
         )}
         noFolder={!path.trim()}
-        selectAll={node.config.select_all_files !== false}
+        // As a run reads it, the way the folder picker on a page asks.
+        selectAll={builder.selectsAll(node)}
         onSelectAll={(all) => setConfig('select_all_files', all)}
         generation={generation}
         subject={node}

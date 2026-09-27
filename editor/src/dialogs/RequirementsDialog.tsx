@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Requirement } from '@/api/client';
 import Modal from '@/ui/Modal';
-import FileBrowserDialog from './FileBrowserDialog';
+import PathField from './PathField';
 import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON } from '@/ui/theme';
 
 interface RequirementsDialogProps {
@@ -13,13 +13,21 @@ interface RequirementsDialogProps {
 const KIND_ICON: Record<string, string> = { text: '📝', file: '📄', directory: '📁' };
 
 /**
+ * What 📂 Browse… picks for a path a run asks for. A file an output writes is
+ * chosen as one to save: it may not exist yet, and a browser that picks only
+ * existing files could not name it.
+ */
+export function browsesFor(req: Pick<Requirement, 'kind' | 'direction'>): 'file' | 'directory' | 'save' {
+  if (req.kind === 'directory') return 'directory';
+  return req.direction === 'output' ? 'save' : 'file';
+}
+
+/**
  * The "before running" window: the values a graph asks for before it can run.
  * The windows a run opens afterwards are `OutputWindows`, mounted once per page.
  */
 export default function RequirementsDialog({ requirements, onSubmit, onCancel }: RequirementsDialogProps) {
   const [values, setValues] = useState<Record<string, string>>({});
-  /** Key of the requirement whose picker is open, or '' for none. */
-  const [browsing, setBrowsing] = useState('');
 
   // Answers are kept by each question's own key, the one the engine writes
   // them back by (`applyRuntimeValues`).
@@ -36,10 +44,7 @@ export default function RequirementsDialog({ requirements, onSubmit, onCancel }:
     .filter((r) => r.direction === 'input' && (values[r.key] ?? '').trim().length === 0)
     .map((r) => r.label);
   const canSubmit = missing.length === 0;
-
-  // Which picker the open Browse… belongs to: a directory requirement picks a
-  // folder, a file requirement picks a file.
-  const browsingKind = requirements.find((r) => r.key === browsing)?.kind ?? 'file';
+  const set = (key: string, value: string) => setValues((prev) => ({ ...prev, [key]: value }));
 
   return (
     <Modal
@@ -98,43 +103,29 @@ export default function RequirementsDialog({ requirements, onSubmit, onCancel }:
                 <span className="ml-1 text-xs" style={{ color: DIMMER }}>(optional)</span>
               )}
             </label>
-            <div className="flex items-center gap-2">
+            {req.kind === 'text' ? (
               <input
-                className={`flex-1 min-w-0 rounded-lg px-3 py-2 text-sm ${req.kind === 'text' ? '' : 'font-mono'}`}
+                className="w-full rounded-lg px-3 py-2 text-sm"
                 style={FIELD}
                 value={values[req.key] ?? ''}
-                onChange={(e) => setValues((prev) => ({ ...prev, [req.key]: e.target.value }))}
-                placeholder={
-                  req.kind === 'text' ? 'Enter text…' : req.kind === 'directory' ? '/path/to/directory' : '/path/to/file'
-                }
+                onChange={(e) => set(req.key, e.target.value)}
+                placeholder="Enter text…"
                 autoFocus={index === 0}
               />
-              {/* Typing an absolute path from memory was the only way to
-                  answer this dialog; a path field should offer a picker. */}
-              {req.kind !== 'text' && (
-                <button
-                  type="button"
-                  className="text-xs px-3 py-2 rounded-lg flex-shrink-0"
-                  style={NEUTRAL_BUTTON}
-                  onClick={() => setBrowsing(req.key)}
-                >
-                  Browse…
-                </button>
-              )}
-            </div>
+            ) : (
+              // Typing an absolute path from memory was the only way to answer
+              // this dialog; a path field offers a picker (`browsesFor`).
+              <PathField
+                value={values[req.key] ?? ''}
+                onChange={(path) => set(req.key, path)}
+                mode={browsesFor(req)}
+                placeholder={req.kind === 'directory' ? '/path/to/directory' : '/path/to/file'}
+                mono
+                autoFocus={index === 0}
+              />
+            )}
           </div>
         ))}
-        {browsing && (
-          <FileBrowserDialog
-            mode={browsingKind === 'directory' ? 'directory' : 'file'}
-            initialPath={values[browsing] ?? ''}
-            onPick={(picked) => {
-              setValues((prev) => ({ ...prev, [browsing]: picked }));
-              setBrowsing('');
-            }}
-            onClose={() => setBrowsing('')}
-          />
-        )}
       </div>
     </Modal>
   );

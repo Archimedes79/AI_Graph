@@ -1,10 +1,13 @@
 import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
-import { fromEngine, type ElementGeneration } from '@/authoring/generation';
+import type { ElementGeneration } from '@/authoring/generation';
+import { selectorGeneration } from '@/authoring/selectorGeneration';
 import { listAsRun } from '@/authoring/readAsRun';
 import { continuing } from '@/store/portRenames';
 import { InputNodeRunner } from '@engine/elements/nodes/input/InputNodeRunner.ts';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
+
+const INPUT = new InputNodeRunner();
 
 const mode = (node: GraphNode): string => String(node.config.input_mode ?? 'text');
 
@@ -40,13 +43,9 @@ export class InputNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly Panel = lazy(() => import('./InputNodePanel'));
 
-  override readonly generation: ElementGeneration<GraphNode> = {
-    ...fromEngine(new InputNodeRunner().generation()),
-    // Only a folder is selected from, and only when not every file is taken.
-    available: (node) => mode(node) === 'directory' && node.config.select_all_files === false,
-    promptLabel: 'Which files to keep',
-    promptPlaceholder: 'e.g. the Markdown files that document an API',
-    bodyLabel: 'Code — run(inputs) receives {"files"} and must return {"files"}',
+  override readonly generation: ElementGeneration<GraphNode> = selectorGeneration(INPUT.generation(), {
+    isFolder: (node) => mode(node) === 'directory',
+    selectsAll: (node) => this.selectsAll(node),
     bodyHeight: 140,
     // An older node may still say what its files contain: a selector may pick
     // by content, so it is told -- as what the files hold, not as the format
@@ -58,7 +57,15 @@ export class InputNodeGuiBuilder extends NodeGuiBuilder {
       if (!String(node.config.value ?? '').trim()) return undefined;
       return { values: { files: await listAsRun(node) }, origin: `the listing of ${String(node.config.value)}` };
     },
-  };
+  });
+
+  /**
+   * Whether a run takes every file the folder lists, and runs no selector:
+   * the engine's answer, as the folder picker on a page asks it.
+   */
+  selectsAll(node: GraphNode): boolean {
+    return INPUT.config(node).selectAll;
+  }
 
   /**
    * A file or a folder is a guess until there is one to read: a default path,
