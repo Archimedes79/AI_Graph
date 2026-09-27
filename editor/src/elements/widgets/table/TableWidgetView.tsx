@@ -2,6 +2,13 @@ import type { WidgetViewProps } from '../WidgetView';
 import { DIMMER, LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
 
 /**
+ * The size a table's header and rows are drawn at, in pixels. Named because
+ * the node feeding the table is told it (`TableWidgetGuiBuilder.textShown`),
+ * and a size said in one place while drawn from another drifts apart.
+ */
+export const TABLE_TEXT = 12;
+
+/**
  * Rows, as a table. Display-only, like the plot: one input port, no output.
  *
  * Accepts the two shapes data actually arrives in — a list of objects sharing
@@ -66,7 +73,7 @@ export default function TableWidgetView({ widget, value, incoming }: WidgetViewP
 
   return (
     <div className="h-full overflow-auto">
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: TABLE_TEXT }}>
         <thead>
           <tr>
             {table.header.map((cell, i) => (

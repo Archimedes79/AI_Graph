@@ -26,3 +26,29 @@ describe('what a block on a page asks of the node wired into it', () => {
     }
   });
 });
+
+/**
+ * Then where the block shows it, which the node wired into it cannot know and
+ * the editor can: its size on the page at full width, from its cells, and its
+ * text as its kind draws it -- so a title can be written to fit, and SVG at the
+ * size it will be drawn.
+ */
+describe('where a block on a page shows what arrives', () => {
+  it('is a chart\'s size and the sizes it draws its labels and title at', () => {
+    const chart = { ...WIDGET_BUILDERS.plot_window.create('Sizes'), id: 'sizes', w: 16, h: 9 };
+    expect(NODE_BUILDERS.gui.wantsOn(page(chart), 'sizes_in'))
+      .toMatch(/which the chart draws at the block's real size .* shown as it stands; shown at about 1106 x 616 px \(16 x 9 cells\), labels 11 px, title 13 px$/);
+  });
+
+  it('is a table\'s rows, at the default span for a block with no size of its own', () => {
+    const table: GuiWidget = { id: 'rows', kind: 'table', label: 'Rows', tone: 'plain' };
+    expect(NODE_BUILDERS.gui.wantsOn(page(table), 'rows_in'))
+      .toMatch(/whose first row is the header; shown at about 546 x 266 px \(8 x 4 cells\), 12 px rows$/);
+  });
+
+  it('is a text box\'s text first: it takes anything, and this is read after "which wants"', () => {
+    const box = { ...WIDGET_BUILDERS.text_io.create('Answer', 'output'), id: 'answer', w: 8, h: 5 };
+    expect(NODE_BUILDERS.gui.wantsOn(page(box), 'answer_in'))
+      .toBe('14 px text that wraps and scrolls, shown at about 546 x 336 px (8 x 5 cells)');
+  });
+});

@@ -4,6 +4,7 @@ import { asText } from '@engine/elements/widgets/text_io/text.ts';
 import { textIoRole } from '@engine/elements/widgets/text_io/role.ts';
 import { DIMMER, FIELD, LINE, SUNKEN, TEXT } from '@/ui/theme';
 import { widgetFiresRun } from '@/document/guiWidgets';
+import { BOX_TEXT } from '@/document/layout';
 
 /** Runtime text_io widget.
  * - "input": text area the user types in (drives graph via output port)
@@ -27,8 +28,8 @@ export default function TextIoWidgetView({ widget, value, incoming, onChange, on
   if (mode === 'output') {
     return (
       <textarea
-        className="w-full h-full rounded-lg px-2 py-1.5 text-sm resize-none"
-        style={{ ...FIELD, minHeight: 80 }}
+        className="w-full h-full rounded-lg px-2 py-1.5 resize-none"
+        style={{ ...FIELD, ...BOX_TEXT, minHeight: 80 }}
         value={text}
         readOnly
         placeholder="Waiting for output…"
@@ -39,8 +40,8 @@ export default function TextIoWidgetView({ widget, value, incoming, onChange, on
   if (mode === 'input') {
     return (
       <textarea
-        className="w-full h-full rounded-lg px-2 py-1.5 text-sm resize-none"
-        style={{ ...FIELD, minHeight: 80 }}
+        className="w-full h-full rounded-lg px-2 py-1.5 resize-none"
+        style={{ ...FIELD, ...BOX_TEXT, minHeight: 80 }}
         value={text}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={sendOnEnter}
@@ -56,14 +57,14 @@ export default function TextIoWidgetView({ widget, value, incoming, onChange, on
   return (
     <div className="flex flex-col gap-2 h-full">
       <div
-        className="flex-1 rounded-lg px-2 py-1.5 text-sm overflow-auto whitespace-pre-wrap"
-        style={{ background: SUNKEN, color: TEXT, border: `1px solid ${LINE}`, minHeight: 40 }}
+        className="flex-1 rounded-lg px-2 py-1.5 overflow-auto whitespace-pre-wrap"
+        style={{ ...BOX_TEXT, background: SUNKEN, color: TEXT, border: `1px solid ${LINE}`, minHeight: 40 }}
       >
         {incomingText || <span style={{ color: DIMMER }}>Incoming value appears here…</span>}
       </div>
       <textarea
-        className="w-full rounded-lg px-2 py-1.5 text-sm resize-none"
-        style={{ ...FIELD, minHeight: 60 }}
+        className="w-full rounded-lg px-2 py-1.5 resize-none"
+        style={{ ...FIELD, ...BOX_TEXT, minHeight: 60 }}
         value={asText(value)}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={sendOnEnter}

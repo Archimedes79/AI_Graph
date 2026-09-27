@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GuiWidget } from '@/graph';
-import { GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_CELL, GUI_MAX_WIDTH, cellSize, cellsFromDrag, resolveWidgetLayout } from './layout';
+import { DEFAULT_WIDGET_SPAN, GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_CELL, GUI_MAX_WIDTH, blockSize, cellSize, cellsFromDrag, resolveWidgetLayout } from './layout';
 
 function widget(id: string, w?: number, h?: number): GuiWidget {
   return { id, kind: 'text_io', label: id, w: w as number, h: h as number } as GuiWidget;
@@ -50,6 +50,22 @@ describe('cellSize', () => {
 
   it('never returns something unusable for a container with no width yet', () => {
     expect(cellSize(0)).toBeGreaterThan(0);
+  });
+});
+
+describe('blockSize', () => {
+  it('is its cells and the gaps between them, at the page\'s full width', () => {
+    expect(blockSize(widget('a', 16, 9))).toEqual({ w: 16, h: 9, width: 1106, height: 616 });
+    // A block across the whole page is the page's whole width.
+    expect(blockSize(widget('a', GUI_GRID_COLUMNS, 1)).width).toBe(GUI_MAX_WIDTH);
+    // One cell has no gap inside it.
+    expect(blockSize(widget('a', 1, 1))).toEqual({ w: 1, h: 1, width: GUI_MAX_CELL, height: GUI_MAX_CELL });
+  });
+
+  it('is the default span for a block with no size of its own, and the grid\'s clamp for one too wide', () => {
+    expect(blockSize({ id: 'a', kind: 'plot_window' } as GuiWidget))
+      .toEqual(blockSize(widget('b', DEFAULT_WIDGET_SPAN.w, DEFAULT_WIDGET_SPAN.h)));
+    expect(blockSize(widget('a', 99, 2)).w).toBe(GUI_GRID_COLUMNS);
   });
 });
 

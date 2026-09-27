@@ -13,4 +13,9 @@ export class ImageViewWidgetGuiBuilder extends DisplayWidgetGuiBuilder {
   }
 
   readonly runner = new ImageViewWidgetRunner();
+
+  /** A picture has no text of its own: its size is what there is to say. */
+  override textShown(): undefined {
+    return undefined;
+  }
 }
