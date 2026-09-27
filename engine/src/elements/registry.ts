@@ -7,6 +7,7 @@
 import type { NodeRunner } from './NodeRunner.ts';
 import type { WidgetRunner } from './WidgetRunner.ts';
 import type { NodeType, WidgetKind } from '../graph.ts';
+import type { Generation } from '../authoring/generation.ts';
 import { AiNodeRunner } from './nodes/ai/AiNodeRunner.ts';
 import { CodeNodeRunner } from './nodes/code/CodeNodeRunner.ts';
 import { DataNodeRunner } from './nodes/data/DataNodeRunner.ts';
@@ -45,6 +46,13 @@ export const registry = {
   },
   widget(kind: WidgetKind | string): WidgetRunner<unknown> | undefined {
     return WIDGETS_BY_KIND.get(kind);
+  },
+  /**
+   * How an AI writes the body of the element with this name: a node type's
+   * first, then a block kind's -- the one lookup ✨ and its tests share.
+   */
+  generation(name: string): Generation | undefined {
+    return NODES_BY_TYPE.get(name)?.generation() ?? WIDGETS_BY_KIND.get(name)?.generation();
   },
   nodeTypes(): string[] {
     return [...NODES_BY_TYPE.keys()];

@@ -12,7 +12,7 @@ import type { AiService, CodeService } from '../../elements/Runtime.ts';
  */
 
 const never: CodeService = { run: async () => ({}) };
-const generationFor = (name: string) => registry.node(name)?.generation() ?? registry.widget(name)?.generation();
+const generationFor = (name: string) => registry.generation(name);
 const target = { provider: 'p', model: 'm' };
 
 /** A model that answers slowly, so the transcript can be read mid-flight. */

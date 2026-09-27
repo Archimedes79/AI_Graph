@@ -35,7 +35,7 @@ const runner = (outcome: (body: string) => Record<string, unknown>): CodeService
   run: async (body) => outcome(body),
 });
 
-const generationFor = (name: string) => registry.node(name)?.generation() ?? registry.widget(name)?.generation();
+const generationFor = (name: string) => registry.generation(name);
 const target = { provider: 'test', model: 'm' };
 
 describe('code', () => {
