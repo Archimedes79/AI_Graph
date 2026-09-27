@@ -27,6 +27,16 @@ import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LIN
  */
 const STALLED_AFTER_SECONDS = 45;
 
+/**
+ * Why New, Open and Reload wait, or null when they need not: a run or a ✨
+ * sweep is going, and what it brings back belongs to the graph it started on.
+ */
+export function graphBusy(running: boolean, sweeping: boolean): string | null {
+  if (running) return 'A run is going: stop it, or wait for it, before opening another graph.';
+  if (sweeping) return '✨ Generate is writing this graph: stop it, or wait for it, before opening another.';
+  return null;
+}
+
 interface ToolbarProps {
   onNewGraph: () => void;
   onSave: () => void;
@@ -99,6 +109,9 @@ export default function Toolbar({
   // What the one long call has sent so far, so designing a graph is not five
   // minutes of a spinning button with nothing behind it.
   const [aiCalls, setAiCalls] = useState<AICall[]>([]);
+
+  /** Why another graph cannot be opened now, or null when it can. */
+  const busyWith = graphBusy(isExecuting, sweep.busy);
 
   /** Whether this tool has a page at all: a window to open, or only ▶ Run. */
   const pageBlocks = rfNodes
@@ -281,8 +294,10 @@ export default function Toolbar({
         <div className="flex-1" />
 
         {/* Actions, grouped: file · history · authoring · run · project */}
-        <ToolbarButton icon={FilePlus2} label="New" title="New graph" onClick={onNewGraph} />
-        <ToolbarButton icon={FolderOpen} label="Open" title="Open a graph file" onClick={onLoad} />
+        {/* Not while a run or a sweep is going: what they bring back is for
+            the graph they started on, and is dropped once another is open. */}
+        <ToolbarButton icon={FilePlus2} label="New" title={busyWith ?? 'New graph'} onClick={onNewGraph} disabled={!!busyWith} />
+        <ToolbarButton icon={FolderOpen} label="Open" title={busyWith ?? 'Open a graph file'} onClick={onLoad} disabled={!!busyWith} />
         <ToolbarButton icon={Save} label="Save" title="Save (Ctrl+S)" onClick={onSave} />
         <ToolbarButton icon={SaveAll} title="Save as…" onClick={onSaveAs} />
         {/* Code and prompts that change on disk come in by themselves; this
@@ -290,8 +305,9 @@ export default function Toolbar({
         {isProject && (
           <ToolbarButton
             icon={RefreshCw}
-            title="Reload the whole project from disk (flow.json or a node's settings changed outside the editor)"
+            title={busyWith ?? 'Reload the whole project from disk (flow.json or a node\'s settings changed outside the editor)'}
             onClick={onReloadProject}
+            disabled={!!busyWith}
           />
         )}
 
