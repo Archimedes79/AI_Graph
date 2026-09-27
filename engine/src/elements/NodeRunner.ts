@@ -84,6 +84,15 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   readonly isResult: boolean = false;
 
   /**
+   * What this node's outputs are called in the run's result, when it is one:
+   * its id, unless the element keeps a name of its own. The run keys the result
+   * by it and `check` compares it, so both ask here.
+   */
+  resultLabel(node: GraphNode): string {
+    return node.id;
+  }
+
+  /**
    * Whether this node is where its graph meets whatever holds it: `'in'` for a
    * value handed down, `'out'` for one handed back up.
    *

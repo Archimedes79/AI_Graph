@@ -59,6 +59,24 @@ describe('what check finds in a graph', () => {
     const problems = problemsIn(graph({ template: 'There are {{totl}} of {{input}}.' }));
     expect(problems).toEqual([expect.objectContaining({ problem: 'Its message template asks for {{totl}}, and it has no input "totl".' })]);
   });
+
+  it('finds two output nodes under one label, of which the run\'s result keys only the first by it', () => {
+    const made = graph();
+    made.nodes[2].config.output_label = 'Answer';
+    made.nodes.push(
+      { ...made.nodes[2], id: 'also', config: { write_mode: 'window', output_label: 'Answer' } },
+      { ...made.nodes[2], id: 'other', config: { write_mode: 'window', output_label: 'Count' } },
+    );
+    made.edges.push(
+      { id: 'e3', source_node_id: 'say', source_port_id: 'output', target_node_id: 'also', target_port_id: 'value' },
+      { id: 'e4', source_node_id: 'count', source_port_id: 'total', target_node_id: 'other', target_port_id: 'value' },
+    );
+    expect(problemsIn(made)).toEqual([expect.objectContaining({
+      where: 'nodes "show", "also"',
+      problem: expect.stringMatching(/share the label "Answer".*only "show" under "Answer": "Answer \(also\)" for the rest/),
+      fix: 'Give every output node its own output_label.',
+    })]);
+  });
 });
 
 describe('what check finds in a setting that would silently do nothing', () => {

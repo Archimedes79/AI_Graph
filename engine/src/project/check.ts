@@ -164,7 +164,31 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
     });
   }
 
+  // Two output nodes under one label both reach the run's result, but only
+  // the first under that label: whoever reads the result by it gets one of
+  // them and never hears of the other. Every new output node starts out as
+  // "Result", so this is easy to do and hard to see. Only at the top: a graph
+  // inside a node hands its outputs up by node id, not by label.
+  if (!inside) problems.push(...sharedResultLabels(graph));
+
   return problems;
+}
+
+/** Output nodes that share a label, and the keys all but the first are handed on under. */
+function sharedResultLabels(graph: Graph): Problem[] {
+  const byLabel = new Map<string, string[]>();
+  for (const node of graph.nodes) {
+    const element = registry.node(node.node_type);
+    if (!element?.isResult) continue;
+    const label = element.resultLabel(node);
+    byLabel.set(label, [...(byLabel.get(label) ?? []), node.id]);
+  }
+  return [...byLabel].filter(([, ids]) => ids.length > 1).map(([label, ids]) => ({
+    where: `nodes ${names(ids)}`,
+    problem: `These output nodes share the label "${label}". The run's result keeps each, but only "${ids[0]}" under "${label}": `
+      + `${ids.slice(1).map((id) => `"${label} (${id})"`).join(', ')} for the rest.`,
+    fix: 'Give every output node its own output_label.',
+  }));
 }
 
 /** The same problem, said about a graph that is inside a node. */
