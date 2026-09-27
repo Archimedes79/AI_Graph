@@ -5,7 +5,7 @@ import { useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from '@/elements/registry';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { delivered } from '@/store/executionStatus';
-import { widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
+import { showsPage, widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 
 /**
@@ -49,7 +49,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
     ? 'Did not run this round: what it produced in an earlier round stands'
     : executionResult?.status;
   const statusColor = status?.color;
-  const isGuiLike = builder?.holdsWidgets ?? false;
+  const isGuiLike = showsPage(graphNode.node_type);
   const summary = builder?.canvasSummary?.(graphNode);
 
   const handleEdit = useCallback(() => setEditingNode(id), [id, setEditingNode]);

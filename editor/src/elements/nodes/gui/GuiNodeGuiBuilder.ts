@@ -39,8 +39,6 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-gui, #4a1d3a)';
 
-  override readonly holdsWidgets = true;
-
   // No Panel: a page is edited in the GUI editor, where its name and what it
   // is about are edited above it (`PageHeading`), and the node dialog is never
   // opened for it (App.tsx). The panel it had could not be reached.

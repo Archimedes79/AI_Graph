@@ -21,7 +21,7 @@ import { memoryFeedbackEdges, topologicalLevels } from '@engine/execution/execut
 import { registry } from '@engine/elements/registry.ts';
 import { shippedText } from '@engine/elements/ElementRunner.ts';
 import type { GraphEdge, GraphNode, GuiWidget, Wire } from '@/graph';
-import { guiWidgetPorts } from '@/document/guiWidgets';
+import { guiWidgetPorts, showsPage } from '@/document/guiWidgets';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 
@@ -127,7 +127,7 @@ export function generationOrder(nodes: GraphNode[], edges: GraphEdge[]): SweepTa
   const portOwner = new Map<string, string>();
 
   for (const node of nodes) {
-    const widgets = NODE_BUILDERS[node.node_type]?.holdsWidgets && Array.isArray(node.config.gui_widgets)
+    const widgets = showsPage(node.node_type) && Array.isArray(node.config.gui_widgets)
       ? node.config.gui_widgets as GuiWidget[]
       : [];
     const blocks = widgets.filter((widget) => {

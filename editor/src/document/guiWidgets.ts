@@ -85,7 +85,7 @@ export function widgetFiresRun(widget: GuiWidget): boolean {
  * block on the page dropped it again and `updateNode` pruned its wire.
  */
 export function syncGuiNodePorts(node: GraphNode): GraphNode {
-  if (!engineRegistry.node(node.node_type)?.hasInterface) return node;
+  if (!showsPage(node.node_type)) return node;
   const derived = derivedNodePorts(node);
   return derived ? { ...node, inputs: derived.inputs, outputs: derived.outputs } : node;
 }

@@ -73,8 +73,8 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   // ── Run time ──────────────────────────────────────────────────────────────
   // Nothing, on purpose. Whether a node's result opens a window is
   // `NODE_KINDS[type].showsResultWindow` (document/nodeKinds.ts), which a deployed
-  // tool reads without this class; whether a node is a page of widgets is
-  // `holdsWidgets`, a build-time fact, below.
+  // tool reads without this class; whether a node is a page of widgets is the
+  // engine's `hasInterface`, asked through `showsPage` (document/guiWidgets.ts).
 
   // ── Build time ────────────────────────────────────────────────────────────
   // The editor: the palette, a new element, its panels, what ✨ Generate is told.
@@ -105,13 +105,6 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    * body -- so the shell draws no separate "Description" field above it.
    */
   readonly ownsDescription?: boolean;
-
-
-  /**
-   * The node is a composite of widgets (`config.gui_widgets`): drawn with them
-   * on the canvas, and generated widget by widget.
-   */
-  readonly holdsWidgets: boolean = false;
 
   /**
    * The dialog is laid out as the four steps of building the node -- what

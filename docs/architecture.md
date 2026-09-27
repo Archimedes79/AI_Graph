@@ -532,7 +532,7 @@ or a page that has them can do the same.
   ([`shells.test.ts`](../editor/src/elements/shells.test.ts)) or in the engine
   ([`shells.test.ts`](../engine/src/shells.test.ts); `execution/triggers.ts` alone reads the document
   without asking). What such a comparison would decide is a member of the element's class —
-  `holdsWidgets`, `missingExample`, `NodeRunner.isResult` and `resultLabel`,
+  `NodeRunner.hasInterface`, `missingExample`, `NodeRunner.isResult` and `resultLabel`,
   `NodeRunner.problems` and `WidgetRunner.problems`, `blocks`, `graphAuthorNote` — so a new
   kind answers for itself. The prompt that designs a whole graph is assembled from the kinds' own
   `graphAuthorNote` -- an input node says the ports each mode derives from its own `derivedPorts`,

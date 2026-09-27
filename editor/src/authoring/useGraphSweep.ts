@@ -10,6 +10,7 @@ import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
 import type { GenerateResponse } from '@/api/client';
 import { shapeToKeep, useGraphStore } from '@/store/graphStore';
 import { graphEdge } from '@/document/wires';
+import { showsPage } from '@/document/guiWidgets';
 import { nodeFacts } from './nodeFacts';
 import { blockFacts } from './blockFacts';
 import { WIDGET_BUILDERS, NODE_BUILDERS } from '@/elements/registry';
@@ -48,7 +49,7 @@ export function useGraphSweep(): SweepState {
     // it is generated against real values even when the graph has never run.
     const produced = new Map<string, Record<string, unknown>>();
 
-    const guiNodes = new Set(nodesOf().filter((n) => NODE_BUILDERS[n.node_type]?.holdsWidgets).map((n) => n.id));
+    const guiNodes = new Set(nodesOf().filter((n) => showsPage(n.node_type)).map((n) => n.id));
 
     /**
      * One block on a page, generated exactly as its own ✨ button would.
