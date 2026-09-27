@@ -5,7 +5,7 @@ import {
 import ToolbarButton, { ToolbarSeparator } from '@/ui/ToolbarButton';
 import { showsPage, widgetFiresRun } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
-import { call, downloadBundle, type AICall } from '@/api/client';
+import { ApiError, call, downloadBundle, watchGeneration, type AICall } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { Graph } from '@/graph';
 import { useDeliveredRun } from '@/page/useDeliveredRun';
@@ -196,6 +196,7 @@ export default function Toolbar({
   };
 
   const handleGenerateGraph = async () => {
+    setAiCalls([]);
     if (!aiDescription.trim()) {
       setAiError('Please describe the graph you want first.');
       return;
@@ -203,21 +204,18 @@ export default function Toolbar({
     setAiGenerating(true);
     setAiError('');
     setAiResult(null);
-    setAiCalls([]);
-    const progressId = `graph-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const watching = window.setInterval(async () => {
-      try {
-        const { calls } = await call('generationProgress', { id: progressId });
-        if (calls.length) setAiCalls(calls);
-      } catch { /* a poll that fails changes nothing */ }
-    }, 500);
     try {
-      const result = await call('generateGraph', { description: aiDescription, progress_id: progressId, ...genAI() });
+      const result = await watchGeneration(
+        (progressId) => call('generateGraph', { description: aiDescription, progress_id: progressId, ...genAI() }),
+        setAiCalls,
+      );
       setAiResult(result);
     } catch (e) {
       setAiError(errorText(e, 'Failed to generate graph.'));
+      // The whole failing exchange, replies included, as a node's ✨ keeps it:
+      // the failing case is the one where what was asked matters.
+      if (e instanceof ApiError && e.body.calls) setAiCalls(e.body.calls);
     } finally {
-      window.clearInterval(watching);
       setAiGenerating(false);
     }
   };
@@ -532,7 +530,7 @@ export default function Toolbar({
               disabled={aiGenerating}
             />
 
-            {aiGenerating && (
+            {(aiGenerating || (aiError && aiCalls.length > 0)) && (
               <div className="mt-3">
                 <LiveGeneration calls={aiCalls} minHeight={140} />
               </div>

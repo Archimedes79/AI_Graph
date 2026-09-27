@@ -11,7 +11,7 @@
 // no answer -- with the request still running on the other side.
 import {
   API, pathFor,
-  type Failure, type RequestOf, type ResponseOf, type RouteName,
+  type AICall, type Failure, type RequestOf, type ResponseOf, type RouteName,
 } from '@engine/host/api.ts';
 import type { EngineGraph, Graph } from '@/graph';
 
@@ -73,6 +73,36 @@ export async function call<K extends RouteName>(name: K, request?: RequestOf<K>)
   const blob = await response.blob();
   const named = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ?? 'download';
   return new File([blob], named, { type: blob.type }) as EditorView<ResponseOf<K>>;
+}
+
+/**
+ * Run a generation, and hand *onCalls* what it has sent so far while it runs.
+ *
+ * A generation is several model calls over a minute or more. Asking every half
+ * second what has gone out turns that wait into something a person can read
+ * and judge -- the prompt, the context, each step. *run* is handed the id to
+ * send as `progress_id`, which is what the engine files the calls under. A
+ * poll that fails changes nothing: the generation is what matters. The node
+ * dialogs and ✨ Generate Graph each wrote this out.
+ */
+export async function watchGeneration<T>(
+  run: (progressId: string) => Promise<T>,
+  onCalls: (calls: AICall[]) => void,
+): Promise<T> {
+  const progressId = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const polling = setInterval(async () => {
+    try {
+      const { calls } = await call('generationProgress', { id: progressId });
+      if (calls.length) onCalls(calls);
+    } catch {
+      // Nothing to do: the next poll, or the generation's own answer, says more.
+    }
+  }, 500);
+  try {
+    return await run(progressId);
+  } finally {
+    clearInterval(polling);
+  }
 }
 
 /** Save the deploy bundle the way a browser saves any download, under the name the engine gave it. */
