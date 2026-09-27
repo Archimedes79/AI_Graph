@@ -80,13 +80,15 @@ written to disk, and the window keeps the graph it was handed until it is opened
 **A node with nothing to do is left alone.** If a port marked *required* is wired and
 brought nothing — or, for an AI node, *every* wired input came up empty — the node is
 skipped, what hangs off it is skipped, and the run is still a success. ▶ Run on a chat
-nobody has typed into asks no model and changes no conversation.
+nobody has typed into asks no model and changes no conversation. A page or a data node is
+never skipped for that: its own button, or the value it keeps, is news by itself.
 
 The third is the one worth understanding. A page event names the port it fired on, and
 what runs is
 
 - the nodes that port is wired to, and everything downstream of them;
-- everything upstream that those nodes need an input from;
+- everything upstream that those nodes need an input from, and whatever computes the ◆ of
+  one of them that the event does not open itself;
 - and nothing else.
 
 So a page with a *Summarize* button and a *Plot* button is two tools in one window, and
@@ -223,8 +225,8 @@ async function run(inputs, node) {
 
 The detail of making the call — keys, providers, tools, images — is behind `node.llm`, and
 the node's settings decide whatever the call does not say. **Left as it is, the file is the
-engine's**: it is written though nobody wrote it, kept up to date when the engine changes,
-and the engine makes that one call itself rather than starting a process per item (a test
+engine's**: it is written though nobody wrote it, and the engine makes that one call
+itself rather than starting a process per item (a test
 holds the two to the same request). **Changed, it is yours** — a loop, a second call, a
 check of the answer — and runs where every body runs: sandboxed, without this machine's
 keys, asking for each call (25 each time it runs, at most). The panel shows it under *Advanced → What
@@ -237,9 +239,7 @@ either way. Then there are two ways to say more, and both are sent whenever they
 anything: in words (“a JSON list of {title, score}”), or shown — press ▶ Try it, and if
 the answer has the shape you want, **Keep this result** makes it step 2's example answer.
 The node is then told to answer in that same structure with new content, and its
-neighbours are generated against it. (There used to be a menu of formats — JSON, CSV,
-custom, example — and only *custom* sent your words; a graph that picked JSON still says
-so, in front of them.) Nothing checks the answer afterwards; a model that ignores the
+neighbours are generated against it. Nothing checks the answer afterwards; a model that ignores the
 format is caught by a Code node, not by this setting.
 
 Everything else — model, temperature, tools, vision, batching, failures — has a default
@@ -393,10 +393,10 @@ Saving refuses to overwrite a file changed outside since it was read. The toolba
 reopens the whole project, for when `flow.json` or a node's settings or ports changed
 (a pull, a merge).
 
-**A single `.json` file** still opens, saves (name it `….json`) and runs: everything
-inline, which is what a download, an import and a deploy bundle carry. A folder saved
-before `flow.json` — a `graph.json` holding the structure — opens too, and is saved in
-this shape.
+**A single `.json` file** opens, saves (name it `….json`) and runs: everything
+inline, which is what a download, an import and a deploy bundle carry. A folder is a
+project only when it has a `flow.json`: a deploy bundle's folder is opened by its
+`graph.json`, and saved back as that one file.
 
 **Output interfaces.** A code or AI node's outputs are described by a JSON Schema,
 `output_schema` in its `interface.json`. You do not write it first: wire the nodes, run the graph, and the
@@ -799,8 +799,6 @@ It runs in a **worker**: no DOM, no network, no modules — data in, points or a
 SVG out. A graph travels, and a body that draws a bar chart has no business with the
 page's origin. A body that will not finish is given four seconds and then destroyed, and
 the block says so where the chart would be. A chart with no body draws whatever arrived.
-
-`run(inputs)` is still accepted, so every chart written before this keeps working.
 
 A **table** or an **image** is different: its transform reshapes data, has no use for the
 window, and still runs once per run where its result can be reused. Same snippet contract

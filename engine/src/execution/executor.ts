@@ -74,9 +74,28 @@ export function memoryFeedbackEdges(
 
     if (visited.size === byId.size) return feedback;
 
-    // Cut one more edge into a node that remembers. If there is none, the cycle
-    // is a real one and `topologicalLevels` reports it as such.
-    const candidate = active.find((e) => !visited.has(e.target_node_id) && remembers(e.target_node_id));
+    // Cut one more edge into a node that remembers -- one that closes a loop:
+    // a node below a loop is unvisited too, and cutting the wire into it
+    // settles its value a round late for nothing. Chosen by the graph's node
+    // order and then by id, never by the order the wires happen to be stored
+    // in. If there is none, the cycle is a real one and `topologicalLevels`
+    // reports it as such.
+    const reaches = (from: string, to: string): boolean => {
+      const seen = new Set([from]);
+      const queue = [from];
+      while (queue.length) {
+        const id = queue.shift()!;
+        if (id === to) return true;
+        for (const e of successors.get(id) ?? []) {
+          if (!seen.has(e.target_node_id)) { seen.add(e.target_node_id); queue.push(e.target_node_id); }
+        }
+      }
+      return false;
+    };
+    const order = new Map(nodes.map((n, index) => [n.id, index]));
+    const [candidate] = active
+      .filter((e) => !visited.has(e.target_node_id) && remembers(e.target_node_id) && reaches(e.target_node_id, e.source_node_id))
+      .sort((a, b) => order.get(a.target_node_id)! - order.get(b.target_node_id)! || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     if (!candidate) return feedback;
     feedback.add(candidate.id);
   }
@@ -268,6 +287,9 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
     return !!node && !!element && (element.isMemory || element.hasInterface || element.eventPorts(node).length > 0);
   };
 
+  /** Where the latch keeps what this node made: see `latch.ts`. */
+  const latchKey = (node: GraphNode): string => options.latch!.key(graph, node, (from) => keepsItsOwn(from.id));
+
   /**
    * Why this node stands still this round, or '' when it runs.
    *
@@ -343,7 +365,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
       // for a node fed only by nodes that stood still: nothing new reached it.
       const shut = standsStill(nodeId);
       if (shut) {
-        const kept = options.latch?.get(graph, node, keepsItsOwn(nodeId));
+        const kept = options.latch?.get(latchKey(node));
         if (kept) {
           held.add(nodeId);
           outputs.set(nodeId, kept);
@@ -357,8 +379,10 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
 
       // A wired input the node declared it cannot do without, and nothing on
       // it: the node has nothing to do, and neither has what hangs off it.
-      // Sending a model "User:" followed by nothing is not a question.
-      const why = dependsOn(nodeId, idle)
+      // Sending a model "User:" followed by nothing is not a question. Except a
+      // node that keeps something of its own: a page's button, a data node's
+      // value, is news whatever an idle neighbour did not send.
+      const why = dependsOn(nodeId, idle) && !keepsItsOwn(nodeId)
         ? 'What feeds this node had nothing to do, so neither had this.'
         : nothingToDo(element, node, inputs, edges, feedback);
       if (why) {
@@ -380,6 +404,8 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         const kept = key && context(nodeId) ? options.reuse!.get(key) : undefined;
         if (kept) {
           outputs.set(nodeId, kept);
+          // What it hands on now is what it made last, for a later round its ◆ stays shut in.
+          options.latch?.set(latchKey(node), kept);
           results.push({
             node_id: nodeId, status: 'success', inputs, outputs: kept, error: null,
             messages: ['Reused from an earlier run: nothing it depends on has changed.'],
@@ -392,27 +418,14 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         );
         if (signal?.aborted) throw new Error('Stopped.');
         outputs.set(nodeId, produced);
-        if (!failures.length) options.latch?.set(graph, node, produced, keepsItsOwn(nodeId));
+        if (!failures.length) options.latch?.set(latchKey(node), produced);
         // Kept only when it went through whole: a partial result is not one to hand back.
         if (key && !failures.length) options.reuse!.set(key, produced);
-        // Some items failed and the rest went through: the node is partial and
-        // says so, rather than a success whose gaps are nulls nobody explains.
-        const status = failures.length ? 'partial' : 'success';
-        if (failures.length) partial.add(nodeId);
-        // Said, not enforced: the values are what they are and the run goes on,
-        // but a node that broke its interface is named here rather than blamed
-        // three nodes later by whatever read the wrong shape.
-        const iface = element.outputInterface(node);
-        const broken = iface ? mismatches(produced, iface) : [];
-        results.push({
-          node_id: nodeId, status, inputs, outputs: produced,
-          error: failures.length ? itemFailures(failures) : null,
-          ...(broken.length ? { messages: broken.map((line) => `Does not match its output interface: ${line}`) } : {}),
-        });
-        runtime.report?.({ type: 'node_done', node_id: nodeId, status });
+        const result = ranTo(element, node, inputs, produced, failures);
+        if (result.status === 'partial') partial.add(nodeId);
+        results.push(result);
+        runtime.report?.({ type: 'node_done', node_id: nodeId, status: result.status });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-
         // Stopped in the middle of this node: not the node's failure, and not
         // something a catch-errors port should turn into data.
         if (signal?.aborted) {
@@ -420,29 +433,15 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
           runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'skipped' });
           continue;
         }
-
-        // A node that catches its own failures turns one into data instead of
-        // ending the run: the message goes on its `error` port, its other
-        // ports carry null, and whatever that port feeds gets to react. Asked
-        // of the element rather than switched on a node type here, so a new
-        // element that wants it says so in its own file -- and one mechanism
-        // covers every kind rather than a copy inside each.
-        //
-        // Still `partial`, never `success`: something did go wrong, and a node
-        // whose outputs are nulls nobody explains is how a broken run comes to
-        // look like a clean one.
-        if (element.catchesErrors(node)) {
-          const produced = failureOutputs(node, message);
-          outputs.set(nodeId, produced);
+        const result = failedWith(element, node, inputs, error);
+        if (result.status === 'partial') {
+          outputs.set(nodeId, result.outputs);
           partial.add(nodeId);
-          results.push({ node_id: nodeId, status: 'partial', inputs, outputs: produced, error: message });
-          runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'partial' });
-          continue;
+        } else {
+          failed.add(nodeId);
         }
-
-        failed.add(nodeId);
-        results.push({ node_id: nodeId, status: 'error', inputs, outputs: {}, error: message });
-        runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'error' });
+        results.push(result);
+        runtime.report?.({ type: 'node_done', node_id: nodeId, status: result.status });
       }
     }
   }
@@ -451,7 +450,9 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   // added to the conversation a second time, nor a window popped up again.
   for (const nodeId of held) outputs.delete(nodeId);
   const memory = settleMemory(graph, feedback, outputs, results, registry);
-  await showDisplays(graph, results, registry, runtime);
+  // What finished before a Stop is drawn as it is: showing it is not the work
+  // Stop was pressed for, and a stopped transform would show "Stopped" instead.
+  await showDisplays(graph, results, registry, signal?.aborted ? options.runtime : runtime);
 
   const status: ExecutionResult['status'] = signal?.aborted
     ? 'cancelled'
@@ -477,10 +478,12 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
  */
 function stoppable(runtime: Runtime, signal: AbortSignal | undefined): Runtime {
   if (!signal) return runtime;
+  const { tools } = runtime;
   return {
     ...runtime,
     ai: { complete: (request) => runtime.ai.complete({ ...request, signal }) },
     code: { run: (body, inputs, _signal, context) => runtime.code.run(body, inputs, signal, context) },
+    ...(tools ? { tools: { open: (servers) => tools.open(servers, signal) } } : {}),
   };
 }
 
@@ -539,10 +542,10 @@ function withSubgraph(runtime: Runtime, options: RunOptions, node: GraphNode, de
   };
 }
 
-/** Whether a value is nothing: not delivered, empty text, an empty list. */
+/** Whether a value is nothing: not delivered, empty text, a list of nothing -- two empty boxes wired into one port. */
 function isNothing(value: unknown): boolean {
   return value === null || value === undefined || value === ''
-    || (Array.isArray(value) && value.length === 0);
+    || (Array.isArray(value) && value.every(isNothing));
 }
 
 /**
@@ -618,7 +621,9 @@ export async function inputsFor(
  *
  * Nothing is settled and nothing downstream runs. A failure is the result,
  * not an exception: the person asked what this node does with these inputs,
- * and "it fails, like this" is an answer.
+ * and "it fails, like this" is an answer -- the answer a run would give: a
+ * node with nothing to do stands still, one that catches its failures puts
+ * them on its error port, and a broken interface is said.
  */
 export async function executeNode(
   graph: Graph,
@@ -631,22 +636,57 @@ export async function executeNode(
   if (!node || !element) {
     return { node_id: nodeId, status: 'error', inputs, outputs: {}, error: `No such node: ${nodeId}` };
   }
+  const why = nothingToDo(element, node, inputs, graph.edges, memoryFeedbackEdges(graph.nodes, graph.edges, options.registry));
+  if (why) return { node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [why] };
   const { runtime } = options;
   try {
     const arrived = await readInputs(element, node, inputs, runtime, graph, options.registry);
     const { produced, failures } = await runNode(
       element, node, arrived, withSubgraph(runtime, options, node, options.depth ?? 0),
     );
-    return {
-      node_id: nodeId, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
-      error: failures.length ? itemFailures(failures) : null,
-    };
+    return ranTo(element, node, inputs, produced, failures);
   } catch (error) {
-    return {
-      node_id: nodeId, status: 'error', inputs, outputs: {},
-      error: error instanceof Error ? error.message : String(error),
-    };
+    return failedWith(element, node, inputs, error);
   }
+}
+
+/**
+ * What a node that ran comes to. Some items failed and the rest went through:
+ * partial, and said, rather than a success whose gaps are nulls nobody
+ * explains. A broken interface is said, not enforced: the values are what they
+ * are, but a node that broke it is named here rather than blamed three nodes
+ * later by whatever read the wrong shape.
+ */
+function ranTo(
+  element: NodeRunner,
+  node: GraphNode,
+  inputs: Record<string, unknown>,
+  produced: Record<string, unknown>,
+  failures: string[] & { total: number },
+): NodeResult {
+  const iface = element.outputInterface(node);
+  const broken = iface ? mismatches(produced, iface) : [];
+  return {
+    node_id: node.id, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
+    error: failures.length ? itemFailures(failures) : null,
+    ...(broken.length ? { messages: broken.map((line) => `Does not match its output interface: ${line}`) } : {}),
+  };
+}
+
+/**
+ * What a node that threw comes to. One that catches its own failures turns
+ * one into data instead of ending the run: the message goes on its `error`
+ * port, its other ports carry null, and whatever that port feeds gets to
+ * react -- asked of the element, so one mechanism covers every kind. Still
+ * `partial`, never `success`: a node whose outputs are nulls nobody explains
+ * is how a broken run comes to look like a clean one.
+ */
+function failedWith(element: NodeRunner, node: GraphNode, inputs: Record<string, unknown>, error: unknown): NodeResult {
+  const message = error instanceof Error ? error.message : String(error);
+  if (element.catchesErrors(node)) {
+    return { node_id: node.id, status: 'partial', inputs, outputs: failureOutputs(node, message), error: message };
+  }
+  return { node_id: node.id, status: 'error', inputs, outputs: {}, error: message };
 }
 
 /**
@@ -655,6 +695,9 @@ export async function executeNode(
  * produce, which run for that and nothing else. The graph's questions are
  * answered with what it already holds, as an unattended run answers them.
  * Hands back the inputs it ran on too, since without *given* nobody else knows.
+ *
+ * What feeds it failing is this node failing to run, as in a run: it is not
+ * run on the nothing that arrived and called a success.
  */
 export async function runNodeAlone(
   graph: Graph,
@@ -663,7 +706,14 @@ export async function runNodeAlone(
   options: RunOptions,
 ): Promise<{ inputs: Record<string, unknown>; result: NodeResult }> {
   applyRuntimeValues(graph, {}, options.registry);
-  const inputs = given ?? (await inputsFor(graph, nodeId, options)).inputs;
+  if (given) return { inputs: given, result: await executeNode(graph, nodeId, given, options) };
+  const { inputs, upstream } = await inputsFor(graph, nodeId, options);
+  if (upstream.node_results.some((result) => result.status === 'error')) {
+    return {
+      inputs,
+      result: { node_id: nodeId, status: 'error', inputs, outputs: {}, error: `What feeds it failed, so it did not run: ${upstream.error}` },
+    };
+  }
   return { inputs, result: await executeNode(graph, nodeId, inputs, options) };
 }
 
@@ -765,7 +815,7 @@ async function runNode(
 
   const items = batchItems(node, inputs);
   const produced: Record<string, unknown>[] = new Array(items.length);
-  const failures = Object.assign([] as string[], { total: items.length });
+  const failed: { index: number; message: string }[] = [];
   const catches = element.catchesErrors(node);
   let next = 0;
   let done = 0;
@@ -783,7 +833,7 @@ async function runNode(
           .filter((p) => !(catches && p.id === ERROR_PORT))
           .map((p) => [p.id, null]));
         const message = error instanceof Error ? error.message : String(error);
-        failures.push(`item ${index + 1}: ${message}`);
+        failed.push({ index, message });
         runtime.report?.({ type: 'activity', node_id: node.id, message: `item ${index + 1}: ${message}` });
       }
       runtime.report?.({ type: 'batch', node_id: node.id, done: ++done, total: items.length });
@@ -792,9 +842,13 @@ async function runNode(
 
   const workers = Math.max(1, Math.min(element.batchConcurrency(node), items.length));
   await Promise.all(Array.from({ length: workers }, worker));
+  // In item order, not the order they happened to fail in: the same run says
+  // the same thing every time.
+  failed.sort((a, b) => a.index - b.index);
+  const failures = Object.assign(failed.map(({ index, message }) => `item ${index + 1}: ${message}`), { total: items.length });
   // Every item failed: that is the node failing, with its own message, not a
   // success made of nulls.
-  if (items.length && failures.length === items.length) throw new Error(failures[0].replace(/^item 1: /, ''));
+  if (items.length && failed.length === items.length) throw new Error(failed[0].message);
   const merged = mergeBatchOutputs(node, produced);
   if (catches && failures.length) merged[ERROR_PORT] = itemFailures(failures);
   return { produced: merged, failures };
@@ -811,8 +865,10 @@ async function runNode(
  *
  * The list returned is the whole of it. Whoever holds the long-lived copy of
  * the graph -- the editor, a served page, the scheduler -- replays the list
- * into it instead of working the same thing out a second time, which is what
- * the editor's store used to do, in sixty lines that had already drifted.
+ * into it instead of working the same thing out a second time.
+ *
+ * Per port, as the round delivers: a port fed by several wires keeps the list
+ * of what arrived on them, not whichever wire came last.
  */
 function settleMemory(
   graph: Graph,
@@ -824,20 +880,29 @@ function settleMemory(
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const written: MemoryWrite[] = [];
 
+  const ports = new Map<string, { target: GraphNode; element: NodeRunner; port: string; wires: GraphEdge[]; loops: boolean }>();
   for (const edge of graph.edges) {
-    const source = outputs.get(edge.source_node_id);
-    if (!source || !(edge.source_port_id in source) || edge.target_port_id === RUN_PORT) continue;
-
+    if (edge.target_port_id === RUN_PORT) continue;
     const target = byId.get(edge.target_node_id);
     const element = target && registry.node(target.node_type);
     if (!target || !element?.isMemory) continue;
-    if (!feedback.has(edge.id) && !element.settlesOnArrival) continue;
+    const key = JSON.stringify([target.id, edge.target_port_id]);
+    const entry = ports.get(key) ?? { target, element, port: edge.target_port_id, wires: [], loops: false };
+    entry.wires.push(edge);
+    entry.loops ||= feedback.has(edge.id);
+    ports.set(key, entry);
+  }
 
-    const value = source[edge.source_port_id];
-    element.settleMemory(target, edge.target_port_id, value);
-    written.push({ node_id: target.id, port_id: edge.target_port_id, value });
+  for (const { target, element, port, wires, loops } of ports.values()) {
+    if (!loops && !element.settlesOnArrival) continue;
+    const delivered = wires.filter((edge) => edge.source_port_id in (outputs.get(edge.source_node_id) ?? {}));
+    if (!delivered.length) continue;
+    const values = delivered.map((edge) => outputs.get(edge.source_node_id)![edge.source_port_id]);
+    const value = wires.length > 1 ? values : values[0];
+    element.settleMemory(target, port, value);
+    written.push({ node_id: target.id, port_id: port, value });
 
-    if (!feedback.has(edge.id)) continue;
+    if (!loops) continue;
     // Said as having arrived, because it did -- only after the round rather
     // than in it. A node the event did not ask to run gets a result for this.
     let result = results.find((r) => r.node_id === target.id);
@@ -845,7 +910,7 @@ function settleMemory(
       result = { node_id: target.id, status: 'success', inputs: {}, outputs: {}, error: null };
       results.push(result);
     }
-    result.inputs = { ...result.inputs, [edge.target_port_id]: value };
+    result.inputs = { ...result.inputs, [port]: value };
   }
   return written;
 }

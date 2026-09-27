@@ -147,6 +147,22 @@ describe('a code node that returns booleans is a filter', () => {
     expect(ran).toEqual(['page', 'router', 'source', 'table']);
   });
 
+  it('is computed in an event round when it is not downstream of the event itself', async () => {
+    // The button starts `a`, and `n` after it; whether `n` may run is decided
+    // by `allow`, which nothing on the page feeds.
+    const graph = graphOf(
+      [
+        node('page', 'gui', { gui_widgets: [{ id: 'go', kind: 'button' }] }),
+        node('a', 'code', { code: 'function run() { return { out: "from a" }; }' }, { in: ['x'], out: ['out'] }),
+        node('allow', 'code', { code: 'function run() { return { ok: true }; }' }, { out: ['ok'] }),
+        node('n', 'code', { code: 'function run(i) { return { got: i.x }; }' }, { in: ['x'], out: ['got'] }),
+      ],
+      [edge('p', 'page', 'go_out', 'a', 'x'), edge('an', 'a', 'out', 'n', 'x'), edge('gate', 'allow', 'ok', 'n', RUN_PORT)],
+    );
+    const run = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'page', port_id: 'go_out' } });
+    expect(result(run, 'n')).toMatchObject({ status: 'success', outputs: { got: 'from a' } });
+  });
+
   it('opens a gate with true and with nothing else', async () => {
     ran = [];
     const truthy = 'function run() { return { draw: "yes", refresh: 1 }; }';
@@ -249,6 +265,134 @@ describe('a node that keeps something of its own', () => {
     const asked = await executeGraph(graph, { runtime, registry, latch, trigger: { node_id: 'pageB', port_id: 'ask_out' } });
     expect(result(asked, 'pageB')).toMatchObject({ status: 'success', outputs: { ask_out: true, q_out: 'second question' } });
     expect(result(asked, 'answer')).toMatchObject({ status: 'success', outputs: { out: 'answer to second question' } });
+  });
+
+  it('runs when what feeds it had nothing to do, and so does what its own button starts', async () => {
+    // The same two pages, but "Read" has never been pressed: the reader has
+    // nothing to hand on, and page B's own button must still work.
+    const graph = graphOf(
+      [
+        node('pageA', 'gui', { gui_widgets: [{ id: 'read', kind: 'button' }] }),
+        node('pageB', 'gui', { gui_widgets: [
+          { id: 'shown', kind: 'text_io', mode: 'output' },
+          { id: 'ask', kind: 'button' },
+          { id: 'q', kind: 'text_io', mode: 'input', value: 'a question' },
+        ] }),
+        node('reader', 'code', { code: 'function run() { return { text: "the file" }; }' }, { out: ['text'] }),
+        node('answer', 'code', { code: 'function run(i) { return { out: "answer to " + i.q }; }' }, { in: ['q'], out: ['out'] }),
+      ],
+      [
+        edge('gate', 'pageA', 'read_out', 'reader', RUN_PORT),
+        edge('show', 'reader', 'text', 'pageB', 'shown_in'),
+        edge('q', 'pageB', 'q_out', 'answer', 'q'),
+        edge('go', 'pageB', 'ask_out', 'answer', RUN_PORT),
+      ],
+    );
+    const asked = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'pageB', port_id: 'ask_out' } });
+    expect(result(asked, 'pageB')!.status).toBe('success');
+    expect(result(asked, 'answer')).toMatchObject({ status: 'success', outputs: { out: 'answer to a question' } });
+  });
+
+  it('hands on what it kept when the node that updates it had nothing to do', async () => {
+    const graph = graphOf(
+      [
+        node('page', 'gui', { gui_widgets: [{ id: 'read', kind: 'button' }, { id: 'use', kind: 'button' }] }),
+        node('reader', 'code', { code: 'function run() { return { text: "new" }; }' }, { out: ['text'] }),
+        node('keep', 'data', { data_value: 'kept from yesterday' }, { in: ['input'], out: ['output'] }),
+        node('user', 'code', { code: 'function run(i) { return { saw: i.x }; }' }, { in: ['x'], out: ['saw'] }),
+      ],
+      [
+        edge('g1', 'page', 'read_out', 'reader', RUN_PORT),
+        edge('a', 'reader', 'text', 'keep', 'input'),
+        edge('b', 'keep', 'output', 'user', 'x'),
+        edge('g2', 'page', 'use_out', 'user', RUN_PORT),
+      ],
+    );
+    const run = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'page', port_id: 'use_out' } });
+    expect(result(run, 'user')).toMatchObject({ status: 'success', outputs: { saw: 'kept from yesterday' } });
+  });
+
+  it('is not silenced by an AI node upstream that had nothing to ask', async () => {
+    const graph = graphOf(
+      [
+        node('page1', 'gui', { gui_widgets: [{ id: 'msg', kind: 'text_io', mode: 'input', value: '' }] }),
+        node('ask', 'ai', { system_prompt: 'x' }, { in: ['message'], out: ['output'] }),
+        node('page2', 'gui', { gui_widgets: [
+          { id: 'shown', kind: 'text_io', mode: 'output' }, { id: 'export', kind: 'button' },
+          { id: 'file', kind: 'text_io', mode: 'input', value: 'out.txt' },
+        ] }),
+        node('exporter', 'code', { code: 'function run(i) { return { done: i.file }; }' }, { in: ['file'], out: ['done'] }),
+      ],
+      [
+        edge('m', 'page1', 'msg_out', 'ask', 'message'),
+        edge('s', 'ask', 'output', 'page2', 'shown_in'),
+        edge('g', 'page2', 'export_out', 'exporter', RUN_PORT),
+        edge('f', 'page2', 'file_out', 'exporter', 'file'),
+      ],
+    );
+    const run = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'page2', port_id: 'export_out' } });
+    expect(result(run, 'ask')!.status).toBe('skipped');
+    expect(result(run, 'exporter')).toMatchObject({ status: 'success', outputs: { done: 'out.txt' } });
+  });
+});
+
+describe('a result handed back from an earlier run', () => {
+  it('is what a later round with a shut gate holds, not the value before it', async () => {
+    // Made X, then Y, then X again -- reused this time -- and then the ◆ stays shut.
+    const latch = new Latch();
+    const reuse = new LastOutputs();
+    const build = (value: string, open: boolean) => graphOf(
+      [
+        node('src', 'code', { code: `function run() { return { v: "${value}" }; }` }, { out: ['v'] }),
+        node('flag', 'code', { code: `function run() { return { open: ${open} }; }` }, { out: ['open'] }),
+        node('c', 'code', { code: 'function run(i) { return { out: i.x }; }' }, { in: ['x'], out: ['out'] }),
+      ],
+      [edge('s', 'src', 'v', 'c', 'x'), edge('g', 'flag', 'open', 'c', RUN_PORT)],
+    );
+    const only = new Set(['src', 'flag', 'c']);
+    const round = (value: string, open: boolean) => executeGraph(build(value, open), { runtime, registry, latch, reuse, only });
+    await round('X', true);
+    await round('Y', true);
+    expect(result(await round('X', true), 'c')!.messages?.[0]).toMatch(/Reused/);
+    expect(result(await round('X', false), 'c')).toMatchObject({ held: true, outputs: { out: 'X' } });
+  });
+});
+
+describe('what a node holds belongs to its own graph', () => {
+  it('is never handed to another graph of the same name', async () => {
+    // Two projects, both "Untitled Graph", with the same node `c`: the second
+    // never ran it, and must not be handed what the first one's `c` made.
+    const latch = new Latch();
+    const build = (secret: string, open: boolean) => graphOf(
+      [
+        node('src', 'code', { code: `function run() { return { v: "${secret}" }; }` }, { out: ['v'] }),
+        node('flag', 'code', { code: `function run() { return { open: ${open} }; }` }, { out: ['open'] }),
+        node('c', 'code', { code: 'function run(i) { return { out: i.x }; }' }, { in: ['x'], out: ['out'] }),
+      ],
+      [edge('s', 'src', 'v', 'c', 'x'), edge('g', 'flag', 'open', 'c', RUN_PORT)],
+    );
+    await executeGraph(build('project A data', true), { runtime, registry, latch });
+    const second = await executeGraph(build('project B data', false), { runtime, registry, latch });
+    expect(result(second, 'c')).toMatchObject({ outputs: {} });
+    expect(result(second, 'c')!.held).toBeUndefined();
+    // The same graph again is handed what it made.
+    const again = await executeGraph(build('project A data', false), { runtime, registry, latch });
+    expect(result(again, 'c')).toMatchObject({ held: true, outputs: { out: 'project A data' } });
+  });
+
+  it('is kept by a data node of another graph neither, whose settings are not part of the key', async () => {
+    const latch = new Latch();
+    const build = (other: string, open: boolean) => graphOf(
+      [
+        node('flag', 'code', { code: `function run() { return { open: ${open} }; }` }, { out: ['open'] }),
+        node('keep', 'data', { data_value: 'mine' }, { in: ['input'], out: ['output'] }),
+        node(other, 'code', {}, { in: ['v'], out: ['v'] }),
+      ],
+      [edge('g', 'flag', 'open', 'keep', RUN_PORT)],
+    );
+    await executeGraph(build('first', true), { runtime, registry, latch });
+    const second = await executeGraph(build('second', false), { runtime, registry, latch });
+    expect(result(second, 'keep')!.held).toBeUndefined();
   });
 });
 

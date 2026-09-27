@@ -18,7 +18,7 @@ import { useTyped } from './useTyped';
 import { derivedOutputWords } from './derivedOutput';
 import { pathPorts } from './generationContext';
 import { outputFormatText } from './outputFormat';
-import { exampleFor, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
+import { exampleFor, keptExpect, listPorts, runsPerItem, tryInputs, tryKey, withPerItem } from './nodeStepRules';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 type Props = Pick<NodePanelProps,
@@ -114,12 +114,7 @@ export default function NodeSteps({
   if (!generation || !steps) return null;
 
   const words = outputFormatText(node.config);
-  const setWords = (text: string) => {
-    // An older picked format is in front of the words shown; once they are
-    // edited, the words are the whole of it, and the choice is gone.
-    if (node.config.output_format !== undefined) setConfig('output_format', undefined);
-    setConfig('output_format_prompt', text);
-  };
+  const setWords = (text: string) => setConfig('output_format_prompt', text);
 
   // A node that takes nothing in has no example to fill, unless one was written before.
   const exampled = node.inputs.length > 0 || !!pair.inputText.trim();
@@ -136,8 +131,8 @@ export default function NodeSteps({
     </p>
   );
   // An expectation that names something. An ai node's step 2 asks for an
-  // answer to imitate rather than for one, but a file written by hand or by
-  // an older dialog can hold one, and `test` holds the answer to it.
+  // answer to imitate rather than for one, but a file written by hand can
+  // hold one, and `test` holds the answer to it.
   const expects = !!pair.expect && Object.keys(pair.expect).length > 0;
 
   const comesIn = (
@@ -153,9 +148,6 @@ export default function NodeSteps({
         ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
         pathPorts={pathPorts(node, nodes, edges)}
         fromGraph={steps.fromGraph}
-        earlierFile={node.config.example_file
-          ? { path: node.config.example_file, drop: () => setConfig('example_file', '') }
-          : undefined}
         note={(
           <>
             {strayInputs.length > 0 && (
@@ -219,19 +211,6 @@ export default function NodeSteps({
       />
       {expectError && <p className="text-xs mt-1" style={{ color: DANGER_TEXT }}>{expectError}</p>}
       {strayOutputNote}
-      {/* A result to imitate, kept by "Example of the output" in an older
-          version: still told to ✨, so shown, and dropped here by whoever no
-          longer wants it said. */}
-      {String(node.config.output_example ?? '').trim() && (
-        <p className="text-xs mt-1 flex items-start gap-1.5" style={{ color: DIMMER }}>
-          <span className="flex-1 min-w-0">Kept before as an example of the output, and still told to ✨: “{clip(String(node.config.output_example).trim(), 200)}”</span>
-          <button className="text-xs px-1 rounded flex-shrink-0" style={NEUTRAL_BUTTON}
-            aria-label="Drop the example of the output kept before"
-            onClick={() => setConfig('output_example', '')}>
-            ✕
-          </button>
-        </p>
-      )}
     </div>
   );
 
@@ -302,6 +281,7 @@ export default function NodeSteps({
       />
       {body.beside}
       <TryItInline
+        of={tryKey(node, tried, generation.promptField)}
         canRun={!!tried && !inputError}
         whyNot={inputError ? 'The example in step 1 is not an object yet.' : 'Fill step 1\'s example first: ⟳ from the graph, or 📂 from a file.'}
         run={() => call('runNode', { ...steps.graph(), node_id: node.id, inputs: tried ?? {} })}

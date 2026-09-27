@@ -18,8 +18,8 @@
 // two lists to each other, class for class.
 //
 // **The element owns its config.** `config(subject)` reads the stored record
-// and returns this element's own settings, with defaults applied and old field
-// names accepted. Nothing else reads another element's fields.
+// and returns this element's own settings, with defaults applied. Nothing else
+// reads another element's fields.
 //
 // **Services arrive as a `Runtime`** (`Runtime.ts`), never as an import.
 //
@@ -63,20 +63,22 @@ export interface TextFile {
    * out all the same, so the folder shows what the element does.
    */
   standard?: string;
-  /** Every `standard` there has been: a file still holding one is brought up to date on save. */
-  earlier?: readonly string[];
 }
 
+const plain = (text: string): string => text.replace(/\r\n/g, '\n').trim();
+
 /**
- * Whether *value* is a text the element itself shipped for *text* -- its
- * standard, or one it had before -- and so nobody's own writing. Asked when a
- * project is read and saved, and by the editor's sweep, which writes only what
- * nobody wrote.
+ * Whether *value* is the text the element itself ships for *text* -- its
+ * standard -- and so nobody's own writing. Asked when a project is read and
+ * saved, and by the editor's sweep, which writes only what nobody wrote.
  */
-export function shippedText(value: unknown, text: Pick<TextFile, 'standard' | 'earlier'>): boolean {
-  const plain = (s: string) => s.replace(/\r\n/g, '\n').trim();
-  return typeof value === 'string'
-    && [text.standard ?? '', ...(text.earlier ?? [])].some((known) => plain(known) === plain(value));
+export function shippedText(value: unknown, text: Pick<TextFile, 'standard'>): boolean {
+  return typeof value === 'string' && plain(text.standard ?? '') === plain(value);
+}
+
+/** Whether *text* is nobody's own: empty, or the *standard* the element ships. What a `run.js` is asked. */
+export function isStandardText(text: string, standard: string): boolean {
+  return !plain(text) || shippedText(text, { standard });
 }
 
 /**
@@ -113,7 +115,7 @@ export abstract class ElementRunner<S extends { id: string; config: RawConfig },
   // ── What it is ────────────────────────────────────────────────────────────
   // Asked whenever the graph is read: by a run, by the editor, by a project folder.
 
-  /** This element's settings, defaulted and migrated. The only reader of `S.config`. */
+  /** This element's settings, defaulted. The only reader of `S.config`. */
   abstract config(subject: S): C;
 
   /**

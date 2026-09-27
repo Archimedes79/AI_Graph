@@ -36,7 +36,7 @@ import { dirname, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { graphTriggers, parseInterval } from '../execution/triggers.ts';
+import { after, graphTriggers, parseInterval } from '../execution/triggers.ts';
 
 export interface CliOptions {
   graphPath: string;
@@ -79,7 +79,11 @@ export function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--every') {
       options.every = parseInterval(argv[++i] ?? '');
     } else if (arg === '--limit') {
-      options.limit = Number(argv[++i]);
+      // Not a number ran nothing and said nothing: `round < NaN` is never true.
+      const given = argv[++i] ?? '';
+      const limit = Number(given);
+      if (!given.trim() || !Number.isInteger(limit) || limit < 1) throw new Error(`--limit wants a whole number of runs, not "${given}".`);
+      options.limit = limit;
     } else if (arg === '--bundle') {
       options.bundle = argv[++i] ?? 'bundle';
     } else if (arg === '--serve') {
@@ -182,7 +186,7 @@ async function runEvery(options: CliOptions): Promise<number> {
   for (let round = 0; options.limit === undefined || round < options.limit; round += 1) {
     if (round > 0) {
       process.stderr.write(`\nWaiting ${seconds}s…\n`);
-      await new Promise((wake) => setTimeout(wake, seconds * 1000));
+      await new Promise<void>((wake) => { after(seconds * 1000, wake); });
     }
     code = await runOnce(options);
   }
@@ -328,13 +332,12 @@ async function runMcp(options: CliOptions): Promise<number> {
 /**
  * Say what is wrong with each graph or project, without running anything.
  * The result on stdout, one problem per paragraph; exit code 1 when there is
- * any, so a CI job fails on a broken graph before anyone opens it. Advice
- * (`notesIn`) is said after it, and fails nothing.
+ * any, so a CI job fails on a broken graph before anyone opens it.
  */
 async function runCheck(paths: string[]): Promise<number> {
   let failed = 0;
   for (const path of paths.length ? paths : ['.']) {
-    const { problems, notes, graph } = await checkPath(path);
+    const { problems, graph } = await checkPath(path);
     if (!problems.length) {
       process.stdout.write(`✓ ${path}: ${graph!.nodes.length} nodes, ${graph!.edges.length} edges\n`);
     } else {
@@ -342,7 +345,6 @@ async function runCheck(paths: string[]): Promise<number> {
       process.stdout.write(`✗ ${path}: ${problems.length} problem${problems.length === 1 ? '' : 's'}\n`);
       for (const { where, problem, fix } of problems) process.stdout.write(`  ${where}: ${problem}\n    → ${fix}\n`);
     }
-    for (const { where, problem, fix } of notes) process.stdout.write(`  note: ${where}: ${problem}\n    → ${fix}\n`);
   }
   return failed ? 1 : 0;
 }

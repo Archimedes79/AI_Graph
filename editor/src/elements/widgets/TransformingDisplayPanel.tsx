@@ -3,7 +3,7 @@ import ExampleInputField from '@/authoring/ExampleInputField';
 import GeneratedBody from '@/authoring/GeneratedBody';
 import TryItInline from '@/authoring/TryItInline';
 import { blockExample } from '@/authoring/blockFacts';
-import { exampleProblem } from '@/authoring/blockStepRules';
+import { blockTryKey, exampleProblem } from '@/authoring/blockStepRules';
 import { DIMMER, MUTED } from '@/ui/theme';
 import type { WidgetPanelProps } from '../WidgetGuiBuilder';
 import { TransformingDisplayGuiBuilder } from './TransformingDisplayGuiBuilder';
@@ -41,9 +41,6 @@ export default function TransformingDisplayPanel({
         ports={[{ id: 'value', name: 'what arrives' }]}
         pathPorts={builder.runner.readsPaths ? ['value'] : []}
         fromGraph={steps.fromGraph}
-        earlierFile={widget.example_file
-          ? { path: widget.example_file, drop: () => onUpdate({ example_file: undefined }) }
-          : undefined}
         placeholder={'{ "value": … }'}
       />
     </>
@@ -72,6 +69,7 @@ export default function TransformingDisplayPanel({
               sent={steps.sent}
             />
             <TryItInline
+              of={blockTryKey(widget, example)}
               canRun={!problem}
               whyNot="The example in step 1 is not an object yet."
               run={() => steps.tryIt(example ?? { value: null })}

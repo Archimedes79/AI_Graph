@@ -12,23 +12,23 @@ import SubgraphNodePanel from '@/elements/nodes/subgraph/SubgraphNodePanel';
 // What going in asks of the store, written down instead of done: the question
 // is what the store is handed, not what it then makes of it. (Vitest lifts
 // both of these above the imports.)
-const asked = vi.hoisted(() => ({ stored: [] as unknown[] }));
-vi.mock('@/store/graphStore', () => ({
-  useGraphStore: {
-    getState: () => ({
-      updateNode: (_id: string, node: unknown) => { asked.stored.push(node); },
-      setEditingNode: () => {},
-      openSubgraph: () => {},
-    }),
-  },
-}));
+const asked = vi.hoisted(() => ({ stored: [] as unknown[], isExecuting: false }));
+vi.mock('@/store/graphStore', () => {
+  const state = {
+    get isExecuting() { return asked.isExecuting; },
+    updateNode: (_id: string, node: unknown) => { asked.stored.push(node); },
+    setEditingNode: () => {},
+    openSubgraph: () => {},
+  };
+  return { useGraphStore: Object.assign((select: (s: typeof state) => unknown) => select(state), { getState: () => state }) };
+});
 
 const port = (id: string, kind: 'input' | 'output'): Port =>
   ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
 
 /** The button that goes in, as the panel made it. */
-function openButton(node: GraphNode): ReactElement<{ onClick: () => void }> {
-  let found: ReactElement<{ onClick: () => void }> | undefined;
+function openButton(node: GraphNode): ReactElement<{ onClick: () => void; disabled: boolean; title?: string }> {
+  let found: ReactElement<{ onClick: () => void; disabled: boolean; title?: string }> | undefined;
   const walk = (child: unknown): void => {
     if (Array.isArray(child)) { child.forEach(walk); return; }
     if (!child || typeof child !== 'object' || !('props' in child)) return;
@@ -56,5 +56,20 @@ describe('going into a node\'s graph from its dialog', () => {
     for (const kept of [...stored.inputs, ...stored.outputs]) {
       expect(Object.getOwnPropertySymbols(kept)).toEqual([]);
     }
+  });
+
+  it('waits while a run is going, and says so, rather than close the dialog and open nothing (B36)', () => {
+    const node: GraphNode = {
+      id: 'part', node_type: 'subgraph', label: 'Part', description: '', position: { x: 0, y: 0 },
+      inputs: [], outputs: [], config: { ...baseNodeConfig(), subgraph: { metadata: {}, nodes: [], edges: [] } },
+    };
+    asked.isExecuting = true;
+    try {
+      expect(openButton(node).props.disabled).toBe(true);
+      expect(openButton(node).props.title).toMatch(/A run is going on/);
+    } finally {
+      asked.isExecuting = false;
+    }
+    expect(openButton(node).props.disabled).toBe(false);
   });
 });

@@ -5,20 +5,19 @@ import { registry } from '../elements/registry.ts';
 import { edge, graphOf, quietRuntime } from '../../test/fakes.ts';
 
 /**
- * An output node takes what arrives whole, whatever an older file says.
+ * An output node takes what arrives whole, whatever its batch_mode says.
  *
- * The editor used to save `batch_mode: "per_item"` on every node it made, and
- * the executor fanned out on it for every kind. An output node writing to a
- * file then wrote each item over the same file, the last one winning, and one
- * writing to a folder wrote `value.txt` once per item instead of `value_1..3`.
- * Only code and ai run once per item now (`NodeRunner.fansOut`).
+ * Fanned out, one writing to a file wrote each item over the same file, the
+ * last one winning, and one writing to a folder wrote `value.txt` once per
+ * item instead of `value_1..3`. Only code and ai run once per item
+ * (`NodeRunner.fansOut`).
  */
 
 const list = (id: string): Port => ({ id, name: id, kind: 'output', data_type: 'any', multi: true, required: false, description: '' });
 const into = (id: string, multi: boolean): Port => ({ id, name: id, kind: 'input', data_type: 'any', multi, required: false, description: '' });
 
-/** A data node holding *value*, wired into an output node set up as an older editor saved it. */
-function graph(value: unknown, output: Record<string, unknown>, extra: { paths?: unknown[] } = {}): Graph {
+/** A data node holding *value*, wired into an output node told to run once per item. */
+function graph(value: unknown, output: Record<string, unknown>): Graph {
   const nodes: GraphNode[] = [
     {
       id: 'items', node_type: 'data', label: 'Items', description: '', position: { x: 0, y: 0 },
@@ -26,19 +25,11 @@ function graph(value: unknown, output: Record<string, unknown>, extra: { paths?:
     },
     {
       id: 'out', node_type: 'output', label: 'Out', description: '', position: { x: 0, y: 0 },
-      inputs: [into('value', true), into('path', !!extra.paths)], outputs: [],
+      inputs: [into('value', true), into('path', false)], outputs: [],
       config: { batch_mode: 'per_item', output_label: 'Result', ...output },
     },
   ];
-  const edges = [edge('e1', 'items', 'output', 'out', 'value')];
-  if (extra.paths) {
-    nodes.push({
-      id: 'paths', node_type: 'data', label: 'Paths', description: '', position: { x: 0, y: 0 },
-      inputs: [], outputs: [list('output')], config: { data_value: extra.paths, data_format: 'structure' },
-    });
-    edges.push(edge('e2', 'paths', 'output', 'out', 'path'));
-  }
-  return graphOf(nodes, edges);
+  return graphOf(nodes, [edge('e1', 'items', 'output', 'out', 'value')]);
 }
 
 /** A runtime whose files are a list of writes, in order. */
@@ -54,7 +45,7 @@ async function run(g: Graph) {
   return { writes, out: result.node_results.find((entry) => entry.node_id === 'out')?.outputs ?? {} };
 }
 
-describe('an output node an older editor saved "once per item"', () => {
+describe('an output node told to run "once per item"', () => {
   it('writes a list to its file once, not each item over the last', async () => {
     const { writes, out } = await run(graph(['a', 'b', 'c'], { write_mode: 'file', value: '/tmp/r.txt' }));
     expect(writes).toEqual([['/tmp/r.txt', JSON.stringify(['a', 'b', 'c'])]]);
@@ -70,15 +61,6 @@ describe('an output node an older editor saved "once per item"', () => {
     const { writes, out } = await run(graph([], { write_mode: 'window' }));
     expect(writes).toEqual([]);
     expect(out.value).toEqual([]);
-  });
-
-  it('still writes each value to its own wired path, when a list of paths arrives', async () => {
-    // "list" ticked on `path`, with a path per item: the one thing running
-    // once per item did for an output node, kept inside the element.
-    const { writes, out } = await run(graph(['a', 'b'], { write_mode: 'file', value: '' }, { paths: ['/x/1.txt', '/x/2.txt'] }));
-    expect(writes).toEqual([['/x/1.txt', 'a'], ['/x/2.txt', 'b']]);
-    expect(out.written_paths).toEqual(['/x/1.txt', '/x/2.txt']);
-    expect(out).not.toHaveProperty('path');
   });
 
   it('is not told to fan out, whatever its file says; a code node still is', () => {

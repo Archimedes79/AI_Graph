@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Graph, GraphNode } from '../graph.ts';
-import { collectInputs, executeGraph, memoryFeedbackEdges, topologicalLevels } from './executor.ts';
+import { collectInputs, executeGraph, executeNode, memoryFeedbackEdges, runNodeAlone, topologicalLevels } from './executor.ts';
 import { NodeRunner } from '../elements/NodeRunner.ts';
 import { type Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
@@ -45,6 +45,26 @@ describe('memoryFeedbackEdges', () => {
       edge('write', 'step', 'output', 'store', 'input'),
     ];
     expect([...memoryFeedbackEdges(nodes, edges, registry)]).toEqual(['write']);
+  });
+
+  it('cuts only an edge that closes a loop, whatever order the wires are stored in', async () => {
+    // store <-> step is the loop; step -> kept -> show hangs below it, and
+    // `kept` remembers too. Cutting the wire into `kept` would settle it a
+    // round late for nothing.
+    const nodes = () => [
+      node('store', 'data', { data_value: 1 }), node('step', 'code', { code: 'function run(i) { return { out: i.x + 1 }; }' }),
+      node('kept', 'data', { data_value: 'stale' }), node('show', 'code', { code: 'function run(i) { return { saw: i.v }; }' }),
+    ];
+    const loop = [edge('read', 'store', 'output', 'step', 'x'), edge('write', 'step', 'out', 'store', 'input')];
+    const tail = [edge('keep', 'step', 'out', 'kept', 'input'), edge('shown', 'kept', 'output', 'show', 'v')];
+    expect([...memoryFeedbackEdges(nodes(), [...loop, ...tail], registry)]).toEqual(['write']);
+    expect([...memoryFeedbackEdges(nodes(), [...tail, ...loop], registry)]).toEqual(['write']);
+
+    const runtime = quietRuntime({ code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) } });
+    const saw = async (edges: typeof loop) => (await executeGraph(graphOf(nodes(), edges), { runtime, registry }))
+      .node_results.find((r) => r.node_id === 'show')!.outputs;
+    expect(await saw([...tail, ...loop])).toEqual({ saw: 2 });
+    expect(await saw([...loop, ...tail])).toEqual({ saw: 2 });
   });
 
   it('leaves a cycle between two forgetful nodes alone, for the ordering to reject', () => {
@@ -186,81 +206,61 @@ describe('executeGraph', () => {
     expect(store.config.data_value).toBe('fresh');
   });
 
-  it('keeps every output in the result when two share a label', async () => {
-    // Every new output node is called "Result". Two of them used to leave the
-    // run's result with one value, the other gone without a word.
-    const result = await executeGraph(
-      graphOf([
-        node('a', 'input', { input_mode: 'text', value: 'alpha' }),
-        node('b', 'input', { input_mode: 'text', value: 'beta' }),
-        node('first', 'output', { output_label: 'Result' }),
-        node('second', 'output', { output_label: 'Result' }),
-        node('named', 'output', { output_label: 'Named' }),
-      ], [
-        edge('e1', 'a', 'output', 'first', 'value'),
-        edge('e2', 'b', 'output', 'second', 'value'),
-        edge('e3', 'a', 'output', 'named', 'value'),
-      ]),
-      { runtime: nowhere, registry },
+  it('keeps the list a port fed by two wires received, not the last wire\'s value', async () => {
+    // A data node fed by two nodes hands on both this round: it must keep both.
+    const store = node('store', 'data', { data_value: 'old' });
+    const runtime = { ...nowhere, code: { run: async (body: string) => ({ v: body }) } };
+    const run = await executeGraph(
+      graphOf([node('a', 'code', { code: 'A' }), node('b', 'code', { code: 'B' }), store],
+        [edge('ea', 'a', 'v', 'store', 'input'), edge('eb', 'b', 'v', 'store', 'input')]),
+      { runtime, registry },
     );
-    // The last keeps its label: a run used to write each over the one before,
-    // so "Result" held the last one's value, and a graph saved then still
-    // finds it there. Labels nobody shares are left as they were.
+    expect(run.node_results.find((r) => r.node_id === 'store')!.outputs.output).toEqual(['A', 'B']);
+    expect(store.config.data_value).toEqual(['A', 'B']);
+    expect(run.memory).toEqual([{ node_id: 'store', port_id: 'input', value: ['A', 'B'] }]);
+  });
+
+  it('shows a block fed across a loop by two wires both of them', async () => {
+    const page = node('page', 'gui', { gui_widgets: [{ id: 'q', kind: 'text_io', mode: 'input', value: 'go' }, { id: 'show', kind: 'table' }] });
+    const runtime = { ...nowhere, code: { run: async (body: string) => ({ output: body }) } };
+    const run = await executeGraph(
+      graphOf([page, node('a', 'code', { code: 'answer a' }), node('b', 'code', { code: 'answer b' })], [
+        edge('e1', 'page', 'q_out', 'a', 'x'), edge('e2', 'page', 'q_out', 'b', 'x'),
+        edge('e3', 'a', 'output', 'page', 'show_in'), edge('e4', 'b', 'output', 'page', 'show_in'),
+      ]),
+      { runtime, registry },
+    );
+    expect(run.node_results.find((r) => r.node_id === 'page')!.inputs.show_in).toEqual(['answer a', 'answer b']);
+    expect(run.memory).toEqual([{ node_id: 'page', port_id: 'show_in', value: ['answer a', 'answer b'] }]);
+  });
+
+  /** Three outputs: two called "Result", and one whose label is the key the second would be given. */
+  const labelled = () => graphOf([
+    node('a', 'input', { input_mode: 'text', value: 'alpha' }),
+    node('b', 'input', { input_mode: 'text', value: 'beta' }),
+    node('c', 'input', { input_mode: 'text', value: 'gamma' }),
+    node('first', 'output', { output_label: 'Result' }),
+    node('clash', 'output', { output_label: 'Result (second)' }),
+    node('second', 'output', { output_label: 'Result' }),
+  ], [
+    edge('e1', 'a', 'output', 'first', 'value'),
+    edge('e2', 'b', 'output', 'second', 'value'),
+    edge('e3', 'c', 'output', 'clash', 'value'),
+  ]);
+
+  it('keeps every output in the result when two share a label: the first under it', async () => {
+    // `check` says to give them their own labels; until then no value is dropped.
+    const result = await executeGraph(labelled(), { runtime: nowhere, registry });
     expect(result.outputs).toEqual({
-      'Result (first)': { value: 'alpha' },
-      Result: { value: 'beta' },
-      Named: { value: 'alpha' },
+      Result: { value: 'alpha' },
+      'Result (second)': { value: 'gamma' },
+      'Result (second) 2': { value: 'beta' },
     });
   });
 
-  it('keys an output the same whether or not the one after it ran', async () => {
-    // A round that runs only part of the graph -- a page event, a trigger --
-    // must not hand the first's value on under the last's key: rounds laid
-    // over each other would lose the last's value once more.
-    const result = await executeGraph(
-      graphOf([
-        node('a', 'input', { input_mode: 'text', value: 'alpha' }),
-        node('b', 'input', { input_mode: 'text', value: 'beta' }),
-        node('first', 'output', { output_label: 'Result' }),
-        node('clash', 'output', { output_label: 'Result (first)' }),
-        node('second', 'output', { output_label: 'Result' }),
-      ], [
-        edge('e1', 'a', 'output', 'first', 'value'),
-        edge('e2', 'b', 'output', 'second', 'value'),
-        edge('e3', 'a', 'output', 'clash', 'value'),
-      ]),
-      { runtime: nowhere, registry, only: new Set(['a', 'first', 'clash']) },
-    );
-    // And a label that happens to be another's key is told apart the same way.
-    expect(result.outputs).toEqual({
-      'Result (first) 2': { value: 'alpha' },
-      'Result (first)': { value: 'alpha' },
-    });
-  });
-
-  it('keeps every output when a label is the key an earlier repeat would be given', async () => {
-    // With "Result (first)" in the graph, the first "Result" would be keyed
-    // "Result (first)" too, and one of the two values gone without a word.
-    const result = await executeGraph(
-      graphOf([
-        node('a', 'input', { input_mode: 'text', value: 'alpha' }),
-        node('b', 'input', { input_mode: 'text', value: 'beta' }),
-        node('c', 'input', { input_mode: 'text', value: 'gamma' }),
-        node('first', 'output', { output_label: 'Result' }),
-        node('clash', 'output', { output_label: 'Result (first)' }),
-        node('second', 'output', { output_label: 'Result' }),
-      ], [
-        edge('e1', 'a', 'output', 'first', 'value'),
-        edge('e2', 'b', 'output', 'second', 'value'),
-        edge('e3', 'c', 'output', 'clash', 'value'),
-      ]),
-      { runtime: nowhere, registry },
-    );
-    expect(result.outputs).toEqual({
-      'Result (first) 2': { value: 'alpha' },
-      'Result (first)': { value: 'gamma' },
-      Result: { value: 'beta' },
-    });
+  it('keys an output the same whether or not the others ran', async () => {
+    const result = await executeGraph(labelled(), { runtime: nowhere, registry, only: new Set(['b', 'second']) });
+    expect(result.outputs).toEqual({ 'Result (second) 2': { value: 'beta' } });
   });
 });
 
@@ -325,6 +325,63 @@ describe('a batch with failing items', () => {
   it('is a plain success when nothing fails', async () => {
     expect((await workResult(['ok', 'ok'])).status).toBe('success');
   });
+
+  it('says the first item\'s failure, not whichever failed first in time', async () => {
+    const slowFirst: Runtime = {
+      ...nowhere,
+      code: { run: async (_body, inputs) => {
+        if (inputs.items === 'bad slow') await new Promise((wait) => setTimeout(wait, 30));
+        throw new Error(`boom on ${String(inputs.items)}`);
+      } },
+    };
+    const run = await executeGraph(batchOf(['bad slow', 'bad fast']), { runtime: slowFirst, registry });
+    expect(run.node_results.find((r) => r.node_id === 'work')!.error).toBe('boom on bad slow');
+  });
+});
+
+describe('what a run leaves on the page', () => {
+  it('shows what finished before Stop as it is, not as a transform that was stopped', async () => {
+    const stop = new AbortController();
+    const runtime = quietRuntime({
+      code: { run: async (body, inputs, signal) => {
+        if (signal?.aborted) throw new Error('Stopped.');
+        if (body.includes('SLOW')) {
+          setTimeout(() => stop.abort(), 5);
+          await new Promise((_, reject) => signal!.addEventListener('abort', () => reject(new Error('Stopped.'))));
+        }
+        return new Function('inputs', `${body}; return run(inputs);`)(inputs) as Record<string, unknown>;
+      } },
+    });
+    const graph = graphOf(
+      [
+        node('src', 'code', { code: 'function run() { return { rows: [1, 2] }; }' }),
+        node('page', 'gui', { gui_widgets: [{ id: 't', kind: 'table', code: 'function run(i) { return { value: i.value }; }' }] }),
+        node('slow', 'code', { code: '/* SLOW */ function run() { return { x: 1 }; }' }),
+      ],
+      [edge('a', 'src', 'rows', 'page', 't_in'), edge('b', 'src', 'rows', 'slow', 'rows')],
+    );
+    const run = await executeGraph(graph, { runtime, registry, signal: stop.signal });
+    expect(run.status).toBe('cancelled');
+    expect(JSON.stringify(run.node_results.find((r) => r.node_id === 'page')!.display)).not.toContain('Stopped');
+  });
+
+  it('does not ask a model when every wire into its one port brought nothing', async () => {
+    let asked = 0;
+    const runtime = quietRuntime({ ai: { complete: async () => { asked += 1; return 'answer'; } } });
+    const graph = graphOf(
+      [
+        node('page', 'gui', { gui_widgets: [
+          { id: 'a', kind: 'text_io', mode: 'input', value: '' },
+          { id: 'b', kind: 'text_io', mode: 'input', value: '' },
+        ] }),
+        node('ask', 'ai', { system_prompt: 'Answer.' }),
+      ],
+      [edge('ea', 'page', 'a_out', 'ask', 'message'), edge('eb', 'page', 'b_out', 'ask', 'message')],
+    );
+    const run = await executeGraph(graph, { runtime, registry });
+    expect(run.node_results.find((r) => r.node_id === 'ask')!.status).toBe('skipped');
+    expect(asked).toBe(0);
+  });
 });
 
 describe('a node that catches its own failure', () => {
@@ -387,5 +444,43 @@ describe('a node that catches its own failure', () => {
     );
     expect(result.status).toBe('partial');
     expect(result.error).toBeNull();
+  });
+
+  it('does the same when it is tried by itself, as Try it, ▶ Test and run-node try it', async () => {
+    const graph = graphOf([failing({ catch_errors: true })], []);
+    const inRun = (await executeGraph(graph, { runtime: nowhere, registry: withBoom as never })).node_results[0];
+    const alone = await executeNode(graph, 'bad', {}, { runtime: nowhere, registry: withBoom as never });
+    expect(alone).toMatchObject({ status: inRun.status, outputs: inRun.outputs, error: inRun.error });
+  });
+});
+
+describe('one node tried by itself', () => {
+  it('stands still where a run would, with the run\'s reason, and asks no model', async () => {
+    let asked = 0;
+    const runtime = quietRuntime({ ai: { complete: async () => { asked += 1; return 'answer'; } } });
+    const ask = node('ask', 'ai', { system_prompt: 'Answer.' });
+    ask.inputs = [{ id: 'message', name: 'm', kind: 'input', data_type: 'text', multi: false, required: false, description: '' }];
+    const graph = graphOf([node('src', 'code'), ask], [edge('e', 'src', 'out', 'ask', 'message')]);
+    const alone = await executeNode(graph, 'ask', { message: '' }, { runtime, registry });
+    expect(alone).toMatchObject({ status: 'skipped', messages: ['Nothing arrived on any of its inputs, so there was nothing to ask.'] });
+    expect(asked).toBe(0);
+  });
+
+  it('fails when what feeds it failed, rather than running on nothing and succeeding', async () => {
+    // run-node and the MCP server's run_node, with no inputs given.
+    const reader = node('reader', 'code', { code: 'function run() { throw new Error("ENOENT: data.csv"); }' });
+    const count = node('count', 'code', { code: 'function run(i) { return { n: String(i.text ?? "").length }; }' });
+    const runtime = quietRuntime({ code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) } });
+    const { result } = await runNodeAlone(graphOf([reader, count], [edge('e', 'reader', 'text', 'count', 'text')]), 'count', undefined, { runtime, registry });
+    expect(result.status).toBe('error');
+    expect(result.error).toMatch(/ENOENT: data\.csv/);
+  });
+
+  it('says it broke its output interface, as a run says it', async () => {
+    const make = node('make', 'code', { code: 'x', output_schema: { type: 'object', properties: { n: { type: 'number' } } } });
+    make.outputs = [{ id: 'n', name: 'n', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }];
+    const runtime = quietRuntime({ code: { run: async () => ({ n: 'not a number' }) } });
+    const alone = await executeNode(graphOf([make]), 'make', {}, { runtime, registry });
+    expect(alone.messages?.[0]).toMatch(/Does not match its output interface/);
   });
 });

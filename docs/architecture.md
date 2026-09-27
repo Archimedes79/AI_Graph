@@ -343,11 +343,12 @@ other knows, it imports it or replays its result:
 ## A run
 
 1. **Order.** Kahn's algorithm gives levels. A loop through a node that remembers (a page,
-   a data node) is legal: the fewest edges into memory nodes are left out of the ordering
-   (`memoryFeedbackEdges`) and settled after the round.
+   a data node) is legal: edges that close a loop into memory nodes are left out of the
+   ordering (`memoryFeedbackEdges`, never by the order the wires are stored in) and settled
+   after the round, port by port.
 2. **What runs.** Everything — or, for an event (a block on a page, a trigger node), the
-   nodes its port is wired to, what follows from them, and what those need upstream
-   (`triggers.ts`). An event is a boolean that is true for the round it started
+   nodes its port is wired to, what follows from them, and what those need upstream,
+   including what computes a ◆ among them the event does not open itself (`triggers.ts`). An event is a boolean that is true for the round it started
    (`Runtime.fired`, asked of `NodeRunner.eventPorts`); a run no event started counts every
    event as fired.
    **The ◆ (`__run`) is a gate**: wired, the node runs only when this round opens it — the
@@ -469,13 +470,15 @@ or a page that has them can do the same.
 
 - **The file wins over the inline value.** A text is read from its file when there is one.
   That is why a deploy bundle (one `graph.json` carrying everything inline) and a plain
-  `.json` file open the same way; a folder saved before `flow.json` is read from its
-  `graph.json` and saved in this shape.
+  `.json` file open the same way. A folder is a project only when it has a `flow.json`.
 - **Structure and writing never share a file**, and keys are sorted, so an unchanged
   save changes nothing and a moved node changes only `layout.json`.
 - **Two editors, one folder.** Every file read or written is remembered by signature; a
-  save that would overwrite a file changed since refuses (`FileChanged`), and the editor
-  asks every 1.5 s what changed (`changesOnDisk`) and takes it in as one undo step.
+  save that would overwrite a file changed since refuses (`FileChanged`) -- `flow.json` and
+  `layout.json` too, so a node another writer added is not saved away -- and the editor
+  asks every 1.5 s what changed (`changesOnDisk`) and takes it in as one undo step. A save
+  tidies away only files it read or wrote itself that no node claims any more; a file it
+  never saw is a person's, and a node of an unknown type keeps its folder.
 - **Interfaces come from runs.** A code or AI node's output shape (in its `interface.json`;
   which nodes keep one is `NodeRunner.keepsOutputInterface`) is inferred from what
   its first successful run produced ([`execution/interface.ts`](../engine/src/execution/interface.ts)),
@@ -492,11 +495,11 @@ or a page that has them can do the same.
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
-  that element's `problems()`. Which files a project's nodes read is asked of the folder's
-  structure before any text is read in (`folder.ts`'s `readStructure`), as the loader asks it.
-  Beside the problems, `notesIn` gives advice that fails nothing: two output nodes sharing a
-  label, as every output an older editor made did. The run's result keeps the last one under
-  the label, as it always did, and the others under their ids (`NodeRunner.ts`'s `resultKeys`).
+  that element's `problems()`. Two output nodes sharing a label are a problem too; until it is
+  fixed the run's result keeps the first under the label and the others under their ids
+  (`NodeRunner.ts`'s `resultKeys`), and `check` names those keys. Ids a folder could not read
+  back -- two differing only in case, a number, a "." or "->" -- are problems as well
+  (`flow.ts`'s `unsavableIds`), and a save refuses them.
 
 ## Where state lives
 
@@ -514,6 +517,11 @@ or a page that has them can do the same.
 ## Security boundaries
 
 - Everything binds to loopback; file browsing and "open in my editor" switch off otherwise.
+- The server answers its own page, not every page in the browser: on loopback a request must
+  name 127.0.0.1, localhost or [::1] with the server's port (no DNS rebinding); an API call
+  that says where it comes from must come from the server's own origin, one the browser
+  marks cross-site is refused, and a body is read only when it is sent as `application/json`
+  (`foreignRequest` and `readJson` in `host/http.ts`).
 - The `for` column of the contract is the line between a deployed tool and the editor: a
   deployed tool answers its graph, run/watch/stop, a file picker and a read-only view of
   its AI settings — no generation, no editing, no writing settings.
@@ -577,13 +585,18 @@ layer order, now held by `layers.test.ts`. What it left, still true:
 
 There are no import cycles through values, and none between the engine and the editor.
 
-- **A saved node carries its own settings only.** In memory every node has the full
-  `NodeConfig`, so a panel can read any field with a type. Each node type names the `settings`
-  it owns in `document/nodeKinds.ts` (`NODE_KINDS[type].settings`); `savedNode` writes those
-  and any other key someone changed, and loading fills the rest back in (`whenMissing`, then
-  what `create` starts a node with). [`savedConfig.test.ts`](../editor/src/elements/savedConfig.test.ts)
-  asks the engine's element the questions a run asks, for every node type and mode, and
-  holds the lean node to the full one's answers.
+- **A saved node carries only what differs from the default.** In memory every node has the
+  full `NodeConfig`, so a panel can read any field with a type. `document/baseNodeConfig.ts`
+  is each key's one default -- what the engine reads a missing key as. Loading fills a missing
+  key from it, and `savedNode` writes only the keys that differ from it.
+  [`savedConfig.test.ts`](../editor/src/elements/savedConfig.test.ts) asks the engine's element
+  the questions a run asks, for every node type and mode, and holds the lean node to the full
+  one's answers.
+- **A run lands only in the graph it started on.** The store counts documents: every load and
+  every step into or out of a node's graph is a new one. A run or a ✨ sweep notes the count it
+  started with and drops what comes back for another; New, Open and Reload wait while either
+  is going. The page is edited only through `page/pageWrite.ts`, which reads the page from the
+  store when an edit lands.
 - **A page event reuses what it only needs.** What the event is *for* — the nodes it is
   wired to and everything after them — runs fresh; a node upstream of that, run only as
   context, hands back its last outputs when its definition and every input (files already

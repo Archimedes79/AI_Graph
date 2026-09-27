@@ -63,11 +63,7 @@ export interface GraphEdge {
   target_port_id: string;
 }
 
-/**
- * A graph's own settings. Keys an older file carries beside these -- a
- * `version`, an `author`, `tags` -- are nobody's to read, and are kept as the
- * file wrote them.
- */
+/** A graph's own settings. Any other key a file carries here is nobody's to read, and is kept as it was written. */
 export interface GraphMetadata {
   name: string;
   description: string;
@@ -141,8 +137,8 @@ export function applyMemory(
 }
 
 /**
- * A graph's settings when nothing says otherwise: a new graph's, and what an
- * older file that leaves one out means. The one statement of them -- the
+ * A graph's settings when nothing says otherwise: a new graph's, and what a
+ * file that leaves one out means. The one statement of them -- the
  * editor starts a new graph from it, and `flow.json` leaves out what equals
  * it. A fresh object each call, so no two graphs share one.
  *
@@ -158,13 +154,11 @@ export function defaultMetadata(): GraphMetadata {
 }
 
 /**
- * Read a graph from parsed JSON, filling in what an older file omits.
+ * Read a graph from parsed JSON, filling in what a file leaves out.
  *
- * Deliberately forgiving about *shape* and strict about *identity*: a file
- * missing `metadata.gui_scheme` is a file from last month, while a node without an
- * id is not a graph. Per-field migrations belong to the element that owns the
- * field, not here — that is what stopped `graph.py` from accumulating a
- * `_migrate_…` function per historical mistake.
+ * Forgiving about *shape* and strict about *identity*: a file that leaves out
+ * `metadata.gui_scheme` means the default, while a node without an id is not
+ * a graph.
  */
 export function parseGraph(raw: unknown): Graph {
   if (!raw || typeof raw !== 'object') throw new Error('Not a graph: expected an object.');

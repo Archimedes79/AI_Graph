@@ -64,11 +64,6 @@ export function blockExample(widget: GuiWidget): Record<string, unknown> | undef
  *                     element fixes
  *     the sample      step 1's example; else what arrived on the last run
  *     the page        its colour scheme, which the code cannot see
- *
- * An example file the 📎 of an older version attached is not a second sample
- * beside these, as it is not for a node (`nodeFacts`): it was only ever pasted
- * into the prompt as text, never tried the code on. Step 1 offers to take it
- * in as the example, and then it is both.
  */
 export function blockFacts(
   nodeId: string,

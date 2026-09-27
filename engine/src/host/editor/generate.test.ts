@@ -6,7 +6,7 @@ import { port } from '../../elements/port.ts';
 import { executeNode } from '../../execution/executor.ts';
 import { inferInterface } from '../../execution/interface.ts';
 import { parseGraph } from '../../graph.ts';
-import { GenerationFailed, GenerationRefused, generate, generateGraph } from './generate.ts';
+import { GenerationFailed, GenerationRefused, firstCodeBlock, generate, generateGraph } from './generate.ts';
 import { nodeCode } from '../node.ts';
 import type { GenerateRequest } from '../api.ts';
 
@@ -144,6 +144,19 @@ describe('code', () => {
   });
 });
 
+describe('the code in a model\'s answer', () => {
+  const fence = '```';
+  it('is found behind any info string, with Windows line ends too', () => {
+    expect(firstCodeBlock(`Here:\n${fence}javascript \nfunction run() {}\n${fence}\nDone.`)).toBe('function run() {}');
+    expect(firstCodeBlock(`${fence}js title="run.js"\r\nfunction run() {}\r\n${fence}`)).toBe('function run() {}');
+  });
+
+  it('does not end at a fence the code writes into a string', () => {
+    const code = 'function run() {\n  return { md: "' + fence + 'json\\n{}\\n' + fence + '" };\n}';
+    expect(firstCodeBlock(`${fence}js\n${code}\n${fence}`)).toBe(code);
+  });
+});
+
 describe('generated code that asks a model', () => {
   it('is tried the way a graph runs it: with a node it can ask -- it used to fail on `node.llm is not a function`', async () => {
     // First reply: the code. Second: what the code's own question is answered with, in the probe.
@@ -188,16 +201,14 @@ describe('what the node says about itself reaches the model', () => {
     expect(prompt.split('Every path in the folder')).toHaveLength(2);
   });
 
-  it('sends the output format and an example whatever else is set, cut to a budget', async () => {
+  it('sends the output format whatever else is set, cut to a budget', async () => {
     const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
     await generate({
       ...rows, examples: undefined, output_format: 'A list of {File, Summary}, largest first.',
-      output_example: '[{"File": "b.txt", "Summary": "Two."}]',
       sample_inputs: { files: ['x'.repeat(5000)], summaries: ['y'] },
     }, { ai, code: runner(() => ({ rows: [] })), generationFor, target });
     const prompt = ai.asked[0].prompt;
     expect(prompt).toContain('Format: A list of {File, Summary}, largest first.');
-    expect(prompt).toContain('the same structure, new content:\n[{"File": "b.txt"');
     expect(prompt).toContain('sample, from the last run: a list of 1: ["xxx');
     expect(prompt).toContain('more characters not shown');
     expect(prompt.length).toBeLessThan(6000);
@@ -592,10 +603,10 @@ describe('a block\'s snippet is looked at before anyone sees it', () => {
   });
 
   it('tries a chart the way its page draws it: a body asking node.llm fails here, and a figure passes', async () => {
-    // The page's worker hands run() a window, not a node. With a node here, the
+    // The page's worker hands draw() a window, not a node. With a node here, the
     // question was answered, the probe and `check` said ✓, and the page failed.
     const ai = scripted([
-      '```js\nasync function run(inputs, node) { return { value: await node.llm({ prompt: "chart it" }) }; }\n```',
+      '```js\nasync function draw(data, node) { return await node.llm({ prompt: "chart it" }); }\n```',
       '```js\nfunction draw(data, window) { return { kind: "line", title: "Temperature", points: data.map((row) => ({ label: row.t, value: row.temp })) }; }\n```',
     ]);
     const reply = await generate({ element: 'plot_window', description: 'a line', sample_inputs: sample }, { ai, code: nodeCode, generationFor, target });

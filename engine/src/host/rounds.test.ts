@@ -30,6 +30,17 @@ describe('Rounds', () => {
     expect(seen).toEqual(['quick', 'slow']);
   });
 
+  it('does not make two different graphs of one name wait for each other', async () => {
+    const rounds = new Rounds();
+    const seen: string[] = [];
+    const untitled = (id: string) => parseGraph({ metadata: { name: 'Untitled Graph' }, nodes: [{ id, node_type: 'code' }], edges: [] });
+    await Promise.all([
+      rounds.turn(untitled('slow'), async () => { await wait(40); seen.push('slow'); }),
+      rounds.turn(untitled('quick'), async () => { seen.push('quick'); }),
+    ]);
+    expect(seen).toEqual(['quick', 'slow']);
+  });
+
   it('goes on after a round that failed', async () => {
     const rounds = new Rounds();
     await expect(rounds.turn(named('a'), async () => { throw new Error('no'); })).rejects.toThrow('no');
@@ -52,5 +63,21 @@ describe('RunBoard', () => {
     for (let i = 0; i < 100 && !runs.snapshot(second)?.done; i += 1) await wait(100);
     const ended = (id: string) => Number((runs.snapshot(id)!.result!.node_results[0].outputs as { out: number }).out);
     expect(ended(second) - ended(first)).toBeGreaterThanOrEqual(250);
+  }, 30_000);
+
+  it('stops a whole run a caller is waiting for, and waits for it, when everything stops', async () => {
+    // What `/api/execute/` starts, and a shutdown must not leave running.
+    const SLOW = 'async function run() { await new Promise((r) => setTimeout(r, 3000)); return { done: "finished anyway" }; }';
+    const runs = new RunBoard();
+    const whole = runs.whole(parseGraph({
+      metadata: { name: 'whole' },
+      nodes: [{ id: 'slow', node_type: 'code', inputs: [], outputs: [{ id: 'done', name: 'done' }], config: { code: SLOW } }],
+      edges: [],
+    }));
+    await wait(300);
+    expect(await runs.stopAll()).toBe(1);
+    const result = await whole;
+    expect(result.status).toBe('cancelled');
+    expect(JSON.stringify(result)).not.toContain('finished anyway');
   }, 30_000);
 });

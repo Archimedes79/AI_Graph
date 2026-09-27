@@ -91,7 +91,7 @@ export class McpRpcError extends Error {
 interface Transport {
   /** *timeoutMs* 0 is no clock; *stop* is the run's, and ends the call wherever it is. */
   request(method: string, params: unknown, timeoutMs: number, stop?: AbortSignal): Promise<unknown>;
-  notify(method: string, params?: unknown): Promise<void>;
+  notify(method: string, params?: unknown, stop?: AbortSignal): Promise<void>;
   /** The version `initialize` settled on; HTTP has to repeat it on every request after. */
   negotiated(version: string): void;
   /** Best effort, and never throws: a close that fails has nobody to tell. */
@@ -396,12 +396,13 @@ function httpTransport(label: string, url: string, configuredHeaders: Record<str
     read: (response: Response) => Promise<T>,
     stop?: AbortSignal,
   ): Promise<T> => {
+    // Before the clock is started: a stopped run must not leave one behind.
+    if (stop?.aborted) throw new Error('Stopped.');
     const abort = new AbortController();
     // One clock over the request *and* the reading of its answer: a stream that
     // opens promptly and then says nothing is the slow case worth catching.
     const timer = timeoutMs > 0 ? setTimeout(() => abort.abort(), timeoutMs) : null;
     const stopped = (): void => abort.abort();
-    if (stop?.aborted) throw new Error('Stopped.');
     stop?.addEventListener('abort', stopped, { once: true });
     try {
       const response = await fetch(url, {
@@ -445,12 +446,12 @@ function httpTransport(label: string, url: string, configuredHeaders: Record<str
       }, stop);
     },
 
-    async notify(method, params) {
+    async notify(method, params, stop) {
       // 202 and no body is the whole answer to a notification. Whatever came
       // instead is let go of unread, so the socket is not held open for it.
       await exchange({ method, ...(params === undefined ? {} : { params }) }, HANDSHAKE_TIMEOUT_MS, async (response) => {
         await response.body?.cancel().catch(() => {});
-      });
+      }, stop);
     },
 
     async close() {
@@ -490,22 +491,23 @@ interface OpenServer {
   tools: McpTool[];
 }
 
-async function handshake(transport: Transport, timeoutMs: number): Promise<McpTool[]> {
+/** Say hello and ask for the tools. Stop ends it at whichever step it is, not after three clocks. */
+async function handshake(transport: Transport, timeoutMs: number, stop?: AbortSignal): Promise<McpTool[]> {
   const hello = await transport.request('initialize', {
     protocolVersion: PROTOCOL_VERSION,
     capabilities: {},
     clientInfo: CLIENT_INFO,
-  }, timeoutMs) as { protocolVersion?: string } | undefined;
+  }, timeoutMs, stop) as { protocolVersion?: string } | undefined;
   // The server may answer with an older version than the one offered. Tools
   // have looked the same in all of them, so whatever it says is what is used.
   transport.negotiated(hello?.protocolVersion ?? PROTOCOL_VERSION);
-  await transport.notify('notifications/initialized');
+  await transport.notify('notifications/initialized', undefined, stop);
 
   const tools: McpTool[] = [];
   const seen = new Set<string>();
   let cursor: string | undefined;
   do {
-    const page = await transport.request('tools/list', cursor ? { cursor } : {}, timeoutMs) as
+    const page = await transport.request('tools/list', cursor ? { cursor } : {}, timeoutMs, stop) as
       { tools?: McpTool[]; nextCursor?: string } | undefined;
     tools.push(...(page?.tools ?? []).filter((tool) => tool && typeof tool.name === 'string'));
     cursor = page?.nextCursor || undefined;
@@ -626,11 +628,11 @@ export function mcpToolService(
     throw new Error(`Tool server "${server}" in ai-settings.json needs either a "command" or a "url".`);
   };
 
-  const connect = async (target: { label: string; connect(): Transport }): Promise<OpenServer> => {
+  const connect = async (target: { label: string; connect(): Transport }, stop?: AbortSignal): Promise<OpenServer> => {
     let transport: Transport | undefined;
     try {
       transport = target.connect();
-      return { label: target.label, transport, tools: await handshake(transport, handshakeTimeout) };
+      return { label: target.label, transport, tools: await handshake(transport, handshakeTimeout, stop) };
     } catch (error) {
       await transport?.close();
       throw new Error(`Tool server "${target.label}" could not be opened: ${(error as Error).message}`);
@@ -638,7 +640,7 @@ export function mcpToolService(
   };
 
   return {
-    async open(servers: string[]): Promise<ToolSession> {
+    async open(servers: string[], stop?: AbortSignal): Promise<ToolSession> {
       const wanted = [...new Set(servers.map((server) => server.trim()).filter(Boolean))];
       // Every name is resolved before anything is started, so a graph asking
       // for one server too many starts none of them.
@@ -646,7 +648,7 @@ export function mcpToolService(
 
       // Together, not in turn: an `npx` server spends seconds on startup, and
       // three of them in a row is a node that looks hung.
-      const settled = await Promise.allSettled(targets.map(connect));
+      const settled = await Promise.allSettled(targets.map((target) => connect(target, stop)));
       const failed = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected');
       if (failed) {
         // All or nothing. A model offered half its tools does not fail -- it

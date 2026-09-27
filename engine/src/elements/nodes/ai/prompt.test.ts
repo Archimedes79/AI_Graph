@@ -1,15 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { assemblePrompt, formatInstruction, outputWords, placeholders, promptText, type PromptSettings } from './prompt.ts';
-import { AiNodeRunner } from './AiNodeRunner.ts';
+import { assemblePrompt, formatInstruction, placeholders, promptText, type PromptSettings } from './prompt.ts';
 
-/** Settings as `AiNodeRunner.config` reads a node: an older node's picked format folded into its words. */
-const settings = ({ outputFormat, ...over }: Partial<PromptSettings> & { outputFormat?: string } = {}): PromptSettings => {
-  const base = { systemPrompt: '', template: '', outputFormatPrompt: '', outputExample: '', ...over };
-  return {
-    ...base,
-    outputFormatPrompt: outputWords({ output_format: outputFormat, output_format_prompt: base.outputFormatPrompt, output_example: base.outputExample }),
-  };
-};
+const settings = (over: Partial<PromptSettings> = {}): PromptSettings =>
+  ({ systemPrompt: '', template: '', outputFormatPrompt: '', outputExample: '', ...over });
 
 describe('assemblePrompt', () => {
   it('sends what arrived when nobody wrote anything', () => {
@@ -67,21 +60,15 @@ describe('assemblePrompt', () => {
     expect(promptText([{ a: 1 }])).toBe('{"a":1}');
   });
 
-  it('adds the declared format to the instructions', () => {
-    expect(assemblePrompt(settings({ systemPrompt: 'Be brief.', outputFormat: 'json' }), { text: 'hi' }).system)
-      .toBe('Be brief.\n\nRespond with JSON and nothing else.');
+  it('adds the words about the answer to the instructions', () => {
+    expect(assemblePrompt(settings({ systemPrompt: 'Be brief.', outputFormatPrompt: 'Respond with JSON.' }), { text: 'hi' }).system)
+      .toBe('Be brief.\n\nRespond with JSON.');
   });
 
   it('can ask for an answer shaped like one it gave before', () => {
-    const { system } = assemblePrompt(
-      settings({ outputFormat: 'example', outputExample: '{"title": "x", "score": 3}' }), { text: 'hi' },
-    );
+    const { system } = assemblePrompt(settings({ outputExample: '{"title": "x", "score": 3}' }), { text: 'hi' });
     expect(system).toContain('same format as this example');
     expect(system).toContain('{"title": "x", "score": 3}');
-  });
-
-  it('falls back to plain text when the example was never recorded', () => {
-    expect(assemblePrompt(settings({ outputFormat: 'example' }), {}).system).toBe('');
   });
 
   it('lists placeholders once each, in order', () => {
@@ -90,16 +77,13 @@ describe('assemblePrompt', () => {
 });
 
 describe('formatInstruction', () => {
-  it('follows a kept example whatever format is picked -- it was kept to be followed', () => {
-    expect(formatInstruction(settings({ outputFormat: 'custom', outputExample: '{"a": 1}', outputFormatPrompt: 'Short.' })))
+  it('follows a kept example -- it was kept to be followed', () => {
+    expect(formatInstruction(settings({ outputExample: '{"a": 1}', outputFormatPrompt: 'Short.' })))
       .toBe('Answer in exactly the same format as this example -- the same structure, the same fields, new content:\n\n{"a": 1}\n\nShort.');
   });
 
-  it('sends the description of the answer (output.md) whatever format is picked', () => {
+  it('sends the description of the answer (output.md)', () => {
     expect(formatInstruction(settings({ outputFormatPrompt: 'One sentence.' }))).toBe('One sentence.');
-    expect(formatInstruction(settings({ outputFormat: 'custom', outputFormatPrompt: 'One sentence.' }))).toBe('One sentence.');
-    expect(formatInstruction(settings({ outputFormat: 'json', outputFormatPrompt: 'Keys: name, count.' })))
-      .toBe('Respond with JSON and nothing else.\n\nKeys: name, count.');
   });
 
   it('says nothing for plain text with no description', () => {
@@ -108,26 +92,3 @@ describe('formatInstruction', () => {
   });
 });
 
-describe('outputWords', () => {
-  it('puts an older node\'s format in front of its words, as the one text every reader shows', () => {
-    expect(outputWords({ output_format: 'json', output_format_prompt: 'Keys: name.' })).toBe('Respond with JSON and nothing else.\n\nKeys: name.');
-    expect(outputWords({ output_format: 'csv_list' })).toBe('Respond with CSV and nothing else.');
-    for (const output_format of ['text', 'custom', 'example', undefined]) {
-      expect(outputWords({ output_format, output_format_prompt: 'Short.' })).toBe('Short.');
-    }
-  });
-
-  it('lets a kept example stand for the format', () => {
-    expect(outputWords({ output_format: 'json', output_example: '{"a": 1}', output_format_prompt: 'Short.' })).toBe('Short.');
-  });
-
-  it('is what the run sends: the words box, once edited, saves what the run already said', () => {
-    // The bug: the dialog showed and saved "JSON. Keys: name." while a run
-    // sent "Respond with JSON and nothing else." -- one setting, two texts.
-    const node = { id: 'a', node_type: 'ai', label: '', description: '', position: { x: 0, y: 0 }, inputs: [], outputs: [],
-      config: { output_format: 'json', output_format_prompt: 'Keys: name.' } } as never;
-    const legacy = new AiNodeRunner().config(node).outputFormatPrompt;
-    const edited = new AiNodeRunner().config({ ...(node as object), config: { output_format_prompt: legacy } } as never).outputFormatPrompt;
-    expect(edited).toBe(legacy);
-  });
-});

@@ -3,7 +3,6 @@
   "description": "Summarize the text faithfully, at the length asked for.",
   "config": {
     "batch_mode": "whole_list",
-    "read_file_inputs": false,
-    "temperature": 0.3
+    "read_file_inputs": false
   }
 }

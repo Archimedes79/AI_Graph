@@ -47,6 +47,13 @@ describe('parseArgs', () => {
     expect(parseArgs(['g.json']).mcp).toBeUndefined();
   });
 
+  it('refuses a --limit that is not a whole number of runs', () => {
+    expect(parseArgs(['g.json', '--limit', '3']).limit).toBe(3);
+    for (const given of ['three', '', '0', '1.5']) {
+      expect(() => parseArgs(['g.json', '--limit', given]), given).toThrow(/--limit wants a whole number/);
+    }
+  });
+
   it('refuses a flag it does not know, rather than reading it as the graph or dropping it', () => {
     expect(() => parseArgs(['--ai-provider', 'openai', 'g.json'])).toThrow(/Unknown option "--ai-provider"/);
     expect(() => parseArgs(['g.json', '--ai-force'])).toThrow(/Unknown option "--ai-force"/);

@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import type { Server } from 'node:http';
+import { request as httpRequest, type Server } from 'node:http';
 import { portTaken, serve } from './serve.ts';
 import { API, pathFor } from './api.ts';
 
@@ -89,9 +89,17 @@ describe('what a deployed tool serves', () => {
     // This request being refused, not the server failing: a 500 has nothing
     // for the caller to act on. The size limit beside it is in `http.test.ts`.
     const { url } = await serveGraph();
-    const refused = await fetch(`${url}/api/execute/requirements`, { method: 'POST', body: 'not json at all' });
+    const refused = await fetch(`${url}/api/execute/requirements`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'not json at all',
+    });
     expect(refused.status).toBe(400);
     expect((await asJson(refused)).detail).toMatch(/not JSON/);
+  });
+
+  it('answers a path with a broken escape as one that names nothing, not as a failure', async () => {
+    const { url } = await serveGraph();
+    const response = await fetch(`${url}/api/execute/runs/%E0%A4%A`);
+    expect(response.status).toBe(404);
   });
 
   it('offers nothing a deployed tool has no business offering', async () => {
@@ -102,6 +110,72 @@ describe('what a deployed tool serves', () => {
       const response = await fetch(`${url}${path}`, { method: 'POST' });
       expect(response.status).toBe(404);
     }
+  });
+});
+
+describe('a web page elsewhere in the same browser', () => {
+  /**
+   * Any page can address 127.0.0.1. A form or `fetch` posting `text/plain` goes
+   * out without the browser asking first, and a page that renamed its own site
+   * to 127.0.0.1 (DNS rebinding) can even read the answer. The editor's server
+   * runs code, writes files and holds keys, so it answers its own page only.
+   */
+  function ask(url: string, path: string, headers: Record<string, string>, body?: string) {
+    const { port } = new URL(url);
+    return new Promise<number>((answered, failed) => {
+      const sent = httpRequest({ host: '127.0.0.1', port, path, method: body === undefined ? 'GET' : 'POST', headers }, (reply) => {
+        reply.resume();
+        answered(reply.statusCode ?? 0);
+      });
+      sent.on('error', failed);
+      sent.end(body);
+    });
+  }
+
+  it('answers its own page, by any loopback name', async () => {
+    const { url, graph } = await serveGraph();
+    const port = new URL(url).port;
+    for (const name of ['127.0.0.1', 'localhost', '[::1]']) {
+      const own = { Host: `${name}:${port}`, Origin: `http://${name}:${port}`, 'Content-Type': 'application/json' };
+      expect(await ask(url, '/api/execute/requirements', own, JSON.stringify(graph)), name).toBe(200);
+    }
+  });
+
+  it('refuses a request that names another host or port', async () => {
+    const { url } = await serveGraph();
+    const port = new URL(url).port;
+    expect(await ask(url, '/api/runtime/graph', { Host: `evil.example:${port}` })).toBe(403);
+    expect(await ask(url, '/api/runtime/graph', { Host: 'localhost:1' })).toBe(403);
+    expect(await ask(url, '/', { Host: `evil.example:${port}` })).toBe(403);
+  });
+
+  it('refuses a call from another origin, or one the browser marks cross-site', async () => {
+    const { url, graph } = await serveGraph();
+    const host = new URL(url).host;
+    const json = { Host: host, 'Content-Type': 'application/json' };
+    const body = JSON.stringify(graph);
+    expect(await ask(url, '/api/execute/requirements', { ...json, Origin: 'https://evil.example' }, body)).toBe(403);
+    expect(await ask(url, '/api/execute/requirements', { ...json, Origin: 'http://localhost:1' }, body)).toBe(403);
+    expect(await ask(url, '/api/execute/requirements', { ...json, Origin: 'null' }, body)).toBe(403);
+    expect(await ask(url, '/api/execute/requirements', { ...json, 'Sec-Fetch-Site': 'cross-site' }, body)).toBe(403);
+  });
+
+  it('reads a body only when it says it is JSON', async () => {
+    // text/plain is what a page may post anywhere without the browser asking first.
+    const { url, graph } = await serveGraph();
+    const host = new URL(url).host;
+    expect(await ask(url, '/api/execute/requirements', { Host: host, 'Content-Type': 'text/plain' }, JSON.stringify(graph))).toBe(415);
+    expect(await ask(url, '/api/execute/requirements', { Host: host }, JSON.stringify(graph))).toBe(415);
+  });
+
+  it('takes any host name when it is served on the network, but still only its own origin', async () => {
+    const { server, url } = await serve({ graphPath: MINIMAL, port: 0, host: '0.0.0.0' });
+    started.push(server);
+    const port = new URL(url).port;
+    const graph = JSON.stringify(JSON.parse(await readFile(MINIMAL, 'utf8')));
+    const json = { 'Content-Type': 'application/json' };
+    expect(await ask(url, '/api/execute/requirements', { ...json, Host: `tool.lan:${port}`, Origin: `http://tool.lan:${port}` }, graph)).toBe(200);
+    expect(await ask(url, '/api/execute/requirements', { ...json, Host: `tool.lan:${port}`, Origin: 'https://evil.example' }, graph)).toBe(403);
   });
 });
 

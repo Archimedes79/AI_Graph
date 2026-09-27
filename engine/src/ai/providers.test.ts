@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { aiService, EmptyCompletionError, settingsFromEnv } from './providers.ts';
+import { aiService, EmptyCompletionError, OutOfBudgetError, settingsFromEnv } from './providers.ts';
 
 /** A stand-in for the network: what was asked, and what to answer. */
 function stubFetch(replies: (
@@ -67,6 +67,12 @@ describe('the OpenAI-style providers', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('finds each provider\'s key in the slot named after it, GitHub Models\' included', async () => {
+    const calls = stubFetch([openAiReply('hi')]);
+    await aiService({ provider: 'github_copilot', model: 'gpt-x', apiKeys: { github_copilot: 'ghp_token' } }).complete({ prompt: 'x' });
+    expect(calls[0].headers.Authorization).toBe('Bearer ghp_token');
+  });
+
   it('still gives the machine\'s model to a node that names the machine\'s own provider', async () => {
     const calls = stubFetch([openAiReply('the answer')]);
     const ai = aiService({ provider: 'lmstudio', model: 'local' });
@@ -91,6 +97,48 @@ describe('anthropic and ollama, which do not fit the table', () => {
 
     expect(await ai.complete({ prompt: 'hi' })).toBe('hi there');
     expect(calls[0].body.stream).toBe(false);
+  });
+
+  const picture = { prompt: 'What is in this picture?', images: ['data:image/jpeg;base64,AAAA'] };
+
+  it('sends anthropic an image as an image block, before the words', async () => {
+    const calls = stubFetch([{ body: { content: [{ type: 'text', text: 'a barn' }] } }]);
+    const ai = aiService({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
+    await ai.complete(picture);
+    expect(calls[0].body.messages[0].content).toEqual([
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
+      { type: 'text', text: 'What is in this picture?' },
+    ]);
+  });
+
+  it('sends ollama the base64 of an image, not a data URL', async () => {
+    const calls = stubFetch([{ body: { message: { content: 'a barn' } } }]);
+    const ai = aiService({ provider: 'ollama', model: 'llava' });
+    await ai.complete(picture);
+    expect(calls[0].body.messages[0].images).toEqual(['AAAA']);
+  });
+
+  it('sends no temperature that nobody asked for -- current Anthropic models refuse one', async () => {
+    const calls = stubFetch([{ body: { content: [{ type: 'text', text: 'hi' }] } }]);
+    const ai = aiService({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
+    await ai.complete({ prompt: 'hi' });
+    await ai.complete({ prompt: 'hi', temperature: 0.2 });
+    expect(calls[0].body).not.toHaveProperty('temperature');
+    expect(calls[1].body.temperature).toBe(0.2);
+
+    vi.unstubAllGlobals();
+    const local = stubFetch([{ body: { message: { content: 'hi' } } }, openAiReply('hi')]);
+    await aiService({ provider: 'ollama', model: 'llama' }).complete({ prompt: 'hi' });
+    await aiService({ provider: 'lmstudio', model: 'local' }).complete({ prompt: 'hi' });
+    expect(local[0].body).not.toHaveProperty('options');
+    expect(local[1].body).not.toHaveProperty('temperature');
+  });
+
+  it('says an anthropic answer cut off by max_tokens before a word is out of budget, once', async () => {
+    const calls = stubFetch([{ body: { stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '' }] } }]);
+    const ai = aiService({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' }, retryDelay: 0, maxTokens: 512 });
+    await expect(ai.complete({ prompt: 'Summarize.' })).rejects.toBeInstanceOf(OutOfBudgetError);
+    expect(calls).toHaveLength(1);
   });
 });
 
@@ -289,7 +337,7 @@ describe('the tool loop, in OpenAI\'s dialect', () => {
     const ai = aiService({ provider: 'lmstudio', model: 'local' });
 
     await ai.complete({ prompt: 'x', tools: { specs: [], call: async () => '' } });
-    expect(Object.keys(calls[0].body)).toEqual(['model', 'messages', 'temperature', 'max_tokens']);
+    expect(Object.keys(calls[0].body)).toEqual(['model', 'messages', 'max_tokens']);
   });
 });
 

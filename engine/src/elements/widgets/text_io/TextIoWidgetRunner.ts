@@ -14,9 +14,7 @@ export class TextIoWidgetRunner extends WidgetRunner<TextIoConfig> {
   readonly widgetKind = 'text_io' as const;
 
   config(widget: Widget): TextIoConfig {
-    // Read as text: a graph saved while a reply could settle here may hold
-    // an object, and that is sent as what the box shows, not "[object Object]".
-    return { value: asText(widget.config.value), role: textIoRole(widget.config.mode) };
+    return { value: String(widget.config.value ?? ''), role: textIoRole(widget.config.mode) };
   }
 
   ports(widget: Widget) {

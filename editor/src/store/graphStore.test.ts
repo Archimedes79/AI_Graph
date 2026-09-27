@@ -263,22 +263,6 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     expect(labels).toEqual(['Result', 'Result 3', 'Result 4']);
   });
 
-  it('writes no output_format on a new node, and keeps an older one\'s as it was', () => {
-    // A choice nothing offers any more: 'text' was saved into every ai and code node.
-    loadTestGraph([graphNode({ id: 'old', node_type: 'ai', config: { output_format: 'json' } as GraphNode['config'] })]);
-    const ai = useGraphStore.getState().addNode('ai', { x: 0, y: 0 });
-    const code = useGraphStore.getState().addNode('code', { x: 0, y: 0 });
-    const saved = useGraphStore.getState().exportGraph().nodes;
-    expect(saved.find((node) => node.id === ai)!.config).not.toHaveProperty('output_format');
-    expect(saved.find((node) => node.id === code)!.config).not.toHaveProperty('output_format');
-    expect(saved.find((node) => node.id === 'old')!.config.output_format).toBe('json');
-  });
-
-  it('keeps an older file\'s batch_mode on another kind as it was, unread', () => {
-    loadTestGraph([graphNode({ id: 'shown', node_type: 'output', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
-    expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');
-  });
-
   it('keeps what the file did say', () => {
     loadTestGraph([graphNode({ id: 'each', node_type: 'code', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
     expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');
@@ -720,7 +704,7 @@ describe('graphStore.connect', () => {
   });
 
   it('does not draw a wire twice, whatever the one already there is called', () => {
-    // A wire read from an older file keeps the id it was saved with.
+    // A graph pasted in or designed by ✨ may call its wires anything.
     loadTestGraph(nodes(), [{ id: 'e1', source_node_id: 'a', source_port_id: 'out', target_node_id: 'b', target_port_id: 'in' }]);
     useGraphStore.getState().connect({ source: 'a', sourceHandle: 'out', target: 'b', targetHandle: 'in' });
     expect(useGraphStore.getState().rfEdges).toHaveLength(1);

@@ -3,7 +3,6 @@
   "description": "Merges the five reviews into one ranked list and a recommendation",
   "config": {
     "batch_mode": "whole_list",
-    "read_file_inputs": false,
-    "temperature": 0.2
+    "read_file_inputs": false
   }
 }

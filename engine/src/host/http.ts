@@ -101,13 +101,68 @@ export function readBytes(request: IncomingMessage, limit = MAX_BODY_BYTES): Pro
   });
 }
 
+/**
+ * The body, read as the JSON it says it is.
+ *
+ * Only a body that says so: a web page may post `text/plain` to any address
+ * without asking first, and `application/json` is what makes a browser ask
+ * this server before it sends anything. The editor always says it.
+ */
 export async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
+  const type = (request.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') throw new Refusal(415, 'The body must be sent as application/json.');
   const raw = (await readBytes(request)).toString('utf8');
   try {
     return raw ? JSON.parse(raw) : {};
   } catch {
     throw new Refusal(400, 'The body is not JSON.');
   }
+}
+
+const LOOPBACK_NAMES = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+/** `http://<host>` as an origin, or null when it is not one. */
+function originOf(address: string): string | null {
+  try {
+    const url = new URL(address);
+    return url.protocol === 'http:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Why a request did not come from this server's own page, or null when it did.
+ *
+ * The server runs code, writes files and holds keys for whoever is at this
+ * machine, and a web page open in the same browser can address it too. So:
+ * on loopback the request must name this machine and this port (a page that
+ * renamed its own site to 127.0.0.1 -- DNS rebinding -- still says its own
+ * name here); a call to the API that says where it comes from must come from
+ * this server's own origin; and one the browser marks cross-site is refused.
+ * Served on the network (`--host 0.0.0.0`), any name reaches it, and the origin
+ * must be the one that was asked for.
+ */
+export function foreignRequest(
+  request: IncomingMessage,
+  server: { loopback: boolean; port: number },
+  api: boolean,
+): string | null {
+  const host = request.headers.host ?? '';
+  const asked = originOf(`http://${host}`);
+  if (server.loopback) {
+    const url = asked ? new URL(asked) : null;
+    if (!url || !LOOPBACK_NAMES.has(url.hostname) || Number(url.port || 80) !== server.port) {
+      return `This server answers only as localhost:${server.port}, not as "${host}".`;
+    }
+  }
+  if (!api) return null;
+  const origin = request.headers.origin;
+  if (origin !== undefined && (!asked || originOf(origin) !== asked)) {
+    return `A page from ${origin} may not call this server.`;
+  }
+  if (request.headers['sec-fetch-site'] === 'cross-site') return 'A page from another site may not call this server.';
+  return null;
 }
 
 const MIME: Record<string, string> = {

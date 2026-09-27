@@ -178,8 +178,10 @@ function outputsSection(request: GenerateRequest, kind: BriefKind): string {
   if (kind === 'format') return lines.length > 1 ? lines.join('\n') : '';
   const format = request.output_format?.trim();
   if (format) lines.push(`Format: ${clip(format, BUDGET.format)}`);
-  const example = request.output_example?.trim();
-  if (example) lines.push(`An example of ${kind === 'code' ? 'what it returns' : 'an answer'} -- the same structure, new content:\n${clip(example, BUDGET.outputExample)}`);
+  // An answer kept to imitate is an AI node's (`output.example.md`); what a
+  // body returns is held by its examples and its kept shape instead.
+  const example = kind === 'prompt' ? request.output_example?.trim() : '';
+  if (example) lines.push(`An example of an answer -- the same structure, new content:\n${clip(example, BUDGET.outputExample)}`);
   const schema = request.output_schema;
   if (schema && typeof schema === 'object') {
     lines.push(`The shape it returned so far, which the nodes after it were built against -- keep it: ${clip(outline(schema), BUDGET.schema)}`);

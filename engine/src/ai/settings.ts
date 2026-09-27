@@ -67,14 +67,25 @@ export interface SettingsFile {
 }
 
 /**
+ * One settings file, parsed, or why it cannot be: missing is empty, anything
+ * but a JSON object throws. For a writer, which must not save over a file it
+ * could not read -- the keys and tool servers in it would be gone.
+ */
+export function parseSettingsFile(path: string): SettingsFile {
+  if (!existsSync(path)) return {};
+  const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('it is not a JSON object');
+  return parsed as SettingsFile;
+}
+
+/**
  * One settings file, parsed. Missing is empty; malformed is empty too, because
  * a file someone is halfway through editing should not stop a run that does
  * not need a model at all.
  */
 export function readSettingsFile(path: string): SettingsFile {
-  if (!existsSync(path)) return {};
   try {
-    return JSON.parse(readFileSync(path, 'utf8')) as SettingsFile;
+    return parseSettingsFile(path);
   } catch {
     return {};
   }
@@ -95,7 +106,8 @@ export function fromFile(
       ...(parsed.ai?.provider ? { provider: parsed.ai.provider } : {}),
       ...(parsed.ai?.model ? { model: parsed.ai.model } : {}),
       apiKeys: parsed.api_keys ?? {},
-      endpoints: parsed.endpoints ?? {},
+      // A blank address is no address: the provider's own default stands.
+      endpoints: Object.fromEntries(Object.entries(parsed.endpoints ?? {}).filter(([, url]) => String(url ?? '').trim())),
     };
   }
   return {};
@@ -169,8 +181,8 @@ export async function probeLocal(
   const cached = probed.get(provider);
   if (!refresh && cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.models;
 
-  const base = (fromFile(cwd, env).endpoints?.[provider] ?? settingsFromEnv(env).endpoints?.[provider]
-    ?? DEFAULT_SETTINGS.endpoints[provider]).replace(/\/+$/, '');
+  // Where a call goes: the environment over the file, as `configuredSettings` has it.
+  const base = (configuredSettings(env, cwd).endpoints?.[provider] ?? DEFAULT_SETTINGS.endpoints[provider]).replace(/\/+$/, '');
   const url = provider === 'ollama' ? `${base}/api/tags` : `${base}/models`;
   let models: string[] | null = null;
   try {

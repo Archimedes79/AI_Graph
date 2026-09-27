@@ -77,15 +77,15 @@ export const ENDPOINT_ENV: Record<string, string> = {
 
 /**
  * The providers that want a credential: which slot of `apiKeys` (and of the
- * settings file's `api_keys`) holds it, and the env var that can supply it
- * instead. GitHub's slot is `github`, older than the provider's name.
+ * settings file's `api_keys`) holds it -- the provider's own name -- and the
+ * env var that can supply it instead.
  */
 export const CREDENTIALS: Record<string, { key: string; env: string }> = {
   openai: { key: 'openai', env: 'OPENAI_API_KEY' },
   anthropic: { key: 'anthropic', env: 'ANTHROPIC_API_KEY' },
   openai_compatible: { key: 'openai_compatible', env: 'OPENAI_COMPATIBLE_API_KEY' },
   google: { key: 'google', env: 'GOOGLE_API_KEY' },
-  github_copilot: { key: 'github', env: 'GITHUB_TOKEN' },
+  github_copilot: { key: 'github_copilot', env: 'GITHUB_TOKEN' },
 };
 
 /** A provider that speaks the OpenAI chat-completions API. Its credential slot, if any, is in `CREDENTIALS`. */
@@ -412,13 +412,40 @@ async function toolLoop(
 // The dialects
 // ---------------------------------------------------------------------------
 
+/**
+ * An image as its media type and bare base64, however it arrived: a data URL,
+ * or the base64 alone (taken as PNG). Each dialect wants it put differently.
+ */
+function imageData(image: string): { mediaType: string; data: string } {
+  const match = /^data:([^;,]+);base64,/.exec(image);
+  return match ? { mediaType: match[1], data: image.slice(match[0].length) } : { mediaType: 'image/png', data: image };
+}
+
+/**
+ * The temperature a request asked for, and nothing when it asked for none.
+ * Current Anthropic models refuse any sampling parameter, so none is sent
+ * that a node did not set itself: the provider's own default stands.
+ */
+function sampling(request: AiRequest): { temperature?: number } {
+  return request.temperature === undefined ? {} : { temperature: request.temperature };
+}
+
+/** The model's budget spent before it said a word: said as that, and not retried for the same nothing. */
+function outOfBudget(provider: string, model: string, maxTokens: number, thought = 0): OutOfBudgetError {
+  return new OutOfBudgetError(
+    `${provider}/${model} used its whole budget of ${maxTokens} tokens`
+    + `${thought ? ` thinking (${thought} characters of it)` : ''} and had none left for the answer. `
+    + 'Raise AI_GRAPH_MAX_TOKENS, turn the model\'s thinking off where it is served, or use a model that does not think.',
+  );
+}
+
 function messages(request: AiRequest): unknown[] {
   const content = request.images?.length
     ? [
         { type: 'text', text: request.prompt },
-        ...request.images.map((image) => ({
+        ...request.images.map(imageData).map(({ mediaType, data }) => ({
           type: 'image_url',
-          image_url: { url: image.startsWith('data:') ? image : `data:image/png;base64,${image}` },
+          image_url: { url: `data:${mediaType};base64,${data}` },
         })),
       ]
     : request.prompt;
@@ -455,7 +482,7 @@ function openAiStyle(
       const body = await post(`${base.replace(/\/$/, '')}/chat/completions`, {
         model: request.model,
         messages: history,
-        temperature: request.temperature ?? 0.7,
+        ...sampling(request),
         max_tokens: settings.maxTokens,
         ...(mode === 'plain' ? {} : { tools: offered }),
         // Still described, no longer on offer. Dropping `tools` altogether
@@ -476,12 +503,7 @@ function openAiStyle(
       // long waits for the same nothing. Said as what it is, once.
       if (choices?.[0]?.finish_reason === 'length' && !message?.content?.trim()
           && !(Array.isArray(message?.tool_calls) && message.tool_calls.length)) {
-        const thought = message?.reasoning_content?.length ?? 0;
-        throw new OutOfBudgetError(
-          `${provider}/${request.model} used its whole budget of ${settings.maxTokens} tokens`
-          + `${thought ? ` thinking (${thought} characters of it)` : ''} and had none left for the answer. `
-          + 'Raise AI_GRAPH_MAX_TOKENS, turn the model\'s thinking off where it is served, or use a model that does not think.',
-        );
+        throw outOfBudget(provider, String(request.model), settings.maxTokens, message?.reasoning_content?.length ?? 0);
       }
       const asked = (Array.isArray(message?.tool_calls) ? message.tool_calls : []) as
         { id?: string; function?: { name?: string; arguments?: unknown } }[];
@@ -516,7 +538,16 @@ function anthropic(request: AiRequest, settings: ProviderSettings): Conversation
   const key = settings.apiKeys.anthropic ?? '';
   if (!key) throw new Error('No Anthropic API key configured (ANTHROPIC_API_KEY).');
 
-  const history: unknown[] = [{ role: 'user', content: request.prompt }];
+  // Images first, then the words, as Anthropic asks; an empty text block is refused.
+  const content = request.images?.length
+    ? [
+        ...request.images.map(imageData).map(({ mediaType, data }) => ({
+          type: 'image', source: { type: 'base64', media_type: mediaType, data },
+        })),
+        ...(request.prompt ? [{ type: 'text', text: request.prompt }] : []),
+      ]
+    : request.prompt;
+  const history: unknown[] = [{ role: 'user', content }];
   const offered = request.tools?.specs.map((spec) => ({
     name: spec.name,
     description: spec.description,
@@ -530,7 +561,7 @@ function anthropic(request: AiRequest, settings: ProviderSettings): Conversation
       const body = await post(`${settings.endpoints.anthropic}/messages`, {
         model: request.model,
         max_tokens: settings.maxTokens,
-        temperature: request.temperature ?? 0.7,
+        ...sampling(request),
         ...(request.system ? { system: request.system } : {}),
         messages: history,
         ...(mode === 'plain' ? {} : { tools: offered }),
@@ -549,7 +580,12 @@ function anthropic(request: AiRequest, settings: ProviderSettings): Conversation
         name: part.name ?? '',
         args: readArguments(part.input),
       }));
-      return { text: content?.map((part) => part.text ?? '').join('') ?? '', calls };
+      const text = content?.map((part) => part.text ?? '').join('') ?? '';
+      // A model that thinks spends the same budget on it, and may have none left to answer with.
+      if (body.stop_reason === 'max_tokens' && !text.trim() && !calls.length) {
+        throw outOfBudget('anthropic', String(request.model), settings.maxTokens);
+      }
+      return { text, calls };
     },
 
     record(results) {
@@ -577,7 +613,8 @@ function anthropic(request: AiRequest, settings: ProviderSettings): Conversation
 function ollama(request: AiRequest, settings: ProviderSettings): Conversation {
   const history: unknown[] = [
     ...(request.system ? [{ role: 'system', content: request.system }] : []),
-    { role: 'user', content: request.prompt, ...(request.images?.length ? { images: request.images } : {}) },
+    // Ollama takes the base64 alone, not a data URL.
+    { role: 'user', content: request.prompt, ...(request.images?.length ? { images: request.images.map((image) => imageData(image).data) } : {}) },
   ];
   const offered = request.tools?.specs.map(functionTool) ?? [];
   let said: unknown;
@@ -588,7 +625,7 @@ function ollama(request: AiRequest, settings: ProviderSettings): Conversation {
       const body = await post(`${settings.endpoints.ollama}/api/chat`, {
         model: request.model,
         stream: false,
-        options: { temperature: request.temperature ?? 0.7 },
+        ...(request.temperature === undefined ? {} : { options: sampling(request) }),
         messages: history,
         // Ollama has no `tool_choice`, and does not mind a history of calls to
         // tools it is no longer shown. So `final` simply stops showing them.

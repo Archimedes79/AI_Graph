@@ -19,10 +19,8 @@ const OWN = new Set<string>([...IDENTITY, ...PRESENTATION]);
 /**
  * Read one block out of stored JSON.
  *
- * Its settings are the record itself minus identity and presentation, so a file
- * written before configs were owned reads exactly as one written after: the
- * element picks what it knows and ignores the rest. That is why there is no
- * migration here — the shape did not change, only who is allowed to look.
+ * Its settings are the record itself minus identity and presentation: the
+ * element picks what it knows and ignores the rest.
  */
 export function parseWidget(raw: unknown): Widget {
   const w = (raw ?? {}) as RawConfig;

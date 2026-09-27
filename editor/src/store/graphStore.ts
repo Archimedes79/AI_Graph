@@ -9,7 +9,8 @@ import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { ACCENT } from '@/ui/theme';
 import { delivered } from './executionStatus';
-import { NODE_KINDS, savedNode, whenMissing } from '@/document/nodeKinds';
+import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
+import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 import type React from 'react';
 import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
@@ -54,6 +55,15 @@ export interface GraphStore {
    * why nothing in here says "subgraph" twice.
    */
   subgraphStack: { nodeId: string; graph: Graph; past: string[]; future: string[] }[];
+
+  /**
+   * Which graph is open: one more each time another is loaded, or the canvas
+   * goes into a node's graph or back out. Work that takes a while -- a run, a
+   * ✨ sweep -- notes it when it starts, and writes nothing into a graph that
+   * is not the one it started on: node ids repeat from graph to graph
+   * (`code`, `ai_2`), and a result landing by id lands on a stranger.
+   */
+  document: number;
 
   // Serialised graph as of the last load/save, for `isDirty`.
   savedSnapshot: string | null;
@@ -188,14 +198,19 @@ export interface GraphStore {
    * piece of state it touches, and because two front-ends need it -- the
    * editor's toolbar and the deployed runtime page. They had a copy each, and
    * the copies had already drifted.
+   *
+   * One at a time: asked while a run is going, it does nothing. A run that
+   * ends after another graph was opened (`document`) is dropped, not shown.
    */
   runGraph: (graph: Graph, trigger?: RunTrigger | null) => Promise<void>;
   /**
    * Empty the boxes whose content was a message rather than a setting, once a
    * run has delivered it. Only for pages that ran, and only when they ran
    * cleanly: a message that reached nobody should still be there to send again.
+   * Only what *sent* sent: a box typed into again while the run went on holds
+   * the next message, not the one delivered.
    */
-  clearSentValues: (result: ExecutionResult) => void;
+  clearSentValues: (result: ExecutionResult, sent: Graph) => void;
   /** Stop the run in flight. Nodes already finished keep their results. */
   stopRun: () => Promise<void>;
 }
@@ -284,15 +299,10 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
     },
     inputs: Array.isArray(rawNode.inputs) ? rawNode.inputs : defaults.inputs,
     outputs: Array.isArray(rawNode.outputs) ? rawNode.outputs : defaults.outputs,
-    // A key the file left out means what the engine reads it as, not what a
-    // new node starts with: loading and saving must not change what a graph
-    // does. A node made in the editor starts from `create`, and once saved it
-    // carries these keys, so only a graph that never said them is filled here.
-    config: {
-      ...defaults.config,
-      ...whenMissing(nodeType),
-      ...(rawNode.config ?? {}),
-    },
+    // A key the file left out means what the engine reads it as -- its one
+    // default -- not what a new node starts with: loading and saving must not
+    // change what a graph does.
+    config: { ...baseNodeConfig(), ...(rawNode.config ?? {}) },
   };
 
   // Where the element derives its ports -- a gui node from its blocks, an
@@ -324,15 +334,10 @@ function withNested(outer: Graph, nodeId: string, inner: Graph): Graph {
 function normalizeGraph(graph: Graph): Graph {
   const nodes = Array.isArray(graph.nodes) ? graph.nodes.map((node) => normalizeGraphNode(node)) : [];
   const nodeIds = new Set(nodes.map((node) => node.id));
+  // A wire is taken as the graph says it (`GraphEdge`); one to a node that is
+  // not there is dropped, as the engine's `check` would report it.
   const edges = Array.isArray(graph.edges)
-    ? graph.edges
-        .filter((edge) => nodeIds.has(edge.source_node_id) && nodeIds.has(edge.target_node_id))
-        .map((edge, index) => ({
-          ...edge,
-          id: edge.id || `edge-${index}-${Date.now()}`,
-          source_port_id: edge.source_port_id || 'output',
-          target_port_id: edge.target_port_id || 'input',
-        }))
+    ? graph.edges.filter((edge) => nodeIds.has(edge.source_node_id) && nodeIds.has(edge.target_node_id))
     : [];
 
   return {
@@ -442,6 +447,7 @@ export const useGraphStore = create<GraphStore>()(
     textOutputWindows: [],
     editingNodeId: null,
     subgraphStack: [],
+    document: 0,
     savedSnapshot: null,
     past: [],
     future: [],
@@ -478,8 +484,8 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     connect: (wire) => {
-      // Named the way flow.json writes a wire, and known by its two ends: a wire
-      // read from an older file keeps the id it was saved with.
+      // Named the way flow.json writes a wire, and known by its two ends: a
+      // graph pasted in or designed by ✨ may call its wires anything.
       const id = wireOf(graphEdge(wire));
       const joins = (edge: Edge): boolean => edge.source === wire.source && edge.target === wire.target
         && (edge.sourceHandle ?? '') === (wire.sourceHandle ?? '') && (edge.targetHandle ?? '') === (wire.targetHandle ?? '');
@@ -634,6 +640,9 @@ export const useGraphStore = create<GraphStore>()(
         state.past = [];
         state.future = [];
         state.subgraphStack = [];
+        state.editingNodeId = null;
+        state.textOutputWindows = [];
+        state.document += 1;
       });
       // Snapshot through exportGraph() rather than from normalizedGraph: it is
       // the same serialisation isDirty() compares against, so a freshly loaded
@@ -665,6 +674,7 @@ export const useGraphStore = create<GraphStore>()(
         // Its own level, its own history: an undo in here cannot reach out.
         state.past = [];
         state.future = [];
+        state.document += 1;
       });
     },
 
@@ -687,6 +697,7 @@ export const useGraphStore = create<GraphStore>()(
         // keystroke, and nothing to say it was about to happen.
         state.past = changed ? [...frame.past, before].slice(-HISTORY_LIMIT) : frame.past;
         state.future = changed ? [] : frame.future;
+        state.document += 1;
       });
     },
 
@@ -852,7 +863,13 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     runGraph: async (graph, trigger = null) => {
+      // A second press -- a double click, or a page event while ▶ Run is
+      // going -- would start a second run beside the first, and whichever
+      // ended first took the Stop button with it.
+      if (get().isExecuting) return;
       const { setExecutionResult } = get();
+      const started = get().document;
+      const stillOpen = () => get().document === started;
       // A page event runs part of the graph, so what the rest of the page
       // shows is still true and stays: pressing "Plot" must not blank the
       // summary beside it. A full run starts from a clean slate, as before.
@@ -884,16 +901,17 @@ export const useGraphStore = create<GraphStore>()(
               completed: snapshot.completed,
               total: snapshot.total,
               label: snapshot.current_label,
-              // `?? 0` rather than a required field: a deployed bundle may be
-              // serving an older snapshot shape, and a missing counter should
-              // mean "no items to show", not NaN in the toolbar.
-              itemDone: snapshot.item_done ?? 0,
-              itemTotal: snapshot.item_total ?? 0,
-              idleSeconds: snapshot.idle_seconds ?? null,
+              itemDone: snapshot.item_done,
+              itemTotal: snapshot.item_total,
+              idleSeconds: snapshot.idle_seconds,
             };
           });
         }
 
+        // Another graph is open now. Its nodes may share this one's ids, and
+        // what this run made -- a shape, a remembered value, a window -- is
+        // not theirs.
+        if (!stillOpen()) return;
         const fresh: ExecutionResult = snapshot.result ?? {
           status: snapshot.cancelled ? 'cancelled' : 'error',
           node_results: [],
@@ -905,7 +923,7 @@ export const useGraphStore = create<GraphStore>()(
         // graph, which is why the result goes through the store rather than
         // being held in a component.
         setExecutionResult(result, fresh);
-        get().clearSentValues(fresh);
+        get().clearSentValues(fresh, graph);
         // Only what this round made opens a window. A node that stood still, or
         // was not asked, keeps the window it has -- or keeps it closed, if the
         // person closed it.
@@ -917,7 +935,7 @@ export const useGraphStore = create<GraphStore>()(
             : opened;
         });
       } catch (error) {
-        setExecutionResult({
+        if (stillOpen()) setExecutionResult({
           status: 'error',
           node_results: [],
           outputs: {},
@@ -932,13 +950,16 @@ export const useGraphStore = create<GraphStore>()(
       }
     },
 
-    clearSentValues: (result) =>
+    clearSentValues: (result, sent) =>
       set((state) => {
         for (const rfNode of state.rfNodes) {
           const graphNode = rfNode.data.graphNode as GraphNode;
           const ran = result.node_results.find((r) => r.node_id === graphNode.id);
           if (!ran || !delivered(ran.status) || !Array.isArray(graphNode.config.gui_widgets)) continue;
+          const sentWidgets = sent.nodes.find((node) => node.id === graphNode.id)?.config.gui_widgets ?? [];
           for (const widget of graphNode.config.gui_widgets) {
+            const was = sentWidgets.find((w) => w.id === widget.id);
+            if (!was || JSON.stringify(was.value) !== JSON.stringify(widget.value)) continue;
             if (engineRegistry.widget(widget.kind)?.clearsValueAfterRun(parseWidget(widget))) widget.value = '';
           }
         }

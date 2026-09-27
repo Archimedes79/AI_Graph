@@ -5,7 +5,7 @@ import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '..
 import { errorOutput, type Problem } from '../../../execution/wiring.ts';
 import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedUp } from './boundary.ts';
 import { runBody } from '../../body.ts';
-import { GRAPH_RUNS_PER_BODY, SUBGRAPH_RUN, SUBGRAPH_RUN_TEMPLATES, isStandardGraphRun } from './runTemplate.ts';
+import { GRAPH_RUNS_PER_BODY, SUBGRAPH_RUN, isStandardGraphRun } from './runTemplate.ts';
 
 export interface SubgraphConfig {
   /** The graph this node holds. An empty one for a node nobody has filled in yet. */
@@ -19,7 +19,7 @@ export interface SubgraphConfig {
 /** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
 const SUBGRAPH_TEXTS: readonly TextFile[] = [
   { field: 'task', file: 'task.md' },
-  { field: 'run_code', file: 'run.js', standard: SUBGRAPH_RUN, earlier: SUBGRAPH_RUN_TEMPLATES },
+  { field: 'run_code', file: 'run.js', standard: SUBGRAPH_RUN },
 ];
 
 /**

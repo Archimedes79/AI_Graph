@@ -3,7 +3,6 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import { describeNodeOutput, inputSources, lastRunInputs, outputTargets, pathPorts, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
 import { nodeFacts } from './nodeFacts';
-import { NODE_BUILDERS } from '@/elements/registry';
 
 const edge = (source: string, target: string) => ({ source, target, sourceHandle: 'output', targetHandle: 'input' });
 
@@ -40,11 +39,11 @@ describe('what ✨ is told of a node\'s neighbours', () => {
   it('carries an upstream ai node\'s declared output format', () => {
     const ai = NODE_KINDS.ai.create('classifier');
     ai.label = 'Classifier';
-    ai.config.output_format = 'json';
+    ai.config.output_format_prompt = 'JSON: {"label": text}';
     const code = NODE_KINDS.code.create('worker');
 
     expect(inputSources('worker', [ai, code], [edge('classifier', 'worker')], true).input)
-      .toContain('Respond with JSON and nothing else.');
+      .toContain('JSON: {"label": text}');
   });
 
   it('is empty for an unconnected node rather than noise', () => {
@@ -71,9 +70,8 @@ describe('describeNodeOutput', () => {
     );
   });
 
-  it('spells out a custom output format', () => {
+  it('spells out the output format in words', () => {
     const node = NODE_KINDS.code.create('c');
-    node.config.output_format = 'custom';
     node.config.output_format_prompt = 'one line per finding';
     expect(describeNodeOutput(node)).toBe('one line per finding');
   });
@@ -244,16 +242,13 @@ describe('what ✨ is told about a node, as facts', () => {
     expect(facts.batchMode).toBe('per_item');
   });
 
-  it('sends the format in words, as a run reads them: under a kept example an older picked format says nothing', () => {
-    const code = NODE_KINDS.code.create('worker');
-    code.config.output_format = 'json';
-    code.config.output_format_prompt = 'a list of {title, score}';
-    code.config.output_example = '[{"title": "a", "score": 1}]';
-    const facts = nodeFacts(code, [code], [], null);
+  it('sends the format in words, and an answer kept to imitate', () => {
+    const ai = NODE_KINDS.ai.create('worker');
+    ai.config.output_format_prompt = 'a list of {title, score}';
+    ai.config.output_example = '[{"title": "a", "score": 1}]';
+    const facts = nodeFacts(ai, [ai], [], null);
     expect(facts.outputFormat).toBe('a list of {title, score}');
     expect(facts.outputExample).toBe('[{"title": "a", "score": 1}]');
-    code.config.output_example = '';
-    expect(nodeFacts(code, [code], [], null).outputFormat).toBe('Respond with JSON and nothing else.\n\na list of {title, score}');
   });
 
   it('takes step 1\'s example as the sample, over what the last run delivered', () => {
@@ -269,8 +264,6 @@ describe('what ✨ is told about a node, as facts', () => {
   });
 
   it('shows a node fed by a file input that file, read as a run reads it, before the graph has run', () => {
-    // A file input's example file and its "what these files contain" reached
-    // no generation downstream; its file now does, as a path the engine reads.
     const input = NODE_KINDS.input.create('src');
     input.config.input_mode = 'file';
     input.config.value = 'data/people.csv';
@@ -282,17 +275,5 @@ describe('what ✨ is told about a node, as facts', () => {
     const facts = nodeFacts(code, [input, code], [{ id: 'a', source: 'src', target: 'worker', sourceHandle: 'content', targetHandle: 'input' }] as never, null);
     expect(facts.sampleInputs).toEqual({ input: 'data/people.csv' });
     expect(facts.readFilePorts).toEqual(['input']);
-  });
-});
-
-describe('a folder input\'s selector, as ✨ is told it', () => {
-  it('is told what the files hold as what they hold, not as the format of what it returns (B20)', () => {
-    // An older dialog let a person say what the files contain. The selector
-    // returns a list of paths, which its contract says; the words went out as
-    // its "Format", so it was told it returns CSV.
-    const folder = NODE_KINDS.input.create('folder');
-    folder.config = { ...folder.config, input_mode: 'directory', select_all_files: false, output_format_prompt: 'UTF-8 CSV, columns: date, amount' };
-    expect(nodeFacts(folder, [folder], [], null).outputFormat).toBe('');
-    expect(NODE_BUILDERS.input.generation?.context?.(folder)).toBe('The files in this folder contain: UTF-8 CSV, columns: date, amount');
   });
 });

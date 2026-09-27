@@ -218,6 +218,13 @@ describe('validate_graph', () => {
     expect((await toolsWith().call('validate_graph', { graph: hello(), path: 'x.json' })).isError).toBe(true);
   });
 
+  it('refuses a path it may not open, whatever the refusal says, rather than calling it a finding', async () => {
+    for (const path of ['   ', 'graphs/x.txt', '../outside.json']) {
+      const checked = await toolsWith().call('validate_graph', { path });
+      expect(checked.isError, path).toBe(true);
+    }
+  });
+
   it('reports a document that is not a graph as a finding, not a failure', async () => {
     const checked = await answer(toolsWith(), 'validate_graph', { graph: { name: 'not-a-graph' } });
     expect(checked.isError).toBeUndefined();
@@ -338,20 +345,16 @@ describe('save_graph', () => {
     expect(JSON.parse(await readFile(join(root, 'hello.json'), 'utf8')).nodes[0].config.value).toBe('two');
   });
 
-  it('writes a graph whose output nodes share a label, as an older editor made them, and says so', async () => {
-    // Every output node an older editor made was "Result". Such a graph runs,
-    // and an agent that only edited one a little could not write it back.
+  it('refuses a graph whose output nodes share a label, and says which', async () => {
+    // Whoever reads the run's result by the label gets one of them.
     const twice = graphOf(
       [textInput('a', 'first'), textInput('b', 'second'), output('out1'), output('out2')],
       [edge('e1', 'a.output', 'out1.value'), edge('e2', 'b.output', 'out2.value')],
     );
     const saved = await answer(toolsWith(), 'save_graph', { path: 'twice.json', graph: twice });
-    expect(saved.isError).toBeUndefined();
-    expect(saved.json.saved).toBe('twice.json');
-    expect(saved.json.notes[0].problem).toMatch(/share the label "Result".*only "out2" under "Result"/);
-    const checked = (await answer(toolsWith(), 'validate_graph', { path: 'twice.json' })).json;
-    expect(checked.valid).toBe(true);
-    expect(checked.notes).toHaveLength(1);
+    expect(saved.isError).toBe(true);
+    expect(saved.json.problems[0].problem).toMatch(/share the label "Result", so the run's result keeps only the first under it/);
+    expect(existsSync(join(root, 'twice.json'))).toBe(false);
   });
 
   it('refuses a graph with problems, returns them, and writes nothing', async () => {
@@ -378,9 +381,8 @@ describe('save_graph', () => {
   });
 
   it('saves into a project the way the editor does: the code to its file, the wiring to flow.json', async () => {
-    await mkdir(join(root, 'proj', 'nodes'), { recursive: true });
     const saved = await toolsWith().call('save_graph', {
-      path: 'proj/graph.json', graph: graphOf([textInput('greeting'), code('work'), output('result')],
+      path: 'proj/flow.json', graph: graphOf([textInput('greeting'), code('work'), output('result')],
         [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')]),
     });
     expect(saved.isError).toBeUndefined();
@@ -475,10 +477,10 @@ describe('confinement', () => {
   it('does not follow a project folder linked out of the root', async () => {
     await writeFile(join(outside, 'code.js'), 'function run() { return { out: "from outside" }; }');
     await mkdir(join(root, 'proj', 'nodes'), { recursive: true });
-    await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(graphOf([code('work', ''), output('result')], [edge('e1', 'work.out', 'result.value')])));
+    await writeFile(join(root, 'proj', 'flow.json'), JSON.stringify({ nodes: { work: 'code', result: 'output' }, wires: ['work.out -> result.value'] }));
     await symlink(outside, join(root, 'proj', 'nodes', 'work'), process.platform === 'win32' ? 'junction' : 'dir');
 
-    const ran = await toolsWith().call('run_graph', { path: 'proj/graph.json' });
+    const ran = await toolsWith().call('run_graph', { path: 'proj/flow.json' });
     expect(ran.isError).toBe(true);
     expect(ran.text).toMatch(/outside the folder/);
     expect(ranBody).toBe('');
@@ -542,9 +544,10 @@ describe('one node at a time', () => {
   });
 
   it('validate_graph on a project also finds what is wrong with its folder', async () => {
+    const tools = toolsWith();
+    await tools.call('save_graph', { path: 'proj/flow.json', graph: chain() });
     await mkdir(join(root, 'proj', 'nodes', 'gone'), { recursive: true });
-    await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(chain()));
-    const checked = await answer(toolsWith(), 'validate_graph', { path: 'proj/graph.json' });
+    const checked = await answer(tools, 'validate_graph', { path: 'proj/flow.json' });
     expect(checked.json.problems.map((p: Problem) => p.where)).toContain('nodes/gone');
   });
 });
@@ -596,16 +599,17 @@ describe('run_graph', () => {
   });
 
   it('reads the code a project keeps in its files, the way the editor saves one', async () => {
-    await mkdir(join(root, 'proj', 'nodes', 'work'), { recursive: true });
-    await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(graphOf(
-      [textInput('greeting'), code('work', ''), output('result')],
-      [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')],
-    )));
+    const tools = toolsWith();
+    await tools.call('save_graph', {
+      path: 'proj/flow.json', graph: graphOf(
+        [textInput('greeting'), code('work', 'function run() { return { out: "saved" }; }'), output('result')],
+        [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')],
+      ),
+    });
     await writeFile(join(root, 'proj', 'nodes', 'work', 'code.js'), 'function run(inputs) { return { out: "from the file" }; }\n');
 
-    const tools = toolsWith();
-    expect((await answer(tools, 'validate_graph', { path: 'proj/graph.json' })).json.valid).toBe(true);
-    const ran = await answer(tools, 'run_graph', { path: 'proj/graph.json' });
+    expect((await answer(tools, 'validate_graph', { path: 'proj/flow.json' })).json.valid).toBe(true);
+    const ran = await answer(tools, 'run_graph', { path: 'proj/flow.json' });
     expect(ran.json.status).toBe('success');
     expect(ranBody).toContain('from the file');
   });

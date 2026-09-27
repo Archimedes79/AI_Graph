@@ -13,6 +13,7 @@
 // what exists.
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { parseGraph, type Graph } from '../graph.ts';
@@ -23,7 +24,7 @@ import { triggeredNodes } from '../execution/triggers.ts';
 import { aiSetting, candidatePaths } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
-  Download, Refusal, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
+  Download, Refusal, foreignRequest, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
 } from './http.ts';
 import { browse, extensionFilter } from './browse.ts';
 import { NotFound } from '../errors.ts';
@@ -80,6 +81,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
   const host = options.host ?? '127.0.0.1';
   const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
   const exchange: Exchange = { loopback: (options.allowBrowse ?? true) && loopback };
+  /** Who this server is, for telling its own page from another's: its port is known once it listens. */
+  const self = { loopback, port: 0 };
 
   // The graph this server ships is held, not re-read: what a run remembers is
   // settled into it, so the next scheduled round -- and the next page to open --
@@ -125,13 +128,15 @@ export async function serve(options: ServeOptions): Promise<Served> {
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const url = new URL(request.url ?? '/', `http://${host}`);
     const path = url.pathname;
+    const foreign = foreignRequest(request, self, path.startsWith('/api/'));
+    if (foreign) return sendJson(response, 403, { detail: foreign });
 
     if (path.startsWith('/api/')) {
+      const found = matchRoute(request.method ?? 'GET', path);
       // Watching and stopping still answer while the runs wind down; nothing new starts.
-      if (lifecycle.stopping && request.method !== 'GET') {
+      if (lifecycle.stopping && request.method !== 'GET' && found?.name !== 'stopRun') {
         return sendJson(response, 503, { detail: 'This server is stopping.' });
       }
-      const found = matchRoute(request.method ?? 'GET', path);
       const handler = found ? handlers[found.name] as ((request: unknown, exchange: Exchange) => unknown) | undefined : undefined;
       if (!found || !handler) return sendJson(response, 404, { detail: 'Not part of this server.' });
       const route = API[found.name];
@@ -180,8 +185,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
       listening();
     });
   });
-  const port = (server.address() as { port: number }).port;
-  return { server, url: `http://${host}:${port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
+  self.port = (server.address() as AddressInfo).port;
+  return { server, url: `http://${host}:${self.port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
 }
 
 /** Whether a failure to start is "something else is already on that port". */

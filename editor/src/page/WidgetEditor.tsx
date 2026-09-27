@@ -186,9 +186,12 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
             discard: () => generate.discard(widget.id),
           }}
         >
-        {/* A panel is its own chunk, loaded when a widget is first opened. */}
+        {/* A panel is its own chunk, loaded when a widget is first opened.
+            Keyed by the block: what one block's panel holds -- a try, a
+            listing -- is not shown in the next block selected. */}
         <Suspense fallback={null}>
         <Panel
+          key={widget.id}
           builder={element}
           widget={widget}
           fields={widgetFields(widget, onChange)}

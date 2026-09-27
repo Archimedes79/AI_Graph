@@ -21,11 +21,9 @@
 // prompts -- is a file of its own so it is edited, reviewed and grepped as what
 // it is.
 //
-// **Two older shapes still open.** A folder with a `graph.json` (the structure
-// in one document) reads as it always did, and is saved in this shape. A single
-// `.json` graph with everything inline -- what a download, an import and a
-// deploy bundle carry -- opens as it is. Wherever a text has a file, the file
-// wins over the inline value.
+// **One other shape opens.** A single `.json` graph with everything inline --
+// what a download, an import and a deploy bundle carry -- opens as it is.
+// Wherever a text has a file, the file wins over the inline value.
 //
 // **Everything reads through here.** The editor, a command line run, a served
 // tool and the MCP server open a project the same way, which is the point: a
@@ -37,7 +35,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
-import { registry, NODES, WIDGETS } from '../elements/registry.ts';
+import { registry } from '../elements/registry.ts';
 import { shippedText } from '../elements/ElementRunner.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
@@ -49,10 +47,6 @@ export { FLOW_FILE };
 export const LAYOUT_FILE = 'layout.json';
 export const NODES_DIR = 'nodes';
 export const NODE_FILE = 'node.json';
-/** The structure of an older project folder, and the name a single-file graph is often given. */
-export const GRAPH_FILE = 'graph.json';
-/** Files older saves wrote and this one takes away: the wiring as code, and the output shape on its own. */
-const RETIRED_FILES = ['flow.js', 'output.schema.json'];
 
 export class FileChanged extends Error {
   readonly fileName: string;
@@ -73,10 +67,10 @@ export type Guard = (path: string) => Promise<void>;
 // Where things are
 // ---------------------------------------------------------------------------
 
-/** A folder with a `flow.json` in it, or the `graph.json` of an older one. */
+/** A folder with a `flow.json` in it. */
 export function isProjectFolder(path: string): boolean {
   try {
-    return statSync(path).isDirectory() && (existsSync(join(path, FLOW_FILE)) || existsSync(join(path, GRAPH_FILE)));
+    return statSync(path).isDirectory() && existsSync(join(path, FLOW_FILE));
   } catch {
     return false;
   }
@@ -85,16 +79,14 @@ export function isProjectFolder(path: string): boolean {
 /**
  * The project folder *path* means, or null for a plain graph file.
  *
- * A folder is one; so is its `flow.json` (or an older folder's `graph.json`),
- * named directly -- which is how a tool that only deals in `.json` paths (the
- * MCP server, a shell's tab completion) reaches one.
+ * A folder is one; so is its `flow.json`, named directly -- which is how a tool
+ * that only deals in `.json` paths (the MCP server, a shell's tab completion)
+ * reaches one.
  */
 export function projectFolderOf(path: string): string | null {
   const full = resolve(path);
   if (isProjectFolder(full)) return full;
   if (basename(full) === FLOW_FILE && existsSync(full)) return dirname(full);
-  if (basename(full) === GRAPH_FILE && existsSync(join(dirname(full), NODES_DIR))) return dirname(full);
-  if (basename(full) === GRAPH_FILE && existsSync(join(dirname(full), LAYOUT_FILE))) return dirname(full);
   return null;
 }
 
@@ -114,21 +106,25 @@ export interface ProjectText {
   json: boolean;
   /** The object the field lives on: a node's config, or the block itself. */
   holder: Record<string, unknown>;
-  /** See `TextFile`: what the file says while nobody has written their own, and every text that was. */
+  /** See `TextFile`: what the file says while nobody has written their own. */
   standard?: string;
-  earlier?: readonly string[];
 }
 
 /** Every piece of writing *graph* can keep in files, whether or not it holds any. */
 export function projectTexts(graph: Graph): ProjectText[] {
   const found: ProjectText[] = [];
+  // Each node and block claims its folder once. Compared without case: on the
+  // disk most people use, "Count" and "count" are one folder, and whichever was
+  // written last would be the only one there.
   const folders = new Map<string, string>();
   const claim = (folder: string, owner: string): string => {
-    const other = folders.get(folder);
-    if (other !== undefined && other !== owner) {
-      throw new NotAGraph(`"${other}" and "${owner}" would share the folder ${folder}. Give one of them another id.`);
+    const other = folders.get(folder.toLowerCase());
+    if (other !== undefined) {
+      throw new NotAGraph(other === owner
+        ? `Two of them are called "${owner}", and would share the folder ${folder}. Give one of them another id.`
+        : `"${other}" and "${owner}" would share the folder ${folder}. Give one of them another id.`);
     }
-    folders.set(folder, owner);
+    folders.set(folder.toLowerCase(), owner);
     return folder;
   };
 
@@ -137,7 +133,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
     for (const text of registry.node(node.node_type)?.texts(node) ?? []) {
       found.push({
         node_id: node.id, widget_id: '', field: text.field, path: `${folder}/${text.file}`,
-        json: text.json === true, holder: node.config, standard: text.standard, earlier: text.earlier,
+        json: text.json === true, holder: node.config, standard: text.standard,
       });
     }
     for (const raw of registry.node(node.node_type)?.blocks(node) ?? []) {
@@ -146,7 +142,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
       for (const text of registry.widget(widget.kind)?.texts(widget) ?? []) {
         found.push({
           node_id: node.id, widget_id: widget.id, field: text.field, path: `${blockFolder}/${text.file}`,
-          json: text.json === true, holder: raw, standard: text.standard, earlier: text.earlier,
+          json: text.json === true, holder: raw, standard: text.standard,
         });
       }
     }
@@ -178,15 +174,6 @@ export function nestedGraphs(graph: Graph): NestedGraph[] {
   return found;
 }
 
-/** Every file name any element keeps writing in: what a save may tidy away, and nothing else. */
-function textFileNames(): Set<string> {
-  const names = new Set<string>();
-  const probeNode = { id: '', node_type: '', label: '', description: '', position: { x: 0, y: 0 }, inputs: [], outputs: [], config: {} } as unknown as GraphNode;
-  for (const element of NODES) for (const text of element.texts(probeNode)) names.add(text.file);
-  for (const element of Object.values(WIDGETS)) for (const text of element.texts(parseWidget({}))) names.add(text.file);
-  return names;
-}
-
 // ---------------------------------------------------------------------------
 // Text in files
 // ---------------------------------------------------------------------------
@@ -210,8 +197,8 @@ function fromFile(content: string, json: boolean, path: string): unknown {
   }
 }
 
-/** Nobody's own: nothing, or a text the element itself once shipped. */
-function isStandard(value: unknown, text: { standard?: string; earlier?: readonly string[] }): boolean {
+/** Nobody's own: nothing, or the text the element itself ships. */
+function isStandard(value: unknown, text: { standard?: string }): boolean {
   return isBlank(value) || shippedText(value, text);
 }
 
@@ -309,31 +296,25 @@ async function readIfThere(path: string, what: string, guard?: Guard): Promise<u
 /**
  * The structure of the project in *folder*: every node with its settings and
  * ports, and the wires -- without the writing, which `readProject` adds.
- * Returns the files it read, for whoever has to watch them.
- *
- * What an element keeps in files is asked of this graph, as `readProject`
- * asks it: an element may name a file only while the node does not hold its
- * text yet, and asked again once the text is read in, the answer differs.
+ * Returns the files it read, each with its signature from *before* it was
+ * read: a file changed while it was being read then still counts as changed.
  */
-export async function readStructure(folder: string, guard?: Guard): Promise<{ graph: Graph; files: string[] }> {
+export async function readStructure(folder: string, guard?: Guard): Promise<{ graph: Graph; files: Map<string, string> }> {
+  const files = new Map<string, string>();
   const flowPath = join(folder, FLOW_FILE);
-  if (!existsSync(flowPath)) {
-    const graphPath = join(folder, GRAPH_FILE);
-    await guard?.(graphPath);
-    return { graph: asGraph(await readJson(graphPath, 'graph'), graphPath), files: [graphPath] };
-  }
+  files.set(flowPath, await signature(flowPath));
   await guard?.(flowPath);
   const flow = await readJson(flowPath, 'flow');
-  const files = [flowPath];
   const read = new Map<string, { about?: unknown; ports?: unknown }>();
+  const readSigned = async (path: string, what: string): Promise<unknown> => {
+    files.set(path, await signature(path));
+    return readIfThere(path, what, guard);
+  };
   for (const id of Object.keys(((flow as { nodes?: unknown })?.nodes ?? {}) as object)) {
     const dir = join(folder, nodeFolder(id));
-    const nodePath = join(dir, NODE_FILE);
-    const interfacePath = join(dir, INTERFACE_FILE);
-    files.push(nodePath, interfacePath);
     read.set(id, {
-      about: await readIfThere(nodePath, 'node', guard),
-      ports: await readIfThere(interfacePath, 'interface', guard),
+      about: await readSigned(join(dir, NODE_FILE), 'node'),
+      ports: await readSigned(join(dir, INTERFACE_FILE), 'interface'),
     });
   }
   return { graph: graphFrom(flow, (id) => read.get(id) ?? {}, flowPath), files };
@@ -343,31 +324,23 @@ export async function readStructure(folder: string, guard?: Guard): Promise<{ gr
 export async function readProject(folder: string, guard?: Guard): Promise<Graph> {
   const { graph, files } = await readStructure(folder, guard);
   const layoutPath = join(folder, LAYOUT_FILE);
-  if (existsSync(layoutPath)) {
-    await guard?.(layoutPath);
-    applyLayout(graph, await readJson(layoutPath, 'layout'));
-  }
+  files.set(layoutPath, await signature(layoutPath));
+  // Without one, every node is put in a row rather than on top of each other.
+  applyLayout(graph, await readIfThere(layoutPath, 'layout', guard) ?? {});
   // Remembered like any other file: a save must not overwrite a node's
   // settings or ports that someone changed since.
-  for (const path of [...files, layoutPath]) await remember(path);
+  for (const [path, signed] of files) seen.set(path, signed);
   for (const text of projectTexts(graph)) {
     const path = join(folder, text.path);
-    if (existsSync(path)) {
+    const signed = await signature(path);
+    if (signed !== ABSENT) {
       await guard?.(path);
       const read = fromFile(await readFile(path, 'utf8'), text.json, text.path);
       // The element's own text is nobody's setting: the node stays as it was
       // written, and saving writes today's standard back out.
       if (text.standard === undefined || !isStandard(read, text)) text.holder[text.field] = read;
     }
-    await remember(path);
-  }
-  // An older save kept a node's output shape in a file of its own.
-  for (const node of graph.nodes) {
-    const element = registry.node(node.node_type);
-    const path = join(folder, nodeFolder(node.id), 'output.schema.json');
-    if (!element?.keepsOutputInterface || element.outputInterface(node) || !existsSync(path)) continue;
-    await guard?.(path);
-    element.setOutputInterface(node, fromFile(await readFile(path, 'utf8'), true, path));
+    seen.set(path, signed);
   }
   // A node that holds a graph holds a project folder: the same rule one level
   // down, so the file wins there too.
@@ -427,18 +400,21 @@ interface Plan {
   folder: string;
   /** Path to content, or null for a file that must go. */
   files: Map<string, string | null>;
-  /** The folders under `nodes/` that hold a project of their own: `tidy` leaves them to it. */
-  nested: Set<string>;
-  document: { flow: unknown; layout: unknown };
+  /**
+   * The folders under `nodes/` that `tidy` leaves alone: those holding a
+   * project of their own, whose own save tidies them, and those of a node of a
+   * type this engine does not know, which claims no files it can name.
+   */
+  untouched: Set<string>;
 }
 
 /** What writing *graph* into *folder* comes to, this level and every level below it. */
 function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   const deeper: Plan[] = [];
-  const nested = new Set<string>();
+  const untouched = new Set<string>();
   for (const held of nestedGraphs(copy)) {
     const inside = join(folder, held.folder);
-    nested.add(inside);
+    untouched.add(inside);
     deeper.push(...planProject(inside, held.graph, root));
     // Written down there, so it comes out of this node's settings up here --
     // the same rule that keeps a code node's body out of them.
@@ -450,6 +426,8 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   const flow = flowOf(copy);
   for (const node of copy.nodes) {
     const element = registry.node(node.node_type);
+    // A typo in flow.json must not cost the node its code on the next save.
+    if (!element) untouched.add(join(folder, nodeFolder(node.id)));
     files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(node, element?.outputInterface(node)), true));
     element?.setOutputInterface(node, null);
   }
@@ -479,9 +457,14 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
     };
     files.set(join(folder, nodeFolder(node.id), NODE_FILE), toFile(about, true));
   }
+  // Files like the rest, so one changed outside -- another writer added a node
+  // and its folder -- refuses the save instead of being written over, and the
+  // new node's files tidied away.
+  files.set(join(folder, FLOW_FILE), toFile(flow, true));
+  files.set(join(folder, LAYOUT_FILE), toFile(layout, true));
 
   // Deepest first, so a level is only written once everything it holds is.
-  return [...deeper, { folder, files, nested, document: { flow, layout } }];
+  return [...deeper, { folder, files, untouched }];
 }
 
 /**
@@ -521,39 +504,23 @@ async function commit(plan: Plan, guard?: Guard): Promise<void> {
     }
     await remember(path);
   }
-  // The documents count as files a save may tidy away, because under
-  // `nodes/` they can only be a subgraph's -- and the folder of a subgraph
-  // node that is still there is protected by `plan.nested`.
-  const names = new Set([...textFileNames(), FLOW_FILE, LAYOUT_FILE, NODE_FILE, INTERFACE_FILE, GRAPH_FILE, ...RETIRED_FILES]);
-  await tidy(join(plan.folder, NODES_DIR), new Set(plan.files.keys()), names, plan.nested);
-
-  await mkdir(plan.folder, { recursive: true });
-  for (const [name, content] of [[FLOW_FILE, plan.document.flow], [LAYOUT_FILE, plan.document.layout]] as const) {
-    const path = join(plan.folder, name);
-    await guard?.(path);
-    await writeFile(path, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
-    await remember(path);
-  }
-  // An older save's structure and its rendered wiring: this shape replaces both.
-  for (const name of [GRAPH_FILE, 'flow.js']) {
-    const path = join(plan.folder, name);
-    if (!existsSync(path)) continue;
-    await guard?.(path);
-    await rm(path);
-  }
+  await tidy(join(plan.folder, NODES_DIR), new Set(plan.files.keys()), plan.untouched);
 }
 
 /**
- * Remove element files nothing claims any more, and the folders that leaves
- * empty.
+ * Remove the files nothing claims any more, and the folders that leaves empty.
  *
- * *nested* is the folders of the nodes that hold a graph **now**: their files
- * are claimed by that project's own save, which has already run. Anything else
- * is this project's to clean, a folder left behind by a subgraph node that was
- * deleted included -- "it has a flow.json in it" would have kept that one
- * forever.
+ * Only files this process read or wrote as a node's -- a deleted node's, a
+ * deleted block's, a selector of a node that no longer lists a folder. A file
+ * it never saw is a person's, whatever it is called and however deep it sits:
+ * `nodes/count/fixtures/code.js` stays.
+ *
+ * *untouched* is the folders of the nodes that hold a graph **now**, whose
+ * files that project's own save claims, and of nodes of an unknown type.
+ * Anything else is this project's to clean, a folder left behind by a subgraph
+ * node that was deleted included.
  */
-async function tidy(directory: string, claimed: Set<string>, names: Set<string>, nested: Set<string>): Promise<boolean> {
+async function tidy(directory: string, claimed: Set<string>, untouched: Set<string>): Promise<boolean> {
   let entries;
   try {
     entries = await readdir(directory, { withFileTypes: true });
@@ -564,11 +531,12 @@ async function tidy(directory: string, claimed: Set<string>, names: Set<string>,
   for (const entry of entries) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
-      if (nested.has(path)) empty = false;
-      else if (await tidy(path, claimed, names, nested)) await rmdir(path);
+      if (untouched.has(path)) empty = false;
+      else if (await tidy(path, claimed, untouched)) await rmdir(path);
       else empty = false;
-    } else if (names.has(entry.name) && !claimed.has(path)) {
+    } else if (!claimed.has(path) && seen.has(path)) {
       await rm(path);
+      seen.delete(path);
     } else {
       empty = false;
     }
@@ -654,10 +622,12 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
       changes.push({
         node_id: nested.node.id, widget_id: '', field: NESTED_GRAPH_FIELD, value: await readProject(inside),
       });
-    } catch {
-      // Half-written by whoever is editing it, most likely. What was collected
-      // above is still good and is handed over; this folder is not marked as
-      // seen, so the next look asks again.
+    } catch (error) {
+      // Half-written by whoever is editing it: JSON cut off, a file between
+      // being deleted and written again. What was collected above is still
+      // good and is handed over; this folder is not marked as seen, so the
+      // next look asks again. Anything else is a real failure, and is said.
+      if (!(error instanceof NotAGraph || error instanceof NotFound)) throw error;
     }
   }
   return changes;
@@ -682,7 +652,7 @@ async function changedUnder(folder: string): Promise<boolean> {
   };
 
   const { graph, files } = await readStructure(folder);
-  for (const path of files) await look(path);
+  for (const path of files.keys()) await look(path);
   await look(join(folder, LAYOUT_FILE));
   for (const text of projectTexts(graph)) await look(join(folder, text.path));
   for (const nested of nestedGraphs(graph)) {

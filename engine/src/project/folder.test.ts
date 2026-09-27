@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { parseGraph, type Graph } from '../graph.ts';
+import { NotAGraph } from '../errors.ts';
+import { problemsIn } from './check.ts';
 import {
   FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, projectFolderOf, readProject, saveGraph, writeProject,
 } from './folder.ts';
@@ -36,7 +38,7 @@ function sample(): Graph {
         inputs: [port('total', 'input')], outputs: [port('output', 'output')],
         config: {
           system_prompt: 'You report counts.', prompt_template: 'There are {{total}} files.',
-          output_format: 'text', output_format_prompt: 'One sentence.', temperature: 0.2,
+          output_format_prompt: 'One sentence.', temperature: 0.2,
         },
       },
       {
@@ -103,14 +105,12 @@ describe('a project folder', () => {
       nodes: { folder: 'input', count: 'code', say: 'ai', page: 'gui' },
       wires: ['folder.files -> count.files', 'count.total -> say.total'],
     });
-    expect(existsSync(join(dir, 'graph.json'))).toBe(false);
-    expect(existsSync(join(dir, 'flow.js'))).toBe(false);
   });
 
   it('keeps a node\'s settings in its node.json and its ports in its interface.json', async () => {
     await writeProject(dir, sample());
     expect(JSON.parse(await text('nodes/count/node.json'))).toEqual({ label: 'Count', config: { batch_mode: 'whole_list' } });
-    expect(JSON.parse(await text('nodes/say/node.json')).config).toEqual({ output_format: 'text', temperature: 0.2 });
+    expect(JSON.parse(await text('nodes/say/node.json')).config).toEqual({ temperature: 0.2 });
     expect(JSON.parse(await text('nodes/page/node.json')).config.gui_widgets[0]).toEqual({ id: 'chart', kind: 'plot_window', label: 'Chart' });
     const ports = JSON.parse(await text('nodes/count/interface.json'));
     expect(ports.inputs).toEqual([{ port: 'files', type: 'any' }]);
@@ -118,21 +118,6 @@ describe('a project folder', () => {
     // Nothing about who is on the other end of a wire: that is the flow's.
     expect(JSON.stringify(ports)).not.toContain('folder');
     expect(JSON.parse(await text('layout.json')).count).toEqual({ x: 300, y: 20, width: 360, height: 180 });
-  });
-
-  it('opens a folder saved before flow.json, and saves it in this shape', async () => {
-    const graph = sample();
-    await writeFile(join(dir, 'graph.json'), JSON.stringify(graph));
-    await mkdir(join(dir, 'nodes/count'), { recursive: true });
-    await writeFile(join(dir, 'nodes/count/output.schema.json'), JSON.stringify({ type: 'object', properties: { old: { type: 'string' } } }));
-    await writeFile(join(dir, 'flow.js'), '// rendered once');
-    const read = await readProject(dir);
-    expect(read.nodes[1].config.code).toContain('inputs.files.length');
-    await writeProject(dir, read);
-    expect(existsSync(join(dir, 'graph.json'))).toBe(false);
-    expect(existsSync(join(dir, 'flow.js'))).toBe(false);
-    expect(existsSync(join(dir, 'nodes/count/output.schema.json'))).toBe(false);
-    expect(JSON.parse(await text('flow.json')).nodes.count).toBe('code');
   });
 
   it('reads back exactly what was written', async () => {
@@ -190,6 +175,27 @@ describe('a project folder', () => {
     expect(await text('nodes/say/notes.txt')).toBe('mine');
   });
 
+  it('keeps a person\'s file in a node\'s folder, whatever it is called and however deep', async () => {
+    const graph = sample();
+    await writeProject(dir, graph);
+    await mkdir(join(dir, 'nodes/count/fixtures'), { recursive: true });
+    await writeFile(join(dir, 'nodes/count/fixtures/code.js'), '// mine, a fixture');
+    await writeFile(join(dir, 'nodes/count/fixtures/node.json'), '{}');
+    await writeProject(dir, await readProject(dir));
+    expect(await text('nodes/count/fixtures/code.js')).toBe('// mine, a fixture');
+    expect(existsSync(join(dir, 'nodes/count/fixtures/node.json'))).toBe(true);
+  });
+
+  it('keeps the files of a node whose type is a typo in flow.json', async () => {
+    await writeProject(dir, sample());
+    const flow = JSON.parse(await text('flow.json'));
+    flow.nodes.count = 'cdoe';
+    await writeFile(join(dir, 'flow.json'), JSON.stringify(flow));
+    forgetSeen();
+    await writeProject(dir, await readProject(dir));
+    expect(await text('nodes/count/code.js')).toContain('inputs.files.length');
+  });
+
   it('takes a file edited in another editor, with Windows line endings and a final newline', async () => {
     await writeProject(dir, sample());
     await writeFile(join(dir, 'nodes/say/system.md'), 'Line one.\r\nLine two.\r\n');
@@ -197,21 +203,99 @@ describe('a project folder', () => {
     expect(read.nodes.find((node) => node.id === 'say')!.config.system_prompt).toBe('Line one.\nLine two.');
   });
 
-  it('opens a folder whose graph.json carries everything inline -- a deploy bundle', async () => {
+  it('opens a deploy bundle by its graph.json, one file with everything inline, and keeps it one', async () => {
     const graph = sample();
     await writeFile(join(dir, 'graph.json'), JSON.stringify(graph));
-    expect(isProjectFolder(dir)).toBe(true);
-    const read = await loadGraph(dir);
+    await writeFile(join(dir, 'run.sh'), 'exec node engine/main.ts graph.json --serve "$@"\n');
+    expect(isProjectFolder(dir)).toBe(false);
+    const read = await loadGraph(join(dir, 'graph.json'));
     expect(read.nodes[1].config.code).toContain('inputs.files.length');
+    await saveGraph(join(dir, 'graph.json'), read);
+    expect(existsSync(join(dir, 'graph.json'))).toBe(true);
+    expect(existsSync(join(dir, 'flow.json'))).toBe(false);
+  });
+});
+
+describe('what a folder could write and not read back', () => {
+  const code = (id: string, body: string) => ({
+    id, node_type: 'code', label: id, position: { x: 0, y: 0 },
+    inputs: [port('in', 'input')], outputs: [port('out', 'output')], config: { code: body },
+  });
+  const wire = (from: string, fromPort: string, to: string, toPort: string) =>
+    ({ id: `${from}-${to}`, source_node_id: from, source_port_id: fromPort, target_node_id: to, target_port_id: toPort });
+
+  it('refuses two ids that differ only in case: one disk folder, one body left', async () => {
+    const graph = parseGraph({ metadata: { name: 'Case' }, nodes: [code('Count', 'UPPER'), code('count', 'lower')], edges: [] });
+    await expect(writeProject(dir, graph)).rejects.toThrow(/share a folder/);
+    expect(existsSync(join(dir, 'flow.json'))).toBe(false);
+    expect(problemsIn(graph).some((p) => /share a folder/.test(p.problem))).toBe(true);
+  });
+
+  it('refuses a node id or port a wire in flow.json could not be read back from', async () => {
+    for (const [id, portId] of [['a->b', 'out'], [' a', 'out'], ['', 'out'], ['a', 'o->ut'], ['a', '']]) {
+      const graph = parseGraph({ metadata: { name: 'Wire' }, nodes: [code(id, 'x'), code('z', 'y')], edges: [wire(id, portId, 'z', 'in')] });
+      await expect(writeProject(dir, graph), JSON.stringify([id, portId])).rejects.toThrow();
+      expect(problemsIn(graph).length, JSON.stringify([id, portId])).toBeGreaterThan(0);
+    }
+    expect(existsSync(join(dir, 'flow.json'))).toBe(false);
+  });
+
+  it('refuses a node id that is a number, which would come back in another order', async () => {
+    const graph = parseGraph({ metadata: { name: 'Order' }, nodes: [code('b', 'x'), code('2', 'y'), code('1', 'z')], edges: [] });
+    await expect(writeProject(dir, graph)).rejects.toThrow(/is a number/);
+  });
+
+  it('refuses two blocks of one page with one id: one folder, one body left', async () => {
+    const graph = parseGraph({
+      metadata: { name: 'Blocks' },
+      nodes: [{
+        id: 'page', node_type: 'gui', label: 'Page', position: { x: 0, y: 0 }, inputs: [], outputs: [],
+        config: { gui_widgets: [
+          { id: 'chart', kind: 'table', code: 'function run(i) { return { value: "FIRST" }; }' },
+          { id: 'chart', kind: 'table', code: 'function run(i) { return { value: "SECOND" }; }' },
+        ] },
+      }],
+      edges: [],
+    });
+    await expect(writeProject(dir, graph)).rejects.toThrow(/called "page\/chart"/);
+  });
+
+  it('says a node.json that is not an object is not a graph, rather than failing somewhere else', async () => {
+    await writeProject(dir, sample());
+    for (const about of ['"x"', '{"label": "Count", "config": "x"}', '{"config": [1, 2]}']) {
+      await writeFile(join(dir, 'nodes/count/node.json'), about);
+      forgetSeen();
+      await expect(readProject(dir), about).rejects.toThrow(NotAGraph);
+    }
+  });
+
+  it('puts nodes in a row, not on top of each other, when layout.json is missing', async () => {
+    await writeProject(dir, sample());
+    await rm(join(dir, 'layout.json'));
+    forgetSeen();
+    const at = (await readProject(dir)).nodes.map((node) => `${node.position.x},${node.position.y}`);
+    expect(new Set(at).size).toBe(at.length);
+  });
+
+  it('counts a file changed while the project was being read as changed', async () => {
+    // The node's settings are read, then changed by someone else before the
+    // reading ends: a save must not take the change for what it read.
+    await writeProject(dir, sample());
+    forgetSeen();
+    const graph = await readProject(dir, async (path) => {
+      if (path.endsWith('layout.json')) await touch(join(dir, 'nodes/count/node.json'), '{"label": "Changed", "config": {}}\n');
+    });
+    await expect(writeProject(dir, graph)).rejects.toThrow(FileChanged);
+    expect(JSON.parse(await text('nodes/count/node.json')).label).toBe('Changed');
   });
 });
 
 describe('finding a project', () => {
-  it('is the folder, or its graph.json named directly', async () => {
+  it('is the folder, or its flow.json named directly', async () => {
     await writeProject(dir, sample());
     expect(projectFolderOf(dir)).toBe(dir);
-    expect(projectFolderOf(join(dir, 'graph.json'))).toBe(dir);
-    expect((await loadGraph(join(dir, 'graph.json'))).nodes).toHaveLength(4);
+    expect(projectFolderOf(join(dir, 'flow.json'))).toBe(dir);
+    expect((await loadGraph(join(dir, 'flow.json'))).nodes).toHaveLength(4);
   });
 
   it('is not a plain graph file, which saves as one file with everything inline', async () => {
@@ -285,6 +369,30 @@ describe('two editors on one folder', () => {
     await touch(join(dir, 'nodes/count/interface.json'), '{"inputs": [], "outputs": [{"port": "total", "type": "number"}]}\n');
     await expect(writeProject(dir, graph)).rejects.toThrow(FileChanged);
     expect(JSON.parse(await text('nodes/count/interface.json')).outputs[0].type).toBe('number');
+  });
+
+  it('does not wipe a node another writer added, nor its folder', async () => {
+    // The MCP server, or a second editor, adds node "extra" to the open project.
+    await writeProject(dir, sample());
+    const open = await readProject(dir);
+    const flow = JSON.parse(await text('flow.json'));
+    flow.nodes.extra = 'code';
+    await touch(join(dir, 'flow.json'), JSON.stringify(flow, null, 2));
+    await mkdir(join(dir, 'nodes/extra'), { recursive: true });
+    await writeFile(join(dir, 'nodes/extra/code.js'), 'function run() { return { out: "somebody else" }; }\n');
+
+    await expect(writeProject(dir, open)).rejects.toThrow(/flow\.json/);
+    expect(JSON.parse(await text('flow.json')).nodes.extra).toBe('code');
+    expect(existsSync(join(dir, 'nodes/extra/code.js'))).toBe(true);
+  });
+
+  it('does not write over a layout moved outside since it was read', async () => {
+    await writeProject(dir, sample());
+    const open = await readProject(dir);
+    const layout = JSON.parse(await text('layout.json'));
+    layout.count.x = 999;
+    await touch(join(dir, 'layout.json'), JSON.stringify(layout, null, 2));
+    await expect(writeProject(dir, open)).rejects.toThrow(/layout\.json/);
   });
 });
 
@@ -393,7 +501,7 @@ describe('saving a project that holds a project', () => {
     expect(existsSync(join(dir, 'nodes/part/nodes/shorten/code.js'))).toBe(true);
 
     // The node is gone. Its folder was a project of its own, which is no
-    // reason to keep it: nothing in graph.json claims it any more.
+    // reason to keep it: nothing in flow.json claims it any more.
     graph.nodes = [];
     await writeProject(dir, graph);
     expect(existsSync(join(dir, 'nodes/part'))).toBe(false);
@@ -408,7 +516,7 @@ describe('saving a project that holds a project', () => {
       config: { code: 'function run() { return { output: 1 }; }' },
     }] as Graph['nodes'];
     await writeProject(dir, graph);
-    expect(existsSync(join(dir, 'nodes/part/graph.json'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes/part/flow.json'))).toBe(false);
     expect(await text('nodes/part/code.js')).toContain('output: 1');
   });
 
@@ -418,11 +526,11 @@ describe('saving a project that holds a project', () => {
       nodes: [holder('a/b', body('one')), holder('a:b', body('two'))],
       edges: [],
     });
-    await expect(writeProject(dir, graph)).rejects.toThrow(/share the folder/);
-    // Not one folder written, not one graph.json: the save was refused before
+    await expect(writeProject(dir, graph)).rejects.toThrow(/share a folder/);
+    // Not one folder written, not one flow.json: the save was refused before
     // anything happened, which is what "look first, write after" means.
     expect(existsSync(join(dir, 'nodes/a_b'))).toBe(false);
-    expect(existsSync(join(dir, 'graph.json'))).toBe(false);
+    expect(existsSync(join(dir, 'flow.json'))).toBe(false);
   });
 
   it('writes nothing at all when a file up here changed under it', async () => {
@@ -455,6 +563,24 @@ describe('saving a project that holds a project', () => {
 
     graph.nodes[0].config.subgraph = body('mine');
     await expect(writeProject(dir, graph)).rejects.toThrow(/nodes\/part\/nodes\/shorten\/code\.js/);
+  });
+});
+
+describe('looking for what changed, when a graph inside cannot be read at all', () => {
+  it('says so, rather than swallowing it as if it were half-written', async () => {
+    const graph = parseGraph({
+      metadata: { name: 'Outer' },
+      nodes: [{
+        id: 'part', node_type: 'subgraph', label: 'Part', position: { x: 0, y: 0 }, inputs: [], outputs: [],
+        config: { subgraph: { metadata: { name: 'Inner' }, nodes: [{ id: 'inner', node_type: 'code', config: { code: 'x' } }], edges: [] } },
+      }],
+      edges: [],
+    });
+    await writeProject(dir, graph);
+    // Where its code should be there is a folder: no editor ever half-writes that.
+    await rm(join(dir, 'nodes/part/nodes/inner/code.js'));
+    await mkdir(join(dir, 'nodes/part/nodes/inner/code.js'));
+    await expect(changesOnDisk(dir)).rejects.toThrow(/EISDIR|illegal operation/);
   });
 });
 

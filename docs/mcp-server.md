@@ -60,8 +60,8 @@ npx @modelcontextprotocol/inspector --cli --config servers.json --server ai-grap
 |---|---|---|
 | `authoring_guide` | — | The authoring prompt the editor's own generation uses, plus the node types and block kinds this engine has. Read before writing a graph by hand. |
 | `generate_graph` | `description`, `save_as?` | Has the model configured on this machine design a graph. Returns the graph, the explanation and any problems; with `save_as`, writes it if there are none. Says so plainly when no model is configured. |
-| `validate_graph` | `graph` *or* `path` | Lists what is wrong, each with where and how to fix it. Empty list = valid. Advice that is no problem -- two output nodes sharing a label -- comes back as `notes`. |
-| `save_graph` | `path`, `graph` | Validates, then writes pretty JSON. Refuses a graph with problems and returns them; writes one with only `notes`, and returns those. |
+| `validate_graph` | `graph` *or* `path` | Lists what is wrong, each with where and how to fix it. Empty list = valid. |
+| `save_graph` | `path`, `graph` | Validates, then writes pretty JSON. Refuses a graph with problems and returns them. |
 | `run_graph` | `path`, `inputs?`, `trigger?` | Runs once. Reports overall status, each node's status and error, and each node's outputs with every value cut to about 600 characters. |
 | `run_node` | `path`, `node_id`, `inputs?` | Runs one node by itself: on the inputs given, or on what the nodes feeding it produce. For writing one node at a time. |
 | `test_graph` | `path`, `node_id?`, `offline?` | Runs the examples nodes keep in their `examples.md` -- also inside the graphs nodes hold, named with the way down (`part ▸ work`) -- and reports each as pass, fail (with what differed), error or skipped. |

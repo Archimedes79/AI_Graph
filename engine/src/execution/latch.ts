@@ -18,36 +18,54 @@
 // is held, a gated node has nothing to hand on, and what needs it waits for
 // the event that opens the gate.
 //
-// Kept per node *as written*: edit a node's code and what the old code made is
-// not what the new one holds. A node that keeps something of its own -- a data
-// node, a page -- is the exception: its config changes with every round that
-// settles into it, so "as written" would forget it each time. It is known by
-// where it is.
+// **Whose value it is.** A graph carries no identity of its own -- a new one
+// is "Untitled Graph", like every other -- so a held value is kept under what
+// made it: the graph's name and shape (its nodes and wires), the node as
+// written, and every node upstream of it as written. Two graphs that differ
+// anywhere a value could come from never hand each other one; edit a node's
+// code, or the code of what feeds it, and what the old code made is not what
+// the new one holds. A node that keeps something of its own -- a data node, a
+// page -- counts without its settings: they change with every round that
+// settles into it, so "as written" would forget it each time.
 
 import { createHash } from 'node:crypto';
 import type { Graph, GraphNode } from '../graph.ts';
+import { upstreamOf } from './triggers.ts';
 
 /** How many nodes' outputs are held. A long editor session opens many graphs. */
 const LIMIT = 512;
 
+/** A graph's name and shape -- which nodes of which types, wired how -- as one key. What rounds of one graph queue by, too. */
+export function graphKey(graph: Graph): string {
+  const shape = [
+    graph.metadata?.name ?? '',
+    graph.nodes.map((node) => `${node.id}:${node.node_type}`).sort(),
+    graph.edges.map((edge) => `${edge.source_node_id}.${edge.source_port_id}>${edge.target_node_id}.${edge.target_port_id}`).sort(),
+  ];
+  return createHash('sha256').update(JSON.stringify(shape)).digest('hex');
+}
+
 export class Latch {
   private readonly kept = new Map<string, Record<string, unknown>>();
 
-  private key(graph: Graph, node: GraphNode, keepsItsOwn: boolean): string {
-    const written = [graph.metadata?.name ?? '', node.id, node.node_type, keepsItsOwn ? null : node.config, node.inputs, node.outputs];
-    return createHash('sha256').update(JSON.stringify(written)).digest('hex');
+  /** Whose value this is: see the header. *keepsItsOwn* says which nodes count without their settings. */
+  key(graph: Graph, node: GraphNode, keepsItsOwn: (node: GraphNode) => boolean): string {
+    const byId = new Map(graph.nodes.map((candidate) => [candidate.id, candidate]));
+    const made = [...upstreamOf(graph, [node.id], new Set())].sort().map((id) => {
+      const from = byId.get(id);
+      return from ? [from.id, from.node_type, keepsItsOwn(from) ? null : from.config, from.inputs, from.outputs] : [id];
+    });
+    return createHash('sha256').update(JSON.stringify([graphKey(graph), node.id, made])).digest('hex');
   }
 
-  get(graph: Graph, node: GraphNode, keepsItsOwn = false): Record<string, unknown> | undefined {
-    const key = this.key(graph, node, keepsItsOwn);
+  get(key: string): Record<string, unknown> | undefined {
     const found = this.kept.get(key);
     // Read is used: a node that only ever stands still must not be the first to go.
     if (found) { this.kept.delete(key); this.kept.set(key, found); }
     return found;
   }
 
-  set(graph: Graph, node: GraphNode, outputs: Record<string, unknown>, keepsItsOwn = false): void {
-    const key = this.key(graph, node, keepsItsOwn);
+  set(key: string, outputs: Record<string, unknown>): void {
     this.kept.delete(key);
     this.kept.set(key, outputs);
     if (this.kept.size > LIMIT) this.kept.delete(this.kept.keys().next().value!);

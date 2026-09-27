@@ -39,12 +39,17 @@ export interface NodeExample {
 
 const BLOCK = /```([^\n`]*)\n([\s\S]*?)```/g;
 
+/** Text with no fence in it: anything but three backticks in a row. */
+const UNFENCED = '(?:[^`]|`(?!``))*';
+
 /**
- * Where an example begins: a `## ` heading. Exported with `exampleBlocks`
- * because the editor edits the file's first example in place, and it must cut
- * the file where a run splits it.
+ * Where an example begins: a `## ` heading -- outside a fenced block, where
+ * everything before it holds whole fences only. A judge asking for "a markdown
+ * heading such as ## Title" is part of its example, not the start of the next.
+ * Exported with `exampleBlocks` because the editor edits the file's first
+ * example in place, and it must cut the file where a run splits it.
  */
-export const EXAMPLE_SECTION = /^## +/m;
+export const EXAMPLE_SECTION = new RegExp(`(?<=(?<![\\s\\S])${UNFENCED}(?:\`\`\`${UNFENCED}\`\`\`${UNFENCED})*)^## +`, 'm');
 
 /** A fenced block of one example, by what its info words say it is, and where it stands in the section. */
 export interface ExampleBlock {
@@ -188,7 +193,6 @@ export async function runExamples(
         const verdict = await runtime.ai.complete({
           system: JUDGE_SYSTEM,
           prompt: `Criterion:\n${example.judge}\n\nAnswer:\n${JSON.stringify(ran.outputs, null, 2)}`,
-          temperature: 0,
           ...(node.config.ai_provider ? { provider: String(node.config.ai_provider) } : {}),
           ...(node.config.ai_model ? { model: String(node.config.ai_model) } : {}),
         });

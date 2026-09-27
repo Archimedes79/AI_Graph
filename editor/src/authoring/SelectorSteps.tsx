@@ -152,6 +152,7 @@ export default function SelectorSteps<S>({
               sent={sent}
             />
             <TryItInline
+              of={JSON.stringify(subject)}
               canRun={!noFolder}
               whyNot="Choose a folder in step 1 first."
               run={tryIt}

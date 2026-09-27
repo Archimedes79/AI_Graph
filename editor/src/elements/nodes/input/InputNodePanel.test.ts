@@ -40,14 +40,4 @@ describe('an input node\'s panel', () => {
     expect(panel(node)).toMatch(/<button(?![^>]*disabled)[^>]*>Show what it hands on<\/button>/);
     expect(panel(NODE_KINDS.input.create('text'))).not.toContain('Show what it hands on');
   });
-
-  it('attaches no example file of its own, and offers to read one an older version attached', () => {
-    const node = NODE_KINDS.input.create('file');
-    node.config.input_mode = 'file';
-    node.config.example_file = 'data/sample.csv';
-    const html = panel(node);
-    expect(html).not.toContain('📎');
-    expect(html).toContain('An example file was attached here before: data/sample.csv');
-    expect(html).toContain('Read this file');
-  });
 });

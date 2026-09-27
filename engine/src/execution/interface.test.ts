@@ -39,6 +39,14 @@ describe('inferring an interface from a run', () => {
     expect(inferSchema([])).toEqual({ type: 'array' });
   });
 
+  it('keeps a column\'s type though one row has nothing in it', () => {
+    // One missing Population must not make the column "anything": a later run
+    // with text there has to be caught.
+    const schema = inferSchema({ rows: [{ Population: 1450000000 }, { Population: null }] });
+    expect(mismatches({ rows: [{ Population: 'many' }] }, schema)).toEqual(['output.rows[0].Population is string; the interface says integer']);
+    expect(inferSchema([1, null, 2])).toEqual({ type: 'array', items: { type: 'integer' } });
+  });
+
   it('stops describing at a sensible depth', () => {
     let deep: unknown = 'leaf';
     for (let level = 0; level < 12; level += 1) deep = { next: deep };

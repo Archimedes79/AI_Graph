@@ -1,10 +1,10 @@
-// What a node of each type *is*, with nothing set — and what a file keeps of it.
+// What a node of each type *is* when it is made, and what a file keeps of it.
 //
-// Not drawing, and therefore not `NodeGuiBuilder`. These three facts are asked while a
+// Not drawing, and therefore not `NodeGuiBuilder`. These facts are asked while a
 // graph is *loaded* and *saved*, which a delivered tool does as much as the
 // editor: `normalizeGraphNode` fills a node read from a file back out from
-// `create`, and `exportGraph` strips it back down with `saved` before it is
-// posted for a run.
+// `baseNodeConfig`, and `exportGraph` strips it back down with `savedNode`
+// before it is posted for a run.
 //
 // They lived on `NodeGuiBuilder` beside the icon, the colour and the settings panel,
 // so the store had to reach into the editor's element registry to load a
@@ -17,26 +17,12 @@
 // shape, which lives in the editor's `graph.ts`. Moving that is the next step
 // and a separate one.
 
-import type { GraphNode, NodeConfig, NodeType } from '@/graph';
+import type { GraphNode, NodeType } from '@/graph';
 import { derivedNodePorts } from './guiWidgets';
 import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
 import { TriggerNodeRunner } from '@engine/elements/nodes/trigger/TriggerNodeRunner.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { baseNodeConfig } from './baseNodeConfig';
-
-/**
- * What a code or ai node without `batch_mode` means (`NodeRunner.batchMode`).
- *
- * A node made here starts per item, and says so in the file (it is one of its
- * settings). A node without the key -- written by hand, by the MCP server, by a
- * model -- runs once on the whole list, and filling it from `create` turned
- * that into per item on the first Save, without anyone touching the setting:
- * the command line and the editor ran the same file two ways.
- */
-const WHOLE_WHEN_MISSING: Partial<NodeConfig> = { batch_mode: 'whole_list' };
-
-/** How a code or ai node made here starts: once per item, as many at once as the run allows. */
-const PER_ITEM: Partial<NodeConfig> = { batch_mode: 'per_item', batch_concurrency: 0 };
 
 const SUBGRAPH = new SubgraphNodeRunner();
 const TRIGGER = new TriggerNodeRunner();
@@ -55,26 +41,16 @@ const TRIGGER = new TriggerNodeRunner();
 export const CODE_STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
 
 export interface NodeKind {
-  /** A node of this type with nothing set: what a new one is, and what a loaded one falls back to. */
+  /**
+   * A node of this type as it is made here: its ports, and the settings
+   * (`baseNodeConfig`) with what a new one of the kind starts with that the
+   * defaults do not say -- which is what its file then carries.
+   */
   create(id: string): GraphNode;
   /**
-   * The settings this node type owns, always written when the graph is saved.
-   *
-   * Every node is created from the one full `NodeConfig` so the panels can
-   * read any field with a type; a saved file should not carry thirty keys its
-   * node never reads.
-   */
-  settings: readonly (keyof NodeConfig)[];
-  /**
-   * What this kind's element reads a key a file leaves out as, where that is
-   * not what `create` starts a new node with. Loading fills a missing key from
-   * here first, so that opening a graph and saving it never changes what it does.
-   */
-  whenMissing?: Partial<NodeConfig>;
-  /**
    * A node just made, beside *others* already in the graph: what it starts as
-   * where that depends on what is there. `create` alone is what a loaded node
-   * falls back to, and must not depend on its neighbours.
+   * where that depends on what is there. `create` alone must not depend on
+   * its neighbours.
    */
   placedAmong?(node: GraphNode, others: GraphNode[]): GraphNode;
   /** Running this node puts its result in a window of its own. */
@@ -83,12 +59,6 @@ export interface NodeKind {
 
 export const NODE_KINDS: Record<NodeType, NodeKind> = {
   input: {
-    // Not the selector, nor what an older dialog let a person say the files
-    // contain: kept once somebody wrote them, and left out while empty, so a
-    // text or file input -- which selects nothing -- saves no selector (B21).
-    settings: [
-      'input_mode', 'value', 'prompt_at_runtime', 'recursive', 'extensions', 'select_all_files', 'catch_errors',
-    ],
     create(id) {
       // A new input starts in text mode, and its ports follow from that -- asked
       // of the engine rather than listed again here.
@@ -100,21 +70,13 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
         position: { x: 0, y: 0 },
         inputs: [],
         outputs: [],
-        config: { ...baseNodeConfig(), input_mode: 'text' },
+        config: baseNodeConfig(),
       };
       return { ...node, ...(derivedNodePorts(node) ?? {}) };
     },
   },
 
   ai: {
-    settings: [
-      'ai_provider', 'ai_model', 'system_prompt', 'temperature', 'prompt_template',
-      'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
-      'read_file_inputs', 'batch_mode', 'batch_concurrency', 'catch_errors', 'examples', 'run_code',
-    ],
-    // A new node starts with a system prompt to show where one goes; a file
-    // without one sends none, and a Save must not start sending ours.
-    whenMissing: { ...WHOLE_WHEN_MISSING, system_prompt: '' },
     create: (id) => ({
       id,
       node_type: 'ai',
@@ -133,19 +95,12 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
         { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'any', multi: true, required: false, description: 'What to ask. A list asks once per item.' },
       ],
       outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: true, required: false, description: 'The answer. One per item when the prompt was a list.' }],
-      config: { ...baseNodeConfig(), ...PER_ITEM, system_prompt: 'You are a helpful assistant.' },
+      // Once per item, and a system prompt to show where one goes.
+      config: { ...baseNodeConfig(), batch_mode: 'per_item', system_prompt: 'You are a helpful assistant.' },
     }),
   },
 
   code: {
-    settings: [
-      'code', 'code_prompt', 'output_schema', 'examples', 'output_format_prompt',
-      'read_file_inputs', 'batch_mode', 'batch_concurrency', 'catch_errors',
-    ],
-    // The starter body is for a node made here. A file without code is a node
-    // with no code -- which `check` says -- not one that quietly hands its
-    // input on after a Save.
-    whenMissing: { ...WHOLE_WHEN_MISSING, code: '' },
     create: (id) => ({
       id,
       node_type: 'code',
@@ -156,17 +111,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       // No description on the output: "one result per item" was true only while
       // step 1 said "Run once per item", and ✨ is told that by the brief itself.
       outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
-      config: { ...baseNodeConfig(), ...PER_ITEM, code: CODE_STARTER },
+      config: { ...baseNodeConfig(), batch_mode: 'per_item', code: CODE_STARTER },
     }),
   },
 
   data: {
-    settings: ['data_value', 'data_format', 'data_prompt', 'data_format_prompt'],
-    // A file without a value holds nothing, which is null for a structure and
-    // '' for text (`DataNodeRunner.config`). One null says both, since the
-    // engine reads it as '' for text. A new node's '' made a structure hand
-    // on a string after one Save.
-    whenMissing: { data_value: null },
     create: (id) => ({
       id,
       node_type: 'data',
@@ -175,17 +124,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       position: { x: 0, y: 0 },
       inputs: [{ id: 'input', name: 'Update', kind: 'input', data_type: 'any', multi: false, required: false, description: 'Optional new value' }],
       outputs: [{ id: 'output', name: 'Value', kind: 'output', data_type: 'any', multi: false, required: false, description: 'Persisted value' }],
-      config: { ...baseNodeConfig(), data_format: 'text', data_value: '' },
+      config: baseNodeConfig(),
     }),
   },
 
   output: {
-    settings: ['output_label', 'write_mode', 'value', 'prompt_at_runtime'],
-    // No label is the node's id as the key of the run's result, and no
-    // write_mode writes nothing and opens no window (`OutputNodeRunner.config`,
-    // `finalOutputs`). Filled with a new node's 'Result', a second output left
-    // unlabelled came back from one Save under the same key as the first.
-    whenMissing: { output_label: '', write_mode: 'none' },
     showsResultWindow: (node) => node.config.write_mode === 'window',
     create: (id) => ({
       id,
@@ -203,7 +146,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       config: { ...baseNodeConfig(), output_label: 'Result', write_mode: 'window' },
     }),
     // Its own label, "Result 2" beside a "Result": two results that share one
-    // keep only the last under it in the run's result, and `check` says so.
+    // are a problem `check` names, and only the first keeps it in the run's result.
     // The labels taken are asked the way `check` asks them, of every element
     // that is a result.
     placedAmong(node, others) {
@@ -218,7 +161,6 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
   },
 
   gui: {
-    settings: ['gui_widgets'],
     create: (id) => ({
       id,
       node_type: 'gui',
@@ -227,12 +169,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       position: { x: 0, y: 0 },
       inputs: [],
       outputs: [],
-      config: { ...baseNodeConfig(), gui_widgets: [] },
+      config: baseNodeConfig(),
     }),
   },
 
   subgraph: {
-    settings: ['subgraph', 'task', 'catch_errors', 'run_code'],
     create: (id) => ({
       id,
       node_type: 'subgraph',
@@ -245,12 +186,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       outputs: [],
       // The engine's own idea of an empty graph, rather than a second copy
       // of what a graph's metadata starts as.
-      config: { ...baseNodeConfig(), subgraph: SUBGRAPH.nestedGraph({ config: {} } as never), task: '' },
+      config: { ...baseNodeConfig(), subgraph: SUBGRAPH.nestedGraph({ config: {} } as never) },
     }),
   },
 
   trigger: {
-    settings: ['trigger_on_start', 'trigger_every'],
     create: (id) => ({
       id,
       node_type: 'trigger',
@@ -259,28 +199,19 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       position: { x: 0, y: 0 },
       inputs: [],
       outputs: TRIGGER.derivedPorts().outputs as GraphNode['outputs'],
-      config: { ...baseNodeConfig(), trigger_on_start: true, trigger_every: '' },
+      config: baseNodeConfig(),
     }),
   },
 };
 
 /**
- * What a node of this type, read from a file, takes each key the file left out
- * to mean -- before `create`'s starting values, which are for a new node.
- */
-export function whenMissing(nodeType: NodeType): Partial<NodeConfig> {
-  return NODE_KINDS[nodeType].whenMissing ?? {};
-}
-
-/**
- * The node as a graph file keeps it: its own settings, and any other key only
- * when it no longer holds the value every node starts with. Loading fills the
- * rest back in from `create`, so nothing is lost either way.
+ * The node as a graph file keeps it: every setting that is not its default
+ * (`baseNodeConfig`), and none that is -- the engine reads a key left out as
+ * that default, and loading fills it back in, so nothing is lost either way.
  */
 export function savedNode(node: GraphNode): GraphNode {
-  const untouched: Record<string, unknown> = baseNodeConfig();
-  const own = new Set<string>(NODE_KINDS[node.node_type].settings);
+  const defaults: Record<string, unknown> = baseNodeConfig();
   const config = Object.fromEntries(Object.entries(node.config)
-    .filter(([key, value]) => own.has(key) || JSON.stringify(value) !== JSON.stringify(untouched[key])));
-  return { ...node, config: config as NodeConfig };
+    .filter(([key, value]) => value !== undefined && JSON.stringify(value) !== JSON.stringify(defaults[key])));
+  return { ...node, config: config as GraphNode['config'] };
 }

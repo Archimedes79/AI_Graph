@@ -51,7 +51,7 @@ file by hand:
 ```json
 {
   "ai":       { "provider": "lmstudio",  "model": "qwen2.5-coder-7b" },
-  "api_keys": { "anthropic": "sk-ant-…", "openai": "", "github": "", "openai_compatible": "" },
+  "api_keys": { "anthropic": "sk-ant-…", "openai": "", "github_copilot": "", "openai_compatible": "" },
   "endpoints": { "lmstudio": "http://localhost:1234/v1" }
 }
 ```
@@ -67,10 +67,11 @@ Two provider names are worth spelling out:
 - **Anthropic** needs an API key from [console.anthropic.com](https://console.anthropic.com)
   (`ANTHROPIC_API_KEY`, or `api_keys.anthropic`). A locally installed Claude Desktop or
   Claude Code is *not* an endpoint this can call — those are applications, not an API
-  server on your machine, so there is nothing to point a base URL at.
+  server on your machine, so there is nothing to point a base URL at. Current Claude
+  models accept no temperature: leave a node's temperature unset for them (below).
 - **GitHub Copilot** in the provider list means the [GitHub Models](https://models.github.ai)
   API, which is OpenAI-compatible. It authenticates with a GitHub personal access token
-  (`GITHUB_TOKEN`, or `api_keys.github`) that has the `models:read` scope — not with a
+  (`GITHUB_TOKEN`, or `api_keys.github_copilot`) that has the `models:read` scope — not with a
   Copilot editor subscription, which exposes no API of its own.
 
 Anything else that speaks the OpenAI protocol — a proxy, a gateway, a self-hosted
@@ -104,7 +105,11 @@ budget on the thinking. On a laptop that is slow — minutes rather than seconds
 the budget runs out mid-thought the answer is empty. AI-Graph says so once instead of
 retrying; the fixes are to raise `AI_GRAPH_MAX_TOKENS` (default 4096), to switch thinking
 off where the model is served, or to use a model that does not think. For ✨ Generate a
-non-thinking coder model is the better choice.
+non-thinking coder model is the better choice. The same holds for a Claude model that
+thinks, whose answer is cut off by the token budget before its first word.
+
+**Temperature** is sent only when an AI node sets one; otherwise every provider answers
+at its own default, and ✨ Generate and a judged example set none either.
 
 ## Tools: connecting a prompt to an MCP server
 

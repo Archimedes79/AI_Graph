@@ -39,8 +39,7 @@ export function withSetting(draft: GraphNode, stored: GraphNode | undefined, key
   // Ticking "catch failures" is what puts the port on the node. Nobody
   // should have to add an output by hand and guess that it must be called
   // `error` for the executor to fill it. Which setting that is, the element
-  // says (`catchesErrors`), and the port is touched only when its answer
-  // turns: an older node's own `error` output survives an unrelated edit.
+  // says (`catchesErrors`), and the port is touched only when its answer turns.
   const element = engineRegistry.node(draft.node_type);
   const catches = element?.catchesErrors(next) ?? false;
   if (element && catches !== element.catchesErrors(draft)) {

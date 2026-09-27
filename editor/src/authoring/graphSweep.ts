@@ -19,7 +19,6 @@
 
 import { memoryFeedbackEdges, topologicalLevels } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
-import { shippedText } from '@engine/elements/ElementRunner.ts';
 import type { GraphEdge, GraphNode, GuiWidget, Wire } from '@/graph';
 import { guiWidgetPorts, showsPage } from '@/document/guiWidgets';
 import { NODE_KINDS } from '@/document/nodeKinds';
@@ -253,17 +252,14 @@ export async function* sweep<T>(
 
 /**
  * Whether *node* holds a body of its own in *field*: something, and not what a
- * new node of its kind starts with -- the starter code of a code node -- nor a
- * text its element once shipped, such as the selector every input node used to
- * be given (`TextFile.earlier`). A sweep writes what nobody wrote, and leaves
- * alone what somebody did.
+ * new node of its kind starts with -- the starter code of a code node. A sweep
+ * writes what nobody wrote, and leaves alone what somebody did.
  */
 export function writtenBody(node: GraphNode, field: string): boolean {
   const text = (value: unknown): string => String(value ?? '').trim();
   const written = text((node.config as unknown as Record<string, unknown>)[field]);
   const starter = text((NODE_KINDS[node.node_type]?.create(node.id).config as unknown as Record<string, unknown> | undefined)?.[field]);
-  const kept = registry.node(node.node_type)?.texts(node as never).find((file) => file.field === field);
-  return !!written && written !== starter && !(kept && shippedText(written, kept));
+  return !!written && written !== starter;
 }
 
 /**
