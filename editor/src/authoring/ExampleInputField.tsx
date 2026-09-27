@@ -39,11 +39,11 @@ interface Props {
   /** The example as stored: a JSON object keyed by input port. */
   text: string;
   /**
-   * Stores the example as typed or filled, and says what it reads back as (see
-   * `useTyped`). Handed only what can be stored (`exampleProblem`): the box
-   * keeps the rest as typed, and says why.
+   * Stores the example as typed or -- *filled* -- from a file or the graph, and
+   * says what it reads back as (see `useTyped`). Handed only what can be
+   * stored (`exampleProblem`): the box keeps the rest as typed, and says why.
    */
-  onText: (text: string) => string;
+  onText: (text: string, filled: boolean) => string;
   /** The ports a file can be picked for. */
   ports: { id: string; name?: string }[];
   /** The ports the node reads the file on (`readFilePorts`): a file picked for one is kept as its path. */
@@ -68,7 +68,7 @@ interface Props {
 export default function ExampleInputField({ text, onText, ports, reads, fromGraph, note }: Props) {
   // What does not parse is not stored: the graph keeps the last example that
   // did, and the box keeps what was typed.
-  const [typed, type] = useTyped(text, (next) => (exampleProblem(next) ? text : onText(next)));
+  const [typed, type] = useTyped<[filled?: boolean]>(text, (next, filled = false) => (exampleProblem(next) ? text : onText(next, filled)));
   const error = exampleProblem(typed);
   // What the box holds now, for a file read that ends after more was typed:
   // the file's value is put into that, not into the box as it was clicked.
@@ -86,7 +86,7 @@ export default function ExampleInputField({ text, onText, ports, reads, fromGrap
     setBusy('graph'); setFailure(''); setSaid('');
     try {
       const got = await fromGraph();
-      if (Object.keys(got.values).length) type(asExampleText(got.values));
+      if (Object.keys(got.values).length) type(asExampleText(got.values), true);
       setSaid(got.said);
     } catch (reason) {
       setFailure(errorText(reason, 'The graph could not be run up to here.'));
@@ -100,7 +100,7 @@ export default function ExampleInputField({ text, onText, ports, reads, fromGrap
     if (!into) return;
     setBusy('file'); setFailure(''); setSaid('');
     try {
-      type(withPortValue(latest.current, into, await value(into)));
+      type(withPortValue(latest.current, into, await value(into)), true);
       setSaid(reads.includes(into)
         ? `“${into}” holds the file's path, which is read as a run reads it.`
         : `“${into}” holds what the file says.`);

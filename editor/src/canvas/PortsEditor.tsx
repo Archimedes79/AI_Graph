@@ -1,5 +1,5 @@
 import type { DataType, Port } from '@/graph';
-import type { PortEditing } from '@/elements/NodeGuiBuilder';
+import { ONCE, type PortEditing, type UndoStep } from '@/elements/NodeGuiBuilder';
 import { useTyped } from '@/authoring/useTyped';
 import { caughtErrorAt, portIdProblems } from './portIds';
 import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
@@ -69,7 +69,8 @@ interface SideProps {
   perPort: boolean;
   /** Why this side could not keep *ports* as they are named, or '' (`portIdProblems`). */
   problemOf: (ports: Port[]) => string;
-  onChange: (ports: Port[]) => void;
+  /** A name typed is typing; a box ticked, a port added or removed, a step of its own (`ONCE`). */
+  onChange: (ports: Port[], step?: UndoStep) => void;
 }
 
 /** A name as a body can read it back, `inputs.<id>`: spaces and punctuation would be a port nobody can address in code. */
@@ -85,7 +86,7 @@ interface RowProps {
   wired: string;
   /** Why the node could not keep this port under *id*, or ''. */
   problemIf: (id: string) => string;
-  set: (patch: Partial<Port>) => void;
+  set: (patch: Partial<Port>, step?: UndoStep) => void;
   remove: () => void;
 }
 
@@ -132,13 +133,13 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wired, problemIf, 
                   style={FIELD}
                   value={port.data_type}
                   aria-label={`${kind} type`}
-                  onChange={(e) => set({ data_type: e.target.value as DataType })}
+                  onChange={(e) => set({ data_type: e.target.value as DataType }, ONCE)}
                 >
                   {TYPES.map((one) => <option key={one.value} value={one.value}>{one.label}</option>)}
                 </select>
                 <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
                   title={kind === 'input' ? 'Arrives as a list -- several values, or one per wired node' : 'Hands on a list: the next node runs once per item unless it takes the whole list'}>
-                  <input type="checkbox" checked={port.multi} onChange={(e) => set({ multi: e.target.checked })} />
+                  <input type="checkbox" checked={port.multi} onChange={(e) => set({ multi: e.target.checked }, ONCE)} />
                   list
                 </label>
               </>
@@ -150,7 +151,7 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wired, problemIf, 
               <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
                 title="Needed: when it is wired and nothing arrives on it, this node does not run that round">
                 <input type="checkbox" checked={port.required} aria-label="input needed"
-                  onChange={(e) => set({ required: e.target.checked })} />
+                  onChange={(e) => set({ required: e.target.checked }, ONCE)} />
                 needed
               </label>
             )}
@@ -161,7 +162,7 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wired, problemIf, 
               <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
                 title="The node is handed what the file says, not its path -- on every run, in Try it and when ✨ tries its code">
                 <input type="checkbox" checked={port.data_type === 'file_path'} aria-label="Read the file at this path"
-                  onChange={(e) => set({ data_type: e.target.checked ? 'file_path' : 'any' })} />
+                  onChange={(e) => set({ data_type: e.target.checked ? 'file_path' : 'any' }, ONCE)} />
                 Read the file at this path
               </label>
             )}
@@ -193,8 +194,8 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wired, problemIf, 
 }
 
 function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, perPort, problemOf, onChange }: SideProps) {
-  const set = (at: number, patch: Partial<Port>) => {
-    onChange(ports.map((port, i) => (i === at ? { ...port, ...patch } : port)));
+  const set = (at: number, patch: Partial<Port>, step?: UndoStep) => {
+    onChange(ports.map((port, i) => (i === at ? { ...port, ...patch } : port)), step);
   };
   const editable = editing === 'edit';
   // Said of what the graph holds: a file written by hand can hold two ports of one name.
@@ -208,7 +209,7 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, pe
           <button
             className="text-xs px-2 py-0.5 rounded"
             style={NEUTRAL_BUTTON}
-            onClick={() => onChange([...ports, fresh(kind, new Set(ports.map((p) => p.id)))])}
+            onClick={() => onChange([...ports, fresh(kind, new Set(ports.map((p) => p.id)))], ONCE)}
           >
             + {kind}
           </button>
@@ -227,8 +228,8 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, pe
             readsFiles={readsFiles}
             wired={wiring[port.id] ?? ''}
             problemIf={(id) => problemOf(ports.map((candidate, i) => (i === at ? { ...candidate, id } : candidate)))}
-            set={(patch) => set(at, patch)}
-            remove={() => onChange(ports.filter((_, i) => i !== at))}
+            set={(patch, step) => set(at, patch, step)}
+            remove={() => onChange(ports.filter((_, i) => i !== at), ONCE)}
           />
         ))}
 
@@ -252,7 +253,7 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, pe
 interface PortsEditorProps {
   inputs: Port[];
   outputs: Port[];
-  onChange: (ports: { inputs: Port[]; outputs: Port[] }) => void;
+  onChange: (ports: { inputs: Port[]; outputs: Port[] }, step?: UndoStep) => void;
   /** Which side to draw; both, by default. The stepped dialog draws them in separate steps. */
   side?: 'inputs' | 'outputs' | 'both';
   /** How much of each side is the person's to change: the element says (`NodeGuiBuilder.portEditing`). */
@@ -295,7 +296,7 @@ export default function PortsEditor({
           title="Takes in" kind="input" ports={inputs} fixed={[]} editing={editing.inputs}
           hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} perPort={!stepped}
           problemOf={(next) => portIdProblems(next, outputs, caught).inputs}
-          onChange={(next) => onChange({ inputs: next, outputs })}
+          onChange={(next, step) => onChange({ inputs: next, outputs }, step)}
         />
       )}
       {showOutputs && (
@@ -303,7 +304,7 @@ export default function PortsEditor({
           title="Hands out" kind="output" ports={ownOutputs} fixed={fixedOutputs} editing={editing.outputs}
           hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} perPort={!stepped}
           problemOf={(next) => portIdProblems(inputs, [...next, ...fixedOutputs], caught).outputs}
-          onChange={(next) => onChange({ inputs, outputs: [...next, ...fixedOutputs] })}
+          onChange={(next, step) => onChange({ inputs, outputs: [...next, ...fixedOutputs] }, step)}
         />
       )}
     </div>

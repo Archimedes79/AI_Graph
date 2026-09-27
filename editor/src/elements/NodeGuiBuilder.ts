@@ -9,6 +9,17 @@ import { ElementGuiBuilder } from './ElementGuiBuilder';
 import { previewOf, type PortPreviews } from './resultPreview';
 
 /**
+ * Which undo step a change made in a node's dialog is (`canvas/nodeDialog.ts`).
+ * Typing is one step with what was typed into the same field a moment before:
+ * the setting's own field, unless `{ field }` names the one typed into -- the
+ * example and the judge's sentence are both the node's examples, and two
+ * fields. `ONCE` is what is not typing -- a file dropped in, a result kept, a
+ * box ticked -- written at once, as a step of its own.
+ */
+export const ONCE = 'once';
+export type UndoStep = typeof ONCE | { field: string };
+
+/**
  * What the node editor hands every node panel. A panel takes the part it needs.
  *
  * What a panel changes is in the graph a moment later (`canvas/nodeDialog.ts`):
@@ -21,14 +32,15 @@ export interface NodePanelProps {
   builder: NodeGuiBuilder;
   node: GraphNode;
   /**
-   * Sets one setting. *value* may instead be a function of the setting as it
-   * is when the change lands: what a write made after a wait -- a run
-   * upstream, a file read -- is merged into, so that it does not put back a
-   * copy from before the wait over what was typed meanwhile.
+   * Sets one setting, as the undo step *step* says (typing into it, by
+   * default). *value* may instead be a function of the setting as it is when
+   * the change lands: what a write made after a wait -- a run upstream, a
+   * file read -- is merged into, so that it does not put back a copy from
+   * before the wait over what was typed meanwhile.
    */
-  setConfig: (key: string, value: unknown) => void;
+  setConfig: (key: string, value: unknown, step?: UndoStep) => void;
   /** Changes the node as a whole, for a setting that is a port and a key at once ("Run once per item"). */
-  updateNode: (change: (node: GraphNode) => GraphNode) => void;
+  updateNode: (change: (node: GraphNode) => GraphNode, step?: UndoStep) => void;
   /**
    * The node's settings and description by name: what ✨ fills in, and what a
    * panel writes the description through. Whether the element authors a body

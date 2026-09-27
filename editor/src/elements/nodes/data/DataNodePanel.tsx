@@ -1,10 +1,18 @@
 import type { DragEvent } from 'react';
 import { useTyped } from '@/authoring/useTyped';
-import { carriesFiles, droppedFile } from '@/authoring/droppedFile';
+import { carriesFiles, droppedFile, type Dropped } from '@/authoring/droppedFile';
 import { contentValue } from '@/authoring/readAsRun';
 import { DANGER_SOFT, DIMMER, FIELD, LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
-import type { NodePanelProps } from '../../NodeGuiBuilder';
+import { ONCE, type NodePanelProps } from '../../NodeGuiBuilder';
 import { asEditableText, convertedValue, dataKind, storedValue, type DataKind } from './dataFormat';
+
+/**
+ * A file dropped on the box: what the node holds from then on, parsed when it
+ * is JSON -- an undo step of its own, not more typing into the box.
+ */
+export async function holdDropped(file: Dropped, setConfig: NodePanelProps['setConfig']): Promise<void> {
+  setConfig('data_value', contentValue(await file.text()), ONCE);
+}
 
 /**
  * A data node: a value, edited in one place -- its kind, and what it holds.
@@ -58,7 +66,7 @@ export default function DataNodePanel({ node, setConfig }: NodePanelProps) {
     if (!file) return;
     event.preventDefault();
     event.stopPropagation();
-    void file.text().then((text) => setConfig('data_value', contentValue(text)));
+    void holdDropped(file, setConfig);
   };
 
   return (

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { Graph } from '@/graph';
 import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { unmet } from '@engine/execution/examples.ts';
-import type { NodePanelProps } from '@/elements/NodeGuiBuilder';
+import { ONCE, type NodePanelProps, type UndoStep } from '@/elements/NodeGuiBuilder';
 import FourSteps, { RunOncePerItem, TaskField } from './FourSteps';
 import ExampleInputField from './ExampleInputField';
 import OutputWordsField from './OutputWordsField';
@@ -93,12 +93,13 @@ export default function NodeSteps({
    * The examples changed from what the node holds when the change lands, not
    * from this render's copy: a fill that waits on a run upstream or a file
    * wrote its render's copy back, over an expectation, a judge or a kept
-   * result entered while it waited.
+   * result entered while it waited. *step*: the example's box and the judge's
+   * are two fields to type into, and what fills or keeps is a click (`ONCE`).
    */
-  const editExamples = (change: (current: string) => string) =>
-    setConfig('examples', (current: unknown) => change(String(current ?? '')));
+  const editExamples = (change: (current: string) => string, step: UndoStep) =>
+    setConfig('examples', (current: unknown) => change(String(current ?? '')), step);
   const [judgeTyped, typeJudge] = useTyped(pair.judge ?? '', (text) => {
-    editExamples((current) => withJudge(exampleFor(node, current), text));
+    editExamples((current) => withJudge(exampleFor(node, current), text), { field: 'judge' });
     return readPair(withJudge(exampleFor(node, examples), text)).judge ?? '';
   });
   const lists = listPorts(node, pair.input, nodes, edges);
@@ -166,8 +167,8 @@ export default function NodeSteps({
       {steps.inputs}
       {exampled && <ExampleInputField
         text={pair.inputText}
-        onText={(text) => {
-          editExamples((current) => withInput(current, text));
+        onText={(text, filled) => {
+          editExamples((current) => withInput(current, text), filled ? ONCE : { field: 'example' });
           return readPair(withInput(examples, text)).inputText;
         }}
         ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
@@ -193,7 +194,7 @@ export default function NodeSteps({
       {askedPerItem.current && (
         <RunOncePerItem
           checked={runsPerItem(node)}
-          onChange={(perItem) => updateNode((current) => withPerItem(current, perItem, lists))}
+          onChange={(perItem) => updateNode((current) => withPerItem(current, perItem, lists), ONCE)}
           subject={subject}
         />
       )}
@@ -217,7 +218,7 @@ export default function NodeSteps({
   );
 
   const keep = keepOwn ?? {
-    onKeep: (result: TryResult) => editExamples((current) => withExpect(exampleFor(node, current), keptExpect(result.outputs))),
+    onKeep: (result: TryResult) => editExamples((current) => withExpect(exampleFor(node, current), keptExpect(result.outputs)), ONCE),
     says: 'Make what came out the output the example must give: Try it and test hold every later version to it',
   };
 
@@ -260,7 +261,7 @@ export default function NodeSteps({
         gaps={gaps}
         expected={expects ? {
           text: pair.expectText,
-          onForget: () => editExamples(noExpectation),
+          onForget: () => editExamples(noExpectation, ONCE),
           note: strayOutputs.length > 0 && (
             <span style={{ color: DANGER_TEXT }}>
               {' '}It names {named(strayOutputs)}, which no output is called: <code>test</code> finds {strayOutputs.length > 1 ? 'them' : 'it'} missing.

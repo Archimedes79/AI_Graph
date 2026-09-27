@@ -6,7 +6,7 @@ import PortsEditor from './PortsEditor';
 import { withPorts } from './nodeDraft';
 import { useNodeDialog } from './nodeDialog';
 import { NODE_BUILDERS } from '@/elements/registry';
-import type { NodePanelProps } from '@/elements/NodeGuiBuilder';
+import type { NodePanelProps, UndoStep } from '@/elements/NodeGuiBuilder';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, nodeFields, withChange, type ChangeAsked, type GenerationRequest } from '@/authoring/generation';
@@ -59,7 +59,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const element = NODE_BUILDERS[node.node_type];
   const caught = node.config.catch_errors === true;
 
-  const setConfig = (key: string, value: unknown) => dialog.setConfig(key, value);
+  const setConfig: NodePanelProps['setConfig'] = (key, value, step) => dialog.setConfig(key, value, step);
   const setDescription = (value: string) => dialog.change((current) => ({ ...current, description: value }));
 
   /**
@@ -107,7 +107,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     inputs: inputSources(node.id, graphNodes, graphEdges),
     outputs: outputTargets(node.id, graphNodes, graphEdges, true),
   };
-  const setPorts = (ports: { inputs: Port[]; outputs: Port[] }) => dialog.change((current) => withPorts(current, ports));
+  const setPorts = (ports: { inputs: Port[]; outputs: Port[] }, step?: UndoStep) => dialog.change((current) => withPorts(current, ports), step);
   // The ports are the person's to name, rather than following a setting.
   const ownPorts = derivedNodePorts(node) === null;
   const stepped = element.stepped && ownPorts;
@@ -195,7 +195,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 builder={element}
                 node={node}
                 setConfig={setConfig}
-                updateNode={(change) => dialog.change(change)}
+                updateNode={(change, step) => dialog.change(change, step)}
                 fields={fields}
                 generating={generate.busy}
                 message={generate.message()}

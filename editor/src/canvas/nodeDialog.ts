@@ -2,10 +2,14 @@
 //
 // There is no Save and no Cancel. What is changed in the dialog is the node it
 // shows at once, and is written into the graph a moment later (`write`) -- as
-// one undo step with what was typed into the same fields just before
+// one undo step with what was typed into the same field just before
 // (`graphStore.commit`), so a word typed is one step and not one per keystroke.
-// Undo takes it back, and the dialog shows what Undo left. Closing it writes
-// what is still waiting: nothing is lost, and nothing asks.
+// A field is what was typed into, not the setting it writes: the example and
+// the judge's sentence are both the node's examples (`UndoStep`). What is not
+// typing -- a file dropped in, a result kept, a box ticked -- is a step of its
+// own, written at once after what was typed before it. Undo takes it back, and
+// the dialog shows what Undo left. Closing it writes what is still waiting:
+// nothing is lost, and nothing asks.
 //
 // What cannot be stored yet -- an example that is not JSON, a port name
 // another port has -- is never handed to it: the field holds what was typed and
@@ -18,6 +22,7 @@ import { useEffect, useReducer, useState } from 'react';
 import type { GraphNode } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { trackPorts } from '@/store/portRenames';
+import { ONCE, type UndoStep } from '@/elements/NodeGuiBuilder';
 import { saveDraft, withSetting } from './nodeDraft';
 
 /** How long after the last change the dialog writes it into the graph. */
@@ -61,14 +66,18 @@ export interface NodeDialog {
   node(): GraphNode | undefined;
   /** The node as the graph holds it, without what is waiting. */
   stored(): GraphNode | undefined;
-  /** Change it: written a moment later, or with the next `write`. */
-  change(edit: (node: GraphNode) => GraphNode): void;
-  /** Change one setting (`withSetting`): *value* may be a function of the setting as it is when the change lands. */
-  setConfig(key: string, value: unknown): void;
   /**
-   * Write what is waiting into the graph now: one undo step with the change
-   * of the same fields just before it -- or, *own*, a step of its own, for
-   * what is not typing: what ✨ wrote, a file dropped in.
+   * Change it, as the undo step *step* says: typed into a field -- the fields
+   * it changes, unless *step* names the one -- written a moment later, or with
+   * the next `write`; or `ONCE`, written now as a step of its own.
+   */
+  change(edit: (node: GraphNode) => GraphNode, step?: UndoStep): void;
+  /** Change one setting (`withSetting`): *value* may be a function of the setting as it is when the change lands. */
+  setConfig(key: string, value: unknown, step?: UndoStep): void;
+  /**
+   * Write what is waiting into the graph now: one undo step with what was
+   * typed into the same fields just before it -- or, *own*, a step of its own,
+   * for what is not typing: what ✨ wrote.
    */
   write(own?: boolean): void;
   /**
@@ -84,7 +93,10 @@ export function nodeDialog(nodeId: string): NodeDialog {
   const store = () => useGraphStore.getState();
   const opened = store().document;
   let edited: GraphNode | null = null;
+  // What waits to be written: the node's fields that changed (`overlay`),
+  // and the fields typed into, which name its undo step.
   const waiting = new Set<string>();
+  const typed = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let tracked: { of: GraphNode; node: GraphNode } | null = null;
   let changed = () => {};
@@ -107,29 +119,38 @@ export function nodeDialog(nodeId: string): NodeDialog {
     clearTimeout(timer);
     const before = stored();
     const draft = node();
-    const fields = [...waiting].sort();
+    const changes = waiting.size;
+    const step = `${nodeId}: ${[...typed].sort().join(', ')}`;
     waiting.clear();
+    typed.clear();
     edited = null;
-    if (!before || !draft || !fields.length) return;
-    saveDraft(nodeId, before, draft, own ? undefined : `${nodeId}: ${fields.join(', ')}`);
+    if (!before || !draft || !changes) return;
+    saveDraft(nodeId, before, draft, own ? undefined : step);
   };
 
   const dialog: NodeDialog = {
     node,
     stored,
     write,
-    change(edit) {
+    change(edit, step) {
+      // Not typing: what was typed before it is a step of its own, and so is this.
+      if (step === ONCE) write();
       const now = node();
       if (!now) return;
       const next = edit(now);
-      for (const field of changedFields(now, next)) waiting.add(field);
+      const fields = changedFields(now, next);
+      for (const field of fields) waiting.add(field);
+      for (const field of step && step !== ONCE ? [step.field] : fields) typed.add(field);
       edited = next;
-      clearTimeout(timer);
-      timer = setTimeout(() => write(), WRITE_AFTER_MS);
+      if (step === ONCE) write(true);
+      else {
+        clearTimeout(timer);
+        timer = setTimeout(() => write(), WRITE_AFTER_MS);
+      }
       changed();
     },
-    setConfig(key, value) {
-      dialog.change((now) => withSetting(now, key, value));
+    setConfig(key, value, step) {
+      dialog.change((now) => withSetting(now, key, value), step);
     },
     watch(onChange) {
       changed = onChange;

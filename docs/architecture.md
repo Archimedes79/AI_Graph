@@ -425,7 +425,10 @@ block. Each panel says what its words in step 2 are for (`wordsHint`).
 
 **No Save.** What a node's dialog changes is written into the graph a moment later
 (`canvas/nodeDialog.ts`), one undo step per field typed into (`graphStore.commit`'s
-coalescing); Undo takes it back, and closing the dialog loses nothing. What cannot be stored
+coalescing) -- the field on screen, not the setting it writes: the example and the judge's
+sentence are both `examples.md`. What is not typing -- a file dropped in, a result kept, a
+box ticked -- is a step of its own (`UndoStep`), and a run that lands ends the step being
+typed. Undo takes it back, and closing the dialog loses nothing. What cannot be stored
 yet -- an example that is not an object, a data node's structure that does not parse, a
 port name that is empty or taken -- stays in its field with the reason (`useTyped`), and is
 never written. The same holds for every kind's dialog, the four steps or not.

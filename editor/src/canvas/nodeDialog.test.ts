@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GraphNode, Port } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { useGraphStore } from '@/store/graphStore';
+import { COALESCE_MS, useGraphStore } from '@/store/graphStore';
+import { ONCE } from '@/elements/NodeGuiBuilder';
+import { holdDropped } from '@/elements/nodes/data/DataNodePanel';
+import { readPair, withExpect, withInput, withJudge } from '@/authoring/examplePair';
+import { exampleFor, keptExpect } from '@/authoring/nodeStepRules';
 import { WRITE_AFTER_MS, changedFields, nodeDialog, overlay, writeBeforeKey } from './nodeDialog';
 import { withPorts } from './nodeDraft';
 
@@ -125,6 +129,44 @@ describe('what a run keeps, landing while a word is typed', () => {
     store().undo();
     expect(stored('code').config.code_prompt).toBe('C');
     expect(stored('history').config.data_value).toBe('turn 1');
+  });
+});
+
+describe('what is not typing, written into a field just typed into', () => {
+  const examples = (dialog: ReturnType<typeof nodeDialog>) => (change: (current: string) => string, step: Parameters<typeof dialog.setConfig>[2]) =>
+    dialog.setConfig('examples', (current: unknown) => change(String(current ?? '')), step);
+
+  it('a file dropped on a data node\'s box is an undo step of its own, not more of what was typed there', async () => {
+    const dialog = nodeDialog('history');
+    dialog.setConfig('data_value', 'typed by hand'); vi.advanceTimersByTime(WRITE_AFTER_MS);
+    // The drop, as the box takes it.
+    await holdDropped({ name: 'state.json', size: 12, text: async () => '{"count": 3}' }, (key, value, step) => dialog.setConfig(key, value, step));
+    expect(stored('history').config.data_value).toEqual({ count: 3 });
+    store().undo();
+    expect(stored('history').config.data_value).toBe('typed by hand');
+  });
+
+  it('"Keep" is an undo step of its own, after the judge\'s sentence typed a moment before', () => {
+    const edit = examples(nodeDialog('code'));
+    edit((current) => withInput(current, '{"input": "a"}'), { field: 'example' });
+    vi.advanceTimersByTime(COALESCE_MS + WRITE_AFTER_MS);
+    edit((current) => withJudge(exampleFor(stored('code'), current), 'Upper case.'), { field: 'judge' });
+    vi.advanceTimersByTime(WRITE_AFTER_MS);
+    edit((current) => withExpect(exampleFor(stored('code'), current), keptExpect({ output: 'A' })), ONCE);
+    store().undo();
+    expect(readPair(stored('code').config.examples)).toMatchObject({ judge: 'Upper case.', input: { input: 'a' } });
+    expect(readPair(stored('code').config.examples).expect).toBeUndefined();
+  });
+
+  it('the example and the judge\'s sentence are two fields, two undo steps, though both are the node\'s examples', () => {
+    const edit = examples(nodeDialog('code'));
+    edit((current) => withInput(current, '{"input": "a"}'), { field: 'example' });
+    vi.advanceTimersByTime(WRITE_AFTER_MS);
+    edit((current) => withJudge(exampleFor(stored('code'), current), 'Upper case.'), { field: 'judge' });
+    vi.advanceTimersByTime(WRITE_AFTER_MS);
+    store().undo();
+    expect(readPair(stored('code').config.examples)).toMatchObject({ input: { input: 'a' } });
+    expect(readPair(stored('code').config.examples).judge).toBeUndefined();
   });
 });
 
