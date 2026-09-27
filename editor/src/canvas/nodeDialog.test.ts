@@ -21,7 +21,7 @@ beforeEach(() => {
   const out = NODE_KINDS.output.create('out');
   store().loadGraph({
     metadata: { name: 'T', description: '', gui_scheme: 'night' },
-    nodes: [code, out],
+    nodes: [code, out, NODE_KINDS.data.create('history')],
     edges: [{ id: 'e', source_node_id: 'code', source_port_id: 'output', target_node_id: 'out', target_port_id: 'value' }],
   });
 });
@@ -99,6 +99,24 @@ describe('a change in a node\'s dialog', () => {
     vi.advanceTimersByTime(WRITE_AFTER_MS);
     expect(stored('code').config.code_prompt).toBe('');
     expect(dialog.node()).toBeUndefined();
+  });
+});
+
+describe('what a run keeps, landing while a word is typed', () => {
+  const ranWithMemory = () => store().setExecutionResult({
+    status: 'success', outputs: {}, node_results: [],
+    memory: [{ node_id: 'history', port_id: 'input', value: 'turn 1' }],
+  } as never);
+
+  it('ends the word\'s undo step: Undo takes back what was typed after it, and leaves what the run kept', () => {
+    const dialog = nodeDialog('code');
+    dialog.setConfig('code_prompt', 'C'); vi.advanceTimersByTime(WRITE_AFTER_MS);
+    ranWithMemory();
+    // Well within the moment in which typing into the same field adds to its step.
+    dialog.setConfig('code_prompt', 'Co'); vi.advanceTimersByTime(WRITE_AFTER_MS);
+    store().undo();
+    expect(stored('code').config.code_prompt).toBe('C');
+    expect(stored('history').config.data_value).toBe('turn 1');
   });
 });
 

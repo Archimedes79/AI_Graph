@@ -591,6 +591,10 @@ export const useGraphStore = create<GraphStore>()(
         state.executionResult = shown;
         const result = ran ?? shown;
         if (!result) return;
+        // What the run settles into the graph below is not a continuation of
+        // what was typed before it: added to that undo step, Undo of the word
+        // took back what the run kept.
+        coalescing = null;
 
         // What the run remembered, replayed into this copy of the graph. The
         // engine decided what was kept and each element decides where it keeps
