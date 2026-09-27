@@ -61,8 +61,9 @@ function pictureOf(text: string): string | undefined {
   return drawing ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawing)}` : undefined;
 }
 
-/** A chart's figure, as the sketch of its values. */
-export function sketchOf(figure: Figure): Preview {
+/** A chart's figure, as the sketch of its values -- or, with none yet, its title, which says why. */
+export function figurePreview(figure: Figure): Preview {
+  if (!figure.points.length) return { kind: 'line', text: oneLine(figure.title) };
   return { kind: 'sketch', values: thinned(figure.points.map((point) => point.value)), line: figure.kind === 'line' };
 }
 
@@ -91,7 +92,7 @@ export function previewOf(value: unknown): Preview | undefined {
   if (typeof value !== 'object') return { kind: 'line', text: String(value) };
   if (Array.isArray(value)) return listPreview(value);
   const figure = toFigure(value);
-  if (figure) return sketchOf(figure);
+  if (figure) return figurePreview(figure);
   const text = brief(value);
   return text ? { kind: 'line', text } : undefined;
 }

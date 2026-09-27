@@ -813,9 +813,12 @@ left out. Axes, gridlines, category and value labels, a legend and the total are
 for you, and because `kind` is a *value* it can come down a wire — a dropdown on a page
 can switch a chart between bars and a donut with no code anywhere. `bars` are horizontal
 and are the right choice when the categories are names, since a name reads along its bar
-instead of being cropped under a column. See
+instead of being cropped under a column. A value may be a number written as text
+(`"1450"`, as a CSV cell arrives when nothing parsed it). A figure with no points shows
+its title where the chart will be: what a node says before there is anything to plot. See
 [examples/population_plotter](../examples/population_plotter/), where the code node
-parses a CSV and writes no SVG at all.
+parses a CSV and writes no SVG at all -- and, with no file chosen, hands on a figure
+titled "Choose a CSV file to plot.".
 
 A figure is laid out for the pixels the block actually has, so a resize redraws it with
 **no run at all**, and a change of the page's colour scheme recolours it. There is no
@@ -830,7 +833,9 @@ chart shows it as it stands, scripts and event handlers stripped. Give it a `vie
 and `currentColor` follow the page's scheme.
 
 A chart has no code of its own, and neither has any other block: what shapes rows into
-points is a code node wired in before it. A **table** shows rows — a list of objects,
+points is a code node wired in before it. What arrives that a chart cannot draw — rows
+whose number is not called `value`, a record — it shows, with what it takes, rather than
+waiting for data that came. A **table** shows rows — a list of objects,
 whose keys become its columns, or a list of lists whose first row is the header. An
 **image** shows a file path, an http(s) URL or a data URL, or a list of them as a contact
 sheet: a run reads a path into the picture, since the machine the graph runs on is not

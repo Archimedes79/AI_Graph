@@ -41,4 +41,9 @@ describe('a chart under its port on the graph canvas', () => {
     expect(WIDGET_BUILDERS.table.preview(points)).toMatchObject({ kind: 'rows', count: 2, first: 'label: Mon, value: 3' });
     expect(WIDGET_BUILDERS.plot_window.preview({ kind: 'line', title: 'T', points })).toMatchObject({ kind: 'sketch', line: true });
   });
+
+  it('is the title of a figure with no points, which is what the chart says', () => {
+    expect(WIDGET_BUILDERS.plot_window.preview({ kind: 'bars', title: 'Choose a CSV file to plot.', points: [] }))
+      .toEqual({ kind: 'line', text: 'Choose a CSV file to plot.' });
+  });
 });
