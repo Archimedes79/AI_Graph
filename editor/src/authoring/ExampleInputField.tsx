@@ -37,8 +37,11 @@ interface Props {
   pathPorts: string[];
   /** ⟳ From the graph: what really arrives here, and a word on where it came from. */
   fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
-  /** An example file an older version of the dialog attached, not yet taken in. */
-  earlierFile?: string;
+  /**
+   * An example file an older version of the dialog attached, not yet taken
+   * in, and how to let it go: once it is taken in, or when the person says so.
+   */
+  earlierFile?: { path: string; drop: () => void };
   /** One line under the field. */
   note?: React.ReactNode;
   /** The field's words when it is empty. */
@@ -92,8 +95,9 @@ export default function ExampleInputField({
     }
   };
 
-  const take = async (path: string) => {
-    if (!into) return;
+  /** Puts the file at *path* into the example, and says whether it could. */
+  const take = async (path: string): Promise<boolean> => {
+    if (!into) return false;
     setBusy('file'); setFailure(''); setSaid('');
     try {
       const value = await pickedValue(path, into, pathPorts);
@@ -101,12 +105,22 @@ export default function ExampleInputField({
       setSaid(pathPorts.includes(into)
         ? `“${into}” holds the file's path, as a run hands it on.`
         : `“${into}” holds what the file says.`);
+      return true;
     } catch (reason) {
       setFailure(errorText(reason, 'The file could not be read.'));
+      return false;
     } finally {
       setBusy('');
     }
   };
+  // Taken in, the file is the example, and the offer has done its work.
+  const takeEarlier = async (earlier: { path: string; drop: () => void }) => {
+    if (await take(earlier.path)) earlier.drop();
+  };
+  // It is offered whether or not there is an example already: hidden then, an
+  // older node's file was neither shown nor sent anywhere, and no one could
+  // tell it was there.
+  const replaces = exampleObject(typed)?.[into] !== undefined;
 
   return (
     <div className="space-y-1.5">
@@ -139,10 +153,17 @@ export default function ExampleInputField({
       </div>
       {earlierFile && into && (
         <p className="text-xs flex flex-wrap items-center gap-2" style={{ color: DIMMER }}>
-          <span>An example file was attached here before.</span>
+          <span className="flex-1 min-w-0">
+            An example file was attached here before: {earlierFile.path}
+            {replaces ? `. Using it replaces what the example gives “${into}”.` : ''}
+          </span>
           <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} disabled={busy !== ''}
-            onClick={() => take(earlierFile)} title={earlierFile}>
+            onClick={() => void takeEarlier(earlierFile)} title={earlierFile.path}>
             Use the example file from before
+          </button>
+          <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} disabled={busy !== ''}
+            onClick={earlierFile.drop} aria-label="Drop the example file from before">
+            ✕
           </button>
         </p>
       )}

@@ -78,13 +78,20 @@ describe.each([
     expect(html).toContain('What ✨ sends');
   });
 
-  it('offers the example file an older version attached, until there is an example', () => {
+  it('offers the example file an older version attached, beside an example too, until it is let go', () => {
+    // Hidden once there was an example, an older node's file was shown nowhere
+    // and sent nowhere: no one could tell it was there.
     const before = made(type, { example_file: 'data/sample.csv' });
     expect(panel(before)).toContain('Use the example file from before');
+    expect(panel(before)).toContain('aria-label="Drop the example file from before"');
+    expect(panel(before)).not.toContain('Using it replaces');
+    const port = before.inputs[0].id;
     const since = type === 'data'
       ? made(type, { example_file: 'data/sample.csv', data_value: 'held' })
-      : made(type, { example_file: 'data/sample.csv', examples: example(`{ "${before.inputs[0].id}": "a" }`) });
-    expect(panel(since)).not.toContain('Use the example file from before');
+      : made(type, { example_file: 'data/sample.csv', examples: example(`{ "${port}": "a" }`) });
+    expect(panel(since)).toContain('Use the example file from before');
+    expect(panel(since)).toContain(`Using it replaces what the example gives “${port}”.`);
+    expect(panel(made(type, { example_file: '' }))).not.toContain('Use the example file from before');
   });
 });
 
