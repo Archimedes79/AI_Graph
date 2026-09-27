@@ -31,6 +31,7 @@ import type { LastOutputs } from './reuse.ts';
 import type { Latch } from './latch.ts';
 import { mismatches } from './interface.ts';
 import { ERROR_PORT, fatalProblems, unrunnable } from './wiring.ts';
+import { applyRuntimeValues } from './runtimeValues.ts';
 
 /** Ids of the fewest edges that must be ignored to make the graph acyclic. */
 export function memoryFeedbackEdges(
@@ -671,6 +672,24 @@ export async function executeNode(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * One node by itself, as `run-node` and the MCP server's `run_node` run it: on
+ * the inputs *given*, or -- without them -- on what the nodes feeding it
+ * produce, which run for that and nothing else. The graph's questions are
+ * answered with what it already holds, as an unattended run answers them.
+ * Hands back the inputs it ran on too, since without *given* nobody else knows.
+ */
+export async function runNodeAlone(
+  graph: Graph,
+  nodeId: string,
+  given: Record<string, unknown> | undefined,
+  options: RunOptions,
+): Promise<{ inputs: Record<string, unknown>; result: NodeResult }> {
+  applyRuntimeValues(graph, {}, options.registry);
+  const inputs = given ?? (await inputsFor(graph, nodeId, options)).inputs;
+  return { inputs, result: await executeNode(graph, nodeId, inputs, options) };
 }
 
 /**

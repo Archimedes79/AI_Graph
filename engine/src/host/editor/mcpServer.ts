@@ -52,13 +52,13 @@
 // touches. Point it at a project folder, not at a home directory.
 
 import { existsSync, statSync } from 'node:fs';
-import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import type { AiService, Runtime, ToolSpec } from '../../elements/Runtime.ts';
 import { parseGraph, type Graph } from '../../graph.ts';
-import { executeGraph, executeNode, inputsFor } from '../../execution/executor.ts';
+import { executeGraph, runNodeAlone } from '../../execution/executor.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
-import { runExamples } from '../../execution/examples.ts';
+import { everyGraphIn, testGraph } from '../../execution/examples.ts';
 import { RUN_PORT, type Trigger } from '../../execution/triggers.ts';
 import { registry } from '../../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';
@@ -68,7 +68,9 @@ import { nodeRuntime } from '../node.ts';
 import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { generationTarget } from './settings.ts';
-import { FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, writeProject } from '../../project/folder.ts';
+import {
+  FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
+} from '../../project/folder.ts';
 import { INTERFACE_FILE } from '../../project/interfaceFile.ts';
 import { folderProblems, names, problemsIn, type Problem } from '../../project/check.ts';
 
@@ -293,7 +295,8 @@ const SPECS: ToolSpec[] = [
   {
     name: 'test_graph',
     description: 'Run the examples nodes keep in their examples.md -- inputs, and what must come out -- and report each '
-      + 'as pass, fail (with what differed), error or skipped. All nodes that have examples, or one with node_id. '
+      + 'as pass, fail (with what differed), error or skipped. All nodes that have examples, or one with node_id -- '
+      + 'also inside the graphs nodes hold, where a result names the way down ("part ▸ work"). '
       + 'offline: ask no model; an AI node\'s examples and judged expectations are skipped.',
     parameters: {
       type: 'object',
@@ -464,14 +467,10 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
     const problems = problemsIn(parseGraph(JSON.parse(JSON.stringify(graph))));
     if (problems.length) return { problems };
 
-    // Into a project, the way the editor saves one: the wiring to `flow.json`,
-    // each node to its own folder. Anywhere else, one file.
-    const folder = projectFolderOf(full) ?? (basename(full) === FLOW_FILE ? dirname(full) : null);
-    if (folder) await writeProject(folder, graph, insideRoot);
-    else {
-      await mkdir(dirname(full), { recursive: true });
-      await writeFile(full, `${JSON.stringify(graph, null, 2)}\n`, 'utf8');
-    }
+    // As the editor saves: into a project, the wiring to `flow.json` and each
+    // node to its own folder; anywhere else, one file (`confine` lets only a
+    // `.json` path through). The guard holds for the one file too.
+    await saveToDisk(full, graph, insideRoot);
     return { saved: shown(full), problems };
   };
 
@@ -561,11 +560,9 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       if (args.inputs !== undefined && (!args.inputs || typeof args.inputs !== 'object' || Array.isArray(args.inputs))) {
         throw new Refused('"inputs" must be an object of values by input port id.');
       }
-      applyRuntimeValues(graph, {}, registry);
-      const runtime = options.runtime();
-      const inputs = (args.inputs as Record<string, unknown> | undefined)
-        ?? (await inputsFor(graph, nodeId, { runtime, registry })).inputs;
-      const result = await executeNode(graph, nodeId, inputs, { runtime, registry });
+      const { inputs, result } = await runNodeAlone(
+        graph, nodeId, args.inputs as Record<string, unknown> | undefined, { runtime: options.runtime(), registry },
+      );
       return json({
         status: result.status,
         ...(result.error ? { error: brief(result.error, ERROR_LIMIT) } : {}),
@@ -577,19 +574,21 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
     async test_graph(args) {
       const { graph } = await loadGraph(args.path);
       const only = args.node_id === undefined ? '' : String(args.node_id);
-      const nodes = graph.nodes.filter((node) => (only ? node.id === only : String(node.config.examples ?? '').trim()));
-      if (only && !nodes.length) throw new Refused(`"node_id" must name a node of this graph: ${names(graph.nodes.map((node) => node.id))}.`);
-      const results = [];
-      for (const node of nodes) {
-        for (const result of await runExamples(graph, node.id, { runtime: options.runtime(), registry, offline: args.offline === true })) {
-          results.push({
-            node: node.id, example: result.title, status: result.status,
-            ...(result.details.length ? { details: result.details.map((line) => brief(line, ERROR_LIMIT)) } : {}),
-          });
-        }
+      // Every depth, as `test` on the command line: the graph a node holds is part of this one.
+      const { tested, results: ran } = await testGraph(graph, {
+        runtime: () => options.runtime(), registry, offline: args.offline === true, only,
+      });
+      if (only && !tested) {
+        const ids = everyGraphIn(graph, registry).flatMap((level) => level.graph.nodes.map((node) => node.id));
+        throw new Refused(`"node_id" must name a node of this graph, or of a graph one of its nodes holds: ${names(new Set(ids))}.`);
       }
+      // A node inside another is named with the way down to it: ids are unique only within one graph.
+      const results = ran.map(({ inside, nodeId, result }) => ({
+        node: `${inside}${nodeId}`, example: result.title, status: result.status,
+        ...(result.details.length ? { details: result.details.map((line) => brief(line, ERROR_LIMIT)) } : {}),
+      }));
       const failed = results.filter((result) => result.status === 'fail' || result.status === 'error').length;
-      return json({ passed: failed === 0, results, ...(nodes.length ? {} : { note: 'No node of this graph has examples.' }) });
+      return json({ passed: failed === 0, results, ...(tested ? {} : { note: 'No node of this graph has examples.' }) });
     },
 
     async save_graph(args) {

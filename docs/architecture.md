@@ -473,7 +473,8 @@ or a page that has them can do the same.
   node's generation. An AI node's `output.md` and `output.example.md` are also sent to the model.
 - **Examples are tests, and the one sample.** A node's optional `examples.md`
   ([`execution/examples.ts`](../engine/src/execution/examples.ts)) is run by `test` and the
-  MCP server's `test_graph`; its first section is the node dialog's example, which Try it
+  MCP server's `test_graph`, through its one `testGraph`, at every depth of the graph; one node
+  alone is run by `executor.ts`'s `runNodeAlone`, behind `run-node` and `run_node` alike. Its first section is the node dialog's example, which Try it
   runs and ✨ is written and checked against. `check` holds an example's inputs to the
   output interface of the node wired into that port.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of

@@ -203,3 +203,42 @@ export async function runExamples(
   }
   return results;
 }
+
+/** The graph, and every graph its nodes hold, each with the way down to it (`outer ▸ `). */
+export function everyGraphIn(graph: Graph, registry: Runners, inside = ''): { graph: Graph; inside: string }[] {
+  return [
+    { graph, inside },
+    ...graph.nodes.flatMap((node) => {
+      const held = registry.node(node.node_type)?.nestedGraph(node);
+      return held ? everyGraphIn(held, registry, `${inside}${node.id} ▸ `) : [];
+    }),
+  ];
+}
+
+/** One example's result, and the node it belongs to, with the way down to it. */
+export interface TestedExample { inside: string; nodeId: string; result: ExampleResult }
+
+/**
+ * Run the examples of every node that keeps some, or only of the nodes with
+ * the id *only* -- at every depth, because the graph a node holds is part of
+ * the same project, as `check` also says. The one runner behind `test` on the
+ * command line and `test_graph` over MCP: the second once looked at the top
+ * graph only, and skipped every example inside a node without a word.
+ * `tested` counts the nodes whose examples ran; none means nothing matched.
+ */
+export async function testGraph(
+  graph: Graph,
+  options: { runtime: () => Runtime; registry: Runners; offline?: boolean; only?: string },
+): Promise<{ tested: number; results: TestedExample[] }> {
+  const results: TestedExample[] = [];
+  let tested = 0;
+  for (const { graph: level, inside } of everyGraphIn(graph, options.registry)) {
+    const nodes = level.nodes.filter((node) => (options.only ? node.id === options.only : String(node.config.examples ?? '').trim()));
+    tested += nodes.length;
+    for (const node of nodes) {
+      const ran = await runExamples(level, node.id, { runtime: options.runtime(), registry: options.registry, offline: options.offline });
+      results.push(...ran.map((result) => ({ inside, nodeId: node.id, result })));
+    }
+  }
+  return { tested, results };
+}

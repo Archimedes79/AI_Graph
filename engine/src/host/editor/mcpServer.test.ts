@@ -508,6 +508,22 @@ describe('one node at a time', () => {
     ]);
   });
 
+  it('test_graph also runs the examples of a node inside another, as `test` does', async () => {
+    // It looked at the top graph only, and skipped these without a word.
+    const holder = {
+      id: 'part', node_type: 'subgraph', label: 'part', description: '', position: { x: 0, y: 0 }, inputs: [], outputs: [],
+      config: { subgraph: chain(example('Inside', 'c', 'ran on c')) },
+    };
+    await writeFile(join(root, 'g.json'), JSON.stringify(graphOf([holder])));
+    const tested = await answer(toolsWith(), 'test_graph', { path: 'g.json' });
+    expect(tested.json).toEqual({ passed: true, results: [{ node: 'part ▸ work', example: 'Inside', status: 'pass' }] });
+    const one = await answer(toolsWith(), 'test_graph', { path: 'g.json', node_id: 'work' });
+    expect(one.json.results).toHaveLength(1);
+    const wrong = await toolsWith().call('test_graph', { path: 'g.json', node_id: 'ghost' });
+    expect(wrong.isError).toBe(true);
+    expect(wrong.text).toMatch(/"part", "greeting", "work", "result"/);
+  });
+
   it('validate_graph on a project also finds what is wrong with its folder', async () => {
     await mkdir(join(root, 'proj', 'nodes', 'gone'), { recursive: true });
     await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(chain()));
