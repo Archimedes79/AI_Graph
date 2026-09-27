@@ -585,13 +585,18 @@ layer order, now held by `layers.test.ts`. What it left, still true:
 
 There are no import cycles through values, and none between the engine and the editor.
 
-- **A saved node carries its own settings only.** In memory every node has the full
-  `NodeConfig`, so a panel can read any field with a type. Each node type names the `settings`
-  it owns in `document/nodeKinds.ts` (`NODE_KINDS[type].settings`); `savedNode` writes those
-  and any other key someone changed, and loading fills the rest back in (`whenMissing`, then
-  what `create` starts a node with). [`savedConfig.test.ts`](../editor/src/elements/savedConfig.test.ts)
-  asks the engine's element the questions a run asks, for every node type and mode, and
-  holds the lean node to the full one's answers.
+- **A saved node carries only what differs from the default.** In memory every node has the
+  full `NodeConfig`, so a panel can read any field with a type. `document/baseNodeConfig.ts`
+  is each key's one default -- what the engine reads a missing key as. Loading fills a missing
+  key from it, and `savedNode` writes only the keys that differ from it.
+  [`savedConfig.test.ts`](../editor/src/elements/savedConfig.test.ts) asks the engine's element
+  the questions a run asks, for every node type and mode, and holds the lean node to the full
+  one's answers.
+- **A run lands only in the graph it started on.** The store counts documents: every load and
+  every step into or out of a node's graph is a new one. A run or a ✨ sweep notes the count it
+  started with and drops what comes back for another; New, Open and Reload wait while either
+  is going. The page is edited only through `page/pageWrite.ts`, which reads the page from the
+  store when an edit lands.
 - **A page event reuses what it only needs.** What the event is *for* — the nodes it is
   wired to and everything after them — runs fresh; a node upstream of that, run only as
   context, hands back its last outputs when its definition and every input (files already
