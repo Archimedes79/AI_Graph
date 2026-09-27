@@ -128,7 +128,7 @@ flowchart LR
 | `DisplayWidgetRunner` | [`widgets/DisplayWidgetRunner.ts`](../engine/src/elements/widgets/DisplayWidgetRunner.ts) | one input, nothing out |
 | `TransformingDisplayRunner` | [`widgets/TransformingDisplayRunner.ts`](../engine/src/elements/widgets/TransformingDisplayRunner.ts) | an optional transform before drawing; its kinds are `plot_window` (with `check.ts`, `view.ts`), `table`, `image_view` (the diagram's list) |
 | `ElementGuiBuilder` | [`editor/src/elements/ElementGuiBuilder.ts`](../editor/src/elements/ElementGuiBuilder.ts) | `Panel` (lazy), `generation` |
-| `NodeGuiBuilder` | [`editor/src/elements/NodeGuiBuilder.ts`](../editor/src/elements/NodeGuiBuilder.ts) | `label`, `icon`, `color`, `hint`, `AdvancedPanel`, `describeOutput`/`canvasSummary`; the four steps' declarations, which the shells ask instead of naming a kind: `stepped`, `exampleInput`, `exampleOutput`, `outputContract`, `ownsDescription`, `portEditing`/`portHint`, `wantsOn`, `restingValue`/`restingFile`, `publishedDescription`; `NodePanelProps` |
+| `NodeGuiBuilder` | [`editor/src/elements/NodeGuiBuilder.ts`](../editor/src/elements/NodeGuiBuilder.ts) | `label`, `icon`, `color`, `hint`, `AdvancedPanel`, `describeOutput`/`canvasSummary`; the four steps' declarations, which the shells ask instead of naming a kind: `stepped`, `exampleInput`, `ownsDescription`, `portEditing`/`portHint`, `wantsOn`, `restingValue`/`restingFile`, `publishedDescription`; `NodePanelProps` |
 | `8 × <Kind>NodeGuiBuilder` | [`editor/src/elements/nodes/`](../editor/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeGuiBuilder.ts` beside `<Kind>NodePanel.tsx`; listed in [`registry.ts`](../editor/src/elements/registry.ts) |
 | `WidgetGuiBuilder` | [`editor/src/elements/WidgetGuiBuilder.ts`](../editor/src/elements/WidgetGuiBuilder.ts) | `create(label, mode)`, `label`, `defaultSpan`, `defaultTone`, `runOnChangeHint`; `WidgetPanelProps` |
 | `6 × <Kind>WidgetGuiBuilder` | [`editor/src/elements/widgets/<kind>/<Kind>WidgetGuiBuilder.ts`](../editor/src/elements/widgets/) | beside `<Kind>WidgetView.tsx` and, if it has settings, `<Kind>WidgetPanel.tsx`; listed in [`widgets/roster.ts`](../editor/src/elements/widgets/roster.ts) |
@@ -279,7 +279,7 @@ classDiagram
     AdvancedPanel
     describeOutput()
     canvasSummary()
-    stepped exampleOutput outputContract ownsDescription portEditing
+    stepped ownsDescription portEditing
     portHint()
     exampleInput()
     wantsOn()

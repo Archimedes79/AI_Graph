@@ -101,30 +101,10 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   readonly advancedSummary?: string;
 
   /**
-   * How this node declares its output. `'format'` (ai, code): step 2 of the
-   * four steps shows the words field (`output_format_prompt`) under the
-   * derived output spec, and ✨ and the graph sweep send no `graphContext`
-   * sentences, because the node's port facts already describe its
-   * neighbours. Absent: no words field, and the neighbours are described in
-   * sentences.
-   */
-  readonly outputContract?: 'format';
-
-  /**
    * The panel already covers what the node is for -- a prompt box, a code
    * body -- so the shell draws no separate "Description" field above it.
    */
   readonly ownsDescription?: boolean;
-
-  /**
-   * What step 2's example output is for this kind of node. `expect`: the
-   * outputs its example must give, the example's expect block in
-   * `examples.md` -- checked by Try it, ✨'s verify pass and `test`. `answer`:
-   * an answer a model is shown to imitate (`output_example`), sent on every
-   * run, because an ai node's answer is never the same twice. Absent: the
-   * node has no example output to keep.
-   */
-  readonly exampleOutput?: 'expect' | 'answer';
 
 
   /**
@@ -169,9 +149,6 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   continuePorts(_before: GraphNode, after: GraphNode): GraphNode {
     return after;
   }
-
-  /** What step 2's words mean for this kind of node, said above them: who reads them, and when. */
-  readonly outputFormatHint?: string;
 
   /**
    * What this node emits, in one line, for its neighbours' generation context.

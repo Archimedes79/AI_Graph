@@ -17,7 +17,7 @@ import { useTyped } from './useTyped';
 import { derivedOutputWords } from './derivedOutput';
 import { pathPorts } from './generationContext';
 import { outputFormatText } from './outputFormat';
-import { exampleFor, keptAnswer, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
+import { exampleFor, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 type Props = Pick<NodePanelProps,
@@ -34,6 +34,16 @@ type Props = Pick<NodePanelProps,
   request?: (example: Record<string, unknown> | undefined, graph: () => Graph) => React.ReactNode;
   /** What came out of a try, drawn the element's own way. */
   renderResult?: (result: TryResult) => React.ReactNode;
+  /** What step 2's words mean for this node, said above them: who reads them, and when. */
+  wordsHint: string;
+  /**
+   * Step 2's example output, where it is an answer a model is shown to
+   * imitate rather than an output the example must give (an ai node's
+   * `output_example`): the element's own field, and how Try it's "Keep"
+   * keeps a result there. Absent, it is the example's expect block, checked
+   * by Try it, ▶ Test and `test`.
+   */
+  answer?: { field: React.ReactNode; keep: (result: TryResult) => void };
 };
 
 /** An expectation of nothing -- "only that it runs" -- is kept as `{}` and shown as an empty box. */
@@ -61,7 +71,7 @@ const noExpectation = (examples: string): string => {
  */
 export default function NodeSteps({
   builder, node, setConfig, updateNode, setInvalid, fields, generating, message, onGenerate, steps,
-  body, subject, request, renderResult,
+  body, subject, request, renderResult, wordsHint, answer,
 }: Props) {
   const generation = builder.generation;
   const nodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
@@ -69,7 +79,7 @@ export default function NodeSteps({
 
   const examples = String(node.config.examples ?? '');
   const pair = readPair(examples);
-  const answers = builder.exampleOutput === 'answer';
+  const answers = !!answer;
   const inputError = pair.inputText.trim() && !pair.input
     ? 'The example input is not an object keyed by input port yet, like {"input": "…"}. It cannot be saved like this.'
     : '';
@@ -170,26 +180,9 @@ export default function NodeSteps({
     </>
   );
 
-  const exampleOutput = answers ? (
+  const exampleOutput = answer ? (
     <div>
-      <div className="flex items-center justify-between mb-1 gap-3">
-        <label className="text-xs font-medium" style={{ color: MUTED }}>Example answer</label>
-        {node.config.output_example && (
-          <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} onClick={() => setConfig('output_example', '')}>Clear</button>
-        )}
-      </div>
-      <p className="text-xs mb-1" style={{ color: DIMMER }}>
-        Shown to the model on every run, to answer in the same shape with new content. Keep one from Try it below, or write it.
-      </p>
-      <textarea
-        className="w-full rounded-lg px-2 py-1.5 text-sm font-mono resize-y"
-        style={{ ...FIELD, minHeight: 56 }}
-        value={String(node.config.output_example ?? '')}
-        onChange={(event) => setConfig('output_example', event.target.value)}
-        placeholder="An answer you liked"
-        spellCheck={false}
-        aria-label="Example answer"
-      />
+      {answer.field}
       {/* Not asked for here, and still checked: shown, so that a `test`
           that fails on it can be seen, and dropped where it is not wanted. */}
       {expects && (
@@ -271,15 +264,13 @@ export default function NodeSteps({
   const comesOut = (
     <>
       {steps.outputs}
-      {builder.outputContract === 'format' && (
-        <OutputWordsField
-          words={words}
-          onWords={setWords}
-          derived={derivedOutputWords(node, nodes, edges)}
-          hint={builder.outputFormatHint}
-        />
-      )}
-      {builder.exampleOutput && exampleOutput}
+      <OutputWordsField
+        words={words}
+        onWords={setWords}
+        derived={derivedOutputWords(node, nodes, edges)}
+        hint={wordsHint}
+      />
+      {exampleOutput}
       {judgeField}
       {testsMore && <TestEveryExample graph={steps.graph} nodeId={node.id} count={pair.others + 1} />}
       {keepsOutputInterface(node) && (
@@ -291,9 +282,8 @@ export default function NodeSteps({
     </>
   );
 
-  const keep = (result: TryResult) => (answers
-    ? setConfig('output_example', keptAnswer(node, result.outputs))
-    : editExamples((current) => withExpect(exampleFor(node, current), keptExpect(result.outputs))));
+  const keep = answer?.keep
+    ?? ((result: TryResult) => editExamples((current) => withExpect(exampleFor(node, current), keptExpect(result.outputs))));
 
   const content = (
     <>

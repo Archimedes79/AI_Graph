@@ -5,7 +5,6 @@
 // builds the examples through these steps.
 
 import type { GraphNode, Wire } from '@/graph';
-import { promptText } from '@engine/elements/nodes/ai/prompt.ts';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
 import { asExampleText, readPair, withInput } from './examplePair';
 
@@ -86,18 +85,4 @@ export function exampleFor(node: GraphNode, examples: string): string {
  */
 export function keptExpect(outputs: Record<string, unknown> | undefined): string {
   return asExampleText(ownOutputs(outputs));
-}
-
-/**
- * What came out of a try, as the answer a model is shown to imitate: one
- * answer, as text. A node run once per item hands on a list of answers, and
- * keeping that list told every later run to answer with a JSON list of one
- * string.
- */
-export function keptAnswer(node: GraphNode, outputs: Record<string, unknown> | undefined): string {
-  const own = ownOutputs(outputs);
-  const values = Object.values(own);
-  const answer = values.length === 1 ? values[0] : own;
-  const one = runsPerItem(node) && Array.isArray(answer) ? answer[0] : answer;
-  return promptText(one);
 }

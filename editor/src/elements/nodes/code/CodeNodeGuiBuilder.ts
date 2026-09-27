@@ -22,14 +22,6 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
   // description (`publishedDescription`): a second box would be a second text.
   override readonly ownsDescription = true;
 
-  override readonly outputContract = 'format';
-
-  // What its example must give, checked: a code node returns the same for the
-  // same input, so its example output is a test, not a style to imitate.
-  override readonly exampleOutput = 'expect';
-
-  override readonly outputFormatHint = 'Told to ✨ Generate, here and in the nodes this one feeds. Nothing reads it when the graph runs.';
-
   override readonly Panel = lazy(() => import('./CodeNodePanel'));
 
   override readonly AdvancedPanel = lazy(() => import('./CodeNodeAdvancedPanel'));

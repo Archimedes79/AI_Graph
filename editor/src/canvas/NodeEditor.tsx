@@ -108,7 +108,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // question ("what did that setting actually store?") that the file on disk
   // answers better, and it cost every node a tab bar to get to the one tab that
   // does something. What a node emits was a third tab for two of six types; it
-  // is a declaration now (`outputContract`), shown in step 2 of the four steps.
+  // is said in step 2 of the four steps now, in words (`OutputWordsField`).
   const element = NODE_BUILDERS[node.node_type];
 
   /**

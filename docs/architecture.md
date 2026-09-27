@@ -119,8 +119,8 @@ ElementRunner<Subject, Config>          config() · texts() · logic() · catche
 
 ElementGuiBuilder<Subject, PanelProps>           Panel · generation
 ├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary   (builder only)
-│                                         + the four steps' declarations: stepped · exampleInput · exampleOutput · outputContract
-│                                           ownsDescription · portEditing/portHint · wantsOn · restingValue/restingFile · publishedDescription
+│                                         + the four steps' declarations: stepped · exampleInput · ownsDescription
+│                                           portEditing/portHint · wantsOn · restingValue/restingFile · publishedDescription
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
 │   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
 │   └── GuiNodeGuiBuilder
@@ -399,6 +399,12 @@ The example is one thing, kept once: the first section of the node's `examples.m
 (`authoring/examplePair.ts`), a block's `example`. It is the sample ✨ is written and
 checked against (`nodeFacts`), what Try it runs, what an AI node's request is shown for,
 and what `test` runs.
+
+Where the steps differ by element, the element's panel hands the difference to `NodeSteps`
+rather than `NodeSteps` asking what it draws: an AI node's panel gives its step 2 the
+example answer a model imitates and how **Keep this result** keeps one there (`answer`,
+with `elements/nodes/ai/keptAnswer.ts`); without it, step 2 is the example's expect block.
+Each panel says what its words in step 2 are for (`wordsHint`).
 
 **One way to run a body — on Node.** A code node's `code.js`, an ai node's changed `run.js`,
 the `select.js` that picks files and the code a table or an image block shapes its value

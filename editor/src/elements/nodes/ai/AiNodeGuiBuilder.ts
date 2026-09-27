@@ -21,14 +21,6 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
   // panel -- a second Description field above it showed the same box twice.
   override readonly ownsDescription = true;
 
-  override readonly outputContract = 'format';
-
-  // An answer is never the same twice, so its example output is not checked:
-  // it is the answer the model is shown to imitate, on every run.
-  override readonly exampleOutput = 'answer';
-
-  override readonly outputFormatHint = 'Only needed when something reads the answer. Sent to the model after its instructions on every run, and to ✨ Generate here and in the nodes this one feeds.';
-
   override readonly Panel = lazy(() => import('./AiNodePanel'));
 
   override readonly AdvancedPanel = lazy(() => import('./AiNodeAdvancedPanel'));

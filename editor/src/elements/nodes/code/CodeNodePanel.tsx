@@ -7,6 +7,7 @@ export default function CodeNodePanel(props: NodePanelProps) {
     <NodeSteps
       {...props}
       subject="this code"
+      wordsHint="Told to ✨ Generate, here and in the nodes this one feeds. Nothing reads it when the graph runs."
       body={{
         title: 'Code',
         hint: 'A JavaScript function run(inputs) that returns the outputs. ✨ Generate writes it from steps 1 to 3, runs it on the example in step 1 -- or, while there is none, on what arrived last -- and repairs it once if it fails.',
