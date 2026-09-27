@@ -119,6 +119,7 @@ ElementGuiBuilder<PanelProps>                    Panel · generation
 ├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
 │                                         + the four steps' declarations: stepped · exampleInput · ownsDescription
 │                                           portEditing/portHint · wantsOn · restingValue · publishedDescription
+│                                           dropPort/withExampleValue (what a file dropped on the node fills)
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
 │   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
 │   └── GuiNodeGuiBuilder
@@ -425,8 +426,14 @@ block. Each panel says what its words in step 2 are for (`wordsHint`).
 **No Save.** What a node's dialog changes is written into the graph a moment later
 (`canvas/nodeDialog.ts`), one undo step per field typed into (`graphStore.commit`'s
 coalescing); Undo takes it back, and closing the dialog loses nothing. What cannot be stored
-yet -- an example that is not an object, a port name that is empty or taken -- stays in its
-field with the reason (`useTyped`), and is never written.
+yet -- an example that is not an object, a data node's structure that does not parse, a
+port name that is empty or taken -- stays in its field with the reason (`useTyped`), and is
+never written. The same holds for every kind's dialog, the four steps or not.
+
+**A dropped file.** A file dropped on a node on the canvas fills what the element says
+(`NodeGuiBuilder.dropPort`, `withExampleValue`): the example on the one input of an AI or
+code node -- its path where that input reads its file, else what it says -- and what a data
+node holds. It is one undo step, and opens the node's dialog (`authoring/droppedFile.ts`).
 
 **Changing what there is.** "Say what to change" and ✨ Fix go through the one generate path
 with `refine`: the body as it is, what came of it (the try on screen, else the last run) and

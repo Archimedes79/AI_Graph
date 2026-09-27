@@ -39,7 +39,10 @@ node is the run's result — what the command line prints, what a tool without a
 shows — under the node's label ("Result" here), and with `write_mode` `file` or
 `directory` it is also written to a file, or one file per value into a folder. A
 **data** node is a value that survives the run: its kind (`data_format`, text or
-structure) and what it holds (`data_value`).
+structure) and what it holds (`data_value`). Its dialog is that value: what is typed is
+in the graph as it is typed, a structure that does not parse stays in the box with the
+reason and is not stored, and a file dropped on the box — or on the node on the canvas —
+is what it holds from then on (what the file says, parsed when it is JSON).
 
 ---
 
@@ -191,7 +194,7 @@ stands in the dialog:
 
 ```
 Instructions (system)   what you wrote, or had ✨ Generate write from "What this node should do"
-                        + the answer format and example, when you gave them
+                        + what the answer should look like (step 2's words), when they say anything
 Message (user)          what arrived on the wires, laid out by the message template
 ```
 
@@ -214,8 +217,8 @@ User: {{message}}
   says that too.
 - A list becomes paragraphs, not `["…","…"]`.
 
-**▶ Try it** runs this one node on its example — without saving and without running the
-graph — and shows first what the model receives, described
+**▶ Try it** runs this one node on its example — as the dialog shows it, without running
+the graph — and shows first what the model receives, described
 [below](#trying-an-element-out-the-same-way-everywhere).
 
 **`run.js`: what the node does with all that.** In a project folder an AI node keeps
@@ -514,7 +517,8 @@ wrote, what comes out?* — built in the same four steps:
   nodes that *feed* this element deliver when they are run now (the file picked, the CSV
   parsed, the page's fields read), not the element itself. **📂 From a file…** fills one
   input from a file — and so does a file **dropped** on the example field, or on a node
-  with one input on the canvas, with no dialog on the way: its path where the input says
+  with one input on the canvas (on a data node, it is what the node holds), with no
+  dialog on the way: its path where the input says
   **Read the file at this path** (read as a run reads it, and kept relative to the folder
   the editor runs in), otherwise what the file says, parsed when it is JSON. A browser
   never says where a dropped file is; the editor finds the one file of that name and size

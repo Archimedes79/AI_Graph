@@ -71,10 +71,10 @@ Nothing leaves the machine unless the graph itself sends it there.
   or a project folder on the window to open it, or use **Open**; every example in
   `examples/` is a project folder.
 - **Eight node types** — Input (a text, or a folder's listing), AI, Code (JavaScript),
-  Data (a value kept between runs), Output (the run's result, under its name; a file or a
-  folder of it if asked), Trigger (the tool starting, a clock), Subgraph: a node that holds a graph of
-  its own, so a graph grows in depth as well as in width — and the Page, one per graph,
-  which its first block makes.
+  Data (a value kept between runs: typed, or a file dropped on it), Output (the run's
+  result, under its name; a file or a folder of it if asked), Trigger (the tool starting,
+  a clock), Subgraph: a node that holds a graph of its own, so a graph grows in depth as
+  well as in width — and the Page, one per graph, which its first block makes.
 - **One ▶ Run, and results in place** — the toolbar's ▶ Run runs the graph from any tab,
   and after it every node shows what it made under its port: a line of text, *214 rows*
   and the first, a small chart of numbers, a thumbnail, or the first line of an error.
