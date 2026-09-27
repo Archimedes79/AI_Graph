@@ -1,6 +1,7 @@
 import type { DataType, Port } from '@/graph';
 import type { PortEditing } from '@/elements/NodeGuiBuilder';
-import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
+import { caughtErrorAt, portIdProblems } from './portIds';
+import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 /**
  * What a node takes in and hands out, named by the person who wrote it.
@@ -62,10 +63,12 @@ interface SideProps {
   reads: string[];
   /** Offer "list" on each port: see `PortsEditor.inputLists`. */
   lists: boolean;
+  /** Why these ports cannot be saved as they are named, or '' (`portIdProblems`). */
+  problem: string;
   onChange: (ports: Port[]) => void;
 }
 
-function Side({ title, hint, kind, ports, fixed, editing, wiring, reads, lists, onChange }: SideProps) {
+function Side({ title, hint, kind, ports, fixed, editing, wiring, reads, lists, problem, onChange }: SideProps) {
   const set = (at: number, patch: Partial<Port>) => {
     onChange(ports.map((port, i) => (i === at ? { ...port, ...patch } : port)));
   };
@@ -171,6 +174,8 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, reads, lists, 
           <p className="text-xs py-1" style={{ color: DIMMER }}>None yet.</p>
         )}
 
+        {problem && <p className="text-xs" style={{ color: DANGER_TEXT }}>{problem} It cannot be saved like this.</p>}
+
         {fixed.map((port) => (
           <div key={port.id} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded" style={{ color: DIMMER, border: `1px dashed ${LINE}` }}>
             <span className="font-mono flex-1">{port.id}</span>
@@ -201,6 +206,8 @@ interface PortsEditorProps {
    * which sets it together with what it does nothing without.
    */
   inputLists?: boolean;
+  /** Whether the node catches its failures, so that its last "error" output is the one that switch added. */
+  caught?: boolean;
 }
 
 const EDIT_BOTH = { inputs: 'edit', outputs: 'edit' } as const;
@@ -208,11 +215,14 @@ const NO_WIRES = { inputs: {}, outputs: {} };
 
 export default function PortsEditor({
   inputs, outputs, onChange, side = 'both', editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, reads = [], inputLists = false,
+  caught = false,
 }: PortsEditorProps) {
   // The Error output belongs to the catch-failures switch, which adds and
   // removes it. Editing it here would let the two disagree.
-  const ownOutputs = outputs.filter((port) => port.id !== 'error');
-  const fixedOutputs = outputs.filter((port) => port.id === 'error');
+  const errorAt = caughtErrorAt(outputs, caught);
+  const ownOutputs = outputs.filter((_, at) => at !== errorAt);
+  const fixedOutputs = outputs.filter((_, at) => at === errorAt);
+  const problems = portIdProblems(inputs, outputs, caught);
   const showInputs = side !== 'outputs' && editing.inputs !== 'none';
   const showOutputs = side !== 'inputs' && editing.outputs !== 'none';
 
@@ -221,14 +231,14 @@ export default function PortsEditor({
       {showInputs && (
         <Side
           title="Takes in" kind="input" ports={inputs} fixed={[]} editing={editing.inputs}
-          hint={hints.inputs} wiring={wiring.inputs} reads={reads} lists={inputLists}
+          hint={hints.inputs} wiring={wiring.inputs} reads={reads} lists={inputLists} problem={editing.inputs === 'edit' ? problems.inputs : ''}
           onChange={(next) => onChange({ inputs: next, outputs })}
         />
       )}
       {showOutputs && (
         <Side
           title="Hands out" kind="output" ports={ownOutputs} fixed={fixedOutputs} editing={editing.outputs}
-          hint={hints.outputs} wiring={wiring.outputs} reads={[]} lists
+          hint={hints.outputs} wiring={wiring.outputs} reads={[]} lists problem={editing.outputs === 'edit' ? problems.outputs : ''}
           onChange={(next) => onChange({ inputs, outputs: [...next, ...fixedOutputs] })}
         />
       )}

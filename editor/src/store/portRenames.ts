@@ -20,8 +20,13 @@
 import type { GraphNode, Port } from '@/graph';
 
 const WAS = Symbol('the id this port had when its node was opened for editing');
+/**
+ * Which port this is, through every rename while its node is open -- given to
+ * a port added there too, which has no id from before (`renamedPorts`).
+ */
+const SAME = Symbol('which port this is while its node is open for editing');
 
-type Tracked = Port & { [WAS]?: string };
+type Tracked = Port & { [WAS]?: string; [SAME]?: symbol };
 
 /**
  * For each side, the old id of every port that is now called something else,
@@ -35,7 +40,7 @@ export interface PortRenames {
 
 /** *node* with every port remembering the id it has now, to be edited from here. */
 export function trackPorts(node: GraphNode): GraphNode {
-  const mark = (port: Port): Tracked => ({ ...port, [WAS]: port.id });
+  const mark = (port: Port): Tracked => ({ ...port, [WAS]: port.id, [SAME]: Symbol(port.id) });
   return { ...node, inputs: node.inputs.map(mark), outputs: node.outputs.map(mark) };
 }
 
@@ -44,6 +49,7 @@ export function untracked(node: GraphNode): GraphNode {
   const plain = (port: Tracked): Port => {
     const copy = { ...port };
     delete copy[WAS];
+    delete copy[SAME];
     return copy;
   };
   return { ...node, inputs: node.inputs.map(plain), outputs: node.outputs.map(plain) };
@@ -103,4 +109,30 @@ export function portRenames(before: GraphNode | undefined, after: GraphNode): Po
     return fate;
   };
   return { inputs: side(before?.inputs, after.inputs), outputs: side(before?.outputs, after.outputs) };
+}
+
+/**
+ * *after* -- *before* with its ports edited once, in the ports editor -- with
+ * every port new to it known from here on, and what became of the name of
+ * each port of *before*: for what is keyed by a port's name rather than wired
+ * to it, the values of its examples (`examplePair.examplesFollowPorts`).
+ *
+ * `portRenames` answers the same question from the node as it is stored, for
+ * the wires, at Save; this answers it edit by edit, so the example the dialog
+ * tries and ✨ is written against says the name the port has now. A name
+ * another port still has belongs to that port, and has no fate here.
+ */
+export function renamedPorts(before: GraphNode, after: GraphNode): { node: GraphNode; names: PortRenames } {
+  const known = (ports: Tracked[]): Tracked[] => ports.map((port) => (port[SAME] ? port : { ...port, [SAME]: Symbol(port.id) }));
+  const node = { ...after, inputs: known(after.inputs), outputs: known(after.outputs) };
+  const side = (was: Tracked[], now: Tracked[]): Record<string, string | null> => {
+    const fate: Record<string, string | null> = {};
+    for (const port of was) {
+      if (now.some((candidate) => candidate.id === port.id)) continue;
+      const same = port[SAME] && now.find((candidate) => candidate[SAME] === port[SAME]);
+      fate[port.id] = same ? same.id : null;
+    }
+    return fate;
+  };
+  return { node, names: { inputs: side(before.inputs, node.inputs), outputs: side(before.outputs, node.outputs) } };
 }

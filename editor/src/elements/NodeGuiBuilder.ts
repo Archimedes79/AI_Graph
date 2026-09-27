@@ -12,6 +12,12 @@ export interface NodePanelProps {
   /** This node type's own builder. */
   builder: NodeGuiBuilder;
   node: GraphNode;
+  /**
+   * Sets one setting of the draft. *value* may instead be a function of the
+   * setting as the draft holds it when the change lands: what a write made
+   * after a wait -- a run upstream, a file read -- is merged into, so that it
+   * does not put back a copy from before the wait over what was typed meanwhile.
+   */
   setConfig: (key: string, value: unknown) => void;
   /** Changes the draft as a whole, for a setting that is a port and a key at once ("Run once per item"). */
   updateNode: (change: (node: GraphNode) => GraphNode) => void;

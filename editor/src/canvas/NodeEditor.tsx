@@ -4,7 +4,8 @@ import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { portRenames, trackPorts, untracked } from '@/store/portRenames';
 import { derivedNodePorts } from '@/document/guiWidgets';
 import PortsEditor from './PortsEditor';
-import { withSetting } from './nodeDraft';
+import { withPorts, withSetting } from './nodeDraft';
+import { portIdProblems } from './portIds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
@@ -62,6 +63,18 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     return reason ? { ...rest, [key]: reason } : rest;
   }), []);
   const blocked = Object.values(invalid).join(' ');
+  // Ports named so that they cannot be saved -- none, twice, the error port's
+  // name -- wait for a name that can, and the ports editor says which. Only
+  // the names the person can edit: ports that follow a setting are not theirs
+  // to put right.
+  const caught = node?.config.catch_errors === true;
+  const portProblems = node ? portIdProblems(node.inputs, node.outputs, caught) : { inputs: '', outputs: '' };
+  const editable = node && derivedNodePorts(node) === null ? NODE_BUILDERS[node.node_type].portEditing : undefined;
+  const portProblem = [
+    editable?.inputs === 'edit' ? portProblems.inputs : '',
+    editable?.outputs === 'edit' ? portProblems.outputs : '',
+  ].filter(Boolean).join(' ');
+  useEffect(() => setInvalid('ports', portProblem), [portProblem, setInvalid]);
 
   // The node can change while this dialog is open: its code edited in
   // another editor, its interface set by a run. An untouched draft simply
@@ -227,8 +240,8 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     inputs: inputSources(node.id, graphNodes, graphEdges),
     outputs: outputTargets(node.id, graphNodes, graphEdges),
   };
-  const setPorts = ({ inputs, outputs }: { inputs: Port[]; outputs: Port[] }) =>
-    setNode((prev) => (prev ? { ...prev, inputs, outputs } : prev));
+  const setPorts = (ports: { inputs: Port[]; outputs: Port[] }) =>
+    setNode((prev) => (prev ? withPorts(prev, ports) : prev));
   // The ports are the person's to name, rather than following a setting.
   const ownPorts = derivedNodePorts(node) === null;
   const stepped = element.stepped && ownPorts;
@@ -243,6 +256,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       wiring={wiring}
       reads={readFilePorts(node, graphNodes, graphEdges)}
       inputLists={!stepped}
+      caught={caught}
     />
   );
   const openInEditor = isProject && nodeLogic(node) && (

@@ -1,6 +1,8 @@
 import type { GraphNode, Port } from '@/graph';
 import { derivedNodePorts } from '@/document/guiWidgets';
 import { NODE_BUILDERS } from '@/elements/registry';
+import { renamedPorts } from '@/store/portRenames';
+import { examplesFollowPorts } from '@/authoring/examplePair';
 
 /** The output a node grows when it is told to catch its own failures. */
 const ERROR_OUTPUT: Port = {
@@ -17,6 +19,9 @@ const ERROR_OUTPUT: Port = {
  * The node dialog's *draft* with its setting *key* set to *value*, and its
  * ports following the setting where they are derived from it.
  *
+ * *value* may be a function of the setting as *draft* holds it: a change that
+ * lands after a wait is made to what is there by then (`NodePanelProps.setConfig`).
+ *
  * *stored* is the node as the store holds it, whose ports the wires are on.
  * Which new port carries on an old one is asked against it rather than the
  * draft: a person stepping through a mode select passes modes that have no
@@ -24,7 +29,10 @@ const ERROR_OUTPUT: Port = {
  * draft, the step through the folder forgot which port the wire was on.
  */
 export function withSetting(draft: GraphNode, stored: GraphNode | undefined, key: string, value: unknown): GraphNode {
-  const next = { ...draft, config: { ...draft.config, [key]: value } };
+  const settled = typeof value === 'function'
+    ? (value as (current: unknown) => unknown)((draft.config as Record<string, unknown>)[key])
+    : value;
+  const next = { ...draft, config: { ...draft.config, [key]: settled } };
   // A setting an element derives its ports from has just changed, so the
   // ports follow it here and now. They used to follow only on the next
   // load, which is why ticking "catch failures" on an input node grew its
@@ -38,7 +46,26 @@ export function withSetting(draft: GraphNode, stored: GraphNode | undefined, key
   // `error` for the executor to fill it.
   if (key === 'catch_errors') {
     const without = next.outputs.filter((port) => port.id !== 'error');
-    next.outputs = value ? [...without, ERROR_OUTPUT] : without;
+    next.outputs = settled ? [...without, ERROR_OUTPUT] : without;
   }
   return next;
+}
+
+/**
+ * The node dialog's *draft* with the ports edited in the ports editor, and its
+ * examples keyed by the names the ports have now.
+ *
+ * An example is an object keyed by input port. A port renamed or removed in
+ * step 1 carried its wire along (`portRenames`), but its value stayed under
+ * the old name: Try it and ✨ ran the body with the value where it no longer
+ * looks, and after Save `check` said the example gives an input the node does
+ * not have. Each edit carries the keys along with the port it renames, or takes
+ * them away with the port it removes.
+ */
+export function withPorts(draft: GraphNode, ports: { inputs: Port[]; outputs: Port[] }): GraphNode {
+  const { node, names } = renamedPorts(draft, { ...draft, ...ports });
+  const examples = draft.config.examples;
+  if (typeof examples !== 'string') return node;
+  const followed = examplesFollowPorts(examples, names);
+  return followed === examples ? node : { ...node, config: { ...node.config, examples: followed } };
 }
