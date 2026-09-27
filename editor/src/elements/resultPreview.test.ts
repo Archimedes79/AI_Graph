@@ -31,6 +31,13 @@ describe('a value as a node on the canvas shows it', () => {
       .toEqual({ kind: 'sketch', values: [3, 5], line: true });
   });
 
+  it('draws a long series as sixty of its numbers, first and last among them: a node is not wider for more', () => {
+    const series = Array.from({ length: 100_000 }, (_, i) => i);
+    const sketch = previewOf(series);
+    expect(sketch?.kind === 'sketch' && sketch.values).toHaveLength(60);
+    expect(sketch?.kind === 'sketch' && [sketch.values[0], sketch.values[59], sketch.line]).toEqual([0, 99_999, true]);
+  });
+
   it('is a thumbnail for a picture: a data URL, an image\'s address, finished SVG', () => {
     const png = 'data:image/png;base64,iVBORw0KGgo=';
     expect(previewOf(png)).toEqual({ kind: 'image', src: png, count: 1 });

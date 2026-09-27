@@ -29,10 +29,19 @@ export interface PortPreviews {
 /** How much of a line is kept: more than a node shows, for the tooltip that shows the rest. */
 const KEPT = 200;
 
-/** *text* on one line, cut to what a tooltip can hold. */
+/** How many numbers a sketch draws: more is no more readable at the width of a node. */
+const DRAWN = 60;
+
+/** *text* on one line, cut to what a tooltip can hold -- read no further than that needs. */
 function oneLine(text: string): string {
-  const line = text.replace(/\s+/g, ' ').trim();
+  const line = text.slice(0, KEPT * 4).replace(/\s+/g, ' ').trim();
   return line.length > KEPT ? `${line.slice(0, KEPT - 1)}…` : line;
+}
+
+/** *values*, or as many of them, evenly spread, as a sketch draws. */
+function thinned(values: number[]): number[] {
+  if (values.length <= DRAWN) return values;
+  return Array.from({ length: DRAWN }, (_, i) => values[Math.round((i * (values.length - 1)) / (DRAWN - 1))]);
 }
 
 /** A value in a few words: a record as its fields, anything else as itself. */
@@ -54,20 +63,21 @@ function pictureOf(text: string): string | undefined {
 
 /** A chart's figure, as the sketch of its values. */
 export function sketchOf(figure: Figure): Preview {
-  return { kind: 'sketch', values: figure.points.map((point) => point.value), line: figure.kind === 'line' };
+  return { kind: 'sketch', values: thinned(figure.points.map((point) => point.value)), line: figure.kind === 'line' };
 }
 
 /** A list: numbers as a sketch, pictures as the first of them, anything else counted with its first item. */
 function listPreview(items: unknown[]): Preview {
   if (items.length > 1 && items.every((item) => typeof item === 'number' && Number.isFinite(item))) {
-    return { kind: 'sketch', values: items as number[], line: items.length > 12 };
+    return { kind: 'sketch', values: thinned(items as number[]), line: items.length > 12 };
   }
   // A failed item of a list run once per item is a null in its place: counted, not read.
   const present = items.filter((item) => item !== null && item !== undefined);
-  const pictures = present.flatMap((item) => (typeof item === 'string' ? pictureOf(item) ?? [] : []));
-  if (pictures.length && pictures.length === present.length) return { kind: 'image', src: pictures[0], count: pictures.length };
+  const first = present[0];
+  const src = typeof first === 'string' ? pictureOf(first) : undefined;
+  if (src && present.every((item) => typeof item === 'string' && pictureOf(item))) return { kind: 'image', src, count: present.length };
   const records = present.length > 0 && present.every((item) => typeof item === 'object' && !Array.isArray(item));
-  return { kind: 'rows', count: items.length, noun: records ? 'rows' : 'items', first: present.length ? brief(present[0]) : '' };
+  return { kind: 'rows', count: items.length, noun: records ? 'rows' : 'items', first: present.length ? brief(first) : '' };
 }
 
 /** What *value* shows as, small; nothing for a value that holds nothing. */
