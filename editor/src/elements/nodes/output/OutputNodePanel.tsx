@@ -4,6 +4,18 @@ import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 /**
+ * How 📂 Browse… opens for where the result goes: a file is saved, so the
+ * dialog starts in the file's folder with its name filled in -- choosing
+ * another folder must not lose the name, which it did -- and a folder is
+ * chosen as it is.
+ */
+export function browseFor(mode: string, value: string): { mode: 'save' | 'directory'; initialPath: string; defaultName?: string } {
+  if (mode !== 'file') return { mode: 'directory', initialPath: value };
+  const name = value.split(/[\\/]/).pop() ?? '';
+  return { mode: 'save', initialPath: value, ...(name ? { defaultName: name } : {}) };
+}
+
+/**
  * An output node: where the result goes, what it is, and what it is called.
  *
  * What it is and where it goes are what the node feeding it is told it wants
@@ -57,8 +69,7 @@ export default function OutputNodePanel({ node, setConfig, setDescription }: Nod
             </div>
             {browsing && (
               <FileBrowserDialog
-                mode={mode === 'file' ? 'save' : 'directory'}
-                initialPath={String(node.config.value ?? '')}
+                {...browseFor(mode, String(node.config.value ?? ''))}
                 onPick={(picked) => { setConfig('value', picked); setBrowsing(false); }}
                 onClose={() => setBrowsing(false)}
               />
