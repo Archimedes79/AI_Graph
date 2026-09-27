@@ -201,16 +201,14 @@ describe('what the node says about itself reaches the model', () => {
     expect(prompt.split('Every path in the folder')).toHaveLength(2);
   });
 
-  it('sends the output format and an example whatever else is set, cut to a budget', async () => {
+  it('sends the output format whatever else is set, cut to a budget', async () => {
     const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
     await generate({
       ...rows, examples: undefined, output_format: 'A list of {File, Summary}, largest first.',
-      output_example: '[{"File": "b.txt", "Summary": "Two."}]',
       sample_inputs: { files: ['x'.repeat(5000)], summaries: ['y'] },
     }, { ai, code: runner(() => ({ rows: [] })), generationFor, target });
     const prompt = ai.asked[0].prompt;
     expect(prompt).toContain('Format: A list of {File, Summary}, largest first.');
-    expect(prompt).toContain('the same structure, new content:\n[{"File": "b.txt"');
     expect(prompt).toContain('sample, from the last run: a list of 1: ["xxx');
     expect(prompt).toContain('more characters not shown');
     expect(prompt.length).toBeLessThan(6000);

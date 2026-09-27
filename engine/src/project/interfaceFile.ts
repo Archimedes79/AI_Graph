@@ -42,7 +42,6 @@ function fromDisk(raw: unknown, kind: PortKind, path: string): Port {
     data_type: (typeof p.type === 'string' ? p.type : 'any') as DataType,
     multi: p.list === true,
     required: p.required === true,
-    // A "format" an older save wrote is left out: nothing ever read it.
     description: typeof p.description === 'string' ? p.description : '',
   };
 }

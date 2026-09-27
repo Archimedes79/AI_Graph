@@ -133,7 +133,7 @@ export interface GenerateRequest {
    * the output a person writes.
    */
   output_format?: string;
-  /** An answer or result to imitate (`output.example.md`), when one was kept. */
+  /** An answer an AI node was kept to imitate (`output.example.md`). Only a prompt is told it. */
   output_example?: string;
   /** Where `sample_inputs` came from, for the model: `the last run`, `the example in step 1`. */
   sample_origin?: string;
