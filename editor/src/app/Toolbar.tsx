@@ -233,7 +233,8 @@ export default function Toolbar({
         {/* The graph's name; where it is saved is its tooltip and the File menu's first line. */}
         <input
           className="bg-transparent border-none outline-none text-sm w-44 min-w-[5rem] flex-shrink"
-          style={{ color: MUTED }}
+          // Dashed underneath: it is a name to type over, not a label.
+          style={{ color: MUTED, borderBottom: `1px dashed ${LINE}`, paddingBottom: 2 }}
           value={metadata.name}
           onChange={(e) => setMetadata({ name: e.target.value })}
           aria-label="The graph's name"
