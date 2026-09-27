@@ -2,7 +2,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
 import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { portRenames, trackPorts, untracked } from '@/store/portRenames';
-import { derivedNodePorts, syncGuiNodePorts } from '@/document/guiWidgets';
+import { derivedNodePorts } from '@/document/guiWidgets';
 import PortsEditor from './PortsEditor';
 import { NODE_BUILDERS } from '@/elements/registry';
 import Modal from '@/ui/Modal';
@@ -15,7 +15,6 @@ import { inferInterface } from '@engine/execution/interface.ts';
 import OutputInterface from '@/authoring/OutputInterface';
 import { nodeLogic } from '@/authoring/logic';
 import GenerationTranscript, { GenerationReport } from '@/authoring/GenerationTranscript';
-import WidgetOutputSummary from '@/elements/nodes/gui/WidgetOutputSummary';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -251,13 +250,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
   const Panel = element.Panel;
 
-  const applyWidgets = (nextWidgets: GraphNode['config']['gui_widgets']) => {
-    setNode((prev) => {
-      if (!prev) return prev;
-      return syncGuiNodePorts({ ...prev, config: { ...prev.config, gui_widgets: nextWidgets } });
-    });
-  };
-
   // What each port is wired to, in words, shown under the port.
   const wiring = {
     inputs: inputSources(node.id, graphNodes, graphEdges),
@@ -393,7 +385,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 message={genMessage}
                 onGenerate={handleGenerate}
                 canGenerate={canGenerate}
-                applyWidgets={applyWidgets}
                 setInvalid={setInvalid}
                 steps={steps}
               /></Suspense>}
@@ -413,7 +404,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 </details>
               )}
 
-              {element.outputContract === 'widgets' && <WidgetOutputSummary node={node} />}
               {!stepped && keepsOutputInterface(node) && <OutputInterface node={node} setConfig={setConfig} />}
 
               {/* Knobs with good defaults, folded away: a node should open on

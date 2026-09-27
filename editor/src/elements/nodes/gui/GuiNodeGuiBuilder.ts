@@ -1,4 +1,3 @@
-import { lazy } from 'react';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 import { WIDGET_BUILDERS } from '../../widgets/roster';
@@ -31,9 +30,9 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly holdsWidgets = true;
 
-  override readonly outputContract = 'widgets';
-
-  override readonly Panel = lazy(() => import('./GuiNodePanel'));
+  // No Panel: a page is edited in the GUI editor, where its name and what it
+  // is about are edited above it (`PageHeading`), and the node dialog is never
+  // opened for it (App.tsx). The panel it had could not be reached.
 
   /**
    * Asked widget by widget, not of the node: a page with an unfilled picker

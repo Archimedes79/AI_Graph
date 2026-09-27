@@ -23,8 +23,6 @@ export interface NodePanelProps {
   message?: string;
   onGenerate: () => void;
   canGenerate: boolean;
-  /** Replaces a gui node's widgets, and the ports that follow from them. */
-  applyWidgets: (widgets: GraphNode['config']['gui_widgets']) => void;
   /**
    * Says that something the panel holds cannot be saved as it stands -- JSON
    * that does not parse -- under *key*, or that it can again (''). While any
@@ -82,10 +80,9 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
 
   /**
    * How this node declares its output under its panel: `'format'` is the
-   * editable output-format contract (ai, code); `'widgets'` the derived
-   * summary a gui node shows. Absent: nothing to declare.
+   * editable output-format contract (ai, code). Absent: nothing to declare.
    */
-  readonly outputContract?: 'format' | 'widgets';
+  readonly outputContract?: 'format';
 
   /**
    * The panel already covers what the node is for -- a prompt box, a code

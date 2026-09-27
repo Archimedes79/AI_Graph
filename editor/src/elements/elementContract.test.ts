@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { BLOCKS } from '@/page/blocks';
-import { guiWidgetPorts } from '@/document/guiWidgets';
+import { guiWidgetPorts, showsPage } from '@/document/guiWidgets';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from './registry';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { nodeLogic, widgetLogic } from '@/authoring/logic';
@@ -62,10 +62,17 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
     expect(Array.isArray(node.outputs)).toBe(true);
   });
 
-  it('has a Panel, loaded only when the node is opened', () => {
-    // Every node type has settings; only page furniture does not (see the
-    // widget suite below). Lazy, so that a deployed tool, which draws pages
-    // and never edits them, never loads a panel.
+  it('has a Panel, loaded only when the node is opened -- or is a page, and never opened', () => {
+    // A page is edited in the GUI editor and its node dialog is never opened
+    // (App.tsx), so a panel of its own is one nobody can reach -- which the
+    // gui node's was, stale copy and all.
+    if (showsPage(nodeType)) {
+      expect(element.Panel).toBeUndefined();
+      return;
+    }
+    // Every other node type has settings; only page furniture does not (see
+    // the widget suite below). Lazy, so that a deployed tool, which draws
+    // pages and never edits them, never loads a panel.
     expect(isLazy(element.Panel)).toBe(true);
     if (element.AdvancedPanel) expect(isLazy(element.AdvancedPanel)).toBe(true);
   });
