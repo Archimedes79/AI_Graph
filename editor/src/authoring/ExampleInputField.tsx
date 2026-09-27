@@ -8,13 +8,13 @@ import { useTyped } from './useTyped';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 /**
- * What a picked file puts on *port*: its path where a path is what arrives
- * there -- the example then holds what a run hands the node, and a node that
- * reads its files reads it exactly as a run does, every time -- and otherwise
- * the file's content, parsed when it is JSON.
+ * What a picked file puts on *port*: its path where the node reads the file
+ * there -- the example then holds what a run hands the node, and it is read
+ * exactly as a run reads it, every time -- and otherwise the file's content,
+ * parsed when it is JSON.
  */
-export async function pickedValue(path: string, port: string, pathPorts: string[]): Promise<unknown> {
-  if (pathPorts.includes(port)) return storedPath(path);
+export async function pickedValue(path: string, port: string, reads: string[]): Promise<unknown> {
+  if (reads.includes(port)) return storedPath(path);
   return contentValue(await readFileAsRun(path));
 }
 
@@ -33,8 +33,8 @@ interface Props {
   error?: string;
   /** The ports a file can be picked for. */
   ports: { id: string; name?: string }[];
-  /** The ports a path arrives on (`pathPorts`): a file picked for one is kept as its path. */
-  pathPorts: string[];
+  /** The ports the node reads the file on (`readFilePorts`): a file picked for one is kept as its path. */
+  reads: string[];
   /** ⟳ From the graph: what really arrives here, and a word on where it came from. */
   fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
   /** One line under the field. */
@@ -60,7 +60,7 @@ interface Props {
  * uploaded copy that was only ever pasted into ✨'s prompt, never run.
  */
 export default function ExampleInputField({
-  text, onText, error, ports, pathPorts, fromGraph, note, showField = true, label = 'Example input',
+  text, onText, error, ports, reads, fromGraph, note, showField = true, label = 'Example input',
 }: Props) {
   const [typed, type] = useTyped(text, onText);
   // What the box holds now, for a file read that ends after more was typed:
@@ -93,10 +93,10 @@ export default function ExampleInputField({
     if (!into) return;
     setBusy('file'); setFailure(''); setSaid('');
     try {
-      const value = await pickedValue(path, into, pathPorts);
+      const value = await pickedValue(path, into, reads);
       type(withPortValue(latest.current, into, value));
-      setSaid(pathPorts.includes(into)
-        ? `“${into}” holds the file's path, as a run hands it on.`
+      setSaid(reads.includes(into)
+        ? `“${into}” holds the file's path, which is read as a run reads it.`
         : `“${into}” holds what the file says.`);
     } catch (reason) {
       setFailure(errorText(reason, 'The file could not be read.'));
@@ -126,7 +126,7 @@ export default function ExampleInputField({
             )}
             <button className="text-xs px-2 py-1 rounded" style={{ ...NEUTRAL_BUTTON, opacity: busy ? 0.5 : 1 }}
               disabled={busy !== ''} onClick={() => setBrowsing(true)}
-              title={pathPorts.includes(into)
+              title={reads.includes(into)
                 ? 'Pick a file: its path goes into the example, as a run hands it on -- and is read the way a run reads it'
                 : 'Pick a file: what it says goes into the example -- parsed, when it is JSON'}>
               {busy === 'file' ? 'Reading…' : '📂 From a file…'}

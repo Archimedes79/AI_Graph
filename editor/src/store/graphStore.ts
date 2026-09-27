@@ -495,10 +495,11 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as never);
 
         // A wire from a port that carries file paths -- a picker, a folder --
-        // makes the port it ends on one that receives file paths. The port
-        // editor can say it too; this is so that nobody has to, because the
-        // wire already said it and a graph wired without it summarised the
-        // file's *name*.
+        // ticks "Read the file at this path" on the input it ends on: the port
+        // is typed `file_path`, and a code or AI node is handed the file's
+        // text there. Step 1 can untick it; this is so that nobody has to say
+        // it, because the wire already did and a graph wired without it
+        // summarised the file's *name*. The run itself asks only the port.
         const portOf = (nodeId: string, side: 'inputs' | 'outputs', portId: string) => state.rfNodes
           .find((node: RFNode) => node.id === nodeId)?.data.graphNode[side].find((port) => port.id === portId);
         const from = portOf(wire.source, 'outputs', wire.sourceHandle);

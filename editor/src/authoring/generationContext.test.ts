@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { describeNodeOutput, inputSources, lastRunInputs, outputTargets, pathPorts, readFilePorts } from './generationContext';
+import { describeNodeOutput, inputSources, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
 import { nodeFacts } from './nodeFacts';
 
@@ -104,36 +104,23 @@ describe('a node that is handed the text of a file', () => {
       { id: 'csv', name: 'CSV', kind: 'input', data_type: 'file_path', multi: false, required: false },
       { id: 'top', name: 'Top', kind: 'input', data_type: 'text', multi: false, required: false },
     ] as typeof node.inputs;
-    node.config.read_file_inputs = true;
     return node;
   };
 
-  it('names the ports the server must read before it tries generated code on the sample', () => {
-    const node = reader();
-    expect(readFilePorts(node)).toEqual(['csv']);
-    node.config.read_file_inputs = false;
-    expect(readFilePorts(node)).toEqual([]);
+  it('names the ports the server must read before it tries generated code on the sample: the ones ticked to read', () => {
+    expect(readFilePorts(reader())).toEqual(['csv']);
+    // A kind that takes a path as a path reads nothing, whatever its ports say.
+    const out = NODE_KINDS.output.create('sink');
+    expect(out.inputs.some((port) => port.data_type === 'file_path')).toBe(true);
+    expect(readFilePorts(out)).toEqual([]);
   });
 
-  it('asks with the wiring, as the run does: an input that says nothing, wired from a path, is read', () => {
-    // A graph written by hand, by the MCP server or by a model keeps the port
-    // `any`; the run reads it, and ✨ was told a path and tried code on a filename.
+  it('never reads an input that did not say so, however it is wired', () => {
+    // The wire used to decide for a port typed `any`: a sentence wired in from
+    // somewhere that declared a path became "no such file".
     const node = NODE_KINDS.code.create('worker');
-    node.config.read_file_inputs = true;
-    const source = NODE_KINDS.input.create('file');
-    source.config.input_mode = 'file';
-    source.outputs = [{ id: 'path', name: 'Path', kind: 'output', data_type: 'file_path', multi: false, required: false, description: '' }];
-    const wired = [{ source: 'file', sourceHandle: 'path', target: 'worker', targetHandle: 'input' }];
     expect(node.inputs[0].data_type).toBe('any');
-    expect(readFilePorts(node, [source, node], wired)).toEqual(['input']);
     expect(readFilePorts(node)).toEqual([]);
-  });
-
-  it('knows a path arrives on a port whether or not the node reads it: a file picked as its example is kept as a path', () => {
-    const node = reader();
-    node.config.read_file_inputs = false;
-    expect(readFilePorts(node)).toEqual([]);
-    expect(pathPorts(node)).toEqual(['csv']);
   });
 
   it('names the recorded path\'s port to be read, so the engine shows the model the text', () => {

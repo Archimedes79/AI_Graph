@@ -41,7 +41,6 @@ export function baseNodeConfig(): NodeConfig {
     // Once on the whole list (`NodeRunner.batchMode`), as many at once as the run allows.
     batch_mode: 'whole_list',
     batch_concurrency: 0,
-    read_file_inputs: false,
     send_images: false,
     catch_errors: false,
     gui_widgets: [],

@@ -25,7 +25,7 @@ import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeRes
 import { resultKeys, type NodeRunner, type Runners } from '../elements/NodeRunner.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
-import { readFileInputs, type FileGraph } from './fileInputs.ts';
+import { readFileInputs } from './fileInputs.ts';
 import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
 import type { LastOutputs } from './reuse.ts';
 import type { Latch } from './latch.ts';
@@ -397,7 +397,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         // What the run reports having received is what came off the wires --
         // the paths, not the megabytes behind them. Only the element sees the
         // contents.
-        const arrived = await readInputs(element, node, inputs, runtime, graph, options.registry);
+        const arrived = await readInputs(element, node, inputs, runtime);
         // An event is a moment: `true` handed back from an earlier round would
         // open gates for a press that is over.
         const key = element.eventPorts(node).length ? undefined : options.reuse?.key(node, arrived);
@@ -640,7 +640,7 @@ export async function executeNode(
   if (why) return { node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [why] };
   const { runtime } = options;
   try {
-    const arrived = await readInputs(element, node, inputs, runtime, graph, options.registry);
+    const arrived = await readInputs(element, node, inputs, runtime);
     const { produced, failures } = await runNode(
       element, node, arrived, withSubgraph(runtime, options, node, options.depth ?? 0),
     );
@@ -729,8 +729,8 @@ export function nodeName(node: GraphNode): string {
 }
 
 /**
- * What the element is given: the wired values, with file paths read where it
- * asked for contents.
+ * What the element is given: the wired values, with the file on each input
+ * that says "read the file at this path" read into its content.
  *
  * The reading is named in the failure. A node that never got as far as its own
  * work failed at a missing file, and "ENOENT" on its own reads as though the
@@ -741,12 +741,10 @@ async function readInputs(
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,
-  graph?: FileGraph,
-  elements?: Runners,
 ): Promise<Record<string, unknown>> {
-  if (!element.readsFileInputs(node)) return inputs;
+  if (!element.readsFileInputs) return inputs;
   try {
-    return await readFileInputs(node, inputs, runtime, graph, elements);
+    return await readFileInputs(node, inputs, runtime);
   } catch (error) {
     throw new Error(`Reading its input files: ${error instanceof Error ? error.message : String(error)}`);
   }

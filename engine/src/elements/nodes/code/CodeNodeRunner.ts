@@ -53,6 +53,9 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
   /** Its body is written for one item, so a list can be handed to it an item at a time. */
   override readonly fansOut = true;
 
+  /** A file on an input that says so arrives as its text: `run` reads no files itself. */
+  override readonly readsFileInputs = true;
+
   async execute(
     node: GraphNode,
     inputs: Record<string, unknown>,

@@ -2,7 +2,6 @@
   "label": "Figures & tables",
   "description": "Figures & tables reviewer: the figures and tables.",
   "config": {
-    "batch_mode": "whole_list",
-    "read_file_inputs": false
+    "batch_mode": "whole_list"
   }
 }

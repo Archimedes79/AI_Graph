@@ -12,7 +12,8 @@ import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, nodeFields, type GenerationRequest } from '@/authoring/generation';
 import { useWhatSends } from '@/authoring/WhatSends';
-import { inputSources, outputTargets, readFilePorts } from '@/authoring/generationContext';
+import { inputSources, outputTargets } from '@/authoring/generationContext';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { nodeFacts } from '@/authoring/nodeFacts';
 import { fromTheGraph } from '@/authoring/fromTheGraph';
 import { nodeLogic } from '@/authoring/logic';
@@ -194,7 +195,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       editing={element.portEditing}
       hints={{ inputs: element.portHint('inputs', node), outputs: element.portHint('outputs', node) }}
       wiring={wiring}
-      reads={readFilePorts(node, graphNodes, graphEdges)}
+      readsFiles={engineRegistry.node(node.node_type)?.readsFileInputs ?? false}
       inputLists={!stepped}
       caught={caught}
     />

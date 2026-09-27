@@ -95,7 +95,7 @@ export interface GenerateRequest {
   input_sources?: Record<string, string>;
   /**
    * Input ports the running node is handed a file's text on, not the path the
-   * wire carries (`read_file_inputs`). The sample holds what came off the wire,
+   * wire carries (typed `file_path`). The sample holds what came off the wire,
    * so these are read, as a run reads them, before the sample is shown or used.
    */
   read_file_ports?: string[];

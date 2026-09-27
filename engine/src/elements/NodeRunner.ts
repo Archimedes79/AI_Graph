@@ -216,16 +216,15 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   }
 
   /**
-   * Whether a wired file path should arrive as the file's *content*.
+   * This kind is handed a file's *content* on each input port typed
+   * `file_path` -- the port's own "Read the file at this path" -- instead of
+   * the path. Only that tick decides, never the wire: a sentence wired in is
+   * never read as a filename, and a path wanted as a path is left one.
    *
    * Declared, like batching, and carried out by the executor: a code node and
-   * an AI node both want it and neither should own it. It lived inside the code
-   * element for a while, which is why an AI node summarising a folder was
-   * handed three filenames and dutifully summarised those.
+   * an AI node both want it and neither should own it.
    */
-  readsFileInputs(node: GraphNode): boolean {
-    return node.config.read_file_inputs === true;
-  }
+  readonly readsFileInputs: boolean = false;
 
   /**
    * What this node needs a person to supply before the graph can run.

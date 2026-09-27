@@ -90,11 +90,6 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
     };
   }
 
-  /** A path that arrives here is a path: what to do with it is the inner graph's business. */
-  override readsFileInputs(): boolean {
-    return false;
-  }
-
   /**
    * The standard run.js is one run of the graph, made here. A run.js somebody
    * changed runs where bodies run, and each `node.graph(inputs)` in it is one

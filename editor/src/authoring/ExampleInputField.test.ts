@@ -10,7 +10,7 @@ describe('step 1\'s example input', () => {
     // the box that was edited -- and one changed character stored the clip.
     const long = JSON.stringify({ rows: Array.from({ length: 200 }, (_, index) => ({ index, name: `row ${index}` })) }, null, 2);
     const html = renderToStaticMarkup(createElement(ExampleInputField, {
-      text: long, onText: (text: string) => text, ports: [{ id: 'rows' }], pathPorts: [],
+      text: long, onText: (text: string) => text, ports: [{ id: 'rows' }], reads: [],
     }));
     expect(html).toContain('row 199');
     expect(html).not.toContain('more characters');

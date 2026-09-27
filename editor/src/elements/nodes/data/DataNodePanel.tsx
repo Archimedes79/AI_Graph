@@ -95,7 +95,7 @@ export default function DataNodePanel({
               onText={takeExample}
               showField={false}
               ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
-              pathPorts={[]}
+              reads={[]}
               fromGraph={steps.fromGraph}
               note={<p className="text-xs" style={{ color: DIMMER }}>These fill what it holds now, below: the example ✨ is shown.</p>}
             />

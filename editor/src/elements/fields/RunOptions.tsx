@@ -9,17 +9,16 @@ interface Props {
 }
 
 /**
- * The execution switches every runnable node has, folded away: what a failure
- * costs, whether `file_path` inputs are read from disk first, and how many
- * items of a list run at once.
+ * The execution switches every node that authors a body has, folded away:
+ * what a failure costs, and how many items of a list run at once.
  *
- * They mean the same thing for an AI node and a Code node -- `catch_errors`,
- * `read_file_inputs` and `batch_concurrency` are handled by the executor, not
- * by the element -- so the controls and their explanations live once, here.
- * Whether a list is taken item by item is not among them: it is a question
- * about what comes in, asked in step 1 ("Run once per item").
+ * They mean the same thing for an AI node and a Code node -- `catch_errors`
+ * and `batch_concurrency` are handled by the executor, not by the element --
+ * so the controls and their explanations live once, here. What comes in is
+ * not among them: whether a list is taken item by item, and whether a file is
+ * read, are questions about the inputs, asked in step 1.
  */
-export default function BatchAndFileInputOptions({ node, setConfig, subject }: Props) {
+export default function RunOptions({ node, setConfig, subject }: Props) {
   return (
     <>
       <div>
@@ -37,22 +36,6 @@ export default function BatchAndFileInputOptions({ node, setConfig, subject }: P
           <strong style={{ color: '#a78bfa' }}>Error</strong> output carrying the reason, its
           other outputs carry nothing, and the run goes on. Wiring that output is optional —
           leave it unconnected and the run simply continues.
-        </p>
-      </div>
-
-      <div>
-        <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-          <input
-            type="checkbox"
-            checked={!!node.config.read_file_inputs}
-            onChange={(e) => setConfig('read_file_inputs', e.target.checked)}
-          />
-          Read file contents from paths
-        </label>
-        <p className="text-xs mt-1" style={{ color: DIMMER }}>
-          When on, an input that receives a file path -- typed &lsquo;File path&rsquo;, or wired from something
-          that hands on paths -- is read from disk (text or base64) before this node runs, and the example
-          in step 1 is read the same way.
         </p>
       </div>
 

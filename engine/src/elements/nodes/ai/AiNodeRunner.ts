@@ -94,6 +94,9 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
   /** Its body is written for one item, so a list can be handed to it an item at a time. */
   override readonly fansOut = true;
 
+  /** A file on an input that says so is sent as what it says, not as its name. */
+  override readonly readsFileInputs = true;
+
   /** What is wired in is the question: with all of it empty there is nothing to ask. */
   override needsInput(): boolean {
     return true;

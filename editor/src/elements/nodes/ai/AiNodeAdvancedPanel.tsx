@@ -1,5 +1,5 @@
 import type { AIProvider } from '@/graph';
-import BatchAndFileInputOptions from '../../fields/BatchAndFileInputOptions';
+import RunOptions from '../../fields/RunOptions';
 import ProviderModelSelect from '../../fields/ProviderModelSelect';
 import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 import RunCode from '@/authoring/RunCode';
@@ -89,12 +89,12 @@ export default function AiNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPan
         </label>
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
           An input that is an image file is sent to the model as a picture instead of as a path
-          in the prompt. Needs a model that can see. Leave &ldquo;Read file contents from paths&rdquo;
-          off for those inputs.
+          in the prompt. Needs a model that can see. Leave &ldquo;Read the file at this path&rdquo;
+          unticked for those inputs in step 1.
         </p>
       </div>
 
-      <BatchAndFileInputOptions node={node} setConfig={setConfig} subject="prompt" />
+      <RunOptions node={node} setConfig={setConfig} subject="prompt" />
 
       <RunCode code={String(node.config.run_code ?? '')} standard={AI_RUN} isStandard={isStandardRun} onChange={(code) => setConfig('run_code', code)}>
         One call to the model, with <code>system.md</code> and <code>message.md</code>. Change it for a loop, a

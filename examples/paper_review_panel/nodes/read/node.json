@@ -2,7 +2,6 @@
   "label": "Read manuscript",
   "description": "Reads the chosen file once, for every reviewer",
   "config": {
-    "batch_mode": "whole_list",
-    "read_file_inputs": true
+    "batch_mode": "whole_list"
   }
 }

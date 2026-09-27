@@ -89,7 +89,6 @@ export type NodeConfig = {
   task: string;
   output_label: string;
   prompt_at_runtime: boolean;
-  read_file_inputs: boolean;
   recursive: boolean;
   send_images: boolean;
   system_prompt: string;

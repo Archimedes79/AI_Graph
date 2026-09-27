@@ -16,7 +16,7 @@ import CodeField from './CodeField';
 import { readPair, withExpect, withInput, withJudge } from './examplePair';
 import { useTyped } from './useTyped';
 import { derivedOutputWords } from './derivedOutput';
-import { pathPorts } from './generationContext';
+import { readFilePorts } from './generationContext';
 import { outputFormatText } from './outputFormat';
 import { exampleFor, keptExpect, listPorts, runsPerItem, tryInputs, tryKey, withPerItem } from './nodeStepRules';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
@@ -146,7 +146,7 @@ export default function NodeSteps({
         }}
         error={inputError}
         ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
-        pathPorts={pathPorts(node, nodes, edges)}
+        reads={readFilePorts(node)}
         fromGraph={steps.fromGraph}
         note={(
           <>

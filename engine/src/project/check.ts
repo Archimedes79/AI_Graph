@@ -67,21 +67,7 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       continue;
     }
 
-    // "Hand me the file's content" is carried out port by port, for the ports
-    // that hold a path. Where no port does, it does nothing at all, silently:
-    // the node is handed the file's *name*, and a model summarises that with a
-    // straight face. Asked of `filePorts` and handed the graph, so this asks
-    // exactly what the run will ask -- a port typed `any` with a picker wired
-    // into it holds a path, and warning about it would be a lie.
-    if (element.readsFileInputs(node) && !filePorts(node, graph, registry).length) {
-      problems.push({
-        where,
-        problem: 'It is set to read wired files into their content, but none of its inputs is a file path -- so it is handed the path as text.',
-        fix: 'Set the data_type of the input that receives the file (or the list of files) to "file_path", or turn read_file_inputs off.',
-      });
-    }
-
-    // The same trap, one setting over: "once per item" fans out over the inputs
+    // A setting that silently does nothing: "once per item" fans out over the inputs
     // declared as lists. With none, the node runs once, on the whole list, and
     // nothing says it was asked to do otherwise. Only where a list really
     // arrives: on a node no list reaches, "once per item" means nothing.
@@ -389,9 +375,7 @@ function exampleProblems(graph: Graph, node: GraphNode, where: string): Problem[
   const inputs = new Set(node.inputs.map((port) => port.id));
   const outputs = new Set(node.outputs.map((port) => port.id));
   // A port whose path is read into text arrives as the text; the producer's interface describes the path.
-  const readsFiles = registry.node(node.node_type)?.readsFileInputs(node) === true;
-  // The same rule the run uses: a port typed any with a path wired in is read too.
-  const read = new Set(filePorts(node, graph, registry));
+  const read = new Set(registry.node(node.node_type)?.readsFileInputs ? filePorts(node) : []);
 
   for (const example of examples) {
     const at = `${where}, example "${example.title}"`;
@@ -400,7 +384,7 @@ function exampleProblems(graph: Graph, node: GraphNode, where: string): Problem[
         found.push({ where: at, problem: `It gives an input "${port}", which the node does not have.`, fix: `Its inputs are ${names(inputs)}.` });
         continue;
       }
-      if (readsFiles && read.has(port)) continue;
+      if (read.has(port)) continue;
       for (const edge of graph.edges.filter((e) => e.target_node_id === node.id && e.target_port_id === port)) {
         const producer = graph.nodes.find((candidate) => candidate.id === edge.source_node_id);
         const iface = producer && registry.node(producer.node_type)?.outputInterface(producer);

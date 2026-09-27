@@ -11,7 +11,7 @@ import { readPair } from '@/authoring/examplePair';
 import { executeGraph } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
 import { problemsIn } from '@engine/project/check.ts';
-import { filePorts } from '@engine/execution/fileInputs.ts';
+import { readFilePorts } from '@/authoring/generationContext';
 import { parseGraph } from '@engine/graph.ts';
 import { graphFrom } from '@engine/project/flow.ts';
 import type { Runtime } from '@engine/elements/Runtime.ts';
@@ -177,7 +177,7 @@ describe('population plotter: choose a CSV, see the chart', () => {
     const file = addBlock('input_picker', 'file', { label: 'CSV file', extensions: '.csv', value: 'data/population.csv', run_on_change: true });
     const plot = addBlock('plot_window', undefined, { label: '' });
     const chart = drop('code', 560);
-    edit(chart, { label: 'What to plot', input: ['csv'], output: 'figure', config: { code: bodyOf('population_plotter', 'chart'), read_file_inputs: true }, perItem: false });
+    edit(chart, { label: 'What to plot', input: ['csv'], output: 'figure', config: { code: bodyOf('population_plotter', 'chart') }, perItem: false });
     wire(page, `${file}_out`, chart, 'csv');
     wire(chart, 'figure', page, `${plot}_in`);
     return { graph: store().rootGraph(), page, file, plot };
@@ -204,7 +204,7 @@ describe('summarize a folder: choose a folder, read the summaries', () => {
     const folder = addBlock('input_picker', 'directory', { label: 'Folder', extensions: '.txt', value: 'stories', run_on_change: true });
     const summaries = addBlock('text_io', 'output', { label: 'Summaries' });
     const summarize = drop('ai', 560);
-    edit(summarize, { label: 'Each file', input: ['story'], config: { system_prompt: 'Summarize the story in two sentences.', prompt_template: '{{story}}', read_file_inputs: true }, perItem: true });
+    edit(summarize, { label: 'Each file', input: ['story'], config: { system_prompt: 'Summarize the story in two sentences.', prompt_template: '{{story}}' }, perItem: true });
     wire(page, `${folder}_out`, summarize, 'story');
     wire(summarize, 'output', page, `${summaries}_in`);
     return { graph: store().rootGraph(), page, folder, summaries };
@@ -279,10 +279,9 @@ describe('a wire from a picker', () => {
 
   /**
    * Every kind a person wires a file into starts out saying nothing about what
-   * it carries, and that is what lets the file be read -- in the editor, by the
-   * wire above, and in the engine, for a graph the editor never touched
-   * (`execution/fileInputs.ts`). An AI node was created `text` instead, so it
-   * alone was handed the file's *name* with "read file contents" ticked.
+   * it carries, and that is what lets the wire tick "Read the file at this
+   * path" on it -- which is all the run asks (`execution/fileInputs.ts`). An AI
+   * node was created `text` instead, so it alone was handed the file's *name*.
    */
   it.each(['code', 'ai'] as const)('%s: a new node says nothing about what its input carries, so a file reaches it whole', (kind) => {
     const page = drop('gui', 60);
@@ -290,6 +289,6 @@ describe('a wire from a picker', () => {
     const node = drop(kind, 560);
     expect(nodeOf(node).inputs[0].data_type).toBe('any');
     wire(page, `${file}_out`, node, nodeOf(node).inputs[0].id);
-    expect(filePorts(nodeOf(node), store().exportGraph())).toEqual([nodeOf(node).inputs[0].id]);
+    expect(readFilePorts(nodeOf(node))).toEqual([nodeOf(node).inputs[0].id]);
   });
 });

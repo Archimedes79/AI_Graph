@@ -91,7 +91,7 @@ export function nodeFacts(
     sampleInputs: sample?.values,
     sampleOrigin: example ? 'the example in step 1' : sample?.origin,
     inputSources: inputSources(node.id, nodes, edges, true),
-    readFilePorts: [...new Set([...readFilePorts(node, nodes, edges), ...(sample?.read ?? [])])],
+    readFilePorts: [...new Set([...readFilePorts(node), ...(sample?.read ?? [])])],
     // What a body is handed on each port: one item of a list input, unless the
     // node takes lists whole.
     inputTypes: Object.fromEntries(node.inputs.map((port) => {

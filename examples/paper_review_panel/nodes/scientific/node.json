@@ -2,7 +2,6 @@
   "label": "Scientific",
   "description": "Scientific reviewer: scientific soundness.",
   "config": {
-    "batch_mode": "whole_list",
-    "read_file_inputs": false
+    "batch_mode": "whole_list"
   }
 }

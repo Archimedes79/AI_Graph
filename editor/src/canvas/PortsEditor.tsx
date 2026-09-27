@@ -59,8 +59,8 @@ interface SideProps {
   editing: PortEditing;
   /** What each port is wired to, by port id, in words: `"Folder" (port "Files")`. */
   wiring: Record<string, string>;
-  /** The inputs a run hands the text of a file on, rather than its path. */
-  reads: string[];
+  /** Offer "Read the file at this path" on each input: the node is handed the file's text there. */
+  readsFiles: boolean;
   /** Offer "list" on each port: see `PortsEditor.inputLists`. */
   lists: boolean;
   /** Why these ports cannot be saved as they are named, or '' (`portIdProblems`). */
@@ -68,7 +68,7 @@ interface SideProps {
   onChange: (ports: Port[]) => void;
 }
 
-function Side({ title, hint, kind, ports, fixed, editing, wiring, reads, lists, problem, onChange }: SideProps) {
+function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, lists, problem, onChange }: SideProps) {
   const set = (at: number, patch: Partial<Port>) => {
     onChange(ports.map((port, i) => (i === at ? { ...port, ...patch } : port)));
   };
@@ -147,6 +147,17 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, reads, lists, 
                       needed
                     </label>
                   )}
+                  {/* The one way a file is read: said here, per input, and kept as
+                      the port's type. A wire from something that hands on paths
+                      ticks it where nobody has said anything yet (`connect`). */}
+                  {kind === 'input' && readsFiles && (
+                    <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
+                      title="The node is handed what the file says, not its path -- on every run, in Try it and when ✨ tries its code">
+                      <input type="checkbox" checked={port.data_type === 'file_path'} aria-label="Read the file at this path"
+                        onChange={(e) => set(at, { data_type: e.target.checked ? 'file_path' : 'any' })} />
+                      Read the file at this path
+                    </label>
+                  )}
                   <button
                     className="text-xs px-1.5 py-1 rounded"
                     style={NEUTRAL_BUTTON}
@@ -166,9 +177,7 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, reads, lists, 
             )}
             <p className="text-xs pl-1" style={{ color: DIMMER }}>
               {wiring[port.id]
-                ? (kind === 'input'
-                  ? `← from ${wiring[port.id]}${reads.includes(port.id) ? ', read as its content' : ''}`
-                  : `→ to ${wiring[port.id]}`)
+                ? (kind === 'input' ? `← from ${wiring[port.id]}` : `→ to ${wiring[port.id]}`)
                 : (kind === 'input' ? '← not wired yet: drag a wire onto it on the canvas' : '→ not wired yet')}
             </p>
           </div>
@@ -203,8 +212,8 @@ interface PortsEditorProps {
   hints?: { inputs?: string; outputs?: string };
   /** What each port is wired to, by port id. */
   wiring?: { inputs: Record<string, string>; outputs: Record<string, string> };
-  /** The inputs a run hands the text of a file on (`readFilePorts`). */
-  reads?: string[];
+  /** Offer "Read the file at this path" on each input: the node's kind reads its files (`readsFileInputs`). */
+  readsFiles?: boolean;
   /**
    * Offer "list" on each input. Only where no step 1 asks "Run once per item",
    * which sets it together with what it does nothing without.
@@ -218,7 +227,7 @@ const EDIT_BOTH = { inputs: 'edit', outputs: 'edit' } as const;
 const NO_WIRES = { inputs: {}, outputs: {} };
 
 export default function PortsEditor({
-  inputs, outputs, onChange, side = 'both', editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, reads = [], inputLists = false,
+  inputs, outputs, onChange, side = 'both', editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, readsFiles = false, inputLists = false,
   caught = false,
 }: PortsEditorProps) {
   // The Error output belongs to the catch-failures switch, which adds and
@@ -235,14 +244,14 @@ export default function PortsEditor({
       {showInputs && (
         <Side
           title="Takes in" kind="input" ports={inputs} fixed={[]} editing={editing.inputs}
-          hint={hints.inputs} wiring={wiring.inputs} reads={reads} lists={inputLists} problem={editing.inputs === 'edit' ? problems.inputs : ''}
+          hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} lists={inputLists} problem={editing.inputs === 'edit' ? problems.inputs : ''}
           onChange={(next) => onChange({ inputs: next, outputs })}
         />
       )}
       {showOutputs && (
         <Side
           title="Hands out" kind="output" ports={ownOutputs} fixed={fixedOutputs} editing={editing.outputs}
-          hint={hints.outputs} wiring={wiring.outputs} reads={[]} lists problem={editing.outputs === 'edit' ? problems.outputs : ''}
+          hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} lists problem={editing.outputs === 'edit' ? problems.outputs : ''}
           onChange={(next) => onChange({ inputs, outputs: [...next, ...fixedOutputs] })}
         />
       )}
