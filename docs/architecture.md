@@ -129,7 +129,7 @@ ElementGuiBuilder<Subject, PanelProps>           Panel · generation
     ├── SliderWidgetGuiBuilder        ButtonWidgetGuiBuilder   ChatWidgetGuiBuilder
     ├── StaticWidgetGuiBuilder            starts unnamed: page furniture has no ports to name
     │   └── TextWidgetGuiBuilder   DividerWidgetGuiBuilder   SpacerWidgetGuiBuilder
-    └── DisplayWidgetGuiBuilder           nothing to operate, so nothing starts the graph
+    └── DisplayWidgetGuiBuilder           shows its one input; no output, so nothing to start the graph with
         └── TransformingDisplayGuiBuilder     one panel for the transform, words from each kind
             └── PlotWindowWidgetGuiBuilder   TableWidgetGuiBuilder   ImageViewWidgetGuiBuilder
 ```
