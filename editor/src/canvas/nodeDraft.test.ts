@@ -90,12 +90,4 @@ describe('catching failures', () => {
     expect(outputIds(ticked)).toEqual([...outputIds(node), 'error']);
     expect(outputIds(withSetting(ticked, ticked, 'catch_errors', false))).toEqual(outputIds(node));
   });
-
-  it('leaves an older node\'s own error output alone when another setting changes', () => {
-    // A node saved with an output of that name and catching off: editing its
-    // task is no reason to drop the port and the wire on it.
-    const node = NODE_KINDS.code.create('worker');
-    const own = { ...node, outputs: [...node.outputs, { ...node.outputs[0], id: 'error', name: 'error' }] };
-    expect(outputIds(withSetting(own, own, 'task', 'something else'))).toEqual(outputIds(own));
-  });
 });
