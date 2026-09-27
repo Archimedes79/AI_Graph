@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { Graph, GraphNode, Port } from '../graph.ts';
 import { executeGraph } from './executor.ts';
-import { type Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
+import { edge, graphOf, quietRuntime } from '../../test/fakes.ts';
 
 /**
  * An output node takes what arrives whole, whatever an older file says.
@@ -30,31 +30,21 @@ function graph(value: unknown, output: Record<string, unknown>, extra: { paths?:
       config: { batch_mode: 'per_item', output_label: 'Result', ...output },
     },
   ];
-  const edges = [{ id: 'e1', source_node_id: 'items', source_port_id: 'output', target_node_id: 'out', target_port_id: 'value' }];
+  const edges = [edge('e1', 'items', 'output', 'out', 'value')];
   if (extra.paths) {
     nodes.push({
       id: 'paths', node_type: 'data', label: 'Paths', description: '', position: { x: 0, y: 0 },
       inputs: [], outputs: [list('output')], config: { data_value: extra.paths, data_format: 'structure' },
     });
-    edges.push({ id: 'e2', source_node_id: 'paths', source_port_id: 'output', target_node_id: 'out', target_port_id: 'path' });
+    edges.push(edge('e2', 'paths', 'output', 'out', 'path'));
   }
-  return {
-    metadata: { name: 't', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
-    nodes, edges,
-  };
+  return graphOf(nodes, edges);
 }
 
 /** A runtime whose files are a list of writes, in order. */
 function recording() {
   const writes: Array<[string, string]> = [];
-  const runtime: Runtime = {
-    files: {
-      resolve: (path) => path, exists: async () => true, read: async () => '', list: async () => [],
-      write: async (path, content) => { writes.push([path, content]); },
-    },
-    code: { run: async (_body, inputs) => inputs },
-    ai: { complete: async () => '' },
-  };
+  const runtime = quietRuntime({ files: { write: async (path, content) => { writes.push([path, content]); } } });
   return { runtime, writes };
 }
 

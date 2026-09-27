@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InputNodeRunner } from './InputNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
+import { quietRuntime } from '../../../../test/fakes.ts';
 import { parseGraph, type Graph, type GraphNode } from '../../../graph.ts';
 import { forgetSeen, readProject, writeProject } from '../../../project/folder.ts';
 
@@ -23,17 +24,13 @@ function inputNode(config: Record<string, unknown>): GraphNode {
   };
 }
 
-const broken: Runtime = {
+const broken = quietRuntime({
   files: {
-    resolve: (p) => p,
     exists: async () => false,
     read: async () => { throw new Error('ENOENT: no such file'); },
-    write: async () => {},
     list: async () => { throw new Error('ENOENT: no such directory'); },
   },
-  code: { run: async (_body, inputs) => inputs },
-  ai: { complete: async () => '' },
-};
+});
 
 describe('an error port', () => {
   it('is not declared when catch_errors is off', () => {

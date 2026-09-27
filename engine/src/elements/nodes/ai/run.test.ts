@@ -10,6 +10,7 @@ import { loadGraph, saveGraph } from '../../../project/folder.ts';
 import { AiNodeRunner } from './AiNodeRunner.ts';
 import { llmCall } from './ask.ts';
 import { AI_RUN, isStandardRun } from './runTemplate.ts';
+import { quietRuntime } from '../../../../test/fakes.ts';
 
 /**
  * `run.js`: what an ai node does, as a file in its folder.
@@ -36,9 +37,7 @@ function recording(reply: (request: AiRequest) => string = () => 'an answer'): R
   const asked: AiRequest[] = [];
   return {
     asked,
-    files: { read: async () => '', write: async () => {}, list: async () => [], resolve: (p) => p, exists: async () => true },
-    code: nodeCode,
-    ai: { complete: async (request) => { asked.push(request); return reply(request); } },
+    ...quietRuntime({ code: nodeCode, ai: { complete: async (request) => { asked.push(request); return reply(request); } } }),
   };
 }
 

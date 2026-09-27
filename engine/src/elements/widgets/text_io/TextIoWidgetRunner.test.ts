@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { TextIoWidgetRunner } from './TextIoWidgetRunner.ts';
 import type { Widget } from '../../WidgetRunner.ts';
-import type { Runtime } from '../../Runtime.ts';
 import type { Graph, GraphNode } from '../../../graph.ts';
 import { registry } from '../../registry.ts';
 import { executeGraph } from '../../../execution/executor.ts';
+import { quietRuntime } from '../../../../test/fakes.ts';
 
 /**
  * A box of text holds one of two things, and the difference is what happens to
@@ -91,11 +91,10 @@ describe('what a text box keeps from a loop', () => {
       ],
     };
     const asked: unknown[] = [];
-    const runtime: Runtime = {
-      files: { read: async () => '', write: async () => {}, list: async () => [], resolve: (p) => p, exists: async () => false },
+    const runtime = quietRuntime({
+      files: { exists: async () => false },
       code: { run: async (_body, inputs) => { asked.push(inputs.question); return { output: { answer: 42 } }; } },
-      ai: { complete: async () => '' },
-    };
+    });
 
     const first = await executeGraph(graph, { runtime, registry });
     // The reply is on the page, as what arrived at the box.

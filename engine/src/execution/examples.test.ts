@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { parseExamples, runExamples, unmet } from './examples.ts';
 import { registry } from '../elements/registry.ts';
 import { parseGraph } from '../graph.ts';
-import type { AiRequest, Runtime } from '../elements/Runtime.ts';
+import type { AiRequest } from '../elements/Runtime.ts';
+import { quietRuntime } from '../../test/fakes.ts';
 
 const fence = '```';
 const section = (title: string, blocks: string[]) => `## ${title}\n\n${blocks.join('\n\n')}\n`;
@@ -55,8 +56,7 @@ describe('unmet', () => {
 
 describe('runExamples', () => {
   const judged: AiRequest[] = [];
-  const runtime = (verdict = 'PASS\nFine.'): Runtime => ({
-    files: { read: async () => '', write: async () => {}, list: async () => [], resolve: (p) => p, exists: async () => true },
+  const runtime = (verdict = 'PASS\nFine.') => quietRuntime({
     // The node doubles what it gets: enough to be right on one example and wrong on another.
     code: { run: async (_body, inputs) => ({ output: Number(inputs.input) * 2 }) },
     ai: { complete: async (request) => { judged.push(request); return verdict; } },

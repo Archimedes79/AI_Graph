@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DataNodeRunner } from './DataNodeRunner.ts';
-import type { Runtime } from '../../Runtime.ts';
+import { quietRuntime } from '../../../../test/fakes.ts';
 import type { GraphNode } from '../../../graph.ts';
 
 /**
@@ -19,11 +19,7 @@ function dataNode(config: Record<string, unknown>): GraphNode {
   };
 }
 
-const nowhere: Runtime = {
-  files: { read: async () => '', write: async () => {}, list: async () => [], resolve: (p) => p, exists: async () => false },
-  code: { run: async (_body, inputs) => inputs },
-  ai: { complete: async () => '' },
-};
+const nowhere = quietRuntime({ files: { exists: async () => false } });
 
 const element = new DataNodeRunner();
 

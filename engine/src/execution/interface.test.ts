@@ -3,7 +3,7 @@ import { inferInterface, inferSchema, merge, mismatches, readInterface } from '.
 import { executeGraph } from './executor.ts';
 import { registry } from '../elements/registry.ts';
 import { parseGraph } from '../graph.ts';
-import type { Runtime } from '../elements/Runtime.ts';
+import { quietRuntime } from '../../test/fakes.ts';
 
 describe('inferring an interface from a run', () => {
   it('describes what a node produced, port by port', () => {
@@ -79,11 +79,7 @@ describe('holding a run to its interface', () => {
 });
 
 describe('a run with an interface kept', () => {
-  const runtime = (produces: Record<string, unknown>): Runtime => ({
-    files: { read: async () => '', write: async () => {}, list: async () => [], resolve: (p) => p, exists: async () => true },
-    code: { run: async () => produces },
-    ai: { complete: async () => '' },
-  });
+  const runtime = (produces: Record<string, unknown>) => quietRuntime({ code: { run: async () => produces } });
   const graphWith = (outputSchema: unknown) => parseGraph({
     metadata: { name: 't' },
     nodes: [{

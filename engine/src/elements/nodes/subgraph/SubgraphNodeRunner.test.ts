@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { executeGraph } from '../../../execution/executor.ts';
 import { registry } from '../../registry.ts';
-import { parseGraph, type Graph, type GraphNode } from '../../../graph.ts';
+import { parseGraph, type Graph, type GraphEdge, type GraphNode } from '../../../graph.ts';
 import type { Runtime } from '../../Runtime.ts';
 import { nodeCode } from '../../../host/node.ts';
 import { SUBGRAPH_RUN } from './runTemplate.ts';
 import { bundleNeeds } from '../../../cli/bundle.ts';
+import { edge, quietRuntime } from '../../../../test/fakes.ts';
 
 /**
  * A graph inside a node, run by the engine that runs graphs.
@@ -31,22 +32,15 @@ function node(id: string, type: string, config: Record<string, unknown> = {}, po
   };
 }
 
-const edge = (id: string, from: string, fromPort: string, to: string, toPort: string) =>
-  ({ id, source_node_id: from, source_port_id: fromPort, target_node_id: to, target_port_id: toPort });
-
-function graph(nodes: GraphNode[], edges: ReturnType<typeof edge>[] = []): Graph {
+function graph(nodes: GraphNode[], edges: GraphEdge[] = []): Graph {
   return parseGraph({ metadata: { name: 'test' }, nodes, edges });
 }
 
 /** Shouts the text it is given, so a value that crossed the boundary is visible. */
-const shouting: Runtime = {
-  files: {
-    read: async (path: string) => `contents of ${path}`,
-    write: async () => {}, list: async () => [], resolve: (p) => p, exists: async () => true,
-  },
+const shouting = quietRuntime({
+  files: { read: async (path: string) => `contents of ${path}` },
   code: { run: async (_body, inputs) => ({ output: String(inputs.value ?? '').toUpperCase() }) },
-  ai: { complete: async () => '' },
-};
+});
 
 /** The inner graph: one text input, one code node, one output. */
 function inner(): unknown {

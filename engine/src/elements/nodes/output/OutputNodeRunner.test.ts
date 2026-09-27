@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { OutputNodeRunner } from './OutputNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
+import { quietRuntime } from '../../../../test/fakes.ts';
 import type { GraphNode } from '../../../graph.ts';
 
 /**
@@ -24,17 +25,12 @@ function outputNode(config: Record<string, unknown>): GraphNode {
 /** A runtime whose files are a map: what was written, and where. */
 function recording() {
   const written = new Map<string, string>();
-  const runtime: Runtime = {
+  const runtime = quietRuntime({
     files: {
       resolve: (path) => `/resolved${path}`,
-      exists: async () => true,
-      read: async () => '',
       write: async (path, content) => { written.set(path, content); },
-      list: async () => [],
     },
-    code: { run: async (_body, inputs) => inputs },
-    ai: { complete: async () => '' },
-  };
+  });
   return { runtime, written };
 }
 

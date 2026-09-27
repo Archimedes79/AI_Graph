@@ -4,6 +4,7 @@ import { executeGraph, inputsFor } from './executor.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeCode } from '../host/node.ts';
+import { quietRuntime } from '../../test/fakes.ts';
 
 /**
  * What a run reports beyond each node's outputs: what it showed, what it kept,
@@ -14,8 +15,7 @@ const port = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: i
 
 /** A body is recognised by a word in it, so a test can say what a node does without a sandbox. */
 function runtime(over: Partial<Runtime> = {}): Runtime {
-  return {
-    files: { read: async () => '', write: async () => {}, list: async () => [], resolve: (p) => p, exists: async () => true },
+  return quietRuntime({
     code: {
       run: async (body, inputs) => {
         if (body.includes('SHOUT')) return { value: `shown(${String(inputs.value)})` };
@@ -25,7 +25,7 @@ function runtime(over: Partial<Runtime> = {}): Runtime {
     },
     ai: { complete: async (request) => `answer to: ${request.prompt}` },
     ...over,
-  };
+  });
 }
 
 /**

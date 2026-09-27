@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { GuiNodeRunner, parseWidget } from './GuiNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
+import { quietRuntime } from '../../../../test/fakes.ts';
 import type { GraphNode } from '../../../graph.ts';
 
 /**
@@ -27,17 +28,9 @@ const picker = (extra: Record<string, unknown> = {}) => ({
 const box = { id: 'note', kind: 'text_io', label: 'Note', mode: 'input', value: 'still here' };
 
 /** A machine where listing a folder fails, as it does when the folder has moved. */
-const brokenFolder: Runtime = {
-  files: {
-    resolve: (p) => p,
-    exists: async () => false,
-    read: async () => '',
-    write: async () => {},
-    list: async () => { throw new Error('ENOENT: no such directory'); },
-  },
-  code: { run: async (_body, inputs) => inputs },
-  ai: { complete: async () => '' },
-};
+const brokenFolder = quietRuntime({
+  files: { exists: async () => false, list: async () => { throw new Error('ENOENT: no such directory'); } },
+});
 
 describe('a block that fails', () => {
   it('takes the whole page down when nobody asked otherwise', async () => {
