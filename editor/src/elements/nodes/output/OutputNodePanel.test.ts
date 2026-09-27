@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { GraphNode } from '@/graph';
@@ -7,6 +7,15 @@ import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { nodeFields } from '@/authoring/generation';
 import OutputNodePanel from './OutputNodePanel';
+
+// Rendered to a string, a component reads the store's first state, not the
+// one a test has since moved it to -- so the graph the panel asks about is
+// answered here. (Vitest lifts both of these above the imports.)
+const open = vi.hoisted(() => ({ rfNodes: [] as { id: string; data: { graphNode: GraphNode } }[] }));
+vi.mock('@/store/graphStore', async (actual) => ({
+  ...await actual<object>(),
+  useGraphStore: (select: (state: typeof open) => unknown) => select(open),
+}));
 
 function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(OutputNodePanel, {
@@ -26,6 +35,24 @@ describe('an output node\'s panel', () => {
     // A node without a label is called by its id there, as the run keys it.
     expect(panel({ ...node, label: '' })).toContain('what this node is called: “totals”.');
     expect(baseNodeConfig()).not.toHaveProperty('output_label');
+  });
+
+  it('names the key its value really has when another output node has its name already', () => {
+    // Two output nodes renamed to one label: the run keeps the second under
+    // "Totals (avg)" (`resultKeys`), and its dialog said the result calls it "Totals".
+    const first = { ...NODE_KINDS.output.create('sum'), label: 'Totals' };
+    const second = { ...NODE_KINDS.output.create('avg'), label: 'Totals' };
+    open.rfNodes = [first, second].map((graphNode) => ({ id: graphNode.id, data: { graphNode } }));
+    try {
+      const html = panel(second);
+      expect(html).toContain('“Totals” is another output node&#x27;s already, so the run&#x27;s result calls this one “Totals (avg)”.');
+      expect(html).not.toContain('what this node is called');
+      // The first keeps its name, and the second as the dialog has it -- renamed -- is its own.
+      expect(panel(first)).toContain('what this node is called: “Totals”.');
+      expect(panel({ ...second, label: 'Averages' })).toContain('what this node is called: “Averages”.');
+    } finally {
+      open.rfNodes = [];
+    }
   });
 
   it('asks what the result is, which the node feeding it is told, in its own words', () => {
