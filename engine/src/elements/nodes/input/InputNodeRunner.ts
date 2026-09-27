@@ -22,8 +22,15 @@ export interface InputConfig {
 /** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
 /** The body that chooses files: named once, so what is said about it names the file that exists. */
 const SELECTOR_FILE = 'select.js';
+/**
+ * The selector the editor used to give every new input node, in every mode. It
+ * handed on every file, which an empty selector does too, so it is nobody's
+ * writing: a project still holding it reads as holding none, and its next save
+ * writes no `select.js` for it.
+ */
+const EARLIER_STARTER = 'function run(inputs) {\n  // inputs.files is the full list of file paths in the directory\n  return { files: inputs.files ?? [] };\n}\n';
 const SELECTOR_TEXTS: readonly TextFile[] = [
-  { field: 'selector_code', file: SELECTOR_FILE },
+  { field: 'selector_code', file: SELECTOR_FILE, standard: '', earlier: [EARLIER_STARTER] },
   { field: 'selector_prompt', file: 'task.md' },
 ];
 

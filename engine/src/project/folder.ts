@@ -34,6 +34,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry, NODES, WIDGETS } from '../elements/registry.ts';
+import { shippedText } from '../elements/ElementRunner.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 import { describeFlow, FLOW_FILE } from './flowFile.ts';
@@ -201,9 +202,7 @@ function fromFile(content: string, json: boolean, path: string): unknown {
 
 /** Nobody's own: nothing, or a text the element itself once shipped. */
 function isStandard(value: unknown, text: { standard?: string; earlier?: readonly string[] }): boolean {
-  if (isBlank(value)) return true;
-  const plain = (s: string) => s.replace(/\r\n/g, '\n').trim();
-  return typeof value === 'string' && [text.standard ?? '', ...(text.earlier ?? [])].some((known) => plain(known) === plain(value));
+  return isBlank(value) || shippedText(value, text);
 }
 
 /** Nothing written: no file for it. A JSON value that is an empty object says nothing either. */

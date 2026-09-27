@@ -68,6 +68,18 @@ export interface TextFile {
 }
 
 /**
+ * Whether *value* is a text the element itself shipped for *text* -- its
+ * standard, or one it had before -- and so nobody's own writing. Asked when a
+ * project is read and saved, and by the editor's sweep, which writes only what
+ * nobody wrote.
+ */
+export function shippedText(value: unknown, text: Pick<TextFile, 'standard' | 'earlier'>): boolean {
+  const plain = (s: string) => s.replace(/\r\n/g, '\n').trim();
+  return typeof value === 'string'
+    && [text.standard ?? '', ...(text.earlier ?? [])].some((known) => plain(known) === plain(value));
+}
+
+/**
  * What runs when an element runs, said for whoever reads its folder or its
  * panel: a node's `interface.json` carries it, and the editor shows it.
  */

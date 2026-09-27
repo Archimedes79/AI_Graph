@@ -98,7 +98,7 @@ describe('a file that cannot be read', () => {
 
 describe('the selector', () => {
   /**
-   * Only a folder listing is narrowed by a selector. The editor gives every
+   * Only a folder listing is narrowed by a selector. The editor gave every
    * input node the starter selector, and a text or single-file input used to
    * have it written into its folder as `select.js`: a file that never runs,
    * saying the node chooses files.
@@ -173,6 +173,29 @@ describe('the selector', () => {
       expect(existsSync(join(folder, 'select.js'))).toBe(false);
       const saved = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8'));
       expect(saved.nodes[0].config).toMatchObject({ selector_code: own, selector_prompt: 'Only the notes.' });
+    });
+
+    it('reads the starter every input used to be given as no selector, and writes no select.js for it', async () => {
+      // The editor gave every new input this selector, which hands on every
+      // file -- as an empty one does. Read as somebody's, it kept a select.js
+      // in the folder and counted as written, so the sweep never wrote one.
+      const earlier = 'function run(inputs) {\n  // inputs.files is the full list of file paths in the directory\n  return { files: inputs.files ?? [] };\n}\n';
+      const folder = join(dir, 'nodes', 'source');
+      await mkdir(folder, { recursive: true });
+      await writeFile(join(dir, 'graph.json'), JSON.stringify({
+        metadata: { name: 'old' },
+        nodes: [{ id: 'source', node_type: 'input', label: 'Source', position: { x: 0, y: 0 }, inputs: [], outputs: [], config: { input_mode: 'directory', value: 'data' } }],
+        edges: [],
+      }));
+      await writeFile(join(folder, 'select.js'), earlier);
+
+      const graph = await readProject(dir);
+      expect(graph.nodes[0].config.selector_code).toBeUndefined();
+
+      // A graph still holding it inline, as a plain graph file of before does.
+      graph.nodes[0].config.selector_code = earlier;
+      await writeProject(dir, graph);
+      expect(existsSync(join(folder, 'select.js'))).toBe(false);
     });
   });
 });

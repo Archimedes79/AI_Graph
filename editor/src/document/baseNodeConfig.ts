@@ -15,7 +15,10 @@ export function baseNodeConfig(): NodeConfig {
     extensions: '',
     select_all_files: true,
     selector_prompt: '',
-    selector_code: 'function run(inputs) {\n  // inputs.files is the full list of file paths in the directory\n  return { files: inputs.files ?? [] };\n}\n',
+    // Empty, as a folder picker's starts: an empty selector keeps every file,
+    // which is all the starter it used to hold did -- saved into the graph of
+    // every text and file input, which select nothing (B21).
+    selector_code: '',
     // 'default' -> follow the graph's metadata.ai_defaults (and whatever
     // overrides it at run time). There is no gen_ai_* pair any more: the
     // code-generation AI is one editor-wide setting, see store/settingsStore.ts.

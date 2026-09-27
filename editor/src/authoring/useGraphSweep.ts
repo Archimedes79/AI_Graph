@@ -132,7 +132,7 @@ export function useGraphSweep(): SweepState {
       // Never overwrite a body somebody already has. A sweep fills a graph in;
       // rewriting working code because a button was pressed is not that. What
       // a new node of the kind starts with is nobody's work, though: every
-      // input node carries the starter selector, and counting it as written
+      // input node used to carry a starter selector, and counting it as written
       // left every folder's selector ungenerated.
       if (writtenBody(current, spec.targetField)) return undefined;
 

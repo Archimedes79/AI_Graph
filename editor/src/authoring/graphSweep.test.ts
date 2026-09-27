@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { generationOrder, missingExamples, sampleFromPredecessors, sweep, type SweepStep, type SweepUnit } from './graphSweep';
+import { generationOrder, missingExamples, sampleFromPredecessors, sweep, writtenBody, type SweepStep, type SweepUnit } from './graphSweep';
 import { NODE_BUILDERS } from '@/elements/registry';
 import type { GraphEdge, GraphNode } from '@/graph';
 
@@ -270,5 +270,27 @@ describe('a page in the order', () => {
     // port name the graph used to get there.
     expect(sampleFromPredecessors(chart, wired, produced, new Set(['panel'])))
       .toEqual({ value: [{ label: 'a', value: 1 }] });
+  });
+});
+
+describe('what a sweep counts as already written', () => {
+  const folder = (selector_code: string): GraphNode => {
+    const input = node('in', 'input');
+    return { ...input, config: { ...input.config, input_mode: 'directory', select_all_files: false, selector_prompt: 'Only the CSVs.', selector_code } };
+  };
+
+  it('is not a folder input nobody wrote a selector for, so its selector is generated (B54)', () => {
+    expect(writtenBody(folder(NODE_KINDS.input.create('in').config.selector_code), 'selector_code')).toBe(false);
+  });
+
+  it('is not the starter selector every input node used to be given', () => {
+    const earlier = 'function run(inputs) {\n  // inputs.files is the full list of file paths in the directory\n  return { files: inputs.files ?? [] };\n}\n';
+    expect(writtenBody(folder(earlier), 'selector_code')).toBe(false);
+  });
+
+  it('is a selector somebody wrote, and a code node\'s code but not its starter', () => {
+    expect(writtenBody(folder('function run(i) { return { files: i.files.slice(0, 1) }; }'), 'selector_code')).toBe(true);
+    expect(writtenBody(node('c'), 'code')).toBe(false);
+    expect(writtenBody({ ...node('c'), config: { ...node('c').config, code: 'function run() { return {}; }' } }, 'code')).toBe(true);
   });
 });

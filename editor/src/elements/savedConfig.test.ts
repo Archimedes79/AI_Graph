@@ -56,6 +56,20 @@ describe('NodeGuiBuilder.saved', () => {
     expect(lean.config).not.toHaveProperty('system_prompt');
   });
 
+  it('saves no selector for an input nobody wrote one for, in any mode, and keeps one somebody did', () => {
+    // Every input node used to carry a starter selector, saved into the graph
+    // of text and file inputs, which select nothing (B21).
+    for (const mode of ['text', 'file', 'directory'] as const) {
+      const node = NODE_KINDS.input.create('n');
+      node.config.input_mode = mode;
+      expect(savedNode(node).config, mode).not.toHaveProperty('selector_code');
+      expect(savedNode(node).config, mode).not.toHaveProperty('selector_prompt');
+    }
+    const node = NODE_KINDS.input.create('n');
+    node.config = { ...node.config, input_mode: 'directory', selector_prompt: 'Only the CSVs.', selector_code: 'function run(i) { return i; }' };
+    expect(savedNode(node).config).toMatchObject({ selector_prompt: 'Only the CSVs.', selector_code: 'function run(i) { return i; }' });
+  });
+
   it('keeps a key it does not own once somebody changed it', () => {
     const node = NODE_KINDS.output.create('n');
     node.config.temperature = 0.1;

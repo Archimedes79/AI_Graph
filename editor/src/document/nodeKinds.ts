@@ -72,9 +72,11 @@ export interface NodeKind {
 
 export const NODE_KINDS: Record<NodeType, NodeKind> = {
   input: {
+    // Not the selector, nor what an older dialog let a person say the files
+    // contain: kept once somebody wrote them, and left out while empty, so a
+    // text or file input -- which selects nothing -- saves no selector (B21).
     settings: [
-      'input_mode', 'value', 'prompt_at_runtime', 'recursive', 'extensions', 'select_all_files',
-      'selector_prompt', 'selector_code', 'output_format_prompt', 'catch_errors',
+      'input_mode', 'value', 'prompt_at_runtime', 'recursive', 'extensions', 'select_all_files', 'catch_errors',
     ],
     create(id) {
       // A new input starts in text mode, and its ports follow from that -- asked
