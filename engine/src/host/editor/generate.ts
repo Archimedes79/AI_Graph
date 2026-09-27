@@ -206,7 +206,7 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
           : inputs.length ? 'What arrives is sent after them, as it is.' : 'Nothing is wired in: the instructions are the whole question.',
         'Put {Node Description} and {Output Definition} where they belong in the instructions: they are filled in when the node runs -- '
           + `the node description as above, and ${json ? 'its output definition, output.js, as above' : '"None: answer in plain text."'}.`,
-        json ? 'The answer is parsed as JSON keyed as the output definition\'s example is, and each key handed on its own output: ask for that JSON and nothing else.'
+        json ? 'The answer is parsed as a JSON object keyed as the output definition\'s example is, and each key handed on its own output: ask for that JSON object and nothing else -- not the file around the example.'
           : 'The answer is plain text, handed on as it is.');
       break;
     }

@@ -50,7 +50,7 @@ describe('an ai node\'s standard instructions', () => {
   it('ask for JSON mapped onto its output definition while it has one', () => {
     const text = standardRunPrompt(true);
     expect(named(text)).toEqual(['Node Description', 'Output Definition']);
-    expect(text).toMatch(/only JSON, keyed as in its example/);
+    expect(text).toMatch(/only a JSON object, keyed and shaped as its example after module\.exports -- not the file itself/);
   });
 
   it('ask for plain text without one', () => {

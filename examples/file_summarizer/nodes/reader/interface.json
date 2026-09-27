@@ -26,20 +26,5 @@
       "type": "text",
       "description": "One line about the file"
     }
-  ],
-  "output_schema": {
-    "type": "object",
-    "properties": {
-      "text": {
-        "type": "string"
-      },
-      "info": {
-        "type": "string"
-      }
-    },
-    "required": [
-      "text",
-      "info"
-    ]
-  }
+  ]
 }

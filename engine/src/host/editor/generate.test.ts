@@ -225,7 +225,7 @@ describe('an ai node\'s instructions', () => {
     const sent = ai.asked[0].prompt;
     expect(sent).toContain('each input under its port id: "text", "topic"');
     expect(sent).toContain('Put {Node Description} and {Output Definition} where they belong');
-    expect(sent).toContain('The answer is parsed as JSON keyed as the output definition\'s example is');
+    expect(sent).toContain('The answer is parsed as a JSON object keyed as the output definition\'s example is');
     expect(ai.asked[0].system).toMatch(/prompt engineer/);
   });
 

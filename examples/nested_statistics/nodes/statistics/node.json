@@ -1,5 +1,5 @@
 {
   "label": "Statistics",
-  "description": "A graph of its own: open it to see how the counting is done",
+  "description": "Measures a piece of text: how many words, how many sentences, and the longest word in it.\nA graph of its own: open it to see how the counting is done.",
   "config": {}
 }

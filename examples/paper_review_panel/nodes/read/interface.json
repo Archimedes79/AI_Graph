@@ -14,16 +14,5 @@
       "type": "text",
       "description": "The manuscript as text"
     }
-  ],
-  "output_schema": {
-    "type": "object",
-    "properties": {
-      "text": {
-        "type": "string"
-      }
-    },
-    "required": [
-      "text"
-    ]
-  }
+  ]
 }

@@ -191,6 +191,12 @@ describe('an answer mapped onto an output definition', () => {
     expect(await element.execute(defined(), {}, answering('```json\n{"rows": [], "count": 0}\n```'))).toEqual({ rows: [], count: 0 });
   });
 
+  it('is read the way output.js is read, where the model answered in its format', async () => {
+    // A small model shown the definition file answers with a file like it.
+    const echoed = '```js\n/** @typedef {Object} Output */\nmodule.exports = {\n  "rows": [3],\n  "count": 1\n};\n```';
+    expect(await element.execute(defined(), {}, answering(echoed))).toEqual({ rows: [3], count: 1 });
+  });
+
   it('fails the node when it is not a JSON object, saying how it began', async () => {
     await expect(element.execute(defined(), {}, answering('Sure! Here are the rows: {"rows": []}')))
       .rejects.toThrow(/not the JSON object this node's output\.js asks for\. It began: "Sure! Here are the rows/);

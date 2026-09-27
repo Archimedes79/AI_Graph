@@ -365,7 +365,8 @@ async function runTests(argv: string[]): Promise<number> {
     const { tested, results } = await testGraph(await loadGraph(path), { runtime: () => nodeRuntime(), registry, offline, only });
     for (const { inside, nodeId, result } of results) {
       const mark = { pass: '✓', fail: '✗', error: '✗', skipped: '·' }[result.status];
-      process.stdout.write(`${mark} ${path} ${inside}${nodeId}${result.status === 'skipped' ? ' (skipped)' : result.held ? ': fits its output.js' : ': runs'}\n`);
+      const said = { skipped: ' (skipped)', pass: result.held ? ': fits its output.js' : ': runs', fail: ': does not fit its output.js', error: ': fails' }[result.status];
+      process.stdout.write(`${mark} ${path} ${inside}${nodeId}${said}\n`);
       for (const line of result.status === 'skipped' ? [] : result.details) process.stdout.write(`    ${line}\n`);
       if (result.status === 'fail' || result.status === 'error') failed += 1;
     }

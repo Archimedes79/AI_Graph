@@ -1,6 +1,6 @@
 {
   "label": "Read file",
-  "description": "Reads the chosen file and says what it is",
+  "description": "Reads the chosen file and says what it is: passes its text on, and one line with its name, word count, character count and reading time.",
   "config": {
     "batch_mode": "whole_list"
   }

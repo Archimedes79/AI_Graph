@@ -1,5 +1,6 @@
 {
   "label": "Counts",
+  "description": "Counts the words and the sentences in the text, and finds its longest word without punctuation.",
   "config": {
     "batch_mode": "whole_list"
   }

@@ -118,6 +118,6 @@ export function nodeDescription(node: { id: string; label: string; description: 
  */
 export function standardRunPrompt(answersJson: boolean): string {
   return answersJson
-    ? '{Node Description}\n\nDo this with the input below, and answer with the data mapped onto this output definition -- only JSON, keyed as in its example:\n{Output Definition}'
+    ? '{Node Description}\n\nDo this with the input below, and answer with the data mapped onto this output definition: only a JSON object, keyed and shaped as its example after module.exports -- not the file itself.\n{Output Definition}'
     : '{Node Description}\n\nDo this with the input below. Answer in plain text.';
 }

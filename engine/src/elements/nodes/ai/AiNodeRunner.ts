@@ -4,7 +4,7 @@ import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
-import { DEFINITION_TEXTS, definitionsIn, type Definitions } from '../../../authoring/definition.ts';
+import { DEFINITION_TEXTS, definitionExample, definitionsIn, type Definitions } from '../../../authoring/definition.ts';
 import { fillPrompt, nodeDescription, standardRunPrompt } from '../../../authoring/prompts.ts';
 import { askModel, type AskSettings } from './ask.ts';
 
@@ -156,19 +156,23 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
 
 /**
  * A model's answer as the JSON object it is: what the node writes out, key by
- * key, with a ```json fence around the whole of it taken off. An answer that is
- * not a JSON object fails the node, saying how it began -- handed on as text,
- * it reaches the node after it as a string where a record was promised, and
- * fails there, further from why.
+ * key, with a ```json fence around the whole of it taken off -- and, where the
+ * model answered in the output definition's own format, `module.exports = …;`
+ * and all, read the way that file is read. An answer that is not a JSON object
+ * fails the node, saying how it began -- handed on as text, it reaches the node
+ * after it as a string where a record was promised, and fails there, further
+ * from why.
  */
 function jsonAnswer(answer: string): Record<string, unknown> {
   const said = answer.trim();
   const fenced = /^```[^\n`]*\n([\s\S]*?)\n?[ \t]*```$/.exec(said);
+  const body = fenced ? fenced[1] : said;
   let value: unknown;
   try {
-    value = JSON.parse(fenced ? fenced[1] : said);
+    value = JSON.parse(body);
   } catch {
-    value = undefined;
+    const asFile = definitionExample(body);
+    value = 'example' in asFile ? asFile.example : undefined;
   }
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
   const start = said.length > 160 ? `${said.slice(0, 160)}…` : said;
