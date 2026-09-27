@@ -33,7 +33,7 @@ export const BUDGET = {
   example: 400,
   format: 1200,
   outputExample: 900,
-  /** A value a probe was given or returned, in a repair prompt and in its report. */
+  /** A value a probe was given, in a repair prompt. */
   preview: 900,
   schema: 700,
   template: 800,
@@ -47,7 +47,7 @@ export function clip(text: string, limit: number): string {
 }
 
 /** A value as JSON, cut to *limit* characters: a string's line breaks stay visible. Anything JSON cannot say, as text. */
-export function jsonClip(value: unknown, limit: number): string {
+function jsonClip(value: unknown, limit: number): string {
   let text: string;
   try {
     text = JSON.stringify(value) ?? String(value);

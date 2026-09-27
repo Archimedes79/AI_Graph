@@ -26,7 +26,7 @@ import { batchItems, mergeBatchOutputs } from '../../execution/batching.ts';
 import { readPorts } from '../../execution/fileInputs.ts';
 import type { GraphNode } from '../../graph.ts';
 import { renderSkeleton } from './skeleton.ts';
-import { BUDGET, exampleSample, jsonClip, renderBrief, type Sample } from './brief.ts';
+import { BUDGET, exampleSample, renderBrief, shown, type Sample } from './brief.ts';
 import { unmet } from '../../execution/examples.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
@@ -292,14 +292,16 @@ const PROBE_TIMEOUT_MS = 25_000;
 /** The report of a probe that did not run: no sample to try on, or a body no probe tries. A fresh one each time. */
 const notProbed = (): ProbeReport => ({ status: 'skipped', error: '', missing_outputs: [] });
 
-/** A short, faithful rendering of a value for the model and the user: the brief's own, so one prompt cuts values one way. */
-const preview = (value: unknown): string => jsonClip(value, BUDGET.preview);
-
+/**
+ * Each input as the repair is shown it: the brief's own rendering (`shown`),
+ * so one prompt says a value -- and a list's length -- one way. A single
+ * value is named by its type too: "string", said outright, is what turns a
+ * body written for a list back into one written for an item.
+ */
 function describeInputs(sample: Record<string, unknown>): string {
   return Object.entries(sample).map(([key, value]) => {
-    let kind: string = Array.isArray(value) ? `list[${value.length}]` : value === null ? 'null' : typeof value;
-    if (Array.isArray(value) && value.length) kind += ` of ${typeof value[0]}`;
-    return `  inputs["${key}"]: ${kind} = ${preview(value)}`;
+    const kind = Array.isArray(value) ? '' : `${value === null ? 'null' : typeof value} = `;
+    return `  inputs["${key}"]: ${kind}${shown(value, BUDGET.preview)}`;
   }).join('\n');
 }
 
