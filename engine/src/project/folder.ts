@@ -310,8 +310,12 @@ async function readIfThere(path: string, what: string, guard?: Guard): Promise<u
  * The structure of the project in *folder*: every node with its settings and
  * ports, and the wires -- without the writing, which `readProject` adds.
  * Returns the files it read, for whoever has to watch them.
+ *
+ * What an element keeps in files is asked of this graph, as `readProject`
+ * asks it: an element may name a file only while the node does not hold its
+ * text yet, and asked again once the text is read in, the answer differs.
  */
-async function readStructure(folder: string, guard?: Guard): Promise<{ graph: Graph; files: string[] }> {
+export async function readStructure(folder: string, guard?: Guard): Promise<{ graph: Graph; files: string[] }> {
   const flowPath = join(folder, FLOW_FILE);
   if (!existsSync(flowPath)) {
     const graphPath = join(folder, GRAPH_FILE);

@@ -545,7 +545,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       // A project also has its folder to be wrong about: files nothing reads, folders no node owns.
       if (args.path !== undefined) {
         const folder = projectFolderOf(await confine(args.path, 'path'));
-        if (folder) problems.push(...await folderProblems(folder, graph));
+        if (folder) problems.push(...await folderProblems(folder));
       }
       return json({ valid: problems.length === 0, problems });
     },

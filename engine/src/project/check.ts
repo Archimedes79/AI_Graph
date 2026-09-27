@@ -19,7 +19,9 @@ import { mismatches, portMisfit, readInterface } from '../execution/interface.ts
 import { filePorts } from '../execution/fileInputs.ts';
 import { parseExamples } from '../execution/examples.ts';
 import { INTERFACE_FILE } from './interfaceFile.ts';
-import { FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
+import {
+  FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, isProjectFolder, loadGraph, nodeFolder, projectFolderOf, projectTexts, readStructure,
+} from './folder.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
 
@@ -262,8 +264,14 @@ function interfaceProblems(node: GraphNode, where: string): Problem[] {
  * belongs to no node (the node was deleted, or renamed in \`flow.json\` by
  * hand), and a file in a node's folder that nothing reads -- `prompt.md` where
  * an AI node reads `system.md` is a text somebody wrote and nobody will ever send.
+ *
+ * Which files a node reads is asked of the folder's structure, before any
+ * text is read in, as `readProject` asks it. Asked of the loaded graph, an
+ * input holding the selector an older save kept in `select.js` named no such
+ * file, and the files it had just been read from were called unread.
  */
-export async function folderProblems(folder: string, graph: Graph): Promise<Problem[]> {
+export async function folderProblems(folder: string): Promise<Problem[]> {
+  const { graph } = await readStructure(folder);
   const found: Problem[] = [];
   const expected = new Map<string, Set<string>>();
   for (const text of projectTexts(graph)) {
@@ -283,12 +291,11 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
   // A node that holds a graph holds a project folder: its own flow.json and
   // layout.json belong there, and what is under them is that project's, looked
   // at below by the same function.
-  const nested = new Map<string, Graph>();
+  const nested = new Set<string>();
   for (const node of graph.nodes) {
-    const held = registry.node(node.node_type)?.nestedGraph(node);
-    if (!held) continue;
+    if (!registry.node(node.node_type)?.nestedGraph(node)) continue;
     const dir = nodeFolder(node.id);
-    nested.set(dir, held);
+    nested.add(dir);
     // Every node's folder is in `expected` already, from the loop above.
     for (const name of [FLOW_FILE, LAYOUT_FILE]) expected.get(dir)!.add(name);
   }
@@ -303,9 +310,10 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
     const reads = expected.get(relative);
     for (const entry of entries) {
       const path = `${relative}/${entry.name}`;
-      // Its own project: checked as one, not walked as part of this one.
-      if (entry.isDirectory() && entry.name === NODES_DIR && nested.has(relative)) {
-        found.push(...(await folderProblems(join(folder, relative), nested.get(relative)!))
+      // Its own project: checked as one, not walked as part of this one. A
+      // `nodes/` there without a flow.json is read by nobody, and said below.
+      if (entry.isDirectory() && entry.name === NODES_DIR && nested.has(relative) && isProjectFolder(join(folder, relative))) {
+        found.push(...(await folderProblems(join(folder, relative)))
           .map((problem) => ({ ...problem, where: `${relative}/${problem.where}` })));
         continue;
       }
@@ -343,7 +351,7 @@ export async function checkPath(path: string): Promise<{ problems: Problem[]; gr
   }
   const problems = problemsIn(graph);
   const folder = projectFolderOf(path);
-  if (folder) problems.push(...await folderProblems(folder, graph));
+  if (folder) problems.push(...await folderProblems(folder));
   return { problems, graph };
 }
 
