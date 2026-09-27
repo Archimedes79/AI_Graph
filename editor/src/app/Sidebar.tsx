@@ -1,5 +1,7 @@
 import type { NodeType } from '@/graph';
 import { NODE_BUILDERS } from '@/elements/registry';
+import { showsPage } from '@/document/guiWidgets';
+import { useGraphStore } from '@/store/graphStore';
 import { ACCENT, DIMMER, LINE, SURFACE, TEXT } from '@/ui/theme';
 
 const CATEGORIES: { label: string; types: NodeType[] }[] = [
@@ -35,6 +37,10 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ onAddNode }: SidebarProps) {
+  // A page is shown only for the graph at the top. Inside a node's graph a
+  // page node would be one nobody ever sees, and `check` rejects it there, so
+  // the palette does not offer one -- and says why rather than hiding it.
+  const inside = useGraphStore((s) => s.subgraphStack.length > 0);
   return (
     <aside
       className="flex flex-col h-full overflow-y-auto"
@@ -59,23 +65,29 @@ export default function Sidebar({ onAddNode }: SidebarProps) {
           <h3 className="px-4 text-xs font-medium uppercase tracking-wider mb-2" style={{ color: DIMMER }}>
             {cat.label}
           </h3>
-          {cat.types.map((type) => (
-            <button
-              key={type}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover-raise"
-              style={{ color: TEXT }}
-              onClick={() => onAddNode(type)}
-              title={NODE_BUILDERS[type].hint}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData('application/nodeType', type);
-                e.dataTransfer.effectAllowed = 'copy';
-              }}
-            >
-              <span className="text-base">{NODE_BUILDERS[type].icon}</span>
-              <span>{NODE_BUILDERS[type].label}</span>
-            </button>
-          ))}
+          {cat.types.map((type) => {
+            const topOnly = inside && showsPage(type);
+            return (
+              <button
+                key={type}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover-raise"
+                style={{ color: TEXT, opacity: topOnly ? 0.4 : 1 }}
+                disabled={topOnly}
+                onClick={() => onAddNode(type)}
+                title={topOnly
+                  ? 'A page belongs to the graph at the top. Go back up to add one: a node\'s graph runs as one part of it and has no page of its own.'
+                  : NODE_BUILDERS[type].hint}
+                draggable={!topOnly}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/nodeType', type);
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+              >
+                <span className="text-base">{NODE_BUILDERS[type].icon}</span>
+                <span>{NODE_BUILDERS[type].label}</span>
+              </button>
+            );
+          })}
         </div>
       ))}
 

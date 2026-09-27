@@ -44,6 +44,10 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
   /** Everything a graph produces leaves through one of these. */
   override readonly isResult = true;
 
+  override resultLabel(node: GraphNode): string {
+    return this.config(node).label;
+  }
+
   override boundaryRole(): 'out' {
     return 'out';
   }

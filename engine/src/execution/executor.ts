@@ -917,8 +917,9 @@ function finalOutputs(
   const final: Record<string, unknown> = {};
   const taken = new Set<string>();
   for (const node of nodes) {
-    if (!registry.node(node.node_type)?.isResult) continue;
-    const label = String(node.config.output_label ?? '') || node.id;
+    const element = registry.node(node.node_type);
+    if (!element?.isResult) continue;
+    const label = element.resultLabel(node);
     const key = taken.has(label) ? `${label} (${node.id})` : label;
     taken.add(key);
     const produced = outputs.get(node.id);
