@@ -45,4 +45,15 @@ describe('a folder picker\'s selector, in its panel', () => {
     expect(selectAllBox(panel(widget))).not.toContain('checked');
     expect(builder.generation!.available!(widget)).toBe(true);
   });
+
+  it('is the four steps an input node\'s folder is: the listing as the example, and code with ✨ and Try it before there is any', () => {
+    const widget = { ...builder.create('Folder', 'directory'), value: 'data', select_all_files: false };
+    const html = panel(widget);
+    for (const step of ['What comes in', 'What comes out', 'Which files to keep?', 'Code']) expect(html, step).toContain(`aria-label="${step}"`);
+    expect(html).toContain('⟳ List them');
+    expect(html).toContain('✨ Generate');
+    const tryButton = /<button[^>]*>▶ Try it<\/button>/.exec(html)?.[0] ?? '';
+    expect(tryButton).not.toBe('');
+    expect(tryButton).not.toContain('disabled');
+  });
 });
