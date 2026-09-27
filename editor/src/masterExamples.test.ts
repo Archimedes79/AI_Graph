@@ -145,7 +145,7 @@ async function run(graph: Graph, trigger: { node_id: string; port_id: string }, 
 
 beforeEach(() => {
   store().loadGraph({
-    metadata: { name: 'Built by hand', version: '1.0.0', description: '', author: '', tags: [], ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+    metadata: { name: 'Built by hand', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
     nodes: [], edges: [],
   });
 });

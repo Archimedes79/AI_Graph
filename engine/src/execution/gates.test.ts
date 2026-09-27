@@ -31,7 +31,7 @@ const edge = (id: string, from: string, fromPort: string, to: string, toPort: st
   ({ id, source_node_id: from, source_port_id: fromPort, target_node_id: to, target_port_id: toPort });
 
 const graphOf = (nodes: GraphNode[], edges: GraphEdge[]): Graph => ({
-  metadata: { name: 'gates', version: '1', description: '', author: '', tags: [], ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+  metadata: { name: 'gates', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
   nodes, edges,
 });
 

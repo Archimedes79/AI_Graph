@@ -150,6 +150,17 @@ describe('a project folder', () => {
     expect(read.metadata.name).toBe('Sample');
   });
 
+  it('keeps the settings an older file carries that nothing reads, as it wrote them', async () => {
+    // version, author and tags are no setting of the graph's any more; a file
+    // that has them keeps them through an open and a save, whatever they say.
+    const graph = sample();
+    Object.assign(graph.metadata, { version: '1.0.0', author: 'Ada', tags: [] });
+    await writeProject(dir, graph);
+    const read = await readProject(dir);
+    expect(read.metadata).toMatchObject({ version: '1.0.0', author: 'Ada', tags: [] });
+    expect(JSON.parse(await text('flow.json'))).toMatchObject({ version: '1.0.0', author: 'Ada', tags: [] });
+  });
+
   it('writes the same bytes for the same graph, so an unchanged save is no change', async () => {
     await writeProject(dir, sample());
     const files = ['flow.json', 'layout.json', 'nodes/count/node.json', 'nodes/count/interface.json', 'nodes/page/node.json'];

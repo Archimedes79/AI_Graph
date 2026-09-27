@@ -32,7 +32,7 @@ function graphNode(overrides: Partial<GraphNode>): GraphNode {
 function loadTestGraph(nodes: GraphNode[], edges: Graph['edges'] = []) {
   useGraphStore.getState().loadGraph({
     metadata: {
-      name: 'Test', version: '1.0.0', description: '', author: '', tags: [],
+      name: 'Test', description: '',
       ai_defaults: { provider: 'default', model: '' },
   gui_scheme: 'night',
     },
@@ -214,7 +214,7 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     const text = (id: string, value: string) => ({ ...NODE_KINDS.input.create(id), config: { value } as GraphNode['config'] });
     const show = (id: string) => ({ ...NODE_KINDS.output.create(id), config: {} as GraphNode['config'] });
     const file: Graph = {
-      metadata: { name: 'T', version: '1.0.0', description: '', author: '', tags: [], ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+      metadata: { name: 'T', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
       nodes: [text('a', 'alpha'), text('b', 'beta'), show('first'), show('second')],
       edges: [
         { id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'first', target_port_id: 'value' },
@@ -504,7 +504,7 @@ describe('graphStore, a graph just opened', () => {
 describe('a graph inside a node', () => {
   const inner = (nodes: unknown[] = []) => ({
     metadata: {
-      name: 'Inner', version: '1.0.0', description: '', author: '', tags: [],
+      name: 'Inner', description: '',
       ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night',
     },
     nodes,

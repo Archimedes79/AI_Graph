@@ -25,7 +25,7 @@ const SHAPE = `You are an expert at authoring Graph DSL documents for a visual n
 
 The JSON document must have this exact shape:
 {
-  "metadata": {"name": str, "version": str, "description": str, "author": str, "tags": [str, ...]},
+  "metadata": {"name": str, "description": str},
   "nodes": [
     {
       "id": str, "node_type": str, "label": str, "description": str,
@@ -93,7 +93,7 @@ const TRIGGERS = `A page can start the graph itself. A "button" block, a "chat" 
 const EXAMPLE = `A complete, working example:
 \`\`\`json
 {
-  "metadata": {"name": "Count rows", "version": "1.0", "description": "", "author": "", "tags": []},
+  "metadata": {"name": "Count rows", "description": ""},
   "nodes": [
     {"id": "source", "node_type": "input", "label": "CSV", "description": "",
      "position": {"x": 80, "y": 120},

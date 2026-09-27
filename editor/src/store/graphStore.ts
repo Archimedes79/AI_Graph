@@ -260,11 +260,7 @@ function newId(prefix: string) {
 }
 
 function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphMetadata {
-  return {
-    ...defaultMetadata(),
-    ...(metadata ?? {}),
-    tags: Array.isArray(metadata?.tags) ? metadata.tags : [],
-  };
+  return { ...defaultMetadata(), ...(metadata ?? {}) };
 }
 
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {

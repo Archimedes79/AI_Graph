@@ -63,12 +63,14 @@ export interface GraphEdge {
   target_port_id: string;
 }
 
+/**
+ * A graph's own settings. Keys an older file carries beside these -- a
+ * `version`, an `author`, `tags` -- are nobody's to read, and are kept as the
+ * file wrote them.
+ */
 export interface GraphMetadata {
   name: string;
-  version: string;
   description: string;
-  author: string;
-  tags: string[];
   ai_defaults: { provider: string; model: string };
   gui_scheme: string;
 }
@@ -148,10 +150,7 @@ export function applyMemory(
 export function defaultMetadata(): GraphMetadata {
   return {
     name: 'Untitled Graph',
-    version: '1.0.0',
     description: '',
-    author: '',
-    tags: [],
     // Which AI this graph's AI nodes call when they run, set once for the
     // whole graph (⚙ Settings) instead of once per node. 'default' means
     // unset, which the running engine resolves to its own fallback; whoever
@@ -166,7 +165,7 @@ export function defaultMetadata(): GraphMetadata {
  * Read a graph from parsed JSON, filling in what an older file omits.
  *
  * Deliberately forgiving about *shape* and strict about *identity*: a file
- * missing `metadata.tags` is a file from last month, while a node without an
+ * missing `metadata.gui_scheme` is a file from last month, while a node without an
  * id is not a graph. Per-field migrations belong to the element that owns the
  * field, not here — that is what stopped `graph.py` from accumulating a
  * `_migrate_…` function per historical mistake.

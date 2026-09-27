@@ -27,7 +27,7 @@ function edge(id: string, from: string, fromPort: string, to: string, toPort: st
 }
 
 const graphOf = (nodes: GraphNode[], edges: GraphEdge[]): Graph => ({
-  metadata: { name: 't', version: '1', description: '', author: '', tags: [], ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+  metadata: { name: 't', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
   nodes, edges,
 });
 

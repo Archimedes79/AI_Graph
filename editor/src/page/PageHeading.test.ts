@@ -39,7 +39,7 @@ describe('a page\'s own name and description, in the GUI editor', () => {
     // The bug: a gui node's dialog never opens, so "GUI Node" stayed, and was
     // what every node upstream of a block was told the page is called.
     useGraphStore.getState().loadGraph({
-      metadata: { name: 'T', version: '1.0.0', description: '', author: '', tags: [], ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+      metadata: { name: 'T', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
       nodes: [page()],
       edges: [],
     });

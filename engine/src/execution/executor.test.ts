@@ -93,7 +93,7 @@ describe('collectInputs', () => {
 describe('executeGraph', () => {
   const graph = (nodes: GraphNode[], edges: GraphEdge[] = []): Graph => ({
     metadata: {
-      name: 'test', version: '1', description: '', author: '', tags: [],
+      name: 'test', description: '',
       ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night',
     },
     nodes, edges,
@@ -293,7 +293,7 @@ describe('the AI default a graph carries', () => {
 
   function graphWith(defaults: { provider: string; model: string }, nodeConfig: Record<string, unknown>): Graph {
     return {
-      metadata: { name: 'g', version: '1', ai_defaults: defaults } as Graph['metadata'],
+      metadata: { name: 'g', ai_defaults: defaults } as Graph['metadata'],
       nodes: [node('a', 'ai', { system_prompt: 'be brief', ...nodeConfig })],
       edges: [],
     };
@@ -341,7 +341,7 @@ describe('a batch with failing items', () => {
   /** A per_item code node fed a list of three, whose runner fails on the word "bad". */
   function graphOf(items: string[], catches = false): Graph {
     return {
-      metadata: { name: 'g', version: '1', ai_defaults: { provider: 'default', model: '' } } as Graph['metadata'],
+      metadata: { name: 'g', ai_defaults: { provider: 'default', model: '' } } as Graph['metadata'],
       nodes: [
         { ...node('a', 'data', { data_value: items, data_format: 'structure' }), outputs: [{ id: 'output', name: 'O', kind: 'output', data_type: 'json', multi: true, required: false, description: '' }] },
         {
@@ -416,7 +416,7 @@ describe('a node that catches its own failure', () => {
 
   const graph = (nodes: GraphNode[], edges: GraphEdge[] = []): Graph => ({
     metadata: {
-      name: 'test', version: '1', description: '', author: '', tags: [],
+      name: 'test', description: '',
       ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night',
     },
     nodes, edges,

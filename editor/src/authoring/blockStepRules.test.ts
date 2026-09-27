@@ -20,7 +20,7 @@ describe('a block tried by itself', () => {
     // The bug: only the block and the value were sent, so Try it asked the
     // machine's default model while a run of the graph asked the graph's.
     useGraphStore.getState().loadGraph({
-      metadata: { name: 'T', version: '1.0.0', description: '', author: '', tags: [], ai_defaults: { provider: 'anthropic', model: 'the-graphs-model' } },
+      metadata: { name: 'T', description: '', ai_defaults: { provider: 'anthropic', model: 'the-graphs-model' } },
       nodes: [], edges: [],
     } as never);
     const table = { ...WIDGET_BUILDERS.table.create('Rows'), id: 'rows' } as GuiWidget;
