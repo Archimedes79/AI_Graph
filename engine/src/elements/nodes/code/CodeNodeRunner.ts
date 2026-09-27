@@ -89,7 +89,7 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
   ): Promise<Record<string, unknown>> {
     const logic = this.logic(node);
     if (logic.isEmpty) {
-      throw new Error(`${node.label || node.id}: this code node has no code to run.`);
+      throw new Error(`${node.label || node.id}: its code.js holds no code yet -- write it with ✨ Code.`);
     }
 
     // Once, for whatever it was handed. Fanning out and reading wired files
@@ -120,8 +120,8 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
     if (String(node.config.code ?? '').trim()) return [];
     return [{
       where,
-      problem: 'A code node with no config.code: it fails the moment it runs.',
-      fix: `Put the body in config.code as "function run(inputs) { ... }", returning an object keyed by this node's output port ids -- or write it with ✨ from its description.`,
+      problem: 'Its code.js holds no code yet (config.code is empty): it fails the moment it runs.',
+      fix: `Write it with ✨ Code from the node's text -- or put "function run(inputs) { ... }" in config.code, returning an object keyed by this node's output port ids.`,
     }];
   }
 

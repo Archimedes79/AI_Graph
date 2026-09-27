@@ -318,7 +318,7 @@ describe('validate_graph', () => {
   it('names a code node with nothing to run', async () => {
     const problems = await problemsOf(graphOf([code('empty', '  '), output('result')], [edge('e1', 'empty.out', 'result.value')]));
     expect(problems).toHaveLength(1);
-    expect(problems[0]).toMatchObject({ where: 'node "empty"', problem: expect.stringMatching(/no config\.code/) });
+    expect(problems[0]).toMatchObject({ where: 'node "empty"', problem: expect.stringMatching(/code\.js holds no code yet/) });
   });
 
   it('names a graph that shows nobody its answer', async () => {

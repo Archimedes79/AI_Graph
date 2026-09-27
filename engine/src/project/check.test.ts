@@ -239,7 +239,7 @@ describe('a graph inside a node', () => {
       { id: 'broken', node_type: 'code', label: 'Broken', inputs: [], outputs: [port('out', 'output')], config: { code: '' } },
       { id: 'out', node_type: 'output', label: 'Out', inputs: [port('value', 'input')], outputs: [], config: {} },
     ])));
-    expect(said(problems)).toContainEqual(expect.stringContaining('node "part" ▸ node "broken": A code node with no config.code'));
+    expect(said(problems)).toContainEqual(expect.stringContaining('node "part" ▸ node "broken": Its code.js holds no code yet'));
   });
 
   it('wants something to come out of it, in its own words', () => {
