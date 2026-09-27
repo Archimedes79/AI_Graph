@@ -99,7 +99,6 @@ export async function sweepGraph({ say, stopped }: { say: (message: string) => v
     return inThisGraph(buildGeneration({
       element: node.node_type,
       generation: spec,
-      subject: current,
       fields,
       // The same facts the node's dialog sends: a sweep must not tell the
       // model less than the ✨ button on the node would.

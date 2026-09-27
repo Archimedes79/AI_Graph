@@ -63,7 +63,7 @@ export function nodeFacts(
   nodes: GraphNode[],
   edges: Edge[],
   executionResult: ExecutionResult | null,
-): Omit<GenerationRequest<GraphNode>, 'element' | 'generation' | 'subject' | 'fields'> {
+): Omit<GenerationRequest, 'element' | 'generation' | 'fields'> {
   const element = NODE_BUILDERS[node.node_type];
   const inputs = node.inputs.map((port) => port.id);
   const whole = node.config.batch_mode === 'whole_list';

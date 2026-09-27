@@ -17,7 +17,6 @@ describe('the request ✨ Generate sends', () => {
   const request = generateRequest({
     element: 'code',
     generation: NODE_BUILDERS.code.generation!,
-    subject: node,
     fields,
     portNotes: {
       inputs: Object.fromEntries(node.inputs.map((p) => [p.id, p.description])),
@@ -47,7 +46,7 @@ describe('the request ✨ Generate sends', () => {
     worker.inputs.push({ ...worker.inputs[0], id: 'stop', name: 'stop', multi: false });
     worker.outputs.push({ ...worker.outputs[0], id: 'count', name: 'count', multi: false });
     const sent = generateRequest({
-      element: 'code', generation: NODE_BUILDERS.code.generation!, subject: worker, fields: nodeFields(worker, () => {}, () => {}),
+      element: 'code', generation: NODE_BUILDERS.code.generation!, fields: nodeFields(worker, () => {}, () => {}),
       ...nodeFacts(worker, [worker], [], null),
     });
     expect(sent.multi_inputs).toEqual(['input']);
@@ -80,7 +79,7 @@ describe('a change to the body there is ("Say what to change", ✨ Fix)', () => 
       get: (field: string) => written[field] ?? String((node.config as Record<string, unknown>)[field] ?? ''),
       set: (field: string, value: string) => { written[field] = value; },
     };
-    return { element: 'code', generation: NODE_BUILDERS.code.generation!, subject: node, fields };
+    return { element: 'code', generation: NODE_BUILDERS.code.generation!, fields };
   };
   const refine = { body: 'function run(i) { return { output: 1 }; }', change: 'Also count the lines.', outcome: '1' };
 

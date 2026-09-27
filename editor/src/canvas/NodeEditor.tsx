@@ -20,7 +20,6 @@ import { nodeLogic } from '@/authoring/logic';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import OpenInMyEditor from '@/authoring/OpenInMyEditor';
-import type { GraphNode } from '@/graph';
 import { FIELD, LINE, MUTED, TEXT } from '@/ui/theme';
 
 interface NodeEditorProps {
@@ -43,8 +42,8 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
   // What ✨ Generate would send, when asked: shown, not sent. The request is
   // the one the button sends, built further down from the node as it is then.
-  const generationRequest = useRef<() => GenerationRequest<GraphNode> | undefined>(() => undefined);
-  const sends = useWhatSends(() => generationRequest.current(), nodeId);
+  const generationRequest = useRef<() => GenerationRequest | undefined>(() => undefined);
+  const sends = useWhatSends(() => generationRequest.current());
   // One state machine for every ✨ Generate button in this editor.
   const generate = useGenerate();
 
@@ -75,10 +74,9 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const generation = element.generation;
   const fields = nodeFields(node, setConfig, setDescription);
   /** Everything ✨ Generate is told, in one request: the button and its preview send the same. */
-  generationRequest.current = (): GenerationRequest<GraphNode> | undefined => generation && ({
+  generationRequest.current = (): GenerationRequest | undefined => generation && ({
       element: node.node_type,
       generation,
-      subject: node,
       fields,
       // What the node says about itself -- ports, samples, wiring, format,
       // shape, examples -- as facts the engine writes one brief from.
@@ -190,7 +188,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
             </div>
           )}
 
-          <GenerationReport calls={generate.transcript()} live={generate.liveTranscript()}>
+          <GenerationReport calls={generate.transcript} live={generate.live}>
           <div className="space-y-4">
               {/* A panel is its own chunk, loaded when a node is first opened. */}
               {Panel && <Suspense fallback={null}><Panel
@@ -200,7 +198,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 updateNode={(change, step) => dialog.change(change, step)}
                 fields={fields}
                 generating={generate.busy}
-                message={generate.message()}
+                message={generate.message}
                 onGenerate={handleGenerate}
                 steps={steps}
               /></Suspense>}

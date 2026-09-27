@@ -13,7 +13,7 @@ export interface GenerateOptions<T> {
    * what lets the transcript be read while it is still being written.
    */
   run: (progressId?: string) => Promise<T>;
-  /** Write the result into the node/widget config. */
+  /** Write the result into the node. */
   apply: (result: T) => void;
   pending?: string;
   /**
@@ -40,65 +40,56 @@ export interface GenerateOptions<T> {
  * for Accept or Discard -- a click after every ✨, with the result on screen
  * but not in the node, so nothing could try it. The exchange that produced it
  * stays on screen either way (`GenerationTranscript`).
- *
- * `key` scopes busy state and message so one component can host several
- * buttons; components with a single button pass nothing and get the default key.
  */
 export function useGenerate() {
-  const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Record<string, string>>({});
-  // What the last generation actually sent and got back, per button.
-  const [transcripts, setTranscripts] = useState<Record<string, AICall[]>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  // What the last generation actually sent and got back.
+  const [transcript, setTranscript] = useState<AICall[]>([]);
   // The same thing while it is still happening, so the wait is not a blank box.
-  const [live, setLive] = useState<Record<string, AICall[]>>({});
-
-  const setMessage = useCallback((text: string, key = '') => {
-    setMessages((prev) => ({ ...prev, [key]: text }));
-  }, []);
+  const [live, setLive] = useState<AICall[]>([]);
 
   /** Generate, and write what comes back. Resolves to whether it was written. */
-  const run = useCallback(async <T,>(options: GenerateOptions<T>, key = ''): Promise<boolean> => {
+  const run = useCallback(async <T,>(options: GenerateOptions<T>): Promise<boolean> => {
     const blocked = options.guard?.();
     if (blocked) {
-      setMessage(`❌ ${blocked}`, key);
+      setMessage(`❌ ${blocked}`);
       return false;
     }
-    setActiveKey(key);
-    setMessage(options.pending ?? 'Generating…', key);
+    setBusy(true);
+    setMessage(options.pending ?? 'Generating…');
 
     // What has gone out so far, while it runs: a wrong answer can then be
     // understood rather than only re-rolled.
-    setLive((prev) => ({ ...prev, [key]: [] }));
+    setLive([]);
     try {
-      const result = await watchGeneration(options.run, (calls) => setLive((prev) => ({ ...prev, [key]: calls })));
+      const result = await watchGeneration(options.run, setLive);
       // Kept whether or not it worked out: a transcript is opened when
       // something went wrong, so the failing case is the one that needs it.
       const calls = (result as { calls?: AICall[] })?.calls;
-      if (calls) setTranscripts((prev) => ({ ...prev, [key]: calls }));
+      if (calls) setTranscript(calls);
       options.apply(result);
-      setMessage(typeof options.success === 'function' ? options.success(result) : options.success, key);
+      setMessage(typeof options.success === 'function' ? options.success(result) : options.success);
       return true;
     } catch (error) {
       const calls = error instanceof ApiError ? error.body.calls : undefined;
-      if (calls) setTranscripts((prev) => ({ ...prev, [key]: calls }));
-      setMessage(`❌ ${errorText(error, options.failure ?? 'Generation failed')}`, key);
+      if (calls) setTranscript(calls);
+      setMessage(`❌ ${errorText(error, options.failure ?? 'Generation failed')}`);
       return false;
     } finally {
-      setLive((prev) => ({ ...prev, [key]: [] }));
-      setActiveKey(null);
+      setLive([]);
+      setBusy(false);
     }
-  }, [setMessage]);
+  }, []);
 
   return {
-    /** Is this particular button mid-flight? */
-    isGenerating: (key = '') => activeKey === key,
-    /** Is any button in this component mid-flight? */
-    busy: activeKey !== null,
-    message: (key = '') => messages[key] ?? '',
-    /** Every model call the last generation on this button made. */
-    transcript: (key = '') => transcripts[key] ?? [],
-    /** The calls of a generation still running on this button, as they arrive. */
-    liveTranscript: (key = '') => live[key] ?? [],
+    /** Whether ✨ is writing now. */
+    busy,
+    message,
+    /** Every model call the last generation made. */
+    transcript,
+    /** The calls of a generation still running, as they arrive. */
+    live,
     run,
   };
 }

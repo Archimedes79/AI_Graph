@@ -26,9 +26,9 @@ interface Props {
  * said. What ✨ wrote is in the body at once; Undo takes it back.
  */
 export default function GeneratedBody({ generation, fields, generating, message, onGenerate, title, preview, sent }: Props) {
-  // From context, not a prop: the path here runs through eight element editors
-  // that would do nothing with it but pass it on -- the same reason the
-  // transcript is a context.
+  // From context, not a prop: the path here runs through the node's panel and
+  // the four steps, which would do nothing with it but pass it on -- the same
+  // reason the transcript is a context.
   const liveCalls = useLiveGeneration();
 
   return (

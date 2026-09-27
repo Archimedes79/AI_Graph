@@ -129,11 +129,10 @@ export function probeMessage(probe: ProbeReport | undefined, fallback: string, o
   }
 }
 
-export interface GenerationRequest<S> {
+export interface GenerationRequest {
   /** The node type -- the server resolves the rest from it. */
   element: string;
   generation: ElementGeneration;
-  subject: S;
   fields: FieldAccess;
   /** The element's real ports, for a snippet that is wired as the node is. */
   ports?: { inputs: string[]; outputs: string[] };
@@ -211,7 +210,7 @@ export interface ChangeAsked {
 }
 
 /** *request*, asked to change its body as *change* says, on the inputs that change came of. */
-export function withChange<S>(request: GenerationRequest<S>, change: ChangeAsked | undefined): GenerationRequest<S> {
+export function withChange(request: GenerationRequest, change: ChangeAsked | undefined): GenerationRequest {
   if (!change) return request;
   return {
     ...request,
@@ -231,7 +230,7 @@ function said(notes: Record<string, string> | undefined): Record<string, string>
  * ✨ sends" (`preview`) and the real button cannot describe two different
  * requests.
  */
-export function generateRequest<S>(request: GenerationRequest<S>): GenerateRequest {
+export function generateRequest(request: GenerationRequest): GenerateRequest {
   const { generation: spec, fields } = request;
   return {
     element: request.element,
@@ -262,7 +261,7 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
  * request and stops at the first model call (`preview`). The answer is that
  * call -- system and prompt, as the model would read them.
  */
-export async function previewGeneration<S>(request: GenerationRequest<S>): Promise<AICall[]> {
+export async function previewGeneration(request: GenerationRequest): Promise<AICall[]> {
   const response = await call('generate', { ...generateRequest(request), preview: true });
   return response.calls ?? [];
 }
@@ -272,7 +271,7 @@ export async function previewGeneration<S>(request: GenerationRequest<S>): Promi
  * task; a change needs something to change -- words, or how it failed -- and
  * no task: the task comes back with it.
  */
-export function generationGuard<S>(request: GenerationRequest<S>): string | undefined {
+export function generationGuard(request: GenerationRequest): string | undefined {
   const { refine, generation: spec } = request;
   if (refine) return refine.change?.trim() || refine.error?.trim() || refine.problems?.length ? undefined : 'Say what to change first.';
   return request.fields.get(spec.promptField).trim() ? undefined : (spec.guard ?? 'Please add a prompt first.');
@@ -284,7 +283,7 @@ export function generationGuard<S>(request: GenerationRequest<S>): string | unde
  * a sweep generate through one code path -- and a change to the body there is
  * goes the same way, with its task written beside the body it came with.
  */
-export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
+export function buildGeneration(request: GenerationRequest): GenerateOptions<GenerateResponse> {
   const { generation: spec, fields, refine } = request;
   const change = !!refine?.change?.trim();
   // What it did, in a word: written anew, changed as said, or repaired.
