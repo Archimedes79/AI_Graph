@@ -1,8 +1,8 @@
 // Saving what a block shows as a file of its own -- a text as .txt, a chart as
-// .svg, a table's rows as .csv -- from the page as it runs: the Preview tab and
-// the delivered tool alike. The browser hands the file over, as it does for any
-// link that says `download`; the page may be open on another machine than the
-// graph, and nothing of the server's is asked.
+// .svg, a table's rows as .csv -- wherever the page is drawn: the Page tab,
+// Preview and the delivered tool alike. The browser hands the file over, as it
+// does for any link that says `download`; the page may be open on another
+// machine than the graph, and nothing of the server's is asked.
 //
 // What goes into a file is made by plain functions, text in and text out, so
 // they are tested without a page. `saveFile` and `drawnSvg` are the two that
