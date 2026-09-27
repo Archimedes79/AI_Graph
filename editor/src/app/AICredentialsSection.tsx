@@ -1,23 +1,38 @@
 import { useEffect, useState } from 'react';
+import type { AIProvider } from '@/graph';
 import { call, type SettingsPatch, type SettingsStatus } from '@/api/client';
 import { errorText } from '@/api/errorText';
+import { AI_PROVIDER_LABELS } from '@/elements/fields/ProviderModelSelect';
+import { DEFAULT_SETTINGS } from '@engine/ai/providers.ts';
 import { ACCENT_TEXT, DIM, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, TEXT } from '@/ui/theme';
 
-/** Providers that need a key, and the ones that need an address. */
-const NEEDS_KEY = [
-  { id: 'openai', label: 'OpenAI', hint: 'From platform.openai.com' },
-  { id: 'anthropic', label: 'Anthropic', hint: 'From console.anthropic.com' },
-  { id: 'google', label: 'Google Gemini', hint: 'Free key from aistudio.google.com/apikey' },
-  { id: 'github_copilot', label: 'GitHub Models', hint: 'A GitHub token with the models:read scope' },
-  { id: 'openai_compatible', label: 'OpenAI-compatible', hint: 'Whatever your endpoint expects' },
-];
+/** Where each provider's key comes from, said where the key is typed. */
+const KEY_HINTS: Record<string, string> = {
+  openai: 'From platform.openai.com',
+  anthropic: 'From console.anthropic.com',
+  google: 'Free key from aistudio.google.com/apikey',
+  github_copilot: 'A GitHub token with the models:read scope',
+  openai_compatible: 'Whatever your endpoint expects',
+};
 
-const NEEDS_ENDPOINT = [
-  { id: 'ollama', label: 'Ollama', placeholder: 'http://localhost:11434' },
-  { id: 'lmstudio', label: 'LM Studio', placeholder: 'http://localhost:1234/v1' },
-  { id: 'openai_compatible', label: 'OpenAI-compatible', placeholder: 'https://my-endpoint.example.com/v1' },
-  { id: 'google', label: 'Google Gemini', placeholder: 'https://generativelanguage.googleapis.com/v1beta/openai' },
-];
+const label = (id: string): string => AI_PROVIDER_LABELS[id as AIProvider] ?? id;
+
+/**
+ * One row per provider that takes a key, and one per provider whose address
+ * can be changed -- the engine's own lists (`CREDENTIALS`, `ENDPOINT_ENV`), as
+ * its status names them. Two tables of their own here disagreed with it:
+ * GitHub Models' address could be set by the environment and not here.
+ */
+export function keyRows(status: SettingsStatus): { id: string; label: string; hint: string }[] {
+  return Object.keys(status.credentials).map((id) => ({ id, label: label(id), hint: KEY_HINTS[id] ?? 'Its API key' }));
+}
+
+/** See `keyRows`. What an address box shows while empty is the address the engine uses then. */
+export function addressRows(status: SettingsStatus): { id: string; label: string; placeholder: string }[] {
+  return Object.keys(status.endpoints).map((id) => ({
+    id, label: label(id), placeholder: DEFAULT_SETTINGS.endpoints[id] || 'https://my-endpoint.example.com/v1',
+  }));
+}
 
 /**
  * Where an API key actually goes.
@@ -73,7 +88,7 @@ export default function AICredentialsSection() {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        {NEEDS_KEY.map((provider) => {
+        {keyRows(status).map((provider) => {
           const state = status.credentials[provider.id];
           const configured = state?.configured;
           return (
@@ -122,7 +137,7 @@ export default function AICredentialsSection() {
       <div className="pt-3" style={{ borderTop: `1px solid ${LINE}` }}>
         <h4 className="text-xs font-semibold mb-2" style={{ color: TEXT }}>Server addresses</h4>
         <div className="space-y-2">
-          {NEEDS_ENDPOINT.map((provider) => (
+          {addressRows(status).map((provider) => (
             <div key={provider.id} className="flex items-center gap-2">
               <span style={{ width: 150 }} className="flex-shrink-0 text-xs font-medium" >{provider.label}</span>
               <input
