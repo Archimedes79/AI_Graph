@@ -8,7 +8,7 @@ import type { Generation } from '../../../authoring/generation.ts';
 import { names, type Problem } from '../../../execution/wiring.ts';
 import { runBody } from '../../body.ts';
 import { askModel, type AskSettings } from './ask.ts';
-import { ALL_INPUTS, placeholders } from './prompt.ts';
+import { ALL_INPUTS, outputWords, placeholders } from './prompt.ts';
 import { AI_RUN, AI_RUN_TEMPLATES, isStandardRun } from './runTemplate.ts';
 
 /** Where an ai node keeps its two halves; used by both declarations below. */
@@ -72,8 +72,7 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
       temperature: Number(c.temperature ?? 0.7),
       sendImages: c.send_images === true,
       template: String(c.prompt_template ?? ''),
-      outputFormat: String(c.output_format ?? 'text'),
-      outputFormatPrompt: String(c.output_format_prompt ?? ''),
+      outputFormatPrompt: outputWords(c),
       outputExample: String(c.output_example ?? ''),
       toolServers: serverList(c.mcp_servers),
       runCode: isStandardRun(String(c.run_code ?? '')) ? '' : String(c.run_code),

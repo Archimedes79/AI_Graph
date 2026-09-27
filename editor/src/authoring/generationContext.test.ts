@@ -46,7 +46,7 @@ describe('connectedFormatContext', () => {
     const code = NODE_KINDS.code.create('worker');
 
     const context = connectedFormatContext('worker', [ai, code], [edge('classifier', 'worker')]);
-    expect(context).toContain('Input from "Classifier" (ai node): JSON');
+    expect(context).toContain('Input from "Classifier" (ai node): Respond with JSON and nothing else.');
   });
 
   it('is empty for an unconnected node rather than noise', () => {
@@ -249,14 +249,16 @@ describe('what ✨ is told about a node, as facts', () => {
     expect(facts.batchMode).toBe('per_item');
   });
 
-  it('sends the format in words whatever was picked, with an older picked format in front', () => {
+  it('sends the format in words, as a run reads them: under a kept example an older picked format says nothing', () => {
     const code = NODE_KINDS.code.create('worker');
     code.config.output_format = 'json';
     code.config.output_format_prompt = 'a list of {title, score}';
     code.config.output_example = '[{"title": "a", "score": 1}]';
     const facts = nodeFacts(code, [code], [], null);
-    expect(facts.outputFormat).toBe('JSON. a list of {title, score}');
+    expect(facts.outputFormat).toBe('a list of {title, score}');
     expect(facts.outputExample).toBe('[{"title": "a", "score": 1}]');
+    code.config.output_example = '';
+    expect(nodeFacts(code, [code], [], null).outputFormat).toBe('Respond with JSON and nothing else.\n\na list of {title, score}');
   });
 
   it('takes step 1\'s example as the sample, over what the last run delivered', () => {

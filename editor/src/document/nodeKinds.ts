@@ -97,7 +97,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
   ai: {
     settings: [
       'ai_provider', 'ai_model', 'system_prompt', 'temperature', 'prompt_template',
-      'output_format', 'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
+      'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
       'read_file_inputs', 'batch_mode', 'batch_concurrency', 'catch_errors', 'examples', 'run_code',
     ],
     // A new node starts with a system prompt to show where one goes; a file
@@ -127,7 +127,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
 
   code: {
     settings: [
-      'code', 'code_prompt', 'output_schema', 'examples', 'output_format', 'output_format_prompt',
+      'code', 'code_prompt', 'output_schema', 'examples', 'output_format_prompt',
       'read_file_inputs', 'batch_mode', 'batch_concurrency', 'catch_errors',
     ],
     // The starter body is for a node made here. A file without code is a node

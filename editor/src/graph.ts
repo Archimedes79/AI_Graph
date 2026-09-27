@@ -74,9 +74,10 @@ export type NodeConfig = {
   extensions: string;
   gui_widgets: GuiWidget[];
   input_mode: 'text' | 'file' | 'directory';
-  output_format: 'text' | 'json' | 'csv' | 'csv_list' | 'custom' | 'example';
+  /** An older node's picked format: nothing writes it now, and json or csv is read into the words (`outputWords`). */
+  output_format?: 'text' | 'json' | 'csv' | 'csv_list' | 'custom' | 'example';
   output_format_prompt: string;
-  /** An answer to imitate, recorded from a test run (`output_format: 'example'`). */
+  /** An answer to imitate, recorded from a test run. */
   output_example?: string;
   /** The message an ai node sends, with `{{port}}` where a port's value goes. Empty: send what arrived. */
   prompt_template?: string;

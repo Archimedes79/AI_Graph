@@ -33,9 +33,6 @@ type Props = Pick<NodePanelProps,
   renderResult?: (result: TryResult) => React.ReactNode;
 };
 
-/** The formats an older version picked from a list, whose words `outputFormatText` still puts in front. */
-const PICKED = new Set(['json', 'csv', 'csv_list', 'example']);
-
 /** An expectation of nothing -- "only that it runs" -- is kept as `{}` and shown as an empty box. */
 const shownExpect = (text: string): string => (text === '{}' ? '' : text);
 
@@ -99,8 +96,8 @@ export default function NodeSteps({
   const words = outputFormatText(node.config);
   const setWords = (text: string) => {
     // An older picked format is in front of the words shown; once they are
-    // edited, the words are the whole of it.
-    if (PICKED.has(String(node.config.output_format))) setConfig('output_format', 'custom');
+    // edited, the words are the whole of it, and the choice is gone.
+    if (node.config.output_format !== undefined) setConfig('output_format', undefined);
     setConfig('output_format_prompt', text);
   };
 

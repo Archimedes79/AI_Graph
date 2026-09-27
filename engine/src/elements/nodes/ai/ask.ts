@@ -23,7 +23,7 @@ export interface AskSettings extends PromptSettings {
 
 /** Nothing said: the graph's default model, plain text, no tools. What a code node's `node.llm` starts from. */
 export const PLAIN_ASK: AskSettings = {
-  systemPrompt: '', template: '', outputFormat: 'text', outputFormatPrompt: '', outputExample: '',
+  systemPrompt: '', template: '', outputFormatPrompt: '', outputExample: '',
   provider: 'default', model: '', temperature: 0.7, sendImages: false, toolServers: [],
 };
 

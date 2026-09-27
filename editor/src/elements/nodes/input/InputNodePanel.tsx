@@ -176,7 +176,7 @@ export default function InputNodePanel({
       <button className="text-xs px-1 rounded flex-shrink-0" style={NEUTRAL_BUTTON}
         title="The nodes after this one are still told it. Drop it."
         aria-label="Drop what was said about the files"
-        onClick={() => { setConfig('output_format_prompt', ''); setConfig('output_format', 'text'); }}>
+        onClick={() => { setConfig('output_format_prompt', ''); setConfig('output_format', undefined); }}>
         ✕
       </button>
     </p>
