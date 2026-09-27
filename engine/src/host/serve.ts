@@ -81,6 +81,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
   const host = options.host ?? '127.0.0.1';
   const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
   const exchange: Exchange = { loopback: (options.allowBrowse ?? true) && loopback };
+  /** Who this server is, for telling its own page from another's: its port is known once it listens. */
+  const self = { loopback, port: 0 };
 
   // The graph this server ships is held, not re-read: what a run remembers is
   // settled into it, so the next scheduled round -- and the next page to open --
@@ -126,7 +128,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const url = new URL(request.url ?? '/', `http://${host}`);
     const path = url.pathname;
-    const foreign = foreignRequest(request, { loopback, port: (server.address() as AddressInfo).port }, path.startsWith('/api/'));
+    const foreign = foreignRequest(request, self, path.startsWith('/api/'));
     if (foreign) return sendJson(response, 403, { detail: foreign });
 
     if (path.startsWith('/api/')) {
@@ -183,8 +185,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
       listening();
     });
   });
-  const port = (server.address() as { port: number }).port;
-  return { server, url: `http://${host}:${port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
+  self.port = (server.address() as AddressInfo).port;
+  return { server, url: `http://${host}:${self.port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
 }
 
 /** Whether a failure to start is "something else is already on that port". */
