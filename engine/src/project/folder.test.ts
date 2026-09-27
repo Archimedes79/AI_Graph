@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { parseGraph, type Graph } from '../graph.ts';
+import { NotAGraph } from '../errors.ts';
+import { problemsIn } from './check.ts';
 import {
   FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, projectFolderOf, readProject, saveGraph, writeProject,
 } from './folder.ts';
@@ -213,6 +215,80 @@ describe('a project folder', () => {
     await saveGraph(join(dir, 'graph.json'), read);
     expect(existsSync(join(dir, 'graph.json'))).toBe(true);
     expect(existsSync(join(dir, 'flow.json'))).toBe(false);
+  });
+});
+
+describe('what a folder could write and not read back', () => {
+  const code = (id: string, body: string) => ({
+    id, node_type: 'code', label: id, position: { x: 0, y: 0 },
+    inputs: [port('in', 'input')], outputs: [port('out', 'output')], config: { code: body },
+  });
+  const wire = (from: string, fromPort: string, to: string, toPort: string) =>
+    ({ id: `${from}-${to}`, source_node_id: from, source_port_id: fromPort, target_node_id: to, target_port_id: toPort });
+
+  it('refuses two ids that differ only in case: one disk folder, one body left', async () => {
+    const graph = parseGraph({ metadata: { name: 'Case' }, nodes: [code('Count', 'UPPER'), code('count', 'lower')], edges: [] });
+    await expect(writeProject(dir, graph)).rejects.toThrow(/share a folder/);
+    expect(existsSync(join(dir, 'flow.json'))).toBe(false);
+    expect(problemsIn(graph).some((p) => /share a folder/.test(p.problem))).toBe(true);
+  });
+
+  it('refuses a node id or port a wire in flow.json could not be read back from', async () => {
+    for (const [id, portId] of [['a->b', 'out'], [' a', 'out'], ['', 'out'], ['a', 'o->ut'], ['a', '']]) {
+      const graph = parseGraph({ metadata: { name: 'Wire' }, nodes: [code(id, 'x'), code('z', 'y')], edges: [wire(id, portId, 'z', 'in')] });
+      await expect(writeProject(dir, graph), JSON.stringify([id, portId])).rejects.toThrow();
+      expect(problemsIn(graph).length, JSON.stringify([id, portId])).toBeGreaterThan(0);
+    }
+    expect(existsSync(join(dir, 'flow.json'))).toBe(false);
+  });
+
+  it('refuses a node id that is a number, which would come back in another order', async () => {
+    const graph = parseGraph({ metadata: { name: 'Order' }, nodes: [code('b', 'x'), code('2', 'y'), code('1', 'z')], edges: [] });
+    await expect(writeProject(dir, graph)).rejects.toThrow(/is a number/);
+  });
+
+  it('refuses two blocks of one page with one id: one folder, one body left', async () => {
+    const graph = parseGraph({
+      metadata: { name: 'Blocks' },
+      nodes: [{
+        id: 'page', node_type: 'gui', label: 'Page', position: { x: 0, y: 0 }, inputs: [], outputs: [],
+        config: { gui_widgets: [
+          { id: 'chart', kind: 'table', code: 'function run(i) { return { value: "FIRST" }; }' },
+          { id: 'chart', kind: 'table', code: 'function run(i) { return { value: "SECOND" }; }' },
+        ] },
+      }],
+      edges: [],
+    });
+    await expect(writeProject(dir, graph)).rejects.toThrow(/called "page\/chart"/);
+  });
+
+  it('says a node.json that is not an object is not a graph, rather than failing somewhere else', async () => {
+    await writeProject(dir, sample());
+    for (const about of ['"x"', '{"label": "Count", "config": "x"}', '{"config": [1, 2]}']) {
+      await writeFile(join(dir, 'nodes/count/node.json'), about);
+      forgetSeen();
+      await expect(readProject(dir), about).rejects.toThrow(NotAGraph);
+    }
+  });
+
+  it('puts nodes in a row, not on top of each other, when layout.json is missing', async () => {
+    await writeProject(dir, sample());
+    await rm(join(dir, 'layout.json'));
+    forgetSeen();
+    const at = (await readProject(dir)).nodes.map((node) => `${node.position.x},${node.position.y}`);
+    expect(new Set(at).size).toBe(at.length);
+  });
+
+  it('counts a file changed while the project was being read as changed', async () => {
+    // The node's settings are read, then changed by someone else before the
+    // reading ends: a save must not take the change for what it read.
+    await writeProject(dir, sample());
+    forgetSeen();
+    const graph = await readProject(dir, async (path) => {
+      if (path.endsWith('layout.json')) await touch(join(dir, 'nodes/count/node.json'), '{"label": "Changed", "config": {}}\n');
+    });
+    await expect(writeProject(dir, graph)).rejects.toThrow(FileChanged);
+    expect(JSON.parse(await text('nodes/count/node.json')).label).toBe('Changed');
   });
 });
 
@@ -452,11 +528,11 @@ describe('saving a project that holds a project', () => {
       nodes: [holder('a/b', body('one')), holder('a:b', body('two'))],
       edges: [],
     });
-    await expect(writeProject(dir, graph)).rejects.toThrow(/share the folder/);
-    // Not one folder written, not one graph.json: the save was refused before
+    await expect(writeProject(dir, graph)).rejects.toThrow(/share a folder/);
+    // Not one folder written, not one flow.json: the save was refused before
     // anything happened, which is what "look first, write after" means.
     expect(existsSync(join(dir, 'nodes/a_b'))).toBe(false);
-    expect(existsSync(join(dir, 'graph.json'))).toBe(false);
+    expect(existsSync(join(dir, 'flow.json'))).toBe(false);
   });
 
   it('writes nothing at all when a file up here changed under it', async () => {

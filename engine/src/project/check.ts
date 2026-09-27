@@ -19,6 +19,7 @@ import { mismatches, portMisfit, readInterface } from '../execution/interface.ts
 import { filePorts } from '../execution/fileInputs.ts';
 import { parseExamples } from '../execution/examples.ts';
 import { INTERFACE_FILE } from './interfaceFile.ts';
+import { unsavableIds } from './flow.ts';
 import {
   FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, isProjectFolder, loadGraph, nodeFolder, projectFolderOf, projectTexts, readStructure,
 } from './folder.ts';
@@ -51,8 +52,8 @@ function knot(graph: Graph, feedback: Set<string>): string[] {
  * a model, and a model fixes what it is told precisely.
  */
 export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
-  // First: with these wrong, a run refuses to start (see wiring.ts).
-  const problems: Problem[] = wiringProblems(graph, registry).map((problem) => within(problem, inside));
+  // First: with these wrong, a run refuses to start (see wiring.ts), or a save.
+  const problems: Problem[] = [...wiringProblems(graph, registry), ...unsavableIds(graph)].map((problem) => within(problem, inside));
 
   for (const node of graph.nodes) {
     const where = `${inside}node "${node.id}"`;

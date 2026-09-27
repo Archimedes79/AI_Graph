@@ -113,13 +113,18 @@ export interface ProjectText {
 /** Every piece of writing *graph* can keep in files, whether or not it holds any. */
 export function projectTexts(graph: Graph): ProjectText[] {
   const found: ProjectText[] = [];
+  // Each node and block claims its folder once. Compared without case: on the
+  // disk most people use, "Count" and "count" are one folder, and whichever was
+  // written last would be the only one there.
   const folders = new Map<string, string>();
   const claim = (folder: string, owner: string): string => {
-    const other = folders.get(folder);
-    if (other !== undefined && other !== owner) {
-      throw new NotAGraph(`"${other}" and "${owner}" would share the folder ${folder}. Give one of them another id.`);
+    const other = folders.get(folder.toLowerCase());
+    if (other !== undefined) {
+      throw new NotAGraph(other === owner
+        ? `Two of them are called "${owner}", and would share the folder ${folder}. Give one of them another id.`
+        : `"${other}" and "${owner}" would share the folder ${folder}. Give one of them another id.`);
     }
-    folders.set(folder, owner);
+    folders.set(folder.toLowerCase(), owner);
     return folder;
   };
 
@@ -291,22 +296,25 @@ async function readIfThere(path: string, what: string, guard?: Guard): Promise<u
 /**
  * The structure of the project in *folder*: every node with its settings and
  * ports, and the wires -- without the writing, which `readProject` adds.
- * Returns the files it read, for whoever has to watch them.
+ * Returns the files it read, each with its signature from *before* it was
+ * read: a file changed while it was being read then still counts as changed.
  */
-export async function readStructure(folder: string, guard?: Guard): Promise<{ graph: Graph; files: string[] }> {
+export async function readStructure(folder: string, guard?: Guard): Promise<{ graph: Graph; files: Map<string, string> }> {
+  const files = new Map<string, string>();
   const flowPath = join(folder, FLOW_FILE);
+  files.set(flowPath, await signature(flowPath));
   await guard?.(flowPath);
   const flow = await readJson(flowPath, 'flow');
-  const files = [flowPath];
   const read = new Map<string, { about?: unknown; ports?: unknown }>();
+  const readSigned = async (path: string, what: string): Promise<unknown> => {
+    files.set(path, await signature(path));
+    return readIfThere(path, what, guard);
+  };
   for (const id of Object.keys(((flow as { nodes?: unknown })?.nodes ?? {}) as object)) {
     const dir = join(folder, nodeFolder(id));
-    const nodePath = join(dir, NODE_FILE);
-    const interfacePath = join(dir, INTERFACE_FILE);
-    files.push(nodePath, interfacePath);
     read.set(id, {
-      about: await readIfThere(nodePath, 'node', guard),
-      ports: await readIfThere(interfacePath, 'interface', guard),
+      about: await readSigned(join(dir, NODE_FILE), 'node'),
+      ports: await readSigned(join(dir, INTERFACE_FILE), 'interface'),
     });
   }
   return { graph: graphFrom(flow, (id) => read.get(id) ?? {}, flowPath), files };
@@ -316,23 +324,23 @@ export async function readStructure(folder: string, guard?: Guard): Promise<{ gr
 export async function readProject(folder: string, guard?: Guard): Promise<Graph> {
   const { graph, files } = await readStructure(folder, guard);
   const layoutPath = join(folder, LAYOUT_FILE);
-  if (existsSync(layoutPath)) {
-    await guard?.(layoutPath);
-    applyLayout(graph, await readJson(layoutPath, 'layout'));
-  }
+  files.set(layoutPath, await signature(layoutPath));
+  // Without one, every node is put in a row rather than on top of each other.
+  applyLayout(graph, await readIfThere(layoutPath, 'layout', guard) ?? {});
   // Remembered like any other file: a save must not overwrite a node's
   // settings or ports that someone changed since.
-  for (const path of [...files, layoutPath]) await remember(path);
+  for (const [path, signed] of files) seen.set(path, signed);
   for (const text of projectTexts(graph)) {
     const path = join(folder, text.path);
-    if (existsSync(path)) {
+    const signed = await signature(path);
+    if (signed !== ABSENT) {
       await guard?.(path);
       const read = fromFile(await readFile(path, 'utf8'), text.json, text.path);
       // The element's own text is nobody's setting: the node stays as it was
       // written, and saving writes today's standard back out.
       if (text.standard === undefined || !isStandard(read, text)) text.holder[text.field] = read;
     }
-    await remember(path);
+    seen.set(path, signed);
   }
   // A node that holds a graph holds a project folder: the same rule one level
   // down, so the file wins there too.
@@ -642,7 +650,7 @@ async function changedUnder(folder: string): Promise<boolean> {
   };
 
   const { graph, files } = await readStructure(folder);
-  for (const path of files) await look(path);
+  for (const path of files.keys()) await look(path);
   await look(join(folder, LAYOUT_FILE));
   for (const text of projectTexts(graph)) await look(join(folder, text.path));
   for (const nested of nestedGraphs(graph)) {

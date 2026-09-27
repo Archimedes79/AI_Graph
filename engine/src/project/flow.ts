@@ -18,7 +18,9 @@
 import { defaultMetadata, parseGraph, type Graph, type GraphEdge, type GraphMetadata } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
 import { NotAGraph } from '../errors.ts';
+import type { Problem } from '../execution/wiring.ts';
 import { interfaceFrom } from './interfaceFile.ts';
+import { folderName } from './names.ts';
 
 export const FLOW_FILE = 'flow.json';
 
@@ -61,13 +63,53 @@ function particular(metadata: GraphMetadata): Record<string, unknown> {
   };
 }
 
-/** What `flow.json` says for *graph*. */
-export function flowOf(graph: Graph): Record<string, unknown> {
+/** Why *name* cannot end a wire in `flow.json`, or '' when it can. */
+function unwritable(name: string): string {
+  if (!name.trim()) return 'is empty';
+  if (name !== name.trim()) return 'starts or ends with a space';
+  if (name.includes('->')) return 'has "->" in it, which is what a wire is written with';
+  return '';
+}
+
+/**
+ * Ids a project folder could write and not read back the same: said by
+ * `check`, and refused by a save before anything is written.
+ *
+ * A node's id is a key of `flow.json`'s "nodes" and the start of each wire,
+ * and names its folder. So it may hold no "." (the wire could not say where
+ * the port begins), is not a number (a JSON object lists those first, and the
+ * graph would come back in another order), and two ids may not name one
+ * folder on a disk that does not tell "Count" from "count".
+ */
+export function unsavableIds(graph: Graph): Problem[] {
+  const problems: Problem[] = [];
+  const folders = new Map<string, string>();
   for (const node of graph.nodes) {
-    if (node.id.includes('.')) {
-      throw new NotAGraph(`The node id "${node.id}" has a "." in it, so a wire could not say where the node ends and its port begins. Rename it.`);
+    const where = `node "${node.id}"`;
+    const why = unwritable(node.id)
+      || (node.id.includes('.') ? 'has a "." in it, so a wire could not say where the node ends and its port begins' : '')
+      || (/^\d+$/.test(node.id) ? 'is a number, which flow.json would list before every other node' : '');
+    if (why) problems.push({ where, problem: `Its id ${why}.`, fix: 'Rename it, for example with letters, digits and "_".' });
+    const folder = folderName(node.id).toLowerCase();
+    const other = folders.get(folder);
+    if (other !== undefined && other !== node.id) {
+      problems.push({ where, problem: `It would share a folder on disk with node "${other}": their ids differ only in case or punctuation.`, fix: 'Rename one of them.' });
+    }
+    folders.set(folder, node.id);
+  }
+  for (const edge of graph.edges) {
+    for (const portId of new Set([edge.source_port_id, edge.target_port_id])) {
+      const why = unwritable(portId);
+      if (why) problems.push({ where: `edge "${edge.id}"`, problem: `Its port "${portId}" ${why}, so flow.json could not read the wire back.`, fix: 'Rename the port.' });
     }
   }
+  return problems;
+}
+
+/** What `flow.json` says for *graph*. */
+export function flowOf(graph: Graph): Record<string, unknown> {
+  const [unsavable] = unsavableIds(graph);
+  if (unsavable) throw new NotAGraph(`${unsavable.where}: ${unsavable.problem} ${unsavable.fix}`);
   return {
     ...particular(graph.metadata),
     nodes: Object.fromEntries(graph.nodes.map((node) => [node.id, node.node_type])),
@@ -98,9 +140,14 @@ export function graphFrom(flow: unknown, filesOf: (id: string) => NodeFiles, pat
   if (!Array.isArray(wires)) throw new NotAGraph(`${path}: "wires" must be a list, one "node.port -> node.port" each.`);
 
   const kept = new Map<string, unknown>();
+  const isObject = (value: unknown): boolean => !!value && typeof value === 'object' && !Array.isArray(value);
   const nodes = Object.entries(listed as Record<string, unknown>).map(([id, type]) => {
     const { about, ports } = filesOf(id);
+    if (about !== undefined && !isObject(about)) throw new NotAGraph(`${path}: node "${id}", node.json is not an object.`);
     const node = (about ?? {}) as Record<string, unknown>;
+    if (node.config !== undefined && node.config !== null && !isObject(node.config)) {
+      throw new NotAGraph(`${path}: node "${id}", node.json: "config" must be an object.`);
+    }
     const faces = interfaceFrom(ports, `${path}: node "${id}", interface.json`);
     if (faces.outputSchema !== undefined) kept.set(id, faces.outputSchema);
     return {
