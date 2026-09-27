@@ -14,8 +14,6 @@ interface CodeFieldProps {
   minHeight?: number;
   /** What the enlarged editor is called: "Draw chart — code". */
   title?: string;
-  /** Extra buttons for the enlarged editor's header, e.g. "Open in VS Code". */
-  actions?: React.ReactNode;
 }
 
 /**
@@ -35,7 +33,7 @@ interface CodeFieldProps {
  * you spend in VS Code.
  */
 export default function CodeField({
-  value, onChange, language, placeholder, minHeight = 160, title, actions,
+  value, onChange, language, placeholder, minHeight = 160, title,
 }: CodeFieldProps) {
   const [large, setLarge] = useState(false);
 
@@ -100,7 +98,6 @@ export default function CodeField({
               Ctrl+F search · Ctrl+D next match · Alt+↑↓ move line · Esc done
             </span>
             <span className="flex-1" />
-            {actions}
             <button type="button" className="text-xs px-3 py-1 rounded" style={PRIMARY_BUTTON} onClick={() => setLarge(false)}>
               Done
             </button>

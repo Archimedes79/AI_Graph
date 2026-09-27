@@ -91,12 +91,11 @@ export function shownOn(result: ExecutionResult | null, nodeId: string, widgetId
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */
 export function PageGrid({
-  children, minRows, gridRef, onCell,
+  children, minRows, onCell,
 }: {
   children: React.ReactNode;
   /** Keep this much height when empty, so there is a page to aim at. */
   minRows?: number;
-  gridRef?: React.MutableRefObject<HTMLDivElement | null>;
   /**
    * The measured cell size, whenever it changes.
    *
@@ -116,10 +115,7 @@ export function PageGrid({
 
   return (
     <div
-      ref={(node) => {
-        (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (gridRef) gridRef.current = node;
-      }}
+      ref={ref}
       data-gui-surface
       style={{
         ...gridStyle(cell),

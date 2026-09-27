@@ -1,6 +1,6 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { LINE, MUTED, NEUTRAL_BUTTON, TEXT } from './theme';
+import { LINE, MUTED, TEXT } from './theme';
 
 interface ToolbarButtonProps {
   icon: LucideIcon;
@@ -9,28 +9,22 @@ interface ToolbarButtonProps {
   title: string;
   onClick: () => void;
   disabled?: boolean;
-  /** The one action a bar is *for*. At most one per group. */
-  primary?: boolean;
-  danger?: boolean;
 }
 
 /**
  * One toolbar control.
  *
  * The bar used to be a dozen visually identical text buttons in one flat row,
- * with emoji standing in for icons, so nothing told you which of them you were
- * likely to want. Three things fix that and they all live here: a real icon set
- * (lucide, already a dependency and previously unused), one shared size and
- * hover treatment, and a `primary` variant so Run reads as the action and the
- * rest as chrome.
+ * with emoji standing in for icons. What fixes that lives here: a real icon
+ * set (lucide) and one shared size and hover treatment. Which button a bar is
+ * *for* is said by the bar -- ▶ Run is drawn by the toolbar itself.
  */
 export default function ToolbarButton({
-  icon: Icon, label, title, onClick, disabled, primary, danger,
+  icon: Icon, label, title, onClick, disabled,
 }: ToolbarButtonProps) {
   const [hover, setHover] = React.useState(false);
 
-  const background = danger ? '#b91c1c' : primary ? undefined : hover && !disabled ? LINE : 'transparent';
-  const color = danger || primary ? 'white' : hover && !disabled ? TEXT : MUTED;
+  const lit = hover && !disabled;
 
   return (
     <button
@@ -43,8 +37,8 @@ export default function ToolbarButton({
       onMouseLeave={() => setHover(false)}
       className={`h-8 rounded-md flex items-center gap-1.5 text-xs font-medium transition-colors ${label ? 'px-2.5' : 'px-2'}`}
       style={{
-        background: primary && !danger ? NEUTRAL_BUTTON.background : background,
-        color,
+        background: lit ? LINE : 'transparent',
+        color: lit ? TEXT : MUTED,
         opacity: disabled ? 0.35 : 1,
         cursor: disabled ? 'default' : 'pointer',
       }}

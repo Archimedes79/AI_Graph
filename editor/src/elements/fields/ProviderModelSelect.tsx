@@ -108,8 +108,6 @@ interface ProviderModelSelectProps {
   model: string;
   onProviderChange: (provider: AIProvider) => void;
   onModelChange: (model: string) => void;
-  /** Tighter inline layout for a header row instead of a stacked grid. */
-  compact?: boolean;
   /**
    * Offer the `default` provider -- "don't pin this, follow the configured
    * one". Off by default so a picker that must name a real provider cannot
@@ -131,7 +129,7 @@ interface ProviderModelSelectProps {
 }
 
 export default function ProviderModelSelect({
-  provider, model, onProviderChange, onModelChange, compact, allowDefault, defaultLabel, defaultTarget, readByRuns, graphDefault,
+  provider, model, onProviderChange, onModelChange, allowDefault, defaultLabel, defaultTarget, readByRuns, graphDefault,
 }: ProviderModelSelectProps) {
   const status = useProviderStatus();
   const listId = useId();
@@ -152,12 +150,11 @@ export default function ProviderModelSelect({
   // an LM Studio model id from memory is exactly the friction this removes.
   const { servedModels, placeholder } = modelHints(provider, status, { readByRuns, graphDefault, defaultTarget });
 
-  const selectClass = compact ? 'rounded px-2 py-1 text-xs' : 'w-full rounded-lg px-3 py-2 text-sm';
-  const inputClass = compact ? 'rounded px-2 py-1 text-xs w-24' : 'w-full rounded-lg px-3 py-2 text-sm';
+  const boxClass = 'w-full rounded-lg px-3 py-2 text-sm';
   const style = { background: SUNKEN, color: TEXT, border: `1px solid ${LINE}` };
 
   const providerSelect = (
-    <select className={selectClass} style={style} value={provider} onChange={(e) => onProviderChange(e.target.value as AIProvider)}>
+    <select className={boxClass} style={style} value={provider} onChange={(e) => onProviderChange(e.target.value as AIProvider)}>
       {options.map(([value, label]) => (
         <option key={value} value={value}>{label}</option>
       ))}
@@ -166,7 +163,7 @@ export default function ProviderModelSelect({
   const modelInput = (
     <>
       <input
-        className={inputClass}
+        className={boxClass}
         style={style}
         value={model}
         onChange={(e) => onModelChange(e.target.value)}
@@ -180,15 +177,6 @@ export default function ProviderModelSelect({
       )}
     </>
   );
-
-  if (compact) {
-    return (
-      <>
-        {providerSelect}
-        {modelInput}
-      </>
-    );
-  }
 
   return (
     <div className="grid grid-cols-2 gap-4">

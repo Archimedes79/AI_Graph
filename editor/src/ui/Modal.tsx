@@ -16,8 +16,6 @@ interface ModalProps {
   dismissOnBackdrop?: boolean;
   /** Escape closes the modal. Off while something is mid-flight. */
   dismissOnEscape?: boolean;
-  /** Raise above another modal (the connector editor opens over the node editor). */
-  zIndex?: number;
   /**
    * Cap the modal at 90vh and scroll its body. On by default: a dialog taller
    * than the window hides its own footer, so Save and Done cannot be reached
@@ -26,8 +24,6 @@ interface ModalProps {
    * must be allowed to grow past the viewport.
    */
   scrollBody?: boolean;
-  /** Fixed row between header and body, e.g. a tab bar that must not scroll. */
-  subHeader?: React.ReactNode;
 }
 
 /**
@@ -50,9 +46,7 @@ export default function Modal({
   maxWidth = 'max-w-lg',
   dismissOnBackdrop = true,
   dismissOnEscape = true,
-  zIndex = 50,
   scrollBody = true,
-  subHeader,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -99,7 +93,7 @@ export default function Modal({
   return (
     <div
       className="fixed inset-0 flex items-center justify-center"
-      style={{ background: SCRIM, zIndex }}
+      style={{ background: SCRIM, zIndex: 50 }}
       onClick={dismissOnBackdrop ? onClose : undefined}
     >
       <div
@@ -119,8 +113,6 @@ export default function Modal({
           <span className="text-sm font-semibold" style={{ color: TEXT }}>{title}</span>
           <button onClick={onClose} aria-label="Close dialog" style={{ color: MUTED }}>✕</button>
         </div>
-
-        {subHeader && <div className="shrink-0">{subHeader}</div>}
 
         <div className={scrollBody ? 'flex-1 overflow-y-auto' : ''}>{children}</div>
 
