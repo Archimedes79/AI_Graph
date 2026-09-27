@@ -274,11 +274,6 @@ function interfaceProblems(node: GraphNode, where: string): Problem[] {
  * belongs to no node (the node was deleted, or renamed in \`flow.json\` by
  * hand), and a file in a node's folder that nothing reads -- `prompt.md` where
  * an AI node reads `system.md` is a text somebody wrote and nobody will ever send.
- *
- * Which files a node reads is asked of the folder's structure, before any
- * text is read in, as `readProject` asks it. Asked of the loaded graph, an
- * input holding the selector an older save kept in `select.js` named no such
- * file, and the files it had just been read from were called unread.
  */
 export async function folderProblems(folder: string): Promise<Problem[]> {
   const { graph } = await readStructure(folder);

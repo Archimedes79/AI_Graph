@@ -469,13 +469,15 @@ or a page that has them can do the same.
 
 - **The file wins over the inline value.** A text is read from its file when there is one.
   That is why a deploy bundle (one `graph.json` carrying everything inline) and a plain
-  `.json` file open the same way; a folder saved before `flow.json` is read from its
-  `graph.json` and saved in this shape.
+  `.json` file open the same way. A folder is a project only when it has a `flow.json`.
 - **Structure and writing never share a file**, and keys are sorted, so an unchanged
   save changes nothing and a moved node changes only `layout.json`.
 - **Two editors, one folder.** Every file read or written is remembered by signature; a
-  save that would overwrite a file changed since refuses (`FileChanged`), and the editor
-  asks every 1.5 s what changed (`changesOnDisk`) and takes it in as one undo step.
+  save that would overwrite a file changed since refuses (`FileChanged`) -- `flow.json` and
+  `layout.json` too, so a node another writer added is not saved away -- and the editor
+  asks every 1.5 s what changed (`changesOnDisk`) and takes it in as one undo step. A save
+  tidies away only files it read or wrote itself that no node claims any more; a file it
+  never saw is a person's, and a node of an unknown type keeps its folder.
 - **Interfaces come from runs.** A code or AI node's output shape (in its `interface.json`;
   which nodes keep one is `NodeRunner.keepsOutputInterface`) is inferred from what
   its first successful run produced ([`execution/interface.ts`](../engine/src/execution/interface.ts)),
@@ -492,9 +494,7 @@ or a page that has them can do the same.
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
-  that element's `problems()`. Which files a project's nodes read is asked of the folder's
-  structure before any text is read in (`folder.ts`'s `readStructure`), as the loader asks it.
-  Beside the problems, `notesIn` gives advice that fails nothing: two output nodes sharing a
+  that element's `problems()`. Beside the problems, `notesIn` gives advice that fails nothing: two output nodes sharing a
   label, as every output an older editor made did. The run's result keeps the last one under
   the label, as it always did, and the others under their ids (`NodeRunner.ts`'s `resultKeys`).
 

@@ -52,7 +52,7 @@ describe('findProjects', () => {
       await mkdir(join(root, folder), { recursive: true });
     }
     for (const project of ['examples/chat', 'work/chat', 'node_modules/pkg/chat']) {
-      await writeFile(join(root, project, 'graph.json'), '{"nodes": [], "edges": []}');
+      await writeFile(join(root, project, 'flow.json'), '{"nodes": {}, "wires": []}');
     }
     expect((await findProjects('chat', root)).map((path) => path.slice(root.length + 1).split(/[\\/]/).join('/')).sort())
       .toEqual(['examples/chat', 'work/chat']);

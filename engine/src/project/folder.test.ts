@@ -120,21 +120,6 @@ describe('a project folder', () => {
     expect(JSON.parse(await text('layout.json')).count).toEqual({ x: 300, y: 20, width: 360, height: 180 });
   });
 
-  it('opens a folder saved before flow.json, and saves it in this shape', async () => {
-    const graph = sample();
-    await writeFile(join(dir, 'graph.json'), JSON.stringify(graph));
-    await mkdir(join(dir, 'nodes/count'), { recursive: true });
-    await writeFile(join(dir, 'nodes/count/output.schema.json'), JSON.stringify({ type: 'object', properties: { old: { type: 'string' } } }));
-    await writeFile(join(dir, 'flow.js'), '// rendered once');
-    const read = await readProject(dir);
-    expect(read.nodes[1].config.code).toContain('inputs.files.length');
-    await writeProject(dir, read);
-    expect(existsSync(join(dir, 'graph.json'))).toBe(false);
-    expect(existsSync(join(dir, 'flow.js'))).toBe(false);
-    expect(existsSync(join(dir, 'nodes/count/output.schema.json'))).toBe(false);
-    expect(JSON.parse(await text('flow.json')).nodes.count).toBe('code');
-  });
-
   it('reads back exactly what was written', async () => {
     const original = sample();
     await writeProject(dir, original);
@@ -190,6 +175,27 @@ describe('a project folder', () => {
     expect(await text('nodes/say/notes.txt')).toBe('mine');
   });
 
+  it('keeps a person\'s file in a node\'s folder, whatever it is called and however deep', async () => {
+    const graph = sample();
+    await writeProject(dir, graph);
+    await mkdir(join(dir, 'nodes/count/fixtures'), { recursive: true });
+    await writeFile(join(dir, 'nodes/count/fixtures/code.js'), '// mine, a fixture');
+    await writeFile(join(dir, 'nodes/count/fixtures/node.json'), '{}');
+    await writeProject(dir, await readProject(dir));
+    expect(await text('nodes/count/fixtures/code.js')).toBe('// mine, a fixture');
+    expect(existsSync(join(dir, 'nodes/count/fixtures/node.json'))).toBe(true);
+  });
+
+  it('keeps the files of a node whose type is a typo in flow.json', async () => {
+    await writeProject(dir, sample());
+    const flow = JSON.parse(await text('flow.json'));
+    flow.nodes.count = 'cdoe';
+    await writeFile(join(dir, 'flow.json'), JSON.stringify(flow));
+    forgetSeen();
+    await writeProject(dir, await readProject(dir));
+    expect(await text('nodes/count/code.js')).toContain('inputs.files.length');
+  });
+
   it('takes a file edited in another editor, with Windows line endings and a final newline', async () => {
     await writeProject(dir, sample());
     await writeFile(join(dir, 'nodes/say/system.md'), 'Line one.\r\nLine two.\r\n');
@@ -197,21 +203,25 @@ describe('a project folder', () => {
     expect(read.nodes.find((node) => node.id === 'say')!.config.system_prompt).toBe('Line one.\nLine two.');
   });
 
-  it('opens a folder whose graph.json carries everything inline -- a deploy bundle', async () => {
+  it('opens a deploy bundle by its graph.json, one file with everything inline, and keeps it one', async () => {
     const graph = sample();
     await writeFile(join(dir, 'graph.json'), JSON.stringify(graph));
-    expect(isProjectFolder(dir)).toBe(true);
-    const read = await loadGraph(dir);
+    await writeFile(join(dir, 'run.sh'), 'exec node engine/main.ts graph.json --serve "$@"\n');
+    expect(isProjectFolder(dir)).toBe(false);
+    const read = await loadGraph(join(dir, 'graph.json'));
     expect(read.nodes[1].config.code).toContain('inputs.files.length');
+    await saveGraph(join(dir, 'graph.json'), read);
+    expect(existsSync(join(dir, 'graph.json'))).toBe(true);
+    expect(existsSync(join(dir, 'flow.json'))).toBe(false);
   });
 });
 
 describe('finding a project', () => {
-  it('is the folder, or its graph.json named directly', async () => {
+  it('is the folder, or its flow.json named directly', async () => {
     await writeProject(dir, sample());
     expect(projectFolderOf(dir)).toBe(dir);
-    expect(projectFolderOf(join(dir, 'graph.json'))).toBe(dir);
-    expect((await loadGraph(join(dir, 'graph.json'))).nodes).toHaveLength(4);
+    expect(projectFolderOf(join(dir, 'flow.json'))).toBe(dir);
+    expect((await loadGraph(join(dir, 'flow.json'))).nodes).toHaveLength(4);
   });
 
   it('is not a plain graph file, which saves as one file with everything inline', async () => {

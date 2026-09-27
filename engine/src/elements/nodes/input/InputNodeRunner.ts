@@ -32,18 +32,11 @@ function portInWords(port: Port): string {
   return `"${port.id}" (${port.multi ? `a list of ${many}` : one}${what})`;
 }
 
-/** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
 /** The body that chooses files: named once, so what is said about it names the file that exists. */
 const SELECTOR_FILE = 'select.js';
-/**
- * The selector the editor used to give every new input node, in every mode. It
- * handed on every file, which an empty selector does too, so it is nobody's
- * writing: a project still holding it reads as holding none, and its next save
- * writes no `select.js` for it.
- */
-const EARLIER_STARTER = 'function run(inputs) {\n  // inputs.files is the full list of file paths in the directory\n  return { files: inputs.files ?? [] };\n}\n';
+/** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
 const SELECTOR_TEXTS: readonly TextFile[] = [
-  { field: 'selector_code', file: SELECTOR_FILE, standard: '', earlier: [EARLIER_STARTER] },
+  { field: 'selector_code', file: SELECTOR_FILE },
   { field: 'selector_prompt', file: 'task.md' },
 ];
 
@@ -62,20 +55,10 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
   /**
    * Only a folder listing keeps a selector in its folder, as `logic` says.
    * A text or single-file input selects nothing, and a `select.js` beside it
-   * said that it did: its selector stays in the graph with its other settings.
-   *
-   * Except while the graph holds none of it. A save from before this kept the
-   * selector in its files whatever the mode, and took it out of the graph, so
-   * a node switched away from listing a folder may hold the selector somebody
-   * wrote for it only there. It is read in from those files, and the next save
-   * keeps it in the graph and tidies the files away. Asked of a node holding
-   * nothing -- which is how a save learns what it may tidy -- the names are
-   * the same as ever.
+   * would say that it did.
    */
   override texts(node: GraphNode): readonly TextFile[] {
-    if (this.config(node).mode === 'directory') return SELECTOR_TEXTS;
-    const holdsSome = SELECTOR_TEXTS.some((text) => node.config[text.field] !== undefined);
-    return holdsSome ? [] : SELECTOR_TEXTS;
+    return this.config(node).mode === 'directory' ? SELECTOR_TEXTS : [];
   }
 
   config(node: GraphNode): InputConfig {

@@ -9,7 +9,7 @@ import { names, type Problem } from '../../../execution/wiring.ts';
 import { runBody } from '../../body.ts';
 import { askModel, type AskSettings } from './ask.ts';
 import { ALL_INPUTS, outputWords, placeholders } from './prompt.ts';
-import { AI_RUN, AI_RUN_TEMPLATES, isStandardRun } from './runTemplate.ts';
+import { AI_RUN, isStandardRun } from './runTemplate.ts';
 
 /** Where an ai node keeps its two halves; used by both declarations below. */
 const PROMPT_FIELDS: LogicFields = {
@@ -17,7 +17,7 @@ const PROMPT_FIELDS: LogicFields = {
 };
 
 export interface AiConfig extends AskSettings {
-  /** `run.js` when somebody changed it; empty for the standard one, whatever its age. */
+  /** `run.js` when somebody changed it; empty for the standard one. */
   runCode: string;
 }
 
@@ -30,7 +30,7 @@ function serverList(raw: unknown): string[] {
 /** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
 const AI_TEXTS: readonly TextFile[] = [
   // What the node does with the rest of this folder: see `runTemplate.ts`.
-  { field: 'run_code', file: 'run.js', standard: AI_RUN, earlier: AI_RUN_TEMPLATES },
+  { field: 'run_code', file: 'run.js', standard: AI_RUN },
   { field: 'system_prompt', file: 'system.md' },
   { field: 'prompt_template', file: 'message.md' },
   // What the model is told its answer must look like.

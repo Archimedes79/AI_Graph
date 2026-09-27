@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InputNodeRunner } from './InputNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
 import { quietRuntime } from '../../../../test/fakes.ts';
 import { parseGraph, type Graph, type GraphNode } from '../../../graph.ts';
-import { forgetSeen, readProject, writeProject } from '../../../project/folder.ts';
+import { forgetSeen, writeProject } from '../../../project/folder.ts';
 
 /**
  * A read that fails: a missing file, an unreadable folder.
@@ -144,55 +144,6 @@ describe('the selector', () => {
       // Not lost: a node switched back to directory mode still has its selector.
       const saved = JSON.parse(await readFile(join(dir, 'nodes', 'source', 'node.json'), 'utf8'));
       expect(saved.config.selector_code).toBe(starter);
-    });
-
-    it('reads the selector a save from before kept in its files, and keeps it in the graph from then on', async () => {
-      // Before, a save took the selector out of the graph and into its files
-      // in every mode. A node that had listed a folder, then been switched to
-      // text, held what somebody wrote for it only there.
-      const own = 'function run(inputs) {\n  return { files: (inputs.files ?? []).filter((f) => f.endsWith(".md")) };\n}';
-      const folder = join(dir, 'nodes', 'source');
-      await mkdir(folder, { recursive: true });
-      await writeFile(join(dir, 'graph.json'), JSON.stringify({
-        metadata: { name: 'old' },
-        nodes: [{ id: 'source', node_type: 'input', label: 'Source', position: { x: 0, y: 0 }, inputs: [], outputs: [], config: { input_mode: 'text', value: 'data' } }],
-        edges: [],
-      }));
-      // As a save wrote them: the text, and a newline to end the file.
-      await writeFile(join(folder, 'select.js'), `${own}\n`);
-      await writeFile(join(folder, 'task.md'), 'Only the notes.\n');
-
-      const graph = await readProject(dir);
-      expect(graph.nodes[0].config.selector_code).toBe(own);
-      expect(graph.nodes[0].config.selector_prompt).toBe('Only the notes.');
-
-      await writeProject(dir, graph);
-      expect(existsSync(join(folder, 'select.js'))).toBe(false);
-      const saved = JSON.parse(await readFile(join(folder, 'node.json'), 'utf8'));
-      expect(saved.config).toMatchObject({ selector_code: own, selector_prompt: 'Only the notes.' });
-    });
-
-    it('reads the starter every input used to be given as no selector, and writes no select.js for it', async () => {
-      // The editor gave every new input this selector, which hands on every
-      // file -- as an empty one does. Read as somebody's, it kept a select.js
-      // in the folder and counted as written, so the sweep never wrote one.
-      const earlier = 'function run(inputs) {\n  // inputs.files is the full list of file paths in the directory\n  return { files: inputs.files ?? [] };\n}\n';
-      const folder = join(dir, 'nodes', 'source');
-      await mkdir(folder, { recursive: true });
-      await writeFile(join(dir, 'graph.json'), JSON.stringify({
-        metadata: { name: 'old' },
-        nodes: [{ id: 'source', node_type: 'input', label: 'Source', position: { x: 0, y: 0 }, inputs: [], outputs: [], config: { input_mode: 'directory', value: 'data' } }],
-        edges: [],
-      }));
-      await writeFile(join(folder, 'select.js'), earlier);
-
-      const graph = await readProject(dir);
-      expect(graph.nodes[0].config.selector_code).toBeUndefined();
-
-      // A graph still holding it inline, as a plain graph file of before does.
-      graph.nodes[0].config.selector_code = earlier;
-      await writeProject(dir, graph);
-      expect(existsSync(join(folder, 'select.js'))).toBe(false);
     });
   });
 });

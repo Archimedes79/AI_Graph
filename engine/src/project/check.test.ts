@@ -209,26 +209,8 @@ describe('what check finds in a project folder', () => {
     expect((await checkPath(dir)).problems).toEqual([]);
   });
 
-  it('asks which files a node reads as the loader asked it, before the files were read in', async () => {
-    // An older save kept a file input's own selector in select.js and task.md.
-    // The loader reads them in; asked again of the loaded node, which now
-    // holds them, the element names neither, and check called both unread.
-    const picks = parseGraph({
-      metadata: { name: 'Picks' },
-      nodes: [{ id: 'file', node_type: 'input', label: 'File', inputs: [], outputs: [], config: { input_mode: 'file', value: 'a.csv' } }],
-      edges: [],
-    });
-    await writeProject(dir, picks);
-    await writeFile(join(dir, 'nodes', 'file', 'select.js'), 'function run(inputs) { return { files: inputs.files.slice(0, 1) }; }\n');
-    await writeFile(join(dir, 'nodes', 'file', 'task.md'), 'Only the first file.');
-
-    const { problems, graph: read } = await checkPath(dir);
-    expect(read!.nodes[0].config.selector_prompt).toBe('Only the first file.');
-    expect(problems.filter((problem) => problem.where.startsWith('nodes/'))).toEqual([]);
-  });
-
   it('reports a project that cannot be read, rather than failing', async () => {
-    await writeFile(join(dir, 'graph.json'), '{ broken');
+    await writeFile(join(dir, 'flow.json'), '{ broken');
     const { problems, graph: read } = await checkPath(dir);
     expect(read).toBeNull();
     expect(problems[0].problem).toMatch(/not valid JSON/);

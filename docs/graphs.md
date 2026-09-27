@@ -223,8 +223,8 @@ async function run(inputs, node) {
 
 The detail of making the call — keys, providers, tools, images — is behind `node.llm`, and
 the node's settings decide whatever the call does not say. **Left as it is, the file is the
-engine's**: it is written though nobody wrote it, kept up to date when the engine changes,
-and the engine makes that one call itself rather than starting a process per item (a test
+engine's**: it is written though nobody wrote it, and the engine makes that one call
+itself rather than starting a process per item (a test
 holds the two to the same request). **Changed, it is yours** — a loop, a second call, a
 check of the answer — and runs where every body runs: sandboxed, without this machine's
 keys, asking for each call (25 each time it runs, at most). The panel shows it under *Advanced → What
@@ -394,9 +394,9 @@ reopens the whole project, for when `flow.json` or a node's settings or ports ch
 (a pull, a merge).
 
 **A single `.json` file** still opens, saves (name it `….json`) and runs: everything
-inline, which is what a download, an import and a deploy bundle carry. A folder saved
-before `flow.json` — a `graph.json` holding the structure — opens too, and is saved in
-this shape.
+inline, which is what a download, an import and a deploy bundle carry. A folder is a
+project only when it has a `flow.json`: a deploy bundle's folder is opened by its
+`graph.json`, and saved back as that one file.
 
 **Output interfaces.** A code or AI node's outputs are described by a JSON Schema,
 `output_schema` in its `interface.json`. You do not write it first: wire the nodes, run the graph, and the

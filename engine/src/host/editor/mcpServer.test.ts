@@ -378,9 +378,8 @@ describe('save_graph', () => {
   });
 
   it('saves into a project the way the editor does: the code to its file, the wiring to flow.json', async () => {
-    await mkdir(join(root, 'proj', 'nodes'), { recursive: true });
     const saved = await toolsWith().call('save_graph', {
-      path: 'proj/graph.json', graph: graphOf([textInput('greeting'), code('work'), output('result')],
+      path: 'proj/flow.json', graph: graphOf([textInput('greeting'), code('work'), output('result')],
         [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')]),
     });
     expect(saved.isError).toBeUndefined();
@@ -475,10 +474,10 @@ describe('confinement', () => {
   it('does not follow a project folder linked out of the root', async () => {
     await writeFile(join(outside, 'code.js'), 'function run() { return { out: "from outside" }; }');
     await mkdir(join(root, 'proj', 'nodes'), { recursive: true });
-    await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(graphOf([code('work', ''), output('result')], [edge('e1', 'work.out', 'result.value')])));
+    await writeFile(join(root, 'proj', 'flow.json'), JSON.stringify({ nodes: { work: 'code', result: 'output' }, wires: ['work.out -> result.value'] }));
     await symlink(outside, join(root, 'proj', 'nodes', 'work'), process.platform === 'win32' ? 'junction' : 'dir');
 
-    const ran = await toolsWith().call('run_graph', { path: 'proj/graph.json' });
+    const ran = await toolsWith().call('run_graph', { path: 'proj/flow.json' });
     expect(ran.isError).toBe(true);
     expect(ran.text).toMatch(/outside the folder/);
     expect(ranBody).toBe('');
@@ -542,9 +541,10 @@ describe('one node at a time', () => {
   });
 
   it('validate_graph on a project also finds what is wrong with its folder', async () => {
+    const tools = toolsWith();
+    await tools.call('save_graph', { path: 'proj/flow.json', graph: chain() });
     await mkdir(join(root, 'proj', 'nodes', 'gone'), { recursive: true });
-    await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(chain()));
-    const checked = await answer(toolsWith(), 'validate_graph', { path: 'proj/graph.json' });
+    const checked = await answer(tools, 'validate_graph', { path: 'proj/flow.json' });
     expect(checked.json.problems.map((p: Problem) => p.where)).toContain('nodes/gone');
   });
 });
@@ -596,16 +596,17 @@ describe('run_graph', () => {
   });
 
   it('reads the code a project keeps in its files, the way the editor saves one', async () => {
-    await mkdir(join(root, 'proj', 'nodes', 'work'), { recursive: true });
-    await writeFile(join(root, 'proj', 'graph.json'), JSON.stringify(graphOf(
-      [textInput('greeting'), code('work', ''), output('result')],
-      [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')],
-    )));
+    const tools = toolsWith();
+    await tools.call('save_graph', {
+      path: 'proj/flow.json', graph: graphOf(
+        [textInput('greeting'), code('work', 'function run() { return { out: "saved" }; }'), output('result')],
+        [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')],
+      ),
+    });
     await writeFile(join(root, 'proj', 'nodes', 'work', 'code.js'), 'function run(inputs) { return { out: "from the file" }; }\n');
 
-    const tools = toolsWith();
-    expect((await answer(tools, 'validate_graph', { path: 'proj/graph.json' })).json.valid).toBe(true);
-    const ran = await answer(tools, 'run_graph', { path: 'proj/graph.json' });
+    expect((await answer(tools, 'validate_graph', { path: 'proj/flow.json' })).json.valid).toBe(true);
+    const ran = await answer(tools, 'run_graph', { path: 'proj/flow.json' });
     expect(ran.json.status).toBe('success');
     expect(ranBody).toContain('from the file');
   });
