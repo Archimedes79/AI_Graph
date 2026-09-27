@@ -146,7 +146,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       config: { ...baseNodeConfig(), output_label: 'Result', write_mode: 'window' },
     }),
     // Its own label, "Result 2" beside a "Result": two results that share one
-    // keep only the last under it in the run's result, and `check` says so.
+    // are a problem `check` names, and only the first keeps it in the run's result.
     // The labels taken are asked the way `check` asks them, of every element
     // that is a result.
     placedAmong(node, others) {

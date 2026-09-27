@@ -46,6 +46,9 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        // The engine answers only its own origin (host/http.ts `foreignRequest`);
+        // the dev page on :3000 is the editor all the same.
+        headers: { origin: 'http://localhost:8000' },
       },
     },
   },

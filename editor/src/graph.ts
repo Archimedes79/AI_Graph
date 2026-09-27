@@ -96,7 +96,8 @@ export type NodeConfig = {
   selector_prompt: string;
   send_images: boolean;
   system_prompt: string;
-  temperature: number;
+  /** Unset: the model's own default -- current Claude models refuse one at all. */
+  temperature?: number;
   value?: string | null;
   write_mode: 'none' | 'file' | 'directory' | 'window';
 };

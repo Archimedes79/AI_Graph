@@ -1,7 +1,7 @@
 import type { AIProvider } from '@/graph';
 import BatchAndFileInputOptions from '../../fields/BatchAndFileInputOptions';
 import ProviderModelSelect from '../../fields/ProviderModelSelect';
-import { DIMMER, FIELD, MUTED } from '@/ui/theme';
+import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 import RunCode from '@/authoring/RunCode';
 import { AI_RUN, LLM_CALLS_PER_RUN, isStandardRun } from '@engine/elements/nodes/ai/runTemplate.ts';
 import type { NodeAdvancedPanelProps } from '../../NodeGuiBuilder';
@@ -35,15 +35,26 @@ export default function AiNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPan
 
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-          Temperature ({node.config.temperature}) <span style={{ color: DIMMER }}>— low repeats itself, high surprises</span>
+          Temperature ({node.config.temperature ?? 'the model’s own'}) <span style={{ color: DIMMER }}>— low repeats itself, high surprises</span>
         </label>
         <input
           type="range"
           min={0} max={2} step={0.05}
-          value={node.config.temperature}
+          value={node.config.temperature ?? 1}
           onChange={(e) => setConfig('temperature', parseFloat(e.target.value))}
           className="w-full"
         />
+        {/* Unset is sent as nothing: current Claude models refuse any temperature. */}
+        {node.config.temperature !== undefined && (
+          <button
+            className="text-xs px-2 py-0.5 rounded mt-1"
+            style={NEUTRAL_BUTTON}
+            onClick={() => setConfig('temperature', undefined)}
+            title="Send no temperature: the model uses its own. Current Claude models accept no other."
+          >
+            Use the model’s own
+          </button>
+        )}
       </div>
 
       <div>

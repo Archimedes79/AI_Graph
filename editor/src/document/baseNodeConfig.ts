@@ -31,7 +31,6 @@ export function baseNodeConfig(): NodeConfig {
     ai_provider: 'default',
     ai_model: '',
     system_prompt: '',
-    temperature: 0.7,
     code: '',
     code_prompt: '',
     data_value: null,
