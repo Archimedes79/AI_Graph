@@ -52,14 +52,6 @@ interface Props {
   fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
   /** One line under the field. */
   note?: React.ReactNode;
-  /**
-   * Draw the example's own field. A node whose example is kept, and edited,
-   * somewhere of its own -- what a data node holds -- has only the ways to
-   * fill it here.
-   */
-  showField?: boolean;
-  /** What the example is called, above the buttons. */
-  label?: string;
 }
 
 /**
@@ -73,9 +65,7 @@ interface Props {
  * and each consumer read a different few of them; the 📎 among them was an
  * uploaded copy that was only ever pasted into ✨'s prompt, never run.
  */
-export default function ExampleInputField({
-  text, onText, ports, reads, fromGraph, note, showField = true, label = 'Example input',
-}: Props) {
+export default function ExampleInputField({ text, onText, ports, reads, fromGraph, note }: Props) {
   // What does not parse is not stored: the graph keeps the last example that
   // did, and the box keeps what was typed.
   const [typed, type] = useTyped(text, (next) => (exampleProblem(next) ? text : onText(next)));
@@ -139,7 +129,7 @@ export default function ExampleInputField({
     <div className="space-y-1.5" onDragOver={onDragOver} onDrop={onDrop}>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs font-medium" style={{ color: MUTED, flex: '1 1 8rem' }}>
-          {label}{ports.length > 0 && <span className="font-normal" style={{ color: DIMMER }}> — or drop a file here</span>}
+          Example input{ports.length > 0 && <span className="font-normal" style={{ color: DIMMER }}> — or drop a file here</span>}
         </label>
         {fromGraph && (
           <button className="text-xs px-2 py-1 rounded" style={{ ...NEUTRAL_BUTTON, opacity: busy ? 0.5 : 1 }}
@@ -166,16 +156,15 @@ export default function ExampleInputField({
           </>
         )}
       </div>
-      {showField && (
-        <CodeField
-          value={typed}
-          onChange={type}
-          language="javascript"
-          placeholder={`{ ${(ports.length ? ports : [{ id: 'input' }]).map((candidate) => `"${candidate.id}": …`).join(', ')} }`}
-          minHeight={72}
-          title={label}
-        />
-      )}
+      <CodeField
+        value={typed}
+        onChange={type}
+        language="javascript"
+        placeholder={`{ ${(ports.length ? ports : [{ id: 'input' }]).map((candidate) => `"${candidate.id}": …`).join(', ')} }`}
+        minHeight={72}
+        title="Example input"
+      />
+
       {error && <p className="text-xs" style={{ color: DANGER_TEXT }}>{error}</p>}
       {failure && <p className="text-xs" style={{ color: DANGER_TEXT }}>{failure}</p>}
       {said && !failure && <p className="text-xs" style={{ color: DIMMER }}>{said}</p>}

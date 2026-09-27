@@ -285,7 +285,7 @@ export default function NodeSteps({
     <FourSteps
       comesIn={comesIn}
       comesOut={comesOut}
-      task={{ field: <TaskField generation={generation} fields={fields} /> }}
+      task={<TaskField generation={generation} fields={fields} />}
       body={{ title: body.title, hint: body.hint, content }}
     />
   );

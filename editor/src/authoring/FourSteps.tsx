@@ -9,9 +9,9 @@ interface Props {
   comesIn: React.ReactNode;
   /** Step 2: what comes out -- the outputs, and what they should hold. */
   comesOut: React.ReactNode;
-  /** Step 3: what it should do, in the person's words. */
-  task: { title?: string; hint?: string; field: React.ReactNode };
-  /** Step 4: the body -- code, instructions, a format -- with ✨, and Try it under it. */
+  /** Step 3: what it should do, in the person's words (`TaskField`). */
+  task: React.ReactNode;
+  /** Step 4: the body -- code, or instructions -- with ✨, and Try it under it. */
   body: { title: string; hint?: string; content: React.ReactNode };
 }
 
@@ -36,8 +36,8 @@ export default function FourSteps({ comesIn, comesOut, task, body }: Props) {
       <Step n={2} title="What comes out" hint="Where each output goes and what the node there wants, as the graph says it -- and your words for what it leaves out. The next node is written against it.">
         {comesOut}
       </Step>
-      <Step n={3} title={task.title ?? 'What should it do?'} hint={task.hint ?? 'In your own words. ✨ Generate writes step 4 from this and steps 1 and 2.'}>
-        {task.field}
+      <Step n={3} title="What should it do?" hint="In your own words. ✨ Generate writes step 4 from this and steps 1 and 2.">
+        {task}
       </Step>
       <Step n={4} title={body.title} hint={body.hint}>
         {body.content}
