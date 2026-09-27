@@ -27,7 +27,6 @@ import { nodeRuntime } from '../node.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile, SentRequest } from '../api.ts';
 import * as files from './files.ts';
-import { browse, extensionFilter } from '../browse.ts';
 import { NotAGraph, NotFound } from '../../errors.ts';
 import * as settings from './settings.ts';
 import * as project from '../../project/folder.ts';
@@ -134,17 +133,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       const { inputs, upstream } = await inputsFor(graph, String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry, reuse });
       const failed = upstream.node_results.find((result) => result.status === 'error');
       return { inputs, error: failed ? `${failed.node_id}: ${failed.error}` : null };
-    },
-
-    // The same browser a deployed tool serves (`host/browse.ts`), opening where
-    // the editor was started rather than in a home folder of dot-directories.
-    async browse(asked, { loopback }) {
-      if (!loopback) throw new Refusal(403, 'Browsing is disabled.');
-      try {
-        return await browse(asked.path ?? '', extensionFilter(asked.extensions ?? ''));
-      } catch (error) {
-        throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));
-      }
     },
 
     openGraph: (asked) => onFile(asked.path, 'load', (path) => project.loadGraph(path)),

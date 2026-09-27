@@ -234,6 +234,22 @@ describe('the engine as the front door of the editor', () => {
     }
   }, 60_000);
 
+  it('opens the picker where the editor was started, even beside a graph it serves', async () => {
+    // One browse handler serves both; only where an empty path starts differs.
+    // A tool starts in its graph's folder, and the editor -- also when it was
+    // started beside a graph.json and so ships one -- where it was started.
+    const dist = await mkdtemp(join(tmpdir(), 'editor-dist-'));
+    await writeFile(join(dist, 'index.html'), '<!doctype html><title>the editor</title>');
+    const ask = async (url: string) => (await asJson(await fetch(`${url}/api/files/browse`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '' }),
+    }))).path;
+    const asEditor = await serve({ port: 0, editor: { dist }, graphPath: MINIMAL });
+    started.push(asEditor.server);
+    expect(await ask(asEditor.url)).toBe(resolve(process.cwd()));
+    const { url: asTool } = await serveGraph();
+    expect(await ask(asTool)).toBe(resolve(REPO, 'engine', 'fixtures'));
+  });
+
   it('still refuses what nothing serves, rather than guessing', async () => {
     const url = await editor();
     expect((await fetch(`${url}/api/nothing/here`)).status).toBe(404);
