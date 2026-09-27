@@ -14,8 +14,8 @@ function drawn(node: GraphNode): string {
   const builder = NODE_BUILDERS[node.node_type];
   const Panel = node.node_type === 'ai' ? AiNodePanel : CodeNodePanel;
   return renderToStaticMarkup(createElement(Panel, {
-    builder, node, setConfig: () => {}, updateNode: () => {}, setDescription: () => {},
-    generation: builder.generation, fields: nodeFields(node, () => {}, () => {}), generating: false,
+    builder, node, setConfig: () => {}, updateNode: () => {},
+    fields: nodeFields(node, () => {}, () => {}), generating: false,
     onGenerate: () => {}, setInvalid: () => {}, steps: {},
   }));
 }

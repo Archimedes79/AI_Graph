@@ -22,7 +22,7 @@ const steps: WidgetSteps = {
 function panel(widget: GuiWidget): string {
   const builder = WIDGET_BUILDERS[widget.kind] as TransformingDisplayGuiBuilder;
   return renderToStaticMarkup(createElement(TransformingDisplayPanel, {
-    builder, widget, onUpdate: () => {}, generation: builder.generation, fields: widgetFields(widget, () => {}),
+    builder, widget, onUpdate: () => {}, fields: widgetFields(widget, () => {}),
     generating: false, onGenerate: () => {}, steps,
   }));
 }

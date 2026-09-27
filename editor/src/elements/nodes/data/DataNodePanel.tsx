@@ -23,8 +23,9 @@ import { asEditableText, convertedValue, dataKind, storedValue, type DataKind } 
  * and a box that does not parse holds up Save rather than being dropped by it.
  */
 export default function DataNodePanel({
-  node, setConfig, setInvalid, generation, fields, generating, message, onGenerate, steps,
+  builder, node, setConfig, setInvalid, fields, generating, message, onGenerate, steps,
 }: NodePanelProps) {
+  const generation = builder.generation;
   const executionResult = useGraphStore((s) => s.executionResult);
   const exportGraph = useGraphStore((s) => s.exportGraph);
   const kind = dataKind(node);

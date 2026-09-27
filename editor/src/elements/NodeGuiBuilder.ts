@@ -2,7 +2,7 @@
 
 import type { ComponentType, ReactNode } from 'react';
 import type { GraphNode, NodeType } from '@/graph';
-import type { ElementGeneration, FieldAccess } from '@/authoring/generation';
+import type { FieldAccess } from '@/authoring/generation';
 import { outputFormatText } from '@/authoring/outputFormat';
 import { readPair } from '@/authoring/examplePair';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
@@ -21,9 +21,11 @@ export interface NodePanelProps {
   setConfig: (key: string, value: unknown) => void;
   /** Changes the draft as a whole, for a setting that is a port and a key at once ("Run once per item"). */
   updateNode: (change: (node: GraphNode) => GraphNode) => void;
-  setDescription: (value: string) => void;
-  /** Present when the element authors a body; see `ElementGuiBuilder.generation`. */
-  generation?: ElementGeneration<GraphNode>;
+  /**
+   * The draft's settings and description by name: what ✨ fills in, and what a
+   * panel writes the description through. Whether the element authors a body
+   * at all is its own `builder.generation`.
+   */
   fields: FieldAccess;
   generating: boolean;
   message?: string;

@@ -55,8 +55,9 @@ function WhatItHandsOn({ path }: { path: string }) {
  * attach and no second description of what the files hold.
  */
 export default function InputNodePanel({
-  node, setConfig, generation, fields, generating, message, onGenerate, steps,
+  builder, node, setConfig, fields, generating, message, onGenerate, steps,
 }: NodePanelProps) {
+  const generation = builder.generation;
   const mode: 'text' | 'file' | 'directory' =
     (node.config.input_mode || 'text') as 'text' | 'file' | 'directory';
 

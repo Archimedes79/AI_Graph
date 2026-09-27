@@ -18,7 +18,7 @@ const steps = {
 
 function panel(widget: GuiWidget): string {
   return renderToStaticMarkup(createElement(InputPickerWidgetPanel, {
-    builder, widget, onUpdate: () => {}, generation: builder.generation, fields: widgetFields(widget, () => {}),
+    builder, widget, onUpdate: () => {}, fields: widgetFields(widget, () => {}),
     generating: false, onGenerate: () => {}, steps,
   }));
 }

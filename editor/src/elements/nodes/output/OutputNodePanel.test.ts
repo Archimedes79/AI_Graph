@@ -9,7 +9,7 @@ import OutputNodePanel, { browseFor } from './OutputNodePanel';
 
 function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(OutputNodePanel, {
-    builder: NODE_BUILDERS.output, node, setConfig: () => {}, updateNode: () => {}, setDescription: () => {},
+    builder: NODE_BUILDERS.output, node, setConfig: () => {}, updateNode: () => {},
     fields: nodeFields(node, () => {}, () => {}), generating: false,
     onGenerate: () => {}, setInvalid: () => {},
   }));

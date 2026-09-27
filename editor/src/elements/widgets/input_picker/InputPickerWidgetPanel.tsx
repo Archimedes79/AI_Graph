@@ -12,8 +12,9 @@ import { InputPickerWidgetGuiBuilder } from './InputPickerWidgetGuiBuilder';
  * behaviour at two levels.
  */
 export default function InputPickerWidgetPanel({
-  builder, widget, generation, fields, onUpdate, generating, message, onGenerate, steps,
+  builder, widget, fields, onUpdate, generating, message, onGenerate, steps,
 }: WidgetPanelProps) {
+  const generation = builder.generation;
   const [browsing, setBrowsing] = useState(false);
   if (!(builder instanceof InputPickerWidgetGuiBuilder)) return null;
   const mode = widget.mode || 'file';

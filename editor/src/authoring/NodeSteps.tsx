@@ -21,7 +21,7 @@ import { exampleFor, keptAnswer, keptExpect, listPorts, runsPerItem, tryInputs, 
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 type Props = Pick<NodePanelProps,
-  'builder' | 'node' | 'setConfig' | 'updateNode' | 'setInvalid' | 'generation' | 'fields' | 'generating' | 'message' | 'onGenerate' | 'steps'
+  'builder' | 'node' | 'setConfig' | 'updateNode' | 'setInvalid' | 'fields' | 'generating' | 'message' | 'onGenerate' | 'steps'
 > & {
   /** Step 4 in this element's words, and what it lays out under its body: an ai node's message. */
   body: { title: string; hint: string; beside?: React.ReactNode };
@@ -57,9 +57,10 @@ const noExpectation = (examples: string): string => {
  * wherever a sample is asked for.
  */
 export default function NodeSteps({
-  builder, node, setConfig, updateNode, setInvalid, generation, fields, generating, message, onGenerate, steps,
+  builder, node, setConfig, updateNode, setInvalid, fields, generating, message, onGenerate, steps,
   body, subject, request, renderResult,
 }: Props) {
+  const generation = builder.generation;
   const nodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
   const edges = useGraphStore((s) => s.rfEdges);
   const executionResult = useGraphStore((s) => s.executionResult);

@@ -10,8 +10,8 @@ import InputNodePanel from './InputNodePanel';
 function panel(node: GraphNode): string {
   const builder = NODE_BUILDERS.input;
   return renderToStaticMarkup(createElement(InputNodePanel, {
-    builder, node, setConfig: () => {}, updateNode: () => {}, setDescription: () => {},
-    generation: builder.generation, fields: nodeFields(node, () => {}, () => {}), generating: false,
+    builder, node, setConfig: () => {}, updateNode: () => {},
+    fields: nodeFields(node, () => {}, () => {}), generating: false,
     onGenerate: () => {}, setInvalid: () => {}, steps: {},
   }));
 }

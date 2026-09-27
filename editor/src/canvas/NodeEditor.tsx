@@ -331,8 +331,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 node={node}
                 setConfig={setConfig}
                 updateNode={(change) => setNode((prev) => (prev ? change(prev) : prev))}
-                setDescription={setDescription}
-                generation={generation}
                 fields={fields}
                 generating={generating}
                 message={genMessage}

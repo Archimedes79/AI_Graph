@@ -2,7 +2,7 @@
 
 import type { ComponentType, ReactNode } from 'react';
 import type { GuiWidget, WidgetKind } from '@/graph';
-import type { ElementGeneration, FieldAccess } from '@/authoring/generation';
+import type { FieldAccess } from '@/authoring/generation';
 import type { TryResult } from '@/authoring/TryItInline';
 import { DEFAULT_WIDGET_SPAN } from '@/document/layout';
 import type { Tone } from '@/ui/tone';
@@ -35,8 +35,6 @@ export interface WidgetPanelProps {
   builder: WidgetGuiBuilder;
   widget: GuiWidget;
   onUpdate: (patch: Partial<GuiWidget>) => void;
-  /** Present when the element authors a body; see `ElementGuiBuilder.generation`. */
-  generation?: ElementGeneration<GuiWidget>;
   fields: FieldAccess;
   generating: boolean;
   message?: string;

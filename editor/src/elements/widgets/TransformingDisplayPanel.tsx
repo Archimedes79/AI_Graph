@@ -19,8 +19,9 @@ import { TransformingDisplayGuiBuilder } from './TransformingDisplayGuiBuilder';
  * kind's builder (`shows`); this is the drawing of all three.
  */
 export default function TransformingDisplayPanel({
-  builder, widget, generation, fields, onUpdate, generating, message, onGenerate, steps,
+  builder, widget, fields, onUpdate, generating, message, onGenerate, steps,
 }: WidgetPanelProps) {
+  const generation = builder.generation;
   if (!(builder instanceof TransformingDisplayGuiBuilder) || !generation || !steps) return null;
   const text = String(widget.example ?? '');
   const problem = exampleProblem(text);

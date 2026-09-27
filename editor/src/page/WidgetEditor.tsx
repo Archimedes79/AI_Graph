@@ -191,7 +191,6 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
         <Panel
           builder={element}
           widget={widget}
-          generation={element.generation}
           fields={widgetFields(widget, onChange)}
           onUpdate={onChange}
           generating={generate.isGenerating(widget.id)}
