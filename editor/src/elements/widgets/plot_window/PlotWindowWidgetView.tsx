@@ -6,6 +6,22 @@ import { draw, type Drawn } from './draw';
 import type { WidgetViewProps } from '../WidgetView';
 
 /**
+ * What a chart's `draw()` is handed: what arrived at its port, or -- before
+ * anything has -- what it stores, which for a chart is nothing, and so null.
+ *
+ * Display-only: the port value is the whole point, the stored value is only a
+ * fallback for before the first run. A block with no value of its own is handed
+ * `''` by the page (`blockValue`, for the text blocks that show one), and a
+ * `draw()` written to its contract -- `if (data === null) return []` -- then
+ * failed on the page with "data.map is not a function", where Try it and the
+ * canvas preview hand it null.
+ */
+export function chartData(value: unknown, incoming: unknown): unknown {
+  if (incoming !== undefined) return incoming;
+  return value === '' || value === undefined ? null : value;
+}
+
+/**
  * Runtime `plot_window` widget: charts what flowed into `{id}_in`.
  *
  * The block's own code runs *here*, when the chart is drawn, and is handed the
@@ -14,9 +30,7 @@ import type { WidgetViewProps } from '../WidgetView';
  * page's scheme. A resize or a switch of scheme is a redraw with no run.
  */
 export default function PlotWindowWidgetView({ widget, value, incoming }: WidgetViewProps) {
-  // Display-only: the port value is the whole point, the stored value is only
-  // a fallback for before the first run.
-  const data = incoming !== undefined ? incoming : value;
+  const data = chartData(value, incoming);
   const code = String(widget.code ?? '');
   const scheme = useGraphStore((s) => s.metadata.gui_scheme);
   const containerRef = useRef<HTMLDivElement>(null);
