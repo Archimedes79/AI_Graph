@@ -4,8 +4,8 @@ import { useGraphStore } from '@/store/graphStore';
 import { syncGuiNodePorts } from '@/document/guiWidgets';
 import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { ALL_ENTRIES, type PaletteEntry } from './DesignerPalette';
-import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
-import { routePage } from './pageWrite';
+import { pageOf, useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
+import { patchBlock, routePage, type PageWrite } from './pageWrite';
 import { liveTypedValues } from './typedValues';
 import PageHeading from './PageHeading';
 import WidgetEditor from './WidgetEditor';
@@ -41,11 +41,20 @@ export default function DesignerTab() {
   const ownerOf = (widgetId: string) => blocks.find((b) => b.widget.id === widgetId)?.node ?? null;
   const selected = blocks.find((b) => b.widget.id === selectedId)?.widget ?? null;
 
-  /** Write a new page back to the nodes it is stored in (see pageWrite.ts). */
-  const applyWidgets = (next: GuiWidget[]) => {
-    for (const { node, widgets } of routePage(guiNodes, blocks, next)) {
+  const write = (writes: PageWrite[]) => {
+    for (const { node, widgets } of writes) {
       updateNode(node.id, syncGuiNodePorts({ ...node, config: { ...node.config, gui_widgets: widgets } }));
     }
+  };
+  /** Write a new page back to the nodes it is stored in (see pageWrite.ts). */
+  const applyWidgets = (next: GuiWidget[]) => write(routePage(guiNodes, blocks, next));
+  /**
+   * Change one block, on the page as the store holds it now: a block's
+   * editor may hand its change on long after it was drawn (`patchBlock`).
+   */
+  const updateBlock = (widgetId: string, patch: Partial<GuiWidget>) => {
+    const now = pageOf(useGraphStore.getState().rfNodes.map((n) => n.data.graphNode as GraphNode));
+    write(patchBlock(now.guiNodes, now.blocks, widgetId, patch));
   };
 
   /**
@@ -193,11 +202,6 @@ export default function DesignerTab() {
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
-  const updateSelected = (patch: Partial<GuiWidget>) => {
-    if (!selected) return;
-    applyWidgets(blocks.map((b) => (b.widget.id === selected.id ? { ...b.widget, ...patch } : b.widget)));
-  };
-
   /** A live edit in a widget: remembered locally, and stored on its own node. */
   const setWidgetValue = (block: SurfaceBlock, value: unknown) => {
     // Only text is remembered as an edit in progress; a block that stores
@@ -270,7 +274,7 @@ export default function DesignerTab() {
         <WidgetEditor
           widget={selected}
           nodeId={selected ? ownerOf(selected.id)?.id ?? '' : ''}
-          onChange={updateSelected}
+          onChange={(patch) => { if (selected) updateBlock(selected.id, patch); }}
           onRemove={removeSelected}
         />
         {selected && new Set(blocks.map((b) => b.node.id)).size > 1 && (

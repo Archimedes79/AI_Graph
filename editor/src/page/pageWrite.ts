@@ -61,3 +61,18 @@ export function routePage(
     // rather than every gui node in the graph.
     .filter(({ node, widgets }) => JSON.stringify(widgets) !== JSON.stringify(node.config.gui_widgets));
 }
+
+/**
+ * The writes that give block *widgetId* *patch* on the page as *guiNodes* and
+ * *blocks* hold it -- nothing, when the block is no longer there.
+ *
+ * A block's editor hands its edits here by the block's id, against the page
+ * as it is when the edit lands. It used to hand the whole page as it was
+ * rendered, and a ✨ result accepted a minute after it was asked for wrote
+ * that page back: every edit made meanwhile was undone, a block added since
+ * vanished with its wires, and one deleted since came back.
+ */
+export function patchBlock(guiNodes: GraphNode[], blocks: OwnedBlock[], widgetId: string, patch: Partial<GuiWidget>): PageWrite[] {
+  if (!blocks.some((b) => b.widget.id === widgetId)) return [];
+  return routePage(guiNodes, blocks, blocks.map((b) => (b.widget.id === widgetId ? { ...b.widget, ...patch } : b.widget)));
+}

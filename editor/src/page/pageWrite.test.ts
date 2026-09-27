@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { routePage } from './pageWrite';
+import { patchBlock, routePage } from './pageWrite';
+import { pageOf } from './GuiPage';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { WIDGET_BUILDERS } from '@/elements/registry';
@@ -75,5 +76,28 @@ describe('routePage', () => {
     // The caller creates one in this case; returning an empty list is how it
     // finds out, and is the only situation where a widget may go unwritten.
     expect(routePage([], [], [WIDGET_BUILDERS.text.create('A')])).toEqual([]);
+  });
+});
+
+describe('a block changed after a wait', () => {
+  it('changes that block on the page as it is by then, keeping what was added, renamed and deleted meanwhile', () => {
+    // Accepting a ✨ result wrote back the page from when ✨ was pressed.
+    const chart = { ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' };
+    const added = { ...WIDGET_BUILDERS.text.create('Added'), id: 'added' };
+    // Pressed on a page of the chart and a block "gone"; meanwhile the chart
+    // was renamed, "gone" deleted, and another block added.
+    const now = guiNode('gui1', [{ ...chart, label: 'Renamed' }, added]);
+    const page = pageOf([now]);
+
+    const writes = patchBlock(page.guiNodes, page.blocks, 'chart', { code: 'function draw() { return []; }' });
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0].widgets.map((w) => [w.id, w.label])).toEqual([['chart', 'Renamed'], ['added', 'Added']]);
+    expect(writes[0].widgets[0].code).toBe('function draw() { return []; }');
+  });
+
+  it('changes nothing when the block was deleted meanwhile', () => {
+    const page = pageOf([guiNode('gui1', [{ ...WIDGET_BUILDERS.text.create('A'), id: 'a' }])]);
+    expect(patchBlock(page.guiNodes, page.blocks, 'chart', { label: 'x' })).toEqual([]);
   });
 });

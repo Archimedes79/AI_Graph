@@ -40,19 +40,23 @@ export interface SurfaceBlock {
 
 /** The gui nodes contributing to the page, in graph order. */
 export function useGuiNodes(): GraphNode[] {
-  const rfNodes = useGraphStore((s) => s.rfNodes);
-  return rfNodes
-    .map((n) => n.data.graphNode as GraphNode)
-    .filter((n) => showsPage(n.node_type));
+  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode)).guiNodes;
 }
 
 /** Every block on the page, with the node that owns it. */
 export function useSurfaceBlocks(): SurfaceBlock[] {
-  const rfNodes = useGraphStore((s) => s.rfNodes);
-  return rfNodes
-    .map((n) => n.data.graphNode as GraphNode)
-    .filter((n) => showsPage(n.node_type))
-    .flatMap((node) => node.config.gui_widgets.map((widget) => ({ node, widget })));
+  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode)).blocks;
+}
+
+/**
+ * The page *nodes* make: the gui nodes in graph order, and every block on
+ * them with the node that owns it. The hooks above read it as it was
+ * rendered; an edit that lands later -- a ✨ result accepted a minute on --
+ * reads it from the store as it is then.
+ */
+export function pageOf(nodes: GraphNode[]): { guiNodes: GraphNode[]; blocks: SurfaceBlock[] } {
+  const guiNodes = nodes.filter((n) => showsPage(n.node_type));
+  return { guiNodes, blocks: guiNodes.flatMap((node) => node.config.gui_widgets.map((widget) => ({ node, widget }))) };
 }
 
 /**
