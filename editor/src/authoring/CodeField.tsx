@@ -6,6 +6,13 @@ export type CodeLanguage = 'javascript' | 'markdown';
 // Loaded when a body is first drawn, never before: see CodeSurface.
 const Surface = React.lazy(() => import('./CodeSurface'));
 
+/**
+ * What marks a code box on the page, for whoever must know that a drop landed
+ * in one: its editor types in the text of a file dropped into it, where it was
+ * dropped, and the drop is the box's (`app/windowDrops.ts`).
+ */
+export const CODE_FIELD = '[data-code-field]';
+
 interface CodeFieldProps {
   value: string;
   onChange: (value: string) => void;
@@ -14,6 +21,8 @@ interface CodeFieldProps {
   minHeight?: number;
   /** What the enlarged editor is called: "Draw chart — code". */
   title?: string;
+  /** A file dropped on it is taken by what holds the field, not typed in: step 1's example. */
+  keepFileDropsOut?: boolean;
 }
 
 /**
@@ -33,7 +42,7 @@ interface CodeFieldProps {
  * you spend in VS Code.
  */
 export default function CodeField({
-  value, onChange, language, placeholder, minHeight = 160, title,
+  value, onChange, language, placeholder, minHeight = 160, title, keepFileDropsOut,
 }: CodeFieldProps) {
   const [large, setLarge] = useState(false);
 
@@ -64,11 +73,11 @@ export default function CodeField({
   }, [large]);
 
   return (
-    <div className="relative">
+    <div className="relative" data-code-field="">
       <Suspense fallback={plain}>
         <Surface
           value={value} onChange={onChange} language={language} placeholder={placeholder}
-          height={{ min: minHeight, max: '46vh' }}
+          height={{ min: minHeight, max: '46vh' }} keepFileDropsOut={keepFileDropsOut}
         />
       </Suspense>
       <button
@@ -106,7 +115,7 @@ export default function CodeField({
             <Suspense fallback={plain}>
               <Surface
                 value={value} onChange={onChange} language={language} placeholder={placeholder}
-                height={{ min: 200, fill: true }} autoFocus
+                height={{ min: 200, fill: true }} autoFocus keepFileDropsOut={keepFileDropsOut}
               />
             </Suspense>
           </div>

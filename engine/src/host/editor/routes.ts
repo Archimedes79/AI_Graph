@@ -18,7 +18,6 @@ import { parseGraph, type Graph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExamples } from '../../execution/examples.ts';
-import { GuiNodeRunner, parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
 import { registry } from '../../elements/registry.ts';
 import { writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
@@ -115,15 +114,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       results: await runExamples(parseGraph(asked), String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry }),
     }),
 
-    async runBlock(asked) {
-      try {
-        const shown = await new GuiNodeRunner().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
-        return { status: 'success', shown, error: null };
-      } catch (error) {
-        return { status: 'error', shown: null, error: message(error) };
-      }
-    },
-
     async nodeInputs(asked) {
       const graph = parseGraph(asked);
       applyRuntimeValues(graph, {}, registry);
@@ -141,7 +131,16 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     findProjects: async (asked, { loopback }) => {
       if (!loopback) throw new Refusal(403, 'Looking for projects is only offered on this machine.');
-      return { paths: asked.name ? await files.findProjects(String(asked.name)) : [] };
+      return { paths: asked.name ? await files.findProjects(String(asked.name)) : [], searched: files.fileSearch() };
+    },
+
+    findFile: async (asked, { loopback }) => {
+      if (!loopback) throw new Refusal(403, 'Looking for files is only offered on this machine.');
+      const size = Number(asked.size);
+      return {
+        paths: asked.name && Number.isFinite(size) ? await files.findFiles(String(asked.name), size) : [],
+        searched: files.fileSearch(),
+      };
     },
 
     async projectChanges(asked) {
@@ -172,9 +171,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     generateGraph: (asked) => watched(asked.progress_id, async (calls) => {
       const target = await aiSetting();
-      const { graph, explanation } = await gen.generateGraph(
-        asked.description ?? '', asked.context ?? '', { ai: nodeRuntime().ai, target, calls },
-      );
+      const { graph, explanation } = await gen.generateGraph(asked.description ?? '', { ai: nodeRuntime().ai, target, calls });
       return { graph: parseGraph(graph), explanation };
     }),
 
@@ -224,7 +221,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       try {
         const folder = project.projectFolderOf(resolve(expandHome(asked.graph_path)));
         if (!folder) throw new Refusal(400, 'Only a project folder keeps files to open: save the graph as one first.');
-        const file = await project.bodyFileOf(folder, asked.node_id, asked.widget_id ?? '');
+        const file = await project.bodyFileOf(folder, asked.node_id);
         return await files.openExternal(join(folder, project.NODES_DIR), file);
       } catch (error) {
         if (error instanceof Refusal) throw error;

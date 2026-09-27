@@ -28,8 +28,8 @@ export type Wire = { source: string; target: string; sourceHandle?: string | nul
 export type AIProvider =
   'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
 
-/** A node's state on the canvas: what a run said about it, or that one is under way. */
-export type ExecutionStatus = NodeResult['status'] | ExecutionResult['status'] | 'pending' | 'running';
+/** What a run said: about one node, or about the whole run. */
+export type ExecutionStatus = NodeResult['status'] | ExecutionResult['status'];
 
 export interface Graph {
   metadata: GraphMetadata;
@@ -59,17 +59,15 @@ export type NodeConfig = {
   catch_errors: boolean;
   code: string;
   code_prompt: string;
+  /** A data node: what kind of value it holds. */
   data_format: 'text' | 'structure';
-  data_format_prompt: string;
-  data_prompt: string;
+  /** A data node: the value it holds, and hands on until something arrives. */
   data_value?: unknown;
   extensions: string;
   gui_widgets: GuiWidget[];
-  input_mode: 'text' | 'file' | 'directory';
+  input_mode: 'text' | 'directory';
   /** The output format in words: `output.md` in a project. */
   output_format_prompt: string;
-  /** An answer to imitate, recorded from a test run. */
-  output_example?: string;
   /** The message an ai node sends, with `{{port}}` where a port's value goes. Empty: send what arrived. */
   prompt_template?: string;
   /** An ai node's `run.js` when somebody changed it; absent or empty for the standard one. */
@@ -87,19 +85,15 @@ export type NodeConfig = {
   subgraph?: unknown;
   /** What a node is meant to do, written before it is filled in: `task.md` in a project. */
   task: string;
-  output_label: string;
   prompt_at_runtime: boolean;
-  read_file_inputs: boolean;
   recursive: boolean;
-  select_all_files: boolean;
-  selector_code: string;
-  selector_prompt: string;
   send_images: boolean;
   system_prompt: string;
   /** Unset: the model's own default -- current Claude models refuse one at all. */
   temperature?: number;
   value?: string | null;
-  write_mode: 'none' | 'file' | 'directory' | 'window';
+  /** An output node: also write the run's result to a file, or one file per value into a folder. */
+  write_mode: 'none' | 'file' | 'directory';
 };
 
 /**
@@ -108,19 +102,11 @@ export type NodeConfig = {
  * stay stable once assigned -- it is what keeps edges attached across edits.
  *
  * Beyond who it is and how it is drawn, a block holds only its own kind's
- * settings, so they are optional here: a divider has no selector, and a block
+ * settings, so they are optional here: a divider has no options, and a block
  * written by hand, by ✨ or over MCP leaves out what it does not set. Read one
- * the way its runner does -- `select_all_files` missing means every file.
+ * the way its runner does -- `recursive` missing means only the folder itself.
  */
 export type GuiWidget = {
-  /** A chart's, a table's or an image's transform. */
-  code?: string;
-  code_prompt?: string;
-  /**
-   * The one example input a transform is written and tried against: the text
-   * of `{"value": …}`, as it is handed the value (`example.json`).
-   */
-  example?: string;
   /** `input_picker`: the file types a folder's listing keeps. */
   extensions?: string;
   h?: number;
@@ -128,10 +114,8 @@ export type GuiWidget = {
   kind: WidgetKind;
   label: string;
   mode?: string;
+  /** `input_picker`: a folder's listing looks into its subfolders too. */
   recursive?: boolean;
-  select_all_files?: boolean;
-  selector_code?: string;
-  selector_prompt?: string;
   tone: 'plain' | 'raised' | 'sunken' | 'accent';
   /** Draw a frame regardless of the tone; unset lets the tone decide. */
   border?: boolean;

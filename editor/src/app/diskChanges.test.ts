@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { TextChange } from '@engine/host/api.ts';
 import { DiskChanges } from './diskChanges';
 
-const change = (node_id: string): TextChange => ({ node_id, widget_id: '', field: 'code', value: `// ${node_id}` });
+const change = (node_id: string): TextChange => ({ node_id, field: 'code', value: `// ${node_id}` });
 
 describe('a change on disk, reported while the editor could not take it', () => {
   it('waits for the next look at the same project, which the server will not report it to again (B36)', () => {

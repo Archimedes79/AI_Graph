@@ -12,7 +12,7 @@ export interface SelectConfig {
  *
  * The list is written once, in the block's own settings — not generated, not
  * wired in: a dropdown is furniture whose options a person decides, the same
- * way a `select_all_files` checkbox is a decision rather than a value. Its own
+ * way a folder's file types are a decision rather than a value. Its own
  * choice is what it emits; nothing flows into it.
  */
 export class SelectWidgetRunner extends WidgetRunner<SelectConfig> {

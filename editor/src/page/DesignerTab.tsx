@@ -1,30 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import type { WidgetKind } from '@/graph';
+import type { GuiWidget, WidgetKind } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { newBlock, type PaletteEntry } from './DesignerPalette';
-import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
+import { usePage, usePageEvents } from './GuiPage';
 import { insertBlock, moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { liveTypedValues } from './typedValues';
 import PageHeading from './PageHeading';
 import WidgetEditor from './WidgetEditor';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import { SCHEMES, type SchemeId } from '@/ui/scheme';
-import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
+import { ACCENT, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
 /**
- * The graph's interface, on one page, built on the page itself.
- *
- * The blocks of every gui node in graph order; edits go back to whichever node
- * owns the block. One graph, one tool, one page -- a bundle's recipient wants a
- * window, not three.
+ * The graph's page, built on the page itself. One graph, one tool, one page --
+ * a bundle's recipient wants a window, not three.
  */
 export default function DesignerTab() {
-  const updateNode = useGraphStore((s) => s.updateNode);
-  const guiScheme = useGraphStore((s) => s.metadata.gui_scheme);
+  const metadata = useGraphStore((s) => s.metadata);
   const setMetadata = useGraphStore((s) => s.setMetadata);
-  const blocks = useSurfaceBlocks();
-  const guiNodes = useGuiNodes();
+  const { page, widgets } = usePage();
   const events = usePageEvents();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // What was typed into a live block, shown in place of what arrived there --
@@ -32,10 +27,9 @@ export default function DesignerTab() {
   // edit that replaced it, ends it (`liveTypedValues`). The value itself is
   // stored as it is typed; this only decides which of the two a block shows.
   const [typed, setTyped] = useState<Record<string, string>>({});
-  const overrides = liveTypedValues(typed, blocks);
+  const overrides = liveTypedValues(typed, widgets);
 
-  const ownerOf = (widgetId: string) => blocks.find((b) => b.widget.id === widgetId)?.node ?? null;
-  const selected = blocks.find((b) => b.widget.id === selectedId)?.widget ?? null;
+  const selected = widgets.find((widget) => widget.id === selectedId) ?? null;
 
   // Every change to the page goes through `pageWrite`, which reads it from the
   // store when the change lands: a block's editor may hand its change on long
@@ -43,7 +37,7 @@ export default function DesignerTab() {
 
   /** Add a block to the page, where it was asked for -- at the end by default. */
   const addWidget = (kind: WidgetKind, mode?: string, at?: number) => {
-    const widget = newBlock(kind, mode, blocks.map((b) => b.widget.id));
+    const widget = newBlock(kind, mode, widgets.map((taken) => taken.id));
     insertBlock(widget, at);
     setSelectedId(widget.id);
   };
@@ -107,9 +101,9 @@ export default function DesignerTab() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [dragEntry, blocks.length]);
+  }, [dragEntry, widgets.length]);
 
-  const selectedIndex = blocks.findIndex((b) => b.widget.id === selectedId);
+  const selectedIndex = widgets.findIndex((widget) => widget.id === selectedId);
 
   /** Move the selected block one place along the page. */
   const moveSelected = (delta: -1 | 1) => {
@@ -134,7 +128,7 @@ export default function DesignerTab() {
         // After the block in hand, or at the end of the page: where the next
         // thing would go if this were a document, which it is.
         event.preventDefault();
-        setInsertAt(selectedIndex === -1 ? blocks.length : selectedIndex + 1);
+        setInsertAt(selectedIndex === -1 ? widgets.length : selectedIndex + 1);
         return;
       }
       if (!selectedId) return;
@@ -153,12 +147,12 @@ export default function DesignerTab() {
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
-  /** A live edit in a widget: remembered locally, and stored on its own node. */
-  const setWidgetValue = (block: SurfaceBlock, value: unknown) => {
+  /** A live edit in a block: remembered here, and stored as the page stores it (`usePageEvents`). */
+  const setWidgetValue = (widget: GuiWidget, value: unknown) => {
     // Only text is remembered as an edit in progress; a block that stores
     // something richer holds it itself and has no half-typed state to protect.
-    if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
-    patchBlock(block.widget.id, { value });
+    if (typeof value === 'string') setTyped((prev) => ({ ...prev, [widget.id]: value }));
+    events.setWidgetValue(widget, value);
   };
 
   return (
@@ -166,7 +160,7 @@ export default function DesignerTab() {
       <DesignerPalette onAdd={addWidget} onDragStart={(entry) => setDragEntry(entry)} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <PageHeading nodes={guiNodes} onChange={(nodeId, words) => updateNode(nodeId, words)} />
+        <PageHeading name={metadata.name} description={metadata.description} onChange={setMetadata} />
         <div
           data-gui-dropzone
           className="flex-1 overflow-auto px-8 py-6"
@@ -174,11 +168,12 @@ export default function DesignerTab() {
         >
           <DesignerSurface
             dropIndex={dragEntry ? dropIndex : null}
-            blocks={blocks}
+            pageId={page?.id}
+            widgets={widgets}
             onWidgetValue={setWidgetValue}
-            onWidgetTrigger={(block, value) => {
-              if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
-              events.fire(block, value);
+            onWidgetTrigger={(widget, value) => {
+              if (typeof value === 'string') setTyped((prev) => ({ ...prev, [widget.id]: value }));
+              events.fire(widget, value);
             }}
             selectedId={selectedId}
             onSelect={setSelectedId}
@@ -203,7 +198,7 @@ export default function DesignerTab() {
         <select
           className="w-full rounded-lg px-2 py-1.5 text-sm mb-5"
           style={FIELD_ON_SURFACE}
-          value={guiScheme}
+          value={metadata.gui_scheme}
           onChange={(e) => setMetadata({ gui_scheme: e.target.value as SchemeId })}
         >
           {SCHEMES.map((entry) => (
@@ -216,19 +211,13 @@ export default function DesignerTab() {
         </h3>
         <WidgetEditor
           widget={selected}
-          nodeId={selected ? ownerOf(selected.id)?.id ?? '' : ''}
           onChange={(patch) => { if (selected) patchBlock(selected.id, patch); }}
           onRemove={removeSelected}
         />
-        {selected && new Set(blocks.map((b) => b.node.id)).size > 1 && (
-          <p className="text-xs mt-3" style={{ color: DIMMER }}>
-            Belongs to “{ownerOf(selected.id)?.label}”.
-          </p>
-        )}
 
         {/* A page has no panel of its own -- this is where it is edited -- so
             what runs when it runs is said here, as every other node says it. */}
-        {guiNodes[0] && <div className="mt-5"><WhatRuns node={guiNodes[0]} /></div>}
+        {page && <div className="mt-5"><WhatRuns node={page} folded /></div>}
       </aside>
 
       {/* The element under the cursor while it is being dragged. Without it the

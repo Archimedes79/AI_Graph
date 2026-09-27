@@ -1,11 +1,79 @@
 // A node: the element branch that sits on the canvas and runs in the graph.
+//
+// Only a node authors anything: a body someone writes -- code, instructions --
+// with files of its own in a project folder, and a way for an AI to write it.
+// A block on a page shows or hands on what it holds, and writes nothing.
 
 import type { Graph, GraphNode, NodeType, Port } from '../graph.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 import { readInterface, type Schema } from '../execution/interface.ts';
 import type { Problem } from '../execution/wiring.ts';
-import { ElementRunner, type WhatRuns } from './ElementRunner.ts';
+import type { Logic } from '../authoring/logic.ts';
+import type { Generation } from '../authoring/generation.ts';
+import { ElementRunner } from './ElementRunner.ts';
 import type { Runtime } from './Runtime.ts';
+
+/** What a deploy bundle must carry for this node to run elsewhere. */
+export interface DeployNeeds {
+  /** The bundle needs the interface: a page, not just a CLI. */
+  needsInterface: boolean;
+  /**
+   * It calls a model, so whoever receives the bundle needs a provider set up.
+   *
+   * Asked of the element rather than looked for by node type. A node that
+   * holds a graph answers for itself; what is *inside* it is followed by
+   * `bundleNeeds`, which walks the graphs.
+   */
+  asksAi: boolean;
+}
+
+/**
+ * One piece of a node's writing, as a project folder keeps it: a file of its
+ * own in the node's folder instead of a string inside its `node.json`.
+ */
+export interface TextFile {
+  /** The config key it is stored under. */
+  field: string;
+  /** Its name in the node's folder. */
+  file: string;
+  /**
+   * What the file says while nobody has written anything of their own. Written
+   * out all the same, so the folder shows what the node does.
+   */
+  standard?: string;
+}
+
+const plain = (text: string): string => text.replace(/\r\n/g, '\n').trim();
+
+/**
+ * Whether *value* is the text the element itself ships for *text* -- its
+ * standard -- and so nobody's own writing. Asked when a project is read and
+ * saved, and by the editor's sweep, which writes only what nobody wrote.
+ */
+export function shippedText(value: unknown, text: Pick<TextFile, 'standard'>): boolean {
+  return typeof value === 'string' && plain(text.standard ?? '') === plain(value);
+}
+
+/** Whether *text* is nobody's own: empty, or the *standard* the element ships. What a `run.js` is asked. */
+export function isStandardText(text: string, standard: string): boolean {
+  return !plain(text) || shippedText(text, { standard });
+}
+
+/**
+ * What runs when a node runs, said for whoever reads its panel or the
+ * documentation: the editor shows it at the foot of the node's panel.
+ */
+export interface WhatRuns {
+  /**
+   * `engine`: this class's `execute`, in the process that holds the graph.
+   * `body`: a file in the node's own folder, run sandboxed (`elements/body.ts`).
+   */
+  by: 'engine' | 'body';
+  /** The source file and method, or the body's file name in the node's folder. */
+  where: string;
+  /** One sentence: what it does with what arrives. */
+  does: string;
+}
 
 /**
  * The elements, as anything that derives ports may need to ask about them: a
@@ -21,6 +89,30 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   // Its kind, its ports, the graph it may hold: asked whenever the graph is read.
 
   abstract readonly nodeType: NodeType;
+
+  /**
+   * What this node keeps in files of its own when its graph is a project
+   * folder. Everything else it stores stays in its `node.json`.
+   *
+   * Fixed names rather than ones made from a label: a folder holding
+   * `code.js`, `task.md` and `examples.md` says what each file is
+   * before it is opened, and renaming a node renames nothing on disk.
+   */
+  texts(_node: GraphNode): readonly TextFile[] {
+    return [];
+  }
+
+  /**
+   * What this node does, if a person writes it: the request, the body, and
+   * how to run it. `undefined` for a node that authors nothing -- an output
+   * node has no text anyone writes at length.
+   *
+   * This replaced a declaration of *field names* that every caller then used to
+   * reach into an untyped config. See `logic.ts` for what that cost.
+   */
+  logic(_node: GraphNode): Logic | undefined {
+    return undefined;
+  }
 
   /**
    * The ports this node has, *when they follow from its settings*.
@@ -67,11 +159,11 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
   /**
    * The blocks this node holds, as the records it keeps them in: a page's
-   * widgets, each with elements of its own and a folder of its own in a project.
+   * widgets, settings in its `node.json` -- a block writes no file of its own.
    * None for a node that holds none.
    *
-   * The element owns where they are kept; the project folder only asks, so it
-   * never learns what a page is.
+   * The element owns where they are kept; the project folder only asks -- to
+   * write each block's keys in order -- so it never learns what a page is.
    */
   blocks(_node: GraphNode): Record<string, unknown>[] {
     return [];
@@ -85,8 +177,9 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
   /**
    * What this node's outputs are called in the run's result, when it is one:
-   * its id, unless the element keeps a name of its own. The run keys the result
-   * by it and `check` compares it, so both ask here.
+   * its id, unless the element names it otherwise -- an output node by its
+   * label. The run keys the result by it and `check` compares it, so both ask
+   * here.
    */
   resultLabel(node: GraphNode): string {
     return node.id;
@@ -216,16 +309,15 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   }
 
   /**
-   * Whether a wired file path should arrive as the file's *content*.
+   * This kind is handed a file's *content* on each input port typed
+   * `file_path` -- the port's own "Read the file at this path" -- instead of
+   * the path. Only that tick decides, never the wire: a sentence wired in is
+   * never read as a filename, and a path wanted as a path is left one.
    *
    * Declared, like batching, and carried out by the executor: a code node and
-   * an AI node both want it and neither should own it. It lived inside the code
-   * element for a while, which is why an AI node summarising a folder was
-   * handed three filenames and dutifully summarised those.
+   * an AI node both want it and neither should own it.
    */
-  readsFileInputs(node: GraphNode): boolean {
-    return node.config.read_file_inputs === true;
-  }
+  readonly readsFileInputs: boolean = false;
 
   /**
    * What this node needs a person to supply before the graph can run.
@@ -271,6 +363,29 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
   // ── Build time ────────────────────────────────────────────────────────────
   // What only building asks: the editor, `check`, `test`, a bundle being made.
+  // It travels with the class -- one class per kind is worth more than a
+  // smaller tool -- but nothing a run calls may reach it (`elements/times.test.ts`).
+
+  /**
+   * How an AI writes this node's body, or undefined if none does: a code node
+   * and an ai node are written; a data node never is.
+   */
+  generation(): Generation | undefined {
+    return undefined;
+  }
+
+  /**
+   * What a bundle must carry for this node to run somewhere else.
+   *
+   * Every body may ask a model (`body.ts`), so every body is looked at, and any
+   * mention counts -- `node.llm(`, `{ llm }`, `const ask = node.llm`: a README
+   * that explains the model to someone who turns out not to need it costs less
+   * than a tool that stops at its first question.
+   */
+  deployNeeds(node: GraphNode): DeployNeeds {
+    const logic = this.logic(node);
+    return { needsInterface: false, asksAi: logic?.kind === 'code' && /\bllm\b/.test(logic.body) };
+  }
 
   /**
    * What someone writing a graph for this kind must know about its settings:
@@ -337,7 +452,7 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
   /**
    * Files and folders this node names as its own defaults: the CSV a picker
-   * starts on, the folder an input node reads.
+   * starts on, the folder an input node lists.
    *
    * A bundle carries them. A tool handed to someone with its default file left
    * behind opens on an error, and the person it was handed to has no way to

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findProjects } from './files.ts';
+import { fileSearch, findFiles, findProjects } from './files.ts';
 
 /**
  * What the editor's project search and its "open in my editor" get from the machine.
@@ -58,5 +58,40 @@ describe('findProjects', () => {
       .toEqual(['examples/chat', 'work/chat']);
     expect(await findProjects('data', root)).toEqual([]);
     expect(await findProjects('chat', join(root, 'examples', 'chat'))).toEqual([join(root, 'examples', 'chat')]);
+  });
+
+  it('looks where a dropped file is looked for, as fileSearch says: three levels of folders down', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ai-graph-find-deep-'));
+    for (const project of ['a/b/c/three', 'a/b/c/d/four']) {
+      await mkdir(join(root, project), { recursive: true });
+      await writeFile(join(root, project, 'flow.json'), '{"nodes": {}, "wires": []}');
+    }
+    expect(await findProjects('three', root)).toEqual([join(root, 'a', 'b', 'c', 'three')]);
+    expect(await findProjects('four', root)).toEqual([]);
+  });
+});
+
+describe('findFiles', () => {
+  it('finds a dropped file by its name and size, and nothing in dependencies, dot-folders or build output', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ai-graph-find-file-'));
+    for (const folder of ['examples/data', 'other', 'node_modules/pkg', '.cache']) await mkdir(join(root, folder), { recursive: true });
+    await writeFile(join(root, 'examples/data/people.csv'), 'name\nAnna\n');
+    await writeFile(join(root, 'other/people.csv'), 'name\nAnna\nBen\n');
+    await writeFile(join(root, 'node_modules/pkg/people.csv'), 'name\nAnna\n');
+    await writeFile(join(root, '.cache/people.csv'), 'name\nAnna\n');
+    const found = async (size: number) => (await findFiles('people.csv', size, root)).map((path) => path.slice(root.length + 1).split(/[\\/]/).join('/'));
+    expect(await found(10)).toEqual(['examples/data/people.csv']);
+    expect(await found(14)).toEqual(['other/people.csv']);
+    expect(await found(3)).toEqual([]);
+  });
+
+  it('looks three levels of folders down, passing over build output and dot names -- and says where it looked', async () => {
+    // A drop that found nothing said "not under the folder the editor was started in" of all of these.
+    const root = await mkdtemp(join(tmpdir(), 'ai-graph-find-depth-'));
+    for (const folder of ['a/b/c', 'data/raw/2024/q1', 'build', '.venv']) await mkdir(join(root, folder), { recursive: true });
+    for (const file of ['a/b/c/three.csv', 'data/raw/2024/q1/four.csv', 'build/data.csv', '.env']) await writeFile(join(root, file), 'x');
+    const count = async (name: string) => (await findFiles(name, 1, root)).length;
+    expect([await count('three.csv'), await count('four.csv'), await count('data.csv'), await count('.env')]).toEqual([1, 0, 0, 0]);
+    expect(fileSearch(root)).toBe(`${root} and 3 levels of folders below it, leaving out node_modules, dist, build and every name that begins with a dot`);
   });
 });

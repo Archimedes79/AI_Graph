@@ -3,7 +3,6 @@
   "description": "Summarizes one file; runs once per file in the folder",
   "config": {
     "batch_concurrency": 3,
-    "batch_mode": "per_item",
-    "read_file_inputs": true
+    "batch_mode": "per_item"
   }
 }

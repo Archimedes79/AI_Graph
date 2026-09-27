@@ -76,9 +76,6 @@ export interface ToolAiSettings {
   settings_file_exists: boolean;
 }
 
-/** What one block shows for one value: the editor's ▶ Test of a block. */
-export interface BlockResult { status: 'success' | 'error'; shown: unknown; error: string | null }
-
 /** A model, already resolved: which provider, which of its models. */
 export interface Target { provider: string; model: string }
 
@@ -87,10 +84,9 @@ export interface Watched { progress_id?: string }
 
 /** One element's body to write. The element's own `Generation` decides the rest. */
 export interface GenerateRequest {
-  /** A node type or block kind: whose `Generation` says what is written and how. */
+  /** A node type: whose `Generation` says what is written and how. */
   element: string;
   description: string;
-  context?: string;
   inputs?: string[];
   outputs?: string[];
   /** Real port values from the last run; enables the verify-and-repair pass. */
@@ -98,7 +94,7 @@ export interface GenerateRequest {
   input_sources?: Record<string, string>;
   /**
    * Input ports the running node is handed a file's text on, not the path the
-   * wire carries (`read_file_inputs`). The sample holds what came off the wire,
+   * wire carries (typed `file_path`). The sample holds what came off the wire,
    * so these are read, as a run reads them, before the sample is shown or used.
    */
   read_file_ports?: string[];
@@ -133,8 +129,6 @@ export interface GenerateRequest {
    * the output a person writes.
    */
   output_format?: string;
-  /** An answer an AI node was kept to imitate (`output.example.md`). Only a prompt is told it. */
-  output_example?: string;
   /** Where `sample_inputs` came from, for the model: `the last run`, `the example in step 1`. */
   sample_origin?: string;
   /** How a list on an input arrives: one item per run (`per_item`) or whole (`whole_list`). */
@@ -152,10 +146,31 @@ export interface GenerateRequest {
    */
   multi_outputs?: string[];
   /**
+   * Change the body there is, instead of writing one from nothing: "Say what
+   * to change" and ✨ Fix in a node's dialog. The answer brings the task along
+   * when there was something to change (`GenerateResponse.task`), restated to
+   * say what the changed body does, so the two are changed together.
+   */
+  refine?: Refine;
+  /**
    * Build the request and hand it back without sending it: what ✨ *would*
    * send, through the same code that sends it, so the preview cannot differ.
    */
   preview?: boolean;
+}
+
+/** A body to change, what it did on the sample, and what to change about it (`GenerateRequest.refine`). */
+export interface Refine {
+  /** The body as it is now. */
+  body: string;
+  /** What to change, in the person's words. Absent: repair it from how it failed (✨ Fix). */
+  change?: string;
+  /** What it gave on the sample: its outputs as JSON, or a model's answer. */
+  outcome?: string;
+  /** The error it raised on the sample. */
+  error?: string;
+  /** What its result falls short of: an example's expected output, a judge's word. */
+  problems?: string[];
 }
 
 /** One request to a model, as it happened: for looking at when an answer is wrong or missing. */
@@ -180,7 +195,7 @@ export interface ProbeReport {
   status: 'skipped' | 'ok' | 'repaired' | 'failed';
   error: string;
   missing_outputs: string[];
-  /** What the element itself found wrong with a result that ran: a chart off its frame, NaN in the markup. */
+  /** What a result that ran falls short of: the example it was tried on, and what that example expects. */
   problems?: string[];
   /**
    * What the node hands on from the sample, whole -- the next node's sample,
@@ -194,7 +209,8 @@ export interface ProbeReport {
 export interface GenerateResponse {
   /** The generated text. Which field it belongs in is the caller's business. */
   result: string;
-  explanation: string;
+  /** The node's task, restated to fit a body changed as asked (`GenerateRequest.refine`). */
+  task?: string;
   probe: ProbeReport;
   /** Every model call this generation made, in order. For a preview, the one request, unsent. */
   calls: AICall[];
@@ -290,12 +306,10 @@ export const API = {
   browse: route<{ path: string; extensions?: string }, BrowsePage>('POST', '/api/files/browse', 'tool'),
 
   // -- what only the editor serves ------------------------------------------
-  /** One node on the inputs given: ▶ Test in a node's editor. */
+  /** One node on the inputs given: ▶ Try it in a node's dialog. */
   runNode: route<OnNode & { inputs: Record<string, unknown> }, NodeResult>('POST', '/api/execute/node', 'editor'),
   /** What one node would ask a model on the inputs given -- its run, with every answer made up and nothing sent. */
   nodeRequests: route<OnNode & { inputs: Record<string, unknown> }, { requests: SentRequest[]; error: string | null }>('POST', '/api/execute/node/requests', 'editor'),
-  /** One value through one block's transform, as the page would show it. */
-  runBlock: route<{ widget: unknown; value: unknown }, BlockResult>('POST', '/api/execute/block', 'editor'),
   /** What would arrive at a node: what feeds it is run, the node is not. */
   nodeInputs: route<OnNode, { inputs: Record<string, unknown>; error: string | null }>('POST', '/api/execute/inputs', 'editor'),
   /** Run a node's examples.md: each example's inputs, held to what it expects. */
@@ -309,15 +323,25 @@ export const API = {
   openGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),
   /** A `.json` path is written as one file; any other path as a project folder. */
   saveGraph: route<{ path: string; graph: Graph }, GraphFile>('POST', '/api/graphs/file/save', 'editor'),
-  /** Project folders with this name under where the editor runs: for a folder dropped onto the page. */
-  findProjects: route<{ name: string }, { paths: string[] }>('GET', '/api/graphs/find', 'editor'),
+  /**
+   * Project folders with this name under where the editor runs: for a folder
+   * dropped onto the page -- and where that search looked, in words, for a drop
+   * that finds none to say.
+   */
+  findProjects: route<{ name: string }, { paths: string[]; searched: string }>('GET', '/api/graphs/find', 'editor'),
+  /**
+   * Files of this name and size under where the editor runs: for a file
+   * dropped onto a node, whose path a browser never says -- and where that
+   * search looked, in words, for a drop that finds none to say.
+   */
+  findFile: route<{ name: string; size: string }, { paths: string[]; searched: string }>('GET', '/api/files/find', 'editor'),
   /** The code and prompts of an open project that changed on disk since last asked. */
   projectChanges: route<{ path: string }, { changes: TextChange[] }>('GET', '/api/graphs/file/changes', 'editor'),
 
   generate: route<GenerateRequest & Watched, GenerateResponse>('POST', '/api/ai/generate', 'editor'),
   /** What the generation with this id has sent and received so far. */
   generationProgress: route<{ id: string }, { calls: AICall[] }>('GET', '/api/ai/generate/progress', 'editor'),
-  generateGraph: route<{ description: string; context?: string } & Watched, { graph: Graph; explanation: string }>(
+  generateGraph: route<{ description: string } & Watched, { graph: Graph; explanation: string }>(
     'POST', '/api/ai/generate-graph', 'editor'),
 
   /** The graph as a deployable zip, named by the server (`<graph name>_bundle.zip`). */
@@ -335,8 +359,8 @@ export const API = {
   saveAiSettings: route<SettingsPatch, SettingsStatus>('POST', '/api/ai/settings', 'editor'),
   providers: route<void, ProviderStatus>('GET', '/api/ai/providers', 'editor'),
 
-  /** A node's (or block's) body file in a project -- `nodes/<id>/code.js` -- in the person's own editor. Loopback only: it starts a program. */
-  openExternal: route<{ graph_path: string; node_id: string; widget_id?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
+  /** A node's body file in a project -- `nodes/<id>/code.js` -- in the person's own editor. Loopback only: it starts a program. */
+  openExternal: route<{ graph_path: string; node_id: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
 } as const;
 
 export type Api = typeof API;

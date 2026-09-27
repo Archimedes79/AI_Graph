@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { showsPage } from '@/document/guiWidgets';
 import { ReactFlowProvider } from 'reactflow';
 
@@ -14,12 +14,13 @@ import NodeEditor from '@/canvas/NodeEditor';
 import ResultsPanel from '@/app/ResultsPanel';
 
 import SettingsDialog from '@/app/SettingsDialog';
+import GraphProblems from '@/app/GraphProblems';
 import { DiskChanges } from '@/app/diskChanges';
+import { droppedProject, landedInCodeField } from '@/app/windowDrops';
 import Modal from '@/ui/Modal';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
-import OutputWindows from '@/dialogs/OutputWindows';
 
-import { useGraphStore } from '@/store/graphStore';
+import { besideTheRest, useGraphStore } from '@/store/graphStore';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { NodeType, Graph } from '@/graph';
@@ -113,6 +114,16 @@ export default function App() {
     return parsed as Graph;
   }, []);
 
+  // What Load Graph would load, as it stands in the box: `check`'s word on
+  // it is said under the box, before it is loaded (`GraphProblems`).
+  const pasted = useMemo(() => {
+    try {
+      return parseGraphJson(jsonImportValue);
+    } catch {
+      return null;
+    }
+  }, [jsonImportValue, parseGraphJson]);
+
   /**
    * Load a graph JSON dropped anywhere on the window.
    *
@@ -151,21 +162,13 @@ export default function App() {
   }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath]);
 
   /**
-   * A dropped folder: a project, most likely. A browser gives its name and not
-   * where it is, so the editor's server looks for a project of that name under
-   * the folder it runs in, and opens it when there is exactly one.
+   * A dropped folder: a project, most likely, opened when the editor's server
+   * finds exactly one of that name (`droppedProject`).
    */
   const handleProjectFolderDrop = useCallback(async (name: string) => {
     if (!confirmDiscard(`Open the project ${name}?`)) return;
     try {
-      const { paths } = await call('findProjects', { name });
-      if (paths.length !== 1) {
-        setSaveStatus(paths.length
-          ? `❌ ${paths.length} projects are called "${name}". Open the one you mean with 📂 Open.`
-          : `❌ No project called "${name}" under the folder the editor was started in. Open it with 📂 Open.`);
-        return;
-      }
-      const result = await call('openGraph', { path: paths[0] });
+      const result = await call('openGraph', { path: await droppedProject(name) });
       loadGraph(result.graph);
       setCurrentFilePath(result.path, result.project);
       setSaveStatus(`✅ Opened ${result.path}`);
@@ -182,8 +185,12 @@ export default function App() {
     };
     const onDrop = (event: DragEvent) => {
       const file = event.dataTransfer?.files?.[0];
-      if (!file) return;   // a palette drag: leave it to the canvas
+      // A palette drag is the canvas's. A file dropped on a node or on an
+      // example field is theirs, and does not arrive here: they stop it.
+      if (!file) return;
       event.preventDefault();
+      // One dropped into a code box arrives, and its editor has typed it in.
+      if (landedInCodeField(event.target)) return;
       // Only answerable while the event lasts: afterwards the item is gone.
       if (event.dataTransfer?.items?.[0]?.webkitGetAsEntry()?.isDirectory) void handleProjectFolderDrop(file.name);
       else void handleGraphFileDrop(file);
@@ -196,19 +203,9 @@ export default function App() {
     };
   }, [handleGraphFileDrop, handleProjectFolderDrop]);
 
-  // Add a node from a palette click
+  // Add a node from a palette click: beside what is already there.
   const handleAddNode = useCallback(
-    (nodeType: NodeType) => {
-      // To the right of what is already there, not somewhere at random: a
-      // random spot inside a 200px square put the second node on top of the
-      // first more often than not, and a graph reads left to right anyway. The
-      // gap is generous because a node widens once it is configured (a file
-      // input grows a path field) and must not then cover its neighbour.
-      const placed = useGraphStore.getState().rfNodes;
-      const right = Math.max(0, ...placed.map((node) => node.position.x + (node.width ?? 240)));
-      const top = placed.length ? Math.min(...placed.map((node) => node.position.y)) : 120;
-      addNode(nodeType, placed.length ? { x: right + 160, y: top } : { x: 200, y: 120 });
-    },
+    (nodeType: NodeType) => { addNode(nodeType, besideTheRest(useGraphStore.getState().rfNodes)); },
     [addNode]
   );
 
@@ -284,8 +281,7 @@ export default function App() {
         const changes = disk.current.due(currentFilePath);
         if (!changes.length) return;
         const refused = takeDiskChanges(changes);
-        const what = changes.filter((c) => !refused.includes(c.node_id))
-          .map((c) => (c.widget_id ? `${c.node_id}/${c.widget_id}` : c.node_id));
+        const what = changes.filter((c) => !refused.includes(c.node_id)).map((c) => c.node_id);
         if (what.length) setSaveStatus(`↻ From disk: ${[...new Set(what)].join(', ')}`);
         // A graph inside a node changed on disk while there is unsaved work
         // here. Taking it would replace that graph whole, so it waits.
@@ -411,7 +407,10 @@ export default function App() {
 
   return (
     <ReactFlowProvider>
-      <div className="flex flex-col h-screen overflow-hidden" style={{ background: SUNKEN }}>
+      {/* Clipped, not hidden: a box that hides its overflow can still be
+          scrolled, and focus moving to a control past the right edge slid
+          the whole page sideways. What does not fit scrolls where it is. */}
+      <div className="flex flex-col h-screen overflow-clip" style={{ background: SUNKEN }}>
         <Toolbar
           onNewGraph={handleNewGraph}
           onSave={handleSave}
@@ -422,8 +421,6 @@ export default function App() {
           onOpenSettings={() => setShowSettings(true)}
           confirmDiscard={confirmDiscard}
           currentFilePath={currentFilePath}
-          onShowInterface={() => setView('preview')}
-          interfaceShown={view === 'preview'}
           saveStatus={saveStatus}
         />
 
@@ -441,13 +438,11 @@ export default function App() {
         {view === 'design' && <TopGraphOnly><DesignerTab /></TopGraphOnly>}
         {view === 'preview' && <TopGraphOnly><PreviewTab /></TopGraphOnly>}
 
-        {/* What a run opened, over whichever view is showing: once, here. */}
-        <OutputWindows />
-
         {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
 
         {editingNodeId && !editingGuiNode && (
           <NodeEditor
+            key={editingNodeId}
             nodeId={editingNodeId}
             onClose={() => setEditingNode(null)}
           />
@@ -586,6 +581,7 @@ export default function App() {
                     {jsonImportError}
                   </div>
                 )}
+                {pasted && <GraphProblems graph={pasted} />}
 
               {copyStatus && (
                 <div className="text-xs" style={{ color: MUTED }}>

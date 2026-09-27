@@ -25,7 +25,7 @@ import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeRes
 import { resultKeys, type NodeRunner, type Runners } from '../elements/NodeRunner.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
-import { readFileInputs, type FileGraph } from './fileInputs.ts';
+import { filePorts, readPorts } from './fileInputs.ts';
 import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
 import type { LastOutputs } from './reuse.ts';
 import type { Latch } from './latch.ts';
@@ -397,7 +397,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         // What the run reports having received is what came off the wires --
         // the paths, not the megabytes behind them. Only the element sees the
         // contents.
-        const arrived = await readInputs(element, node, inputs, runtime, graph, options.registry);
+        const arrived = await readInputs(node, inputs, runtime, registry);
         // An event is a moment: `true` handed back from an earlier round would
         // open gates for a press that is over.
         const key = element.eventPorts(node).length ? undefined : options.reuse?.key(node, arrived);
@@ -447,12 +447,12 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   }
 
   // What stood still is not news: a reply held from the last round must not be
-  // added to the conversation a second time, nor a window popped up again.
+  // added to the conversation a second time, nor handed back as this round's result.
   for (const nodeId of held) outputs.delete(nodeId);
   const memory = settleMemory(graph, feedback, outputs, results, registry);
-  // What finished before a Stop is drawn as it is: showing it is not the work
-  // Stop was pressed for, and a stopped transform would show "Stopped" instead.
-  await showDisplays(graph, results, registry, signal?.aborted ? options.runtime : runtime);
+  // What finished before a Stop is drawn as it is: showing asks no model and
+  // runs no body, so there is nothing in it for Stop to end.
+  await showDisplays(graph, results, registry, runtime);
 
   const status: ExecutionResult['status'] = signal?.aborted
     ? 'cancelled'
@@ -640,7 +640,7 @@ export async function executeNode(
   if (why) return { node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [why] };
   const { runtime } = options;
   try {
-    const arrived = await readInputs(element, node, inputs, runtime, graph, options.registry);
+    const arrived = await readInputs(node, inputs, runtime, options.registry);
     const { produced, failures } = await runNode(
       element, node, arrived, withSubgraph(runtime, options, node, options.depth ?? 0),
     );
@@ -729,24 +729,23 @@ export function nodeName(node: GraphNode): string {
 }
 
 /**
- * What the element is given: the wired values, with file paths read where it
- * asked for contents.
+ * What the element is given: the wired values, with the file on each input
+ * that says "read the file at this path" read into its content.
  *
  * The reading is named in the failure. A node that never got as far as its own
  * work failed at a missing file, and "ENOENT" on its own reads as though the
  * body went looking for one.
  */
 async function readInputs(
-  element: NodeRunner,
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,
-  graph?: FileGraph,
-  elements?: Runners,
+  registry: Runners,
 ): Promise<Record<string, unknown>> {
-  if (!element.readsFileInputs(node)) return inputs;
+  const ports = filePorts(node, registry);
+  if (!ports.length) return inputs;
   try {
-    return await readFileInputs(node, inputs, runtime, graph, elements);
+    return await readPorts(inputs, ports, runtime.files);
   } catch (error) {
     throw new Error(`Reading its input files: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -920,9 +919,8 @@ function settleMemory(
  *
  * After settling, not during the node's own run: a chart on a page that also
  * holds the file picker is fed across a feedback edge, so while the page runs
- * its chart has nothing yet. Drawing then meant a block's transform was handed
- * `undefined` and the raw value was shown in its place -- on every page with
- * both an input and a display, which is most of them.
+ * its chart has nothing yet -- on every page with both an input and a display,
+ * which is most of them.
  */
 async function showDisplays(
   graph: Graph,
@@ -934,24 +932,22 @@ async function showDisplays(
     const node = graph.nodes.find((n) => n.id === result.node_id);
     const element = node && registry.node(node.node_type);
     // What stood still is shown as it was: the editor and the page keep the
-    // display they have, and a block's transform is not run for nothing.
+    // display they have, and an image is not read again for nothing.
     if (!node || !element?.hasInterface || result.status === 'error' || result.held) continue;
     result.display = await element.display(node, result.inputs, runtime);
   }
 }
 
 /**
- * What the run produced, keyed the way the graph's output nodes asked.
+ * What the run produced, keyed by the graph's output nodes' labels.
  *
- * Two output nodes may well be given one label -- every new one starts as
- * "Result" -- and a run's result is not a place where one of them may quietly
- * replace the other. The last keeps its label, as it did when it replaced the
- * others; one that comes earlier under a label already taken is told apart by
- * its id, so a graph gets every key it always got, holding what it always
- * held (`resultKeys`).
+ * Two output nodes may well be given one label, and a run's result is not a
+ * place where one of them may quietly replace the other. The first keeps the
+ * label; one that comes later under a label already taken is told apart by its
+ * id (`resultKeys`), and `check` says to give it a label of its own.
  *
- * "Last" in the graph, whether or not it produced anything this run: a round
- * started by a page event, or one where the last stood still, would
+ * "First" in the graph, whether or not it produced anything this run: a round
+ * started by a page event, or one where the first stood still, would
  * otherwise hand another's value on under its key -- and whoever lays rounds
  * over each other (a schedule) would lose one of them once more.
  */

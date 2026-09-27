@@ -49,7 +49,7 @@ describe('the graph prompt', () => {
       id: 'i', node_type: 'input', label: '', description: '', position: { x: 0, y: 0 },
       inputs: [], outputs: [], config: { input_mode: mode },
     });
-    for (const mode of ['text', 'file', 'directory']) {
+    for (const mode of ['text', 'directory']) {
       for (const port of element.derivedPorts(node(mode))!.outputs) {
         expect(GRAPH_SYSTEM, `${mode} mode emits ${port.id}`).toContain(`"${port.id}"`);
       }
@@ -65,7 +65,7 @@ describe('the graph prompt', () => {
       id: 'i', node_type: 'input', label: '', description: '', position: { x: 0, y: 0 },
       inputs: [], outputs: [], config: { input_mode: mode },
     });
-    const numbers = ['text', 'file', 'directory']
+    const numbers = ['text', 'directory']
       .flatMap((mode) => element.derivedPorts(node(mode))!.outputs)
       .filter((port) => port.data_type === 'number');
     expect(numbers.map((port) => port.id)).toContain('count');
@@ -77,13 +77,18 @@ describe('the graph prompt', () => {
   it('names each derived input port with what it holds', () => {
     // Said from `derivedPorts`, so a type or a port changed there is changed here.
     const element = new InputNodeRunner();
-    for (const mode of ['text', 'file', 'directory']) {
+    for (const mode of ['text', 'directory']) {
       const derived = element.derivedPorts({ id: 'i', config: { input_mode: mode } } as unknown as GraphNode)!;
       for (const port of [...derived.inputs, ...derived.outputs]) {
         const holds = { text: 'text', number: 'a number', file_path: port.multi ? 'a list of file paths' : 'a file path' }[port.data_type as string];
         expect(GRAPH_SYSTEM, `${mode}: ${port.id}`).toContain(`"${port.id}" (${holds}`);
       }
     }
+  });
+
+  it('offers no input that reads a file: the node that wants the text reads it, from a path held as text', () => {
+    expect(GRAPH_SYSTEM).not.toMatch(/input_mode "file"|"input_mode": "file"/);
+    expect(registry.node('input')!.graphAuthorNote()).toContain('hold the path as text and wire it into that node\'s input typed "file_path"');
   });
 
   it('lists every block kind the registry knows, each with what it says of itself', () => {
@@ -94,6 +99,26 @@ describe('the graph prompt', () => {
     }
     // The three modes a text box has, the default one included.
     expect(registry.widget('text_io')!.graphAuthorNote()).toMatch(/input .*output .*both/);
+  });
+
+  it('offers a block no code of its own: a drawing block shows what arrives, a folder hands on its listing', () => {
+    for (const kind of ['plot_window', 'table', 'image_view'] as const) {
+      const note = registry.widget(kind)!.graphAuthorNote()!;
+      expect(note, kind).toMatch(/^shows what arrives on "<id>_in"/);
+      expect(note, kind).not.toMatch(/config\.code|transform/);
+    }
+    expect(GRAPH_SYSTEM).toContain('A block has no code of its own');
+    expect(GRAPH_SYSTEM).not.toMatch(/selector|select_all_files/);
+    // Choosing some of a folder's files is a code node, said where a folder is.
+    for (const note of [registry.node('input')!.graphAuthorNote()!, registry.widget('input_picker')!.graphAuthorNote()!]) {
+      expect(note).toMatch(/extensions/);
+      expect(note).toMatch(/recursive/);
+    }
+    expect(registry.node('input')!.graphAuthorNote()).toContain('to keep only some of the files, wire a code node after it');
+  });
+
+  it('says a graph has one page, which holds every block: a second one is a problem check names', () => {
+    expect(GRAPH_SYSTEM).toContain('- gui: A graph has at most one gui node: its page, which holds every block.');
   });
 
   it('names every node type the registry knows, except the ones that say a graph is not built with them', () => {
@@ -116,9 +141,10 @@ describe('a graph that shows nothing', () => {
    * ended there, so running it showed a blank screen and the tool looked
    * broken. Ending in something visible is a rule, not a matter of taste.
    */
-  it('is ruled out in words', () => {
+  it('is ruled out in words: an output node is the run\'s result, under its label, and opens no window', () => {
     expect(GRAPH_SYSTEM).toContain('must end in something a person can see');
-    expect(GRAPH_SYSTEM).toContain('"window"');
+    expect(GRAPH_SYSTEM).toContain('what arrives there is the run\'s result, shown to whoever ran the graph under the node\'s label');
+    expect(GRAPH_SYSTEM).not.toMatch(/"window"|output_label/);
   });
 
   it('and the worked example obeys its own rule', () => {

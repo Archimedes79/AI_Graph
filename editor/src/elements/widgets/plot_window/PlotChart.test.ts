@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { asDrawing, axisLabel, chartMargins, computeAxisRange, toFigure } from './PlotChart';
-import { PLOT_VIEW, PlotWindowWidgetRunner } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import PlotChart, { asDrawing, axisLabel, chartMargins, computeAxisRange, toFigure } from './PlotChart';
 
 describe('computeAxisRange', () => {
   it('includes 0 in the range for all-positive data', () => {
@@ -31,7 +32,7 @@ describe('computeAxisRange', () => {
 describe('a chart the model drew itself', () => {
   /**
    * The point of this path: a bar chart is one plot, and the block should not
-   * be limited to the plots someone thought of here. A transform may hand back
+   * be limited to the plots someone thought of here. A node upstream may hand back
    * finished SVG -- a scatter, a pie, its own legend -- and it is drawn as it
    * stands.
    */
@@ -81,28 +82,13 @@ describe('room for axes', () => {
 
 describe('one coordinate system: the block', () => {
   /**
-   * There used to be two answers to "how big is a chart?" and they disagreed.
-   * The app drew into a fixed 400x240 box and scaled it into the block, while
-   * the body contract told an author to lay out for the size they were handed.
-   * At a measured 1084x470 the fixed box scaled by 1.38, so an 11px label
-   * arrived as 15px and a tenth of the width was letterbox.
+   * The app drew into a fixed 400x240 box and scaled it into the block. At a
+   * measured 1084x470 the fixed box scaled by 1.38, so an 11px label arrived
+   * as 15px and a tenth of the width was letterbox.
    *
    * There is one answer now: pixels, the block's own. What remains of the old
    * frame is margins, which were always pixels.
    */
-  it('keeps no drawing space of its own to scale from', () => {
-    expect(Object.keys(PLOT_VIEW)).toEqual(['margin']);
-  });
-
-  it('tells a body the same thing: lay out for the window you are handed', () => {
-    const contract = new PlotWindowWidgetRunner().generation().contract ?? '';
-    expect(contract).toContain('draw(data, window)');
-    expect(contract).toContain('window.width');
-    expect(contract).toContain('window.height');
-    // And that the empty case is the same function, not a state the app owns.
-    expect(contract).toMatch(/null before anything/);
-  });
-
   it('gives a long number more room to its left than a short one', () => {
     // '1.4G' and '128500' do not need the same margin. One constant for both
     // either crops the long one or wastes the short one's space.
@@ -149,6 +135,48 @@ describe('a figure: what a node sends a chart', () => {
     expect(toFigure(null)).toBeNull();
     expect(toFigure('just a sentence')).toBeNull();
     expect(toFigure({ points: [] })).toBeNull();
+    expect(toFigure([])).toBeNull();
     expect(toFigure({ points: [{ label: 'a', value: 'lots' }] })).toBeNull();
+  });
+
+  it('takes a number written as text, as a CSV cell arrives when nothing parsed it', () => {
+    expect(toFigure({ kind: 'bars', title: 'Population', points: [{ label: 'India', value: '1450' }] })?.points)
+      .toEqual([{ label: 'India', value: 1450 }]);
+    expect(toFigure(['3', ' 1.5 ', 2])?.points.map((p) => p.value)).toEqual([3, 1.5, 2]);
+    expect(toFigure(['3', ''])).toBeNull();
+  });
+
+  it('is a figure with no points when it has a title: what a node says before there is anything to plot', () => {
+    expect(toFigure({ kind: 'bars', title: 'Choose a CSV file to plot.', points: [] }))
+      .toEqual({ kind: 'bars', title: 'Choose a CSV file to plot.', points: [] });
+  });
+});
+
+describe('a chart on the page, handed what it cannot draw', () => {
+  const chart = (data: unknown) => renderToStaticMarkup(createElement(PlotChart, { data, width: 400, height: 200 }));
+
+  it('waits while nothing has arrived', () => {
+    expect(chart(undefined)).toContain('Waiting for data');
+    expect(chart('')).toContain('Waiting for data');
+  });
+
+  it('says what arrived and what a chart takes: rows whose number is not called "value"', () => {
+    // The canvas counted "2 rows" at the block's port while the page said
+    // "Waiting for data".
+    const html = chart([{ country: 'India', population: 1450 }, { country: 'China', population: 1419 }]);
+    expect(html).not.toContain('Waiting for data');
+    expect(html).toContain('what arrived is [{&quot;country&quot;:&quot;India&quot;,&quot;population&quot;:1450}');
+    expect(html).toContain('A chart draws numbers, {&quot;label&quot;, &quot;value&quot;} points or a figure');
+  });
+
+  it('draws points whose values are numbers written as text', () => {
+    expect(chart({ kind: 'bars', title: 'Population', points: [{ label: 'India', value: '1450' }] })).toContain('bars chart of 1 point"');
+  });
+
+  it('shows the title of a figure with no points: population_plotter before a file is chosen', () => {
+    // Its examples.md promises "the chart says what to do"; it said "Waiting for data".
+    const html = chart({ kind: 'bars', title: 'Choose a CSV file to plot.', points: [] });
+    expect(html).toContain('Choose a CSV file to plot.');
+    expect(html).not.toContain('Waiting for data');
   });
 });

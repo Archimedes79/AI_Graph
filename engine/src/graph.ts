@@ -22,8 +22,9 @@ export type PortKind = 'input' | 'output';
 
 /**
  * What a port carries. A label for people and for generation, with one
- * exception the engine acts on: a `file_path` input is what `read_file_inputs`
- * reads. One list, used by the editor too.
+ * exception the engine acts on: a code or AI node is handed the content of the
+ * file on a `file_path` input ("Read the file at this path"). One list, used
+ * by the editor too.
  */
 export type DataType =
   | 'text' | 'number' | 'boolean' | 'json' | 'list' | 'file_path' | 'image' | 'binary' | 'any';
@@ -85,9 +86,9 @@ export interface NodeResult {
   inputs: Record<string, unknown>;
   outputs: Record<string, unknown>;
   /**
-   * What a node with an interface shows, per block id -- after the block's own
-   * transform, which is why it is not `inputs`: those say what arrived, this
-   * says what is on the screen.
+   * What a node with an interface shows, per block id -- an image's path read
+   * into the picture, which is why it is not `inputs`: those say what arrived,
+   * this says what is on the screen.
    */
   display?: Record<string, unknown>;
   error?: string | null;

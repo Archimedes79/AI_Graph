@@ -2,8 +2,8 @@
 //
 // A port's id is the name a body reads it by -- `inputs.csv`, `{ figure }` --
 // so it is the field the ports editor edits, and it is also what a wire points
-// at. When the node dialog is saved, `updateNode` has to be told which id each
-// port had before, or a renamed port loses its wires to the pruning.
+// at. When the node dialog writes a change, `updateNode` has to be told which
+// id each port had before, or a renamed port loses its wires to the pruning.
 //
 // That used to be worked out by position: row 2 before is row 2 now. It is
 // true of a rename and false of a removal. Remove the first of `prompt` and
@@ -12,8 +12,9 @@
 // two -- the ✕ that promises "remove this port, and any wire on it" handed the
 // wire to its neighbour instead.
 //
-// So each port carries the id it had when the dialog opened, and a port is
-// followed by that, not by where it stands. It is kept under a symbol: an edit
+// So each port carries the id it has in the graph (`trackPorts`, which the
+// dialog puts on the node as stored), and a port is followed by that, not by
+// where it stands. It is kept under a symbol: an edit
 // that spreads a port (`{ ...port, id }`, which is how the ports editor renames
 // one) carries it along, and JSON never sees it, so the draft still compares
 // equal to the stored node and nothing of it is ever saved.
@@ -56,36 +57,12 @@ export function untracked(node: GraphNode): GraphNode {
 }
 
 /**
- * *after* with each port named in *continues* (its id -> the id of the port of
- * *before* it continues) taking that port's place, so a Save moves the old
- * port's wires onto it. For ports an element derives from a setting, which no
- * editor spread: they are otherwise the port of their name, or new
- * (`NodeGuiBuilder.continuePorts`).
- */
-export function continuing(
-  before: GraphNode,
-  after: GraphNode,
-  continues: { inputs?: Record<string, string>; outputs?: Record<string, string> },
-): GraphNode {
-  const carry = (was: Tracked[], now: Port[], map: Record<string, string> = {}): Port[] => now.map((port) => {
-    const old = port.id in map ? was.find((candidate) => candidate.id === map[port.id]) : undefined;
-    return old ? { ...port, [WAS]: old[WAS] ?? old.id } : port;
-  });
-  return {
-    ...after,
-    inputs: carry(before.inputs, after.inputs, continues.inputs),
-    outputs: carry(before.outputs, after.outputs, continues.outputs),
-  };
-}
-
-/**
  * What became of each port of *before* in *after*, for `updateNode`.
  *
  * A port that went through the ports editor says which one it was. One that
  * did not -- added with "+", or put there by the element because a setting
  * changed (a page's blocks, an input's mode, "catch failures") -- is the port
- * of its name, if there was one and no edited port already says it is that one
- * -- unless the element said which port it continues (`continuing`).
+ * of its name, if there was one and no edited port already says it is that one.
  */
 export function portRenames(before: GraphNode | undefined, after: GraphNode): PortRenames {
   const side = (was: Port[] = [], now: Tracked[]): Record<string, string | null> => {
@@ -118,7 +95,7 @@ export function portRenames(before: GraphNode | undefined, after: GraphNode): Po
  * to it, the values of its examples (`examplePair.examplesFollowPorts`).
  *
  * `portRenames` answers the same question from the node as it is stored, for
- * the wires, at Save; this answers it edit by edit, so the example the dialog
+ * the wires, when the dialog writes; this answers it edit by edit, so the example the dialog
  * tries and ✨ is written against says the name the port has now. A name
  * another port still has belongs to that port, and has no fate here.
  */

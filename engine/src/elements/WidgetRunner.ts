@@ -3,7 +3,6 @@
 import type { Port, RawConfig, WidgetKind } from '../graph.ts';
 import { ElementRunner } from './ElementRunner.ts';
 import type { Runtime } from './Runtime.ts';
-import type { Problem } from '../execution/wiring.ts';
 
 /**
  * How a block sits on the page. Nothing an element ever reads to decide what
@@ -48,20 +47,6 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
 
   // ── Run time ──────────────────────────────────────────────────────────────
   // What the page asks of it while a graph runs.
-
-  /**
-   * Whether the *page* runs this block's body, when it draws it, rather than a
-   * run running it once and storing what came back.
-   *
-   * True for a chart. What a chart's body most needs to be told is how big the
-   * block is and which scheme the page is in, and neither exists while a graph
-   * runs -- so it is run where they do, and a resize or a change of scheme
-   * redraws without a run. A run then hands the page what arrived, untouched.
-   *
-   * False for everything else: a table's or an image's transform reshapes data
-   * and has no use for the window, so it stays where a run can memoise it.
-   */
-  readonly bodyDrawsOnThePage: boolean = false;
 
   /**
    * Whether this block starts the graph when the person uses it.
@@ -140,14 +125,4 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
   graphAuthorNote(): string | undefined {
     return undefined;
   }
-
-  /**
-   * What is wrong with this block as written, for `check`: the page asks each
-   * of its blocks (`GuiNodeRunner.problems`), saying *where* it is. Nothing,
-   * for a kind that cannot be written wrong in a way its run would not say.
-   */
-  problems(_widget: Widget, _where: string): Problem[] {
-    return [];
-  }
-
 }

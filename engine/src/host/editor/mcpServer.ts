@@ -71,7 +71,8 @@ import {
   FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
 } from '../../project/folder.ts';
 import { INTERFACE_FILE } from '../../project/interfaceFile.ts';
-import { folderProblems, names, problemsIn, type Problem } from '../../project/check.ts';
+import { names, problemsIn, type Problem } from '../../project/check.ts';
+import { folderProblems } from '../../project/folderCheck.ts';
 
 export type { Problem };
 
@@ -508,7 +509,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
 
       let generated: { graph: unknown; explanation: string };
       try {
-        generated = await generateGraph(description, '', { ai: options.ai, target });
+        generated = await generateGraph(description, { ai: options.ai, target });
       } catch (error) {
         throw new Refused(`Generation with ${target.provider} / ${target.model} failed: ${message(error).slice(0, ERROR_LIMIT)}\n`
           + `If that model is not set up or not running, configure one in the AI-Graph editor's Settings. ${otherwise}`);

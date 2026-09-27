@@ -1,5 +1,4 @@
-import { NodeRunner } from '../../NodeRunner.ts';
-import type { TextFile, WhatRuns } from '../../ElementRunner.ts';
+import { NodeRunner, type TextFile, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
@@ -27,7 +26,7 @@ function serverList(raw: unknown): string[] {
   return entries.map((entry) => String(entry).trim()).filter(Boolean);
 }
 
-/** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
+/** What this keeps in files of its own in a project folder: see `NodeRunner.texts`. */
 const AI_TEXTS: readonly TextFile[] = [
   // What the node does with the rest of this folder: see `runTemplate.ts`.
   { field: 'run_code', file: 'run.js', standard: AI_RUN },
@@ -35,7 +34,6 @@ const AI_TEXTS: readonly TextFile[] = [
   { field: 'prompt_template', file: 'message.md' },
   // What the model is told its answer must look like.
   { field: 'output_format_prompt', file: 'output.md' },
-  { field: 'output_example', file: 'output.example.md' },
   // Optional: inputs, and what the answer must meet. See `execution/examples.ts`.
   { field: 'examples', file: 'examples.md' },
 ];
@@ -73,7 +71,6 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
       sendImages: c.send_images === true,
       template: String(c.prompt_template ?? ''),
       outputFormatPrompt: outputWords(c),
-      outputExample: String(c.output_example ?? ''),
       toolServers: serverList(c.mcp_servers),
       runCode: isStandardRun(String(c.run_code ?? '')) ? '' : String(c.run_code),
     };
@@ -94,6 +91,9 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
   /** Its body is written for one item, so a list can be handed to it an item at a time. */
   override readonly fansOut = true;
 
+  /** A file on an input that says so is sent as what it says, not as its name. */
+  override readonly readsFileInputs = true;
+
   /** What is wired in is the question: with all of it empty there is nothing to ask. */
   override needsInput(): boolean {
     return true;
@@ -113,10 +113,7 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
 
     return runBody(settings.runCode, inputs, runtime, {
       data: {
-        texts: {
-          system: settings.systemPrompt, message: settings.template,
-          output: settings.outputFormatPrompt, output_example: settings.outputExample,
-        },
+        texts: { system: settings.systemPrompt, message: settings.template, output: settings.outputFormatPrompt },
       },
       ask: settings,
       order,

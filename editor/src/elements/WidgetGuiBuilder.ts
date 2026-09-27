@@ -1,46 +1,18 @@
 // A widget's build-time half, in the browser: the mirror of `engine/src/elements/WidgetRunner.ts`.
 
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import type { GuiWidget, WidgetKind } from '@/graph';
-import type { FieldAccess } from '@/authoring/generation';
-import type { TryResult } from '@/authoring/TryItInline';
 import { DEFAULT_WIDGET_SPAN } from '@/document/layout';
 import type { Tone } from '@/ui/tone';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
+import { previewOf, type Preview } from './resultPreview';
 
-/**
- * What only the shell can hand a panel laid out in the four steps: the page
- * the block sits on, and the page it is drawn in. The panel places each where
- * its step is.
- */
-export interface WidgetSteps {
-  /** What is wired into the block, in words -- `"Rows" (port "rows")` -- or '' while nothing is. */
-  feeds: string;
-  /** ⟳ From the graph: what arrives at the block -- on the last run, else from what feeds it, run now. Absent for a block nothing can feed. */
-  fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
-  /** The block run by itself on *values*, the way a run runs it. */
-  tryIt: (values: Record<string, unknown>) => Promise<TryResult>;
-  /** What came out, drawn by the block itself, at its own proportions. */
-  renderResult: (result: TryResult) => ReactNode;
-  /** "What ✨ sends", beside ✨, and what it sends, under it. */
-  preview?: ReactNode;
-  sent?: ReactNode;
-  /** "Open in my editor", under the body, in a project. */
-  openInEditor?: ReactNode;
-}
-
-/** What the widget editor hands every widget panel. */
+/** What the widget editor hands every widget panel: a block has settings, and no body to write. */
 export interface WidgetPanelProps {
   /** This widget kind's own builder. */
   builder: WidgetGuiBuilder;
   widget: GuiWidget;
   onUpdate: (patch: Partial<GuiWidget>) => void;
-  fields: FieldAccess;
-  generating: boolean;
-  message?: string;
-  onGenerate: () => void;
-  /** For a block that authors a body: see `WidgetSteps`. */
-  steps?: WidgetSteps;
 }
 
 /** One entry of the page designer's palette: a kind in one of its modes, as a person looks for it. */
@@ -66,7 +38,7 @@ export interface InlineEditorProps {
 
 let created = 0;
 
-export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, WidgetPanelProps> {
+export abstract class WidgetGuiBuilder extends ElementGuiBuilder<WidgetPanelProps> {
   // ── What it is ────────────────────────────────────────────────────────────
 
   abstract readonly widgetKind: WidgetKind;
@@ -78,8 +50,8 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
   // merely uncalled in it.
 
   // ── Build time ────────────────────────────────────────────────────────────
-  // The editor: the palette, a new element, its panels, what ✨ Generate is told.
-  // Nothing else, and now nothing a tool can reach (`runtime/boundary.test.ts`).
+  // The editor: the palette, a new element, its panel. Nothing else, and now
+  // nothing a tool can reach (`runtime/boundary.test.ts`).
 
   /** What the palette and the properties header call it. */
   abstract readonly label: string;
@@ -103,15 +75,17 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
   readonly InlineEditor?: ComponentType<InlineEditorProps>;
 
   /**
-   * Drawn on the canvas under the widget's input port: what last arrived
-   * there, as the block shows it. Handed the block too, because what it shows
-   * can be its own code's work -- a chart's draw() -- and not what arrived.
+   * What the block shows, small, under its port on the graph canvas: *value*
+   * read by its shape (`resultPreview.ts`). A kind that reads a value its own
+   * way says so: a chart reads a list of points as a chart.
    */
-  readonly CanvasPreview?: ComponentType<{ widget: GuiWidget; data: unknown }>;
+  preview(value: unknown): Preview | undefined {
+    return previewOf(value);
+  }
 
   /** Said under "⚡ Using this starts the graph", for a widget that can be told to. */
   readonly runOnChangeHint: string =
-    'Choosing a value runs the nodes this widget is wired to, and what follows from them — not the whole graph.';
+    'Choosing a value runs the nodes this block is wired to, and what follows from them — not the whole graph.';
 
   /** The widget is a source whose data nothing describes yet: see `NodeGuiBuilder.missingExample`. */
   missingExample(_widget: GuiWidget): boolean {

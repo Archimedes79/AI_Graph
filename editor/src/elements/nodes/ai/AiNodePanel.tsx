@@ -1,9 +1,9 @@
 import { useRef } from 'react';
 import NodeSteps from '@/authoring/NodeSteps';
 import { promptText } from '@engine/elements/nodes/ai/prompt.ts';
-import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
+import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, MUTED, SUNKEN, TEXT } from '@/ui/theme';
 import PromptPreview from './PromptPreview';
-import { keptAnswer } from './keptAnswer';
+import { keepAnswerShape } from './keptAnswer';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 /**
@@ -71,41 +71,17 @@ export default function AiNodePanel(props: NodePanelProps) {
       </div>
   );
 
-  // What its step 2 keeps as an example: an answer the model is shown to
-  // imitate, sent on every run -- never checked, as an answer is never the
-  // same twice.
-  const answerBox = (
-    <>
-      <div className="flex items-center justify-between mb-1 gap-3">
-        <label className="text-xs font-medium" style={{ color: MUTED }}>Example answer</label>
-        {node.config.output_example && (
-          <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} onClick={() => setConfig('output_example', '')}>Clear</button>
-        )}
-      </div>
-      <p className="text-xs mb-1" style={{ color: DIMMER }}>
-        Shown to the model on every run, to answer in the same shape with new content. Keep one from Try it below, or write it.
-      </p>
-      <textarea
-        className="w-full rounded-lg px-2 py-1.5 text-sm font-mono resize-y"
-        style={{ ...FIELD, minHeight: 56 }}
-        value={String(node.config.output_example ?? '')}
-        onChange={(event) => setConfig('output_example', event.target.value)}
-        placeholder="An answer you liked"
-        spellCheck={false}
-        aria-label="Example answer"
-      />
-    </>
-  );
-
   return (
     <NodeSteps
       {...props}
       subject="the model"
       wordsHint="Only needed when something reads the answer. Sent to the model after its instructions on every run, and to ✨ Generate here and in the nodes this one feeds."
-      answer={{ field: answerBox, keep: (result) => setConfig('output_example', keptAnswer(node, result.outputs)) }}
+      // An answer is never the same twice: what is kept of one is its shape,
+      // in the words every request is sent with -- not an output to check.
+      keep={keepAnswerShape(node, setConfig)}
       body={{
         title: 'Instructions',
-        hint: 'What the model is told with every request, and the message its inputs are laid out in. ✨ Generate writes the instructions from steps 1 to 3; the words and the example answer of step 2 are added after them by themselves.',
+        hint: 'What the model is told with every request, and the message its inputs are laid out in. ✨ Generate writes the instructions from steps 1 to 3; the words of step 2 are added after them by themselves.',
         beside: messageBox,
       }}
       request={(example, graph) => <PromptPreview node={node} example={example} graph={graph} />}

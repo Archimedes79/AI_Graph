@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { parseGraph, type Graph } from '../graph.ts';
-import { checkPath, problemsIn } from './check.ts';
+import { problemsIn } from './check.ts';
+import { checkPath } from './folderCheck.ts';
 import { forgetSeen, writeProject } from './folder.ts';
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
@@ -21,7 +22,7 @@ function graph(overrides: { schema?: unknown; template?: string } = {}): Graph {
         id: 'say', node_type: 'ai', label: 'Say', inputs: [port('total', 'input')], outputs: [port('output', 'output')],
         config: { system_prompt: 'Report.', prompt_template: overrides.template ?? 'There are {{total}}.' },
       },
-      { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: { write_mode: 'window' } },
+      { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: {} },
     ],
     edges: [
       { id: 'e1', source_node_id: 'count', source_port_id: 'total', target_node_id: 'say', target_port_id: 'total' },
@@ -62,10 +63,10 @@ describe('what check finds in a graph', () => {
 
   it('finds two output nodes under one label, with the keys the run really uses', () => {
     const made = graph();
-    made.nodes[2].config.output_label = 'Answer';
+    made.nodes[2].label = 'Answer';
     made.nodes.push(
-      { ...made.nodes[2], id: 'clash', config: { write_mode: 'window', output_label: 'Answer (also)' } },
-      { ...made.nodes[2], id: 'also', config: { write_mode: 'window', output_label: 'Answer' } },
+      { ...made.nodes[2], id: 'clash', label: 'Answer (also)' },
+      { ...made.nodes[2], id: 'also', label: 'Answer' },
     );
     made.edges.push(
       { id: 'e3', source_node_id: 'say', source_port_id: 'output', target_node_id: 'also', target_port_id: 'value' },
@@ -74,7 +75,35 @@ describe('what check finds in a graph', () => {
     expect(problemsIn(made)).toEqual([expect.objectContaining({
       where: 'nodes "show", "also"',
       problem: 'These output nodes share the label "Answer", so the run\'s result keeps only the first under it, the rest under "Answer (also) 2".',
-      fix: 'Give every output node its own output_label.',
+      fix: 'Give every output node its own label.',
+    })]);
+  });
+
+  it('finds nothing a person can see where the page has no blocks: a page is its blocks', () => {
+    // A page node whose last block was removed counted as something to see,
+    // and a delivered tool drew nothing on it.
+    const made = graph();
+    made.nodes = made.nodes.filter((node) => node.id !== 'show');
+    made.edges = made.edges.filter((edge) => edge.target_node_id !== 'show');
+    made.nodes.push(...parseGraph({ metadata: { name: 'x' }, nodes: [{ id: 'page', node_type: 'gui', label: 'Page', config: { gui_widgets: [] } }], edges: [] }).nodes);
+    expect(problemsIn(made)).toEqual([expect.objectContaining({
+      where: 'graph',
+      problem: 'Nothing a person can see: there is no output node, and no page with a block on it, so a run computes its answer and shows nobody.',
+    })]);
+    made.nodes[made.nodes.length - 1].config.gui_widgets = [{ id: 'answer', kind: 'text_io', mode: 'output', label: 'Answer' }];
+    expect(problemsIn(made)).toEqual([]);
+  });
+
+  it('finds a second page: a graph is one tool, with one page', () => {
+    const page = (id: string, block: string) => ({ id, node_type: 'gui', label: 'Page', inputs: [], outputs: [],
+      config: { gui_widgets: [{ id: block, kind: 'text_io', mode: 'output', label: block }] } });
+    const made = graph();
+    made.nodes.push(...parseGraph({ metadata: { name: 'x' }, nodes: [page('page', 'answer')], edges: [] }).nodes);
+    expect(problemsIn(made)).toEqual([]);
+    made.nodes.push(...parseGraph({ metadata: { name: 'x' }, nodes: [page('more', 'extra')], edges: [] }).nodes);
+    expect(problemsIn(made)).toEqual([expect.objectContaining({
+      where: 'nodes "page", "more"',
+      problem: 'A graph has one page, and these are 2: only the blocks of "page" are shown.',
     })]);
   });
 });
@@ -97,25 +126,11 @@ describe('what check finds in a setting that would silently do nothing', () => {
   });
   const said = (graph: Graph) => problemsIn(graph).map((found) => found.problem).join(' ');
 
-  it('finds "read the files" where no port will hold one: the box is ticked and the node gets the file\'s name', () => {
-    // `text` is a word somebody said: it wants the name, so the wire does not
-    // override it -- and then nothing at all is read.
-    expect(said(folder({ multi: true, data_type: 'text' }, { read_file_inputs: true, batch_mode: 'per_item' })))
-      .toMatch(/none of its inputs is a file path/);
-    expect(said(folder({ multi: true, data_type: 'file_path' }, { read_file_inputs: true, batch_mode: 'per_item' }))).toBe('');
-  });
-
-  it('says nothing where the wire holds the path: a port typed `any` is read, so warning about it would be a lie', () => {
-    // Exactly what the run does (`execution/fileInputs.ts`), asked the same way
-    // here -- including a page's ports, which follow from its blocks and which
-    // a graph.json need not spell out.
-    expect(said(folder({ multi: true, data_type: 'any' }, { read_file_inputs: true, batch_mode: 'per_item' }))).toBe('');
-  });
-
   it('finds "once per item" where a list arrives and no input is declared as one: it would run once, on all of it', () => {
-    expect(said(folder({ data_type: 'file_path' }, { read_file_inputs: true, batch_mode: 'per_item' }))).toMatch(/none of its inputs is declared as a list/);
+    expect(said(folder({ data_type: 'file_path' }, { batch_mode: 'per_item' }))).toMatch(/none of its inputs is declared as a list/);
+    expect(said(folder({ multi: true, data_type: 'file_path' }, { batch_mode: 'per_item' }))).toBe('');
     // Not where no list arrives, and not on a page, whose ports follow from its blocks.
-    expect(said(folder({ data_type: 'file_path' }, { read_file_inputs: true, batch_mode: 'whole_list' }))).toBe('');
+    expect(said(folder({ data_type: 'file_path' }, { batch_mode: 'whole_list' }))).toBe('');
     expect(problemsIn(graph())).toEqual([]);
   });
 });
@@ -280,7 +295,7 @@ describe('a graph inside a node', () => {
   it('says a page in there would never be shown, and a question in there never asked', () => {
     const problems = problemsIn(holder(inner([
       { id: 'page', node_type: 'gui', label: 'Page', inputs: [], outputs: [], config: { gui_widgets: [] } },
-      { id: 'asks', node_type: 'input', label: 'Asks', inputs: [], outputs: [], config: { input_mode: 'file', prompt_at_runtime: true } },
+      { id: 'asks', node_type: 'input', label: 'Asks', inputs: [], outputs: [], config: { input_mode: 'directory', prompt_at_runtime: true } },
       { id: 'out', node_type: 'output', label: 'Out', inputs: [port('value', 'input')], outputs: [], config: {} },
     ])));
     expect(said(problems)).toContainEqual(expect.stringContaining('a page in here would never be shown'));

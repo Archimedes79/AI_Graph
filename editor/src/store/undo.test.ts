@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useGraphStore } from './graphStore';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { COALESCE_MS, useGraphStore } from './graphStore';
 import type { Graph } from '@/graph';
 
 const emptyGraph: Graph = {
@@ -135,6 +135,58 @@ describe('undo / redo', () => {
   it('keeps the history bounded', () => {
     for (let i = 0; i < 60; i += 1) store().addNode('code', { x: i, y: 0 });
     expect(store().past.length).toBeLessThanOrEqual(50);
+  });
+
+  describe('a change typed into one field', () => {
+    // A dialog writes what is typed as it is typed, a moment later each time:
+    // one undo step per keystroke was fifty steps for a sentence.
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+    const label = () => store().rfNodes[0].data.graphNode.label;
+    const typed = (text: string, key = 'code: label') => store().updateNode(store().rfNodes[0].id, { label: text }, undefined, key);
+
+    it('is one undo step, however many writes it took', () => {
+      store().addNode('code', { x: 0, y: 0 });
+      const before = label();
+      for (const text of ['W', 'Wo', 'Wor', 'Word']) { typed(text); vi.advanceTimersByTime(500); }
+      expect(label()).toBe('Word');
+      store().undo();
+      expect(label()).toBe(before);
+    });
+
+    it('is a step of its own after a pause, or after a change to another field', () => {
+      store().addNode('code', { x: 0, y: 0 });
+      typed('One');
+      vi.advanceTimersByTime(COALESCE_MS + 1);
+      typed('Two');
+      typed('Three', 'code: description');
+      store().undo();
+      expect(label()).toBe('Two');
+      store().undo();
+      expect(label()).toBe('One');
+    });
+
+    it('starts afresh after an undo: typing again is not added to the step undone', () => {
+      store().addNode('code', { x: 0, y: 0 });
+      typed('One');
+      store().undo();
+      typed('Two');
+      expect(store().future).toHaveLength(0);
+      store().undo();
+      expect(store().rfNodes).toHaveLength(1);
+    });
+  });
+
+  it('leaves the node\'s dialog open on an undo that keeps its node, and closes it on one that takes it away', () => {
+    store().addNode('code', { x: 0, y: 0 });
+    const id = store().rfNodes[0].id;
+    store().updateNode(id, { label: 'Renamed' });
+    store().setEditingNode(id);
+    store().undo();
+    expect(store().editingNodeId).toBe(id);
+    store().undo();
+    expect(store().rfNodes).toHaveLength(0);
+    expect(store().editingNodeId).toBeNull();
   });
 
   it('moving nodes does not write history per frame', () => {

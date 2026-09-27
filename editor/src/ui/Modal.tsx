@@ -100,9 +100,12 @@ export default function Modal({
     }
   };
 
+  // `nokey`: a key pressed in a dialog is the dialog's. ReactFlow passes over
+  // a key only in a text field or under `.nokey`, so Backspace on a focused
+  // button deleted the node selected on the canvas behind the dialog.
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center"
+      className="nokey fixed inset-0 flex items-center justify-center"
       style={{ background: SCRIM, zIndex: 50 }}
       onClick={dismissOnBackdrop ? onClose : undefined}
     >

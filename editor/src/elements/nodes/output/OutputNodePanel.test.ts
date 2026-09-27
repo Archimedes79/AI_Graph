@@ -1,31 +1,56 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { nodeFields } from '@/authoring/generation';
 import OutputNodePanel from './OutputNodePanel';
+
+// Rendered to a string, a component reads the store's first state, not the
+// one a test has since moved it to -- so the graph the panel asks about is
+// answered here. (Vitest lifts both of these above the imports.)
+const open = vi.hoisted(() => ({ rfNodes: [] as { id: string; data: { graphNode: GraphNode } }[] }));
+vi.mock('@/store/graphStore', async (actual) => ({
+  ...await actual<object>(),
+  useGraphStore: (select: (state: typeof open) => unknown) => select(open),
+}));
 
 function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(OutputNodePanel, {
     builder: NODE_BUILDERS.output, node, setConfig: () => {}, updateNode: () => {},
     fields: nodeFields(node, () => {}, () => {}), generating: false,
-    onGenerate: () => {}, setInvalid: () => {},
+    onGenerate: async () => false,
   }));
 }
 
-/** An output node as a graph file that names nothing loads: its id keys the result. */
-function unnamed(): GraphNode {
-  const node = NODE_KINDS.output.create('totals');
-  return { ...node, config: baseNodeConfig() };
-}
-
 describe('an output node\'s panel', () => {
-  it('says that an empty name is the node\'s id, rather than show a name that looks lost (B57)', () => {
-    const html = panel(unnamed());
-    expect(html).toContain('placeholder="Empty: the node’s id, “totals”, names the result" aria-label="Name of the result" value=""');
+  it('is the run\'s result under the node\'s own name: no window to open, and no second name to give it', () => {
+    const node = { ...NODE_KINDS.output.create('totals'), label: 'Totals' };
+    const html = panel(node);
+    expect(html).toMatch(/<select[^>]*aria-label="Where the result goes"[^>]*><option value="none"[^>]*>Into the run&#x27;s result only<\/option><option value="file">[^<]*<\/option><option value="directory">[^<]*<\/option><\/select>/);
+    expect(html).not.toMatch(/window|Name of the result/i);
+    expect(html).toContain('The run&#x27;s result calls it what this node is called: “Totals”.');
+    // A node without a label is called by its id there, as the run keys it.
+    expect(panel({ ...node, label: '' })).toContain('what this node is called: “totals”.');
+  });
+
+  it('names the key its value really has when another output node has its name already', () => {
+    // Two output nodes renamed to one label: the run keeps the second under
+    // "Totals (avg)" (`resultKeys`), and its dialog said the result calls it "Totals".
+    const first = { ...NODE_KINDS.output.create('sum'), label: 'Totals' };
+    const second = { ...NODE_KINDS.output.create('avg'), label: 'Totals' };
+    open.rfNodes = [first, second].map((graphNode) => ({ id: graphNode.id, data: { graphNode } }));
+    try {
+      const html = panel(second);
+      expect(html).toContain('“Totals” is another output node&#x27;s already, so the run&#x27;s result calls this one “Totals (avg)”.');
+      expect(html).not.toContain('what this node is called');
+      // The first keeps its name, and the second as the dialog has it -- renamed -- is its own.
+      expect(panel(first)).toContain('what this node is called: “Totals”.');
+      expect(panel({ ...second, label: 'Averages' })).toContain('what this node is called: “Averages”.');
+    } finally {
+      open.rfNodes = [];
+    }
   });
 
   it('asks what the result is, which the node feeding it is told, in its own words', () => {

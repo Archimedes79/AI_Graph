@@ -2,7 +2,6 @@
   "label": "Summarize",
   "description": "Summarize the text faithfully, at the length asked for.",
   "config": {
-    "batch_mode": "whole_list",
-    "read_file_inputs": false
+    "batch_mode": "whole_list"
   }
 }

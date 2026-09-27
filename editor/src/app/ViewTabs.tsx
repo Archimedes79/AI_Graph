@@ -1,16 +1,22 @@
-import { useGraphStore } from '@/store/graphStore';
-import { showsPage } from '@/document/guiWidgets';
+import { usePage } from '@/page/GuiPage';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE } from '@/ui/theme';
 
 export type EditorView = 'graph' | 'design' | 'preview';
 
+/** The three views, by the one word each: the page is made of blocks, and nothing else is called anything. */
+const VIEW_TABS: { id: EditorView; label: string; hint: string }[] = [
+  { id: 'graph', label: 'Graph', hint: 'Nodes and the wires between them' },
+  { id: 'design', label: 'Page', hint: 'The page this tool shows — build it here, block by block' },
+  { id: 'preview', label: 'Preview', hint: 'Exactly what is delivered, and it works — try it' },
+];
+
 /**
- * Graph and interface, side by side as two views of one document.
+ * Graph and page, side by side as two views of one document.
  *
- * They are not separate documents: the interface is derived from the graph's
- * gui nodes, so a block added there is a port added here. The design tab exists
- * because designing a page inside a node's config dialog meant designing it
- * through a keyhole.
+ * They are not separate documents: the page is the graph's one page node, so
+ * a block added there is a port added here. The Page tab exists because
+ * designing a page inside a node's config dialog meant designing it through a
+ * keyhole.
  *
  * The third is the same page with the builder's affordances gone — literally
  * the component a deployed tool runs, not a rendition of it. A preview built
@@ -20,21 +26,12 @@ export type EditorView = 'graph' | 'design' | 'preview';
 export default function ViewTabs({
   view, onChange,
 }: { view: EditorView; onChange: (view: EditorView) => void }) {
-  // How many blocks the interface has, so the tab says whether there is one.
-  const blockCount = useGraphStore((s) => s.rfNodes
-    .map((n) => n.data.graphNode)
-    .filter((n) => showsPage(n.node_type))
-    .reduce((total, n) => total + n.config.gui_widgets.length, 0));
-
-  const tabs: { id: EditorView; label: string; hint: string }[] = [
-    { id: 'graph', label: 'Graph', hint: 'Nodes and the wires between them' },
-    { id: 'design', label: 'GUI editor', hint: 'The page this tool shows — build it here' },
-    { id: 'preview', label: 'Preview', hint: 'Exactly what is delivered, and it works — try it' },
-  ];
+  // How many blocks the page has, so the tab says whether there is one.
+  const blockCount = usePage().widgets.length;
 
   return (
     <div className="flex items-center gap-1 px-3 flex-shrink-0" style={{ background: SURFACE, borderBottom: `1px solid ${LINE}` }}>
-      {tabs.map((tab) => {
+      {VIEW_TABS.map((tab) => {
         const active = view === tab.id;
         return (
           <button

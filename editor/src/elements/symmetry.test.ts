@@ -6,8 +6,8 @@
  * two halves are a pair of classes -- a `Runner` on the engine side, a
  * `GuiBuilder` on the editor side -- whose inheritance mirrors, level for level:
  *
- *   PlotWindowWidgetRunner     → TransformingDisplayRunner     → DisplayWidgetRunner     → WidgetRunner     → ElementRunner
- *   PlotWindowWidgetGuiBuilder → TransformingDisplayGuiBuilder → DisplayWidgetGuiBuilder → WidgetGuiBuilder → ElementGuiBuilder
+ *   PlotWindowWidgetRunner     → DisplayWidgetRunner     → WidgetRunner     → ElementRunner
+ *   PlotWindowWidgetGuiBuilder → DisplayWidgetGuiBuilder → WidgetGuiBuilder → ElementGuiBuilder
  *
  * and the two registries list the same kinds. A new element with only one
  * half -- or a half filed, named or derived some other way -- is a failure

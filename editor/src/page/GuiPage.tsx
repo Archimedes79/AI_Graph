@@ -3,15 +3,17 @@ import type { ExecutionResult, GraphNode, GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { BLOCKS } from './blocks';
 import { useContainerCell } from './useContainerCell';
+import { patchBlock } from './pageWrite';
 import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from '@/document/layout';
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
-import { DANGER, MUTED } from '@/ui/theme';
-import { showsPage, widgetFiresRun } from '@/document/guiWidgets';
+import { DANGER, DIM, MUTED, TEXT } from '@/ui/theme';
+import { blockShows, pageOf, widgetFiresRun } from '@/document/guiWidgets';
 import type { RunTrigger } from '@/api/client';
+import RunResult from './RunResult';
 
 /**
- * The page a graph shows: every gui node's blocks, in graph order, on one grid.
+ * The page a graph shows: its blocks, in order, on one grid.
  *
  * **This module is the deployment boundary.** It holds what a *user* of the
  * finished tool sees and nothing else — no selection, no drag handle, no resize
@@ -28,35 +30,18 @@ import type { RunTrigger } from '@/api/client';
  * so the boundary has to be a module boundary — and `runtime.boundary.test.ts`
  * asserts that it stays one.
  *
- * A gui node is a *part* of the interface, not an interface of its own — the
- * same relation a widget already has to its node. Hence one page for the graph,
- * not one window per node.
+ * A graph is one tool with one page: the first node that carries an interface
+ * (the file format calls it `gui`). A second one is a problem `check` names,
+ * and nothing draws it.
  */
-
-export interface SurfaceBlock {
-  node: GraphNode;
-  widget: GuiWidget;
-}
-
-/** The gui nodes contributing to the page, in graph order. */
-export function useGuiNodes(): GraphNode[] {
-  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode)).guiNodes;
-}
-
-/** Every block on the page, with the node that owns it. */
-export function useSurfaceBlocks(): SurfaceBlock[] {
-  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode)).blocks;
-}
 
 /**
- * The page *nodes* make: the gui nodes in graph order, and every block on
- * them with the node that owns it. The hooks above read it as it was
- * rendered; an edit that lands later -- a ✨ result accepted a minute on --
- * reads it from the store as it is then.
+ * The page -- the node that is the page, none before the first block makes it
+ * -- and its blocks, as they were drawn. An edit that lands later reads the
+ * page from the store as it is then (`pageWrite.ts`).
  */
-export function pageOf(nodes: GraphNode[]): { guiNodes: GraphNode[]; blocks: SurfaceBlock[] } {
-  const guiNodes = nodes.filter((n) => showsPage(n.node_type));
-  return { guiNodes, blocks: guiNodes.flatMap((node) => node.config.gui_widgets.map((widget) => ({ node, widget }))) };
+export function usePage(): ReturnType<typeof pageOf> {
+  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode));
 }
 
 /**
@@ -69,25 +54,18 @@ export function pageOf(nodes: GraphNode[]): { guiNodes: GraphNode[]; blocks: Sur
  * what a run sends from it: its own (`BlockKind.ownsValue`).
  */
 export function blockValue(
-  block: SurfaceBlock,
+  widget: GuiWidget,
   incoming: unknown,
   overrides?: Record<string, string>,
 ): unknown {
-  const own = overrides?.[block.widget.id] ?? block.widget.value ?? '';
-  if (BLOCKS[block.widget.kind]?.ownsValue?.(block.widget)) return own;
-  return incoming !== undefined && overrides?.[block.widget.id] === undefined ? incoming : own;
+  const own = overrides?.[widget.id] ?? widget.value ?? '';
+  if (BLOCKS[widget.kind]?.ownsValue?.(widget)) return own;
+  return incoming !== undefined && overrides?.[widget.id] === undefined ? incoming : own;
 }
 
-/**
- * What a run put on one block: the engine's `display`, which is what arrived
- * *through the block's own transform*. A block that also hands something on --
- * a chat, a box that is typed into and shows -- is no display, and shows what
- * arrived on its port.
- */
+/** What a run put on one block of the page node *nodeId* (`blockShows`). */
 export function shownOn(result: ExecutionResult | null, nodeId: string, widgetId: string): unknown {
-  const ran = result?.node_results.find((r) => r.node_id === nodeId);
-  const shown = ran?.display?.[widgetId];
-  return shown !== undefined ? shown : ran?.inputs?.[`${widgetId}_in`];
+  return blockShows(result?.node_results.find((r) => r.node_id === nodeId), widgetId);
 }
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */
@@ -199,29 +177,30 @@ export function GuiBlock({
 
 /** The page itself: what a deployed tool renders, and what the preview shows. */
 function GuiPage({
-  blocks, onWidgetValue, onWidgetTrigger,
+  pageId, widgets, onWidgetValue, onWidgetTrigger,
 }: {
-  blocks: SurfaceBlock[];
-  onWidgetValue: (block: SurfaceBlock, value: unknown) => void;
-  onWidgetTrigger?: (block: SurfaceBlock, value?: unknown) => void;
+  pageId: string;
+  widgets: GuiWidget[];
+  onWidgetValue: (widget: GuiWidget, value: unknown) => void;
+  onWidgetTrigger?: (widget: GuiWidget, value?: unknown) => void;
 }) {
   const executionResult = useGraphStore((s) => s.executionResult);
   const busy = useGraphStore((s) => s.isExecuting);
-  const placements = resolveWidgetLayout(blocks.map((b) => b.widget));
+  const placements = resolveWidgetLayout(widgets);
 
   return (
     <PageGrid>
-      {placements.map((placement, index) => {
-        const block = blocks[index];
-        const incoming = shownOn(executionResult, block.node.id, placement.widget.id);
+      {placements.map((placement) => {
+        const { widget } = placement;
+        const incoming = shownOn(executionResult, pageId, widget.id);
         return (
           <GuiBlock
-            key={placement.widget.id}
+            key={widget.id}
             placement={placement}
             incoming={incoming}
-            value={blockValue(block, incoming)}
-            onChange={(next) => onWidgetValue(block, next)}
-            onTrigger={onWidgetTrigger ? (next) => onWidgetTrigger(block, next) : undefined}
+            value={blockValue(widget, incoming)}
+            onChange={(next) => onWidgetValue(widget, next)}
+            onTrigger={onWidgetTrigger ? (next) => onWidgetTrigger(widget, next) : undefined}
             busy={busy}
           />
         );
@@ -241,35 +220,24 @@ function GuiPage({
  * its blocks are live.
  */
 export function usePageEvents(onRun?: (trigger: RunTrigger) => void) {
-  const updateNode = useGraphStore((s) => s.updateNode);
   const exportGraph = useGraphStore((s) => s.exportGraph);
   const runGraph = useGraphStore((s) => s.runGraph);
 
-  const setWidgetValue = (block: SurfaceBlock, value: unknown) => {
-    // Read from the store, not from `block`: a value and the event that
-    // follows it arrive in the same tick, and the block in hand is the one
-    // from before either.
-    const current = useGraphStore.getState().rfNodes.find((n) => n.id === block.node.id)?.data.graphNode as GraphNode | undefined;
-    const config = current?.config ?? block.node.config;
-    updateNode(block.node.id, {
-      config: {
-        ...config,
-        gui_widgets: config.gui_widgets.map(
-          (w) => (w.id === block.widget.id ? { ...w, value } : w),
-        ),
-      },
-    });
-  };
+  // Through `pageWrite`, as every edit of the page: a value and the event that
+  // follows it arrive in the same tick, and the page in hand is the one from
+  // before either.
+  const setWidgetValue = (widget: GuiWidget, value: unknown) => patchBlock(widget.id, { value });
 
   /**
    * A block was used. If it is one that starts the graph, start it -- where the
    * block is wired to, which is the engine's question to answer, not the page's.
    */
-  const fire = (block: SurfaceBlock, value?: unknown) => {
-    if (value !== undefined) setWidgetValue(block, value);
-    if (!widgetFiresRun(block.widget)) return;
+  const fire = (widget: GuiWidget, value?: unknown) => {
+    if (value !== undefined) setWidgetValue(widget, value);
+    const { page } = pageOf(useGraphStore.getState().rfNodes.map((n) => n.data.graphNode as GraphNode));
+    if (!page || !widgetFiresRun(widget)) return;
     if (useGraphStore.getState().isExecuting) return;
-    const trigger: RunTrigger = { node_id: block.node.id, port_id: `${block.widget.id}_out` };
+    const trigger: RunTrigger = { node_id: page.id, port_id: `${widget.id}_out` };
     if (onRun) onRun(trigger);
     else void runGraph(exportGraph(), trigger);
   };
@@ -278,8 +246,32 @@ export function usePageEvents(onRun?: (trigger: RunTrigger) => void) {
 }
 
 /**
+ * What a tool shows when its page has no blocks: what it does, how to start
+ * it, and what its run handed back -- each output node's values under its
+ * name. A page is its blocks; a page node whose last block was removed has
+ * nothing to draw, and drew an empty rectangle where the run's result belongs.
+ */
+function WithoutPage() {
+  const metadata = useGraphStore((s) => s.metadata);
+  const executionResult = useGraphStore((s) => s.executionResult);
+  return (
+    <div className="m-6 max-w-2xl">
+      <p className="text-sm mb-2" style={{ color: TEXT }}>
+        {metadata.description || `${metadata.name} is ready to run.`}
+      </p>
+      <p className="text-xs" style={{ color: DIM }}>
+        Press <strong>▶ Run</strong> above. Anything the tool still needs — a value to start from,
+        a place to write — is asked for first. Results appear here when it finishes.
+      </p>
+      <RunResult result={executionResult} />
+    </div>
+  );
+}
+
+/**
  * The page wired to the graph: what a deployed tool serves, and what the
- * editor's preview tab shows. One component, so a preview cannot flatter.
+ * editor's preview tab shows -- or, with no blocks, the tool without a page.
+ * One component, so a preview cannot flatter.
  */
 export function GuiSurfacePage({ onRun }: {
   /**
@@ -290,13 +282,13 @@ export function GuiSurfacePage({ onRun }: {
    */
   onRun?: (trigger: RunTrigger) => void;
 }) {
-  const blocks = useSurfaceBlocks();
+  const { page, widgets } = usePage();
   const { setWidgetValue, fire } = usePageEvents(onRun);
 
-  if (blocks.length === 0) return null;
+  if (!page || widgets.length === 0) return <WithoutPage />;
   return (
     <div className="flex-1 overflow-auto px-8 py-6">
-      <GuiPage blocks={blocks} onWidgetValue={setWidgetValue} onWidgetTrigger={fire} />
+      <GuiPage pageId={page.id} widgets={widgets} onWidgetValue={setWidgetValue} onWidgetTrigger={fire} />
     </div>
   );
 }

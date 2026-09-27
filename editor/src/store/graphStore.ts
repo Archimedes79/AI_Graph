@@ -41,10 +41,13 @@ export interface GraphStore {
 
   // Execution state
   executionResult: ExecutionResult | null;
+  /**
+   * Each node that has a result in `executionResult`, as the run that made it
+   * ran it: what that result speaks of. A node changed since -- its body, its
+   * ports, a setting -- is not the node the result is about (`lastRunOf`).
+   */
+  ranAs: Record<string, GraphNode>;
   isExecuting: boolean;
-
-  // Text Output node windows shown after a run
-  textOutputWindows: { nodeId: string; label: string; content: string }[];
 
   /**
    * The graphs this one is inside, outermost first: one frame per node that
@@ -89,20 +92,32 @@ export interface GraphStore {
   editingNodeId: string | null;
 
   // Actions
+  /**
+   * Change what the graph is called, what it does, its page's scheme: a
+   * change like any other, one undo step per field typed into (`commit`).
+   * The tool's name and description took none, so an Undo meant for the
+   * block added before them took them too.
+   */
   setMetadata: (meta: Partial<GraphMetadata>) => void;
   setCurrentFilePath: (path: string | null, isProject?: boolean) => void;
-  /** Add a node and return its id, so a caller can immediately fill it in. */
-  addNode: (nodeType: NodeType, position: { x: number; y: number }) => string;
+  /**
+   * Add a node and return its id, so a caller can immediately fill it in --
+   * or, with *fill*, as it is made, in the same undo step: the page's first
+   * block and the page it makes are one change.
+   */
+  addNode: (nodeType: NodeType, position: { x: number; y: number }, fill?: (node: GraphNode) => GraphNode) => string;
   /**
    * `renamed` maps a port's old id to its new one, per side, so the wires
    * follow the rename instead of being pruned as "a port that vanished" --
    * and to null for a port that was removed, whose wires go even when another
-   * port has been given its name since (`portRenames`).
+   * port has been given its name since (`portRenames`). `coalesce` makes it
+   * one undo step with the change just before it of the same name (`commit`).
    */
   updateNode: (
     nodeId: string,
     updates: Partial<GraphNode>,
     renamed?: PortRenames,
+    coalesce?: string,
   ) => void;
   /**
    * Wire one port to another: what dragging from a handle to a handle does.
@@ -121,7 +136,6 @@ export interface GraphStore {
    * conversation a second time.
    */
   setExecutionResult: (result: ExecutionResult | null, ran?: ExecutionResult) => void;
-  closeTextOutputWindow: (nodeId: string) => void;
   loadGraph: (graph: Graph) => void;
   /**
    * An empty graph with the engine's default settings, as a document of its
@@ -161,12 +175,22 @@ export interface GraphStore {
    * made. Committing an identical state twice is a no-op, which is what keeps a
    * delete that arrives through two paths (the node's own button and ReactFlow's
    * remove change) from costing two presses of Ctrl+Z.
+   *
+   * *coalesce* names the change -- a node and the fields a dialog wrote. A
+   * change of the same name within a moment of the last one adds to that
+   * one's undo step instead of taking one of its own: a word typed into a
+   * field is one step, not one per keystroke. Anything else in between -- an
+   * unnamed change, an undo, another document -- ends it.
    */
-  commit: () => void;
+  commit: (coalesce?: string) => void;
   undo: () => void;
   redo: () => void;
-  /** Internal: replace the graph with a serialised snapshot (used by undo/redo). */
-  applyGraphSnapshot: (json: string) => void;
+  /**
+   * Internal: replace the graph with a serialised snapshot (used by undo/redo).
+   * *keepEditing*: the node dialog stays open when its node is still there --
+   * Undo takes back what it changed, and it shows what Undo left.
+   */
+  applyGraphSnapshot: (json: string, keepEditing?: boolean) => void;
   isDirty: () => boolean;
   /** Record the current graph as saved (after a successful write to disk). */
   markSaved: () => void;
@@ -191,8 +215,7 @@ export interface GraphStore {
   takeDiskChanges: (changes: TextChange[]) => string[];
   /**
    * Execute *graph* and put the whole outcome into the store: the result, the
-   * text-output windows, the busy flag, and a synthesised error result if the
-   * request itself fails.
+   * busy flag, and a synthesised error result if the request itself fails.
    *
    * Lives here rather than in a component because the store already owns every
    * piece of state it touches, and because two front-ends need it -- the
@@ -237,31 +260,6 @@ export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult):
 }
 
 /**
- * The content of every `output` node set to `write_mode: "window"`, ready to
- * show in a floating window.
- */
-function collectTextOutputWindows(
-  graph: Graph,
-  result: ExecutionResult,
-): { nodeId: string; label: string; content: string }[] {
-  return graph.nodes
-    .filter((node) => NODE_KINDS[node.node_type]?.showsResultWindow?.(node) ?? false)
-    .map((node) => {
-      const nodeResult = result.node_results.find((r) => r.node_id === node.id);
-      if (!nodeResult || !delivered(nodeResult.status)) return null;
-      // Text as text; anything else as the JSON it is -- String() of an object
-      // is "[object Object]", which says nothing about the result it replaced.
-      const content = Object.values(nodeResult.outputs)
-        .flatMap((value) => (Array.isArray(value) ? value : [value]))
-        .filter((value) => value !== null && value !== undefined)
-        .map((value) => (typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)))
-        .join('\n');
-      return { nodeId: node.id, label: node.config.output_label || node.label, content };
-    })
-    .filter((w): w is { nodeId: string; label: string; content: string } => w !== null);
-}
-
-/**
  * A wire that carries a value, and one that only says "start here".
  *
  * Drawn differently because they *are* different: a run edge delivers nothing,
@@ -272,6 +270,19 @@ export function edgeStyle(targetPort: string | null | undefined): React.CSSPrope
   return targetPort === RUN_PORT
     ? { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 4' }
     : { stroke: ACCENT, strokeWidth: 2 };
+}
+
+/**
+ * Where a node goes that nobody put anywhere -- a palette click, the page a
+ * first block makes: to the right of what is already there, not on top of it.
+ * A random spot put the second node on the first more often than not, and a
+ * graph reads left to right anyway. The gap is generous because a node widens
+ * once it is configured and must not then cover its neighbour.
+ */
+export function besideTheRest(placed: Node[]): { x: number; y: number } {
+  if (!placed.length) return { x: 200, y: 120 };
+  const right = Math.max(0, ...placed.map((node) => node.position.x + (node.width ?? 240)));
+  return { x: right + 160, y: Math.min(...placed.map((node) => node.position.y)) };
 }
 
 let nodeCounter = 1;
@@ -356,6 +367,16 @@ const RUN_POLL_INTERVAL_MS = 400;
 
 /** How many undo steps are kept. Each entry is a whole serialised graph. */
 const HISTORY_LIMIT = 50;
+
+/** How long after a named change the next one of that name still belongs to its undo step (`commit`). */
+export const COALESCE_MS = 2000;
+
+/**
+ * The last undo step a named change began or added to, and when -- or null
+ * when the last change had no name. Not state anybody draws, so not in the
+ * store: a change of the same name within `COALESCE_MS` adds to that step.
+ */
+let coalescing: { key: string; at: number } | null = null;
 
 /** The size a node was given, if it was given one, as ReactFlow lays it out. */
 function sizeStyle(node: GraphNode): { style: { width: number; height: number } } | Record<string, never> {
@@ -443,8 +464,8 @@ export const useGraphStore = create<GraphStore>()(
     currentFilePath: null,
     isProject: false,
     executionResult: null,
+    ranAs: {},
     isExecuting: false,
-    textOutputWindows: [],
     editingNodeId: null,
     subgraphStack: [],
     document: 0,
@@ -454,10 +475,13 @@ export const useGraphStore = create<GraphStore>()(
     runProgress: null,
     currentRunId: null,
 
-    setMetadata: (meta) =>
+    setMetadata: (meta) => {
+      // Named without ": ", so it is never taken for a node dialog's change (`nodeId: fields`).
+      get().commit(`metadata.${Object.keys(meta).join('+')}`);
       set((state) => {
         Object.assign(state.metadata, meta);
-      }),
+      });
+    },
 
     setCurrentFilePath: (path, isProject = false) =>
       set((state) => {
@@ -465,7 +489,7 @@ export const useGraphStore = create<GraphStore>()(
         state.isProject = path !== null && isProject;
       }),
 
-    addNode: (nodeType, position) => {
+    addNode: (nodeType, position, fill) => {
       get().commit();
       const id = freeId(nodeType, get().rfNodes.map((existing) => existing.id));
       const kind = NODE_KINDS[nodeType];
@@ -475,7 +499,7 @@ export const useGraphStore = create<GraphStore>()(
         id,
         type: 'graphNode',
         position,
-        data: { graphNode: defaults },
+        data: { graphNode: fill ? fill(defaults) : defaults },
       };
       set((state) => {
         state.rfNodes.push(rfNode as never);
@@ -495,30 +519,34 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as never);
 
         // A wire from a port that carries file paths -- a picker, a folder --
-        // makes the port it ends on one that receives file paths. The port
-        // editor can say it too; this is so that nobody has to, because the
-        // wire already said it and a graph wired without it summarised the
-        // file's *name*.
+        // ticks "Read the file at this path" on the input it ends on: the port
+        // is typed `file_path`, and a code or AI node is handed the file's
+        // text there. Step 1 can untick it; this is so that nobody has to say
+        // it, because the wire already did and a graph wired without it
+        // summarised the file's *name*. The run itself asks only the port.
         const portOf = (nodeId: string, side: 'inputs' | 'outputs', portId: string) => state.rfNodes
           .find((node: RFNode) => node.id === nodeId)?.data.graphNode[side].find((port) => port.id === portId);
         const from = portOf(wire.source, 'outputs', wire.sourceHandle);
         const to = portOf(wire.target, 'inputs', wire.targetHandle);
-        // Not on a node whose ports follow from its settings (a page, an input): those are recomputed.
-        const target = state.rfNodes.find((node: RFNode) => node.id === wire.target)?.data.graphNode;
-        const own = !!target && derivedNodePorts(target as GraphNode) === null;
+        // Only on a node that reads its files (`readsFileInputs`): a data node
+        // or an output node takes a path as a path, and was retyped all the
+        // same. And not on one whose ports follow from its settings: those are
+        // recomputed.
+        const target = state.rfNodes.find((node: RFNode) => node.id === wire.target)?.data.graphNode as GraphNode | undefined;
+        const reads = !!target && engineRegistry.node(target.node_type)?.readsFileInputs === true && derivedNodePorts(target) === null;
         // Only a port with nobody's word on it. A port typed `text` said what it
         // wants -- a file reader takes the same picker twice, one to read and one
         // to keep the name -- and the engine reads it the same way
         // (`execution/fileInputs.ts`: the target's own type wins).
-        if (own && from?.data_type === 'file_path' && to && to.data_type === 'any') {
+        if (reads && from?.data_type === 'file_path' && to && to.data_type === 'any') {
           to.data_type = 'file_path';
           if (from.multi) to.multi = true;
         }
       });
     },
 
-    updateNode: (nodeId, updates, renamed) => {
-      get().commit();
+    updateNode: (nodeId, updates, renamed, coalesce) => {
+      get().commit(coalesce);
       set((state) => {
         const idx = state.rfNodes.findIndex((n: RFNode) => n.id === nodeId);
         if (idx !== -1) {
@@ -592,6 +620,10 @@ export const useGraphStore = create<GraphStore>()(
         state.executionResult = shown;
         const result = ran ?? shown;
         if (!result) return;
+        // What the run settles into the graph below is not a continuation of
+        // what was typed before it: added to that undo step, Undo of the word
+        // took back what the run kept.
+        coalescing = null;
 
         // What the run remembered, replayed into this copy of the graph. The
         // engine decided what was kept and each element decides where it keeps
@@ -615,20 +647,17 @@ export const useGraphStore = create<GraphStore>()(
         }
       }),
 
-    closeTextOutputWindow: (nodeId) =>
-      set((state) => {
-        state.textOutputWindows = state.textOutputWindows.filter((w) => w.nodeId !== nodeId);
-      }),
-
     loadGraph: (graph) => {
       const normalizedGraph = normalizeGraph(graph);
       const { rfNodes, rfEdges } = buildReactFlowGraph(normalizedGraph);
+      coalescing = null;
 
       set((state) => {
         state.metadata = normalizedGraph.metadata;
         state.rfNodes = rfNodes as never;
         state.rfEdges = rfEdges;
         state.executionResult = null;
+        state.ranAs = {};
         // Whoever loaded a graph without going through the file-path flow
         // (Paste JSON, AI Graph, etc.) doesn't know its file path; the caller
         // sets `currentFilePath` explicitly right after loadGraph when it does.
@@ -641,7 +670,6 @@ export const useGraphStore = create<GraphStore>()(
         state.future = [];
         state.subgraphStack = [];
         state.editingNodeId = null;
-        state.textOutputWindows = [];
         state.document += 1;
       });
       // Snapshot through exportGraph() rather than from normalizedGraph: it is
@@ -742,7 +770,13 @@ export const useGraphStore = create<GraphStore>()(
       return { metadata, nodes, edges };
     },
 
-    commit: () => {
+    commit: (coalesce) => {
+      const now = Date.now();
+      if (coalesce && coalescing?.key === coalesce && now - coalescing.at < COALESCE_MS) {
+        coalescing.at = now;
+        return;
+      }
+      coalescing = coalesce ? { key: coalesce, at: now } : null;
       const snapshot = JSON.stringify(get().exportGraph());
       set((state) => {
         if (state.past[state.past.length - 1] === snapshot) return;
@@ -764,7 +798,7 @@ export const useGraphStore = create<GraphStore>()(
         state.past.pop();
         state.future.push(current);
       });
-      get().applyGraphSnapshot(previous);
+      get().applyGraphSnapshot(previous, true);
     },
 
     redo: () => {
@@ -776,7 +810,7 @@ export const useGraphStore = create<GraphStore>()(
         state.future.pop();
         state.past.push(current);
       });
-      get().applyGraphSnapshot(next);
+      get().applyGraphSnapshot(next, true);
     },
 
     /**
@@ -785,20 +819,24 @@ export const useGraphStore = create<GraphStore>()(
      * clean again, and undoing past it as dirty, which falls out of leaving
      * `savedSnapshot` alone.
      */
-    applyGraphSnapshot: (json) => {
+    applyGraphSnapshot: (json, keepEditing = false) => {
       const graph = normalizeGraph(JSON.parse(json) as Graph);
       const { rfNodes, rfEdges } = buildReactFlowGraph(graph);
+      // Whatever came next is not a continuation of what was typed before.
+      coalescing = null;
       set((state) => {
         state.metadata = graph.metadata;
         state.rfNodes = rfNodes as never;
         state.rfEdges = rfEdges;
         // Everything that names a node of the graph that was here. Left
         // standing, each points at something that may not exist any more: a
-        // result against ids that now mean other nodes, a window from another
-        // graph's run floating over this one.
+        // result against ids that now mean other nodes, a dialog on one of
+        // them. The node dialog stays for Undo, on a node that is still there:
+        // the same graph, a step back.
         state.executionResult = null;
-        state.editingNodeId = null;
-        state.textOutputWindows = [];
+        state.ranAs = {};
+        const stays = keepEditing && graph.nodes.some((node) => node.id === state.editingNodeId);
+        if (!stays) state.editingNodeId = null;
       });
     },
 
@@ -834,10 +872,7 @@ export const useGraphStore = create<GraphStore>()(
             Object.assign(node, derivedNodePorts(node) ?? {});
             continue;
           }
-          const holder: Record<string, unknown> | undefined = change.widget_id
-            ? (node.config.gui_widgets ?? []).find((widget) => widget.id === change.widget_id)
-            : node.config;
-          if (holder) holder[change.field] = change.value;
+          (node.config as unknown as Record<string, unknown>)[change.field] = change.value;
         }
       });
       if (wasClean) get().markSaved();
@@ -874,9 +909,11 @@ export const useGraphStore = create<GraphStore>()(
       // shows is still true and stays: pressing "Plot" must not blank the
       // summary beside it. A full run starts from a clean slate, as before.
       const previous = trigger ? get().executionResult : null;
+      // Each node as this run runs it, in the form the editor holds a node:
+      // what its result will speak of (`ranAs`).
+      const running = new Map(normalizeGraph(graph).nodes.map((node) => [node.id, node]));
       set((state) => {
         state.isExecuting = true;
-        if (!trigger) state.textOutputWindows = [];
       });
       if (!trigger) setExecutionResult(null);
       try {
@@ -909,7 +946,7 @@ export const useGraphStore = create<GraphStore>()(
         }
 
         // Another graph is open now. Its nodes may share this one's ids, and
-        // what this run made -- a shape, a remembered value, a window -- is
+        // what this run made -- a shape, a remembered value, a result -- is
         // not theirs.
         if (!stillOpen()) return;
         const fresh: ExecutionResult = snapshot.result ?? {
@@ -923,17 +960,16 @@ export const useGraphStore = create<GraphStore>()(
         // graph, which is why the result goes through the store rather than
         // being held in a component.
         setExecutionResult(result, fresh);
-        get().clearSentValues(fresh, graph);
-        // Only what this round made opens a window. A node that stood still, or
-        // was not asked, keeps the window it has -- or keeps it closed, if the
-        // person closed it.
-        const opened = collectTextOutputWindows(graph, fresh);
-        const again = new Set(opened.map((w) => w.nodeId));
+        // What each result speaks of: this run's nodes, and for a page event
+        // the earlier run's where their results were kept.
         set((state) => {
-          state.textOutputWindows = previous
-            ? [...state.textOutputWindows.filter((w) => !again.has(w.nodeId)), ...opened]
-            : opened;
+          if (!previous) state.ranAs = {};
+          for (const ran of fresh.node_results) {
+            const node = running.get(ran.node_id);
+            if (node) state.ranAs[ran.node_id] = node as never;
+          }
         });
+        get().clearSentValues(fresh, graph);
       } catch (error) {
         if (stillOpen()) setExecutionResult({
           status: 'error',

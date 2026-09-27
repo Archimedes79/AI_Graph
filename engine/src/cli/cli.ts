@@ -23,7 +23,7 @@
 
 import { createInterface } from 'node:readline/promises';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
-import { checkPath } from '../project/check.ts';
+import { checkPath } from '../project/folderCheck.ts';
 import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
 import { testGraph } from '../execution/examples.ts';
 import { registry } from '../elements/registry.ts';

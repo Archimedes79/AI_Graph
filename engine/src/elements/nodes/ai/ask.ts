@@ -24,7 +24,7 @@ export interface AskSettings extends PromptSettings {
 
 /** Nothing said: the one AI setting's model, plain text, no tools. What a code node's `node.llm` starts from. */
 export const PLAIN_ASK: AskSettings = {
-  systemPrompt: '', template: '', outputFormatPrompt: '', outputExample: '',
+  systemPrompt: '', template: '', outputFormatPrompt: '',
   provider: 'default', model: '', sendImages: false, toolServers: [],
 };
 

@@ -1,5 +1,13 @@
 import { DIM, DIMMER, HOVER, LINE, MUTED, RAISE, TEXT } from '@/ui/theme';
-import { PLOT_VIEW } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
+
+/**
+ * The room a chart leaves around its plot, in the block's own pixels -- a
+ * floor, since the room a value axis needs depends on how long its numbers
+ * are (`chartMargins`). A chart is drawn at the size the block is: there is no
+ * drawing space of its own scaled into the block, which made a label's size a
+ * function of how big the block had been dragged.
+ */
+const MARGIN = { left: 46, right: 14, top: 16, bottom: 30 };
 
 interface PlotWidgetProps {
   data: unknown;
@@ -12,7 +20,7 @@ interface PlotPoint {
   value: number;
 }
 
-/** The four shapes the app draws itself. Anything else is written as SVG by the block's own body. */
+/** The four shapes the app draws itself. Anything else arrives as SVG, written by a node upstream. */
 export type PlotKind = 'bars' | 'columns' | 'line' | 'donut';
 
 /**
@@ -35,28 +43,26 @@ const KINDS: PlotKind[] = ['bars', 'columns', 'line', 'donut'];
 const FALLBACK = ['#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#06b6d4', '#a78bfa', '#84cc16', '#fb923c'];
 const colour = (index: number) => `var(--plot-${(index % 8) + 1}, ${FALLBACK[index % 8]})`;
 
+/**
+ * A value to plot: a finite number, or a text that is one -- "1450", as a CSV
+ * cell arrives when nothing parsed it. Anything else is null.
+ */
+function numberOf(value: unknown): number | null {
+  const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : null;
+}
+
 /** Coerce a list into `{label, value}` points, or `null` if it can't be charted. */
 function toPoints(value: unknown): PlotPoint[] | null {
-  if (!Array.isArray(value) || value.length === 0) return null;
+  if (!Array.isArray(value)) return null;
 
   const points: PlotPoint[] = [];
   for (let i = 0; i < value.length; i++) {
     const item = value[i];
-    if (typeof item === 'number') {
-      if (!Number.isFinite(item)) return null;
-      points.push({ label: String(i), value: item });
-      continue;
-    }
-    if (item && typeof item === 'object') {
-      const obj = item as Record<string, unknown>;
-      const rawValue = obj.y ?? obj.value;
-      const rawLabel = obj.x ?? obj.label ?? i;
-      if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
-        points.push({ label: String(rawLabel), value: rawValue });
-        continue;
-      }
-    }
-    return null;
+    const obj = item && typeof item === 'object' ? item as Record<string, unknown> : undefined;
+    const number = numberOf(obj ? obj.y ?? obj.value : item);
+    if (number === null) return null;
+    points.push({ label: String(obj ? obj.x ?? obj.label ?? i : i), value: number });
   }
   return points;
 }
@@ -67,8 +73,10 @@ function toPoints(value: unknown): PlotPoint[] | null {
  * Three shapes are accepted and they are not alternatives so much as a ladder.
  * A bare list of points is the old shape and still the shortest thing that
  * works. A `{kind, title, points}` object is the same list with the two
- * decisions a caller usually also has. Neither is SVG: a body that draws its
- * own is caught before this, by `asDrawing`.
+ * decisions a caller usually also has -- and with no points, its title alone:
+ * what a node says before there is anything to plot ("Choose a CSV file to
+ * plot."). Neither is SVG: a body that draws its own is caught before this,
+ * by `asDrawing`.
  */
 export function toFigure(data: unknown): Figure | null {
   let value = data;
@@ -81,18 +89,30 @@ export function toFigure(data: unknown): Figure | null {
   }
 
   const listed = toPoints(value);
-  if (listed) return { kind: listed.length > 12 ? 'line' : 'columns', title: '', points: listed };
+  if (listed?.length) return { kind: listed.length > 12 ? 'line' : 'columns', title: '', points: listed };
 
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const object = value as Record<string, unknown>;
     const points = toPoints(object.points ?? object.values ?? object.data);
-    if (!points) return null;
+    const title = String(object.title ?? '');
+    if (!points || (!points.length && !title.trim())) return null;
     const asked = String(object.kind ?? '').toLowerCase();
     const kind = KINDS.includes(asked as PlotKind) ? asked as PlotKind
       : points.length > 12 ? 'line' : 'columns';
-    return { kind, title: String(object.title ?? ''), points };
+    return { kind, title, points };
   }
   return null;
+}
+
+/**
+ * What to say about a value that arrived and is no figure: rows whose number
+ * is not called "value", a record, a lone number. The chart said "Waiting for
+ * data" -- as if nothing had come -- while the canvas counted the rows.
+ */
+function notAFigure(value: unknown): string {
+  const seen = JSON.stringify(value) ?? String(value);
+  return `⚠ A chart draws numbers, {"label", "value"} points or a figure {"kind", "title", "points"}, and what arrived is ${seen.length > 120 ? `${seen.slice(0, 120)}…` : seen}. `
+    + 'A code node wired in before it can turn it into points.';
 }
 
 /** Auto-scale a set of values to an axis range that always includes 0 (so the baseline stays on-chart for all-negative or all-positive data), guarding against a zero-size range. */
@@ -136,8 +156,8 @@ export function chartMargins(width: number, height: number, longestLabel = 3) {
   if (!labelled) return { left: 6, right: 6, top: 6, bottom: 6, labelled };
   const forNumbers = Math.min(Math.round(width * 0.3), 12 + longestLabel * 7);
   return {
-    ...PLOT_VIEW.margin,
-    left: Math.max(PLOT_VIEW.margin.left, forNumbers),
+    ...MARGIN,
+    left: Math.max(MARGIN.left, forNumbers),
     labelled,
   };
 }
@@ -149,18 +169,17 @@ function fit(label: string, slotWidth: number): string {
 }
 
 /**
- * Drawing the block's own body did itself.
+ * A drawing that arrived finished.
  *
  * The four kinds below cover the ordinary case, and nothing beyond it: a
  * scatter, two series against each other, a legend of its own. Rather than
- * growing a chart library one option at a time, a body may return finished SVG
- * and this draws it -- so what can be plotted is whatever the body can write,
- * not whatever was foreseen here.
+ * growing a chart library one option at a time, a node upstream may hand on
+ * finished SVG and this shows it -- so what can be plotted is whatever that
+ * node can write, not whatever was foreseen here.
  *
- * Scripts and event handlers are stripped. The markup is generated locally by
- * code the person asked for, but it also travels inside a graph that may be
- * handed on, and "it came from our own AI" is not a reason to run whatever
- * arrives.
+ * Scripts and event handlers are stripped. The markup is made by code the
+ * person asked for, but it also travels inside a graph that may be handed on,
+ * and "it came from our own AI" is not a reason to run whatever arrives.
  */
 export function asDrawing(data: unknown): string | null {
   if (typeof data !== 'string') return null;
@@ -186,7 +205,7 @@ export function asDrawing(data: unknown): string | null {
  * size depend on how big someone had dragged the window.
  */
 export default function PlotChart({ data, width = 220, height = 90 }: PlotWidgetProps) {
-  // Finished SVG wins: the body drew something this could not have.
+  // Finished SVG wins: a node upstream drew something this could not have.
   const drawing = asDrawing(data);
   if (drawing) {
     return (
@@ -201,22 +220,26 @@ export default function PlotChart({ data, width = 220, height = 90 }: PlotWidget
 
   const figure = toFigure(data);
 
-  // A string that is not a figure is worth showing verbatim: it is either the
-  // raw value that arrived, or a "⚠ transform failed" message from the engine.
-  const message = typeof data === 'string' ? data.trim() : '';
-  if (!figure && message) {
+  // Something arrived that is no figure: said, not drawn as a chart still
+  // waiting. A string as it is -- a message from upstream as likely as not --
+  // anything else with what a chart takes.
+  const arrived = data !== undefined && data !== null && (typeof data !== 'string' || data.trim() !== '');
+  if (!figure && arrived) {
     return (
       <div
         className="text-xs px-2 py-1.5 rounded whitespace-pre-wrap break-words"
         style={{ background: HOVER, color: DIM, maxHeight: 160, overflowY: 'auto' }}
       >
-        {message}
+        {typeof data === 'string' ? data.trim() : notAFigure(data)}
       </div>
     );
   }
 
+  // Nothing to plot yet: a chart waiting for data, or one saying what its
+  // figure's title says instead.
+  const plotted = figure?.points.length ? figure : null;
   const frame = { width: Math.max(1, width), height: Math.max(1, height) };
-  const values = figure ? figure.points.map((p) => p.value) : [0, 1];
+  const values = plotted ? plotted.points.map((p) => p.value) : [0, 1];
   const { min, max, range } = computeAxisRange(values);
   const widest = Math.max(...[max, min + range / 2, min].map((t) => axisLabel(t).length));
   const margin = chartMargins(frame.width, frame.height, widest);
@@ -224,14 +247,15 @@ export default function PlotChart({ data, width = 220, height = 90 }: PlotWidget
   // The title is part of the drawing, not a label above it: a block may be
   // wired to a node that renames the chart every run, and a widget's own label
   // cannot follow that.
-  const titleH = figure?.title && margin.labelled && frame.height >= 110 ? 22 : 0;
+  const titleH = plotted?.title && margin.labelled && frame.height >= 110 ? 22 : 0;
   const top = margin.top + titleH;
 
   const common = { frame, margin, top, min, range };
-  const body = !figure ? <Empty {...common} />
-    : figure.kind === 'donut' ? <Donut figure={figure} {...common} />
-      : figure.kind === 'bars' ? <Bars figure={figure} {...common} />
-        : <Upright figure={figure} {...common} />;
+  const waiting = figure?.title || 'Waiting for data';
+  const body = !plotted ? <Empty {...common} text={waiting} />
+    : plotted.kind === 'donut' ? <Donut figure={plotted} {...common} />
+      : plotted.kind === 'bars' ? <Bars figure={plotted} {...common} />
+        : <Upright figure={plotted} {...common} />;
 
   return (
     <svg
@@ -239,12 +263,14 @@ export default function PlotChart({ data, width = 220, height = 90 }: PlotWidget
       height={frame.height}
       viewBox={`0 0 ${frame.width} ${frame.height}`}
       role="img"
-      aria-label={figure ? `${figure.kind} chart of ${figure.points.length} points` : 'Empty chart, waiting for data'}
+      aria-label={plotted
+        ? `${plotted.kind} chart of ${plotted.points.length} point${plotted.points.length === 1 ? '' : 's'}`
+        : figure ? waiting : 'Empty chart, waiting for data'}
       style={{ background: RAISE, borderRadius: 4 }}
     >
       {titleH > 0 && (
         <text x={margin.left} y={margin.top + 8} fontSize={13} fontWeight={600} fill={TEXT}>
-          {fit(figure!.title, frame.width - margin.left - margin.right)}
+          {fit(plotted!.title, frame.width - margin.left - margin.right)}
         </text>
       )}
       {body}
@@ -260,13 +286,14 @@ interface Common {
   range: number;
 }
 
-function Empty({ frame, margin, top }: Common) {
+/** Where the chart will be, with *text* in its middle: waiting, or what the figure's title says. */
+function Empty({ frame, margin, top, text }: Common & { text: string }) {
   return (
     <text
       x={frame.width / 2} y={top + (frame.height - top - margin.bottom) / 2}
       textAnchor="middle" fontSize={13} fill={DIMMER}
     >
-      Waiting for data
+      {fit(text, frame.width - 16)}
     </text>
   );
 }

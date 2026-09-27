@@ -25,6 +25,7 @@ vi.mock('@/api/client', async (actual) => ({
 }));
 
 const { useGraphStore } = await import('./graphStore');
+const { lastRunOf, whatCameOf } = await import('@/authoring/nodeStepRules');
 const store = () => useGraphStore.getState();
 const nodeOf = (id: string) => store().rfNodes.find((n) => n.id === id)!.data.graphNode as GraphNode;
 /** Until the run in flight has asked for its result. */
@@ -72,6 +73,29 @@ describe('a run that ends after another graph was opened', () => {
     await running;
     expect(store().executionResult?.status).toBe('success');
     expect(nodeOf('code').config.output_schema).toBeDefined();
+  });
+});
+
+describe('what the last run says of a node, in its dialog', () => {
+  it('is said while the node is the one it ran, and not once its body changed since', async () => {
+    const code = store().addNode('code', { x: 0, y: 0 });
+    store().updateNode(code, { config: { ...nodeOf(code).config, code: 'function run(inputs) { return { output: inputs.input.toUpperCase() }; }' } });
+    const running = store().runGraph(store().exportGraph());
+    await polled();
+    runs[0].finish({
+      status: 'error', error: 'x', outputs: {},
+      node_results: [{ node_id: code, status: 'error', inputs: { input: 5 }, outputs: {}, error: 'inputs.input.toUpperCase is not a function' }],
+    });
+    await running;
+    // "The last run failed here", and ✨ Fix -- asked the way the dialog asks.
+    const said = () => whatCameOf(null, undefined, lastRunOf(nodeOf(code), store().executionResult, store().ranAs, 'code_prompt'));
+    expect(said()).toMatchObject({ failed: true, said: { error: 'inputs.input.toUpperCase is not a function' } });
+    // What only describes it changes nothing: its task, its example.
+    store().updateNode(code, { config: { ...nodeOf(code).config, code_prompt: 'Shout it.', examples: '## The example\n\n```json input\n{"input": "a"}\n```\n' } });
+    expect(said()).toMatchObject({ failed: true });
+    // The body fixed by hand, or by ✨: that run said nothing about this one.
+    store().updateNode(code, { config: { ...nodeOf(code).config, code: 'function run(inputs) { return { output: String(inputs.input).toUpperCase() }; }' } });
+    expect(said()).toBeUndefined();
   });
 });
 

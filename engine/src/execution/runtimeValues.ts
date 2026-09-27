@@ -7,9 +7,11 @@
 //
 // The engine asks the elements rather than looking for node types itself; a new
 // element that wants to prompt says so in its own file and nothing here changes.
+// What only the wires say -- that a text asked for is a file to read -- is added here.
 
 import type { Graph, GraphNode } from '../graph.ts';
 import type { Runners } from '../elements/NodeRunner.ts';
+import { filePorts } from './fileInputs.ts';
 
 export interface RuntimeRequirement {
   /** `nodeId`, or `nodeId::widgetId` for a block inside a page. */
@@ -27,9 +29,27 @@ export function runtimeRequirements(graph: Graph, registry: Runners): RuntimeReq
   for (const node of graph.nodes) {
     const element = registry.node(node.node_type);
     if (!element) continue;
-    asked.push(...element.runtimeRequirements(node));
+    for (const requirement of element.runtimeRequirements(node)) {
+      asked.push(requirement.kind === 'text' && readAsFile(graph, node.id, registry) ? { ...requirement, kind: 'file' } : requirement);
+    }
   }
   return asked;
+}
+
+/**
+ * Whether what *nodeId* hands on is the path of a file to read: it is wired
+ * into an input the node there reads the file at (`filePorts`). A text asked
+ * for when the run starts is then asked
+ * for as a file, with the file browser -- a text input is the one way left to
+ * name a file from outside a page, and it was asked for in a bare text box.
+ * Only the graph knows the wire, so it is asked here and not of the element.
+ */
+function readAsFile(graph: Graph, nodeId: string, registry: Runners): boolean {
+  return graph.edges.some((edge) => {
+    if (edge.source_node_id !== nodeId) return false;
+    const target = graph.nodes.find((node) => node.id === edge.target_node_id);
+    return !!target && filePorts(target, registry).includes(edge.target_port_id);
+  });
 }
 
 /**

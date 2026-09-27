@@ -1,5 +1,4 @@
-import { NodeRunner } from '../../NodeRunner.ts';
-import type { TextFile, WhatRuns } from '../../ElementRunner.ts';
+import { NodeRunner, type TextFile, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
@@ -14,7 +13,7 @@ export interface CodeConfig {
   code: string;
 }
 
-/** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
+/** What this keeps in files of its own in a project folder: see `NodeRunner.texts`. */
 const CODE_TEXTS: readonly TextFile[] = [
   { field: 'code', file: 'code.js' },
   { field: 'code_prompt', file: 'task.md' },
@@ -52,6 +51,9 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
 
   /** Its body is written for one item, so a list can be handed to it an item at a time. */
   override readonly fansOut = true;
+
+  /** A file on an input that says so arrives as its text: `run` reads no files itself. */
+  override readonly readsFileInputs = true;
 
   async execute(
     node: GraphNode,

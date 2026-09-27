@@ -12,7 +12,7 @@ import { BLOCKS } from '@/page/blocks';
 import { guiWidgetPorts, showsPage } from '@/document/guiWidgets';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from './registry';
 import type { GraphNode, GuiWidget } from '@/graph';
-import { nodeLogic, widgetLogic } from '@/authoring/logic';
+import { nodeLogic } from '@/authoring/logic';
 
 /**
  * A widget as the app really creates one, with a fixed id so assertions can name
@@ -44,7 +44,7 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
   });
 
   it('has a Panel, loaded only when the node is opened -- or is a page, and never opened', () => {
-    // A page is edited in the GUI editor and its node dialog is never opened
+    // A page is edited on the Page tab and its node dialog is never opened
     // (App.tsx), so a panel of its own is one nobody can reach -- which the
     // gui node's was, stale copy and all.
     if (showsPage(nodeType)) {
@@ -81,12 +81,9 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
     // nothing else would notice. Offered and authored are the same question,
     // so they are asserted to agree even when the answer is "not for this node".
     const logic = nodeLogic(node);
-    const offered = spec.available?.(node) ?? true;
-    expect(Boolean(logic)).toBe(offered);
-    if (logic) {
-      expect(logic.fields.body).toBe(spec.targetField);
-      expect(logic.fields.prompt).toBe(spec.promptField);
-    }
+    expect(logic).toBeTruthy();
+    expect(logic!.fields.body).toBe(spec.targetField);
+    expect(logic!.fields.prompt).toBe(spec.promptField);
   });
 
   it('describes what it emits', () => {
@@ -122,27 +119,5 @@ describe.each(Object.entries(WIDGET_BUILDERS))('gui widget element: %s', (widget
       return;
     }
     expect(isLazy(element.Panel)).toBe(true);
-  });
-
-  it('declares a generation whose fields exist, or declares none at all', () => {
-    const widget = makeWidget(widgetKind as GuiWidget['kind']);
-    const spec = element.generation;
-    if (!spec) {
-      expect(widgetLogic(widget)).toBeFalsy();
-      return;
-    }
-    const flat = widget as unknown as Record<string, unknown>;
-    expect(spec.promptField in flat).toBe(true);
-    expect(spec.targetField in flat).toBe(true);
-    expect(spec.guard && spec.success).toBeTruthy();
-
-    // Same agreement one level down (see the node case above).
-    const logic = widgetLogic(widget);
-    const offered = spec.available?.(widget) ?? true;
-    expect(Boolean(logic)).toBe(offered);
-    if (logic) {
-      expect(logic.fields.body).toBe(spec.targetField);
-      expect(logic.fields.prompt).toBe(spec.promptField);
-    }
   });
 });

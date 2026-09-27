@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2, Wand2,
 } from 'lucide-react';
 import ToolbarButton, { ToolbarSeparator } from '@/ui/ToolbarButton';
-import { showsPage, widgetFiresRun } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
 import { ApiError, call, downloadBundle, watchGeneration, type AICall } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -14,7 +13,8 @@ import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
 import LiveGeneration from '@/authoring/LiveGeneration';
 import SubgraphTrail from './SubgraphTrail';
-import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
+import GraphProblems from './GraphProblems';
+import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, TEXT } from '@/ui/theme';
 
 /**
  * How long a node may go without producing anything before the toolbar says so.
@@ -70,27 +70,11 @@ interface ToolbarProps {
   confirmDiscard: (action: string) => boolean;
   currentFilePath: string | null;
   saveStatus: string;
-  /**
-   * Show the graph's page.
-   *
-   * Pressing Run when a block on the page has nothing in it used to open a
-   * dialog asking for the same value the block asks for, one tab away — two
-   * places to fill in one field, and the one you were not looking at.
-   */
-  onShowInterface: () => void;
-  /**
-   * Whether that page is what is on screen right now.
-   *
-   * ▶ Run means "start this", and for a graph with a page starting it is
-   * opening the page. Once it is open there is nothing left to open, so the
-   * same button is the one in the page's own header.
-   */
-  interfaceShown: boolean;
 }
 
 export default function Toolbar({
   onNewGraph, onSave, onSaveAs, onReloadProject, onLoad, onInjectJson, onOpenSettings, confirmDiscard,
-  currentFilePath, saveStatus, onShowInterface, interfaceShown,
+  currentFilePath, saveStatus,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
   const sweep = useGraphSweep();
@@ -113,13 +97,10 @@ export default function Toolbar({
   const executionResult = useGraphStore((s) => s.executionResult);
   const loadGraph = useGraphStore((s) => s.loadGraph);
 
-  const [showDeploy, setShowDeploy] = useState(false);
   const [deployBusy, setDeployBusy] = useState('');
   const [deployError, setDeployError] = useState('');
   // Asking what the graph needs, then running: the delivered page's own steps.
   const delivered = useDeliveredRun();
-
-  const [openingTool, setOpeningTool] = useState('');
 
   const [showAiGraph, setShowAiGraph] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
@@ -134,70 +115,22 @@ export default function Toolbar({
   /** Why another graph cannot be opened now, or null when it can. */
   const busyWith = graphBusy(isExecuting, sweep.busy);
 
-  /** Whether this tool has a page at all: a window to open, or only ▶ Run. */
-  const pageBlocks = rfNodes
-    .map((n) => n.data.graphNode)
-    .filter((node) => showsPage(node.node_type))
-    .flatMap((node) => node.config.gui_widgets);
-  const hasPage = pageBlocks.length > 0;
-  /** Whether that page has anything to *use* — a button, a chat, a field told to fire. */
-  const hasEvent = pageBlocks.some(widgetFiresRun);
-
-  const handleRun = async () => {
-    // A graph with a page is an application, and starting an application is
-    // opening its window -- not pressing the button its user would have
-    // pressed, on whatever values happen to be on the page.
-    //
-    // So for a graph with a page this button *only* opens it, and never
-    // computes. Computing is the page's: a block wired to start the graph, or
-    // the ▶ Run in its header, which is the one a recipient gets too.
-    //
-    // It used to run as well, and then the page's own ▶ Run appeared beside
-    // it -- two controls with the same tooltip, the second one reachable only
-    // by pressing the first. The button is hidden once the page is up, so
-    // there is exactly one way to run at any moment.
-    if (hasPage) {
-      onShowInterface();
-      return;
-    }
-    // Without a page, what the graph asks belongs to nodes -- an input set to
-    // ask, an output set to ask where to write -- and the dialog asks it. (A
-    // question a block asks comes from a page, which returned above.)
-    await delivered.run(null);
-  };
-
   /**
-   * The tool as it is delivered, in a window of its own.
+   * ▶ Run: the whole graph, now, on what is set -- the same on every tab.
    *
-   * ▶ Run runs every node, now, from the top, whether or not the page asked
-   * for it -- which is what you want while building and is not what the thing
-   * you are building does. What a tool *is* -- a page that sits there until
-   * someone uses it, and then runs what that use is wired to -- was until now
-   * only reachable by bundling it and opening the zip somewhere else.
+   * It used to mean three things. With a page it was ▶ Start, which only
+   * switched to the Preview tab, whose header then had a ▶ Run of its own; a
+   * graph without a page ran here. One button, one meaning: what a page's own
+   * blocks start is theirs, and they still start it.
    *
-   * So the graph is handed to the server and `runtime.html` is opened against
-   * it: the same page, the same entry point and the same routes a bundle
-   * serves, in a window with no editor in it. Nothing is written to disk, and
-   * the window keeps the graph it was given until it is opened again — which
-   * is what a delivered tool does.
+   * What the graph still asks -- a file nobody chose, a place to write -- is
+   * asked first, by the delivered tool's own steps (`useDeliveredRun`).
    */
-  const openAsTool = async () => {
-    setOpeningTool('Opening…');
-    try {
-      await call('holdGraph', useGraphStore.getState().rootGraph());
-      // Named, so pressing it again reloads the tool's own window instead of
-      // leaving a trail of them.
-      const opened = window.open('runtime.html', 'ai-graph-tool');
-      setOpeningTool(opened ? '' : 'The browser blocked the window. Allow pop-ups for this page.');
-    } catch (error) {
-      setOpeningTool(errorText(error, 'The tool could not be opened.'));
-    }
-  };
+  const handleRun = () => { void delivered.run(null); };
 
-  // Both deploy actions used to have no busy state and no error handling, so a
-  // slow or rejecting backend looked exactly like a dead button.
+  // Deploying used to have no busy state and no error handling, so a slow or
+  // rejecting backend looked exactly like a dead button.
   const runDeployAction = async (label: string, action: () => Promise<void>) => {
-    setShowDeploy(false);
     setDeployBusy(label);
     setDeployError('');
     try {
@@ -269,49 +202,38 @@ export default function Toolbar({
     setAiError('');
   };
 
-  // A dropdown with no dismiss handler stays open over the canvas until you
-  // find the button again.
-  useEffect(() => {
-    if (!showDeploy) return;
-    const close = () => setShowDeploy(false);
-    const onKeyDown = (event: KeyboardEvent) => event.key === 'Escape' && close();
-    // Deferred so the click that opened the menu doesn't immediately close it.
-    const timer = window.setTimeout(() => document.addEventListener('click', close), 0);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.clearTimeout(timer);
-      document.removeEventListener('click', close);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [showDeploy]);
-
   const statusColor = executionResult
     ? executionResult.status === 'success' ? SUCCESS : DANGER
     : DIMMER;
   const statusLabel = executionResult ? executionResult.status : '';
 
+  // The bar fits the window: below 1536 pixels its buttons are their icons
+  // (`ToolbarButton`), and what it says -- the file, a status, a sweep's
+  // progress -- is cut to the room there is, whole in its tooltip. What still
+  // does not fit scrolls inside the bar. It used to overflow into the page,
+  // which then slid sideways and took the palette and the tabs out of view.
   return (
     <>
       <header
-        className="flex items-center gap-4 px-4 h-14 flex-shrink-0"
-        style={{ background: SUNKEN, borderBottom: `1px solid ${LINE}` }}
+        className="flex items-center gap-2 2xl:gap-3 px-3 2xl:px-4 h-14 flex-shrink-0 min-w-0 overflow-x-auto overflow-y-hidden"
+        style={{ background: SUNKEN, borderBottom: `1px solid ${LINE}`, scrollbarWidth: 'thin' }}
       >
         {/* Logo */}
-        <div className="flex items-center gap-2 mr-2">
+        <div className="flex items-center gap-2 mr-1 2xl:mr-2 flex-shrink-0">
           <span className="text-xl">🕸️</span>
-          <span className="text-base font-bold" style={{ color: ACCENT }}>
+          <span className="hidden 2xl:inline text-base font-bold whitespace-nowrap" style={{ color: ACCENT }}>
             AI-Graph
           </span>
         </div>
 
         {/* Graph name */}
         <input
-          className="bg-transparent border-none outline-none text-sm font-medium max-w-xs"
+          className="bg-transparent border-none outline-none text-sm font-medium w-40 min-w-[6rem] flex-shrink"
           style={{ color: TEXT, borderBottom: `1px dashed ${LINE}`, paddingBottom: 2 }}
           value={metadata.name}
           onChange={(e) => setMetadata({ name: e.target.value })}
         />
-        <span className="text-xs truncate max-w-xs" style={{ color: DIMMER }} title={currentFilePath ?? 'Not saved to a file yet'}>
+        <span className="text-xs truncate min-w-[4rem] max-w-xs" style={{ color: DIMMER }} title={currentFilePath ?? 'Not saved to a file yet'}>
           {currentFilePath ?? 'Untitled — not saved'}
         </span>
 
@@ -350,7 +272,7 @@ export default function Toolbar({
             the node before it turned out to return, so only the first one is
             written against a description rather than against data. */}
         <ToolbarButton
-          icon={Wand2}
+          icon={sweep.busy ? Square : Wand2}
           label={sweep.busy ? 'Stop' : 'Generate'}
           title={sweep.busy
             ? 'Stop after the node in flight'
@@ -358,7 +280,7 @@ export default function Toolbar({
           onClick={sweep.busy ? sweep.stop : sweep.run}
         />
         {sweep.message && (
-          <span className="text-xs truncate max-w-md" style={{ color: MUTED }} title={sweep.message}>
+          <span className="text-xs truncate max-w-xs" style={{ color: MUTED }} title={sweep.message}>
             {sweep.message}
           </span>
         )}
@@ -369,12 +291,12 @@ export default function Toolbar({
             what is on disk; it only shows while the graph is actually clean.
             (rfNodes/rfEdges are read above purely to drive this re-render.) */}
         {saveStatus && !isDirty() && (
-          <span className="text-xs" style={{ color: MUTED }}>
+          <span className="text-xs truncate max-w-[14rem]" style={{ color: MUTED }} title={saveStatus}>
             {saveStatus}
           </span>
         )}
         {isDirty() && (rfNodes.length > 0 || rfEdges.length > 0) && (
-          <span className="text-xs" style={{ color: DIM }} title="Unsaved changes">
+          <span className="text-xs whitespace-nowrap" style={{ color: DIM }} title="Unsaved changes">
             ● unsaved
           </span>
         )}
@@ -382,7 +304,7 @@ export default function Toolbar({
         {/* Run, and while running, what it is doing and how to stop it */}
         {isExecuting && runProgress && (
           <span
-            className="text-xs tabular-nums"
+            className="text-xs tabular-nums truncate max-w-[14rem]"
             style={{ color: MUTED }}
             title={
               'Nodes finished, of the total in this graph'
@@ -403,7 +325,7 @@ export default function Toolbar({
         {isExecuting && runProgress && runProgress.idleSeconds !== null
           && runProgress.idleSeconds > STALLED_AFTER_SECONDS && (
           <span
-            className="text-xs tabular-nums"
+            className="text-xs tabular-nums whitespace-nowrap"
             style={{ color: DIM }}
             title="No output from the model since this long. The run is still waiting, not stopped."
           >
@@ -414,28 +336,22 @@ export default function Toolbar({
           <button
             onClick={stopRun}
             title="Stop this run"
-            className="h-8 px-3.5 rounded-md text-xs font-semibold flex items-center gap-1.5"
+            className="h-8 px-3.5 flex-shrink-0 rounded-md text-xs font-semibold flex items-center gap-1.5"
             style={{ background: DANGER, color: 'white' }}
           >
             <Square size={14} strokeWidth={2.5} aria-hidden="true" />
             Stop
           </button>
-        ) : hasPage && interfaceShown ? null : (
+        ) : (
           <button
             onClick={handleRun}
-            title={!hasPage ? 'Run this graph — it has no page, so this is its only start'
-              : hasEvent ? 'Show this tool\'s page. It runs when its user does something on it.'
-                : 'Show this tool\'s page. Nothing on it starts the graph yet, so its ▶ Run is the only way in — give a block "⚡ starts the graph", or add a button or a trigger node.'}
-            className="h-8 px-3.5 rounded-md text-xs font-semibold flex items-center gap-1.5"
+            title="Run the whole graph on what is set now. Anything it still needs is asked for first."
+            className="h-8 px-3.5 flex-shrink-0 rounded-md text-xs font-semibold flex items-center gap-1.5"
             style={{ background: ACCENT, color: 'white' }}
           >
             <Play size={14} strokeWidth={2.5} aria-hidden="true" />
-            {hasPage ? 'Start' : 'Run'}
+            Run
           </button>
-        )}
-
-        {openingTool && openingTool !== 'Opening…' && (
-          <span className="text-xs" style={{ color: DANGER_TEXT }}>{openingTool}</span>
         )}
 
         <ToolbarSeparator />
@@ -451,67 +367,27 @@ export default function Toolbar({
           onClick={onOpenSettings}
         />
 
-        {/* Deploy dropdown */}
-        <div className="relative">
-          <ToolbarButton
-            icon={Rocket}
-            label={deployBusy ? `${deployBusy}…` : 'Deploy'}
-            title="Package this graph as a standalone tool"
-            onClick={() => setShowDeploy(!showDeploy)}
-            disabled={!!deployBusy}
-          />
-        </div>
+        {/* One thing to do, so no menu: the look at the tool detached is the
+            Preview tab's pop-out, beside the page it opens. */}
+        <ToolbarButton
+          icon={Rocket}
+          label={deployBusy ? `${deployBusy}…` : 'Deploy'}
+          title="Download this graph as a tool of its own: a zip with the engine, the graph and its page"
+          onClick={handleDownloadBundle}
+          disabled={!!deployBusy}
+        />
 
         {deployError && (
-          <span className="text-xs font-medium" style={{ color: DANGER_TEXT }}>❌ {deployError}</span>
+          <span className="text-xs font-medium truncate max-w-[14rem]" style={{ color: DANGER_TEXT }} title={deployError}>❌ {deployError}</span>
         )}
 
         {/* Status */}
         {statusLabel && (
-          <span className="text-xs font-medium" style={{ color: statusColor }}>
+          <span className="text-xs font-medium whitespace-nowrap" style={{ color: statusColor }}>
             {statusLabel}
           </span>
         )}
       </header>
-
-      {/* Deploy menu */}
-      {showDeploy && (
-        <div
-          className="fixed z-50"
-          style={{ top: 56, right: 16, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 8, minWidth: 200, boxShadow: '0 8px 32px var(--ui-scrim, rgba(0,0,0,0.5))' }}
-        >
-          {/* Both ways of handing this over, in the order you would use them:
-              look at it detached, then pack it. ▶ Run opens the same page in
-              the Preview tab, attached to what you are building; this opens it
-              in a window with no editor anywhere near it, which is the last
-              look before the zip. */}
-          {hasPage && (
-            <button
-              className="w-full text-left px-4 py-3 text-sm hover-raise transition-colors"
-              style={{ color: TEXT }}
-              title="A window of its own, served exactly as a bundle serves it. Nothing is written to disk."
-              onClick={() => { setShowDeploy(false); void openAsTool(); }}
-              disabled={openingTool === 'Opening…'}
-            >
-              ⧉ Open as a tool (new window)
-            </button>
-          )}
-          <button
-            className={`w-full text-left px-4 py-3 text-sm hover-raise transition-colors${hasPage ? ' border-t' : ''}`}
-            style={{ color: TEXT, borderColor: LINE }}
-            onClick={handleDownloadBundle}
-          >
-            📦 Download Bundle (zip)
-          </button>
-          <button
-            className="w-full text-left px-4 py-3 text-sm hover-raise transition-colors border-t"
-            style={{ color: MUTED, borderColor: LINE }}
-            onClick={() => setShowDeploy(false)}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
 
       <RequirementsDialog
         requirements={delivered.requirements}
@@ -567,7 +443,7 @@ export default function Toolbar({
               onChange={(e) => setAiDescription(e.target.value)}
               className="w-full rounded-lg p-3 text-sm resize-y outline-none"
               style={{ minHeight: 100, background: SUNKEN, border: `1px solid ${LINE}`, color: TEXT }}
-              placeholder="e.g. Read a text file, summarize it with AI, and show the result in a text window."
+              placeholder="e.g. Read a text file, summarize it with AI, and show the result on a page."
               disabled={aiGenerating}
             />
 
@@ -588,6 +464,7 @@ export default function Toolbar({
                 {aiResult.graph.edges.length} edge{aiResult.graph.edges.length === 1 ? '' : 's'})
               </div>
             )}
+            {aiResult && <GraphProblems graph={aiResult.graph} />}
           </div>
         </Modal>
       )}

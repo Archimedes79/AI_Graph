@@ -23,12 +23,6 @@ import type { BrowseEntry, BrowsePage } from './api.ts';
 import { isProjectFolder } from '../project/folder.ts';
 import { NotFound } from '../errors.ts';
 
-/** `.md, txt` -> ['.md', '.txt']; empty means "everything". */
-export function extensionFilter(raw: string): string[] {
-  return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
-    .map((e) => (e.startsWith('.') ? e : `.${e}`));
-}
-
 /** Where a browser can jump to: home, plus the drives that exist on Windows and `/` elsewhere. */
 function filesystemRoots(): string[] {
   const roots = [homedir()];

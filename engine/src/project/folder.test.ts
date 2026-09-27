@@ -13,7 +13,7 @@ import {
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
 
-/** One of each element that keeps writing: a code node, an ai node, a directory input, a page with a chart. */
+/** A code node and an ai node, which keep writing, beside a directory input and a page with a chart, which keep none. */
 function sample(): Graph {
   return parseGraph({
     metadata: { name: 'Sample', description: 'All the writing there is.' },
@@ -21,7 +21,7 @@ function sample(): Graph {
       {
         id: 'folder', node_type: 'input', label: 'Folder', position: { x: 10, y: 20 },
         inputs: [], outputs: [port('files', 'output')],
-        config: { input_mode: 'directory', value: 'data', selector_code: 'function run(i) { return { files: i.files }; }', selector_prompt: 'Only the CSVs.' },
+        config: { input_mode: 'directory', value: 'data', extensions: '.csv' },
       },
       {
         id: 'count', node_type: 'code', label: 'Count', position: { x: 300.4, y: 20 }, width: 360, height: 180,
@@ -44,7 +44,7 @@ function sample(): Graph {
       {
         id: 'page', node_type: 'gui', label: 'Page', position: { x: 900, y: 20 },
         inputs: [port('chart_in', 'input')], outputs: [],
-        config: { gui_widgets: [{ id: 'chart', kind: 'plot_window', label: 'Chart', code: 'function run(i) { return i; }', code_prompt: 'Bars.' }] },
+        config: { gui_widgets: [{ id: 'chart', kind: 'plot_window', label: 'Chart' }] },
       },
     ],
     edges: [
@@ -81,20 +81,9 @@ describe('a project folder', () => {
     expect(await text('nodes/say/system.md')).toBe('You report counts.\n');
     expect(await text('nodes/say/message.md')).toBe('There are {{total}} files.\n');
     expect(await text('nodes/say/output.md')).toBe('One sentence.\n');
-    expect(await text('nodes/folder/select.js')).toContain('i.files');
-    expect(await text('nodes/page/chart/code.js')).toContain('return i');
-    expect(await text('nodes/page/chart/task.md')).toBe('Bars.\n');
-  });
-
-  it('keeps a block\'s example input in a file of its own, as it was typed', async () => {
-    const graph = sample();
-    const example = '{\n  "value": [{ "city": "Oslo", "people": 700000 }]\n}';
-    graph.nodes[3].config.gui_widgets = [{ id: 'rows', kind: 'table', label: 'Rows', code: '', code_prompt: '', example }];
-    await writeProject(dir, graph);
-    expect(await text('nodes/page/rows/example.json')).toBe(`${example}\n`);
-    expect(JSON.parse(await text('nodes/page/node.json')).config.gui_widgets[0]).toEqual({ id: 'rows', kind: 'table', label: 'Rows' });
-    const read = await readProject(dir);
-    expect((read.nodes.find((n) => n.id === 'page')!.config.gui_widgets as Record<string, unknown>[])[0].example).toBe(example);
+    // A folder listing and a chart have no writing of their own.
+    expect(existsSync(join(dir, 'nodes/folder/select.js'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes/page/chart'))).toBe(false);
   });
 
   it('says the flow once, in flow.json, and nothing about any node there', async () => {
@@ -245,19 +234,23 @@ describe('what a folder could write and not read back', () => {
     await expect(writeProject(dir, graph)).rejects.toThrow(/is a number/);
   });
 
-  it('refuses two blocks of one page with one id: one folder, one body left', async () => {
+  it('keeps a page\'s blocks in its node.json, with no folder of their own -- two of one id are check\'s to name', async () => {
     const graph = parseGraph({
       metadata: { name: 'Blocks' },
       nodes: [{
         id: 'page', node_type: 'gui', label: 'Page', position: { x: 0, y: 0 }, inputs: [], outputs: [],
         config: { gui_widgets: [
-          { id: 'chart', kind: 'table', code: 'function run(i) { return { value: "FIRST" }; }' },
-          { id: 'chart', kind: 'table', code: 'function run(i) { return { value: "SECOND" }; }' },
+          { id: 'chart', kind: 'input_picker', mode: 'directory', value: 'first' },
+          { id: 'chart', kind: 'input_picker', mode: 'directory', value: 'second' },
         ] },
       }],
       edges: [],
     });
-    await expect(writeProject(dir, graph)).rejects.toThrow(/called "page\/chart"/);
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'nodes/page/chart'))).toBe(false);
+    const blocks = (await readProject(dir)).nodes[0].config.gui_widgets as { value: string }[];
+    expect(blocks.map((block) => block.value)).toEqual(['first', 'second']);
+    expect(problemsIn(graph)).toEqual([expect.objectContaining({ problem: 'More than one block has the id "chart".' })]);
   });
 
   it('says a node.json that is not an object is not a graph, rather than failing somewhere else', async () => {
@@ -352,11 +345,11 @@ describe('two editors on one folder', () => {
     expect(await changesOnDisk(dir)).toEqual([]);
 
     await touch(join(dir, 'nodes/say/system.md'), 'You count carefully.\n');
-    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'say', widget_id: '', field: 'system_prompt', value: 'You count carefully.' }]);
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'say', field: 'system_prompt', value: 'You count carefully.' }]);
     expect(await changesOnDisk(dir)).toEqual([]);
 
-    await rm(join(dir, 'nodes/page/chart/task.md'));
-    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'page', widget_id: 'chart', field: 'code_prompt', value: '' }]);
+    await rm(join(dir, 'nodes/count/task.md'));
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'code_prompt', value: '' }]);
 
     // A change taken in is no conflict for the next save.
     const graph = await readProject(dir);
@@ -469,7 +462,7 @@ describe('a graph inside a node', () => {
     await touch(join(dir, 'nodes/part/nodes/shorten/code.js'), 'function run() { return { short: "hi" }; }\n');
     const [change, ...rest] = await changesOnDisk(dir);
     expect(rest).toEqual([]);
-    expect(change).toMatchObject({ node_id: 'part', widget_id: '', field: 'nested_graph' });
+    expect(change).toMatchObject({ node_id: 'part', field: 'nested_graph' });
     expect((change.value as Graph).nodes[0].config.code).toContain('"hi"');
     // Once, like every other change.
     expect(await changesOnDisk(dir)).toEqual([]);

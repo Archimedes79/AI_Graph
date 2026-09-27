@@ -7,6 +7,7 @@ import { parseGraph } from '../graph.ts';
 import { loadGraph } from '../project/folder.ts';
 import { registry } from '../elements/registry.ts';
 import { bundleNeeds, writeBundle } from './bundle.ts';
+import { NODE_MAJOR } from './launchers.ts';
 
 /**
  * A bundle is only a claim until someone runs it somewhere else.
@@ -107,6 +108,10 @@ describe('a bundle', () => {
     expect(bundleNeeds(plotter).interface).toBe(true);
     // Hello world is two nodes, no page and no model: Node and nothing else.
     expect(bundleNeeds(hello)).toEqual({ interface: false, ai: false });
+    // A page node whose blocks are all gone draws nothing. Served, the tool
+    // showed an empty page and not the run's result.
+    const blank = { id: 'page', node_type: 'gui', label: 'Page', inputs: [], outputs: [], config: { gui_widgets: [] } };
+    expect(bundleNeeds(parseGraph({ ...hello, nodes: [...hello.nodes, blank] }))).toEqual({ interface: false, ai: false });
 
     // A model called from inside a node that holds a graph is still a model
     // the recipient has to configure.
@@ -170,13 +175,17 @@ describe('a bundle', () => {
     const dir = await bundleOf(resolve(REPO, 'examples', 'population_plotter'));
     try {
       const readme = await readFile(join(dir, 'README.md'), 'utf8');
-      expect(readme).toContain('Node 22 or newer');
+      // The Node the launchers check for: it said 22 while run.sh refused anything below 24.
+      expect(readme).toContain(`Node ${NODE_MAJOR} or newer`);
       // The one thing a recipient has to be told, and now the only one: the
       // interpreter that runs the engine runs every body in the graph too.
       expect(readme).toContain('Nothing else');
       // The plotter asks no model, so a page of provider settings would be
       // instructions for something that never happens.
       expect(readme).not.toContain('AI_GRAPH_AI_PROVIDER');
+      // What a person is handed is a page of blocks, called that.
+      expect(readme).toContain('## The page');
+      expect(readme).not.toMatch(/\b(interface|widgets?|gui)\b/i);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

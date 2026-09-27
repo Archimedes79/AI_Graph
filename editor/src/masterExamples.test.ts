@@ -1,17 +1,17 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import { useGraphStore } from '@/store/graphStore';
 import type { Graph, GraphNode, GuiWidget, NodeType, Port, WidgetKind } from '@/graph';
-import { trackPorts } from '@/store/portRenames';
-import { saveDraft, withPorts, withSetting } from '@/canvas/nodeDraft';
+import { withPorts } from '@/canvas/nodeDraft';
+import { nodeDialog } from '@/canvas/nodeDialog';
 import { newBlock } from '@/page/DesignerPalette';
-import { pageOf } from '@/page/GuiPage';
+import { pageOf } from '@/document/guiWidgets';
 import { insertBlock, patchBlock } from '@/page/pageWrite';
 import { listPorts, withPerItem } from '@/authoring/nodeStepRules';
 import { readPair } from '@/authoring/examplePair';
 import { executeGraph } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
 import { problemsIn } from '@engine/project/check.ts';
-import { filePorts } from '@engine/execution/fileInputs.ts';
+import { readFilePorts } from '@/authoring/generationContext';
 import { parseGraph } from '@engine/graph.ts';
 import { graphFrom } from '@engine/project/flow.ts';
 import type { Runtime } from '@engine/elements/Runtime.ts';
@@ -20,14 +20,15 @@ import type { Runtime } from '@engine/elements/Runtime.ts';
  * The three master examples, built by hand.
  *
  * A plotter, a folder of summaries, a chat: each is a page and one node, and
- * each is put together here the way a person puts it together -- a node dropped
- * on the canvas, blocks added to the page, a setting changed in a dialog, a wire
- * dragged from one port to another. No mouse, no browser, and no copy of what
+ * each is put together here the way a person puts it together -- blocks added
+ * to the page (the first one makes it), a node dropped on the canvas, a setting
+ * changed in a dialog, a wire dragged from one port to another. No mouse, no browser, and no copy of what
  * the editor's handlers do: a block comes from the palette's `newBlock` and
- * reaches the page through `insertBlock` and `patchBlock`, a dialog's draft is
- * edited by `withPorts` and `withSetting` and saved by `saveDraft`, a wire is
- * the store's `connect` -- the functions the designer and the node dialog call.
- * What stays in the components -- which row was clicked -- is left out.
+ * reaches the page through `insertBlock` and `patchBlock`, a node's dialog is
+ * its own `nodeDialog` -- changed as its ports editor and its fields change it,
+ * and written into the graph as it writes -- and a wire is the store's
+ * `connect`: the functions the designer and the node dialog call. What stays
+ * in the components -- which row was clicked -- is left out.
  *
  * Then three questions, of each:
  *   - is what was built sound (`check` finds nothing)?
@@ -63,51 +64,55 @@ const nodeOf = (id: string): GraphNode => store().rfNodes.find((node) => node.id
 const drop = (type: NodeType, x: number): string => store().addNode(type, { x, y: 160 });
 
 const pageNow = () => pageOf(store().rfNodes.map((node) => node.data.graphNode as GraphNode));
+/** The page's node: there is none to drop, the page's first block made it. */
+const pageId = (): string => pageNow().page!.id;
 
 /**
  * Add a block to the page from the palette, then set what its panel sets: the
  * designer's own steps (`newBlock`, `insertBlock`, then `patchBlock`).
  */
 function addBlock(kind: WidgetKind, mode: string | undefined, settings: Partial<GuiWidget>): string {
-  const block = newBlock(kind, mode, pageNow().blocks.map((b) => b.widget.id));
+  const block = newBlock(kind, mode, pageNow().widgets.map((taken) => taken.id));
   insertBlock(block);
   patchBlock(block.id, settings);
   return block.id;
 }
 
 /**
- * Save a node's dialog: its name, what its ports are called, its settings --
- * and step 1's "Run once per item", ticked or not, which sets how the node
- * runs and which inputs fan out, together (`withPerItem`), for the lists step
- * 1 sees arriving. Port *types* no dialog sets. *needed* ticks step 1's
- * "needed" on those inputs (`PortsEditor`), which sets `required` on the port.
+ * Open a node's dialog and set what it asks: its name, what its ports are
+ * called, its settings -- and step 1's "Run once per item", ticked or not,
+ * which sets how the node runs and which inputs fan out and which outputs hand
+ * on a list, together (`withPerItem`), for the lists step 1 sees arriving.
+ * Port *types* no dialog sets, but a wire from a picker ticks "Read the file
+ * at this path". *needed* ticks step 1's "needed" on those inputs
+ * (`PortsEditor`), which sets `required` on the port.
  *
- * The draft is edited the way the dialog edits it (`trackPorts`, `withPorts`,
- * `withSetting`) and saved the way the dialog saves it (`saveDraft`).
+ * Done through the dialog's own `nodeDialog`: each change as its ports editor
+ * and its fields make it, and written into the graph as it writes -- closed.
  */
 function edit(nodeId: string, changes: {
   label: string; input?: string[]; output?: string; config?: Record<string, unknown>; perItem?: boolean; needed?: string[];
 }): void {
-  const stored = nodeOf(nodeId);
-  let draft = trackPorts(JSON.parse(JSON.stringify(stored)) as GraphNode);
+  const dialog = nodeDialog(nodeId);
   // A row renamed in the ports editor; past the last row, one added with + and then named.
   const renamed = (ports: Port[], names: string[], kind: Port['kind']) => names.map((name, index) => ({
     ...(ports[index] ?? { kind, data_type: 'any', multi: false, required: false, description: '' }), id: name, name,
   }));
-  draft = withPorts(draft, {
+  dialog.change((draft) => withPorts(draft, {
     inputs: (changes.input ? renamed(draft.inputs, changes.input, 'input') : draft.inputs)
       .map((port) => (changes.needed?.includes(port.id) ? { ...port, required: true } : port)),
     outputs: changes.output ? renamed(draft.outputs, [changes.output], 'output') : draft.outputs,
-  });
-  draft = { ...draft, label: changes.label };
-  for (const [key, value] of Object.entries(changes.config ?? {})) draft = withSetting(draft, stored, key, value);
+  }));
+  dialog.change((draft) => ({ ...draft, label: changes.label }));
+  for (const [key, value] of Object.entries(changes.config ?? {})) dialog.setConfig(key, value);
   if (changes.perItem !== undefined) {
-    const lists = listPorts(draft, readPair(draft.config.examples).input, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
+    const shown = dialog.node()!;
+    const lists = listPorts(shown, readPair(shown.config.examples).input, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
     // The box is there only when a list arrives; a new code or ai node's input is declared one.
     expect(lists.length).toBeGreaterThan(0);
-    draft = withPerItem(draft, changes.perItem, lists);
+    dialog.change((draft) => withPerItem(draft, changes.perItem!, lists));
   }
-  saveDraft(nodeId, stored, draft);
+  dialog.write();
 }
 
 /** Drag a wire from one handle to another. */
@@ -172,12 +177,12 @@ beforeEach(() => {
 
 describe('population plotter: choose a CSV, see the chart', () => {
   const build = () => {
-    const page = drop('gui', 60);
     addBlock('text', 'heading', { value: 'Population plotter' });
+    const page = pageId();
     const file = addBlock('input_picker', 'file', { label: 'CSV file', extensions: '.csv', value: 'data/population.csv', run_on_change: true });
     const plot = addBlock('plot_window', undefined, { label: '' });
     const chart = drop('code', 560);
-    edit(chart, { label: 'What to plot', input: ['csv'], output: 'figure', config: { code: bodyOf('population_plotter', 'chart'), read_file_inputs: true }, perItem: false });
+    edit(chart, { label: 'What to plot', input: ['csv'], output: 'figure', config: { code: bodyOf('population_plotter', 'chart') }, perItem: false });
     wire(page, `${file}_out`, chart, 'csv');
     wire(chart, 'figure', page, `${plot}_in`);
     return { graph: store().rootGraph(), page, file, plot };
@@ -199,12 +204,12 @@ describe('population plotter: choose a CSV, see the chart', () => {
 
 describe('summarize a folder: choose a folder, read the summaries', () => {
   const build = () => {
-    const page = drop('gui', 60);
     addBlock('text', 'heading', { value: 'Summarize a folder' });
+    const page = pageId();
     const folder = addBlock('input_picker', 'directory', { label: 'Folder', extensions: '.txt', value: 'stories', run_on_change: true });
     const summaries = addBlock('text_io', 'output', { label: 'Summaries' });
     const summarize = drop('ai', 560);
-    edit(summarize, { label: 'Each file', input: ['story'], config: { system_prompt: 'Summarize the story in two sentences.', prompt_template: '{{story}}', read_file_inputs: true }, perItem: true });
+    edit(summarize, { label: 'Each file', input: ['story'], config: { system_prompt: 'Summarize the story in two sentences.', prompt_template: '{{story}}' }, perItem: true });
     wire(page, `${folder}_out`, summarize, 'story');
     wire(summarize, 'output', page, `${summaries}_in`);
     return { graph: store().rootGraph(), page, folder, summaries };
@@ -227,8 +232,8 @@ describe('summarize a folder: choose a folder, read the summaries', () => {
 
 describe('chat: a page with a chat block, and a model', () => {
   const build = () => {
-    const page = drop('gui', 60);
     addBlock('text', 'heading', { value: 'Chat' });
+    const page = pageId();
     const chat = addBlock('chat', undefined, {});
     const assistant = drop('ai', 560);
     edit(assistant, { label: 'Assistant', input: ['history', 'message'], config: { system_prompt: 'You are a friendly assistant.', prompt_template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}' }, perItem: false, needed: ['message'] });
@@ -266,8 +271,8 @@ describe('chat: a page with a chat block, and a model', () => {
 
 describe('a wire from a picker', () => {
   it('makes the input it ends on one that receives file paths, so nobody has to say it twice', () => {
-    const page = drop('gui', 60);
     const file = addBlock('input_picker', 'file', { label: 'File' });
+    const page = pageId();
     const code = drop('code', 560);
     expect(nodeOf(code).inputs[0].data_type).toBe('any');
     wire(page, `${file}_out`, code, nodeOf(code).inputs[0].id);
@@ -279,17 +284,16 @@ describe('a wire from a picker', () => {
 
   /**
    * Every kind a person wires a file into starts out saying nothing about what
-   * it carries, and that is what lets the file be read -- in the editor, by the
-   * wire above, and in the engine, for a graph the editor never touched
-   * (`execution/fileInputs.ts`). An AI node was created `text` instead, so it
-   * alone was handed the file's *name* with "read file contents" ticked.
+   * it carries, and that is what lets the wire tick "Read the file at this
+   * path" on it -- which is all the run asks (`execution/fileInputs.ts`). An AI
+   * node was created `text` instead, so it alone was handed the file's *name*.
    */
   it.each(['code', 'ai'] as const)('%s: a new node says nothing about what its input carries, so a file reaches it whole', (kind) => {
-    const page = drop('gui', 60);
     const file = addBlock('input_picker', 'file', { label: 'File' });
+    const page = pageId();
     const node = drop(kind, 560);
     expect(nodeOf(node).inputs[0].data_type).toBe('any');
     wire(page, `${file}_out`, node, nodeOf(node).inputs[0].id);
-    expect(filePorts(nodeOf(node), store().exportGraph())).toEqual([nodeOf(node).inputs[0].id]);
+    expect(readFilePorts(nodeOf(node))).toEqual([nodeOf(node).inputs[0].id]);
   });
 });

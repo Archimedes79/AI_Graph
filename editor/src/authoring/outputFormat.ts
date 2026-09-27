@@ -17,21 +17,14 @@ export function outputFormatText(config: GraphNode['config']): string {
   return String(config.output_format_prompt ?? '').trim();
 }
 
-/** An answer or result to imitate, when one was kept. */
-export function outputExampleText(config: GraphNode['config']): string {
-  return String(config.output_example ?? '').trim();
-}
-
 /**
- * The declaration in one line, for a neighbour's ✨: the words, the example's
- * start, and the shape a run kept. `text` when nothing is declared.
+ * The declaration in one line, for a neighbour's ✨: the words, and the shape
+ * a run kept. `text` when nothing is declared.
  */
 export function describeDeclaredOutput(config: GraphNode['config']): string {
   const parts: string[] = [];
   const words = outputFormatText(config);
   if (words) parts.push(words);
-  const example = outputExampleText(config);
-  if (example) parts.push(`shaped like ${example.length > 300 ? `${example.slice(0, 300)}…` : example}`);
   const schema = readInterface(config.output_schema);
   if (schema) parts.push(`returns ${schemaOutline(schema)}`);
   return parts.join('; ') || 'text';

@@ -1,5 +1,4 @@
 import { lazy } from 'react';
-import type { GraphNode } from '@/graph';
 import { fromEngine, type ElementGeneration } from '@/authoring/generation';
 import { AiNodeRunner } from '@engine/elements/nodes/ai/AiNodeRunner.ts';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
@@ -25,9 +24,9 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly AdvancedPanel = lazy(() => import('./AiNodeAdvancedPanel'));
 
-  override readonly advancedSummary = 'model, tools, files, failures';
+  override readonly advancedSummary = 'model, tools, images, failures';
 
-  override readonly generation: ElementGeneration<GraphNode> = {
+  override readonly generation: ElementGeneration = {
     ...fromEngine(new AiNodeRunner().generation()),
     promptLabel: 'What this node should do',
     promptPlaceholder: 'Describe what this node should do — ✨ Generate turns it into the instructions in step 4.',

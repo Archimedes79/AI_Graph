@@ -40,7 +40,7 @@ describe('the order a graph is generated in', () => {
     const [a, b, c] = [node('a'), node('b'), node('c')];
     // Added c, b, a; wired a -> b -> c.
     const order = generationOrder([c, b, a], [edge('a', 'b'), edge('b', 'c')]);
-    expect(order.map((t) => t.key)).toEqual(['a', 'b', 'c']);
+    expect(order.map((n) => n.id)).toEqual(['a', 'b', 'c']);
   });
 
   it('refuses a graph that cannot run, the way the engine does', () => {
@@ -58,7 +58,7 @@ describe('sweeping a graph', () => {
     const seen: string[] = [];
     const nodes = [node('a'), node('b')];
     const steps = await collect(sweep(nodes, [edge('a', 'b')], {
-      unitFor: (t) => ok(seen, t.key),
+      unitFor: (n) => ok(seen, n.id),
     }));
 
     expect(seen).toEqual(['a', 'b']);
@@ -74,9 +74,9 @@ describe('sweeping a graph', () => {
     const seen: string[] = [];
     const nodes = [node('a'), node('b')];
     const steps = await collect(sweep(nodes, [edge('a', 'b')], {
-      unitFor: (t) => (t.key === 'a'
+      unitFor: (n) => (n.id === 'a'
         ? { guard: () => 'Please add a code generation prompt first.', run: async () => '', apply: () => {} }
-        : ok(seen, t.key)),
+        : ok(seen, n.id)),
     }));
 
     expect(steps.map((s) => s.status)).toEqual(['blocked', 'generated']);
@@ -88,9 +88,9 @@ describe('sweeping a graph', () => {
     const seen: string[] = [];
     const nodes = [node('a'), node('b'), node('c')];
     const steps = await collect(sweep(nodes, [edge('a', 'b'), edge('b', 'c')], {
-      unitFor: (t) => (t.key === 'b'
+      unitFor: (n) => (n.id === 'b'
         ? { run: async () => { throw new Error('the model refused'); }, apply: () => {} }
-        : ok(seen, t.key)),
+        : ok(seen, n.id)),
     }));
 
     expect(steps.map((s) => s.status)).toEqual(['generated', 'failed']);
@@ -103,7 +103,7 @@ describe('sweeping a graph', () => {
     const nodes = [node('a'), node('b')];
     const stopped = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
     const steps = await collect(sweep(nodes, [edge('a', 'b')], {
-      unitFor: (t) => ok(seen, t.key), stopped,
+      unitFor: (n) => ok(seen, n.id), stopped,
     }));
 
     expect(seen).toEqual(['a']);
@@ -112,15 +112,6 @@ describe('sweeping a graph', () => {
 });
 
 describe('what a sweep would have to guess at', () => {
-  it('names a file input with nothing to read, and not one with a file set', () => {
-    const source = node('src', 'input');
-    source.config.input_mode = 'file';
-    expect(missingExamples([source], []).map((n) => n.id)).toEqual(['src']);
-
-    source.config.value = 'data/sample.csv';
-    expect(missingExamples([source], [])).toEqual([]);
-  });
-
   it('names a folder input with no folder, and not one with a folder set', () => {
     const source = node('src', 'input');
     source.config.input_mode = 'directory';
@@ -138,7 +129,7 @@ describe('what a sweep would have to guess at', () => {
 
   it('leaves alone a node that is fed by another, which will describe itself', () => {
     const source = node('src', 'input');
-    source.config.input_mode = 'file';
+    source.config.input_mode = 'directory';
     const fed = node('b');
     expect(missingExamples([source, fed], [edge('src', 'b')]).map((n) => n.id)).toEqual(['src']);
     expect(missingExamples([fed], [edge('src', 'b')])).toEqual([]);
@@ -146,24 +137,22 @@ describe('what a sweep would have to guess at', () => {
 });
 
 describe('what the next node is generated against', () => {
-  /** A plain node target, for the cases that have nothing to do with a page. */
-  const plain = (id: string) => ({ node: node(id), key: id, label: id });
   const wire = (source: string, sourceHandle: string, target: string, targetHandle: string) => ({ source, sourceHandle, target, targetHandle });
 
   it('is what the node before it returned, port by port', () => {
     const produced = new Map([['a', { out: 'text from a', count: 3 }]]);
-    expect(sampleFromPredecessors(plain('b'), [wire('a', 'out', 'b', 'text'), wire('a', 'count', 'b', 'n')], produced))
+    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'text'), wire('a', 'count', 'b', 'n')], produced))
       .toEqual({ text: 'text from a', n: 3 });
   });
 
   it('collects several sources into a list, as a run would', () => {
     const produced = new Map([['a', { out: 1 }], ['c', { out: 2 }]]);
-    expect(sampleFromPredecessors(plain('b'), [wire('a', 'out', 'b', 'items'), wire('c', 'out', 'b', 'items')], produced))
+    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'items'), wire('c', 'out', 'b', 'items')], produced))
       .toEqual({ items: [1, 2] });
   });
 
   it('is nothing at all when no predecessor has produced anything yet', () => {
-    expect(sampleFromPredecessors(plain('b'), [wire('a', 'out', 'b', 'text')], new Map())).toBeUndefined();
+    expect(sampleFromPredecessors('b', [wire('a', 'out', 'b', 'text')], new Map())).toBeUndefined();
   });
 });
 
@@ -197,14 +186,11 @@ describe('a GUI file picker as a source', () => {
 
 describe('a page in the order', () => {
   /**
-   * The chain that made this necessary, and the reason a page cannot simply be
-   * walked in list order: its blocks have no edges among themselves, and what
-   * connects them runs out through the graph and back.
+   * A page is one node in the order, and writes nothing: its blocks have no
+   * body. What runs out of it and back -- picker, code node, chart -- is a
+   * loop the memory rule absolves, so the code node comes after the page.
    *
    *   [page] picker ──→ code node ──→ [page] chart
-   *
-   * So the blocks stand in the graph in their node's place, and one sort
-   * answers for both kinds at once.
    */
   function plotterish(): { nodes: GraphNode[]; edges: GraphEdge[] } {
     const page = node('panel', 'gui');
@@ -229,51 +215,20 @@ describe('a page in the order', () => {
     };
   }
 
-  it('puts each block where its wiring says, not where the page lists it', () => {
+  it('puts the page before the node its picker feeds, and writes nothing for it', async () => {
     const { nodes, edges } = plotterish();
-    expect(generationOrder(nodes, edges).map((t) => t.key))
-      .toEqual(['panel::picker', 'points', 'panel::chart']);
-  });
-
-  it('leaves out the blocks that have no ports and generate nothing', () => {
-    const { nodes, edges } = plotterish();
-    expect(generationOrder(nodes, edges).map((t) => t.key)).not.toContain('panel::title');
-  });
-
-  it('names a block by its page and itself, so a step says which one', () => {
-    const { nodes, edges } = plotterish();
-    const chart = generationOrder(nodes, edges).find((t) => t.key === 'panel::chart');
-    expect(chart?.label).toBe(`${nodes[0].label} / Chart`);
-    expect(chart?.widget?.id).toBe('chart');
-  });
-
-  it('hands a block what the node before it produced, as its transform sees it', () => {
-    const { nodes, edges } = plotterish();
-    const chart = generationOrder(nodes, edges).find((t) => t.key === 'panel::chart')!;
-    const produced = new Map([['points', { points: [{ label: 'a', value: 1 }] }]]);
-    const wired = edges.map((e) => ({
-      source: e.source_node_id, sourceHandle: e.source_port_id,
-      target: e.target_node_id, targetHandle: e.target_port_id,
+    expect(generationOrder(nodes, edges).map((n) => n.id)).toEqual(['panel', 'points']);
+    const seen: string[] = [];
+    const steps = await collect(sweep(nodes, edges, {
+      unitFor: (n) => (NODE_BUILDERS[n.node_type].generation ? ok(seen, n.id) : undefined),
     }));
-    // `{value: ...}` -- the shape a block's own contract promises it, not the
-    // port name the graph used to get there.
-    expect(sampleFromPredecessors(chart, wired, produced, new Set(['panel'])))
-      .toEqual({ value: [{ label: 'a', value: 1 }] });
+    expect(steps.map((s) => [s.nodeId, s.status])).toEqual([['panel', 'skipped'], ['points', 'generated']]);
+    expect(seen).toEqual(['points']);
   });
 });
 
 describe('what a sweep counts as already written', () => {
-  const folder = (selector_code: string): GraphNode => {
-    const input = node('in', 'input');
-    return { ...input, config: { ...input.config, input_mode: 'directory', select_all_files: false, selector_prompt: 'Only the CSVs.', selector_code } };
-  };
-
-  it('is not a folder input nobody wrote a selector for, so its selector is generated (B54)', () => {
-    expect(writtenBody(folder(NODE_KINDS.input.create('in').config.selector_code), 'selector_code')).toBe(false);
-  });
-
-  it('is a selector somebody wrote, and a code node\'s code but not its starter', () => {
-    expect(writtenBody(folder('function run(i) { return { files: i.files.slice(0, 1) }; }'), 'selector_code')).toBe(true);
+  it('is a code node\'s code, but not its starter', () => {
     expect(writtenBody(node('c'), 'code')).toBe(false);
     expect(writtenBody({ ...node('c'), config: { ...node('c').config, code: 'function run() { return {}; }' } }, 'code')).toBe(true);
   });

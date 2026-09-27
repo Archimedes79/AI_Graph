@@ -1,13 +1,11 @@
-// What is wrong with a graph, and with a project folder.
+// What is wrong with a graph.
 //
 // One list of problems for every reader: `node engine/src/main.ts check`
 // prints it and fails a CI job on it, the MCP server hands it to a model before
-// saving, and each entry says where, what, and how to fix it -- the reader may
-// be a person or a model, and both fix what they are told precisely.
-
-import { existsSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+// saving, the editor shows it before it loads a graph from outside, and each
+// entry says where, what, and how to fix it -- the reader may be a person or a
+// model, and both fix what they are told precisely. It reads no disk, so the
+// page can ask it; what only a project folder gets wrong is `folderCheck.ts`.
 
 import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
 import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
@@ -18,11 +16,7 @@ import { resultKeys } from '../elements/NodeRunner.ts';
 import { mismatches, portMisfit, readInterface } from '../execution/interface.ts';
 import { filePorts } from '../execution/fileInputs.ts';
 import { parseExamples } from '../execution/examples.ts';
-import { INTERFACE_FILE } from './interfaceFile.ts';
 import { unsavableIds } from './flow.ts';
-import {
-  FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, isProjectFolder, loadGraph, nodeFolder, projectFolderOf, projectTexts, readStructure,
-} from './folder.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
 
@@ -67,21 +61,7 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       continue;
     }
 
-    // "Hand me the file's content" is carried out port by port, for the ports
-    // that hold a path. Where no port does, it does nothing at all, silently:
-    // the node is handed the file's *name*, and a model summarises that with a
-    // straight face. Asked of `filePorts` and handed the graph, so this asks
-    // exactly what the run will ask -- a port typed `any` with a picker wired
-    // into it holds a path, and warning about it would be a lie.
-    if (element.readsFileInputs(node) && !filePorts(node, graph, registry).length) {
-      problems.push({
-        where,
-        problem: 'It is set to read wired files into their content, but none of its inputs is a file path -- so it is handed the path as text.',
-        fix: 'Set the data_type of the input that receives the file (or the list of files) to "file_path", or turn read_file_inputs off.',
-      });
-    }
-
-    // The same trap, one setting over: "once per item" fans out over the inputs
+    // A setting that silently does nothing: "once per item" fans out over the inputs
     // declared as lists. With none, the node runs once, on the whole list, and
     // nothing says it was asked to do otherwise. Only where a list really
     // arrives: on a node no list reaches, "once per item" means nothing.
@@ -150,21 +130,41 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
 
   // A graph inside a node hands its answer to the node above it, which is
   // somewhere for the answer to go: what this asks for is an output node, and
-  // in there an output node *is* a port.
-  if (!graph.nodes.some((node) => registry.node(node.node_type)?.isResult || registry.node(node.node_type)?.hasInterface)) {
+  // in there an output node *is* a port. A page is its blocks: a page node
+  // with none shows nobody anything, as a delivered tool draws nothing on it.
+  const shows = (node: GraphNode): boolean => {
+    const element = registry.node(node.node_type);
+    return !!element && (element.isResult || (element.hasInterface && element.blocks(node).length > 0));
+  };
+  if (!graph.nodes.some(shows)) {
     problems.push(inside ? {
       where: `${inside}graph`,
       problem: 'Nothing comes out: a graph inside a node hands its answer up through its output nodes, and there are none.',
       fix: 'Add an "output" node inside and wire the result into it. Each one is an output port on the node that holds this graph.',
     } : {
       where: 'graph',
-      problem: 'Nothing a person can see: there is no gui node and no output node, so a run computes its answer and shows nobody.',
-      fix: 'End every branch in an "output" node (config.write_mode "window" plus an output_label, or "file"), or in a "gui" node with a block that displays the value.',
+      problem: 'Nothing a person can see: there is no output node, and no page with a block on it, so a run computes its answer and shows nobody.',
+      fix: 'End every branch in an "output" node -- the run\'s result, under its label; config.write_mode "file" or "directory" writes it too -- or in a "gui" node with a block that displays the value.',
     });
   }
-  if (!inside) problems.push(...sharedResultLabels(graph));
+  if (!inside) problems.push(...sharedResultLabels(graph), ...secondPages(graph));
 
   return problems;
+}
+
+/**
+ * A graph is one tool with one page. Nodes that carry an interface beyond the
+ * first are shown by nobody: the editor and a delivered tool draw the first
+ * page's blocks. (Inside a node's graph any page is a problem of that node's.)
+ */
+function secondPages(graph: Graph): Problem[] {
+  const pages = graph.nodes.filter((node) => registry.node(node.node_type)?.hasInterface).map((node) => node.id);
+  if (pages.length < 2) return [];
+  return [{
+    where: `nodes ${names(pages)}`,
+    problem: `A graph has one page, and these are ${pages.length}: only the blocks of "${pages[0]}" are shown.`,
+    fix: `Move the blocks of the others into "${pages[0]}" (its config.gui_widgets), wire them there, and delete the others.`,
+  }];
 }
 
 /**
@@ -193,7 +193,7 @@ function sharedResultLabels(graph: Graph): Problem[] {
       problem: ids.length > 1
         ? `These output nodes share the label "${label}", so the run's result keeps only the first under it, the rest under ${elsewhere}.`
         : `Its label "${label}" is the key another output's result is handed on under, so the run's result keeps it under ${elsewhere}.`,
-      fix: 'Give every output node its own output_label.',
+      fix: 'Give every output node its own label.',
     });
   }
   return problems;
@@ -256,97 +256,6 @@ function interfaceProblems(node: GraphNode, where: string): Problem[] {
 }
 
 /**
- * What only a project folder can get wrong: a folder under `nodes/` that
- * belongs to no node (the node was deleted, or renamed in \`flow.json\` by
- * hand), and a file in a node's folder that nothing reads -- `prompt.md` where
- * an AI node reads `system.md` is a text somebody wrote and nobody will ever send.
- */
-export async function folderProblems(folder: string): Promise<Problem[]> {
-  const { graph } = await readStructure(folder);
-  const found: Problem[] = [];
-  const expected = new Map<string, Set<string>>();
-  for (const text of projectTexts(graph)) {
-    const slash = text.path.lastIndexOf('/');
-    const dir = text.path.slice(0, slash);
-    if (!expected.has(dir)) expected.set(dir, new Set());
-    expected.get(dir)!.add(text.path.slice(slash + 1));
-  }
-  // Every node and block has a folder it may use, even one that keeps no writing yet.
-  for (const node of graph.nodes) {
-    const nodeDir = nodeFolder(node.id);
-    if (!expected.has(nodeDir)) expected.set(nodeDir, new Set());
-    // Its name and settings, and what goes in and what comes out.
-    expected.get(nodeDir)!.add(NODE_FILE).add(INTERFACE_FILE);
-  }
-
-  // A node that holds a graph holds a project folder: its own flow.json and
-  // layout.json belong there, and what is under them is that project's, looked
-  // at below by the same function.
-  const nested = new Set<string>();
-  for (const node of graph.nodes) {
-    if (!registry.node(node.node_type)?.nestedGraph(node)) continue;
-    const dir = nodeFolder(node.id);
-    nested.add(dir);
-    // Every node's folder is in `expected` already, from the loop above.
-    for (const name of [FLOW_FILE, LAYOUT_FILE]) expected.get(dir)!.add(name);
-  }
-
-  const walk = async (relative: string): Promise<void> => {
-    let entries;
-    try {
-      entries = await readdir(join(folder, relative), { withFileTypes: true });
-    } catch {
-      return;
-    }
-    const reads = expected.get(relative);
-    for (const entry of entries) {
-      const path = `${relative}/${entry.name}`;
-      // Its own project: checked as one, not walked as part of this one. A
-      // `nodes/` there without a flow.json is read by nobody, and said below.
-      if (entry.isDirectory() && entry.name === NODES_DIR && nested.has(relative) && isProjectFolder(join(folder, relative))) {
-        found.push(...(await folderProblems(join(folder, relative)))
-          .map((problem) => ({ ...problem, where: `${relative}/${problem.where}` })));
-        continue;
-      }
-      if (entry.isDirectory()) {
-        const owned = [...expected.keys()].some((dir) => dir === path || dir.startsWith(`${path}/`));
-        if (!owned) {
-          found.push({
-            where: path,
-            problem: 'This folder belongs to no node in flow.json.',
-            fix: 'Delete it, or give the node it was for this id again.',
-          });
-          continue;
-        }
-        await walk(path);
-      } else if (reads && !reads.has(entry.name) && !entry.name.startsWith('.')) {
-        found.push({
-          where: path,
-          problem: 'Nothing reads this file.',
-          fix: reads.size ? `This element reads ${names(reads)}.` : 'This element keeps no writing in files.',
-        });
-      }
-    }
-  };
-  if (existsSync(join(folder, NODES_DIR))) await walk(NODES_DIR);
-  return found;
-}
-
-/** Everything wrong with the graph or project at *path*: the `check` command's answer. */
-export async function checkPath(path: string): Promise<{ problems: Problem[]; graph: Graph | null }> {
-  let graph: Graph;
-  try {
-    graph = await loadGraph(path);
-  } catch (error) {
-    return { problems: [{ where: path, problem: (error as Error).message, fix: 'Fix the file so it can be read.' }], graph: null };
-  }
-  const problems = problemsIn(graph);
-  const folder = projectFolderOf(path);
-  if (folder) problems.push(...await folderProblems(folder));
-  return { problems, graph };
-}
-
-/**
  * A wire whose two ends disagree about what travels on it.
  *
  * Only where both ends have said something: the output interface a run left
@@ -389,9 +298,7 @@ function exampleProblems(graph: Graph, node: GraphNode, where: string): Problem[
   const inputs = new Set(node.inputs.map((port) => port.id));
   const outputs = new Set(node.outputs.map((port) => port.id));
   // A port whose path is read into text arrives as the text; the producer's interface describes the path.
-  const readsFiles = registry.node(node.node_type)?.readsFileInputs(node) === true;
-  // The same rule the run uses: a port typed any with a path wired in is read too.
-  const read = new Set(filePorts(node, graph, registry));
+  const read = new Set(filePorts(node, registry));
 
   for (const example of examples) {
     const at = `${where}, example "${example.title}"`;
@@ -400,7 +307,7 @@ function exampleProblems(graph: Graph, node: GraphNode, where: string): Problem[
         found.push({ where: at, problem: `It gives an input "${port}", which the node does not have.`, fix: `Its inputs are ${names(inputs)}.` });
         continue;
       }
-      if (readsFiles && read.has(port)) continue;
+      if (read.has(port)) continue;
       for (const edge of graph.edges.filter((e) => e.target_node_id === node.id && e.target_port_id === port)) {
         const producer = graph.nodes.find((candidate) => candidate.id === edge.source_node_id);
         const iface = producer && registry.node(producer.node_type)?.outputInterface(producer);

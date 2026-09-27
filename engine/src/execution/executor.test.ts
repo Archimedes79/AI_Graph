@@ -239,9 +239,9 @@ describe('executeGraph', () => {
     node('a', 'input', { input_mode: 'text', value: 'alpha' }),
     node('b', 'input', { input_mode: 'text', value: 'beta' }),
     node('c', 'input', { input_mode: 'text', value: 'gamma' }),
-    node('first', 'output', { output_label: 'Result' }),
-    node('clash', 'output', { output_label: 'Result (second)' }),
-    node('second', 'output', { output_label: 'Result' }),
+    { ...node('first', 'output'), label: 'Result' },
+    { ...node('clash', 'output'), label: 'Result (second)' },
+    { ...node('second', 'output'), label: 'Result' },
   ], [
     edge('e1', 'a', 'output', 'first', 'value'),
     edge('e2', 'b', 'output', 'second', 'value'),
@@ -340,7 +340,7 @@ describe('a batch with failing items', () => {
 });
 
 describe('what a run leaves on the page', () => {
-  it('shows what finished before Stop as it is, not as a transform that was stopped', async () => {
+  it('shows what finished before Stop as it arrived', async () => {
     const stop = new AbortController();
     const runtime = quietRuntime({
       code: { run: async (body, inputs, signal) => {
@@ -355,14 +355,14 @@ describe('what a run leaves on the page', () => {
     const graph = graphOf(
       [
         node('src', 'code', { code: 'function run() { return { rows: [1, 2] }; }' }),
-        node('page', 'gui', { gui_widgets: [{ id: 't', kind: 'table', code: 'function run(i) { return { value: i.value }; }' }] }),
+        node('page', 'gui', { gui_widgets: [{ id: 't', kind: 'table' }] }),
         node('slow', 'code', { code: '/* SLOW */ function run() { return { x: 1 }; }' }),
       ],
       [edge('a', 'src', 'rows', 'page', 't_in'), edge('b', 'src', 'rows', 'slow', 'rows')],
     );
     const run = await executeGraph(graph, { runtime, registry, signal: stop.signal });
     expect(run.status).toBe('cancelled');
-    expect(JSON.stringify(run.node_results.find((r) => r.node_id === 'page')!.display)).not.toContain('Stopped');
+    expect(run.node_results.find((r) => r.node_id === 'page')!.display).toEqual({ t: [1, 2] });
   });
 
   it('does not ask a model when every wire into its one port brought nothing', async () => {
@@ -446,7 +446,7 @@ describe('a node that catches its own failure', () => {
     expect(result.error).toBeNull();
   });
 
-  it('does the same when it is tried by itself, as Try it, ▶ Test and run-node try it', async () => {
+  it('does the same when it is tried by itself, as Try it and run-node try it', async () => {
     const graph = graphOf([failing({ catch_errors: true })], []);
     const inRun = (await executeGraph(graph, { runtime: nowhere, registry: withBoom as never })).node_results[0];
     const alone = await executeNode(graph, 'bad', {}, { runtime: nowhere, registry: withBoom as never });

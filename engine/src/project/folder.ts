@@ -7,11 +7,10 @@
 //         count/            one folder per node, by id
 //           node.json       its name and its settings
 //           interface.json  what goes in and what comes out
-//           code.js         what the element keeps in files: `ElementRunner.texts`
+//           code.js         what the element keeps in files: `NodeRunner.texts`
 //         page/
-//           node.json
+//           node.json       a page's blocks are settings: they live here
 //           interface.json
-//           chart/code.js   a block of a page, one level down
 //
 // **Each fact in one place.** The flow says which node feeds which, and nothing
 // about any node. A node's folder says everything about that node, and nothing
@@ -36,8 +35,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry } from '../elements/registry.ts';
-import { shippedText } from '../elements/ElementRunner.ts';
-import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
+import { shippedText } from '../elements/NodeRunner.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 import { FLOW_FILE, flowOf, graphFrom } from './flow.ts';
 import { folderName } from './names.ts';
@@ -98,24 +96,24 @@ export function nodeFolder(nodeId: string): string {
 /** One piece of writing in a graph: whose it is, which field holds it, and where its file goes. */
 export interface ProjectText {
   node_id: string;
-  /** The block inside a page, or `''` for the node's own. */
-  widget_id: string;
   field: string;
   /** Relative to the project folder, with `/`. */
   path: string;
-  json: boolean;
-  /** The object the field lives on: a node's config, or the block itself. */
+  /** The node's config, where the field lives. */
   holder: Record<string, unknown>;
   /** See `TextFile`: what the file says while nobody has written their own. */
   standard?: string;
 }
 
-/** Every piece of writing *graph* can keep in files, whether or not it holds any. */
+/**
+ * Every piece of writing *graph* can keep in files, whether or not it holds
+ * any. Only a node writes: a page's blocks are settings, kept in its node.json.
+ */
 export function projectTexts(graph: Graph): ProjectText[] {
   const found: ProjectText[] = [];
-  // Each node and block claims its folder once. Compared without case: on the
-  // disk most people use, "Count" and "count" are one folder, and whichever was
-  // written last would be the only one there.
+  // Each node claims its folder once. Compared without case: on the disk most
+  // people use, "Count" and "count" are one folder, and whichever was written
+  // last would be the only one there.
   const folders = new Map<string, string>();
   const claim = (folder: string, owner: string): string => {
     const other = folders.get(folder.toLowerCase());
@@ -132,19 +130,9 @@ export function projectTexts(graph: Graph): ProjectText[] {
     const folder = claim(nodeFolder(node.id), node.id);
     for (const text of registry.node(node.node_type)?.texts(node) ?? []) {
       found.push({
-        node_id: node.id, widget_id: '', field: text.field, path: `${folder}/${text.file}`,
-        json: text.json === true, holder: node.config, standard: text.standard,
+        node_id: node.id, field: text.field, path: `${folder}/${text.file}`,
+        holder: node.config, standard: text.standard,
       });
-    }
-    for (const raw of registry.node(node.node_type)?.blocks(node) ?? []) {
-      const widget = parseWidget(raw);
-      const blockFolder = claim(`${folder}/${folderName(widget.id)}`, `${node.id}/${widget.id}`);
-      for (const text of registry.widget(widget.kind)?.texts(widget) ?? []) {
-        found.push({
-          node_id: node.id, widget_id: widget.id, field: text.field, path: `${blockFolder}/${text.file}`,
-          json: text.json === true, holder: raw, standard: text.standard,
-        });
-      }
     }
   }
   return found;
@@ -187,14 +175,8 @@ function toFile(value: unknown, json: boolean): string {
   return `${json ? JSON.stringify(value, null, 2) : String(value)}\n`;
 }
 
-function fromFile(content: string, json: boolean, path: string): unknown {
-  const text = content.replace(/\r\n/g, '\n').replace(/\n$/, '');
-  if (!json) return text;
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    throw new NotAGraph(`${path} is not valid JSON: ${(error as Error).message}`);
-  }
+function fromFile(content: string): string {
+  return content.replace(/\r\n/g, '\n').replace(/\n$/, '');
 }
 
 /** Nobody's own: nothing, or the text the element itself ships. */
@@ -335,7 +317,7 @@ export async function readProject(folder: string, guard?: Guard): Promise<Graph>
     const signed = await signature(path);
     if (signed !== ABSENT) {
       await guard?.(path);
-      const read = fromFile(await readFile(path, 'utf8'), text.json, text.path);
+      const read = fromFile(await readFile(path, 'utf8'));
       // The element's own text is nobody's setting: the node stays as it was
       // written, and saving writes today's standard back out.
       if (text.standard === undefined || !isStandard(read, text)) text.holder[text.field] = read;
@@ -380,7 +362,7 @@ function sorted<T extends Record<string, unknown>>(record: T): T {
  *
  * Every text goes to its file and out of its node's `node.json`; a text that is empty
  * has no file, and one that was emptied loses it. Files a node no longer has
- * -- it was deleted, or its block was -- are removed, but only files with the
+ * -- it was deleted, or became another kind -- are removed, but only files with the
  * names elements write: whatever else a person put in the folder stays.
  *
  * Refuses, before writing anything, when a file it would change was changed
@@ -435,7 +417,7 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
     const written = text.holder[text.field];
     delete text.holder[text.field];
     const value = text.standard !== undefined && isStandard(written, text) ? text.standard : written;
-    files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, text.json));
+    files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, false));
   }
 
   const layout: Record<string, Record<string, number>> = {};
@@ -511,7 +493,7 @@ async function commit(plan: Plan, guard?: Guard): Promise<void> {
  * Remove the files nothing claims any more, and the folders that leaves empty.
  *
  * Only files this process read or wrote as a node's -- a deleted node's, a
- * deleted block's, a selector of a node that no longer lists a folder. A file
+ * file a node of another kind no longer keeps. A file
  * it never saw is a person's, whatever it is called and however deep it sits:
  * `nodes/count/fixtures/code.js` stays.
  *
@@ -562,19 +544,16 @@ export async function saveGraph(path: string, graph: Graph, guard?: Guard): Prom
 }
 
 /**
- * The file a node's (or a block's) body lives in, relative to the project's
- * `nodes/` folder -- `count/code.js`, `say/system.md` -- created empty when
- * nothing has been written yet, so there is something to open.
+ * The file a node's body lives in, relative to the project's `nodes/` folder
+ * -- `count/code.js`, `say/system.md` -- created empty when nothing has been
+ * written yet, so there is something to open.
  */
-export async function bodyFileOf(folder: string, nodeId: string, widgetId = ''): Promise<string> {
+export async function bodyFileOf(folder: string, nodeId: string): Promise<string> {
   const { graph } = await readStructure(folder);
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node) throw new NotFound(`No node "${nodeId}" in ${folder}. Save the graph first.`);
-  const raw = widgetId
-    ? registry.node(node.node_type)?.blocks(node).find((w) => w.id === widgetId)
-    : undefined;
-  const logic = raw ? registry.widget(parseWidget(raw).kind)?.logic(parseWidget(raw)) : registry.node(node.node_type)?.logic(node);
-  const texts = projectTexts(graph).filter((text) => text.node_id === nodeId && text.widget_id === widgetId);
+  const logic = registry.node(node.node_type)?.logic(node);
+  const texts = projectTexts(graph).filter((text) => text.node_id === nodeId);
   const body = texts.find((text) => text.field === logic?.fields.body) ?? texts[0];
   if (!body) throw new NotFound(`"${nodeId}" keeps nothing in files.`);
   const path = join(folder, body.path);
@@ -607,9 +586,9 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
     const known = seen.get(path);
     const now = await signature(path);
     if (known === undefined || known === now) continue;
-    const value = now === ABSENT ? (text.json ? null : '') : fromFile(await readFile(path, 'utf8'), text.json, text.path);
+    const value = now === ABSENT ? '' : fromFile(await readFile(path, 'utf8'));
     seen.set(path, now);
-    changes.push({ node_id: text.node_id, widget_id: text.widget_id, field: text.field, value });
+    changes.push({ node_id: text.node_id, field: text.field, value });
   }
   // A node that holds a graph: anything changed in its folder is that graph
   // changed, and it comes back whole. Which file it was is a distinction
@@ -620,7 +599,7 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
     try {
       if (!await changedUnder(inside)) continue;
       changes.push({
-        node_id: nested.node.id, widget_id: '', field: NESTED_GRAPH_FIELD, value: await readProject(inside),
+        node_id: nested.node.id, field: NESTED_GRAPH_FIELD, value: await readProject(inside),
       });
     } catch (error) {
       // Half-written by whoever is editing it: JSON cut off, a file between

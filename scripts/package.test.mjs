@@ -141,7 +141,7 @@ test('it runs the graphs it ships with, a graph inside a node included', () => {
   assert.equal(ran.status, 0, ran.stderr);
   const result = JSON.parse(ran.stdout.slice(ran.stdout.indexOf('{')));
   assert.equal(result.status, 'success', ran.stdout);
-  assert.deepEqual(result.outputs.Statistics.value, { words: 32, sentences: 2, longest: 'directions' });
+  assert.deepEqual(result.outputs.Report.value, { words: 32, sentences: 2, longest: 'directions' });
 });
 
 test('it starts from its own folder and serves the editor', async () => {

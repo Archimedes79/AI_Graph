@@ -46,7 +46,6 @@ describe('code', () => {
       { ai, code: runner(() => ({})), generationFor, target },
     );
     expect(reply.result).toBe('function run(inputs) { return { out: 1 }; }');
-    expect(reply.explanation).toBe('It adds.');
     expect(reply.probe.status).toBe('skipped');                 // no sample, one honest pass
     expect(ai.asked[0].prompt).toContain('function run(inputs) {');
     expect(ai.asked[0].prompt).toContain('const a = inputs["a"];');
@@ -105,42 +104,115 @@ describe('code', () => {
     expect(reply.result).toContain('wrong: 1');
   });
 
-  it('generates a fixed-port snippet against its own ports, never probing the node\'s sample', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { value: [] }; }\n```']);
-    let probed = false;
+  it('is not offered for a block, nor for a folder listing: neither has code to write', async () => {
+    for (const kind of ['plot_window', 'table', 'image_view', 'input_picker', 'input']) {
+      await expect(generate({ element: kind, description: 'x' }, { ai: scripted([]), code: runner(() => ({})), generationFor, target }))
+        .rejects.toThrow(GenerationRefused);
+    }
+  });
+});
+
+describe('changing a body there is (refine)', () => {
+  it('writes code from the function as it is, what it returned and what to change -- and restates the task with it', async () => {
+    const ai = scripted(['```js\nfunction run(i) { return { out: i.a * 3 }; }\n```\nNow triples.\n<task>Triple the number.</task>']);
     const reply = await generate(
-      { element: 'plot_window', description: 'chart it', inputs: ['text'], outputs: ['result'], sample_inputs: { text: 'x' } },
-      { ai, code: runner(() => { probed = true; return {}; }), generationFor, target },
+      {
+        element: 'code', description: 'Double the number.', inputs: ['a'], outputs: ['out'], sample_inputs: { a: 2 },
+        refine: { body: 'function run(i) { return { out: i.a * 2 }; }', outcome: '{"out": 4}', change: 'Triple it instead.' },
+      },
+      { ai, code: runner(() => ({ out: 6 })), generationFor, target },
     );
-    expect(probed).toBe(false);
-    expect(reply.probe.status).toBe('skipped');
-    expect(ai.asked[0].prompt).toContain('- `value`');
-    expect(ai.asked[0].prompt).toContain('Must expose draw(data, window)');    // the block's own contract
+    const asked = ai.asked[0].prompt;
+    expect(asked).toContain('--- the function as it is now ---\nfunction run(i) { return { out: i.a * 2 }; }');
+    expect(asked).toContain('--- what it returned on the last run ---\n{"out": 4}');
+    expect(asked).toContain('--- what to change ---\nTriple it instead.');
+    expect(asked).toContain('<task></task>');
+    expect(reply).toMatchObject({ result: 'function run(i) { return { out: i.a * 3 }; }', task: 'Triple the number.' });
+    // Tried on the sample like any body written, with the one repair behind it.
+    expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 6 } });
   });
 
-  it('asks for a chart\'s draw(data, window) in the page\'s worker, and nothing a graph\'s node is told', async () => {
-    // It was told draw(data, window), then "complete function run(inputs), keep
-    // its name", then Node's standard library -- and followed the skeleton.
-    const ai = scripted(['```js\nfunction draw(data, window) { return []; }\n```']);
-    await generate({ element: 'plot_window', description: 'a line of the temperatures' }, { ai, code: runner(() => ({})), generationFor, target });
-    const { prompt, system } = ai.asked[0];
-    expect(prompt).toContain('## The function\nComplete this function. Keep its name and its two parameters');
-    expect(prompt).toContain('function draw(data, window) {');
-    expect(prompt).toContain('runs in a worker');
-    expect(prompt).not.toContain('function run(inputs)');
-    expect(prompt).not.toContain('one node of a graph');
-    expect(prompt).not.toContain('Node has built in');
-    expect(prompt).not.toContain('Downstream nodes');
-    expect(prompt).not.toContain('## Also');                                   // the contract is the frame, said once
-    expect(system).not.toContain('node.llm');
-    expect(system).not.toContain('downstream nodes');
+  it('brings no task back where no change was asked, whatever the model offered: the person\'s task is not written over', async () => {
+    const ai = scripted(['<system_prompt>You name capitals.</system_prompt>\n<task>Something else entirely.</task>']);
+    const reply = await generate(
+      { element: 'ai', description: 'Name the capital.', inputs: ['prompt'], outputs: ['output'] },
+      { ai, code: runner(() => ({})), generationFor, target },
+    );
+    expect(reply.result).toBe('You name capitals.');
+    expect(reply.task).toBeUndefined();
   });
 
-  it('still asks a table\'s transform for run(inputs) in the sandbox, which is where it runs', async () => {
-    const ai = scripted(['```js\nfunction run(inputs) { return { value: [] }; }\n```']);
-    await generate({ element: 'table', description: 'one row per file' }, { ai, code: runner(() => ({})), generationFor, target });
-    expect(ai.asked[0].prompt).toContain('function run(inputs) {');
-    expect(ai.asked[0].prompt).toContain('Node has built in');
+  it('fixes code from how it failed, the inputs it failed on and the body: the repair step, and the task stays', async () => {
+    const ai = scripted(['```js\nfunction run(i) { return { out: String(i.a).length }; }\n```']);
+    const reply = await generate(
+      {
+        element: 'code', description: 'Count the characters.', inputs: ['a'], outputs: ['out'], sample_inputs: { a: 12345 },
+        refine: { body: 'function run(i) { return { out: i.a.length }; }', error: 'Cannot read properties of undefined' },
+      },
+      { ai, code: runner(() => ({ out: 5 })), generationFor, target },
+    );
+    const asked = ai.asked[0].prompt;
+    expect(asked).toContain('--- your previous attempt ---\nfunction run(i) { return { out: i.a.length }; }');
+    expect(asked).toContain('inputs["a"]: number = 12345');
+    expect(asked).toContain('--- the error it raised ---\nCannot read properties of undefined');
+    expect(asked).not.toContain('<task>');
+    expect(reply.task).toBeUndefined();
+    expect(reply.probe.status).toBe('ok');
+  });
+
+  describe('held to an example written before it', () => {
+    /** A body run in this process, as the sandbox would run it. */
+    const evaluated: CodeService = {
+      run: async (body, inputs) => new Function('inputs', `${body}\nreturn run(inputs);`)(inputs) as Record<string, unknown>,
+    };
+    // The example as the dialog writes it when a result was kept: an input, and what must come out.
+    const examples = '## The example\n\n```json input\n{"name": "anna"}\n```\n\n```json expect\n{"out": "anna"}\n```\n';
+    const asked = {
+      element: 'code', description: 'Return the name.', inputs: ['name'], outputs: ['out'], examples,
+      refine: { body: 'function run(i) { return { out: i.name }; }', outcome: 'anna', change: 'Return it in upper case.' },
+    };
+
+    it('is not: the repair turned the change back to the example, and the task said it was made', async () => {
+      const ai = scripted([
+        '```js\nfunction run(i) { return { out: String(i.name).toUpperCase() }; }\n```\n<task>Return the name in upper case.</task>',
+        // What a repair held to the old example writes: the body from before the change.
+        '```js\nfunction run(i) { return { out: i.name }; }\n```',
+      ]);
+      const reply = await generate(asked, { ai, code: evaluated, generationFor, target });
+      expect(ai.asked).toHaveLength(1);
+      expect(reply).toMatchObject({ result: 'function run(i) { return { out: String(i.name).toUpperCase() }; }', task: 'Return the name in upper case.' });
+      expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 'ANNA' }, problems: [] });
+      // Told what the examples are: written before the change, which wins.
+      expect(ai.asked[0].prompt).toContain('## Examples -- written before this change: where one disagrees with the change, the change wins');
+    });
+
+    it('and a change that does not run is repaired as the change, from the task it restated', async () => {
+      const ai = scripted([
+        '```js\nfunction run(i) { return { out: i.name.toUpperCase() }; }\n```\n<task>Return the name in upper case.</task>',
+        '```js\nfunction run(i) { return { out: String(i.name).toUpperCase() }; }\n```',
+      ]);
+      const reply = await generate({ ...asked, examples: examples.replace('"anna"}', '5}') }, { ai, code: evaluated, generationFor, target });
+      const repair = ai.asked[1].prompt;
+      expect(repair).toContain('The node should:\nReturn the name in upper case.');
+      expect(repair).toContain('--- the change it was written to make, which the fix keeps ---\nReturn it in upper case.');
+      expect(repair).toContain('i.name.toUpperCase is not a function');
+      expect(reply).toMatchObject({ result: 'function run(i) { return { out: String(i.name).toUpperCase() }; }', task: 'Return the name in upper case.' });
+      expect(reply.probe.status).toBe('repaired');
+    });
+  });
+
+  it('writes a system prompt from the one there is, what the model answered and what to change, with the task restated', async () => {
+    const ai = scripted(['<system_prompt>Answer in one word.</system_prompt>\nShorter now.\n<task>Name the capital, in one word.</task>']);
+    const reply = await generate(
+      {
+        element: 'ai', description: 'Name the capital.', inputs: ['prompt'], outputs: ['output'],
+        refine: { body: 'Name the capital of the country.', outcome: 'The capital of France is Paris.', change: 'One word only.' },
+      },
+      { ai, code: runner(() => ({})), generationFor, target },
+    );
+    expect(ai.asked[0].prompt).toContain('## The system prompt as it is now\n\nName the capital of the country.');
+    expect(ai.asked[0].prompt).toContain('## What to change\n\nOne word only.');
+    expect(reply).toMatchObject({ result: 'Answer in one word.', task: 'Name the capital, in one word.' });
   });
 });
 
@@ -231,17 +303,14 @@ describe('what the node says about itself reaches the model', () => {
     const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
     await generate(rows, { ai, code: runner(() => ({})), generationFor, target });
     expect(ai.asked[0].prompt).not.toContain('chart');
-    expect(registry.widget('plot_window')?.receives({} as never)).toContain('NOT a drawing');
-    expect(registry.widget('table')?.receives({} as never)).toContain('column header');
+    expect(registry.widget('plot_window')?.receives(parseWidget({ id: 'b', kind: 'plot_window' }))).toContain('draws at the block\'s real size');
+    expect(registry.widget('table')?.receives(parseWidget({ id: 'b', kind: 'table' }))).toContain('column header');
   });
 
-  it('tells the node upstream to pre-shape nothing when the block reshapes what arrives itself', () => {
-    // A chart whose draw() reads rows was still said to want points, so the
-    // node feeding it was written to hand it points, which its draw() read as rows.
+  it('tells the node upstream what a drawing block takes', () => {
+    // A block reshapes nothing itself: the node wired into it hands it what it draws.
     for (const kind of ['plot_window', 'table', 'image_view'] as const) {
-      const element = registry.widget(kind)!;
-      expect(element.receives(parseWidget({ id: 'b', kind, code: '' }))).toBeTruthy();
-      expect(element.receives(parseWidget({ id: 'b', kind, code: 'function draw(rows) { return rows.map((r) => r.temp); }' }))).toBeUndefined();
+      expect(registry.widget(kind)!.receives(parseWidget({ id: 'b', kind })), kind).toBeTruthy();
     }
   });
 
@@ -496,35 +565,16 @@ describe('a node that is handed a file\'s text, not its path', () => {
 });
 
 describe('prose', () => {
-  it('takes the text between the tags and the explanation after them', async () => {
+  it('takes the text between the tags, and not what the model says after them', async () => {
     const ai = scripted(['<system_prompt>Be terse.</system_prompt>\nBecause.']);
     const reply = await generate({ element: 'ai', description: 'a terse bot' }, { ai, code: runner(() => ({})), generationFor, target });
-    expect(reply).toMatchObject({ result: 'Be terse.', explanation: 'Because.' });
+    expect(reply.result).toBe('Be terse.');
   });
 
   it('falls back to the whole reply when the model ignored the tags', async () => {
     const ai = scripted(['Just text.']);
-    const reply = await generate({ element: 'data', description: 'x' }, { ai, code: runner(() => ({})), generationFor, target });
+    const reply = await generate({ element: 'ai', description: 'x' }, { ai, code: runner(() => ({})), generationFor, target });
     expect(reply.result).toBe('Just text.');
-  });
-
-  it('writes a data node\'s format against what feeds it, what reads it and what it holds, told as a body is told them', async () => {
-    // A data node's neighbours reached its ✨ only as sentences the editor
-    // wrote beside the brief; the facts it sent were dropped for this kind.
-    const ai = scripted(['<data_format>A list of names.</data_format>']);
-    await generate({
-      element: 'data', description: 'the names seen so far', inputs: ['input'], outputs: ['output'],
-      input_sources: { input: '"Reader" (port "Names"), which hands on: one name per line' },
-      output_targets: { output: '"Greeter" (port "Names"), which wants a list of names' },
-      output_format: 'not given: this is what is written',
-      sample_inputs: { input: ['Ada', 'Bo'] }, sample_origin: 'the example in step 1',
-    }, { ai, code: runner(() => ({})), generationFor, target });
-    const prompt = ai.asked[0].prompt;
-    expect(prompt).toContain('Task description: the names seen so far');
-    expect(prompt).toContain('## What comes in\n- `input`\n  from "Reader" (port "Names"), which hands on: one name per line');
-    expect(prompt).toContain('sample, from the example in step 1: a list of 2: ["Ada","Bo"]');
-    expect(prompt).toContain('## What goes out\n- `output`\n  to "Greeter" (port "Names"), which wants a list of names');
-    expect(prompt).not.toContain('not given');
   });
 });
 
@@ -532,6 +582,8 @@ describe('refusals and failures', () => {
   it('refuses an element that generates nothing, and a request that names no element', async () => {
     const deps = { ai: scripted([]), code: runner(() => ({})), generationFor, target };
     await expect(generate({ element: 'output', description: 'x' }, deps)).rejects.toBeInstanceOf(GenerationRefused);
+    // A data node is its value: there is no format of it to write.
+    await expect(generate({ element: 'data', description: 'x' }, deps)).rejects.toBeInstanceOf(GenerationRefused);
     // What arrives over the wire is not held to the type: a body without one.
     await expect(generate({ description: 'x' } as GenerateRequest, deps)).rejects.toBeInstanceOf(GenerationRefused);
   });
@@ -548,92 +600,12 @@ describe('refusals and failures', () => {
 describe('a whole graph', () => {
   it('parses the fenced document and keeps the explanation', async () => {
     const ai = scripted(['```json\n{"metadata":{"name":"g"},"nodes":[],"edges":[]}\n```\nDone.']);
-    const reply = await generateGraph('anything', '', { ai, target });
+    const reply = await generateGraph('anything', { ai, target });
     expect(reply.graph).toEqual({ metadata: { name: 'g' }, nodes: [], edges: [] });
     expect(reply.explanation).toBe('Done.');
   });
 
   it('fails, with the transcript, when there is no document to parse', async () => {
-    await expect(generateGraph('x', '', { ai: scripted(['no json here']), target })).rejects.toBeInstanceOf(GenerationFailed);
-  });
-});
-
-describe('a block\'s snippet is looked at before anyone sees it', () => {
-  const sample = { value: [{ t: '08:00', temp: 61 }, { t: '08:05', temp: 64 }] };
-  const blank = '<svg width="100%" height="100%" viewBox="0 0 400 240"><circle cx="NaN" cy="40" r="3"/></svg>';
-  const drawn = '<svg width="100%" height="100%" viewBox="0 0 400 240"><circle cx="60" cy="40" r="3"/></svg>';
-
-  it('runs a chart transform on the sample the block editor sent -- it used to be thrown away', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { value: "GOOD" }; }\n```']);
-    const reply = await generate(
-      { element: 'plot_window', description: 'a line', sample_inputs: sample },
-      { ai, code: runner(() => ({ value: drawn })), generationFor, target },
-    );
-    expect(reply.probe).toMatchObject({ status: 'ok' });
-  });
-
-  it('hands a drawing full of NaN back with the reason, and keeps the repair', async () => {
-    const ai = scripted([
-      '```js\nfunction run(i) { return { value: "FIRST" }; }\n```',
-      '```js\nfunction run(i) { return { value: "SECOND" }; }\n```',
-    ]);
-    const reply = await generate(
-      { element: 'plot_window', description: 'a line', sample_inputs: sample },
-      { ai, code: runner((body) => ({ value: body.includes('SECOND') ? drawn : blank })), generationFor, target },
-    );
-    expect(reply.probe).toMatchObject({ status: 'repaired', problems: [] });
-    expect(reply.result).toContain('SECOND');
-    // The second request carries what was found, in words the model can act on.
-    expect(ai.asked[1].prompt).toContain('what is wrong with what it produced');
-    expect(ai.asked[1].prompt).toContain('cx="NaN"');
-  });
-
-  it('keeps the attempt that got further when the repair is no better, and says what remains', async () => {
-    const ai = scripted([
-      '```js\nfunction run(i) { return { value: "FIRST" }; }\n```',
-      '```js\nfunction run(i) { throw new Error("worse"); }\n```',
-    ]);
-    const reply = await generate(
-      { element: 'plot_window', description: 'a line', sample_inputs: sample },
-      { ai, code: runner((body) => { if (body.includes('worse')) throw new Error('worse'); return { value: blank }; }), generationFor, target },
-    );
-    expect(reply.result).toContain('FIRST');
-    expect(reply.probe.status).toBe('failed');
-    expect(reply.probe.problems?.[0]).toMatch(/not numbers/);
-  });
-
-  it('tries a chart the way its page draws it: a body asking node.llm fails here, and a figure passes', async () => {
-    // The page's worker hands draw() a window, not a node. With a node here, the
-    // question was answered, the probe and `check` said ✓, and the page failed.
-    const ai = scripted([
-      '```js\nasync function draw(data, node) { return await node.llm({ prompt: "chart it" }); }\n```',
-      '```js\nfunction draw(data, window) { return { kind: "line", title: "Temperature", points: data.map((row) => ({ label: row.t, value: row.temp })) }; }\n```',
-    ]);
-    const reply = await generate({ element: 'plot_window', description: 'a line', sample_inputs: sample }, { ai, code: nodeCode, generationFor, target });
-    expect(ai.asked).toHaveLength(2);                                  // nobody answered the chart's question
-    expect(ai.asked[1].prompt).toContain('node.llm is not a function');
-    expect(reply.probe).toMatchObject({ status: 'repaired', problems: [] });
-    expect(reply.probe.outputs).toEqual({ value: { kind: 'line', title: 'Temperature', points: [{ label: '08:00', value: 61 }, { label: '08:05', value: 64 }] } });
-  }, 30_000);
-
-  it('tells the repair the line of the chart\'s body an error is on, as the body is shown to it', async () => {
-    // The wrapper that calls it as the page does stood two lines above it, and
-    // the repair was told of a line 5 in a body of four.
-    const ai = scripted([
-      '```js\nfunction draw(data, window) {\n  const rows = data;\n  return rows.nope.map((row) => row.temp);\n}\n```',
-      '```js\nfunction draw(data) { return data.map((row) => row.temp); }\n```',
-    ]);
-    const reply = await generate({ element: 'plot_window', description: 'a line', sample_inputs: sample }, { ai, code: nodeCode, generationFor, target });
-    expect(ai.asked[1].prompt).toMatch(/reading 'map'\)[\s\S]*\bline 3, column \d+/);
-    expect(reply.probe.status).toBe('repaired');
-  }, 30_000);
-
-  it('still ignores a sample keyed by the node\'s ports, which a block\'s snippet does not have', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { value: [] }; }\n```']);
-    const reply = await generate(
-      { element: 'plot_window', description: 'a line', sample_inputs: { chart_in: [1, 2] } },
-      { ai, code: runner(() => { throw new Error('must not run'); }), generationFor, target },
-    );
-    expect(reply.probe.status).toBe('skipped');
+    await expect(generateGraph('x', { ai: scripted(['no json here']), target })).rejects.toBeInstanceOf(GenerationFailed);
   });
 });

@@ -22,10 +22,7 @@ export function browsesFor(req: Pick<Requirement, 'kind' | 'direction'>): 'file'
   return req.direction === 'output' ? 'save' : 'file';
 }
 
-/**
- * The "before running" window: the values a graph asks for before it can run.
- * The windows a run opens afterwards are `OutputWindows`, mounted once per page.
- */
+/** The "before running" window: the values a graph asks for before it can run. */
 export default function RequirementsDialog({ requirements, onSubmit, onCancel }: RequirementsDialogProps) {
   const [values, setValues] = useState<Record<string, string>>({});
 

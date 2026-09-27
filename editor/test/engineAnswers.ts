@@ -9,7 +9,7 @@ import type { GraphNode } from '@/graph';
 
 /** What a run asks a node's element before and while running it. None of them runs anything. */
 export const RUN_QUESTIONS = [
-  'config', 'batchMode', 'batchConcurrency', 'readsFileInputs', 'catchesErrors', 'needsInput',
+  'config', 'batchMode', 'batchConcurrency', 'catchesErrors', 'needsInput',
   'derivedPorts', 'runtimeRequirements', 'referencedPaths', 'logic',
 ] as const;
 

@@ -1,41 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useGraphStore } from '@/store/graphStore';
-import { scheme as schemeOf } from '@/ui/scheme';
 import PlotChart from './PlotChart';
-import { draw, type Drawn } from './draw';
 import type { WidgetViewProps } from '../WidgetView';
 
 /**
- * What a chart's `draw()` is handed: what arrived at its port, or -- before
- * anything has -- what it stores, which for a chart is nothing, and so null.
- *
- * Display-only: the port value is the whole point, the stored value is only a
- * fallback for before the first run. A block with no value of its own is handed
- * `''` by the page (`blockValue`, for the text blocks that show one), and a
- * `draw()` written to its contract -- `if (data === null) return []` -- then
- * failed on the page with "data.map is not a function", where Try it and the
- * canvas preview hand it null.
+ * Runtime `plot_window` widget: charts what flowed into `{id}_in` -- points, a
+ * figure or a string of SVG -- at the size the block really is on screen, so
+ * a resize redraws it with no run.
  */
-export function chartData(value: unknown, incoming: unknown): unknown {
-  if (incoming !== undefined) return incoming;
-  return value === '' || value === undefined ? null : value;
-}
-
-/**
- * Runtime `plot_window` widget: charts what flowed into `{id}_in`.
- *
- * The block's own code runs *here*, when the chart is drawn, and is handed the
- * size and the scheme — see `draw.ts` for why. So this component redraws on
- * three things and not only on new data: the value, the measured box, and the
- * page's scheme. A resize or a switch of scheme is a redraw with no run.
- */
-export default function PlotWindowWidgetView({ widget, value, incoming }: WidgetViewProps) {
-  const data = chartData(value, incoming);
-  const code = String(widget.code ?? '');
-  const scheme = useGraphStore((s) => s.metadata.gui_scheme);
+export default function PlotWindowWidgetView({ value, incoming }: WidgetViewProps) {
+  const data = incoming !== undefined ? incoming : value;
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 320, height: 180 });
-  const [drawn, setDrawn] = useState<Drawn>({ value: data });
 
   /**
    * Measure before the first paint, and again whenever the box changes.
@@ -77,28 +52,9 @@ export default function PlotWindowWidgetView({ widget, value, incoming }: Widget
     }
   }, [data]);
 
-  /**
-   * Run the body. Dropped rather than raced if another run starts first: a
-   * drag across a resize handle fires this many times, and the answer wanted
-   * is the last one, not whichever worker happened to finish last.
-   */
-  useEffect(() => {
-    let current = true;
-    const about = {
-      width: size.width,
-      height: size.height,
-      scheme,
-      dark: schemeOf(scheme).light !== true,
-    };
-    void draw(code, data ?? null, about).then((answer) => { if (current) setDrawn(answer); });
-    return () => { current = false; };
-  }, [code, data, size.width, size.height, scheme]);
-
   return (
     <div ref={containerRef} className="w-full h-full flex items-center justify-center" style={{ minHeight: 60 }}>
-      {drawn.error
-        ? <PlotChart data={`⚠ ${drawn.error}`} width={size.width} height={size.height} />
-        : <PlotChart data={drawn.value} width={size.width} height={size.height} />}
+      <PlotChart data={data} width={size.width} height={size.height} />
     </div>
   );
 }

@@ -1,9 +1,9 @@
-// What a node's port ids must be, for the node dialog to save them.
+// What a node's port ids must be, for the node dialog to store them.
 //
 // A port's id is the name a body reads it by and a wire points at, so the
 // ports editor lets it be typed freely -- '' and a name another port has are
-// steps on the way to the one meant -- and says here, until Save, what would
-// be wrong with keeping it.
+// steps on the way to the one meant -- and stores it only once nothing here
+// is wrong with keeping it; until then it says what is.
 
 import type { Port } from '@/graph';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';

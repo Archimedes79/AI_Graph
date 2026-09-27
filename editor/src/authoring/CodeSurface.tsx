@@ -26,19 +26,28 @@ const FONT = {
 };
 
 /**
+ * CodeMirror told that a file dropped on it is handled, which it then leaves
+ * alone: its own handler reads a dropped file and types its text in -- beside
+ * step 1's example box, which takes the same file as a run hands it on.
+ */
+export const FILE_DROPS_LEFT = { drop: (event: Pick<DragEvent, 'dataTransfer'>): boolean => !!event.dataTransfer?.files.length };
+
+/**
  * One editor instance. Uncontrolled inside -- CodeMirror owns the document --
  * with the two directions handled separately: typing calls `onChange`, and a
  * `value` that changed for any *other* reason (✨ Generate wrote a new body, a
  * file was reloaded from disk) replaces the document. Comparing against the
  * editor's own text is what stops the second from fighting the first.
  */
-export default function CodeSurface({ value, onChange, language, placeholder, height, autoFocus }: {
+export default function CodeSurface({ value, onChange, language, placeholder, height, autoFocus, keepFileDropsOut }: {
   value: string;
   onChange: (value: string) => void;
   language: CodeLanguage;
   placeholder?: string;
   height: { min: number; max?: string; fill?: boolean };
   autoFocus?: boolean;
+  /** A file dropped on it is its owner's, and not typed in (`FILE_DROPS_LEFT`). */
+  keepFileDropsOut?: boolean;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
@@ -68,6 +77,7 @@ export default function CodeSurface({ value, onChange, language, placeholder, he
             '.cm-scroller': { ...FONT['.cm-scroller'], minHeight: `${height.min}px`, ...(height.max ? { maxHeight: height.max } : {}) },
           }),
           ...(placeholder ? [placeholderExtension(placeholder)] : []),
+          ...(keepFileDropsOut ? [EditorView.domEventHandlers(FILE_DROPS_LEFT)] : []),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) changed.current(update.state.doc.toString());
           }),

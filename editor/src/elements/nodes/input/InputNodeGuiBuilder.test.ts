@@ -1,32 +1,27 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { useGraphStore } from '@/store/graphStore';
-import { portRenames, trackPorts, untracked } from '@/store/portRenames';
-import { withSetting } from '@/canvas/nodeDraft';
+import { nodeDialog } from '@/canvas/nodeDialog';
 
 /**
- * Switching an input node's mode in its dialog, and saving: which wire stays.
+ * Switching an input node's mode in its dialog: which wire stays.
  *
- * Done as the dialog does it (`NodeEditor`): each choice goes through
- * `withSetting`, which re-derives the draft's ports and asks the element which
- * new port carries on an old one, and Save moves the wires by what
- * `portRenames` makes of that.
+ * Done as the dialog does it (`nodeDialog`): each choice goes through
+ * `withSetting`, which re-derives the node's ports, and the write moves the
+ * wires by what `portRenames` makes of that -- a port of the same name keeps
+ * its wire, and a port that is gone takes its wire with it.
  */
 const store = () => useGraphStore.getState();
-const stored = (id: string) => store().rfNodes.find((n) => n.id === id)!.data.graphNode as GraphNode;
 /** Every wire out of *source*, as "port -> target". */
 const outOf = (source: string) => store().rfEdges
   .filter((edge) => edge.source === source)
   .map((edge) => `${edge.sourceHandle} -> ${edge.target}`);
 
-/** The dialog opened on *id*, its mode chosen once for each of *modes* in turn, and saved. */
-function switchMode(id: string, ...modes: ('text' | 'file' | 'directory')[]) {
-  const draft = modes.reduce(
-    (node, mode) => withSetting(node, stored(id), 'input_mode', mode),
-    trackPorts(JSON.parse(JSON.stringify(stored(id)))) as GraphNode,
-  );
-  store().updateNode(id, untracked(draft), portRenames(stored(id), draft));
+/** The dialog opened on *id*, its mode chosen once for each of *modes* in turn -- quicker than a write -- and written. */
+function switchMode(id: string, ...modes: ('text' | 'directory')[]) {
+  const dialog = nodeDialog(id);
+  for (const mode of modes) dialog.setConfig('input_mode', mode);
+  dialog.write();
 }
 
 beforeEach(() => {
@@ -40,25 +35,13 @@ beforeEach(() => {
 });
 
 describe('an input node switched to another mode', () => {
-  it('moves the wire from its text onto the file\'s content, and back: both are the text it hands on', () => {
-    switchMode('src', 'file');
-    expect(outOf('src')).toEqual(['content -> code']);
-    switchMode('src', 'text');
-    expect(outOf('src')).toEqual(['output -> code']);
-  });
-
   it('lets the wire go when it lists a folder, which hands on paths instead of text', () => {
     switchMode('src', 'directory');
     expect(outOf('src')).toEqual([]);
   });
 
-  it('keeps the wire when the select is stepped through a folder on the way to a file', () => {
-    // Arrow keys on the mode select pass every mode between: text, a folder,
-    // then one file. The folder has no text port, and asked against the draft
-    // a step earlier, the file's content no longer knew it carried on "output".
-    switchMode('src', 'directory', 'file');
-    expect(outOf('src')).toEqual(['content -> code']);
-    switchMode('src', 'text', 'directory', 'file');
-    expect(outOf('src')).toEqual(['content -> code']);
+  it('keeps the wire when the select is stepped through a folder and back to text', () => {
+    switchMode('src', 'directory', 'text');
+    expect(outOf('src')).toEqual(['output -> code']);
   });
 });

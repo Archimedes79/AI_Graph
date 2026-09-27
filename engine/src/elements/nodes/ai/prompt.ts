@@ -4,7 +4,7 @@
 //
 //   the instructions   -- the system prompt someone wrote, or had written
 //   the message        -- what arrived on the wires, laid out by a template
-//   the answer's shape -- the sentence the declared output format becomes
+//   the answer's shape -- what the node says of its output, in words
 //
 // This used to be a loop inside `execute`, which is fine for running and
 // useless for showing: the editor could display the system prompt and nothing
@@ -29,10 +29,11 @@ export interface PromptSettings {
   systemPrompt: string;
   /** The message, with `{{port}}` where a port's value goes. Empty: send what arrived. */
   template: string;
-  /** What the node says about its answer, in words (`outputWords`). */
+  /**
+   * What the node says about its answer, in words (`outputWords`) -- where an
+   * answer a person liked is kept, too: "Answer in this shape: …".
+   */
   outputFormatPrompt: string;
-  /** An answer to imitate, when the format was learned from a run rather than described. */
-  outputExample: string;
 }
 
 export interface AssembledPrompt {
@@ -72,24 +73,6 @@ export function outputWords(config: { output_format_prompt?: unknown }): string 
 }
 
 /**
- * What the node was told to ask for, as sentences the model can follow.
- *
- * The description of the answer -- `output.md` in a project -- is sent
- * whenever it says anything: it is what the person wrote for the model about
- * its output, and a file somebody wrote for the model that the model never
- * sees is a trap. A kept example adds its own sentence in front.
- */
-export function formatInstruction(settings: PromptSettings): string {
-  // An example is followed whenever one was kept: it was kept to be
-  // followed, and sent only under one setting it was a file the model never saw.
-  const rule = settings.outputExample.trim()
-    ? 'Answer in exactly the same format as this example -- the same structure, '
-      + `the same fields, new content:\n\n${settings.outputExample.trim()}`
-    : '';
-  return [rule, settings.outputFormatPrompt.trim()].filter(Boolean).join('\n\n');
-}
-
-/**
  * The request, from the node's settings and what the wires delivered.
  *
  * `inputs` is in port order and holds text-bound values only: an image that is
@@ -118,8 +101,10 @@ export function assemblePrompt(settings: PromptSettings, inputs: Record<string, 
   const appended = wantsRest ? [] : rest.map(([name]) => name);
   if (!wantsRest && restText) user = user ? `${user}\n\n${restText}` : restText;
 
-  const instruction = formatInstruction(settings);
-  const system = [settings.systemPrompt.trim(), instruction].filter(Boolean).join('\n\n');
+  // The words about the answer -- `output.md` in a project -- are sent whenever
+  // they say anything: a file somebody wrote for the model that the model never
+  // sees is a trap.
+  const system = [settings.systemPrompt.trim(), settings.outputFormatPrompt.trim()].filter(Boolean).join('\n\n');
   // A node with nothing wired in is its instructions and nothing else -- "write
   // a haiku about autumn". Those are the question, then, and go as the message:
   // a request with an empty message is refused by some providers and answered

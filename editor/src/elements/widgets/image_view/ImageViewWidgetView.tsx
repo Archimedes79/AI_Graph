@@ -10,7 +10,7 @@ import { DIMMER, LINE, MUTED, SUNKEN } from '@/ui/theme';
 function notAPath(block: string, value: unknown): string {
   const seen = JSON.stringify(value) ?? String(value);
   return `⚠ ${block} shows an image file path or URL, and what arrived is ${seen.length > 120 ? `${seen.slice(0, 120)}…` : seen}. `
-    + 'A transform can pick the path out of it.';
+    + 'A code node wired in before it can pick the path out of it.';
 }
 
 /**

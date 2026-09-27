@@ -26,7 +26,8 @@ import { API, matchRoute, type RouteName } from './api.ts';
 import {
   Download, Refusal, foreignRequest, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
 } from './http.ts';
-import { browse, extensionFilter } from './browse.ts';
+import { browse } from './browse.ts';
+import { extensionFilter } from '../elements/folderListing.ts';
 import { NotFound } from '../errors.ts';
 import { RunBoard } from './runs.ts';
 import { Rounds } from './rounds.ts';

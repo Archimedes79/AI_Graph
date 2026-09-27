@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { describeNodeOutput, inputSources, lastRunInputs, outputTargets, pathPorts, readFilePorts } from './generationContext';
+import { describeNodeOutput, inputSources, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
 import { nodeFacts } from './nodeFacts';
 
@@ -11,7 +11,7 @@ describe('what ✨ is told of a node\'s neighbours', () => {
     const source = NODE_KINDS.data.create('source');
     source.label = 'Input records';
     source.config.data_format = 'structure';
-    source.config.data_format_prompt = 'columns: id integer, name text';
+    source.description = 'columns: id integer, name text';
     const processor = NODE_KINDS.code.create('processor');
     const target = NODE_KINDS.data.create('target');
     target.label = 'Result map';
@@ -56,8 +56,8 @@ describe('what ✨ is told of a node\'s neighbours', () => {
 describe('describeNodeOutput', () => {
   it('distinguishes the input node modes', () => {
     const node = NODE_KINDS.input.create('i');
-    node.config.input_mode = 'file';
-    expect(describeNodeOutput(node)).toContain('port "Content" carries the file');
+    node.config.input_mode = 'directory';
+    expect(describeNodeOutput(node)).toContain('port "Files" carries a list of file paths');
     node.config.input_mode = 'text';
     expect(describeNodeOutput(node)).toBe('text');
   });
@@ -104,36 +104,23 @@ describe('a node that is handed the text of a file', () => {
       { id: 'csv', name: 'CSV', kind: 'input', data_type: 'file_path', multi: false, required: false },
       { id: 'top', name: 'Top', kind: 'input', data_type: 'text', multi: false, required: false },
     ] as typeof node.inputs;
-    node.config.read_file_inputs = true;
     return node;
   };
 
-  it('names the ports the server must read before it tries generated code on the sample', () => {
-    const node = reader();
-    expect(readFilePorts(node)).toEqual(['csv']);
-    node.config.read_file_inputs = false;
-    expect(readFilePorts(node)).toEqual([]);
+  it('names the ports the server must read before it tries generated code on the sample: the ones ticked to read', () => {
+    expect(readFilePorts(reader())).toEqual(['csv']);
+    // A kind that takes a path as a path reads nothing, whatever its ports say.
+    const out = NODE_KINDS.output.create('sink');
+    expect(out.inputs.some((port) => port.data_type === 'file_path')).toBe(true);
+    expect(readFilePorts(out)).toEqual([]);
   });
 
-  it('asks with the wiring, as the run does: an input that says nothing, wired from a path, is read', () => {
-    // A graph written by hand, by the MCP server or by a model keeps the port
-    // `any`; the run reads it, and ✨ was told a path and tried code on a filename.
+  it('never reads an input that did not say so, however it is wired', () => {
+    // The wire used to decide for a port typed `any`: a sentence wired in from
+    // somewhere that declared a path became "no such file".
     const node = NODE_KINDS.code.create('worker');
-    node.config.read_file_inputs = true;
-    const source = NODE_KINDS.input.create('file');
-    source.config.input_mode = 'file';
-    source.outputs = [{ id: 'path', name: 'Path', kind: 'output', data_type: 'file_path', multi: false, required: false, description: '' }];
-    const wired = [{ source: 'file', sourceHandle: 'path', target: 'worker', targetHandle: 'input' }];
     expect(node.inputs[0].data_type).toBe('any');
-    expect(readFilePorts(node, [source, node], wired)).toEqual(['input']);
     expect(readFilePorts(node)).toEqual([]);
-  });
-
-  it('knows a path arrives on a port whether or not the node reads it: a file picked as its example is kept as a path', () => {
-    const node = reader();
-    node.config.read_file_inputs = false;
-    expect(readFilePorts(node)).toEqual([]);
-    expect(pathPorts(node)).toEqual(['csv']);
   });
 
   it('names the recorded path\'s port to be read, so the engine shows the model the text', () => {
@@ -158,7 +145,7 @@ describe('duplicate neighbours', () => {
     const wire = { source: 'worker', sourceHandle: 'output', target: 'sink', targetHandle: 'value' };
 
     expect(outputTargets('worker', [code, out], [wire, { ...wire }], true).output)
-      .toBe('"Result" (port "Value"), which wants shown as text in a window');
+      .toBe('"Result" (port "Value"), which wants the run\'s result');
   });
 });
 
@@ -212,7 +199,7 @@ describe('what a node is wired to, as the dialog and ✨ say it', () => {
       { source: 'worker', sourceHandle: 'output', target: 'page', targetHandle: 'w1_in' },
     ], true);
     expect(told.output).toContain('"Dashboard"');
-    expect(told.output).toContain('NOT a drawing');
+    expect(told.output).toContain('{"kind": "bars"|"columns"|"line"|"donut"');
   });
 });
 
@@ -242,13 +229,11 @@ describe('what ✨ is told about a node, as facts', () => {
     expect(facts.batchMode).toBe('per_item');
   });
 
-  it('sends the format in words, and an answer kept to imitate', () => {
+  it('sends the format in words', () => {
     const ai = NODE_KINDS.ai.create('worker');
     ai.config.output_format_prompt = 'a list of {title, score}';
-    ai.config.output_example = '[{"title": "a", "score": 1}]';
     const facts = nodeFacts(ai, [ai], [], null);
     expect(facts.outputFormat).toBe('a list of {title, score}');
-    expect(facts.outputExample).toBe('[{"title": "a", "score": 1}]');
   });
 
   it('takes step 1\'s example as the sample, over what the last run delivered', () => {
@@ -261,19 +246,5 @@ describe('what ✨ is told about a node, as facts', () => {
     // An example the engine reads in full, with what it expects, is left to it.
     code.config.examples = '## Mine\n\n```json input\n{"input": "typed"}\n```\n\n```json expect\n{}\n```\n';
     expect(nodeFacts(code, [code], [], ran).sampleInputs).toBeUndefined();
-  });
-
-  it('shows a node fed by a file input that file, read as a run reads it, before the graph has run', () => {
-    const input = NODE_KINDS.input.create('src');
-    input.config.input_mode = 'file';
-    input.config.value = 'data/people.csv';
-    input.outputs = [
-      { id: 'content', name: 'Content', kind: 'output', data_type: 'text', multi: false, required: false, description: '' },
-      { id: 'path', name: 'Path', kind: 'output', data_type: 'file_path', multi: false, required: false, description: '' },
-    ];
-    const code = NODE_KINDS.code.create('worker');
-    const facts = nodeFacts(code, [input, code], [{ id: 'a', source: 'src', target: 'worker', sourceHandle: 'content', targetHandle: 'input' }] as never, null);
-    expect(facts.sampleInputs).toEqual({ input: 'data/people.csv' });
-    expect(facts.readFilePorts).toEqual(['input']);
   });
 });

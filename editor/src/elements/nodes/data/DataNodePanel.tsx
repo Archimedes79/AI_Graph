@@ -1,34 +1,50 @@
-import { useEffect } from 'react';
-import FourSteps, { TaskField } from '@/authoring/FourSteps';
-import ExampleInputField from '@/authoring/ExampleInputField';
-import GeneratedBody from '@/authoring/GeneratedBody';
-import Step from '@/authoring/Step';
-import { asExampleText } from '@/authoring/examplePair';
+import { useState, type DragEvent } from 'react';
+import { errorText } from '@/api/errorText';
 import { useTyped } from '@/authoring/useTyped';
+import { carriesFiles, droppedFile, type Dropped } from '@/authoring/droppedFile';
+import { contentValue } from '@/authoring/readAsRun';
 import { DANGER_SOFT, DIMMER, FIELD, LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
-import type { NodePanelProps } from '../../NodeGuiBuilder';
+import { ONCE, type NodePanelProps } from '../../NodeGuiBuilder';
 import { asEditableText, convertedValue, dataKind, storedValue, type DataKind } from './dataFormat';
 
 /**
- * A data node: the four steps -- what arrives, what it hands on, what it
- * holds, its format -- and after them, what it holds now, which is its example.
+ * A file dropped on the box: what the node holds from then on, parsed when it
+ * is JSON -- an undo step of its own, not more typing into the box. *say* is
+ * told why it could not be read, or '' once one was: a failed read used to
+ * leave the box as it was, with nothing said.
+ */
+export async function holdDropped(file: Dropped, setConfig: NodePanelProps['setConfig'], say: (failure: string) => void): Promise<void> {
+  try {
+    setConfig('data_value', contentValue(await file.text()), ONCE);
+    say('');
+  } catch (reason) {
+    say(`“${file.name}” could not be read -- ${errorText(reason, 'no reason was given')}`);
+  }
+}
+
+/**
+ * A data node: a value, edited in one place -- its kind, and what it holds.
+ *
+ * What it holds is what it hands on, what the nodes wired to it are shown as
+ * their sample, and what a run replaces with what arrives on its input. There
+ * is nothing to write and nothing to generate: a format described beside the
+ * value said less than the value, and went stale beside it. A file dropped on
+ * the box -- or on the node on the canvas -- is what it holds from then on:
+ * what the file says, parsed when it is JSON.
  *
  * What it holds is edited as what it is. The box used to follow only the Kind
  * setting: an object a run had left in a node set to Text was saved back as a
  * string at the first keystroke, a string could not be edited at all under
  * Structure, and valid JSON was re-indented under the caret. Now the value
  * says what it is where it can (`dataKind`), switching the Kind converts it,
- * and a box that does not parse holds up Save rather than being dropped by it.
+ * and what a box holds that does not parse is kept as typed, and not stored.
  */
-export default function DataNodePanel({
-  builder, node, setConfig, setInvalid, fields, generating, message, onGenerate, steps,
-}: NodePanelProps) {
-  const generation = builder.generation;
+export default function DataNodePanel({ node, setConfig }: NodePanelProps) {
   const kind = dataKind(node);
   const held = node.config.data_value;
   const shown = asEditableText(held, kind);
   // The box keeps what is typed; the stored value is what it parses to. What
-  // does not parse is not stored -- the box says so, and Save waits for it.
+  // does not parse is not stored -- the box says so, and keeps it as typed.
   const [content, type] = useTyped(shown, (text) => {
     const result = storedValue(text, kind);
     if ('error' in result) return shown;
@@ -37,10 +53,7 @@ export default function DataNodePanel({
   });
   const typed = storedValue(content, kind);
   const contentError = 'error' in typed ? typed.error : '';
-
-  useEffect(() => setInvalid('held value', contentError), [contentError, setInvalid]);
-
-  if (!generation || !steps) return null;
+  const [dropFailed, setDropFailed] = useState('');
 
   const switchKind = (next: DataKind) => {
     setConfig('data_format', next);
@@ -52,100 +65,54 @@ export default function DataNodePanel({
     else if (!('error' in retyped)) setConfig('data_value', retyped.value);
   };
 
-  // Its example is what it holds, so the two ways to fill an example fill that.
-  const example = held === null || held === undefined || held === '' ? '' : asExampleText({ input: held });
-  const takeExample = (text: string): string => {
-    try {
-      const value = (JSON.parse(text) as Record<string, unknown>).input;
-      if (value !== undefined) setConfig('data_value', value);
-    } catch {
-      // Only ever handed JSON of our own making.
-    }
-    return text;
+  const onDragOver = (event: DragEvent) => {
+    if (!carriesFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+  const onDrop = (event: DragEvent) => {
+    const file = droppedFile(event.dataTransfer);
+    if (!file) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void holdDropped(file, setConfig, setDropFailed);
   };
 
-  const kindSelect = (
-    <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Kind</label>
-      <select
-        className="w-full rounded px-2 py-2 text-sm"
-        style={FIELD}
-        value={kind}
-        onChange={(event) => switchKind(event.target.value as DataKind)}
-        aria-label="Kind"
-      >
-        <option value="text">Text</option>
-        <option value="structure">Structure (JSON)</option>
-      </select>
-      {kind !== node.config.data_format && (
-        <p className="text-xs mt-1" style={{ color: DIMMER }}>It holds structured data, so it is edited and described as structure.</p>
-      )}
-    </div>
-  );
-
   return (
-    <>
-      <FourSteps
-        comesIn={(
-          <>
-            {steps.inputs}
-            <ExampleInputField
-              label="Its example: what it holds"
-              text={example}
-              onText={takeExample}
-              showField={false}
-              ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
-              pathPorts={[]}
-              fromGraph={steps.fromGraph}
-              note={<p className="text-xs" style={{ color: DIMMER }}>These fill what it holds now, below: the example ✨ is shown.</p>}
-            />
-          </>
-        )}
-        comesOut={(
-          <>
-            {steps.outputs}
-            <p className="text-xs" style={{ color: DIMMER }}>What it hands on is what it holds, in the format of step 4.</p>
-          </>
-        )}
-        task={{
-          title: 'What should it hold?',
-          hint: 'In your own words. ✨ Generate writes the format in step 4 from this, what it holds now and what it is wired to.',
-          field: <TaskField generation={generation} fields={fields} />,
-        }}
-        body={{
-          title: 'Its format',
-          hint: 'The kind, then the fields, types and limits in it -- what the nodes wired to it are written against.',
-          content: (
-            <>
-              {kindSelect}
-              <GeneratedBody
-                generation={generation}
-                fields={fields}
-                generating={generating}
-                message={message}
-                onGenerate={onGenerate}
-                title={node.label}
-                preview={steps.preview}
-                sent={steps.sent}
-              />
-              {steps.openInEditor}
-            </>
-          ),
-        }}
+    <div className="space-y-1" onDragOver={onDragOver} onDrop={onDrop}>
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-xs font-medium" style={{ color: MUTED }} htmlFor={`${node.id}-held`}>
+          What it holds<span className="font-normal" style={{ color: DIMMER }}> — or drop a file here</span>
+        </label>
+        <select
+          className="rounded px-2 py-1 text-xs"
+          style={FIELD}
+          value={kind}
+          onChange={(event) => switchKind(event.target.value as DataKind)}
+          aria-label="Kind"
+        >
+          <option value="text">Text</option>
+          <option value="structure">Structure (JSON)</option>
+        </select>
+      </div>
+      <textarea
+        id={`${node.id}-held`}
+        className="w-full rounded-lg px-3 py-2 text-sm resize-y font-mono"
+        style={{ background: SUNKEN, color: TEXT, border: `1px solid ${contentError ? DANGER_SOFT : LINE}`, minHeight: 160 }}
+        value={content}
+        onChange={(event) => type(event.target.value)}
+        spellCheck={false}
+        aria-label="What it holds"
       />
-      <Step title="What it holds now" hint="Kept between runs. What arrives on its input replaces it; until then this is what it hands on.">
-        <div>
-          <textarea
-            className="w-full rounded-lg px-3 py-2 text-sm resize-y font-mono"
-            style={{ background: SUNKEN, color: TEXT, border: `1px solid ${contentError ? DANGER_SOFT : LINE}`, minHeight: 160 }}
-            value={content}
-            onChange={(event) => type(event.target.value)}
-            spellCheck={false}
-            aria-label="What it holds now"
-          />
-          {contentError && <p className="text-xs mt-1" style={{ color: DANGER_SOFT }}>{contentError} It cannot be saved like this.</p>}
-        </div>
-      </Step>
-    </>
+      {contentError && <p className="text-xs" style={{ color: DANGER_SOFT }}>{contentError} It is kept once it parses.</p>}
+      {dropFailed && <p className="text-xs" style={{ color: DANGER_SOFT }}>{dropFailed}</p>}
+      {kind !== node.config.data_format && (
+        <p className="text-xs" style={{ color: DIMMER }}>It holds structured data, so it is edited and described as structure.</p>
+      )}
+      <p className="text-xs" style={{ color: DIMMER }}>
+        Kept between runs. What arrives on its input replaces it; until then this is what it hands on,
+        and what the nodes wired to it are shown.
+      </p>
+    </div>
   );
 }

@@ -47,7 +47,6 @@ export default function PromptPreview({ node, example, graph }: {
   /** The graph with this node as the dialog holds it (`NodePanelProps.steps.graph`). */
   graph: () => Graph;
 }) {
-  const nodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
   const edges = useGraphStore((s) => s.rfEdges);
 
   const wired = new Set(edges.filter((edge) => edge.target === node.id).map((edge) => edge.targetHandle));
@@ -62,7 +61,7 @@ export default function PromptPreview({ node, example, graph }: {
       .map((port) => [port.id, values[port.id] ?? `⟨${port.name || port.id}⟩`]),
   );
 
-  if (!previewIsLocal(node, values, readFilePorts(node, nodes, edges))) {
+  if (!previewIsLocal(node, values, readFilePorts(node))) {
     // Only the example's own values: a placeholder must not be read as a file name.
     return <EngineRequests node={node} inputs={values} own={!!settings.runCode} graph={graph} />;
   }

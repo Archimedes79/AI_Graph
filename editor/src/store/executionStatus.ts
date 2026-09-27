@@ -1,4 +1,5 @@
-import type { ExecutionStatus } from '@/graph';
+import type { ExecutionStatus, NodeResult } from '@/graph';
+import { DANGER_TEXT } from '@/ui/theme';
 
 /**
  * Whether a node result carries usable output.
@@ -13,9 +14,21 @@ import type { ExecutionStatus } from '@/graph';
 export const delivered = (status: ExecutionStatus | string | undefined): boolean =>
   status === 'success' || status === 'partial';
 
-/** Chip/label colours for a status, shared by the results panel and the canvas. */
+/**
+ * Whether a node's result has outputs to show: it made them this round, or it
+ * stood still and what it made in an earlier one stands (`held`, which the
+ * executor reports as `skipped` with those outputs). The canvas draws the
+ * second faded; asked by status alone, it drew neither.
+ */
+export const hasOutputs = (result: Pick<NodeResult, 'status' | 'held'>): boolean =>
+  delivered(result.status) || result.held === true;
+
+/**
+ * Chip/label colours for a status, shared by the results panel and the canvas:
+ * green delivered, amber delivered with items lost (`partial`), red otherwise.
+ */
 export const statusTone = (status: ExecutionStatus | string | undefined) => {
   if (status === 'success') return { bg: 'rgba(34,197,94,0.1)', fg: '#86efac' };
   if (status === 'partial') return { bg: 'rgba(234,179,8,0.12)', fg: '#fcd34d' };
-  return { bg: 'rgba(239,68,68,0.1)', fg: '#fca5a5' };
+  return { bg: 'rgba(239,68,68,0.1)', fg: DANGER_TEXT };
 };

@@ -1,13 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { createElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import PageHeading, { type PageWords } from './PageHeading';
+import PageHeading from './PageHeading';
+import { insertBlock } from './pageWrite';
+import { pageOf } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
-import { syncGuiNodePorts } from '@/document/guiWidgets';
-import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
-import { NODE_KINDS } from '@/document/nodeKinds';
-import { outputTargets } from '@/authoring/generationContext';
 import type { GraphNode } from '@/graph';
 
 /** The field of *element* that says it is *name*: what a person types into. */
@@ -23,39 +21,57 @@ function field(element: ReactNode, name: string): { onChange: (event: { target: 
   return undefined;
 }
 
-describe('a page\'s own name and description, in the GUI editor', () => {
-  const plot = WIDGET_BUILDERS.plot_window.create('Chart');
-  const page = (): GraphNode => syncGuiNodePorts({
-    id: 'gui1', node_type: 'gui', label: 'GUI Node', description: '', position: { x: 0, y: 0 },
-    inputs: [], outputs: [], config: { ...baseNodeConfig(), gui_widgets: [plot] },
-  });
-
-  it('are shown above the page, as what they are', () => {
-    const html = renderToStaticMarkup(createElement(PageHeading, { nodes: [{ ...page(), description: 'Plots a CSV' }], onChange: () => {} }));
-    expect(html).toContain('value="GUI Node"');
+describe('above the page: the tool\'s name and what it does, which are the graph\'s', () => {
+  it('are shown as what they are', () => {
+    const html = renderToStaticMarkup(createElement(PageHeading, { name: 'Plotter', description: 'Plots a CSV', onChange: () => {} }));
+    expect(html).toContain('value="Plotter"');
     expect(html).toContain('value="Plots a CSV"');
-    expect(renderToStaticMarkup(createElement(PageHeading, { nodes: [], onChange: () => {} }))).toBe('');
   });
 
-  it('can be changed there -- and the node wired to a block is told the new name', () => {
-    // The bug: a gui node's dialog never opens, so "GUI Node" stayed, and was
-    // what every node upstream of a block was told the page is called.
-    useGraphStore.getState().loadGraph({
-      metadata: { name: 'T', description: '', gui_scheme: 'night' },
-      nodes: [page()],
-      edges: [],
-    });
-    const change = (nodeId: string, words: PageWords) => useGraphStore.getState().updateNode(nodeId, words);
-    const stored = () => useGraphStore.getState().rfNodes[0].data.graphNode as GraphNode;
+  it('are written into the graph -- its description too, which nothing else sets -- and not into the page\'s node', () => {
+    // The page had a name and an "About" of its own, beside the graph's name,
+    // and the graph's description -- the one a delivered tool shows -- could be
+    // set nowhere.
+    useGraphStore.getState().newGraph();
+    const heading = () => {
+      const { metadata, setMetadata } = useGraphStore.getState();
+      return PageHeading({ name: metadata.name, description: metadata.description, onChange: setMetadata });
+    };
+    field(heading(), 'Name of the tool')!.onChange({ target: { value: 'Plotter' } });
+    field(heading(), 'What the tool does')!.onChange({ target: { value: 'Plots a CSV' } });
+    expect(useGraphStore.getState().metadata).toMatchObject({ name: 'Plotter', description: 'Plots a CSV' });
+    expect(useGraphStore.getState().exportGraph().metadata).toMatchObject({ name: 'Plotter', description: 'Plots a CSV' });
+  });
+});
 
-    field(PageHeading({ nodes: [stored()], onChange: change }), 'Name of the page')!.onChange({ target: { value: 'Plotter' } });
-    field(PageHeading({ nodes: [stored()], onChange: change }), 'What the page is for')!.onChange({ target: { value: 'Plots a CSV' } });
+describe('the tool\'s name and description, typed above the page', () => {
+  const store = () => useGraphStore.getState();
+  const blocks = () => pageOf(store().rfNodes.map((n) => n.data.graphNode as GraphNode)).widgets.length;
+  beforeEach(() => { vi.useFakeTimers(); store().newGraph(); });
+  afterEach(() => { vi.useRealTimers(); });
 
-    expect(stored()).toMatchObject({ label: 'Plotter', description: 'Plots a CSV' });
-    const feeding = NODE_KINDS.code.create('src');
-    const told = outputTargets('src', [feeding, stored()], [
-      { source: 'src', sourceHandle: 'output', target: 'gui1', targetHandle: `${plot.id}_in` },
-    ], true);
-    expect(told.output).toMatch(/^"Plotter" \(port "[^"]+"\), which wants /);
+  it('take an undo step of their own: Undo takes back the description, then the block added before it', () => {
+    // They took none: an Undo meant for the block took the description with
+    // it, and with nothing before them Undo could not take them back at all.
+    insertBlock({ ...WIDGET_BUILDERS.text_io.create('Box'), id: 'box' });
+    store().setMetadata({ description: 'Counts the words in a text.' });
+    store().undo();
+    expect(store().metadata.description).toBe('');
+    expect(blocks()).toBe(1);
+    store().undo();
+    expect(blocks()).toBe(0);
+    store().redo();
+    store().redo();
+    expect(store().metadata.description).toBe('Counts the words in a text.');
+  });
+
+  it('are one step per field typed into, not one per keystroke', () => {
+    for (const name of ['W', 'Wo', 'Word']) { store().setMetadata({ name }); vi.advanceTimersByTime(300); }
+    store().setMetadata({ description: 'Counts.' });
+    expect(store().past).toHaveLength(2);
+    store().undo();
+    expect(store().metadata).toMatchObject({ name: 'Word', description: '' });
+    store().undo();
+    expect(store().metadata.name).toBe('Untitled Graph');
   });
 });

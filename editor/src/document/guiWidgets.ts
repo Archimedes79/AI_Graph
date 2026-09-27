@@ -5,7 +5,7 @@
 // does this block have" is the one disagreement that silently deletes wires:
 // the editor drawing a port the engine will not produce, or the engine
 // producing one the editor never drew.
-import type { GraphNode, GuiWidget, Port } from '@/graph';
+import type { GraphNode, GuiWidget, NodeResult, Port } from '@/graph';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 
@@ -46,6 +46,18 @@ export function widgetOfPort(node: GraphNode, portId: string): GuiWidget | undef
 }
 
 /**
+ * What a run put on one block of the page that is *result*: the engine's
+ * `display`, which is what arrived as the block draws it -- an image's path
+ * read into the picture. A block that also hands something on -- a chat, a
+ * box that is typed into and shows -- is no display, and shows what arrived
+ * on its port. The page and the page's node on the canvas both ask here.
+ */
+export function blockShows(result: NodeResult | undefined, widgetId: string): unknown {
+  const shown = result?.display?.[widgetId];
+  return shown !== undefined ? shown : result?.inputs?.[`${widgetId}_in`];
+}
+
+/**
  * Whether this kind of node carries the graph's interface — the engine's
  * answer, not a second flag beside it.
  *
@@ -56,6 +68,15 @@ export function widgetOfPort(node: GraphNode, portId: string): GuiWidget | undef
  */
 export function showsPage(nodeType: string): boolean {
   return engineRegistry.node(nodeType)?.hasInterface === true;
+}
+
+/**
+ * The page among *nodes* -- the first node that carries the interface: a graph
+ * has one -- and its blocks. None of either before the first block makes it.
+ */
+export function pageOf(nodes: GraphNode[]): { page: GraphNode | undefined; widgets: GuiWidget[] } {
+  const page = nodes.find((node) => showsPage(node.node_type));
+  return { page, widgets: page?.config.gui_widgets ?? [] };
 }
 
 /**

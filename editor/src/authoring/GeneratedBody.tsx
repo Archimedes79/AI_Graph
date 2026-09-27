@@ -1,13 +1,12 @@
 import type React from 'react';
-import GenerationTranscript, { useGenerationReview, useLiveGeneration } from './GenerationTranscript';
+import GenerationTranscript, { useLiveGeneration } from './GenerationTranscript';
 import LiveGeneration from './LiveGeneration';
 import CodeField from './CodeField';
 import type { ElementGeneration, FieldAccess } from './generation';
 import { ACCENT_FILL, ACCENT_TEXT, MUTED, SUCCESS } from '@/ui/theme';
 
 interface Props {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a node's or a widget's
-  generation: ElementGeneration<any>;
+  generation: ElementGeneration;
   fields: FieldAccess;
   generating: boolean;
   message?: string;
@@ -22,19 +21,15 @@ interface Props {
 
 /**
  * The body an element authors, and the ✨ button that writes it: the part of
- * every authoring editor that is the same everywhere -- the button, a result
- * waiting to be accepted or discarded while the exchange that produced it
- * stays on screen, the body in its editor, and what the last generation said.
+ * every authoring editor that is the same everywhere -- the button, the
+ * exchange while it runs, the body in its editor, and what the last generation
+ * said. What ✨ wrote is in the body at once; Undo takes it back.
  */
 export default function GeneratedBody({ generation, fields, generating, message, onGenerate, title, preview, sent }: Props) {
-  // From context, not a prop: the path here runs through eight element editors
-  // that would do nothing with it but pass it on -- the same reason the
-  // transcript is a context.
+  // From context, not a prop: the path here runs through the node's panel and
+  // the four steps, which would do nothing with it but pass it on -- the same
+  // reason the transcript is a context.
   const liveCalls = useLiveGeneration();
-  // A finished result is not written in until it is taken, so the exchange
-  // that produced it stays on screen while there is something to judge.
-  const review = useGenerationReview();
-  const reviewing = generating || review.pending;
 
   return (
     <div>
@@ -45,7 +40,7 @@ export default function GeneratedBody({ generation, fields, generating, message,
         <div className="flex items-center gap-2">
           {preview}
           <button
-            onClick={onGenerate}
+            onClick={() => onGenerate()}
             disabled={generating}
             className="text-xs px-2 py-1 rounded"
             style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}
@@ -55,28 +50,8 @@ export default function GeneratedBody({ generation, fields, generating, message,
         </div>
       </div>
       {sent}
-      {reviewing ? (
-        <>
-          <LiveGeneration calls={liveCalls} minHeight={generation.bodyHeight ?? 160} />
-          {review.pending && (
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                onClick={review.accept}
-                className="text-xs px-3 py-1 rounded"
-                style={{ background: SUCCESS, color: 'white' }}
-              >
-                Accept
-              </button>
-              <button
-                onClick={review.discard}
-                className="text-xs px-3 py-1 rounded"
-                style={{ background: 'transparent', color: MUTED, border: `1px solid ${MUTED}` }}
-              >
-                Discard
-              </button>
-            </div>
-          )}
-        </>
+      {generating ? (
+        <LiveGeneration calls={liveCalls} minHeight={generation.bodyHeight ?? 160} />
       ) : (
         <CodeField
           value={fields.get(generation.targetField)}

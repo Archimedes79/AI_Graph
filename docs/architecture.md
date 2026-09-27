@@ -31,7 +31,7 @@ engine/src/elements/                            editor/src/elements/
   NodeRunner.ts                                   NodeGuiBuilder.ts
   WidgetRunner.ts                                 WidgetGuiBuilder.ts
   registry.ts                                     registry.ts
-  Runtime.ts  port.ts  fileSelection.ts           fields/  (settings several panels share)
+  Runtime.ts  port.ts  folderListing.ts           fields/  (settings several panels share)
   nodes/                                          nodes/
     ai/     AiNodeRunner.ts  prompt.ts              ai/   AiNodeGuiBuilder.ts  AiNodePanel.tsx
                                                           AiNodeAdvancedPanel.tsx  PromptPreview.tsx
@@ -41,13 +41,12 @@ engine/src/elements/                            editor/src/elements/
     roster.ts                                       roster.ts
     StaticWidgetRunner.ts                           StaticWidgetGuiBuilder.ts
     DisplayWidgetRunner.ts                          DisplayWidgetGuiBuilder.ts
-    TransformingDisplayRunner.ts                    TransformingDisplayGuiBuilder.ts
-                                                    TransformingDisplayPanel.tsx
+                                                    DisplayWidgetPanel.tsx
     select/ SelectWidgetRunner.ts                   select/ SelectWidgetGuiBuilder.ts
                                                             SelectWidgetView.tsx
                                                             SelectWidgetPanel.tsx
     plot_window/ PlotWindowWidgetRunner.ts          plot_window/ PlotWindowWidgetGuiBuilder.ts
-                 check.ts  view.ts                              PlotWindowWidgetView.tsx
+                                                                PlotWindowWidgetView.tsx
                                                                 PlotChart.tsx
     …                                               …  WidgetView.ts
 ```
@@ -79,7 +78,7 @@ reads and enforces.
 | `ElementRunner` | `ElementGuiBuilder` |
 | `NodeRunner` | `NodeGuiBuilder` |
 | `WidgetRunner` | `WidgetGuiBuilder` |
-| `StaticWidgetRunner`, `DisplayWidgetRunner`, `TransformingDisplayRunner` | `StaticWidgetGuiBuilder`, `DisplayWidgetGuiBuilder`, `TransformingDisplayGuiBuilder` |
+| `StaticWidgetRunner`, `DisplayWidgetRunner` | `StaticWidgetGuiBuilder`, `DisplayWidgetGuiBuilder` |
 | `AiNodeRunner` | `AiNodeGuiBuilder` |
 | `SelectWidgetRunner` | `SelectWidgetGuiBuilder` |
 
@@ -102,44 +101,48 @@ its names, on both sides.
 Behaviour lives in classes. Shared code asks the element and never switches on a type name.
 
 ```
-ElementRunner<Subject, Config>          config() · texts() · logic() · catchesErrors() ┊ generation() · deployNeeds()
-├── NodeRunner<C>                a node: derivedPorts · execute · display · eventPorts · keepsTime · settleMemory ┊ whatRuns · problems · graphAuthorNote
+ElementRunner<Subject, Config>          config() · catchesErrors()
+├── NodeRunner<C>                a node: texts · logic · derivedPorts · execute · display · eventPorts · keepsTime · settleMemory ┊ generation · deployNeeds · whatRuns · problems · graphAuthorNote
 │   ├── InputNodeRunner   AiNodeRunner   CodeNodeRunner
 │   ├── DataNodeRunner    OutputNodeRunner   SubgraphNodeRunner
 │   ├── TriggerNodeRunner        an event with nobody there: the tool starting, a clock
 │   └── GuiNodeRunner            a composite: holds widgets, its ports are theirs
-└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue ┊ receives · problems · graphAuthorNote
+└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue ┊ receives · graphAuthorNote
     ├── InputPickerWidgetRunner   TextIoWidgetRunner   SelectWidgetRunner
     ├── SliderWidgetRunner        ButtonWidgetRunner   ChatWidgetRunner
     ├── StaticWidgetRunner       no ports: part of the page, not the graph
     │   └── TextWidgetRunner   DividerWidgetRunner   SpacerWidgetRunner
-    └── DisplayWidgetRunner      one input, nothing out
-        └── TransformingDisplayRunner   an optional transform before drawing
-            └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
+    └── DisplayWidgetRunner      one input, nothing out: shows what arrives, says what it draws
+        └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
 
-ElementGuiBuilder<Subject, PanelProps>           Panel · generation
-├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary   (builder only)
-│                                         + the four steps' declarations: stepped · exampleInput · ownsDescription
-│                                           portEditing/portHint · wantsOn · restingValue/restingFile · publishedDescription
+ElementGuiBuilder<PanelProps>                    Panel
+├── NodeGuiBuilder                        label · icon · color · hint · generation · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
+│                                         + the four steps' declarations: stepped · ownsDescription
+│                                           portEditing/portHint · wantsOn · restingValue · publishedDescription
+│                                           dropPort/withExampleValue (what a file dropped on the node fills)
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
 │   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
 │   └── GuiNodeGuiBuilder
-└── WidgetGuiBuilder                      create(label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor   (builder only)
+└── WidgetGuiBuilder                      create(label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor · preview   (builder only)
     ├── InputPickerWidgetGuiBuilder   TextIoWidgetGuiBuilder   SelectWidgetGuiBuilder
     ├── SliderWidgetGuiBuilder        ButtonWidgetGuiBuilder   ChatWidgetGuiBuilder
     ├── StaticWidgetGuiBuilder            starts unnamed: page furniture has no ports to name
     │   └── TextWidgetGuiBuilder   DividerWidgetGuiBuilder   SpacerWidgetGuiBuilder
-    └── DisplayWidgetGuiBuilder           shows its one input; no output, so nothing to start the graph with
-        └── TransformingDisplayGuiBuilder     one panel for the transform, words from each kind
-            └── PlotWindowWidgetGuiBuilder   TableWidgetGuiBuilder   ImageViewWidgetGuiBuilder
+    └── DisplayWidgetGuiBuilder           one panel: what the kind shows, in its runner's words
+        └── PlotWindowWidgetGuiBuilder   TableWidgetGuiBuilder   ImageViewWidgetGuiBuilder
 ```
 
 The browser half is the same tree with `GuiBuilder` for `Runner`, and
 [`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts) compares the two lineages
 class by class. What each kind knows about its own appearance — its name, icon and colour,
-a new widget's size, tone and first values — is a member of its `GuiBuilder`, not a table in a
-shell. An element is handed its services (`Runtime.ts`: `files`, `code`, `ai`, `tools`)
-rather than reaching for them.
+a new widget's size, tone and first values, how its last result reads on the canvas — is a
+member of its `GuiBuilder`, not a table in a shell. After a run the canvas shows each value a
+node made under the port it stands at, read by its shape (`elements/resultPreview.ts`: a
+line, a count and the first row, a sketch, a thumbnail); `NodeGuiBuilder.resultPreviews` says
+which port, and where the element reads a value its own way it says so — a page shows what
+each block shows, and a chart block reads a list of points as a chart
+(`WidgetGuiBuilder.preview`). An element is handed its services (`Runtime.ts`: `files`,
+`code`, `ai`, `tools`) rather than reaching for them.
 
 ### Build time and run time, in one class
 
@@ -163,11 +166,11 @@ turned out there was nothing to keep apart — see below.)
 | | What it is | Run time | Build time |
 |---|---|---|---|
 | **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
-| `ElementRunner` | `config` · `texts` · `logic` | `catchesErrors` · `snippetFailure` · `runSnippet` | `generation` · `deployNeeds` |
-| `NodeRunner` | `nodeType` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `resultLabel` · `boundaryRole` · `valuePorts` · `keepsOutputInterface` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `fansOut` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
-| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | `receives` · `problems` · `graphAuthorNote` |
+| `ElementRunner` | `config` | `catchesErrors` | — |
+| `NodeRunner` | `nodeType` · `texts` · `logic` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `resultLabel` · `boundaryRole` · `valuePorts` · `keepsOutputInterface` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `fansOut` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `generation` · `deployNeeds` · `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
+| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | `receives` · `graphAuthorNote` |
 | `NodeGuiBuilder` | `nodeType` | — | **everything**: the palette, panels, what ✨ Generate is told |
-| `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, panels, what ✨ Generate is told |
+| `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, its panel |
 
 ### …and a third role, which is neither
 
@@ -180,7 +183,8 @@ role that had nowhere to live:
 | Was | Is now | Because |
 |---|---|---|
 | `WidgetGuiBuilder.View`, `ownsValue` | [`page/blocks.ts`](../editor/src/page/blocks.ts) | what the **page draws** — the one part of a widget a recipient operates |
-| `NodeGuiBuilder.create`, `settings`, `saved`, `showsResultWindow` | [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| `NodeGuiBuilder.create`, `settings`, `saved` | [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| `NodeGuiBuilder.showsResultWindow` | — | gone with the output node's window: a run's result is what its output nodes hand back, under their labels |
 | `WidgetGuiBuilder.clearValueAfterRun` | `WidgetRunner.clearsValueAfterRun` | what a **run** means for a block, the same family as `settle` |
 
 A node's middle role is empty by nature: the canvas is never delivered. A widget's is not,
@@ -264,23 +268,24 @@ engine/src                               editor/src
     generation.ts    written, where it       FourSteps           Try it, the live transcript, the
     logic.ts         is kept, who runs it    NodeSteps …         page-wide sweep (graphSweep.ts)
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
-    executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor
-    triggers.ts      what starts a run     page/               a gui node's page: GuiPage (drawn by
-    batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike),
-    runtimeValues.ts  images.ts              DesignerTab …       the designer, layout, schemes
+    executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
+    triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
+    batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
+    runtimeValues.ts  images.ts              DesignerTab …       Page tab, the Preview tab, layout, schemes
     reuse.ts  interface.ts  examples.ts
   project/           a graph on disk
     folder.ts        read · write · watch
     flow.ts          flow.json: nodes and wires
     interfaceFile.ts a node's ports
-    check.ts         what is wrong
+    check.ts         what is wrong: no disk, the page asks it too
+    folderCheck.ts   what a folder gets wrong
   host/              Node and HTTP         api/client.ts       the contract's client
     api.ts           the contract          app/                toolbar, sidebar, dialogs, results
     serve.ts  http.ts  runs.ts             store/              the open graph, runs, undo
     schedule.ts  node.ts                   runtime/            the deployed tool's page
     lifecycle.ts     what is stopped, in order
     editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal
-                                           dialogs/            FileBrowserDialog, PathField, RequirementsDialog, OutputWindows
+                                           dialogs/            FileBrowserDialog, PathField, RequirementsDialog
   ai/                providers · MCP · settings
   cli/               cli.ts  bundle.ts
 ```
@@ -300,13 +305,12 @@ editor asks the registry what a node is. Panels are lazy chunks, so there is no 
 
 **1. An element owns everything about its kind.** Its settings (`config()`), its ports,
 what it does (`execute`), what it shows (`display`), how an AI writes its body
-(`generation()`), and what a good result looks like (`Generation.check`) — in its own
-class. Adding a kind adds one folder on each side and one line in each registry
-(`elements/registry.ts` and `widgets/roster.ts` in the engine, `elements/registry.ts` in
-the editor), and nothing else changes.
+(`generation()`) — in its own class. Adding a kind adds one folder on each side and one
+line in each registry (`elements/registry.ts` and `widgets/roster.ts` in the engine,
+`elements/registry.ts` in the editor), and nothing else changes.
 
 **2. The executor owns everything about a run.** Ordering, fan-out over lists, reading
-wired files, catching failures, stopping, idle-skipping, settling memory, and asking for
+the file on each input that says so, catching failures, stopping, idle-skipping, settling memory, and asking for
 displays are done once, in `execution/executor.ts`, for every element alike. An element
 declares (`fansOut` and `batchMode`, `readsFileInputs`, `catchesErrors`, `needsInput`, `isMemory`,
 `settlesOnArrival`); the executor carries out.
@@ -360,7 +364,8 @@ other knows, it imports it or replays its result:
    too, unless it keeps something of its own (a page, a data node, a trigger); an event's
    `true` is never handed back by `reuse.ts`; nothing is held inside a subgraph; what stood still is never settled into memory or shown a second time.
 3. **Per node.** Collect inputs → idle-skip if a required or (for an AI node) every wired
-   input came up empty → read wired files → run once, or once per item → record.
+   input came up empty → read the file on each input typed `file_path` (a code or AI node's
+   "Read the file at this path"; never guessed from the wire) → run once, or once per item → record.
    A failure marks the node and skips its dependents; with `catch_errors` it becomes an
    `error` output instead.
 4. **After the round.** `settleMemory` hands loop values to the nodes that keep them and
@@ -384,47 +389,73 @@ other knows, it imports it or replays its result:
 node) are the same machinery, and are what the editor's **Try it** and **⟳ From the
 graph** use.
 
-## Authoring: one loop for every element
+## Authoring: one loop for every node that writes
 
-Every element that has a body — an AI node's prompt, a code node, a data node's format, a
-chart's transform, a file selector — is written the same way, in four steps
-(`authoring/FourSteps`; `NodeSteps` for a node, the block panels and `SelectorSteps` for
-the rest):
+Every node that has a body — an AI node's prompt, a code node — is written the same way,
+in four steps (`authoring/FourSteps`, drawn by `NodeSteps`). A block on a page has none: a
+chart, a table or an image shows what arrives, a folder picker lists its folder, and what
+reshapes a value or chooses some of the files is a code node wired in before or after it.
+The block's dialog is its settings, and for a display block one sentence of what it shows
+(`DisplayWidgetRunner.draws`, the same words the node wired into it is told). Nor do the
+nodes that are values: an input is a text or a folder's listing, a data node its kind and
+what it holds, an output the run's result under its label (and a file or folder of it, if
+asked) — their dialogs are those settings, and a file is read nowhere but at the input of
+the node that wants its text.
 
 ```
-1 what comes in:  ports + ONE example   ⟳ from the graph · 📂 from a file · "run once per item"
-2 what comes out: ports + words (greyed: what the graph already says) + example output + kept shape
-3 what it should do ──✨──▶ 4 body ──▶ ▶ Try it on the example ──▶ what came out ── Keep this result ─▶ 2
-                             ▲                                        │
-                             └────────────── verified ────────────────┘
+1 what comes in:  ports ("read the file at this path", "whole list") + ONE example   ⟳ · 📂 · a file dropped · "run once per item"
+2 what comes out: ports, where each goes and what it wants (read only) + ONE words field + kept shape
+3 what it should do ──✨──▶ 4 body ──▶ ▶ Try it ──▶ what came out · ✓/✗ expected · judge · "and 2 more"
+                             ▲                        │  Keep (as expected output / this answer's shape)
+                             └── "Say what to change" ┘  ✨ Fix (where it failed)
 ```
 
 The example is one thing, kept once: the first section of the node's `examples.md`
-(`authoring/examplePair.ts`), a block's `example`. It is the sample ✨ is written and
+(`authoring/examplePair.ts`). It is the sample ✨ is written and
 checked against (`nodeFacts`), what Try it runs, what an AI node's request is shown for,
-and what `test` runs.
+and what `test` runs. Where the file holds a judge's sentence or more examples, Try it runs
+them the way `test` does (`testNode`), so the answer shown is the answer judged.
 
-Where the steps differ by element, the element's panel hands the difference to `NodeSteps`
-rather than `NodeSteps` asking what it draws: an AI node's panel gives its step 2 the
-example answer a model imitates and how **Keep this result** keeps one there (`answer`,
-with `elements/nodes/ai/keptAnswer.ts`); without it, step 2 is the example's expect block.
-Each panel says what its words in step 2 are for (`wordsHint`).
+An AI node and a code node have the same sections in the same order and the same buttons;
+only the body differs. Where an element keeps a result differently, its panel hands that to
+`NodeSteps` rather than `NodeSteps` asking what it draws: an AI node's answer is never the
+same twice, so its "Keep this answer's shape" writes "Answer in this shape: …" into its words
+(`keep`, `keepAnswerShape` in `elements/nodes/ai/keptAnswer.ts`, with the button's words); a
+code node's "Keep as expected output" writes the example's expect block. Each panel says
+what its words in step 2 are for (`wordsHint`).
 
-**One way to run a body — on Node.** A code node's `code.js`, an ai node's changed `run.js`,
-the `select.js` that picks files and the code a table or an image block shapes its value
-with are one kind of thing, and `elements/body.ts` (`runBody`) is the only place in the
-engine that runs one: `async function run(inputs, node)`, in a process of its own, returning
-an object keyed by output port. The element decides *when* and what a failure costs; never *how*. The probe that tries generated code on a sample runs it the same way, so code that asks a model is tried with a node it can ask.
+**No Save.** What a node's dialog changes is written into the graph a moment later
+(`canvas/nodeDialog.ts`), one undo step per field typed into (`graphStore.commit`'s
+coalescing) -- the field on screen, not the setting it writes: the example and the judge's
+sentence are both `examples.md`. What is not typing -- a file dropped in, a result kept, a
+box ticked -- is a step of its own (`UndoStep`), and a run that lands ends the step being
+typed. Undo takes it back, and closing the dialog loses nothing. What cannot be stored
+yet -- an example that is not an object, a data node's structure that does not parse, a
+port name that is empty or taken -- stays in its field with the reason (`useTyped`), and is
+never written. The same holds for every kind's dialog, the four steps or not.
 
-**The one body that runs in the page: a chart's.** A chart's body is not a transform of a
-value but `function draw(data, window)`, and what it needs — the block's size in pixels and
-the page's colour scheme — exists only where the block is drawn, so it runs there, again on
-every change of data, size or scheme, with no run. It runs in a browser **Web Worker**
-(no DOM, no network, no modules; destroyed after four seconds), in
-[`plot_window/draw.ts`](../editor/src/elements/widgets/plot_window/draw.ts), and its SVG still
-goes through `asDrawing`. The engine is told to leave it alone: `WidgetRunner.bodyDrawsOnThePage`
-makes `GuiNodeRunner.showBlock` hand the value through untouched. A node says *what* to plot
-(`{kind, title, points}`, ordinary data on a wire); the block draws it.
+**A dropped file.** A file dropped on a node on the canvas fills what the element says
+(`NodeGuiBuilder.dropPort`, `withExampleValue`): the example on the one input of an AI or
+code node -- its path where that input reads its file, else what it says -- and what a data
+node holds. It is one undo step, and opens the node's dialog (`authoring/droppedFile.ts`).
+
+**Changing what there is.** "Say what to change" and ✨ Fix go through the one generate path
+with `refine`: the body as it is, what came of it (the try on screen, else the last run) and
+the words -- none for a fix, which is the repair step made of the body there is. The answer
+brings the task back restated, and the dialog writes both as one step and tries it at once.
+A change is not held to the example's expectation, written before it, and its repair is
+written from the restated task and the change: held to the old one, the repair turned the
+change back while the task said it was made.
+
+**One way to run a body — on Node.** A code node's `code.js` and an ai node's or a
+subgraph node's changed `run.js` are one kind of thing, and `elements/body.ts` (`runBody`)
+is the only place in the engine that runs one: `async function run(inputs, node)`, in a
+process of its own, returning an object keyed by output port. The element decides *when*;
+what a failure costs is the executor's (`catch_errors`); never *how*. The probe that tries
+generated code on a sample runs it the same way, so code that asks a model is tried with a
+node it can ask. Nothing runs in the page: a node says *what* to plot (`{kind, title,
+points}`, ordinary data on a wire, or finished SVG), and the chart draws it at the block's
+real size (`plot_window/PlotChart.tsx`), redrawn on a resize with no run.
 
 **A body can ask.** `CodeService.run(body, inputs, signal, context)` hands a body a second
 argument, `node`: plain data, and `calls` — questions it may put to the process that holds
@@ -433,17 +464,17 @@ without ever holding a key: `node.llm` is answered by `askModel` (`nodes/ai/ask.
 way to ask, counted per run -- and offered to every body, since they all run the one way. An ai node's `run.js` (`nodes/ai/runTemplate.ts`) is such a
 body; left as the engine shipped it, the engine makes its one call directly.
 
-Generation (`host/editor/generate.ts`) is: write → run once on the sample → ask the
-element's `check` → repair once with the evidence. The sample is what came off the wires,
+Generation (`host/editor/generate.ts`) is: write → run once on the sample → hold it to the
+keys it must return and to what the example expects → repair once with the evidence. The
+sample is what came off the wires,
 so for a node that reads its file inputs the files are read first, by the function a run
 reads them with (`execution/fileInputs.ts`) — code tried on a filename finds no rows,
 returns an empty chart, and passes. A node that runs once per item is probed on one item,
 cut from the sample by the rule the executor cuts by (`batchItems`), and its answer is
 recorded as the list a run hands on (`mergeBatchOutputs`), so the shape kept from a probe is
-the shape a run checks itself against. A chart is probed the way its page calls it:
-the element wraps the body (`Generation.probeWith`) so it is called as
-`draw(data, window)` with a window standing in for the block's. Every model call is recorded
-(`AICall`) and can be watched while it runs; the result waits for the person to accept it.
+the shape a run checks itself against. Every model call is recorded
+(`AICall`) and can be watched while it runs; the result is written into the node at once,
+and Undo takes it back.
 
 ## A graph on disk
 
@@ -457,9 +488,10 @@ A graph is a folder, and **each fact is in one place**:
   Nothing about its neighbours: a node that needs to know what arrives follows the wire and
   reads the other node's interface. Whether a node keeps an output shape is
   `NodeRunner.keepsOutputInterface`.
-- Every piece of writing is a file of its own beside them — `code.js`, `system.md`, and a
-  block's files one folder further down. Which fields become which files is element
-  knowledge, so each element declares it (`ElementRunner.texts`).
+- Every piece of writing is a file of its own beside them — `code.js`, `system.md`. Which
+  fields become which files is element knowledge, so each element declares it
+  (`NodeRunner.texts`). A page's blocks write nothing: they are settings, in its
+  `node.json`.
 - `layout.json` — positions only.
 
 [`project/folder.ts`](../engine/src/project/folder.ts) reads and writes a folder for everyone —
@@ -483,7 +515,8 @@ or a page that has them can do the same.
   which nodes keep one is `NodeRunner.keepsOutputInterface`) is inferred from what
   its first successful run produced ([`execution/interface.ts`](../engine/src/execution/interface.ts)),
   checked against on every later run (a message, not a failure), and handed to the next
-  node's generation. An AI node's `output.md` and `output.example.md` are also sent to the model.
+  node's generation. An AI node's `output.md` -- its words, an answer's shape kept there too --
+  is also sent to the model.
 - **Examples are tests, and the one sample.** A node's optional `examples.md`
   ([`execution/examples.ts`](../engine/src/execution/examples.ts)) is run by `test` and the
   MCP server's `test_graph`, through its one `testGraph`, at every depth of the graph; one node
@@ -492,10 +525,15 @@ or a page that has them can do the same.
   against. `check` holds an example's inputs to the output interface of the node wired into
   that port.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
-  problems: the CLI prints it and CI fails on it, the MCP server returns it before saving. It finds
+  problems: the CLI prints it and CI fails on it, the MCP server returns it before saving, and
+  the editor says it before Load under a graph pasted as JSON and under one ✨ AI Graph
+  designed (`app/GraphProblems.tsx`). It reads no disk, so the page can ask it; what only a
+  project folder gets wrong -- a folder or a file nothing claims -- is
+  [`folderCheck.ts`](../engine/src/project/folderCheck.ts)'s. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
-  that element's `problems()`. Two output nodes sharing a label are a problem too; until it is
+  that element's `problems()`. A second page is a problem: a graph has one, the first node that
+  `hasInterface`, and the editor and a tool draw only that. Two output nodes sharing a label are a problem too; until it is
   fixed the run's result keeps the first under the label and the others under their ids
   (`NodeRunner.ts`'s `resultKeys`), and `check` names those keys. Ids a folder could not read
   back -- two differing only in case, a number, a "." or "->" -- are problems as well
@@ -510,8 +548,9 @@ or a page that has them can do the same.
 | a run in flight | `RunBoard` on the server | `RunSnapshot`, polled |
 | what every node made last, for rounds its ◆ stays shut | `Latch`, in the process holding the graph; gone at restart | `NodeResult.held` |
 | the last run | the editor's store / the served page / `schedule.ts` | `ExecutionResult` |
+| each node as the last run ran it, so a node changed since is not described by that run | the editor's store (`ranAs`, read by `lastRunOf`) | — |
 | keys, endpoints, MCP servers that start programs | `ai-settings.json`, machine-side, never in a graph | — |
-| the one AI setting: what ✨ Generate, Try it, ▶ Test and every run call unless a node pins its own | `ai-settings.json`'s `ai` (or `AI_GRAPH_AI_PROVIDER`/`_MODEL`), read only by `aiSetting` in [`ai/settings.ts`](../engine/src/ai/settings.ts) | `ProviderStatus.target`, for the editor's "now: …" |
+| the one AI setting: what ✨ Generate, Try it (and its judge) and every run call unless a node pins its own | `ai-settings.json`'s `ai` (or `AI_GRAPH_AI_PROVIDER`/`_MODEL`), read only by `aiSetting` in [`ai/settings.ts`](../engine/src/ai/settings.ts) | `ProviderStatus.target`, for the editor's "now: …" |
 | a node's own model | the node's config (`ai_provider`, `ai_model`) | the graph |
 
 ## Security boundaries
@@ -550,7 +589,7 @@ or a page that has them can do the same.
   ([`shells.test.ts`](../engine/src/shells.test.ts); `execution/triggers.ts` alone reads the document
   without asking). What such a comparison would decide is a member of the element's class —
   `NodeRunner.hasInterface`, `missingExample`, `NodeRunner.isResult` and `resultLabel`,
-  `NodeRunner.problems` and `WidgetRunner.problems`, `blocks`, `graphAuthorNote` — so a new
+  `NodeRunner.problems`, `WidgetRunner.receives`, `blocks`, `graphAuthorNote` — so a new
   kind answers for itself. The prompt that designs a whole graph is assembled from the kinds' own
   `graphAuthorNote` -- an input node says the ports each mode derives from its own `derivedPorts`,
   and the page lists every block kind with the block's own note -- and keeps only the rules that
@@ -566,9 +605,9 @@ engine's own half of "no shell names a kind" (`check.ts`, `executor.finalOutputs
 `project/folder.ts`), the hand-written list of node types in `graphPrompt.ts`, and the editor's
 layer order, now held by `layers.test.ts`. What it left, still true:
 
-- **A few functions and files carry too much at once.** `graphStore.ts` (~960 lines: the
+- **A few functions and files carry too much at once.** `graphStore.ts` (~1000 lines: the
   document, its normalisation, the ReactFlow adapter, run polling and undo), `App.tsx` (~600
-  lines), `Toolbar.tsx` (~550 lines), `mcpServer.ts`'s `createGraphTools`, and `executor.ts`'s
+  lines), `Toolbar.tsx` (~470 lines), `mcpServer.ts`'s `createGraphTools`, and `executor.ts`'s
   `executeGraph`. Nothing in the tests catches a mistake made splitting one of them, which is
   exactly why none has been split yet. Parts of the shell already moved out of `App.tsx` into
   `app/{Sidebar,Toolbar,ResultsPanel,SettingsDialog,ViewTabs,AICredentialsSection,SubgraphTrail}.tsx`,

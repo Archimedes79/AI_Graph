@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { insertBlock, moveBlock, patchBlock, removeBlock, routePage } from './pageWrite';
-import { pageOf } from './GuiPage';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { insertBlock, moveBlock, patchBlock, removeBlock } from './pageWrite';
+import { usePageEvents } from './GuiPage';
+import { pageOf } from '@/document/guiWidgets';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { WIDGET_BUILDERS } from '@/elements/registry';
@@ -19,72 +22,71 @@ function guiNode(id: string, widgets: GuiWidget[]): GraphNode {
   };
 }
 
-describe('routePage', () => {
-  it('gives the first block to a gui node that is still empty', () => {
-    // The regression: the owner set used to come from the blocks already on the
-    // page. With an empty gui node there were none, every new widget resolved
-    // to no owner, and adding one -- by click or by drag -- silently did
-    // nothing. Dead palette, no error, and only while the page was empty.
-    const node = guiNode('gui1', []);
-    const added = WIDGET_BUILDERS.text.create('Title', 'heading');
-
-    const writes = routePage([node], [], [added]);
-
-    expect(writes).toHaveLength(1);
-    expect(writes[0].node.id).toBe('gui1');
-    expect(writes[0].widgets.map((w) => w.id)).toEqual([added.id]);
-  });
-
-  it('keeps every block on the node that already stores it', () => {
-    const a = WIDGET_BUILDERS.text.create('A');
-    const b = WIDGET_BUILDERS.text.create('B');
-    const first = guiNode('gui1', [a]);
-    const second = guiNode('gui2', [b]);
-    const blocks = [{ node: first, widget: a }, { node: second, widget: b }];
-
-    // Reordered across nodes: B before A on the page, both staying put.
-    const writes = routePage([first, second], blocks, [b, a]);
-
-    expect(writes).toEqual([]);
-  });
-
-  it('inserts a new block on the first node without moving the others', () => {
-    const a = WIDGET_BUILDERS.text.create('A');
-    const b = WIDGET_BUILDERS.text.create('B');
-    const first = guiNode('gui1', [a]);
-    const second = guiNode('gui2', [b]);
-    const blocks = [{ node: first, widget: a }, { node: second, widget: b }];
-    const added = WIDGET_BUILDERS.divider.create('');
-
-    const writes = routePage([first, second], blocks, [added, a, b]);
-
-    expect(writes).toHaveLength(1);
-    expect(writes[0].node.id).toBe('gui1');
-    expect(writes[0].widgets.map((w) => w.id)).toEqual([added.id, a.id]);
-  });
-
-  it('writes the emptied node when its last block is deleted', () => {
-    const a = WIDGET_BUILDERS.text.create('A');
-    const node = guiNode('gui1', [a]);
-
-    const writes = routePage([node], [{ node, widget: a }], []);
-
-    expect(writes).toHaveLength(1);
-    expect(writes[0].widgets).toEqual([]);
-  });
-
-  it('drops nothing on the floor when there is no gui node at all', () => {
-    // The caller creates one in this case; returning an empty list is how it
-    // finds out, and is the only situation where a widget may go unwritten.
-    expect(routePage([], [], [WIDGET_BUILDERS.text.create('A')])).toEqual([]);
-  });
-});
-
-// ── Changing the page as the store holds it ────────────────────────────────
-
 const store = () => useGraphStore.getState();
 const page = () => pageOf(store().rfNodes.map((n) => n.data.graphNode as GraphNode));
-const shown = () => page().blocks.map((b) => b.widget);
+const shown = () => page().widgets;
+
+describe('the page', () => {
+  beforeEach(() => store().newGraph());
+
+  it('is one node: its first block makes it, and every block after lands on it', () => {
+    insertBlock({ ...WIDGET_BUILDERS.text.create('Title', 'heading'), id: 'title' });
+    const made = page().page!;
+    expect(store().rfNodes).toHaveLength(1);
+    insertBlock({ ...WIDGET_BUILDERS.text_io.create('Answer', 'output'), id: 'answer' });
+    expect(store().rfNodes).toHaveLength(1);
+    expect(page().page!.id).toBe(made.id);
+    expect(shown().map((w) => w.id)).toEqual(['title', 'answer']);
+    // Its ports follow its blocks.
+    expect(page().page!.inputs.map((port) => port.id)).toEqual(['answer_in']);
+  });
+
+  it('is made by its first block in that block\'s undo step, and one Undo takes both', () => {
+    // Two steps, and one Undo left a page node with no blocks: a page to a
+    // delivered tool and a bundle, which drew nothing on it.
+    const chart = { ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' };
+    insertBlock(chart);
+    expect(store().past).toHaveLength(1);
+    expect(shown()).toEqual([chart]);
+    store().undo();
+    expect(store().rfNodes).toEqual([]);
+    store().redo();
+    expect(shown()).toEqual([chart]);
+  });
+
+  it('goes with its last block', () => {
+    insertBlock({ ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' });
+    removeBlock('chart');
+    expect(store().rfNodes).toEqual([]);
+    // Undo brings the block back, and the page with it.
+    store().undo();
+    expect(shown().map((w) => w.id)).toEqual(['chart']);
+  });
+
+  it('is made beside the nodes on the canvas, not on top of the first', () => {
+    // The palette's first node lands at (200, 120); the page went to (240, 160).
+    const code = store().addNode('code', { x: 200, y: 120 });
+    insertBlock({ ...WIDGET_BUILDERS.text.create('Title', 'heading'), id: 'title' });
+    const at = (id: string) => store().rfNodes.find((n) => n.id === id)!.position;
+    expect(at(page().page!.id).x).toBeGreaterThanOrEqual(at(code).x + 240);
+    expect(at(page().page!.id).y).toBe(at(code).y);
+  });
+
+  it('is the first one, where a graph has two -- a problem `check` names -- and the second is left as it is', () => {
+    // The page was every gui node's blocks in graph order, and an edit was
+    // routed back to whichever node held the block.
+    const a = { ...WIDGET_BUILDERS.text.create('A'), id: 'a' };
+    const b = { ...WIDGET_BUILDERS.text.create('B'), id: 'b' };
+    store().loadGraph({ metadata: { name: 'Two', description: '', gui_scheme: 'night' }, nodes: [guiNode('first', [a]), guiNode('second', [b])], edges: [] });
+    expect(page().page!.id).toBe('first');
+    expect(shown().map((w) => w.id)).toEqual(['a']);
+    insertBlock({ ...WIDGET_BUILDERS.divider.create(''), id: 'd' }, 0);
+    patchBlock('b', { label: 'not on the page' });
+    const second = store().rfNodes.find((n) => n.id === 'second')!.data.graphNode as GraphNode;
+    expect(second.config.gui_widgets).toEqual([b]);
+    expect(shown().map((w) => w.id)).toEqual(['d', 'a']);
+  });
+});
 
 describe('a block edited on the page', () => {
   beforeEach(() => store().newGraph());
@@ -102,29 +104,49 @@ describe('a block edited on the page', () => {
   });
 
   it('changes a block on the page as it is by then, keeping what was added, renamed and deleted meanwhile', () => {
-    // Accepting a ✨ result wrote back the page from when ✨ was pressed.
+    // A change that lands late -- an answer from the engine -- wrote back the
+    // page from when it was asked for.
     insertBlock({ ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' });
     insertBlock({ ...WIDGET_BUILDERS.text.create('Gone'), id: 'gone' });
     patchBlock('chart', { label: 'Renamed' });
     removeBlock('gone');
     insertBlock({ ...WIDGET_BUILDERS.text.create('Added'), id: 'added' });
 
-    patchBlock('chart', { code: 'function draw() { return []; }' });
+    patchBlock('chart', { tone: 'accent' });
 
     expect(shown().map((w) => [w.id, w.label])).toEqual([['chart', 'Renamed'], ['added', 'Added']]);
-    expect(shown()[0].code).toBe('function draw() { return []; }');
+    expect(shown()[0].tone).toBe('accent');
   });
 
-  it('changes nothing when the block was deleted meanwhile', () => {
+  it('is changed here when it is used, too -- on the Page tab, in the preview, in a tool: what it holds already is no undo step', () => {
+    // A block used on the page wrote the page's blocks itself, beside this
+    // file, and took an undo step for a value the block already held.
+    insertBlock({ ...WIDGET_BUILDERS.text_io.create('Ask'), id: 'ask', value: 'hello' });
+    let events: ReturnType<typeof usePageEvents> | undefined;
+    function Using() {
+      events = usePageEvents();
+      return null;
+    }
+    renderToStaticMarkup(createElement(Using));
+    const undo = store().past.length;
+    events!.setWidgetValue(shown()[0], 'hello');
+    expect(store().past.length).toBe(undo);
+    events!.setWidgetValue(shown()[0], 'hello there');
+    expect(shown()[0].value).toBe('hello there');
+    expect(store().past.length).toBe(undo + 1);
+  });
+
+  it('changes nothing when the block was deleted meanwhile: not even an undo step', () => {
     insertBlock({ ...WIDGET_BUILDERS.text.create('A'), id: 'a' });
     const before = JSON.stringify(store().exportGraph());
+    const undo = store().past.length;
     patchBlock('chart', { label: 'x' });
     expect(JSON.stringify(store().exportGraph())).toBe(before);
+    expect(store().past.length).toBe(undo);
   });
 
-  it('makes the page\'s node for the first block, and moves a block by place or onto another', () => {
+  it('moves a block by place or onto another, and takes the page away with its last one', () => {
     for (const id of ['a', 'b', 'c']) insertBlock({ ...WIDGET_BUILDERS.text.create(id), id });
-    expect(page().guiNodes).toHaveLength(1);
     moveBlock('c', 0);
     expect(shown().map((w) => w.id)).toEqual(['c', 'a', 'b']);
     moveBlock('c', 'b');
@@ -133,6 +155,7 @@ describe('a block edited on the page', () => {
     expect(shown().map((w) => w.id)).toEqual(['a', 'b', 'c']);
     insertBlock({ ...WIDGET_BUILDERS.divider.create(''), id: 'd' }, 1);
     expect(shown().map((w) => w.id)).toEqual(['a', 'd', 'b', 'c']);
+    for (const id of ['a', 'd', 'b', 'c']) removeBlock(id);
+    expect(page().page).toBeUndefined();
   });
 });
-

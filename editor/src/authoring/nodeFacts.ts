@@ -2,42 +2,39 @@ import type { Edge } from 'reactflow';
 import type { ExecutionResult, GraphNode } from '@/graph';
 import type { GenerationRequest } from './generation';
 import { inputSources, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
-import { outputExampleText, outputFormatText } from './outputFormat';
+import { outputFormatText } from './outputFormat';
 import { readPair } from './examplePair';
 import { NODE_BUILDERS } from '@/elements/registry';
 
-/** A sample, where it came from, and which of its ports hold a path the engine is to read. */
-interface Sample { values: Record<string, unknown>; origin: string; read: string[] }
+/** A sample, and where it came from. */
+interface Sample { values: Record<string, unknown>; origin: string }
 
 /**
  * Before any run: what the nodes wired in hold without running -- a typed
- * text, a stored value, the file an input node reads. Only when every wired
- * input has one: half a sample would be tried on the code as if the other
- * half were empty.
+ * text, a stored value. Only when every wired input has one: half a sample
+ * would be tried on the code as if the other half were empty.
  *
- * A file is sent as its path, and named as a port to read: the engine reads
+ * A text naming a file, wired into an input that reads the file at its path,
+ * is sent as that path on a port to read (`readFilePorts`): the engine reads
  * it the way a run reads a file before it shows the sample or tries code on
- * it -- so a node fed by a file input is written against that file's rows, not
- * against a guess, before the graph has ever run.
+ * it -- so the node is written against that file's rows, not against a guess,
+ * before the graph has ever run.
  */
 function restingValues(node: GraphNode, nodes: GraphNode[], edges: Edge[]): Sample | undefined {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const values: Record<string, unknown> = {};
-  const read: string[] = [];
   const from = new Set<string>();
   for (const edge of edges) {
     if (edge.target !== node.id || !edge.targetHandle) continue;
     const source = byId.get(edge.source);
     const element = source && NODE_BUILDERS[source.node_type];
     if (!element || !edge.sourceHandle) return undefined;
-    const file = element.restingFile(source, edge.sourceHandle);
-    const value = file ?? element.restingValue(source, edge.sourceHandle);
+    const value = element.restingValue(source, edge.sourceHandle);
     if (value === undefined) return undefined;
     values[edge.targetHandle] = value;
-    if (file) read.push(edge.targetHandle);
     from.add(`"${source.label}"`);
   }
-  return Object.keys(values).length ? { values, read, origin: `what ${[...from].join(' and ')} holds now` } : undefined;
+  return Object.keys(values).length ? { values, origin: `what ${[...from].join(' and ')} holds now` } : undefined;
 }
 
 /**
@@ -50,7 +47,7 @@ function restingValues(node: GraphNode, nodes: GraphNode[], edges: Edge[]): Samp
  *     what comes in   each input: type, where from and what that node hands
  *                     on, and one sample
  *     what goes out   each output: where to and what the node there wants;
- *                     the format in words; an example; the shape a run kept
+ *                     the format in words; the shape a run kept
  *     examples        the node's `examples.md`
  *
  * The sample is the node's example (step 1) when it has one: the engine reads
@@ -66,20 +63,19 @@ export function nodeFacts(
   nodes: GraphNode[],
   edges: Edge[],
   executionResult: ExecutionResult | null,
-): Omit<GenerationRequest<GraphNode>, 'element' | 'generation' | 'subject' | 'fields'> {
-  const element = NODE_BUILDERS[node.node_type];
+): Omit<GenerationRequest, 'element' | 'generation' | 'fields'> {
   const inputs = node.inputs.map((port) => port.id);
   const whole = node.config.batch_mode === 'whole_list';
-  const given = element?.exampleInput(node);
-  const example = given && Object.keys(given).length ? given : undefined;
-  // The engine reads a complete first pair from `examples.md` by itself, and
-  // then also checks what it expects; any other example is sent as it is.
   const pair = readPair(node.config.examples);
-  const read = !!example && pair.complete && JSON.stringify(pair.input) === JSON.stringify(example);
+  const example = pair.input && Object.keys(pair.input).length ? pair.input : undefined;
+  // The engine reads a complete first pair from `examples.md` by itself, and
+  // then also checks what it expects; an example with nothing to hold it to
+  // is sent as it is.
+  const read = !!example && pair.complete;
   const observed = lastRunInputs(node.id, executionResult);
   const sample: Sample | undefined = read ? undefined
-    : example ? { values: example, origin: 'the example in step 1', read: [] }
-      : observed ? { values: observed, origin: 'the last run', read: [] } : restingValues(node, nodes, edges);
+    : example ? { values: example, origin: 'the example in step 1' }
+      : observed ? { values: observed, origin: 'the last run' } : restingValues(node, nodes, edges);
   return {
     // All of them: the error port is the executor's, and the engine drops it
     // where a request comes in (`generate`).
@@ -91,7 +87,7 @@ export function nodeFacts(
     sampleInputs: sample?.values,
     sampleOrigin: example ? 'the example in step 1' : sample?.origin,
     inputSources: inputSources(node.id, nodes, edges, true),
-    readFilePorts: [...new Set([...readFilePorts(node, nodes, edges), ...(sample?.read ?? [])])],
+    readFilePorts: readFilePorts(node),
     // What a body is handed on each port: one item of a list input, unless the
     // node takes lists whole.
     inputTypes: Object.fromEntries(node.inputs.map((port) => {
@@ -107,7 +103,6 @@ export function nodeFacts(
     },
     outputTargets: outputTargets(node.id, nodes, edges, true),
     outputFormat: outputFormatText(node.config),
-    outputExample: outputExampleText(node.config),
     outputSchema: node.config.output_schema,
     examples: node.config.examples,
     messageTemplate: node.config.prompt_template,

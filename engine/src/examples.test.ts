@@ -161,8 +161,9 @@ describe('what each example is there to show', () => {
   it('nested_statistics: the part runs inside the whole, and on its own', async () => {
     const whole = await runGraph(await load('nested_statistics'));
     expect(whole.status).toBe('success');
-    // The value came up through the node that holds the graph doing the counting.
-    expect(whole.outputs.Statistics).toEqual({ value: { words: 32, sentences: 2, longest: 'directions' } });
+    // The value came up through the node that holds the graph doing the counting,
+    // and is the run's result under the output node's name.
+    expect(whole.outputs.Report).toEqual({ value: { words: 32, sentences: 2, longest: 'directions' } });
 
     // And the same folder is a project: the graph inside runs by itself, on the
     // value its own input node holds. That is the claim the design rests on.

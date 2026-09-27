@@ -2,10 +2,9 @@
 //
 // A widget has three roles and they belong in three places. The engine's
 // `WidgetRunner` is what it contributes to a *run* -- a picker produces its
-// path, a chat its message, a transform its value. `WidgetGuiBuilder` is what
-// the builder needs: a settings panel, a ✨ button, what the palette drops. And
-// this is the third: what the person using the finished tool looks at and
-// operates.
+// path, a chat its message, a slider its number. `WidgetGuiBuilder` is what
+// the builder needs: a settings panel, what the palette drops. And this is the
+// third: what the person using the finished tool looks at and operates.
 //
 // The third one is a `View` and not a third `…Runner`, which is a question the
 // other two names invite. A view is not the running half of anything: the

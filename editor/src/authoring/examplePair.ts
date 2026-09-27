@@ -33,6 +33,8 @@ export interface ExamplePair {
   title: string;
   /** How many sections come after the first: kept, and run by `test`. */
   others: number;
+  /** Those sections, as written: what a try of them ran (`TryItInline.stillSaid`). */
+  later: string;
   /** An input and something checked: what `test` runs and ✨ is tried on. */
   complete: boolean;
 }
@@ -57,7 +59,7 @@ function cut(text: string): { before: string; first: string; after: string; othe
 /**
  * An example as values: an object keyed by port, or undefined while *text* is
  * empty or is not one -- what `parseExamples` accepts as a block. The one
- * reading of an example's text, for a node's pair and a block's step 1 alike.
+ * reading of an example's text.
  */
 export function exampleObject(text: string | undefined): Record<string, unknown> | undefined {
   const trimmed = String(text ?? '').trim();
@@ -72,7 +74,7 @@ export function exampleObject(text: string | undefined): Record<string, unknown>
 
 /** The first pair of *text*, as the dialog shows it. */
 export function readPair(text: string | undefined): ExamplePair {
-  const { first, others } = cut(text ?? '');
+  const { first, after, others } = cut(text ?? '');
   const blocks = exampleBlocks(first);
   const input = blocks.find((block) => block.role === 'input');
   const expect = blocks.find((block) => block.role === 'expect');
@@ -85,6 +87,7 @@ export function readPair(text: string | undefined): ExamplePair {
     judge: judge?.body.trim() || undefined,
     title: first ? first.replace(EXAMPLE_SECTION, '').split('\n', 1)[0].trim() : '',
     others,
+    later: after,
     complete: false,
   };
   pair.complete = !!pair.input && (!!pair.expect || !!pair.judge);

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { AICall } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { SentPart } from './GenerationTranscript';
@@ -13,13 +13,10 @@ import { MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
  * so the two cannot describe different requests.
  *
  * `preview` is the button, for beside ✨; `sent` is the request, for under it.
- * *about* names what it is shown for: another element in the same editor
- * folds away what was shown for the last one.
  */
-export function useWhatSends<S>(request: () => GenerationRequest<S> | undefined, about?: string): { preview: ReactNode; sent: ReactNode } {
+export function useWhatSends(request: () => GenerationRequest | undefined): { preview: ReactNode; sent: ReactNode } {
   const [sends, setSends] = useState<AICall[] | null>(null);
   const [note, setNote] = useState('');
-  useEffect(() => { setSends(null); setNote(''); }, [about]);
 
   const toggle = async () => {
     if (sends) { setSends(null); return; }

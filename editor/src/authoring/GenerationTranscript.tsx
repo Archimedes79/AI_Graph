@@ -12,33 +12,23 @@ export function useLiveGeneration(): AICall[] {
   return useContext(Live);
 }
 
-/** A finished result waiting to be taken, and the two ways to answer it. */
-export interface Review { pending: boolean; accept: () => void; discard: () => void }
-const NO_REVIEW: Review = { pending: false, accept: () => {}, discard: () => {} };
-const Waiting = createContext<Review>(NO_REVIEW);
-
-export function useGenerationReview(): Review {
-  return useContext(Waiting);
-}
-
 /**
- * Hand the transcript of one ✨ button to whatever draws that button's result.
+ * Hand the transcript of a node dialog's ✨ to whatever draws its result.
  *
- * A context rather than a prop because the path from the component that owns
- * `useGenerate` down to the one that draws the message runs through eight
- * element editors that do nothing with it but pass it on. That row of
- * forwarding props is what let the ✨ button drift apart in the first place --
- * see `GeneratedBody`, the one drawing of it now.
+ * A context rather than a prop because the path from the dialog, which owns
+ * `useGenerate`, down to the body that draws the message runs through the
+ * node's own panel and the four steps (`NodeSteps`), which do nothing with it
+ * but pass it on. A row of forwarding props like that is what let the ✨
+ * button drift apart in the first place -- see `GeneratedBody`, the one
+ * drawing of it now.
  */
 export function GenerationReport(
-  { calls, live = NOTHING, review = NO_REVIEW, children }:
-  { calls: AICall[]; live?: AICall[]; review?: Review; children: React.ReactNode },
+  { calls, live = NOTHING, children }:
+  { calls: AICall[]; live?: AICall[]; children: React.ReactNode },
 ) {
   return (
     <Transcript.Provider value={calls}>
-      <Live.Provider value={live}>
-        <Waiting.Provider value={review}>{children}</Waiting.Provider>
-      </Live.Provider>
+      <Live.Provider value={live}>{children}</Live.Provider>
     </Transcript.Provider>
   );
 }

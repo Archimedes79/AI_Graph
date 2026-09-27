@@ -26,7 +26,7 @@ function graph(value: unknown, output: Record<string, unknown>): Graph {
     {
       id: 'out', node_type: 'output', label: 'Out', description: '', position: { x: 0, y: 0 },
       inputs: [into('value', true), into('path', false)], outputs: [],
-      config: { batch_mode: 'per_item', output_label: 'Result', ...output },
+      config: { batch_mode: 'per_item', ...output },
     },
   ];
   return graphOf(nodes, [edge('e1', 'items', 'output', 'out', 'value')]);
@@ -58,7 +58,7 @@ describe('an output node told to run "once per item"', () => {
   });
 
   it('hands an empty list on as one, rather than running zero times', async () => {
-    const { writes, out } = await run(graph([], { write_mode: 'window' }));
+    const { writes, out } = await run(graph([], {}));
     expect(writes).toEqual([]);
     expect(out.value).toEqual([]);
   });

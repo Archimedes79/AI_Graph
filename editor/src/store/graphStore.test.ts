@@ -235,13 +235,16 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     expect(await run(useGraphStore.getState().exportGraph())).toEqual(await run(file));
   });
 
-  it('still starts a node made in the editor per item, and keys its output "Result"', () => {
+  it('still starts a node made in the editor per item, and calls a new output "Result" -- which keys its value', () => {
     loadTestGraph([]);
     const code = useGraphStore.getState().addNode('code', { x: 0, y: 0 });
     const output = useGraphStore.getState().addNode('output', { x: 0, y: 0 });
     const saved = useGraphStore.getState().exportGraph().nodes;
     expect(saved.find((node) => node.id === code)!.config.batch_mode).toBe('per_item');
-    expect(saved.find((node) => node.id === output)!.config).toMatchObject({ output_label: 'Result', write_mode: 'window' });
+    // The run's result, and nothing else: no window, no name beside its label.
+    const made = saved.find((node) => node.id === output)!;
+    expect(made.label).toBe('Result');
+    expect(made.config).toEqual({});
   });
 
   it('writes "once per item" only on the kinds that can run so', () => {
@@ -256,10 +259,10 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
   });
 
   it('labels each new output node its own way, as check asks', () => {
-    // Two outputs sharing a label keep only the last under it, and `check` says so.
-    loadTestGraph([graphNode({ id: 'kept', node_type: 'output', config: { output_label: 'Result 2' } as GraphNode['config'] })]);
+    // Two outputs sharing a label keep only the first under it, and `check` says so.
+    loadTestGraph([graphNode({ id: 'kept', node_type: 'output', label: 'Result 2' })]);
     const labels = [0, 1, 2].map(() => useGraphStore.getState().addNode('output', { x: 0, y: 0 }))
-      .map((id) => useGraphStore.getState().exportGraph().nodes.find((node) => node.id === id)!.config.output_label);
+      .map((id) => useGraphStore.getState().exportGraph().nodes.find((node) => node.id === id)!.label);
     expect(labels).toEqual(['Result', 'Result 3', 'Result 4']);
   });
 
@@ -394,17 +397,14 @@ describe('graphStore, a project open on disk', () => {
   });
 
   it('takes code changed on disk in as one undo step, and a clean graph stays clean', () => {
-    const page = graphNode({ id: 'page', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [{ ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' }] } });
-    loadTestGraph([codeNode(), page]);
+    loadTestGraph([codeNode()]);
     useGraphStore.getState().markSaved();
 
     useGraphStore.getState().takeDiskChanges([
-      { node_id: 'count', widget_id: '', field: 'code', value: 'function run() { return { total: 2 }; }' },
-      { node_id: 'page', widget_id: 'chart', field: 'code', value: 'function run(i) { return i; }' },
-      { node_id: 'gone', widget_id: '', field: 'code', value: 'ignored' },
+      { node_id: 'count', field: 'code', value: 'function run() { return { total: 2 }; }' },
+      { node_id: 'gone', field: 'code', value: 'ignored' },
     ]);
     expect(nodeById('count').config.code).toContain('total: 2');
-    expect(nodeById('page').config.gui_widgets[0].code).toContain('return i');
     expect(useGraphStore.getState().isDirty()).toBe(false);
 
     useGraphStore.getState().undo();
@@ -415,7 +415,7 @@ describe('graphStore, a project open on disk', () => {
     loadTestGraph([codeNode()]);
     useGraphStore.getState().markSaved();
     useGraphStore.getState().updateNode('count', { label: 'Renamed here' });
-    useGraphStore.getState().takeDiskChanges([{ node_id: 'count', widget_id: '', field: 'code_prompt', value: 'Count.' }]);
+    useGraphStore.getState().takeDiskChanges([{ node_id: 'count', field: 'code_prompt', value: 'Count.' }]);
     expect(useGraphStore.getState().isDirty()).toBe(true);
     expect(nodeById('count').label).toBe('Renamed here');
   });
@@ -592,7 +592,6 @@ describe('a graph inside a node', () => {
     // holds, whole. An output node appeared in there while we were away.
     store().takeDiskChanges([{
       node_id: 'part',
-      widget_id: '',
       field: NESTED_GRAPH_FIELD,
       value: inner([graphNode({ id: 'result', node_type: 'output', label: 'Result' })]),
     }]);
@@ -661,10 +660,10 @@ describe('a graph inside a node', () => {
   it('leaves nothing of the level behind when it swaps', () => {
     loadTestGraph([holder()]);
     useGraphStore.setState({
-      textOutputWindows: [{ nodeId: 'part', label: 'Result', content: 'from the level above' }],
+      executionResult: { status: 'success', node_results: [{ node_id: 'part', status: 'success', inputs: {}, outputs: { x: 'from the level above' } }], outputs: {} },
     });
     store().openSubgraph('part');
-    expect(store().textOutputWindows).toEqual([]);
+    expect(store().executionResult).toBeNull();
   });
 
   it('leaves a graph changed on disk alone while there is unsaved work here', () => {
@@ -673,7 +672,7 @@ describe('a graph inside a node', () => {
     store().addNode('output', { x: 0, y: 0 });   // unsaved work, out here
 
     const refused = store().takeDiskChanges([{
-      node_id: 'part', widget_id: '', field: NESTED_GRAPH_FIELD, value: inner([graphNode({ id: 'theirs' })]),
+      node_id: 'part', field: NESTED_GRAPH_FIELD, value: inner([graphNode({ id: 'theirs' })]),
     }]);
 
     // Taking it would have replaced that whole graph without a word.
@@ -708,5 +707,24 @@ describe('graphStore.connect', () => {
     loadTestGraph(nodes(), [{ id: 'e1', source_node_id: 'a', source_port_id: 'out', target_node_id: 'b', target_port_id: 'in' }]);
     useGraphStore.getState().connect({ source: 'a', sourceHandle: 'out', target: 'b', targetHandle: 'in' });
     expect(useGraphStore.getState().rfEdges).toHaveLength(1);
+  });
+
+  it('ticks "Read the file at this path" where a path arrives -- on a node that reads its files, and nowhere else', () => {
+    // A data node's input and an output node's value became file_path too, on
+    // kinds that take a path as a path.
+    const paths = { ...port('files', 'output'), data_type: 'file_path' as const, multi: true };
+    loadTestGraph([
+      graphNode({ id: 'folder', node_type: 'code', outputs: [paths] }),
+      graphNode({ id: 'reader', node_type: 'code', inputs: [port('in', 'input')] }),
+      graphNode({ id: 'memory', node_type: 'data', inputs: [port('input', 'input')] }),
+      graphNode({ id: 'result', node_type: 'output', inputs: [port('value', 'input')] }),
+    ]);
+    const typed = (id: string) => (useGraphStore.getState().rfNodes.find((n) => n.id === id)!.data.graphNode as GraphNode).inputs[0];
+    for (const [target, handle] of [['reader', 'in'], ['memory', 'input'], ['result', 'value']]) {
+      useGraphStore.getState().connect({ source: 'folder', sourceHandle: 'files', target, targetHandle: handle });
+    }
+    expect(typed('reader')).toMatchObject({ data_type: 'file_path', multi: true });
+    expect(typed('memory')).toMatchObject({ data_type: 'any', multi: false });
+    expect(typed('result')).toMatchObject({ data_type: 'any', multi: false });
   });
 });

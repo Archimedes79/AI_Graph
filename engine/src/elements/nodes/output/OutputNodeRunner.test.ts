@@ -127,10 +127,22 @@ describe('an output node writing to one file', () => {
   });
 
   it('writes nothing when it is not asked to', async () => {
-    for (const write_mode of ['none', 'window', undefined]) {
+    for (const write_mode of ['none', undefined]) {
       const { runtime, written } = recording();
       await element.execute(outputNode({ write_mode, value: '/tmp/out' }), { value: 'alpha' }, runtime);
       expect(written.size).toBe(0);
     }
+  });
+});
+
+describe('an output node\'s result', () => {
+  it('is called what the node is called: its label, or its id without one', () => {
+    // It had a name of its own for the result beside its label, and a window
+    // it opened in the editor. The label is the one name, the result is what
+    // it is, and a page is where results are shown.
+    expect(element.resultLabel({ ...outputNode({}), label: 'Totals' })).toBe('Totals');
+    expect(element.resultLabel({ ...outputNode({}), label: '  ' })).toBe('out');
+    expect(element.graphAuthorNote()).not.toMatch(/window|output_label/);
+    expect(element.whatRuns(outputNode({})).does).not.toMatch(/window/);
   });
 });

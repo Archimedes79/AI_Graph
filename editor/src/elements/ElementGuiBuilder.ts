@@ -20,17 +20,9 @@
 // loaded when the element is opened in the editor and never by a deployed tool.
 
 import type { ComponentType } from 'react';
-import type { ElementGeneration } from '@/authoring/generation';
 
-/** `Subject` is what the element is attached to (a node, a widget); `PanelProps` what its panel is handed. */
-export abstract class ElementGuiBuilder<Subject, PanelProps> {
+/** `PanelProps` is what its panel is handed. */
+export abstract class ElementGuiBuilder<PanelProps> {
   /** The element's settings panel. Absent for an element with nothing to set: a rule, a gap. */
   readonly Panel?: ComponentType<PanelProps>;
-
-  /**
-   * The ✨ Generate button this element offers, mirroring the engine's
-   * `ElementRunner.generation()`. Absent for an element that authors nothing, which
-   * is what decides whether a button is drawn at all.
-   */
-  readonly generation?: ElementGeneration<Subject>;
 }

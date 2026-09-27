@@ -1,27 +1,22 @@
-import type { GraphNode, GuiWidget } from '@/graph';
+import type { GraphNode } from '@/graph';
 import { call, type AICall, type GenerateRequest, type GenerateResponse, type ProbeReport } from '@/api/client';
 import type { GenerateOptions } from './useGenerate';
 import type { Generation } from '@engine/authoring/generation.ts';
+import type { Refine } from '@engine/host/api.ts';
 
 /**
  * The ✨ Generate button, declared by the element instead of written out by the
  * shell that draws it.
  *
- * There were five hand-written call sites: four handlers in NodeEditor.tsx,
- * passed to every Panel so each could pick the one prop it recognised;
- * an `isPlot` ternary threaded through eight lines of WidgetEditor.tsx; and
- * OutputFormatEditor's own. Which is why `image_view` had a `code` field with
- * the same contract as plot_window and no button at all -- nobody added the
- * sixth branch.
+ * There were five hand-written call sites, passed to every Panel so each could
+ * pick the one prop it recognised -- and an element one of them forgot had a
+ * body and no button at all.
  *
- * What is NOT here is as important as what is. The generator kind, the contract
- * sentence describing what the engine will do with the snippet, and any fixed
- * port names live on the *engine* element (`Generation`, declared by each
- * element under `engine/src/elements/`) and are resolved server-side from the element's name.
- * A contract sentence copied into the editor would be a second copy of a
- * statement about engine behaviour, and a prompt that exists twice is a prompt
- * that will drift -- which is exactly what happened to the file-selector
- * sentence, which existed three times.
+ * What is NOT here is as important as what is. The generator kind lives on the
+ * *engine* element (`Generation`, declared by each element under
+ * `engine/src/elements/`) and is resolved server-side from the element's name:
+ * a sentence about engine behaviour copied into the editor is a second copy,
+ * and a prompt that exists twice is a prompt that will drift.
  */
 /**
  * The half of a generation the engine already declared, in the editor's words.
@@ -29,8 +24,7 @@ import type { Generation } from '@engine/authoring/generation.ts';
  * Which field holds the request, which the body, and what to say when the
  * request is missing or the answer arrived -- an element's `Generation` says
  * all of it, beside its `Logic`, from one constant. The editor's definition
- * adds only what the engine cannot know: labels, placeholders, and whether the
- * button is offered on this particular node.
+ * adds only what the engine cannot know: labels and placeholders.
  */
 export function fromEngine(
   generation: Generation | undefined,
@@ -39,16 +33,15 @@ export function fromEngine(
   return {
     promptField: generation.fields.promptOnSubject ? 'description' : generation.fields.prompt,
     targetField: generation.fields.body,
-    // Code is JavaScript; a system prompt and a data format are prose -- the
-    // rule `Logic.extension` gives a file holding the body, from the same kind.
+    // Code is JavaScript; a system prompt is prose, as the file that keeps it
+    // says (`code.js`, `system.md`).
     language: generation.kind === 'code' ? 'javascript' : 'markdown',
     guard: generation.guard,
     success: generation.success,
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- a node's and a widget's, held side by side
-export interface ElementGeneration<S = any> {
+export interface ElementGeneration {
   /**
    * Field holding the user's request. `'description'` means the node's own
    * description rather than a config key -- the ai node's request lives there.
@@ -56,20 +49,6 @@ export interface ElementGeneration<S = any> {
   promptField: string;
   /** Field the generated text is written into. */
   targetField: string;
-  /**
-   * Is there a body to write for this particular subject? Omitted means
-   * always. An input node selects files only in directory mode; that is a
-   * question about one node, not about the element, which is why it is here
-   * and not in the backend descriptor. The graph sweep passes over a subject
-   * that has none; a panel shows step 4, and so ✨, only where there is one.
-   */
-  available?: (subject: S) => boolean;
-  /**
-   * Context only the editor can know: what the user chose in this node's own
-   * config (batch mode, declared output format). Everything about the *graph*
-   * around the node is assembled once by the shell and passed in separately.
-   */
-  context?: (subject: S) => string;
   /** Shown when the prompt field is empty. */
   guard?: string;
   /** Shown when it worked, unless the result has more to say (see probe). */
@@ -93,13 +72,6 @@ export interface ElementGeneration<S = any> {
   language: 'javascript' | 'markdown';
   /** How tall the body box starts out; a system prompt needs less than a module. */
   bodyHeight?: number;
-  /**
-   * A sample only the engine can produce, asked for when ✨ is pressed: a
-   * folder's listing, which is what a file selector is handed and what no
-   * field of the node holds. It wins over the node's own sample, which is keyed
-   * by ports the snippet does not have.
-   */
-  fetchSample?: (subject: S) => Promise<{ values: Record<string, unknown>; origin: string } | undefined>;
 }
 
 /** Reading and writing one element's fields, wherever they happen to live. */
@@ -121,17 +93,6 @@ export function nodeFields(
   };
 }
 
-/** A widget's fields: all flat on the widget, one level down. */
-export function widgetFields(
-  widget: GuiWidget,
-  update: (patch: Partial<GuiWidget>) => void,
-): FieldAccess {
-  const flat = widget as unknown as Record<string, unknown>;
-  return {
-    get: (field) => String(flat[field] ?? ''),
-    set: (field, value) => update({ [field]: value } as Partial<GuiWidget>),
-  };
-}
 
 /**
  * What to say after generating.
@@ -143,32 +104,35 @@ export function widgetFields(
  * saying so now is kinder than letting the next ▶ Run say it; when it runs and
  * only the element's own check or the example's expected output found fault
  * with the result, it says that, and not that it does not run.
+ *
+ * *held*: whether the probe held it to what the example expects. A change is
+ * not (`generate.ts`): the example was written before it, so a change that
+ * runs has run on it, and Try it says whether it gives what that expects.
  */
-export function probeMessage(probe: ProbeReport | undefined, fallback: string, origin?: string): string {
+export function probeMessage(probe: ProbeReport | undefined, fallback: string, origin?: string, done = 'Generated', held = true): string {
   const on = origin ?? 'the sample';
   switch (probe?.status) {
     case 'ok':
-      return `✅ Generated and verified against ${on}.`;
+      return held ? `✅ ${done} and verified against ${on}.` : `✅ ${done}, and it runs on ${on}.`;
     case 'repaired':
-      return `✅ Generated. The first attempt failed on ${on}; this one runs.`;
+      return `✅ ${done}. The first attempt failed on ${on}; this one runs.`;
     case 'failed': {
-      if (probe.error) return `⚠️ Generated, but it does not run yet: ${probe.error}`;
-      if (probe.missing_outputs.length) return `⚠️ Generated, but it does not return ${probe.missing_outputs.join(', ')} yet.`;
+      if (probe.error) return `⚠️ ${done}, but it does not run yet: ${probe.error}`;
+      if (probe.missing_outputs.length) return `⚠️ ${done}, but it does not return ${probe.missing_outputs.join(', ')} yet.`;
       const problems = probe.problems ?? [];
       return problems.length
-        ? `⚠️ Generated and it runs on ${on}, but the result is not right yet: ${problems.join('; ')}`
-        : `⚠️ Generated, but it could not be verified against ${on}.`;
+        ? `⚠️ ${done} and it runs on ${on}, but the result is not right yet: ${problems.join('; ')}`
+        : `⚠️ ${done}, but it could not be verified against ${on}.`;
     }
     default:
       return fallback;
   }
 }
 
-export interface GenerationRequest<S> {
-  /** NodeType or WidgetKind -- the server resolves the rest from it. */
+export interface GenerationRequest {
+  /** The node type -- the server resolves the rest from it. */
   element: string;
-  generation: ElementGeneration<S>;
-  subject: S;
+  generation: ElementGeneration;
   fields: FieldAccess;
   /** The element's real ports, for a snippet that is wired as the node is. */
   ports?: { inputs: string[]; outputs: string[] };
@@ -178,13 +142,6 @@ export interface GenerationRequest<S> {
    * call and hands its answer on.
    */
   lists?: { inputs: string[]; outputs: string[] };
-  /**
-   * Sentences beside the facts, for a block on a page (`blockFacts`): what
-   * feeds it, which the engine leaves out for a snippet whose ports the
-   * element fixes, and the page's colour scheme. A node is told its
-   * neighbours as facts alone, which the engine's brief puts into words.
-   */
-  graphContext?: string;
   /** Raw last-run values, for the backend's verify-and-repair pass. */
   sampleInputs?: Record<string, unknown>;
   /**
@@ -222,8 +179,12 @@ export interface GenerationRequest<S> {
   outputTargets?: Record<string, string>;
   /** The output format, in the person's words (`output.md`) -- sent whenever it says anything. */
   outputFormat?: string;
-  /** A result to imitate (`output.example.md`). */
-  outputExample?: string;
+  /**
+   * Change the body there is instead of writing one anew: "Say what to
+   * change", or ✨ Fix with nothing to change but how it failed. What comes
+   * back brings the task along, restated to fit, and both are written.
+   */
+  refine?: Refine;
   /**
    * Keep what the generated body actually returned, as the node's output
    * shape, when it has none yet.
@@ -233,18 +194,31 @@ export interface GenerationRequest<S> {
    * used to be written into the node's format description as a sentence,
    * over the one field that is the person's own words; the shape is where a
    * measurement belongs (the node's `interface.json`), and a run would put it there
-   * anyway. Only for a node: a block inside a page has no output of its own.
+   * anyway.
    */
   recordShape?: (outputs: Record<string, unknown>) => void;
 }
 
 /**
- * Turn an element's declaration into the options `useGenerate().run` takes.
- *
- * Both shells call exactly this, so a node and a widget generate through one
- * code path -- as they already execute, author files and declare ports through
- * one.
+ * What a panel asks of ✨ beyond writing the body anew (`NodePanelProps.onGenerate`):
+ * a change to the body there is -- and the inputs what came of it came from,
+ * where those are not step 1's example: a run's.
  */
+export interface ChangeAsked {
+  refine: Refine;
+  sample?: { values: Record<string, unknown>; origin: string };
+}
+
+/** *request*, asked to change its body as *change* says, on the inputs that change came of. */
+export function withChange(request: GenerationRequest, change: ChangeAsked | undefined): GenerationRequest {
+  if (!change) return request;
+  return {
+    ...request,
+    refine: change.refine,
+    ...(change.sample ? { sampleInputs: change.sample.values, sampleOrigin: change.sample.origin } : {}),
+  };
+}
+
 /** Only the entries that say something: an empty description is not a note. */
 function said(notes: Record<string, string> | undefined): Record<string, string> | undefined {
   const kept = Object.entries(notes ?? {}).filter(([, text]) => text?.trim());
@@ -256,12 +230,11 @@ function said(notes: Record<string, string> | undefined): Record<string, string>
  * ✨ sends" (`preview`) and the real button cannot describe two different
  * requests.
  */
-export function generateRequest<S>(request: GenerationRequest<S>): GenerateRequest {
-  const { generation: spec, subject, fields } = request;
+export function generateRequest(request: GenerationRequest): GenerateRequest {
+  const { generation: spec, fields } = request;
   return {
     element: request.element,
     description: fields.get(spec.promptField).trim(),
-    context: [spec.context?.(subject), request.graphContext].filter(Boolean).join('\n\n'),
     inputs: request.ports?.inputs,
     outputs: request.ports?.outputs,
     sample_inputs: request.sampleInputs,
@@ -279,25 +252,8 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
     multi_outputs: request.lists?.outputs,
     output_targets: request.outputTargets && Object.keys(request.outputTargets).length ? request.outputTargets : undefined,
     output_format: request.outputFormat?.trim() || undefined,
-    output_example: request.outputExample?.trim() || undefined,
+    refine: request.refine,
   };
-}
-
-/**
- * The request with the sample its element can only get by asking the engine
- * (`ElementGeneration.fetchSample`), when it declares one. Asked at the moment
- * ✨ is pressed, so it is what is there now; one that cannot be had leaves the
- * request as it was, and the verify pass is simply off.
- */
-async function withFetchedSample<S>(request: GenerationRequest<S>): Promise<GenerationRequest<S>> {
-  const fetch = request.generation.fetchSample;
-  if (!fetch) return request;
-  try {
-    const fetched = await fetch(request.subject);
-    return fetched ? { ...request, sampleInputs: fetched.values, sampleOrigin: fetched.origin } : request;
-  } catch {
-    return request;
-  }
 }
 
 /**
@@ -305,34 +261,48 @@ async function withFetchedSample<S>(request: GenerationRequest<S>): Promise<Gene
  * request and stops at the first model call (`preview`). The answer is that
  * call -- system and prompt, as the model would read them.
  */
-export async function previewGeneration<S>(request: GenerationRequest<S>): Promise<AICall[]> {
-  const response = await call('generate', { ...generateRequest(await withFetchedSample(request)), preview: true });
+export async function previewGeneration(request: GenerationRequest): Promise<AICall[]> {
+  const response = await call('generate', { ...generateRequest(request), preview: true });
   return response.calls ?? [];
 }
 
-export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
-  const { generation: spec, fields } = request;
-  const prompt = fields.get(spec.promptField).trim();
-  // What the verify pass ran it on, as the message after it says: set once the
-  // request is sent, since a fetched sample is only known then.
-  let origin = request.sampleOrigin;
+/**
+ * Why *request* cannot be sent yet, or undefined. A body is written from the
+ * task; a change needs something to change -- words, or how it failed -- and
+ * no task: the task comes back with it.
+ */
+export function generationGuard(request: GenerationRequest): string | undefined {
+  const { refine, generation: spec } = request;
+  if (refine) return refine.change?.trim() || refine.error?.trim() || refine.problems?.length ? undefined : 'Say what to change first.';
+  return request.fields.get(spec.promptField).trim() ? undefined : (spec.guard ?? 'Please add a prompt first.');
+}
+
+/**
+ * Turn an element's declaration into the options `useGenerate().run` takes.
+ * A node's dialog and the graph sweep both call exactly this, so a button and
+ * a sweep generate through one code path -- and a change to the body there is
+ * goes the same way, with its task written beside the body it came with.
+ */
+export function buildGeneration(request: GenerationRequest): GenerateOptions<GenerateResponse> {
+  const { generation: spec, fields, refine } = request;
+  const change = !!refine?.change?.trim();
+  // What it did, in a word: written anew, changed as said, or repaired.
+  const done = !refine ? 'Generated' : change ? 'Changed' : 'Fixed';
 
   return {
-    guard: () => (prompt ? undefined : (spec.guard ?? 'Please add a prompt first.')),
-    pending: 'Generating…',
-    success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!', origin),
-    failure: 'Generation failed',
-    run: async (progressId?: string) => {
-      const sent = await withFetchedSample(request);
-      origin = sent.sampleOrigin;
-      return call('generate', {
-        ...generateRequest(sent),
-        // Only a single ✨ button passes one; a sweep runs unattended.
-        ...(progressId ? { progress_id: progressId } : {}),
-      });
-    },
+    guard: () => generationGuard(request),
+    pending: refine ? 'Changing…' : 'Generating…',
+    success: (result) => probeMessage(result.probe, refine ? `✅ ${done}.` : spec.success ?? '✅ Generated!', request.sampleOrigin, done, !change),
+    failure: refine ? 'The change failed' : 'Generation failed',
+    run: (progressId?: string) => call('generate', {
+      ...generateRequest(request),
+      // Only a single ✨ button passes one; a sweep runs unattended.
+      ...(progressId ? { progress_id: progressId } : {}),
+    }),
     apply: (result) => {
       fields.set(spec.targetField, result.result);
+      // What it does now, said with the body that does it: the two change together.
+      if (result.task?.trim()) fields.set(spec.promptField, result.task.trim());
 
       const outputs = result.probe?.outputs;
       if (request.recordShape && outputs && Object.keys(outputs).length) request.recordShape(outputs);

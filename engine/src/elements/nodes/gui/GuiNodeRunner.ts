@@ -1,5 +1,4 @@
-import { NodeRunner } from '../../NodeRunner.ts';
-import type { WhatRuns } from '../../ElementRunner.ts';
+import { NodeRunner, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type Widget, type WidgetRunner, type WidgetPresentation } from '../../WidgetRunner.ts';
 import type { GraphNode, Port, RawConfig } from '../../../graph.ts';
@@ -139,8 +138,8 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
   }
 
   /**
-   * What each display block shows: what arrived, through the block's own
-   * transform, as the page can draw it.
+   * What each display block shows: what arrived, as the page can draw it --
+   * an image's path read into a picture (`WidgetRunner.displayValue`).
    *
    * A block nothing arrived at is left out rather than shown as nothing, so a
    * run that touched half a page leaves the other half as it was.
@@ -152,29 +151,9 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
       if (!element || element.ports(widget).outputs.length) continue;
       const value = arrived[`${widget.id}_in`];
       if (value === undefined) continue;
-      shown[widget.id] = await this.showBlock(widget, value, runtime);
+      shown[widget.id] = await element.displayValue(widget, value, runtime);
     }
     return shown;
-  }
-
-  /** One block's value, as drawn. Also what the editor's ▶ Test of a block runs. */
-  async showBlock(widget: Widget, value: unknown, runtime: Runtime): Promise<unknown> {
-    const element = BY_KIND.get(widget.kind);
-    if (!element) throw new Error(`Unknown block kind: ${widget.kind}`);
-    // A block the page draws itself is handed what arrived, untouched: its
-    // body wants the size of the block and the page's scheme, and a run knows
-    // neither. See `WidgetRunner.bodyDrawsOnThePage`.
-    if (element.bodyDrawsOnThePage) return element.displayValue(widget, value, runtime);
-    const transformed = await element.runSnippet(widget, { value }, runtime);
-    // A block with no transform is handed back what it was given, `value`
-    // included. One whose transform returned no `value` has a broken
-    // transform, and says so: shown the raw input instead, it looked like a
-    // block without one. An explicit null is what the transform said to show.
-    if (!('value' in transformed)) {
-      const returned = Object.keys(transformed);
-      return `⚠ ${widget.id}: its transform returned no "value"${returned.length ? ` (only ${returned.map((key) => `"${key}"`).join(', ')})` : ''}.`;
-    }
-    return element.displayValue(widget, transformed.value, runtime);
   }
 
   /** A picker with nothing chosen is a question, and its block is who to ask. */
@@ -224,8 +203,8 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
 
   /**
    * A block's ports are named after its id, so an id that is missing or
-   * shared is two blocks on one port. What is wrong with one block as it is
-   * written, the block says itself (`WidgetRunner.problems`).
+   * shared is two blocks on one port; and a kind nobody knows draws nothing.
+   * A block runs no code, so there is nothing else in it to get wrong.
    */
   override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
     const found: Problem[] = [];
@@ -237,15 +216,12 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
         found.push({ where, problem: `More than one block has the id "${block.id}".`, fix: 'Give every block on the page its own id.' });
       }
       seen.add(block.id);
-      const element = BY_KIND.get(block.kind);
-      if (!element) {
+      if (!BY_KIND.has(block.kind)) {
         found.push({
           where: `${where}, block "${block.id}"`,
           problem: `Unknown block kind "${block.kind}".`,
           fix: `Use one of: ${[...BY_KIND.keys()].join(', ')}.`,
         });
-      } else {
-        found.push(...element.problems(block, `${where}, block "${block.id}"`));
       }
     }
     return found;
@@ -262,20 +238,25 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
       const note = element.graphAuthorNote();
       return `  - ${element.widgetKind}${note ? `: ${note}` : ''}`;
     });
-    return 'config.gui_widgets is the list of blocks on the page. A block is {"id", "kind", "label", "w" (1-16 columns), '
+    return 'A graph has at most one gui node: its page, which holds every block. '
+      + 'config.gui_widgets is the list of blocks on the page. A block is {"id", "kind", "label", "w" (1-16 columns), '
       + '"h" (rows), ...}. The page\'s ports are DERIVED from its blocks, not taken from this document: every block '
-      + `contributes "<block id>_out", "<block id>_in", or both, "<id>" standing for its id. The kinds:\n${kinds.join('\n')}`;
+      + 'contributes "<block id>_out", "<block id>_in", or both, "<id>" standing for its id. A block has no code of its '
+      + 'own: what reshapes a value before a block shows it, or keeps only some of the files a folder lists, is a code '
+      + `node wired in between. The kinds:\n${kinds.join('\n')}`;
   }
 
   override whatRuns(): WhatRuns {
-    return this.engineRuns('Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives; a block with code of its own runs it sandboxed before showing.');
+    return this.engineRuns('Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives.');
   }
 
+  /**
+   * A page is its blocks: a bundle holding one with blocks needs the page, and
+   * one whose blocks are all gone has nothing to draw -- a tool without a
+   * page, run on the terminal. Its blocks run no code, and so ask no model.
+   */
   override deployNeeds(node: GraphNode) {
-    // A gui node *is* the interface, so a bundle holding one needs the page. A
-    // block's own code may ask a model like any other body.
-    const asksAi = this.config(node).widgets.some((widget) => BY_KIND.get(widget.kind)?.deployNeeds(widget).asksAi === true);
-    return { needsInterface: true, asksAi };
+    return { needsInterface: this.config(node).widgets.length > 0, asksAi: false };
   }
 
   /** What its pickers start on. */

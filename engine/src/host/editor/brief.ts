@@ -1,5 +1,5 @@
-// What ✨ Generate is told about a node: one brief, the same for code, for a
-// system prompt and for a data node's format.
+// What ✨ Generate is told about a node: one brief, the same for code and for
+// a system prompt.
 //
 // A body is written against four things, and a node already holds all four:
 //
@@ -7,7 +7,7 @@
 //     what comes in   each input -- its type, what it holds, where it is wired
 //                     from and what that node hands on -- and one real sample
 //     what goes out   each output, where it goes and what the node there
-//                     wants; the format in words; an example; the kept shape
+//                     wants; the format in words; the kept shape
 //     examples        inputs, and what must come out
 //
 // They used to reach the model from five places in five wordings, some of
@@ -32,7 +32,6 @@ export const BUDGET = {
   /** One example's inputs, or what it expects. */
   example: 400,
   format: 1200,
-  outputExample: 900,
   /** A value a probe was given, in a repair prompt. */
   preview: 900,
   schema: 700,
@@ -99,13 +98,8 @@ export function exampleSample(examples: string | undefined): Sample | undefined 
   return first ? { values: first.inputs, origin: `the example "${first.title}"`, expect: first.expect } : undefined;
 }
 
-/**
- * What the brief is for: a body that runs (`code`), a system prompt a model
- * is sent (`prompt`), or the format a data node holds (`format`) -- which is
- * written against the same neighbours and sample as code, and is itself the
- * format, so it is told none.
- */
-export type BriefKind = 'code' | 'prompt' | 'format';
+/** What the brief is for: a body that runs (`code`), or a system prompt a model is sent (`prompt`). */
+export type BriefKind = 'code' | 'prompt';
 
 function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
   const inputs = request.inputs ?? [];
@@ -122,8 +116,8 @@ function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sampl
     const said = oneLine(request.input_notes?.[port]);
     lines.push(`- \`${port}\`${type ? ` (${type})` : ''}${said ? `: ${said}` : ''}`);
     const source = request.input_sources?.[port];
-    // A snippet whose ports the element fixes (a chart's `value`) is told no
-    // wiring at all, rather than told it is unwired.
+    // A request that says nothing of the wiring -- one the editor did not
+    // make -- is told none, rather than that every input is unwired.
     if (source) lines.push(`  from ${source}`);
     else if (request.input_sources) lines.push('  not wired yet');
     if (sample && port in sample.values) {
@@ -173,30 +167,30 @@ function outputsSection(request: GenerateRequest, kind: BriefKind): string {
     const target = request.output_targets?.[port];
     if (target) lines.push(`  to ${target}`);
   }
-  // A format is what is being written: what the node says of its output is
-  // that format, not a given to write it against.
-  if (kind === 'format') return lines.length > 1 ? lines.join('\n') : '';
   const format = request.output_format?.trim();
   if (format) lines.push(`Format: ${clip(format, BUDGET.format)}`);
-  // An answer kept to imitate is an AI node's (`output.example.md`); what a
-  // body returns is held by its examples and its kept shape instead.
-  const example = kind === 'prompt' ? request.output_example?.trim() : '';
-  if (example) lines.push(`An example of an answer -- the same structure, new content:\n${clip(example, BUDGET.outputExample)}`);
   const schema = request.output_schema;
   if (schema && typeof schema === 'object') {
     lines.push(`The shape it returned so far, which the nodes after it were built against -- keep it: ${clip(outline(schema), BUDGET.schema)}`);
   }
-  if (kind === 'prompt' && (format || example)) {
+  if (kind === 'prompt' && format) {
     lines.push('The format is added after the system prompt by itself, at run time: the system prompt need not repeat it, and must not contradict it.');
   }
   return lines.length > 1 ? lines.join('\n') : '';
 }
 
-function examplesSection(text: string | undefined): string {
+/**
+ * The node's examples. For a change (*changing*) they were written before it,
+ * and a change is not held to them (`generate.ts`): said as the check, they
+ * asked for the body the change replaces.
+ */
+function examplesSection(text: string | undefined, changing: boolean): string {
   if (!text?.trim()) return '';
   const { examples } = parseExamples(text);
   if (!examples.length) return '';
-  const lines = ['## Examples -- the result is checked against these'];
+  const lines = [changing
+    ? '## Examples -- written before this change: where one disagrees with the change, the change wins'
+    : '## Examples -- the result is checked against these'];
   for (const example of examples.slice(0, BUDGET.examples)) {
     lines.push(`- ${example.title}`, `  in: ${shown(example.inputs, BUDGET.example)}`);
     if (example.expect) lines.push(`  must return, at least: ${shown(example.expect, BUDGET.example)}`);
@@ -211,6 +205,7 @@ function examplesSection(text: string | undefined): string {
  * it. The task goes first and the element's fixed text last, by the caller.
  */
 export function renderBrief(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
-  return [inputsSection(request, kind, sample), outputsSection(request, kind), examplesSection(request.examples)]
+  const changing = !!request.refine?.change?.trim();
+  return [inputsSection(request, kind, sample), outputsSection(request, kind), examplesSection(request.examples, changing)]
     .filter(Boolean).join('\n\n');
 }

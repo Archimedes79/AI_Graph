@@ -12,7 +12,7 @@ import { applyRuntimeValues, runtimeRequirements } from './runtimeValues.ts';
 describe('what a graph asks before it runs', () => {
   const graph = () => parseGraph({
     nodes: [
-      { id: 'ask', node_type: 'input', config: { input_mode: 'file', prompt_at_runtime: true, value: '' } },
+      { id: 'ask', node_type: 'input', config: { input_mode: 'text', prompt_at_runtime: true, value: '' } },
       { id: 'page', node_type: 'gui', config: { gui_widgets: [{ id: 'pick', kind: 'input_picker', mode: 'directory', value: '' }] } },
       { id: 'quiet', node_type: 'input', config: { value: 'kept' } },
     ],
@@ -30,5 +30,24 @@ describe('what a graph asks before it runs', () => {
     ]);
     expect((asked.nodes[1].config.gui_widgets as Array<{ value: string }>)[0].value).toBe('data');
     expect(asked.nodes[2].config.value).toBe('kept');
+  });
+
+  it('asks for a text wired into an input that reads its file as a file, to be browsed for', () => {
+    // An input node reads no file: the path of one is a text, wired into the
+    // input of the node that reads it. Asked for when the run starts, it was
+    // asked for as a text -- a bare box, where a file mode offered a browser.
+    const port = (id: string, data_type: string) => ({ id, name: id, kind: 'input', data_type, multi: false, required: false, description: '' });
+    const wired = (into: string) => parseGraph({
+      nodes: [
+        { id: 'paper', node_type: 'input', label: 'Manuscript', config: { input_mode: 'text', value: 'paper.md', prompt_at_runtime: true } },
+        { id: 'count', node_type: 'code', inputs: [port('text', 'file_path'), port('title', 'text')], config: { code: 'function run() { return {}; }' } },
+      ],
+      edges: [{ id: 'e', source_node_id: 'paper', source_port_id: 'output', target_node_id: 'count', target_port_id: into }],
+    });
+    expect(runtimeRequirements(wired('text'), registry)).toEqual([
+      { key: 'paper', label: 'Manuscript', kind: 'file', direction: 'input', current: 'paper.md' },
+    ]);
+    // A text wired where a text is wanted stays one.
+    expect(runtimeRequirements(wired('title'), registry)[0].kind).toBe('text');
   });
 });

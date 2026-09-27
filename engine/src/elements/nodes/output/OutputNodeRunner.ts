@@ -1,5 +1,4 @@
-import { NodeRunner } from '../../NodeRunner.ts';
-import type { WhatRuns } from '../../ElementRunner.ts';
+import { NodeRunner, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type GraphNode, type Port } from '../../../graph.ts';
 
@@ -13,19 +12,19 @@ export interface OutputConfig {
   /** Where to write, when writing at all. */
   path: string;
   mode: 'none' | 'file' | 'directory';
-  /** What this output is called in the run's result. */
-  label: string;
   promptAtRuntime: boolean;
 }
 
 /**
- * What the graph produces: everything wired into it, plus a file if asked.
+ * What the graph produces: the run's result -- everything wired into it, under
+ * the node's name -- and, if asked, a file or a folder of them too.
  *
  * A passthrough, deliberately — it echoes its inputs so the run's result says
  * what arrived, rather than inventing a shape of its own. It does not *show*
- * anything either: showing is what the page is for, and an output node that
- * opened a window was a second place where results appeared, with its own
- * layout and no relation to the interface being designed next door.
+ * anything either: showing is what the page is for, and the window it could
+ * open was a second place where results appeared, with its own layout and no
+ * relation to the page being designed next door. Its name in the result was a
+ * second name beside its label; the label is the one.
  */
 export class OutputNodeRunner extends NodeRunner<OutputConfig> {
   readonly nodeType = 'output' as const;
@@ -36,7 +35,6 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
     return {
       path: String(c.value ?? ''),
       mode: (['none', 'file', 'directory'].includes(mode) ? mode : 'none') as OutputConfig['mode'],
-      label: String(c.output_label ?? '') || node.id,
       promptAtRuntime: c.prompt_at_runtime === true,
     };
   }
@@ -44,8 +42,9 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
   /** Everything a graph produces leaves through one of these. */
   override readonly isResult = true;
 
+  /** What it is called on the canvas is what its value is called in the run's result: its label, or its id without one. */
   override resultLabel(node: GraphNode): string {
-    return this.config(node).label;
+    return String(node.label ?? '').trim() || node.id;
   }
 
   override boundaryRole(): 'out' {
@@ -97,9 +96,8 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `config.write_mode is none, window, file or directory: window shows the result in a window in the editor, `
-      + `file writes it to the file config.value names, directory writes each value to a file of its own in the folder config.value names. `
-      + `config.output_label names the result in the run's result and titles the window; give every output node its own.`;
+    return `what arrives on its inputs is the run's result, handed back to whoever ran the graph under the node's label; give every output node its own. `
+      + `config.write_mode is none, file or directory: file also writes it to the file config.value names, directory each value to a file of its own in the folder config.value names.`;
   }
 
   override whatRuns(node: GraphNode): WhatRuns {
@@ -108,7 +106,7 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
     if (mode === 'directory') {
       return this.engineRuns('Writes each value that arrives -- each item of a list -- to a file of its own in its folder, and hands it on, with "written_paths".');
     }
-    return this.engineRuns('Hands on what arrives: the run\'s result, shown in a window or returned to whoever ran the graph.');
+    return this.engineRuns('Hands on what arrives: the run\'s result, under its label, to whoever ran the graph.');
   }
 }
 

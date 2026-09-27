@@ -18,7 +18,7 @@ interface Props {
  * the words are only for what the graph cannot say; "Use this" takes the
  * derived text in to start from. There used to be a format field, an example
  * box with "Use the last result", a description per output port and a "Use
- * this format" copy of a wired data node's format, all saying this.
+ * this format" copy of the format a wired data node kept then, all saying this.
  */
 export default function OutputWordsField({ words, onWords, derived, hint }: Props) {
   return (

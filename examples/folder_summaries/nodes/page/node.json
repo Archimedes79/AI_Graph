@@ -1,6 +1,5 @@
 {
-  "label": "Folder summaries",
-  "description": "The page this tool shows",
+  "label": "Page",
   "config": {
     "gui_widgets": [
       {
@@ -21,7 +20,6 @@
         "label": "Folder",
         "mode": "directory",
         "run_on_change": true,
-        "select_all_files": true,
         "tone": "sunken",
         "value": "examples/data/stories",
         "w": 16

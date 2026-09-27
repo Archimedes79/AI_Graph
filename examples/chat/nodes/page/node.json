@@ -1,6 +1,5 @@
 {
-  "label": "Chat",
-  "description": "The page this tool shows",
+  "label": "Page",
   "config": {
     "gui_widgets": [
       {

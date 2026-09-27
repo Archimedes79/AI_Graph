@@ -3,8 +3,6 @@ import type { BodyContext, Runtime } from './Runtime.ts';
 import type { GraphNode } from '../graph.ts';
 import { runBody } from './body.ts';
 import { registry } from './registry.ts';
-import { selectFiles } from './fileSelection.ts';
-import { Logic } from '../authoring/logic.ts';
 import { quietRuntime } from '../../test/fakes.ts';
 
 /**
@@ -15,11 +13,10 @@ import { quietRuntime } from '../../test/fakes.ts';
 function watching(): { runtime: Runtime; seen: { body: string; context?: BodyContext }[] } {
   const seen: { body: string; context?: BodyContext }[] = [];
   const runtime = quietRuntime({
-    files: { list: async () => ['a.txt', 'b.txt'] },
     code: {
       run: async (body, inputs, _signal, context) => {
         seen.push({ body, context });
-        return body.includes('files') ? { files: ['b.txt'] } : { value: inputs.value, output: 'ran' };
+        return { value: inputs.value, output: 'ran' };
       },
     },
     ai: { complete: async () => 'an answer' },
@@ -59,21 +56,6 @@ describe('every kind of body runs that way', () => {
     expect(seen[0].context?.calls).toHaveProperty('llm');
     expect(seen[0].context?.data).toMatchObject({ texts: { system: 'S' } });
   });
-
-  it('the code that chooses files', async () => {
-    const { runtime, seen } = watching();
-    const logic = new Logic('code', '', 'function run({ files }) { return { files }; }', { body: 'selector_code', prompt: 'selector_prompt' });
-    const chosen = await selectFiles(logic, { recursive: false, extensions: '', selectAll: false }, 'folder', runtime);
-    expect(chosen).toEqual(['b.txt']);
-    expect(seen[0].context?.calls).toHaveProperty('llm');
-  });
-
-  it('the code a display block shapes its value with', async () => {
-    const { runtime, seen } = watching();
-    const table = registry.widget('table')!;
-    await table.runSnippet({ id: 't', kind: 'table', label: '', w: 4, h: 4, tone: 'plain', config: { code: 'function run({ value }) { return { value }; }' } } as never, { value: 1 }, runtime);
-    expect(seen[0].context?.calls).toHaveProperty('llm');
-  });
 });
 
 describe('a bundle knows a body asks a model', () => {
@@ -83,10 +65,8 @@ describe('a bundle knows a body asks a model', () => {
     expect(element.deployNeeds(node('code', { code: 'function run() { return { a: 1 }; }' })).asksAi).toBe(false);
   });
 
-  it('in a block on a page', () => {
-    const page = (code: string) => node('gui', { gui_widgets: [{ id: 't', kind: 'table', code }] });
-    const element = registry.node('gui')!;
-    expect(element.deployNeeds(page('async function run({ value }, { llm }) { return { value: await llm({ prompt: value }) }; }'))).toEqual({ needsInterface: true, asksAi: true });
-    expect(element.deployNeeds(page('function run({ value }) { return { value }; }'))).toEqual({ needsInterface: true, asksAi: false });
+  it('not in a display block on a page, which runs no code: an old `code` key is not read', () => {
+    const page = node('gui', { gui_widgets: [{ id: 't', kind: 'table', code: 'async function run({ value }, { llm }) { return { value: await llm({ prompt: value }) }; }' }] });
+    expect(registry.node('gui')!.deployNeeds(page)).toEqual({ needsInterface: true, asksAi: false });
   });
 });

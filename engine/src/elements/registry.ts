@@ -48,11 +48,12 @@ export const registry = {
     return WIDGETS_BY_KIND.get(kind);
   },
   /**
-   * How an AI writes the body of the element with this name: a node type's
-   * first, then a block kind's -- the one lookup ✨ and its tests share.
+   * How an AI writes the body of the node type with this name -- the one
+   * lookup ✨ and its tests share. A block has no body: it shows or hands on
+   * what it holds.
    */
   generation(name: string): Generation | undefined {
-    return NODES_BY_TYPE.get(name)?.generation() ?? WIDGETS_BY_KIND.get(name)?.generation();
+    return NODES_BY_TYPE.get(name)?.generation();
   },
   nodeTypes(): string[] {
     return [...NODES_BY_TYPE.keys()];

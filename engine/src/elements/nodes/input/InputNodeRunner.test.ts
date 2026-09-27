@@ -1,16 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readdirSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InputNodeRunner } from './InputNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
-import { quietRuntime } from '../../../../test/fakes.ts';
+import { edge, graphOf, quietRuntime } from '../../../../test/fakes.ts';
 import { parseGraph, type Graph, type GraphNode } from '../../../graph.ts';
 import { forgetSeen, writeProject } from '../../../project/folder.ts';
+import { executeGraph } from '../../../execution/executor.ts';
+import { registry } from '../../registry.ts';
 
 /**
- * A read that fails: a missing file, an unreadable folder.
+ * A listing that fails: a folder that is not there.
  *
  * Off by default, the node fails the way it always did. On, the failure
  * becomes an `error` port instead -- declared only then, so a graph that never
@@ -32,17 +34,15 @@ const broken = quietRuntime({
   },
 });
 
+const element = new InputNodeRunner();
+
 describe('an error port', () => {
   it('is not declared when catch_errors is off', () => {
-    const element = new InputNodeRunner();
-    const ports = element.derivedPorts(inputNode({ input_mode: 'file', value: '/x' }));
+    const ports = element.derivedPorts(inputNode({ input_mode: 'directory', value: '/x' }));
     expect(ports?.outputs.map((p) => p.id)).not.toContain('error');
   });
 
-  it('is declared for file and directory modes when catch_errors is on, not for text', () => {
-    const element = new InputNodeRunner();
-    expect(element.derivedPorts(inputNode({ input_mode: 'file', catch_errors: true }))?.outputs.map((p) => p.id))
-      .toContain('error');
+  it('is declared for a folder when catch_errors is on, not for text', () => {
     expect(element.derivedPorts(inputNode({ input_mode: 'directory', catch_errors: true }))?.outputs.map((p) => p.id))
       .toContain('error');
     expect(element.derivedPorts(inputNode({ input_mode: 'text', catch_errors: true }))?.outputs.map((p) => p.id))
@@ -50,107 +50,63 @@ describe('an error port', () => {
   });
 });
 
-describe('where it reads', () => {
-  const reads: Runtime = {
+describe('where it lists', () => {
+  const lists: Runtime = {
     ...broken,
-    files: { ...broken.files, read: async (path: string) => `contents of ${path}` },
+    files: { ...broken.files, list: async (folder: string) => [`${folder}/a.txt`] },
   };
 
   it('takes the wired path over the configured one, as the port promises', async () => {
-    const element = new InputNodeRunner();
-    const result = await element.execute(
-      inputNode({ input_mode: 'file', value: '/configured.txt' }),
-      { path: '/wired.txt' },
-      reads,
-    );
-    expect(result).toEqual({ content: 'contents of /wired.txt', path: '/wired.txt' });
+    const result = await element.execute(inputNode({ input_mode: 'directory', value: '/configured' }), { path: '/wired' }, lists);
+    expect(result).toEqual({ files: ['/wired/a.txt'], count: 1 });
   });
 
   it('falls back to the configured path when the wire brought nothing', async () => {
-    const element = new InputNodeRunner();
     for (const arrived of [{}, { path: '' }, { path: '   ' }, { path: null }]) {
-      const result = await element.execute(inputNode({ input_mode: 'file', value: '/configured.txt' }), arrived, reads);
-      expect(result).toMatchObject({ path: '/configured.txt' });
+      const result = await element.execute(inputNode({ input_mode: 'directory', value: '/configured' }), arrived, lists);
+      expect(result).toMatchObject({ files: ['/configured/a.txt'] });
     }
+  });
+
+  it('lists nothing, and fails at nothing, where no folder is named', async () => {
+    expect(await element.execute(inputNode({ input_mode: 'directory', catch_errors: true }), {}, broken))
+      .toEqual({ files: [], count: 0, error: '' });
   });
 });
 
-describe('a file that cannot be read', () => {
+describe('a folder that cannot be listed', () => {
   // It throws either way; the executor decides what that costs. See executor.test.ts.
   it('throws, whatever catch_errors says', async () => {
-    const element = new InputNodeRunner();
-    await expect(element.execute(inputNode({ input_mode: 'file', value: '/gone.txt' }), {}, broken))
+    await expect(element.execute(inputNode({ input_mode: 'directory', value: '/gone' }), {}, broken))
       .rejects.toThrow('ENOENT');
-    await expect(element.execute(inputNode({ input_mode: 'file', value: '/gone.txt', catch_errors: true }), {}, broken))
+    await expect(element.execute(inputNode({ input_mode: 'directory', value: '/gone', catch_errors: true }), {}, broken))
       .rejects.toThrow('ENOENT');
-  });
-
-  it('reports an empty error alongside a real read', async () => {
-    const element = new InputNodeRunner();
-    const okay: Runtime = { ...broken, files: { ...broken.files, resolve: (p) => p, read: async () => 'hi' } };
-    const result = await element.execute(inputNode({ input_mode: 'file', value: '/x.txt', catch_errors: true }), {}, okay);
-    expect(result).toEqual({ content: 'hi', path: '/x.txt', error: '' });
   });
 });
 
-describe('the selector', () => {
-  /**
-   * Only a folder listing is narrowed by a selector. The editor gave every
-   * input node the starter selector, and a text or single-file input used to
-   * have it written into its folder as `select.js`: a file that never runs,
-   * saying the node chooses files.
-   */
-  const starter = 'function run(inputs) {\n  return { files: inputs.files ?? [] };\n}\n';
-
-  it('is kept in a file of its own only by a node that lists a folder', () => {
-    const element = new InputNodeRunner();
-    for (const mode of ['text', 'file']) {
-      expect(element.texts(inputNode({ input_mode: mode, selector_code: starter })), mode).toEqual([]);
-    }
-    expect(element.texts(inputNode({ input_mode: 'directory', selector_code: starter })).map((text) => text.file))
-      .toEqual(['select.js', 'task.md']);
+describe('a folder it lists', () => {
+  /** Nothing is written beside a listing: no body chooses its files, a code node after it does. */
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ai-graph-input-'));
+    forgetSeen();
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
   });
 
-  describe('in a project folder', () => {
-    let dir: string;
-    beforeEach(async () => {
-      dir = await mkdtemp(join(tmpdir(), 'ai-graph-input-'));
-      forgetSeen();
-    });
-    afterEach(async () => {
-      await rm(dir, { recursive: true, force: true });
-    });
-
-    const graphWith = (mode: string): Graph => parseGraph({
-      nodes: [{
-        id: 'source', node_type: 'input', label: 'Source', position: { x: 0, y: 0 }, inputs: [], outputs: [],
-        config: { input_mode: mode, value: 'data', selector_code: starter },
-      }],
-      edges: [],
-    });
-
-    it('writes no select.js for a text or file input', async () => {
-      for (const mode of ['text', 'file']) {
-        await writeProject(dir, graphWith(mode));
-        expect(existsSync(join(dir, 'nodes', 'source', 'select.js')), mode).toBe(false);
-      }
-    });
-
-    it('tidies away the select.js a node left when it stops listing a folder, and keeps what it said', async () => {
-      await writeProject(dir, graphWith('directory'));
-      expect(existsSync(join(dir, 'nodes', 'source', 'select.js'))).toBe(true);
-      await writeProject(dir, graphWith('text'));
-      expect(existsSync(join(dir, 'nodes', 'source', 'select.js'))).toBe(false);
-      // Not lost: a node switched back to directory mode still has its selector.
-      const saved = JSON.parse(await readFile(join(dir, 'nodes', 'source', 'node.json'), 'utf8'));
-      expect(saved.config.selector_code).toBe(starter);
-    });
+  it('keeps no file of its own in a project folder: it is its settings', async () => {
+    const folder = { input_mode: 'directory', value: 'data' };
+    expect(element.texts(inputNode(folder))).toEqual([]);
+    expect(element.logic(inputNode(folder))).toBeUndefined();
+    const graph: Graph = parseGraph({ nodes: [{ ...inputNode(folder), id: 'source' }], edges: [] });
+    await writeProject(dir, graph);
+    expect(readdirSync(join(dir, 'nodes', 'source')).sort()).toEqual(['interface.json', 'node.json']);
   });
 });
 
 describe('what it hands on', () => {
   it('counts a folder\'s files as a number, and says so on its port', async () => {
-    const element = new InputNodeRunner();
     const listing: Runtime = { ...broken, files: { ...broken.files, list: async () => ['/d/a.txt', '/d/b.txt'] } };
     const result = await element.execute(inputNode({ input_mode: 'directory', value: '/d' }), {}, listing);
     expect(result).toMatchObject({ files: ['/d/a.txt', '/d/b.txt'], count: 2 });
@@ -159,13 +115,41 @@ describe('what it hands on', () => {
   });
 
   it('hands on the text it holds in text mode, and nothing from a wire it does not have', async () => {
-    // Text mode declares no inputs. A wire left on "path" from file mode used
+    // Text mode declares no inputs. A wire left on "path" from a folder used
     // to be handed on as the text whenever the box was empty.
-    const element = new InputNodeRunner();
     expect(element.derivedPorts(inputNode({ input_mode: 'text' }))!.inputs).toEqual([]);
     expect(await element.execute(inputNode({ input_mode: 'text', value: 'hello' }), { path: '/elsewhere.txt' }, broken))
       .toEqual({ output: 'hello' });
     expect(await element.execute(inputNode({ input_mode: 'text', value: '' }), { path: '/elsewhere.txt', value: 'x' }, broken))
       .toEqual({ output: '' });
+  });
+
+  it('reads no file: a path it holds is handed on as text, for the node that reads it', async () => {
+    // It had a mode that read one file into "content". Reading is the reading
+    // node's own input now ("Read the file at this path"), so an input that
+    // names a file is a text holding its path.
+    const named = inputNode({ input_mode: 'text', value: 'data/people.csv' });
+    expect(await element.execute(named, {}, broken)).toEqual({ output: 'data/people.csv' });
+    expect(element.whatRuns(named).does).not.toMatch(/reads/i);
+    expect(element.graphAuthorNote()).not.toMatch(/"file"|content/);
+  });
+
+  it('names a file for the node that reads it: wired into an input that reads its file, the file\'s text arrives there', async () => {
+    const port = (id: string, kind: 'input' | 'output', data_type: string) =>
+      ({ id, name: id, kind, data_type, multi: false, required: false, description: '' });
+    const graph = graphOf([
+      { ...inputNode({ input_mode: 'text', value: 'data/people.csv' }), outputs: [port('output', 'output', 'text')] } as GraphNode,
+      {
+        id: 'reader', node_type: 'code', label: 'Reader', description: '', position: { x: 0, y: 0 },
+        inputs: [port('file', 'input', 'file_path')], outputs: [port('rows', 'output', 'text')],
+        config: { code: 'function run(inputs) { return { rows: inputs.file }; }' },
+      } as GraphNode,
+    ], [edge('e', 'src', 'output', 'reader', 'file')]);
+    const runtime = quietRuntime({
+      files: { read: async (path: string) => `the text of ${path}` },
+      code: { run: async (_body, inputs) => ({ rows: inputs.file }) },
+    });
+    const result = await executeGraph(graph, { registry, runtime });
+    expect(result.node_results.find((r) => r.node_id === 'reader')?.outputs).toEqual({ rows: 'the text of data/people.csv' });
   });
 });

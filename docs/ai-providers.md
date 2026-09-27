@@ -28,8 +28,9 @@ Set environment variables in a `.env` file or pass them to Docker Compose.
 There are exactly two levels:
 
 1. **The one AI setting** — **⚙ Settings → AI** in the toolbar. ✨ Generate (and the
-   check and repair it runs on what it wrote), Try it, ▶ Test and `test`, a block's
-   Try it, and every run call it, for every AI call a node does not pin: an AI node
+   check and repair it runs on what it wrote, "Say what to change" and ✨ Fix), Try it
+   and its judge, `test`, and every run
+   call it, for every AI call a node does not pin: an AI node
    left on its default, and code that asks a model through `node.llm`. It belongs to
    this machine and is saved in `ai-settings.json` (below), never in a graph — so a
    graph you share runs on whatever its recipient chose.
