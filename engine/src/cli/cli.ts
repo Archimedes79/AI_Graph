@@ -102,6 +102,15 @@ export function parseArgs(argv: string[]): CliOptions {
       options.mcp = true;
     } else if (arg === '--mcp-root') {
       options.mcpRoot = argv[++i] ?? '';
+    } else if (arg.startsWith('--')) {
+      // A flag this command does not know is a mistake to say, not a file to
+      // look for: taken as the graph, `--ai-provider openai g.json` went
+      // looking for a graph called "--ai-provider", and after the graph it
+      // was dropped without a word.
+      throw new Error(
+        `Unknown option "${arg}". This command knows --inputs, --every, --limit, --bundle, `
+          + '--serve, --port, --editor, --host, --mcp and --mcp-root.',
+      );
     } else if (!options.graphPath) {
       options.graphPath = arg;
     }
