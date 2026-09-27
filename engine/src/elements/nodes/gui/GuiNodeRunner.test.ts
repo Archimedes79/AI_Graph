@@ -67,6 +67,15 @@ describe('a block that fails', () => {
     const produced = await element.execute(page([picker({ catch_errors: true })]), {}, working);
     expect(produced.pick_error).toBe('');
   });
+
+  it('grows no error port on a block that only shows, which never fails in a run', async () => {
+    // A text box switched to "Output" kept its flag and its port, which the
+    // editor no longer offered to untick, and every run sent `{}` on it.
+    const element = new GuiNodeRunner();
+    const shown = { ...box, mode: 'output', catch_errors: true };
+    expect(element.derivedPorts(page([shown])).outputs.map((p) => p.id)).toEqual([]);
+    expect(await element.execute(page([shown]), {}, brokenFolder)).toEqual({});
+  });
 });
 
 /**

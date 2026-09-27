@@ -81,8 +81,11 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
       outputs.push(...own.outputs);
       // A block told to catch its failures grows the port to put one on --
       // here, once, rather than in each of eleven block kinds. Named after the
-      // block for the same reason its other ports are: a page has many.
-      if (element.catchesErrors(widget)) outputs.push(errorPort(widget));
+      // block for the same reason its other ports are: a page has many. Only
+      // a block that hands something on can fail in a run (`execute`); one
+      // that only shows -- a text box switched to "Output" -- kept a port the
+      // editor no longer offers to take away, which sent `{}` on every run.
+      if (own.outputs.length && element.catchesErrors(widget)) outputs.push(errorPort(widget));
     }
     return { inputs, outputs };
   }
