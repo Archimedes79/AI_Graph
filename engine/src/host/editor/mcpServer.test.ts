@@ -128,7 +128,8 @@ describe('authoring_guide', () => {
     expect(text).toContain('Graph DSL');
     expect(text).toContain('__run');
     expect(text).toMatch(/Node types this engine runs: .*\bgui\b/);
-    expect(text).toMatch(/Block kinds a gui node can hold: .*\bbutton\b/);
+    // The block kinds are the prompt's own, listed by the gui element from the registry.
+    expect(text).toContain('  - button');
   });
 });
 

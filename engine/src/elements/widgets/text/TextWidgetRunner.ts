@@ -17,4 +17,10 @@ export class TextWidgetRunner extends StaticWidgetRunner<TextConfig> {
       role: textRole(widget.config.mode),
     };
   }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override graphAuthorNote(): string {
+    return 'mode heading|body|caption, value = the words';
+  }
 }

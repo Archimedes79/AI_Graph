@@ -486,7 +486,6 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
         + 'Fix what validate_graph reports before saving; save_graph refuses a graph with problems.',
         '',
         `Node types this engine runs: ${registry.nodeTypes().join(', ')}.`,
-        `Block kinds a gui node can hold: ${registry.widgetKinds().join(', ')}.`,
         `The port every node accepts without declaring it: "${RUN_PORT}". A node with config.catch_errors = true also has an output "${ERROR_PORT}".`,
         'Paths inside a graph (an input node\'s file, an output node\'s target) are relative to the server\'s folder.',
       ].join('\n');

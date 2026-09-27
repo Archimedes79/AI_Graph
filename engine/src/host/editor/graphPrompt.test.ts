@@ -74,6 +74,28 @@ describe('the graph prompt', () => {
     }
   });
 
+  it('names each derived input port with what it holds', () => {
+    // Said from `derivedPorts`, so a type or a port changed there is changed here.
+    const element = new InputNodeRunner();
+    for (const mode of ['text', 'file', 'directory']) {
+      const derived = element.derivedPorts({ id: 'i', config: { input_mode: mode } } as unknown as GraphNode)!;
+      for (const port of [...derived.inputs, ...derived.outputs]) {
+        const holds = { text: 'text', number: 'a number', file_path: port.multi ? 'a list of file paths' : 'a file path' }[port.data_type as string];
+        expect(GRAPH_SYSTEM, `${mode}: ${port.id}`).toContain(`"${port.id}" (${holds}`);
+      }
+    }
+  });
+
+  it('lists every block kind the registry knows, each with what it says of itself', () => {
+    // The kinds used to be a hand-kept list, which never learnt of the spacer.
+    for (const kind of registry.widgetKinds()) {
+      const note = registry.widget(kind)!.graphAuthorNote();
+      expect(GRAPH_SYSTEM, kind).toContain(`  - ${kind}${note ? `: ${note}` : '\n'}`);
+    }
+    // The three modes a text box has, the default one included.
+    expect(registry.widget('text_io')!.graphAuthorNote()).toMatch(/input .*output .*both/);
+  });
+
   it('names every node type the registry knows, except the ones that say a graph is not built with them', () => {
     const silent: string[] = [];
     for (const type of registry.nodeTypes()) {

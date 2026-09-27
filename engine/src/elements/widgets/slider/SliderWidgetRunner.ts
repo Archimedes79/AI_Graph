@@ -32,4 +32,10 @@ export class SliderWidgetRunner extends WidgetRunner<SliderRange> {
   async execute(widget: Widget) {
     return { [`${widget.id}_out`]: this.config(widget).value };
   }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override graphAuthorNote(): string {
+    return 'min, max, step';
+  }
 }

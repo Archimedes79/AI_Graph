@@ -108,7 +108,7 @@ ElementRunner<Subject, Config>          config() · texts() · logic() · catche
 │   ├── DataNodeRunner    OutputNodeRunner   SubgraphNodeRunner
 │   ├── TriggerNodeRunner        an event with nobody there: the tool starting, a clock
 │   └── GuiNodeRunner            a composite: holds widgets, its ports are theirs
-└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue ┊ receives · problems
+└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue ┊ receives · problems · graphAuthorNote
     ├── InputPickerWidgetRunner   TextIoWidgetRunner   SelectWidgetRunner
     ├── SliderWidgetRunner        ButtonWidgetRunner   ChatWidgetRunner
     ├── StaticWidgetRunner       no ports: part of the page, not the graph
@@ -165,7 +165,7 @@ turned out there was nothing to keep apart — see below.)
 | **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
 | `ElementRunner` | `config` · `texts` · `logic` | `catchesErrors` · `snippetFailure` · `runSnippet` | `generation` · `deployNeeds` |
 | `NodeRunner` | `nodeType` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `resultLabel` · `boundaryRole` · `valuePorts` · `keepsOutputInterface` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `fansOut` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
-| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | `receives` · `problems` |
+| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | `receives` · `problems` · `graphAuthorNote` |
 | `NodeGuiBuilder` | `nodeType` | — | **everything**: the palette, panels, what ✨ Generate is told |
 | `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, panels, what ✨ Generate is told |
 
@@ -528,7 +528,9 @@ or a page that has them can do the same.
   `holdsWidgets`, `missingExample`, `NodeRunner.isResult` and `resultLabel`,
   `NodeRunner.problems` and `WidgetRunner.problems`, `blocks`, `graphAuthorNote` — so a new
   kind answers for itself. The prompt that designs a whole graph is assembled from the kinds' own
-  `graphAuthorNote`; a kind without one (a subgraph) is not offered to the model.
+  `graphAuthorNote` -- an input node says the ports each mode derives from its own `derivedPorts`,
+  and the page lists every block kind with the block's own note -- and keeps only the rules that
+  span kinds; a node kind without a note (a subgraph) is not offered to the model.
 - The editor's layers are held by [`layers.test.ts`](../editor/src/layers.test.ts), see above.
 - What two layers both say, one file says: `errors.ts` holds `NotFound` and `NotAGraph` for the
   project folder, the directory listing and the server that turns them into a status.

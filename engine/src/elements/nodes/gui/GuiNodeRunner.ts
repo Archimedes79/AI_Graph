@@ -253,8 +253,20 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     return found;
   }
 
+  /**
+   * The page's blocks, and every kind of block with what it says of itself
+   * (`WidgetRunner.graphAuthorNote`): a kind is listed by being registered,
+   * so the prompt cannot leave one out, as its hand-kept list once left out
+   * the spacer.
+   */
   override graphAuthorNote(): string {
-    return `config.gui_widgets is the list of blocks on the page.`;
+    const kinds = [...BY_KIND.values()].map((element) => {
+      const note = element.graphAuthorNote();
+      return `  - ${element.widgetKind}${note ? `: ${note}` : ''}`;
+    });
+    return 'config.gui_widgets is the list of blocks on the page. A block is {"id", "kind", "label", "w" (1-16 columns), '
+      + '"h" (rows), ...}. The page\'s ports are DERIVED from its blocks, not taken from this document: every block '
+      + `contributes "<block id>_out", "<block id>_in", or both, "<id>" standing for its id. The kinds:\n${kinds.join('\n')}`;
   }
 
   override whatRuns(): WhatRuns {

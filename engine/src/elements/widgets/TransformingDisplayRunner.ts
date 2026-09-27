@@ -66,4 +66,10 @@ export abstract class TransformingDisplayRunner extends DisplayWidgetRunner<Tran
 
   /** What a node wired into this kind of block should hand it, while the block has no code of its own. */
   protected abstract receivesAsItIs(): string;
+
+  /** What arrives, and the code that may reshape it first: said once for the three drawing kinds. */
+  override graphAuthorNote(): string {
+    return `shows what arrives on "<id>_in", which should be ${this.receivesAsItIs()} `
+      + 'Optional config.code is code of its own that reshapes what arrives first.';
+  }
 }

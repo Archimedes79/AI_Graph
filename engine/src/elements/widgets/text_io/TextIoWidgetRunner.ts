@@ -67,4 +67,11 @@ export class TextIoWidgetRunner extends WidgetRunner<TextIoConfig> {
   override clearsValueAfterRun(widget: Widget): boolean {
     return this.config(widget).role !== 'output' && this.firesRun(widget);
   }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override graphAuthorNote(): string {
+    return 'mode input (typed into; "<id>_out"), output (shows what arrives on "<id>_in") or both '
+      + '(typed into and showing; both ports), which is what a block without a mode is';
+  }
 }

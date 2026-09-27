@@ -76,7 +76,11 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `config.data_value is what it remembers between runs.`;
+    return 'persisted graph memory, with one optional input port named "input" and one output port named "output". '
+      + 'config.data_value is what it remembers between runs; initialize it when useful. Set config.data_format to text or '
+      + 'structure, and put the precise schema -- field names, types, nesting and constraints -- in config.data_format_prompt. '
+      + 'Define data nodes before code or ai nodes when a workflow has known intermediate contracts: connected code and '
+      + 'ai nodes must honor those source and target contracts.';
   }
 
   override whatRuns(): WhatRuns {

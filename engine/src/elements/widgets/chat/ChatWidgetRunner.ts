@@ -73,4 +73,13 @@ export class ChatWidgetRunner extends WidgetRunner<ChatValue> {
       pending: '',
     };
   }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override graphAuthorNote(): string {
+    return 'keeps the conversation itself and contributes "<id>_out" (the message just sent), "<id>_history" '
+      + '(everything before it) and "<id>_in" (the reply). A chatbot is therefore TWO nodes: a gui node with one chat '
+      + 'block, and an ai node with inputs "history" and "message" wired from it and its "output" wired back to '
+      + '"<id>_in". Do not add data or code nodes to hold the conversation.';
+  }
 }

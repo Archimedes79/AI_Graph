@@ -1,7 +1,7 @@
 import { NodeRunner } from '../../NodeRunner.ts';
 import type { TextFile, WhatRuns } from '../../ElementRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
-import { type GraphNode } from '../../../graph.ts';
+import { type GraphNode, type Port } from '../../../graph.ts';
 import { logicFrom, Logic } from '../../../authoring/logic.ts';
 import { selectFiles } from '../../fileSelection.ts';
 import { port } from '../../port.ts';
@@ -17,6 +17,18 @@ export interface InputConfig {
   promptAtRuntime: boolean;
   /** Return a failed read or listing as an `error` port instead of failing the node. */
   catchErrors: boolean;
+}
+
+/** What a port holds, in words: one of them, and a list of them. */
+const HOLDS: Record<string, [string, string]> = {
+  text: ['text', 'texts'], number: ['a number', 'numbers'], file_path: ['a file path', 'file paths'],
+};
+
+/** A port for the graph designer: `"count" (a number, how many files were listed)`. */
+function portInWords(port: Port): string {
+  const [one, many] = HOLDS[port.data_type] ?? [port.data_type, port.data_type];
+  const what = port.description ? `, ${port.description.charAt(0).toLowerCase()}${port.description.slice(1)}` : '';
+  return `"${port.id}" (${port.multi ? `a list of ${many}` : one}${what})`;
 }
 
 /** What this keeps in files of its own in a project folder: see `ElementRunner.texts`. */
@@ -177,8 +189,19 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  /**
+   * Its settings, and the ports each mode derives, said from `derivedPorts`
+   * itself: a hand-kept list of them once named the count without saying it
+   * is a number, and a graph built on it added "3" to "4".
+   */
   override graphAuthorNote(): string {
-    return `config.value is the text, the file path or the folder path; config.input_mode is text, file or directory.`;
+    const modes = (['text', 'file', 'directory'] as const).map((mode) => {
+      const { inputs, outputs } = this.derivedPorts({ id: 'i', config: { input_mode: mode } } as unknown as GraphNode);
+      const taken = inputs.length ? `; input ${inputs.map(portInWords).join(' and ')}` : '';
+      return `  - input_mode "${mode}": outputs ${outputs.map(portInWords).join(' and ')}${taken}.`;
+    });
+    return 'config.value is the text, the file path or the folder path; config.input_mode is text, file or directory. '
+      + `Its ports are DERIVED from input_mode, not taken from this document:\n${modes.join('\n')}`;
   }
 
   override whatRuns(node: GraphNode): WhatRuns {
