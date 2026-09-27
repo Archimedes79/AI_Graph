@@ -37,6 +37,8 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
 
   const element = WIDGET_BUILDERS[widget.kind];
   const Panel = element.Panel;
+  // Only a block that hands something on can start the graph, or fail in a run.
+  const handsOn = guiWidgetPorts(widget).outputs.length > 0;
 
   return (
     <div className="px-3 py-3 rounded-lg" style={WELL}>
@@ -69,7 +71,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
 
       {/* What starts the graph. A button or a chat always does; anything else
           with an output can be told to. */}
-      {guiWidgetPorts(widget).outputs.length > 0 && (
+      {handsOn && (
         <div className="mb-3">
           {widgetFiresRun({ ...widget, run_on_change: false }) ? (
             <p className="text-xs" style={{ color: MUTED }}>
@@ -109,7 +111,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
           finished without any of it -- the page used to open on these. */}
       <details className="mt-3 rounded-lg" style={{ border: `1px solid ${LINE}` }}>
         <summary className="px-3 py-2 text-xs font-medium cursor-pointer select-none" style={{ color: MUTED }}>
-          Look, size & failures
+          {handsOn ? 'Look, size & failures' : 'Look & size'}
         </summary>
         <div className="px-3 pb-3 pt-1">
           {/* A closed set, not a colour picker: every value comes from the one
@@ -172,8 +174,8 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
             <span className="text-xs" style={{ color: DIMMER }}>cells of {GUI_GRID_COLUMNS}</span>
           </div>
 
-          {/* Only for a block that does something: a rule or a gap cannot fail. */}
-          {guiWidgetPorts(widget).outputs.length > 0 && (
+          {/* Only for a block that hands something on: a rule, a gap or a chart cannot fail. */}
+          {handsOn && (
             <div>
               <label className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
                 <input

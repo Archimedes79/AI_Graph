@@ -724,8 +724,10 @@ out like a canvas:
   ¼ ½ ¾ Full, shorter/taller, move up/down, add a block below, remove. Two halves sit
   side by side; the corner can still be dragged to any size.
 - The panel on the right shows what the selected block *is* — its label, its own
-  settings, whether using it starts the graph. How it looks, its exact size and what a
-  failure costs are folded away under *Look, size & failures*.
+  settings (for a chart, a table or an image: one sentence of what it shows), whether
+  using it starts the graph. How it looks, its exact size and what a failure costs are
+  folded away under *Look, size & failures* — *Look & size* for a block that only shows,
+  which cannot fail.
 
 A block that **starts** the graph is marked `⚡` on the designer canvas, and its port on
 the graph canvas is the amber diamond `◆` the run port wears — the same shape wherever a
