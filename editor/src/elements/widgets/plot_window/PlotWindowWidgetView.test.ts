@@ -32,6 +32,14 @@ describe('a chart on the page', () => {
     expect(onPage('')).toContain('Empty chart, waiting for data');
     expect(onPage([5, 6])).toContain('chart of 2 points');
   });
+
+  it('offers to save what it draws, and nothing while it only says something', () => {
+    const save = 'Save this chart as an SVG file';
+    expect(onPage('', [3, 1, 2])).toContain(save);
+    expect(onPage('', '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>')).toContain(save);
+    expect(onPage('')).not.toContain(save);
+    expect(onPage('', { kind: 'bars', title: 'Choose a CSV file to plot.', points: [] })).not.toContain(save);
+  });
 });
 
 describe('a chart under its port on the graph canvas', () => {

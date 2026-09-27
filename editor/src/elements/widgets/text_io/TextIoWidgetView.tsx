@@ -1,5 +1,7 @@
 import React from 'react';
 import type { WidgetViewProps } from '../WidgetView';
+import SaveButton from '../SaveButton';
+import { fileName, saveFile } from '../download';
 import { asText } from '@engine/elements/widgets/text_io/text.ts';
 import { textIoRole } from '@engine/elements/widgets/text_io/role.ts';
 import { DIMMER, FIELD, LINE, SUNKEN, TEXT } from '@/ui/theme';
@@ -10,6 +12,9 @@ import { BOX_TEXT } from '@/document/layout';
  * - "input": text area the user types in (drives graph via output port)
  * - "output": read-only display of incoming value
  * - "both": shows incoming value above, user text area below
+ *
+ * What it shows of a run can be saved as a text file; what is typed is the
+ * person's own, and already in their hands.
  */
 export default function TextIoWidgetView({ widget, value, incoming, onChange, onTrigger }: WidgetViewProps) {
   const mode = textIoRole(widget.mode);
@@ -24,16 +29,25 @@ export default function TextIoWidgetView({ widget, value, incoming, onChange, on
     const typed = event.currentTarget.value;
     if (typed.trim()) onTrigger?.(typed);
   };
+  const saveButton = (shown: string) => shown.trim() !== '' && (
+    <SaveButton
+      title="Save this text as a file"
+      onSave={() => saveFile(fileName(widget.label, 'output', 'txt'), shown, 'text/plain')}
+    />
+  );
 
   if (mode === 'output') {
     return (
-      <textarea
-        className="w-full h-full rounded-lg px-2 py-1.5 resize-none"
-        style={{ ...FIELD, ...BOX_TEXT, minHeight: 80 }}
-        value={text}
-        readOnly
-        placeholder="Waiting for output…"
-      />
+      <div className="relative group h-full">
+        <textarea
+          className="w-full h-full rounded-lg px-2 py-1.5 resize-none"
+          style={{ ...FIELD, ...BOX_TEXT, minHeight: 80 }}
+          value={text}
+          readOnly
+          placeholder="Waiting for output…"
+        />
+        {saveButton(text)}
+      </div>
     );
   }
 
@@ -56,11 +70,15 @@ export default function TextIoWidgetView({ widget, value, incoming, onChange, on
   const incomingText = asText(incoming);
   return (
     <div className="flex flex-col gap-2 h-full">
-      <div
-        className="flex-1 rounded-lg px-2 py-1.5 overflow-auto whitespace-pre-wrap"
-        style={{ ...BOX_TEXT, background: SUNKEN, color: TEXT, border: `1px solid ${LINE}`, minHeight: 40 }}
-      >
-        {incomingText || <span style={{ color: DIMMER }}>Incoming value appears here…</span>}
+      {/* The reply scrolls inside a frame that does not, so Save stays in its corner. */}
+      <div className="relative group flex-1" style={{ minHeight: 40 }}>
+        <div
+          className="absolute inset-0 rounded-lg px-2 py-1.5 overflow-auto whitespace-pre-wrap"
+          style={{ ...BOX_TEXT, background: SUNKEN, color: TEXT, border: `1px solid ${LINE}` }}
+        >
+          {incomingText || <span style={{ color: DIMMER }}>Incoming value appears here…</span>}
+        </div>
+        {saveButton(incomingText)}
       </div>
       <textarea
         className="w-full rounded-lg px-2 py-1.5 resize-none"

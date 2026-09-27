@@ -201,6 +201,15 @@ export function asDrawing(data: unknown): string | null {
 }
 
 /**
+ * Whether *data* is drawn as a picture -- finished SVG, or a figure with points
+ * -- rather than said: a chart still waiting, a figure's title alone, or what
+ * arrived and is no figure. What there is to save of a chart.
+ */
+export function drawsSomething(data: unknown): boolean {
+  return asDrawing(data) !== null || Boolean(toFigure(data)?.points.length);
+}
+
+/**
  * A chart, dependency-free, drawn from a figure at the size the block is.
  *
  * It draws its own axes: a value scale and the category names. Without them

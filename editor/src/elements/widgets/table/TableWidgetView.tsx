@@ -1,4 +1,6 @@
 import type { WidgetViewProps } from '../WidgetView';
+import SaveButton from '../SaveButton';
+import { csvText, fileName, saveFile } from '../download';
 import { DIMMER, LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
 
 /**
@@ -71,40 +73,46 @@ export default function TableWidgetView({ widget, value, incoming }: WidgetViewP
     );
   }
 
+  // The columns and the cells as shown here, so what a spreadsheet opens is what was read.
+  const save = () => saveFile(fileName(widget.label, 'table', 'csv'), csvText(table.header, table.rows), 'text/csv');
+
   return (
-    <div className="h-full overflow-auto">
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: TABLE_TEXT }}>
-        <thead>
-          <tr>
-            {table.header.map((cell, i) => (
-              <th
-                key={i}
-                style={{
-                  textAlign: 'left', padding: '3px 8px', position: 'sticky', top: 0,
-                  borderBottom: `1px solid ${LINE}`, color: MUTED, fontWeight: 600,
-                  // The page's own recessed colour, so the header follows its
-                  // scheme -- a fixed near-black band sat on the light ones --
-                  // and opaque, because rows scroll under a sticky header.
-                  background: SUNKEN,
-                }}
-              >
-                {cell}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {table.rows.map((row, r) => (
-            <tr key={r}>
-              {row.map((cell, c) => (
-                <td key={c} style={{ padding: '3px 8px', borderBottom: `1px solid ${LINE}`, color: TEXT }}>
+    <div className="relative group h-full">
+      <div className="h-full overflow-auto">
+        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: TABLE_TEXT }}>
+          <thead>
+            <tr>
+              {table.header.map((cell, i) => (
+                <th
+                  key={i}
+                  style={{
+                    textAlign: 'left', padding: '3px 8px', position: 'sticky', top: 0,
+                    borderBottom: `1px solid ${LINE}`, color: MUTED, fontWeight: 600,
+                    // The page's own recessed colour, so the header follows its
+                    // scheme -- a fixed near-black band sat on the light ones --
+                    // and opaque, because rows scroll under a sticky header.
+                    background: SUNKEN,
+                  }}
+                >
                   {cell}
-                </td>
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {table.rows.map((row, r) => (
+              <tr key={r}>
+                {row.map((cell, c) => (
+                  <td key={c} style={{ padding: '3px 8px', borderBottom: `1px solid ${LINE}`, color: TEXT }}>
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <SaveButton title="Save this table as a CSV file" onSave={save} />
     </div>
   );
 }
