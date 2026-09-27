@@ -1,4 +1,4 @@
-import type { ExecutionStatus } from '@/graph';
+import type { ExecutionStatus, NodeResult } from '@/graph';
 
 /**
  * Whether a node result carries usable output.
@@ -12,6 +12,15 @@ import type { ExecutionStatus } from '@/graph';
  */
 export const delivered = (status: ExecutionStatus | string | undefined): boolean =>
   status === 'success' || status === 'partial';
+
+/**
+ * Whether a node's result has outputs to show: it made them this round, or it
+ * stood still and what it made in an earlier one stands (`held`, which the
+ * executor reports as `skipped` with those outputs). The canvas draws the
+ * second faded; asked by status alone, it drew neither.
+ */
+export const hasOutputs = (result: Pick<NodeResult, 'status' | 'held'>): boolean =>
+  delivered(result.status) || result.held === true;
 
 /** Chip/label colours for a status, shared by the results panel and the canvas. */
 export const statusTone = (status: ExecutionStatus | string | undefined) => {

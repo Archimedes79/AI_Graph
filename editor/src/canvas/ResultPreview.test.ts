@@ -52,6 +52,20 @@ describe('a node on the canvas, after a run', () => {
     expect(html).not.toContain('{&quot;output&quot;');
   });
 
+  it('shows what it made in an earlier round, faded, when it stood still in this one', () => {
+    // As the executor hands on a node whose ◆ stayed shut and whose latch kept
+    // its outputs: skipped, held, the outputs there. Asked by status alone, the
+    // canvas drew the held glyph and no value.
+    const html = node({
+      node_id: 'count', status: 'skipped', held: true, inputs: {},
+      outputs: { output: 'Once upon a time there was a lighthouse keeper.' },
+      error: null, messages: ['Nothing opened its ◆ this round. What it produced last stands.'],
+    });
+    expect(html).toContain('‖');
+    expect(html).toContain('Once upon a time there was a lighthouse keeper.');
+    expect(html).toContain('opacity:0.6');
+  });
+
   it('shows why it failed, on one line', () => {
     const html = node({ node_id: 'count', status: 'error', inputs: {}, outputs: {}, error: 'No such file: data/x.csv\nat read' });
     expect(html).toMatch(/title="No such file: data\/x.csv\nat read"[^>]*>No such file: data\/x.csv</);
