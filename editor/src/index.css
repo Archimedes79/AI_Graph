@@ -39,6 +39,12 @@ html, body, #root {
   fill: currentColor !important;
 }
 
+/* The map's shade over what is out of view, in the scheme's own: it shipped as
+   a light grey, which glared from the corner of every dark canvas. */
+.react-flow__minimap-mask {
+  fill: var(--ui-scrim, rgba(0,0,0,0.70));
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;

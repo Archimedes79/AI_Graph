@@ -10,6 +10,7 @@ import ReactFlow, {
   EdgeChange,
   BackgroundVariant,
   ReactFlowInstance,
+  useStore,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -17,6 +18,7 @@ import { useGraphStore } from '@/store/graphStore';
 import GraphNodeView from './GraphNodeView';
 import { deleteKeys, removalsToApply } from './nodeRemoval';
 import { drawnWire } from './wireLook';
+import { panToShow } from './inView';
 import { showsPage } from '@/document/guiWidgets';
 import type { NodeType } from '@/graph';
 import { LINE, PANEL, SUNKEN, SURFACE } from '@/ui/theme';
@@ -80,6 +82,29 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
     // cancelled when the nodes change again -- measuring it is such a change.
     window.setTimeout(() => rfInstance.fitView({ padding: 0.2, duration: 300, maxZoom: 1 }), 80);
   }, [rfNodes, rfInstance]);
+
+  // A node whose panel opens stays in view: the canvas narrows under it as the
+  // panel comes in, so it is looked at once the canvas has its new width.
+  const openId = useGraphStore((s) => s.editingNodeId);
+  React.useEffect(() => {
+    if (!openId || !rfInstance) return undefined;
+    const timer = window.setTimeout(() => {
+      const node = rfInstance.getNode(openId);
+      const wrapper = reactFlowWrapper.current;
+      if (!node || !wrapper) return;
+      const { x, y, zoom } = rfInstance.getViewport();
+      const at = node.positionAbsolute ?? node.position;
+      const { dx, dy } = panToShow(
+        { x: at.x * zoom + x, y: at.y * zoom + y, width: (node.width ?? 240) * zoom, height: (node.height ?? 120) * zoom },
+        { x: 0, y: 0, width: wrapper.clientWidth, height: wrapper.clientHeight },
+      );
+      if (dx || dy) rfInstance.setViewport({ x: x + dx, y: y + dy, zoom }, { duration: 250 });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [openId, rfInstance]);
+  // The map of the whole graph, only where the canvas has room for it beside
+  // what it maps: beside a node's panel at 1024 it covered a third of it.
+  const roomy = useStore((s) => s.width >= 640);
 
   // The wire itself is the store's to make (`connect`): a canvas is one way
   // to ask for one, and a test is another.
@@ -180,21 +205,23 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
         <Controls
           style={PANEL}
         />
-        <MiniMap
-          style={PANEL}
-          // The minimap paints SVG `fill` attributes, where a CSS variable does
-          // not resolve -- so the scheme's tint is read off the document here
-          // instead of handed over as `var(--ui-node-ai)`. It was a second,
-          // hard-coded copy of four of the six tints before that, which is why
-          // a data node was the wrong colour on a map of its own graph.
-          nodeColor={(node) => {
-            const type = node.data?.graphNode?.node_type;
-            const tint = type
-              ? getComputedStyle(document.documentElement).getPropertyValue(`--ui-node-${type}`).trim()
-              : '';
-            return tint || SURFACE;
-          }}
-        />
+        {roomy && (
+          <MiniMap
+            style={PANEL}
+            // The minimap paints SVG `fill` attributes, where a CSS variable does
+            // not resolve -- so the scheme's tint is read off the document here
+            // instead of handed over as `var(--ui-node-ai)`. It was a second,
+            // hard-coded copy of four of the six tints before that, which is why
+            // a data node was the wrong colour on a map of its own graph.
+            nodeColor={(node) => {
+              const type = node.data?.graphNode?.node_type;
+              const tint = type
+                ? getComputedStyle(document.documentElement).getPropertyValue(`--ui-node-${type}`).trim()
+                : '';
+              return tint || SURFACE;
+            }}
+          />
+        )}
       </ReactFlow>
     </div>
   );
