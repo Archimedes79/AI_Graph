@@ -2,18 +2,11 @@ import { WidgetRunner, type Widget } from '../../WidgetRunner.ts';
 import { port } from '../../port.ts';
 import type { RawConfig } from '../../../graph.ts';
 import { asText } from './text.ts';
-
-export type TextIoRole = 'input' | 'output' | 'both';
+import { textIoRole, type TextIoRole } from './role.ts';
 
 export interface TextIoConfig {
   value: string;
   role: TextIoRole;
-}
-
-/** What a stored mode means: anything but the three is "both", for the ports, a run and settling alike. */
-function roleOf(mode: unknown): TextIoRole {
-  const role = String(mode ?? 'both');
-  return (['input', 'output', 'both'].includes(role) ? role : 'both') as TextIoRole;
 }
 
 /** A box of text: typed into, shown in, or both. */
@@ -23,7 +16,7 @@ export class TextIoWidgetRunner extends WidgetRunner<TextIoConfig> {
   config(widget: Widget): TextIoConfig {
     // Read as text: a graph saved while a reply could settle here may hold
     // an object, and that is sent as what the box shows, not "[object Object]".
-    return { value: asText(widget.config.value), role: roleOf(widget.config.mode) };
+    return { value: asText(widget.config.value), role: textIoRole(widget.config.mode) };
   }
 
   ports(widget: Widget) {
@@ -62,7 +55,7 @@ export class TextIoWidgetRunner extends WidgetRunner<TextIoConfig> {
    * model as though the person had said it.
    */
   override settle(stored: RawConfig, value: unknown): void {
-    if (roleOf(stored.mode) === 'output') stored.value = value;
+    if (textIoRole(stored.mode) === 'output') stored.value = value;
   }
 
   /**

@@ -25,7 +25,7 @@
 import type { ComponentType } from 'react';
 import type { GuiWidget, WidgetKind } from '@/graph';
 import type { WidgetViewProps } from '@/elements/widgets/WidgetView';
-import { effectiveTextIoMode } from '@/elements/widgets/text_io/mode';
+import { textIoRole } from '@engine/elements/widgets/text_io/role.ts';
 
 import ButtonWidgetView from '@/elements/widgets/button/ButtonWidgetView';
 import ChatWidgetView from '@/elements/widgets/chat/ChatWidgetView';
@@ -61,7 +61,7 @@ export const BLOCKS: Record<WidgetKind, BlockKind> = {
   // sends; the reply is shown above it from what arrived. Handed the reply as
   // its value, the box showed one text and ▶ Run sent another. A box that
   // only shows is what arrived.
-  text_io: { View: TextIoWidgetView, ownsValue: (widget) => effectiveTextIoMode(widget) !== 'output' },
+  text_io: { View: TextIoWidgetView, ownsValue: (widget) => textIoRole(widget.mode) !== 'output' },
   plot_window: { View: PlotWindowWidgetView },
   image_view: { View: ImageViewWidgetView },
   table: { View: TableWidgetView },

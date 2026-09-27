@@ -1,7 +1,7 @@
 import React from 'react';
 import type { WidgetViewProps } from '../WidgetView';
 import { asText } from '@engine/elements/widgets/text_io/text.ts';
-import { effectiveTextIoMode } from './mode';
+import { textIoRole } from '@engine/elements/widgets/text_io/role.ts';
 import { DIMMER, FIELD, LINE, SUNKEN, TEXT } from '@/ui/theme';
 
 /** Runtime text_io widget.
@@ -10,7 +10,7 @@ import { DIMMER, FIELD, LINE, SUNKEN, TEXT } from '@/ui/theme';
  * - "both": shows incoming value above, user text area below
  */
 export default function TextIoWidgetView({ widget, value, incoming, onChange, onTrigger }: WidgetViewProps) {
-  const mode = effectiveTextIoMode(widget);
+  const mode = textIoRole(widget.mode);
   const text = asText(value);
   // In a box that sends, Enter sends and Shift+Enter is the newline -- what
   // every messenger does. In one that does not, Enter is just a newline.
