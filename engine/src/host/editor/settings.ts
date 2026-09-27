@@ -13,7 +13,10 @@
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { aiSetting, candidatePaths, LOCAL_PROVIDERS, probeLocal, readSettingsFile, type SettingsFile } from '../../ai/settings.ts';
+import {
+  aiSetting, candidatePaths, LOCAL_PROVIDERS, parseSettingsFile, probeLocal, readSettingsFile, type SettingsFile,
+} from '../../ai/settings.ts';
+import { Refusal, message } from '../http.ts';
 import { CREDENTIALS, DEFAULT_SETTINGS, ENDPOINT_ENV } from '../../ai/providers.ts';
 import type { ProviderStatus, SettingsPatch, SettingsStatus, Target } from '../api.ts';
 
@@ -74,12 +77,21 @@ export function status(cwd = process.cwd(), env: Env = process.env): SettingsSta
  */
 export async function save(patch: SettingsPatch, cwd = process.cwd(), env: Env = process.env): Promise<SettingsStatus> {
   const path = settingsPath(cwd, env);
-  const file = readSettingsFile(path);
+  let file: SettingsFile;
+  try {
+    file = parseSettingsFile(path);
+  } catch (error) {
+    throw new Refusal(409, `${path} cannot be read (${message(error)}). Fix it by hand first: saving over it now would lose the keys and tool servers in it.`);
+  }
   const endpoints = { ...file.endpoints };
   const apiKeys = { ...file.api_keys };
 
   for (const [provider, value] of Object.entries(patch.endpoints ?? {})) {
-    if (ENDPOINT_PROVIDERS.includes(provider)) endpoints[provider] = String(value ?? '').trim();
+    if (!ENDPOINT_PROVIDERS.includes(provider)) continue;
+    // Left blank, the provider's own address stands: a blank one is not written.
+    const url = String(value ?? '').trim();
+    if (url) endpoints[provider] = url;
+    else delete endpoints[provider];
   }
   for (const [provider, value] of Object.entries(patch.api_keys ?? {})) {
     const key = CREDENTIALS[provider]?.key;

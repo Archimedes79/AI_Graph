@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { providerStatus, save, settingsPath, setupLines, status } from './settings.ts';
-import { aiSetting, readSettingsFile } from '../../ai/settings.ts';
+import { aiSetting, configuredSettings, probeLocal, readSettingsFile } from '../../ai/settings.ts';
 
 /**
  * The settings dialog's contract: what it may see, what a save may change, and
@@ -71,6 +71,22 @@ describe('what a save may change', () => {
     expect(raw.endpoints).toEqual({ ollama: 'http://old:11434', lmstudio: 'http://box:1234/v1' });
   });
 
+  it('will not save over a file it cannot read, which would lose its keys and tool servers', async () => {
+    const { file, env } = await own();
+    const handEdited = '{\n "api_keys": {"openai": "sk-test-1234567890"},\n "mcp_servers": {"files": {"command": "npx"}},\n}\n';
+    await writeFile(file, handEdited);
+    await expect(save({ endpoints: { ollama: 'http://127.0.0.1:11434' } }, '/nowhere', env)).rejects.toMatchObject({ status: 409 });
+    expect(await readFile(file, 'utf8')).toBe(handEdited);
+  });
+
+  it('writes no blank address: the provider\'s own stands, and calls still reach it', async () => {
+    const { file, env } = await own({ endpoints: { ollama: 'http://old:11434' } });
+    await save({ endpoints: { ollama: '', lmstudio: 'http://box:1234/v1' } }, '/nowhere', env);
+    expect(JSON.parse(await readFile(file, 'utf8')).endpoints).toEqual({ lmstudio: 'http://box:1234/v1' });
+    await writeFile(file, JSON.stringify({ endpoints: { ollama: '' } }));
+    expect(configuredSettings(env, '/nowhere').endpoints).toEqual({});
+  });
+
   it('creates the file, and its folder, on first save', async () => {
     const { dir } = await own();
     const nested = join(dir, 'deep', 'ai-settings.json');
@@ -115,6 +131,17 @@ describe('the one AI setting', () => {
     expect((await providerStatus('/nowhere', env)).target).toEqual({ provider: 'anthropic', model: 'claude-x' });
   });
 
+  it('looks for a local model where a call would go: the environment over the file', async () => {
+    const { env } = await own({ endpoints: { ollama: 'http://file-ollama:11434' } });
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => { asked.push(url); return new Response(JSON.stringify({ models: [{ name: 'm1' }] })); });
+    try {
+      await probeLocal('ollama', { refresh: true, cwd: '/nowhere', env: { ...env, OLLAMA_BASE_URL: 'http://env-ollama:11434' } });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(asked).toEqual(['http://env-ollama:11434/api/tags']);
+  });
 });
 
 describe('a provider named without a model', () => {
