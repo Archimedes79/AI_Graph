@@ -150,19 +150,27 @@ export function nodeDialog(nodeId: string): NodeDialog {
 }
 
 /**
- * The dialog of node *nodeId*, drawn anew whenever its node changes -- here or
- * in the graph. Ctrl+Z writes what is waiting first, so Undo takes back what
- * was just typed rather than the step before it.
+ * What a key pressed while the dialog is open does first, before whatever the
+ * key is for hears it: Ctrl+Z and Ctrl+Y write what is waiting, so Undo takes
+ * back what was just typed rather than the step before it -- and Ctrl+S, so
+ * the file holds what the dialog shows. It saved without the last moment of
+ * typing.
  */
+export function writeBeforeKey(dialog: Pick<NodeDialog, 'write'>): (event: Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'key'>) => void {
+  return (event) => {
+    if ((event.ctrlKey || event.metaKey) && /^[zys]$/i.test(event.key)) dialog.write();
+  };
+}
+
+/** The dialog of node *nodeId*, drawn anew whenever its node changes -- here or in the graph. */
 export function useNodeDialog(nodeId: string): NodeDialog {
   const [dialog] = useState(() => nodeDialog(nodeId));
   const [, render] = useReducer((count: number) => count + 1, 0);
   useGraphStore((s) => s.rfNodes.find((item) => item.id === nodeId)?.data.graphNode);
   useEffect(() => dialog.watch(render), [dialog]);
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && /^[zy]$/i.test(event.key)) dialog.write();
-    };
+    // Heard first, in the capture phase: the shortcuts themselves are the page's.
+    const onKey = writeBeforeKey(dialog);
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [dialog]);

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GraphNode, Port } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { useGraphStore } from '@/store/graphStore';
-import { WRITE_AFTER_MS, changedFields, nodeDialog, overlay } from './nodeDialog';
+import { WRITE_AFTER_MS, changedFields, nodeDialog, overlay, writeBeforeKey } from './nodeDialog';
 import { withPorts } from './nodeDraft';
 
 /**
@@ -99,6 +99,14 @@ describe('a change in a node\'s dialog', () => {
     vi.advanceTimersByTime(WRITE_AFTER_MS);
     expect(stored('code').config.code_prompt).toBe('');
     expect(dialog.node()).toBeUndefined();
+  });
+
+  it('is written first when the graph is saved with Ctrl+S, so the file holds what the dialog shows', () => {
+    const dialog = nodeDialog('code');
+    dialog.setConfig('code_prompt', 'Saved with it.');
+    // The dialog hears the key first (capture); the save is the page's, after it.
+    writeBeforeKey(dialog)({ ctrlKey: true, metaKey: false, key: 's' });
+    expect(store().rootGraph().nodes.find((node) => node.id === 'code')?.config.code_prompt).toBe('Saved with it.');
   });
 });
 
