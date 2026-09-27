@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Graph, GraphNode } from '../graph.ts';
-import { collectInputs, executeGraph, memoryFeedbackEdges, topologicalLevels } from './executor.ts';
+import { collectInputs, executeGraph, executeNode, memoryFeedbackEdges, runNodeAlone, topologicalLevels } from './executor.ts';
 import { NodeRunner } from '../elements/NodeRunner.ts';
 import { type Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
@@ -435,5 +435,43 @@ describe('a node that catches its own failure', () => {
     );
     expect(result.status).toBe('partial');
     expect(result.error).toBeNull();
+  });
+
+  it('does the same when it is tried by itself, as Try it, ▶ Test and run-node try it', async () => {
+    const graph = graphOf([failing({ catch_errors: true })], []);
+    const inRun = (await executeGraph(graph, { runtime: nowhere, registry: withBoom as never })).node_results[0];
+    const alone = await executeNode(graph, 'bad', {}, { runtime: nowhere, registry: withBoom as never });
+    expect(alone).toMatchObject({ status: inRun.status, outputs: inRun.outputs, error: inRun.error });
+  });
+});
+
+describe('one node tried by itself', () => {
+  it('stands still where a run would, with the run\'s reason, and asks no model', async () => {
+    let asked = 0;
+    const runtime = quietRuntime({ ai: { complete: async () => { asked += 1; return 'answer'; } } });
+    const ask = node('ask', 'ai', { system_prompt: 'Answer.' });
+    ask.inputs = [{ id: 'message', name: 'm', kind: 'input', data_type: 'text', multi: false, required: false, description: '' }];
+    const graph = graphOf([node('src', 'code'), ask], [edge('e', 'src', 'out', 'ask', 'message')]);
+    const alone = await executeNode(graph, 'ask', { message: '' }, { runtime, registry });
+    expect(alone).toMatchObject({ status: 'skipped', messages: ['Nothing arrived on any of its inputs, so there was nothing to ask.'] });
+    expect(asked).toBe(0);
+  });
+
+  it('fails when what feeds it failed, rather than running on nothing and succeeding', async () => {
+    // run-node and the MCP server's run_node, with no inputs given.
+    const reader = node('reader', 'code', { code: 'function run() { throw new Error("ENOENT: data.csv"); }' });
+    const count = node('count', 'code', { code: 'function run(i) { return { n: String(i.text ?? "").length }; }' });
+    const runtime = quietRuntime({ code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) } });
+    const { result } = await runNodeAlone(graphOf([reader, count], [edge('e', 'reader', 'text', 'count', 'text')]), 'count', undefined, { runtime, registry });
+    expect(result.status).toBe('error');
+    expect(result.error).toMatch(/ENOENT: data\.csv/);
+  });
+
+  it('says it broke its output interface, as a run says it', async () => {
+    const make = node('make', 'code', { code: 'x', output_schema: { type: 'object', properties: { n: { type: 'number' } } } });
+    make.outputs = [{ id: 'n', name: 'n', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }];
+    const runtime = quietRuntime({ code: { run: async () => ({ n: 'not a number' }) } });
+    const alone = await executeNode(graphOf([make]), 'make', {}, { runtime, registry });
+    expect(alone.messages?.[0]).toMatch(/Does not match its output interface/);
   });
 });

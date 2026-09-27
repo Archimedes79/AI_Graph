@@ -421,24 +421,11 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         if (!failures.length) options.latch?.set(latchKey(node), produced);
         // Kept only when it went through whole: a partial result is not one to hand back.
         if (key && !failures.length) options.reuse!.set(key, produced);
-        // Some items failed and the rest went through: the node is partial and
-        // says so, rather than a success whose gaps are nulls nobody explains.
-        const status = failures.length ? 'partial' : 'success';
-        if (failures.length) partial.add(nodeId);
-        // Said, not enforced: the values are what they are and the run goes on,
-        // but a node that broke its interface is named here rather than blamed
-        // three nodes later by whatever read the wrong shape.
-        const iface = element.outputInterface(node);
-        const broken = iface ? mismatches(produced, iface) : [];
-        results.push({
-          node_id: nodeId, status, inputs, outputs: produced,
-          error: failures.length ? itemFailures(failures) : null,
-          ...(broken.length ? { messages: broken.map((line) => `Does not match its output interface: ${line}`) } : {}),
-        });
-        runtime.report?.({ type: 'node_done', node_id: nodeId, status });
+        const result = ranTo(element, node, inputs, produced, failures);
+        if (result.status === 'partial') partial.add(nodeId);
+        results.push(result);
+        runtime.report?.({ type: 'node_done', node_id: nodeId, status: result.status });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-
         // Stopped in the middle of this node: not the node's failure, and not
         // something a catch-errors port should turn into data.
         if (signal?.aborted) {
@@ -446,29 +433,15 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
           runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'skipped' });
           continue;
         }
-
-        // A node that catches its own failures turns one into data instead of
-        // ending the run: the message goes on its `error` port, its other
-        // ports carry null, and whatever that port feeds gets to react. Asked
-        // of the element rather than switched on a node type here, so a new
-        // element that wants it says so in its own file -- and one mechanism
-        // covers every kind rather than a copy inside each.
-        //
-        // Still `partial`, never `success`: something did go wrong, and a node
-        // whose outputs are nulls nobody explains is how a broken run comes to
-        // look like a clean one.
-        if (element.catchesErrors(node)) {
-          const produced = failureOutputs(node, message);
-          outputs.set(nodeId, produced);
+        const result = failedWith(element, node, inputs, error);
+        if (result.status === 'partial') {
+          outputs.set(nodeId, result.outputs);
           partial.add(nodeId);
-          results.push({ node_id: nodeId, status: 'partial', inputs, outputs: produced, error: message });
-          runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'partial' });
-          continue;
+        } else {
+          failed.add(nodeId);
         }
-
-        failed.add(nodeId);
-        results.push({ node_id: nodeId, status: 'error', inputs, outputs: {}, error: message });
-        runtime.report?.({ type: 'node_done', node_id: nodeId, status: 'error' });
+        results.push(result);
+        runtime.report?.({ type: 'node_done', node_id: nodeId, status: result.status });
       }
     }
   }
@@ -644,7 +617,9 @@ export async function inputsFor(
  *
  * Nothing is settled and nothing downstream runs. A failure is the result,
  * not an exception: the person asked what this node does with these inputs,
- * and "it fails, like this" is an answer.
+ * and "it fails, like this" is an answer -- the answer a run would give: a
+ * node with nothing to do stands still, one that catches its failures puts
+ * them on its error port, and a broken interface is said.
  */
 export async function executeNode(
   graph: Graph,
@@ -657,22 +632,57 @@ export async function executeNode(
   if (!node || !element) {
     return { node_id: nodeId, status: 'error', inputs, outputs: {}, error: `No such node: ${nodeId}` };
   }
+  const why = nothingToDo(element, node, inputs, graph.edges, memoryFeedbackEdges(graph.nodes, graph.edges, options.registry));
+  if (why) return { node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [why] };
   const { runtime } = options;
   try {
     const arrived = await readInputs(element, node, inputs, runtime, graph, options.registry);
     const { produced, failures } = await runNode(
       element, node, arrived, withSubgraph(runtime, options, node, options.depth ?? 0),
     );
-    return {
-      node_id: nodeId, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
-      error: failures.length ? itemFailures(failures) : null,
-    };
+    return ranTo(element, node, inputs, produced, failures);
   } catch (error) {
-    return {
-      node_id: nodeId, status: 'error', inputs, outputs: {},
-      error: error instanceof Error ? error.message : String(error),
-    };
+    return failedWith(element, node, inputs, error);
   }
+}
+
+/**
+ * What a node that ran comes to. Some items failed and the rest went through:
+ * partial, and said, rather than a success whose gaps are nulls nobody
+ * explains. A broken interface is said, not enforced: the values are what they
+ * are, but a node that broke it is named here rather than blamed three nodes
+ * later by whatever read the wrong shape.
+ */
+function ranTo(
+  element: NodeRunner,
+  node: GraphNode,
+  inputs: Record<string, unknown>,
+  produced: Record<string, unknown>,
+  failures: string[] & { total: number },
+): NodeResult {
+  const iface = element.outputInterface(node);
+  const broken = iface ? mismatches(produced, iface) : [];
+  return {
+    node_id: node.id, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
+    error: failures.length ? itemFailures(failures) : null,
+    ...(broken.length ? { messages: broken.map((line) => `Does not match its output interface: ${line}`) } : {}),
+  };
+}
+
+/**
+ * What a node that threw comes to. One that catches its own failures turns
+ * one into data instead of ending the run: the message goes on its `error`
+ * port, its other ports carry null, and whatever that port feeds gets to
+ * react -- asked of the element, so one mechanism covers every kind. Still
+ * `partial`, never `success`: a node whose outputs are nulls nobody explains
+ * is how a broken run comes to look like a clean one.
+ */
+function failedWith(element: NodeRunner, node: GraphNode, inputs: Record<string, unknown>, error: unknown): NodeResult {
+  const message = error instanceof Error ? error.message : String(error);
+  if (element.catchesErrors(node)) {
+    return { node_id: node.id, status: 'partial', inputs, outputs: failureOutputs(node, message), error: message };
+  }
+  return { node_id: node.id, status: 'error', inputs, outputs: {}, error: message };
 }
 
 /**
@@ -681,6 +691,9 @@ export async function executeNode(
  * produce, which run for that and nothing else. The graph's questions are
  * answered with what it already holds, as an unattended run answers them.
  * Hands back the inputs it ran on too, since without *given* nobody else knows.
+ *
+ * What feeds it failing is this node failing to run, as in a run: it is not
+ * run on the nothing that arrived and called a success.
  */
 export async function runNodeAlone(
   graph: Graph,
@@ -689,7 +702,14 @@ export async function runNodeAlone(
   options: RunOptions,
 ): Promise<{ inputs: Record<string, unknown>; result: NodeResult }> {
   applyRuntimeValues(graph, {}, options.registry);
-  const inputs = given ?? (await inputsFor(graph, nodeId, options)).inputs;
+  if (given) return { inputs: given, result: await executeNode(graph, nodeId, given, options) };
+  const { inputs, upstream } = await inputsFor(graph, nodeId, options);
+  if (upstream.node_results.some((result) => result.status === 'error')) {
+    return {
+      inputs,
+      result: { node_id: nodeId, status: 'error', inputs, outputs: {}, error: `What feeds it failed, so it did not run: ${upstream.error}` },
+    };
+  }
   return { inputs, result: await executeNode(graph, nodeId, inputs, options) };
 }
 
