@@ -321,7 +321,10 @@ engine contains no React at all. On the page side, a deployed tool draws widgets
 their views and never loads a panel: panels are registered with `lazy(() => import(…))`,
 so each is a chunk of its own that only the editor fetches. Tests hold all of it:
 `cli/bundle.test.ts`, `runtime/boundary.test.ts`, `strippable.test.ts` (no TypeScript
-feature that needs a compiler: no enums, no parameter properties).
+feature that needs a compiler: no enums, no parameter properties). What the tests share
+sits beside `src`, not in it — `engine/test/fakes.ts` (a runtime with no world attached),
+`editor/test/engineAnswers.ts` (what a run asks a node's element) — so no bundle, package
+or layer rule has to be told to leave it out.
 
 **5. One implementation, replayed — never two that agree.** Where one side needs what the
 other knows, it imports it or replays its result:

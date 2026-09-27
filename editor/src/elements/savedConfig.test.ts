@@ -10,22 +10,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
-import { registry } from '@engine/elements/registry.ts';
-import type { GraphNode as EngineNode } from '@engine/graph.ts';
 import type { GraphNode, NodeConfig } from '@/graph';
-
-/** What a run asks a node's element before and while running it. None of them runs anything. */
-const QUESTIONS = [
-  'config', 'batchMode', 'batchConcurrency', 'readsFileInputs', 'catchesErrors', 'needsInput',
-  'derivedPorts', 'runtimeRequirements', 'referencedPaths', 'logic',
-] as const;
-
-function answers(node: GraphNode): Record<string, string> {
-  const element = registry.node(node.node_type) as unknown as Record<string, (node: EngineNode) => unknown>;
-  return Object.fromEntries(QUESTIONS
-    .filter((question) => typeof element[question] === 'function')
-    .map((question) => [question, JSON.stringify(element[question](node as EngineNode)) ?? 'undefined']));
-}
+import { answers } from '../../test/engineAnswers';
 
 /** Each node type as created, and once more in every mode that changes what it reads. */
 function variants(): GraphNode[] {

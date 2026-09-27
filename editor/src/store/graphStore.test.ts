@@ -7,8 +7,9 @@ import { WIDGET_BUILDERS } from '@/elements/registry';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import { parseGraph, type GraphNode as EngineNode } from '@engine/graph.ts';
+import { parseGraph } from '@engine/graph.ts';
 import { executeGraph } from '@engine/execution/executor.ts';
+import { answers as runAnswers } from '../../test/engineAnswers';
 
 // The same defaults every node type is created with. Copied out field by field
 // here once, which meant adding a field to NodeConfig broke this file for a
@@ -178,22 +179,14 @@ describe('graphStore.loadGraph gui port sync', () => {
  * item after one Save in the editor; an output node with no label came back
  * keyed "Result" instead of by its id.
  *
- * The mirror of `elements/savedConfig.test.ts`: that one holds a saved node to
- * the full one, this one holds a loaded node to the file it was loaded from.
+ * The mirror of `elements/savedConfig.test.ts`, asking the same questions
+ * (`test/engineAnswers.ts`): that one holds a saved node to the full one, this
+ * one holds a loaded node to the file it was loaded from.
  * Not `config()` itself: it spells a setting as it is stored, and a missing
  * provider and 'default' are one and the same provider to a run.
  */
 describe('graphStore.loadGraph: a key the file leaves out', () => {
-  const QUESTIONS = [
-    'batchMode', 'batchConcurrency', 'readsFileInputs', 'catchesErrors', 'needsInput',
-    'derivedPorts', 'runtimeRequirements', 'referencedPaths', 'logic',
-  ] as const;
-  const answers = (node: GraphNode): Record<string, string> => {
-    const element = engineRegistry.node(node.node_type) as unknown as Record<string, (node: EngineNode) => unknown>;
-    return Object.fromEntries(QUESTIONS
-      .filter((question) => typeof element[question] === 'function')
-      .map((question) => [question, JSON.stringify(element[question](node as EngineNode)) ?? 'undefined']));
-  };
+  const answers = (node: GraphNode) => runAnswers(node, ['config']);
 
   /** Each node type as a file might say it: its ports, and not one setting. */
   const bare = Object.values(NODE_KINDS).map((kind) => {
