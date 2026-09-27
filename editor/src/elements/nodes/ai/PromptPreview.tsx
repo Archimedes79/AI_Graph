@@ -14,18 +14,19 @@ import { assemblePrompt } from '@engine/elements/nodes/ai/prompt.ts';
 const ai = new AiNodeRunner();
 
 /**
- * Whether the request can be put together here, as it is, from *given*: only
- * when a run would send exactly `assemblePrompt` of it. Not when a file on a
- * port is read into its text first, not when a list is asked about one item
- * at a time, not when pictures are split off, and not when a run.js of the
- * person's own decides what to ask -- then the engine is asked, by running the
- * node with made-up answers, and it shows each request a run would send.
+ * Whether the request for the *example* can be put together here, as it is:
+ * only when a run would send exactly `assemblePrompt` of it. Not when a file
+ * on a port is read into its text first, not when a list is asked about one
+ * item at a time, not when pictures are split off, and not when a run.js of
+ * the person's own decides what to ask -- then the engine is asked, by running
+ * the node with made-up answers, and it shows each request a run would send.
+ * A port the example has no value for is not read and not fanned out.
  */
-export function previewIsLocal(node: GraphNode, given: Record<string, unknown>, reads: string[]): boolean {
+export function previewIsLocal(node: GraphNode, example: Record<string, unknown>, reads: string[]): boolean {
   const settings = ai.config(node as never);
   if (settings.runCode || settings.sendImages) return false;
-  if (reads.some((port) => given[port] !== undefined)) return false;
-  const fansOut = runsPerItem(node) && node.inputs.some((port) => port.multi && Array.isArray(given[port.id]));
+  if (reads.some((port) => example[port] !== undefined)) return false;
+  const fansOut = runsPerItem(node) && node.inputs.some((port) => port.multi && Array.isArray(example[port.id]));
   return !fansOut;
 }
 
@@ -56,7 +57,7 @@ export default function PromptPreview({ node, example }: { node: GraphNode; exam
       .map((port) => [port.id, values[port.id] ?? `⟨${port.name || port.id}⟩`]),
   );
 
-  if (!previewIsLocal(node, given, readFilePorts(node, nodes, edges))) {
+  if (!previewIsLocal(node, values, readFilePorts(node, nodes, edges))) {
     // Only the example's own values: a placeholder must not be read as a file name.
     return <EngineRequests node={node} inputs={values} own={!!settings.runCode} />;
   }

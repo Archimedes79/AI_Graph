@@ -26,6 +26,8 @@ describe('what the model receives, for the example', () => {
   it('is asked of the engine when a port is handed a file\'s text, not its path', () => {
     // It showed the path as the message; a run sends what the file says.
     expect(previewIsLocal(node(), { prompt: 'stories/a.txt' }, ['prompt'])).toBe(false);
+    // With no file in the example yet there is nothing to read: the port is shown by name.
+    expect(previewIsLocal(node(), {}, ['prompt'])).toBe(true);
   });
 
   it('is asked of the engine when pictures are split off, or a run.js of the person\'s own asks', () => {
