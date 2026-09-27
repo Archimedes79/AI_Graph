@@ -28,8 +28,8 @@ export type Wire = { source: string; target: string; sourceHandle?: string | nul
 export type AIProvider =
   'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
 
-/** A node's state on the canvas: what a run said about it, or that one is under way. */
-export type ExecutionStatus = NodeResult['status'] | ExecutionResult['status'] | 'pending' | 'running';
+/** What a run said: about one node, or about the whole run. */
+export type ExecutionStatus = NodeResult['status'] | ExecutionResult['status'];
 
 export interface Graph {
   metadata: GraphMetadata;

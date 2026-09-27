@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useState } from 'react';
 import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import type { RFNodeData } from '@/store/nodeData';
+import type { NodeResult } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { errorLine } from '@/elements/resultPreview';
@@ -28,13 +29,16 @@ const EVENT_PORT: React.CSSProperties = {
 
 // Colour AND a glyph: a red/green 8px dot is unreadable both to a screen
 // reader and to a colour-blind user scanning a canvas for the failed node.
-const statusStyles: Record<string, { color: string; glyph: string }> = {
-  success: { color: SUCCESS, glyph: '✓' },
-  error: { color: DANGER, glyph: '!' },
-  running: { color: '#f59e0b', glyph: '…' },
-  pending: { color: '#6b7280', glyph: '·' },
+// One for every status a run reports, so none goes without a dot.
+const statusStyles: Record<NodeResult['status'] | 'held', { color: string; glyph: string; title: string }> = {
+  success: { color: SUCCESS, glyph: '✓', title: 'Succeeded' },
+  // Delivered, with items lost: amber, as in the results panel.
+  partial: { color: '#f59e0b', glyph: '◐', title: 'Some items failed; the others delivered' },
+  error: { color: DANGER, glyph: '!', title: 'Failed' },
+  // Something it needs failed, the run was stopped, or its ◆ stayed shut.
+  skipped: { color: '#6b7280', glyph: '–', title: 'Did not run' },
   // Did not run this round: its ◆ stayed shut, and what it made before stands.
-  held: { color: '#6b7280', glyph: '‖' },
+  held: { color: '#6b7280', glyph: '‖', title: 'Did not run this round: what it produced in an earlier round stands' },
 };
 
 const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
@@ -49,9 +53,10 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const bgColor = builder?.color ?? SURFACE;
   const icon = builder?.icon ?? '⬜';
   const status = executionResult ? statusStyles[executionResult.held ? 'held' : executionResult.status] : undefined;
-  const statusTitle = executionResult?.held
-    ? 'Did not run this round: what it produced in an earlier round stands'
-    : executionResult?.status;
+  // A node that did not run says why, when the run said.
+  const statusTitle = executionResult?.status === 'skipped' && !executionResult.held
+    ? executionResult.messages?.[0] ?? status?.title
+    : status?.title;
   const statusColor = status?.color;
   const isGuiLike = showsPage(graphNode.node_type);
   const summary = builder?.canvasSummary?.(graphNode);
