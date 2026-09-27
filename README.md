@@ -82,8 +82,8 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **Every node's folder says what it is** — `node.json` (its settings), `interface.json`
   (what goes in and what comes out), its prompts or code, and for an AI node `run.js`:
   the call itself, as a file you can change.
-- **AI generation** — a node's code or system prompt, a plot transform, or an entire
-  graph, written from a plain-language description and left visible and editable. Code
+- **AI generation** — a node's code or system prompt, or an entire graph, written from a
+  plain-language description and left visible and editable. Code
   generation starts from a typed skeleton of the node's real ports — the types and
   example values come from the node's example (step 1), or, without one, from the last
   run — and the result is executed once and repaired
@@ -101,7 +101,8 @@ Nothing leaves the machine unless the graph itself sends it there.
   `git diff` both work on them.
 - **GUI nodes** — a page built like a document: type headings in place, press `/` to
   insert a chat, a file picker, a dropdown, a chart or a table, and deploy it together
-  with the graph.
+  with the graph. A block runs no code: a chart, a table or an image shows what arrives,
+  drawn at the block's real size, and what shapes it is a node.
 - **Triggers** — a graph starts when the tool opens, on a clock, or from its own page: a
   button, a chat message or a dropdown starts the graph *at the node it is wired to*, so
   one page can hold several tools.
@@ -111,10 +112,10 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
 - **A real editor** — code and prompts are written in CodeMirror, full-window on ⤢, or
   in your own editor with one click.
-- **Four steps, the same way everywhere** — an AI node, a code node and a chart's
-  transform are each built in the same four steps: one example of what comes in, what
-  comes out, what it should do, and the body. Get the example from the graph (⟳) or a
-  file (📂), press ▶ Try it, see what comes out (a chart is drawn). The same values are
+- **Four steps, the same way everywhere** — an AI node, a code node and a data node are
+  each built in the same four steps: one example of what comes in, what comes out, what
+  it should do, and the body. Get the example from the graph (⟳) or a file (📂), press
+  ▶ Try it, see what comes out. The same values are
   what ✨ Generate is written and verified against, and ▶ Test runs every example the
   node keeps, a judge's included.
 - **An MCP server** — `--mcp` lets Claude Code or Claude Desktop generate, validate, save

@@ -263,7 +263,7 @@ function run(inputs) {
 The AI can generate this function for you: just describe what the node should do.
 
 **The node's dialog is the order the work is done in**, the same for an AI node and a
-Data node — and for every block on a page that has code of its own:
+Data node:
 
 ```
 1  What comes in        each input: its name, and where it is wired from
@@ -344,7 +344,6 @@ my_tool/
     page/
       node.json           its settings are its blocks
       interface.json
-      chart/code.js       a block of a page, one folder down
 ```
 
 **Each fact is in one place.** `flow.json` says which node feeds which, and nothing about
@@ -372,11 +371,10 @@ starts from, and what ✨ Generate is told.
 | Code | `code.js`, `task.md`, `examples.md` |
 | AI | `run.js`, `system.md`, `message.md`, `output.md`, `output.example.md`, `examples.md` |
 | Data | `format.md` (the contract neighbours are generated against), `task.md` |
-| Input (directory) | `select.js` (the file selector), `task.md` |
-| A chart, table or image block | `code.js`, `task.md`, `example.json` (the one example input it is written and tried against; never read by a run) |
-| A file-picker block | `select.js`, `task.md` |
 
-An empty text has no file — except `run.js`, below. Settings — the model, the temperature, a node's mode — are in
+An input, an output, a trigger and a page keep no writing: all they are is settings, and a
+page's blocks are settings too. An empty text has no file — except `run.js`, below.
+Settings — the model, the temperature, a node's mode — are in
 its `node.json`, and positions in `layout.json`, so moving a node on the canvas is not a
 change to what the graph does, and an unchanged save changes no file. Renaming a node
 renames nothing on disk: folders are named by id. A new node's id is its type — `code`,
@@ -468,9 +466,9 @@ Every node's panel ends with *What this node runs*. There are two answers:
 |---|---|---|
 | Code | `code.js`, sandboxed | Calls `run(inputs, node)` and hands on what it returns. |
 | AI | `run.js` | Unchanged: the engine makes the one model call it describes (`system.md`, `message.md` filled from the inputs). Changed: it runs sandboxed like any body, and each `node.llm(...)` is a call made for it. |
-| Input | `InputNodeRunner.execute` | Hands on its text; or reads the file on `path`; or lists the folder — through `select.js`, sandboxed, if files are chosen by code. |
+| Input | `InputNodeRunner.execute` | Hands on its text; or reads the file on `path`; or lists the folder — its file types, and its subfolders when it looks into them. |
 | Data | `DataNodeRunner.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
-| GUI | `GuiNodeRunner.execute` | Hands on what each block holds and shows what arrives; a block's own code runs sandboxed before it is shown. |
+| GUI | `GuiNodeRunner.execute` | Hands on what each block holds and shows what arrives. |
 | Output | `OutputNodeRunner.execute` | Hands on what arrives as the run's result, or writes it to its file, or — in directory mode — each value, each item of a list, to a file of its own in a folder it makes when it is not there yet. |
 | Trigger | `TriggerNodeRunner.execute` | `fired`: true in a round it began. The clock is kept by whatever holds the graph. |
 | Subgraph | `SubgraphNodeRunner.execute` | Runs the graph in its folder, whole, by the engine that runs this one. |
@@ -480,9 +478,8 @@ this table cannot drift apart without a test noticing the class or method is gon
 
 ### Trying an element out: the same way everywhere
 
-An AI node, a code node and a block's transform (a chart, a table, a file selector) are
-the same loop — *here is what arrives, here is what I wrote, what comes out?* — built in
-the same four steps:
+An AI node and a code node are the same loop — *here is what arrives, here is what I
+wrote, what comes out?* — built in the same four steps:
 
 - **The example**, in step 1: one set of values, keyed by input. **⟳ From the graph**
   fills it with what really arrives — the last run's values, or, before one, what the
@@ -492,34 +489,32 @@ the same four steps:
   wired from something that hands on paths — read as a run reads it when *read file
   contents* is on) — kept relative to the folder the editor runs in — and otherwise what
   the file says, parsed when it is JSON. Typing is editing what they filled. A node with
-  no inputs has no example: Try it runs it on nothing. A file selector's example is its
-  folder's listing, which is what its code is handed: **⟳ List them** lists the folder the
-  way a run does, and it is what ✨ writes the selector against.
+  no inputs has no example: Try it runs it on nothing.
 - **▶ Try it**, under the body in step 4, runs just this element on that example, through
   the same steps a run takes (the same model, wired files read into text, one
   call per item). Nothing is saved and nothing downstream runs. An AI node shows the
   request first, as the model receives it — put together by the engine, one request per
-  item, when the node runs per item or reads files; a block *draws* what came back, at
-  the block's own proportions — the chart, looked at, before the graph has ever run.
-  A node's result is set against step 2's example output, and **Keep this result** makes
-  it that; a block's step 2 is the one thing its kind shows, so what it draws is looked
-  at, not held to an example.
-- **What ✨ sends**, beside the button, shows the request word for word: the brief above,
-  and — for a block — the page's colour scheme. The example is the sample the generated
-  body is then run against and, for a chart, *looked at* (viewBox, NaN, an empty frame,
-  labels outside the box) before you see it; what is found goes back to the model for one
-  repair.
+  item, when the node runs per item or reads files. The result is set against step 2's
+  example output, and **Keep this result** makes it that.
+- **What ✨ sends**, beside the button, shows the request word for word: the brief above.
+  The example is the sample the generated body is then run against, and what it expects
+  is checked before you see it; what falls short goes back to the model for one repair.
 
 ### Every element works the same way
 
-A node and a GUI widget are the same kind of thing, and they are configured the same
-way: a name, one file behind it, one example input, and one ✨ **Generate** button that
-writes the body from your words plus what the graph around it says (what the neighbours
-hand on and want, and the example).
+A node that writes a body is configured the same way whatever its kind: a name, one file
+behind it, one example input, and one ✨ **Generate** button that writes the body from
+your words plus what the graph around it says (what the neighbours hand on and want, and
+the example).
 
-What the element emits is said in the same dialog, in step 2: what the next nodes want
-and the shape a run kept, and your words for what they leave out — for a block, the one
-thing its kind shows. There is no separate Output tab.
+What the node emits is said in the same dialog, in step 2: what the next nodes want and
+the shape a run kept, and your words for what they leave out. There is no separate Output
+tab.
+
+A block on a page writes nothing: it has settings, and shows or hands on what it holds. A
+chart, a table or an image shows what arrives, and its dialog says in one sentence what
+that should be; whatever has to be shaped into it first is a code node wired in before
+it.
 
 ### Writing a body: two editors
 
@@ -528,7 +523,7 @@ numbers, folding, bracket matching, search with Ctrl+F, Tab that indents. **⤢*
 same document across the whole window; Esc comes back.
 
 For longer work there is your own editor. In a project, **↗ Open in my editor** in a
-node's (or block's) dialog saves the project and opens the node's file — in VS Code when
+node's dialog saves the project and opens the node's file — in VS Code when
 its `code` command is installed, otherwise in whatever the system opens that file type
 with — and what you save there appears in the graph by itself. Only a project's own
 files under `nodes/` can be opened this way, and only from the machine the editor runs on.
@@ -670,9 +665,9 @@ inputs and outputs always reflect exactly what its widgets are capable of.**
 | Widget kind | Ports it contributes |
 |---|---|
 | `input_picker` (mode `file`) | 1 output (file path) |
-| `input_picker` (mode `directory`) | 1 output (list of file paths, filtered by `extensions`) |
+| `input_picker` (mode `directory`) | 1 output (list of file paths: the folder's files of the types in `extensions`, its subfolders' too when `recursive`) |
 | `text_io` | 1 input + 1 output (text passthrough; precedence depends on its `mode`) |
-| `plot_window` | 1 input only — display-only, no downstream port, like an `output` node with `write_mode="window"` |
+| `plot_window`, `table`, `image_view` | 1 input only — display-only, no downstream port: each shows what arrives, and runs no code of its own |
 | `select`, `slider` | 1 output (the choice, the number) |
 | `button` | 1 output (a boolean: pressed just now). Pressing it starts the graph where it is wired to — usually a node's ◆ run port |
 | `chat` | 2 outputs (`_out`: the message just sent, `_history`: everything before it) + 1 input (`_in`: the reply) |
@@ -704,6 +699,13 @@ files; a native browser file dialog cannot be used here, since browsers reveal o
 file's name and never its location. Deployed tools get the same picker, but only when
 bound to localhost (the default): started with `--host 0.0.0.0` the browse endpoint is
 switched off rather than exposing the host's filesystem listing to the network.
+
+**A folder is a listing**, the same for an input node in directory mode and a picker in
+directory mode: the folder, its file types (`extensions`, e.g. `.csv, .txt` — compared
+without regard to case) and whether it looks into subfolders (`recursive`). It hands on
+every file it lists, sorted; its dialog shows that list when asked, made the way a run
+makes it. To use only some of the files, wire a code node after it that returns the ones
+to keep.
 
 ### The GUI window and designer
 
@@ -775,34 +777,24 @@ instead of being cropped under a column. See
 [examples/population_plotter](../examples/population_plotter/), where the code node
 parses a CSV and writes no SVG at all.
 
-For anything those four shapes cannot do, `plot_window` is the one block whose body the
-**page** runs, not a run:
+A figure is laid out for the pixels the block actually has, so a resize redraws it with
+**no run at all**, and a change of the page's colour scheme recolours it. There is no
+inner coordinate space anywhere: a drawing built for a guessed 720×340 and stretched into
+a block measured at 1084×470 puts its 11px labels on screen at 15px and wastes the
+difference as letterbox.
 
-```js
-function draw(data, window) { … }   // window: { width, height, scheme, dark }
-```
+For anything those four shapes cannot do — a scatter, several series — a node upstream
+can hand the chart a finished **SVG** document, a string starting with `<svg`, and the
+chart shows it as it stands, scripts and event handlers stripped. Give it a `viewBox` and
+`width="100%" height="100%"` so it scales to the block; `var(--plot-1)` … `var(--plot-8)`
+and `currentColor` follow the page's scheme.
 
-It returns a figure, a list of points, or a string of SVG, and it is called again
-whenever the data, the block's size or the page's colour scheme changes. So a chart is
-laid out for the pixels it actually has, a resize or a change of scheme redraws it with
-**no run at all**, and `data` being `null` before anything has arrived is the same
-function rather than a state the app owns. Everything a chart needs to know it is now
-told; the fixed frame and the "the scheme may change after you are done" caveat existed
-only because a body running on the server could not be.
-
-There is no inner coordinate space left anywhere: the app draws in the block's own
-pixels, exactly as a body is told to. A drawing built for a guessed 720×340 and stretched
-into a block measured at 1084×470 — which is what the plotting example used to do — puts
-its 11px labels on screen at 15px and wastes the difference as letterbox.
-
-It runs in a **worker**: no DOM, no network, no modules — data in, points or a string of
-SVG out. A graph travels, and a body that draws a bar chart has no business with the
-page's origin. A body that will not finish is given four seconds and then destroyed, and
-the block says so where the chart would be. A chart with no body draws whatever arrived.
-
-A **table** or an **image** is different: its transform reshapes data, has no use for the
-window, and still runs once per run where its result can be reused. Same snippet contract
-as a code node: `run(inputs) -> {"value": …}`.
+A chart has no code of its own, and neither has any other block: what shapes rows into
+points is a code node wired in before it. A **table** shows rows — a list of objects,
+whose keys become its columns, or a list of lists whose first row is the header. An
+**image** shows a file path, an http(s) URL or a data URL, or a list of them as a contact
+sheet: a run reads a path into the picture, since the machine the graph runs on is not
+the one showing the page.
 
 ### Generating whole graphs with AI
 

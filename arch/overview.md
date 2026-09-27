@@ -104,14 +104,14 @@ flowchart LR
     ER2["ElementRunner"] --> WR["WidgetRunner"]
     WR --> KWR["6 × #lt;Kind#gt;WidgetRunner"]
     WR --> SR["StaticWidgetRunner"] --> KSR["text, divider, spacer"]
-    WR --> DR["DisplayWidgetRunner"] --> TR["TransformingDisplayRunner"] --> KTR["plot_window, table, image_view"]
+    WR --> DR["DisplayWidgetRunner"] --> KTR["plot_window, table, image_view"]
   end
   subgraph WB["Widgets, editor: widgets/#lt;kind#gt;/#lt;Kind#gt;WidgetGuiBuilder.ts"]
     direction TB
     EG2["ElementGuiBuilder"] --> WG["WidgetGuiBuilder"]
     WG --> KWG["6 × #lt;Kind#gt;WidgetGuiBuilder"]
     WG --> SG["StaticWidgetGuiBuilder"] --> KSG["text, divider, spacer"]
-    WG --> DG["DisplayWidgetGuiBuilder"] --> TG["TransformingDisplayGuiBuilder"] --> KTG["plot_window, table, image_view"]
+    WG --> DG["DisplayWidgetGuiBuilder"] --> KTG["plot_window, table, image_view"]
   end
   NE -. mirrors .- NB
   WE -. mirrors .- WB
@@ -119,26 +119,25 @@ flowchart LR
 
 | Diagram node | Path | Notes |
 |---|---|---|
-| `ElementRunner` | [`engine/src/elements/ElementRunner.ts`](../engine/src/elements/ElementRunner.ts) | `config()`, `texts()`, `logic()`, `catchesErrors()`, `runSnippet()` ┊ build time: `generation()`, `deployNeeds()`; `WhatRuns`; services in [`Runtime.ts`](../engine/src/elements/Runtime.ts) |
+| `ElementRunner` | [`engine/src/elements/ElementRunner.ts`](../engine/src/elements/ElementRunner.ts) | `config()`, `texts()`, `logic()`, `catchesErrors()` ┊ build time: `generation()`, `deployNeeds()`; `WhatRuns`; services in [`Runtime.ts`](../engine/src/elements/Runtime.ts) |
 | `NodeRunner` | [`engine/src/elements/NodeRunner.ts`](../engine/src/elements/NodeRunner.ts) | `derivedPorts`, `execute`, `display`, `runtimeRequirements`, `settleMemory`, `blocks`, `isResult`, `resultLabel`, `valuePorts`, `keepsOutputInterface`, and what the executor reads; `resultKeys` (the key each result node is handed on under: the first under a label keeps it) ┊ build time: `whatRuns`, `problems`, `graphAuthorNote`, `referencedPaths` |
-| `8 × <Kind>NodeRunner` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeRunner.ts`; listed in [`registry.ts`](../engine/src/elements/registry.ts), which also says which `Generation` an element name has (`registry.generation`: a node type's, else a block kind's) |
+| `8 × <Kind>NodeRunner` | [`engine/src/elements/nodes/`](../engine/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeRunner.ts`; listed in [`registry.ts`](../engine/src/elements/registry.ts), which also says which `Generation` a node type has (`registry.generation`; a block has none) |
 | `WidgetRunner` | [`engine/src/elements/WidgetRunner.ts`](../engine/src/elements/WidgetRunner.ts) | `ports`, `execute`, `firesRun`, `settle`, `displayValue` ┊ build time: `receives`, `problems`, `graphAuthorNote` |
-| `6 × <Kind>WidgetRunner` | [`engine/src/elements/widgets/<kind>/<Kind>WidgetRunner.ts`](../engine/src/elements/widgets/) | input_picker, text_io, select, slider, button, chat; listed in [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts) |
+| `6 × <Kind>WidgetRunner` | [`engine/src/elements/widgets/<kind>/<Kind>WidgetRunner.ts`](../engine/src/elements/widgets/) | input_picker, text_io, select, slider, button, chat; listed in [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts). A folder picker lists its folder through [`folderListing.ts`](../engine/src/elements/folderListing.ts), the function an input node's directory mode lists with |
 | `StaticWidgetRunner` | [`widgets/StaticWidgetRunner.ts`](../engine/src/elements/widgets/StaticWidgetRunner.ts) | no ports: part of the page, not the graph; its kinds are `text`, `divider`, `spacer` (the diagram's list) |
-| `DisplayWidgetRunner` | [`widgets/DisplayWidgetRunner.ts`](../engine/src/elements/widgets/DisplayWidgetRunner.ts) | one input, nothing out |
-| `TransformingDisplayRunner` | [`widgets/TransformingDisplayRunner.ts`](../engine/src/elements/widgets/TransformingDisplayRunner.ts) | an optional transform before drawing, and what each kind draws as it arrives (`draws`, `readsPaths`); its kinds are `plot_window` (with `check.ts`, `view.ts`), `table`, `image_view` (the diagram's list) |
+| `DisplayWidgetRunner` | [`widgets/DisplayWidgetRunner.ts`](../engine/src/elements/widgets/DisplayWidgetRunner.ts) | one input, nothing out: shows what arrives, runs no code, and says what it draws (`draws`, what a node wired into it `receives`); its kinds are `plot_window` (with `view.ts`), `table`, `image_view` (the diagram's list; an image reads a path into the picture, `displayValue`) |
 | `ElementGuiBuilder` | [`editor/src/elements/ElementGuiBuilder.ts`](../editor/src/elements/ElementGuiBuilder.ts) | `Panel` (lazy), `generation` |
 | `NodeGuiBuilder` | [`editor/src/elements/NodeGuiBuilder.ts`](../editor/src/elements/NodeGuiBuilder.ts) | `label`, `icon`, `color`, `hint`, `AdvancedPanel`, `describeOutput`/`canvasSummary`; the four steps' declarations, which the shells ask instead of naming a kind: `stepped`, `exampleInput`, `ownsDescription`, `portEditing`/`portHint`, `wantsOn`, `restingValue`/`restingFile`, `publishedDescription`; `NodePanelProps` |
 | `8 × <Kind>NodeGuiBuilder` | [`editor/src/elements/nodes/`](../editor/src/elements/nodes/) | `nodes/<kind>/<Kind>NodeGuiBuilder.ts` beside `<Kind>NodePanel.tsx`; listed in [`registry.ts`](../editor/src/elements/registry.ts). The ai node's panel hands the four steps its answer box, and [`ai/keptAnswer.ts`](../editor/src/elements/nodes/ai/keptAnswer.ts) is what Keep puts in it |
 | `WidgetGuiBuilder` | [`editor/src/elements/WidgetGuiBuilder.ts`](../editor/src/elements/WidgetGuiBuilder.ts) | `create(label, mode)`, `label`, `defaultSpan`, `defaultTone`, `runOnChangeHint`, `paletteEntries` (what the designer's palette offers of the kind), `InlineEditor` (a block typed where it stands: the text kind's [`TextInPlace.tsx`](../editor/src/elements/widgets/text/TextInPlace.tsx)); `WidgetPanelProps` |
 | `6 × <Kind>WidgetGuiBuilder` | [`editor/src/elements/widgets/<kind>/<Kind>WidgetGuiBuilder.ts`](../editor/src/elements/widgets/) | beside `<Kind>WidgetView.tsx` and, if it has settings, `<Kind>WidgetPanel.tsx`; listed in [`widgets/roster.ts`](../editor/src/elements/widgets/roster.ts) |
 | `StaticWidgetGuiBuilder` | [`widgets/StaticWidgetGuiBuilder.ts`](../editor/src/elements/widgets/StaticWidgetGuiBuilder.ts) | starts unnamed: page furniture has no ports to name |
-| `DisplayWidgetGuiBuilder` | [`widgets/DisplayWidgetGuiBuilder.ts`](../editor/src/elements/widgets/DisplayWidgetGuiBuilder.ts) | shows its one input; no output, so the block editor offers no "starts the graph" |
-| `TransformingDisplayGuiBuilder` | [`widgets/TransformingDisplayGuiBuilder.ts`](../editor/src/elements/widgets/TransformingDisplayGuiBuilder.ts) | owns the one panel of table and image, which says in step 2 what the kind's runner `draws`; a chart's own body runs in the page (`plot_window/draw.ts`, a Web Worker) |
+| `DisplayWidgetGuiBuilder` | [`widgets/DisplayWidgetGuiBuilder.ts`](../editor/src/elements/widgets/DisplayWidgetGuiBuilder.ts) | owns the one panel of chart, table and image ([`DisplayWidgetPanel.tsx`](../editor/src/elements/widgets/DisplayWidgetPanel.tsx)): one sentence of what the kind's runner `draws`; no output, so the block editor offers no "starts the graph" |
 
 Also related, not drawn:
 
-- `body.ts`: [`engine/src/elements/body.ts`](../engine/src/elements/body.ts), `runBody`: the one way an authored body runs *on Node* — `run(inputs, node)`, sandboxed, with `node.llm`. The one exception is a chart's `draw(data, window)`, which runs in a browser Web Worker: see [`plot_window/draw.ts`](../editor/src/elements/widgets/plot_window/draw.ts)
+- `body.ts`: [`engine/src/elements/body.ts`](../engine/src/elements/body.ts), `runBody`: the one way an authored body runs — `run(inputs, node)`, on Node, sandboxed, with `node.llm`. Only nodes have bodies: a block writes nothing
+- `FolderListing.tsx`: [`editor/src/elements/fields/FolderListing.tsx`](../editor/src/elements/fields/FolderListing.tsx), what a folder adds to its path and file types, for the input node and the folder picker alike: subfolders, the one line that choosing some files is a code node after it, and the list as a run makes it
 - `times.test.ts`: [`engine/src/elements/times.test.ts`](../engine/src/elements/times.test.ts) · [`editor/…`](../editor/src/elements/times.test.ts), build time and run time inside one class: the bars, the order, and (in the engine) that no run reaches a build-time member; in the editor, that a `GuiBuilder`'s run-time bar is empty, with `runtime/boundary.test.ts` holding that a tool never loads one
 
 Shared by elements, not drawn: [`authoring/generation.ts`](../engine/src/authoring/generation.ts)
@@ -163,7 +162,6 @@ classDiagram
     texts()
     logic()
     catchesErrors()
-    runSnippet()
     generation()
     deployNeeds()
   }
@@ -202,9 +200,9 @@ classDiagram
 | Diagram node | Path | Notes |
 |---|---|---|
 | `ElementRunner` | [`engine/src/elements/ElementRunner.ts`](../engine/src/elements/ElementRunner.ts) | `Logic` ([`authoring/logic.ts`](../engine/src/authoring/logic.ts)) is what `logic()` returns |
-| `NodeRunner` | [`engine/src/elements/NodeRunner.ts`](../engine/src/elements/NodeRunner.ts) | its members in three bars; `problems()` is answered by ai, code, gui, subgraph and trigger (and, on the widget side, by the chart) |
+| `NodeRunner` | [`engine/src/elements/NodeRunner.ts`](../engine/src/elements/NodeRunner.ts) | its members in three bars; `problems()` is answered by ai, code, gui, subgraph and trigger |
 | `InputNodeRunner` … `TriggerNodeRunner` | [`engine/src/elements/nodes/<kind>/<Kind>NodeRunner.ts`](../engine/src/elements/nodes/) | `AiNodeRunner` also has `prompt.ts`, `ask.ts`, `runTemplate.ts`; `SubgraphNodeRunner` has `boundary.ts` |
-| `GuiNodeRunner` | [`engine/src/elements/nodes/gui/GuiNodeRunner.ts`](../engine/src/elements/nodes/gui/GuiNodeRunner.ts) | a composite: its ports are its widgets'; `showBlock` hands a value through untouched when `bodyDrawsOnThePage` |
+| `GuiNodeRunner` | [`engine/src/elements/nodes/gui/GuiNodeRunner.ts`](../engine/src/elements/nodes/gui/GuiNodeRunner.ts) | a composite: its ports are its widgets'; `display` shows each display block what arrived, through its `displayValue` |
 | `WidgetRunner` | [`engine/src/elements/WidgetRunner.ts`](../engine/src/elements/WidgetRunner.ts) | see the next diagram |
 
 ## Class diagram: widget runners
@@ -214,7 +212,6 @@ classDiagram
   class WidgetRunner {
     <<abstract>>
     widgetKind
-    bodyDrawsOnThePage
     ports()
     execute()
     firesRun()
@@ -222,16 +219,13 @@ classDiagram
     clearsValueAfterRun()
     displayValue()
     receives()
-    problems()
   }
   class StaticWidgetRunner {
     <<abstract>>
   }
   class DisplayWidgetRunner {
     <<abstract>>
-  }
-  class TransformingDisplayRunner {
-    <<abstract>>
+    draws()
   }
   ElementRunner <|-- WidgetRunner
   WidgetRunner <|-- InputPickerWidgetRunner
@@ -245,20 +239,19 @@ classDiagram
   StaticWidgetRunner <|-- TextWidgetRunner
   StaticWidgetRunner <|-- DividerWidgetRunner
   StaticWidgetRunner <|-- SpacerWidgetRunner
-  DisplayWidgetRunner <|-- TransformingDisplayRunner
-  TransformingDisplayRunner <|-- PlotWindowWidgetRunner
-  TransformingDisplayRunner <|-- TableWidgetRunner
-  TransformingDisplayRunner <|-- ImageViewWidgetRunner
+  DisplayWidgetRunner <|-- PlotWindowWidgetRunner
+  DisplayWidgetRunner <|-- TableWidgetRunner
+  DisplayWidgetRunner <|-- ImageViewWidgetRunner
 ```
 
-This one has 16 boxes instead of 12: it is a plain tree, and cutting it in two would hide the point, which is that
-three abstract levels carry what 12 kinds share.
+This one has 15 boxes instead of 12: it is a plain tree, and cutting it in two would hide the point, which is that
+two abstract levels carry what 12 kinds share.
 
 | Diagram node | Path | Notes |
 |---|---|---|
-| `WidgetRunner` | [`engine/src/elements/WidgetRunner.ts`](../engine/src/elements/WidgetRunner.ts) | `bodyDrawsOnThePage` is true only for the chart |
-| `StaticWidgetRunner`, `DisplayWidgetRunner`, `TransformingDisplayRunner` | [`engine/src/elements/widgets/`](../engine/src/elements/widgets/) | no ports · one input, nothing out · an optional transform before drawing |
-| `<Kind>WidgetRunner` | [`engine/src/elements/widgets/<kind>/<Kind>WidgetRunner.ts`](../engine/src/elements/widgets/) | listed in [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts); `PlotWindowWidgetRunner` keeps `check.ts` and `view.ts` beside it |
+| `WidgetRunner` | [`engine/src/elements/WidgetRunner.ts`](../engine/src/elements/WidgetRunner.ts) | no block writes a body: `logic()`, `texts()` and `generation()` answer nothing for every kind |
+| `StaticWidgetRunner`, `DisplayWidgetRunner` | [`engine/src/elements/widgets/`](../engine/src/elements/widgets/) | no ports · one input, nothing out: shows what arrives, and says what it draws |
+| `<Kind>WidgetRunner` | [`engine/src/elements/widgets/<kind>/<Kind>WidgetRunner.ts`](../engine/src/elements/widgets/) | listed in [`widgets/roster.ts`](../engine/src/elements/widgets/roster.ts); `PlotWindowWidgetRunner` keeps `view.ts` (the chart's margins) beside it |
 
 ## Class diagram: the builder side
 
@@ -299,15 +292,12 @@ classDiagram
   }
   class DisplayWidgetGuiBuilder {
     <<abstract>>
-  }
-  class TransformingDisplayGuiBuilder {
-    <<abstract>>
+    runner
   }
   ElementGuiBuilder <|-- NodeGuiBuilder
   ElementGuiBuilder <|-- WidgetGuiBuilder
   WidgetGuiBuilder <|-- StaticWidgetGuiBuilder
   WidgetGuiBuilder <|-- DisplayWidgetGuiBuilder
-  DisplayWidgetGuiBuilder <|-- TransformingDisplayGuiBuilder
   ElementRunner .. ElementGuiBuilder : mirrors
   NodeRunner .. NodeGuiBuilder : mirrors
   WidgetRunner .. WidgetGuiBuilder : mirrors
@@ -315,10 +305,10 @@ classDiagram
 
 | Diagram node | Path | Notes |
 |---|---|---|
-| `ElementGuiBuilder` | [`editor/src/elements/ElementGuiBuilder.ts`](../editor/src/elements/ElementGuiBuilder.ts) | the two lazily loaded members: `Panel`, `generation` |
+| `ElementGuiBuilder` | [`editor/src/elements/ElementGuiBuilder.ts`](../editor/src/elements/ElementGuiBuilder.ts) | the two lazily loaded members: `Panel`, `generation` (a node's; no block has one) |
 | `NodeGuiBuilder` | [`editor/src/elements/NodeGuiBuilder.ts`](../editor/src/elements/NodeGuiBuilder.ts) | builder only; what a node *is* on load and save is in [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) |
 | `WidgetGuiBuilder` | [`editor/src/elements/WidgetGuiBuilder.ts`](../editor/src/elements/WidgetGuiBuilder.ts) | what the *page* draws is in [`page/blocks.ts`](../editor/src/page/blocks.ts) and the `<Kind>WidgetView.tsx` files |
-| `TransformingDisplayGuiBuilder` | [`editor/src/elements/widgets/TransformingDisplayGuiBuilder.ts`](../editor/src/elements/widgets/TransformingDisplayGuiBuilder.ts) | owns the one panel of table and image; the chart's own body runs in the page (`plot_window/draw.ts`, a Web Worker) |
+| `DisplayWidgetGuiBuilder` | [`editor/src/elements/widgets/DisplayWidgetGuiBuilder.ts`](../editor/src/elements/widgets/DisplayWidgetGuiBuilder.ts) | owns the one panel of chart, table and image: one sentence of what its `runner` draws |
 
 ## Class diagram: runs and their state
 
@@ -514,8 +504,8 @@ flowchart TD
 | `Graph canvas` | [`editor/src/canvas/GraphCanvas.tsx`](../editor/src/canvas/GraphCanvas.tsx), [`GraphNodeView.tsx`](../editor/src/canvas/GraphNodeView.tsx) | ReactFlow; `nodeRemoval.ts`, `PortsEditor.tsx`, [`portIds.ts`](../editor/src/canvas/portIds.ts) (the port names the node dialog will not save: none, twice, the error port's) |
 | `Node editor` | [`editor/src/canvas/NodeEditor.tsx`](../editor/src/canvas/NodeEditor.tsx) | the node dialog: draws the element's own `Panel` — for a body-writing node the four steps (`authoring/NodeSteps`), into which it hands the port lists when the node is `stepped` — and `AdvancedPanel` folded under it; [`nodeDraft.ts`](../editor/src/canvas/nodeDraft.ts) (`withSetting`: a setting's change to the draft, its ports following, asked against the stored node so a wire keeps its port -- or a function of the setting, for a write that lands after a wait; `withPorts`: a ports edit, the examples' keys following the ports; `saveDraft`: Save, the wires following the ports and the description what the element publishes) |
 | `Page + designer` | [`editor/src/page/`](../editor/src/page/) | `GuiPage.tsx` draws a page (shared with the tool page); `DesignerTab.tsx`, `DesignerPalette.tsx` (where each block kind's own `paletteEntries` stand, and `newBlock`: the block an entry adds, named for its kind), `WidgetEditor.tsx`, `pageWrite.ts` (`routePage`, and `patchBlock`: one block changed on the page as the store holds it when the change lands); [`PageHeading.tsx`](../editor/src/page/PageHeading.tsx) (a page's name and what it is for: a gui node has no dialog, so this is where they are written); [`TopGraphOnly.tsx`](../editor/src/page/TopGraphOnly.tsx) (the designer and the preview only in the graph at the top, where a page can be); [`typedValues.ts`](../editor/src/page/typedValues.ts) (what was typed into a live block, shown while the block still holds it); [`useDeliveredRun.ts`](../editor/src/page/useDeliveredRun.ts) (ask what a graph needs, write the answers by the engine's `applyRuntimeValues`, then run: for the tool page, the preview and the toolbar's ▶ Run alike) |
-| `Element builders` | [`editor/src/elements/`](../editor/src/elements/) | `registry.ts`, `ElementGuiBuilder.ts`, one folder per element — see [elements](#elements). A chart's view, `plot_window/PlotWindowWidgetView.tsx`, runs the body's `draw(data, window)` in a Web Worker (`draw.ts`), redrawn on a resize or a change of scheme with no run; `PlotChart.tsx` lays a figure `{kind, title, points}` out itself |
-| `Authoring` | [`editor/src/authoring/`](../editor/src/authoring/) | the four steps of every dialog: `FourSteps` and `Step`, drawn by `NodeSteps` for a node and `SelectorSteps` (and the block panels) for the rest; what a click in them does, apart from drawing (`nodeStepRules.ts`, `blockStepRules.ts`). Step 1: `ExampleInputField`, the one example (`examplePair.ts`), ⟳ `fromTheGraph.ts` (one procedure for a node and a block, handed to a node's panel by the dialog as `steps.fromGraph` beside `steps.graph`, the graph with the draft in it -- as `WidgetSteps` hands a block's), 📂 and a selector's listing read as a run reads them (`readAsRun.ts`), and the words ✨ is given for a selector at both its levels (`selectorGeneration.ts`). Step 2: `derivedOutput.ts` (what the graph already says a node hands on), `OutputWordsField`, `outputFormat.ts`, `OutputInterface` (the kept shape), `TestEveryExample` (▶ Test). Step 4: `GeneratedBody`, `CodeField`/`CodeSurface` (CodeMirror, lazy), `RunCode` (`run.js`), `TryItInline`, `OpenInMyEditor` (save the project, then hand a node's or block's file to the person's editor). What ✨ is told: `nodeFacts.ts`, `blockFacts.ts`, `generationContext.ts`, `logic.ts`, shown by `WhatSends`; `useGenerate`, `LiveGeneration`, `GenerationTranscript`, `generation.ts`; the page-wide sweep (`graphSweep.ts`, `useGraphSweep.ts`); `useTyped.ts` (a box keeps what is typed while its stored form comes back tidied) |
+| `Element builders` | [`editor/src/elements/`](../editor/src/elements/) | `registry.ts`, `ElementGuiBuilder.ts`, one folder per element — see [elements](#elements). A chart's view, `plot_window/PlotWindowWidgetView.tsx`, measures the block and hands what arrived to `PlotChart.tsx`, which lays a figure `{kind, title, points}` out at that size (or shows finished SVG), redrawn on a resize with no run; the canvas previews what arrived with the same `PlotChart` |
+| `Authoring` | [`editor/src/authoring/`](../editor/src/authoring/) | the four steps of a node's dialog: `FourSteps` and `Step`, drawn by `NodeSteps`; what a click in them does, apart from drawing (`nodeStepRules.ts`). Step 1: `ExampleInputField`, the one example (`examplePair.ts`), ⟳ `fromTheGraph.ts` (handed to a node's panel by the dialog as `steps.fromGraph` beside `steps.graph`, the graph with the draft in it), 📂 and a folder's listing read as a run reads them (`readAsRun.ts`). Step 2: `derivedOutput.ts` (what the graph already says a node hands on), `OutputWordsField`, `outputFormat.ts`, `OutputInterface` (the kept shape), `TestEveryExample` (▶ Test). Step 4: `GeneratedBody`, `CodeField`/`CodeSurface` (CodeMirror, lazy), `RunCode` (`run.js`), `TryItInline`, `OpenInMyEditor` (save the project, then hand a node's file to the person's editor). What ✨ is told: `nodeFacts.ts`, `generationContext.ts`, `logic.ts`, shown by `WhatSends`; `useGenerate`, `LiveGeneration`, `GenerationTranscript`, `generation.ts`; the graph-wide sweep over the nodes (`graphSweep.ts`, `useGraphSweep.ts`); `useTyped.ts` (a box keeps what is typed while its stored form comes back tidied) |
 | `Graph store` | [`editor/src/store/graphStore.ts`](../editor/src/store/graphStore.ts) | the open graph, undo, a new one (`newGraph`, from the engine's `defaultMetadata`), saving it (`save`: what counts as saved is what was sent), the output shape a node keeps from a run or ✨ (`shapeToKeep`), runs (start → poll `run` → replay `memory`); `nodeData.ts`, `executionStatus.ts`; [`portRenames.ts`](../editor/src/store/portRenames.ts) (which port became which across an edit of a node's ports, so a renamed port keeps its wires -- and, edit by edit, its example values: `renamedPorts`) |
 | `API client` | [`editor/src/api/client.ts`](../editor/src/api/client.ts) | the contract's client: `call(route, request)`, `ApiError`, `watchGeneration`; `errorText.ts` |
 | `Document` | [`editor/src/document/`](../editor/src/document/) | what a graph is to the editor: [`nodeKinds.ts`](../editor/src/document/nodeKinds.ts) (a node of each type, loaded and saved; `CODE_STARTER`, a new code node's body), `baseNodeConfig.ts`, `guiWidgets.ts` (a page's ports, as the engine derives them), `layout.ts` (the grid), [`wires.ts`](../editor/src/document/wires.ts) (`graphEdge`: a canvas wire as the saved edge, for every place that asks the wiring as a file has it) |
