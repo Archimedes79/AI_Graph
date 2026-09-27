@@ -704,7 +704,7 @@ describe('graphStore.connect', () => {
   });
 
   it('does not draw a wire twice, whatever the one already there is called', () => {
-    // A wire read from an older file keeps the id it was saved with.
+    // A graph pasted in or designed by ✨ may call its wires anything.
     loadTestGraph(nodes(), [{ id: 'e1', source_node_id: 'a', source_port_id: 'out', target_node_id: 'b', target_port_id: 'in' }]);
     useGraphStore.getState().connect({ source: 'a', sourceHandle: 'out', target: 'b', targetHandle: 'in' });
     expect(useGraphStore.getState().rfEdges).toHaveLength(1);

@@ -334,15 +334,10 @@ function withNested(outer: Graph, nodeId: string, inner: Graph): Graph {
 function normalizeGraph(graph: Graph): Graph {
   const nodes = Array.isArray(graph.nodes) ? graph.nodes.map((node) => normalizeGraphNode(node)) : [];
   const nodeIds = new Set(nodes.map((node) => node.id));
+  // A wire is taken as the graph says it (`GraphEdge`); one to a node that is
+  // not there is dropped, as the engine's `check` would report it.
   const edges = Array.isArray(graph.edges)
-    ? graph.edges
-        .filter((edge) => nodeIds.has(edge.source_node_id) && nodeIds.has(edge.target_node_id))
-        .map((edge, index) => ({
-          ...edge,
-          id: edge.id || `edge-${index}-${Date.now()}`,
-          source_port_id: edge.source_port_id || 'output',
-          target_port_id: edge.target_port_id || 'input',
-        }))
+    ? graph.edges.filter((edge) => nodeIds.has(edge.source_node_id) && nodeIds.has(edge.target_node_id))
     : [];
 
   return {
@@ -489,8 +484,8 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     connect: (wire) => {
-      // Named the way flow.json writes a wire, and known by its two ends: a wire
-      // read from an older file keeps the id it was saved with.
+      // Named the way flow.json writes a wire, and known by its two ends: a
+      // graph pasted in or designed by ✨ may call its wires anything.
       const id = wireOf(graphEdge(wire));
       const joins = (edge: Edge): boolean => edge.source === wire.source && edge.target === wire.target
         && (edge.sourceHandle ?? '') === (wire.sourceHandle ?? '') && (edge.targetHandle ?? '') === (wire.targetHandle ?? '');

@@ -80,8 +80,9 @@ export function blockValue(
 
 /**
  * What a run put on one block: the engine's `display`, which is what arrived
- * *through the block's own transform*. A server from before `display` existed
- * answers without one, and then what arrived is the best there is.
+ * *through the block's own transform*. A block that also hands something on --
+ * a chat, a box that is typed into and shows -- is no display, and shows what
+ * arrived on its port.
  */
 export function shownOn(result: ExecutionResult | null, nodeId: string, widgetId: string): unknown {
   const ran = result?.node_results.find((r) => r.node_id === nodeId);
