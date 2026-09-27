@@ -1,14 +1,10 @@
 import { WidgetRunner, type Widget } from '../../WidgetRunner.ts';
 import { port } from '../../port.ts';
+import { selectChoice, selectOptions } from './choice.ts';
 
 export interface SelectConfig {
   value: string;
   options: string[];
-}
-
-/** One option per line; blank lines dropped, so a stray empty row is not a choice. */
-function parseOptions(raw: string): string[] {
-  return raw.split('\n').map((line) => line.trim()).filter(Boolean);
 }
 
 /**
@@ -23,12 +19,8 @@ export class SelectWidgetRunner extends WidgetRunner<SelectConfig> {
   readonly widgetKind = 'select' as const;
 
   config(widget: Widget): SelectConfig {
-    const options = parseOptions(String(widget.config.options ?? ''));
-    const stored = String(widget.config.value ?? '');
-    // A value from a retired option, or none yet: the first option is the
-    // honest default, since that is what the dropdown itself would show.
-    const value = options.includes(stored) ? stored : (options[0] ?? '');
-    return { value, options };
+    const options = selectOptions(widget.config.options);
+    return { value: selectChoice(options, widget.config.value), options };
   }
 
   /**

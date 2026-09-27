@@ -6,7 +6,8 @@ import { blockValue, GuiBlock, PageGrid, shownOn, type SurfaceBlock } from './Gu
 import { cellsFromDrag, resolveWidgetLayout, GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_CELL } from '@/document/layout';
 import QuickInsert from './QuickInsert';
 import type { PaletteEntry } from './DesignerPalette';
-import { TEXT_ROLES, textRole } from '@/elements/widgets/text/TextWidgetView';
+import { TEXT_ROLES } from '@/elements/widgets/text/TextWidgetView';
+import { textRole } from '@engine/elements/widgets/text/role.ts';
 import { widgetFiresRun } from '@/document/guiWidgets';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
 

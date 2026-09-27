@@ -2,18 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import type { WidgetViewProps } from '../WidgetView';
 import Markdown from '@/ui/Markdown';
 import { ACCENT_FILL, DIMMER, FIELD, LINE, MUTED, PRIMARY_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
-
-interface ChatMessage { role: 'user' | 'assistant'; text: string }
-interface ChatValue { messages: ChatMessage[]; pending: string }
-
-/** The block's stored value, whatever state an older file or an empty block left it in. */
-function read(value: unknown): ChatValue {
-  const stored = (value && typeof value === 'object' ? value : {}) as Partial<ChatValue>;
-  return {
-    messages: Array.isArray(stored.messages) ? stored.messages.filter((m) => typeof m?.text === 'string') : [],
-    pending: typeof stored.pending === 'string' ? stored.pending : '',
-  };
-}
+import { chatValue, type ChatMessage, type ChatValue } from '@engine/elements/widgets/chat/value.ts';
 
 /**
  * Runtime chat widget: the conversation, and the box that continues it.
@@ -30,7 +19,7 @@ function read(value: unknown): ChatValue {
  * fails leaves it, so the message is still in the box to send again.
  */
 export default function ChatWidgetView({ value, onChange, onTrigger, busy }: WidgetViewProps) {
-  const { messages, pending } = read(value);
+  const { messages, pending } = chatValue(value);
   const end = useRef<HTMLDivElement | null>(null);
   // While its answer is on the way the message is shown as said, not as being typed.
   const sending = busy === true && pending.trim() !== '';

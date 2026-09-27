@@ -1,5 +1,6 @@
 import { DIMMER, MUTED } from '@/ui/theme';
 import type { WidgetPanelProps } from '../../WidgetGuiBuilder';
+import { textRole } from '@engine/elements/widgets/text/role.ts';
 
 /**
  * Prose. The role -- heading, body, caption -- comes from the palette entry you
@@ -19,7 +20,7 @@ import type { WidgetPanelProps } from '../../WidgetGuiBuilder';
  * panel beside it, was two places to edit one thing.
  */
 export default function TextWidgetPanel({ widget }: WidgetPanelProps) {
-  const heading = (widget.mode || 'body') === 'heading';
+  const heading = textRole(widget.mode) === 'heading';
   return (
     <div>
       <p className="text-xs" style={{ color: MUTED }}>Click the text on the page and type.</p>

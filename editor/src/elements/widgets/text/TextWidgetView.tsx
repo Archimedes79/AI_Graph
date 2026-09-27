@@ -1,6 +1,7 @@
 import type { WidgetViewProps } from '../WidgetView';
 import Markdown from '@/ui/Markdown';
 import { DIMMER, MUTED, TEXT } from '@/ui/theme';
+import { textRole, type TextRole } from '@engine/elements/widgets/text/role.ts';
 
 /**
  * Prose: a heading, a paragraph, or a caption — one widget, three roles.
@@ -16,13 +17,7 @@ export const TEXT_ROLES = {
   heading: { fontSize: 19, fontWeight: 600, color: TEXT, letterSpacing: '-0.01em' },
   body: { fontSize: 13, fontWeight: 400, color: TEXT, letterSpacing: 'normal' },
   caption: { fontSize: 11, fontWeight: 400, color: MUTED, letterSpacing: 'normal' },
-} as const;
-
-export type TextRole = keyof typeof TEXT_ROLES;
-
-export function textRole(mode: string | undefined): TextRole {
-  return (mode && mode in TEXT_ROLES ? mode : 'body') as TextRole;
-}
+} as const satisfies Record<TextRole, object>;
 
 export default function TextWidgetView({ widget }: WidgetViewProps) {
   const role = textRole(widget.mode);
