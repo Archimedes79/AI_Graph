@@ -8,6 +8,10 @@ export class ButtonWidgetGuiBuilder extends WidgetGuiBuilder {
 
   readonly label = 'Button';
 
+  paletteEntries() {
+    return [{ label: this.label, icon: '🔘', also: 'run start go trigger' }];
+  }
+
   protected override defaultSpan() {
     return { w: 5, h: 2 };
   }

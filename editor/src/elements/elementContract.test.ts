@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { BLOCKS } from '@/page/blocks';
-import { guiWidgetPorts } from '@/document/guiWidgets';
+import { guiWidgetPorts, showsPage } from '@/document/guiWidgets';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from './registry';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { nodeLogic, widgetLogic } from '@/authoring/logic';
@@ -36,36 +36,24 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
   const kind = NODE_KINDS[nodeType as GraphNode['node_type']];
   it('create() produces a valid GraphNode shape', () => {
     const node = kind.create(`${nodeType}-1`);
-    // A few NodeType keys share one element (widget resolves to the gui-style
-    // element) -- create() always stamps its own canonical node_type, so assert
-    // it round-trips through the registry to this same element rather than
-    // requiring an exact string match.
-    expect(NODE_BUILDERS[node.node_type as GraphNode['node_type']]).toBe(element);
+    expect(node.node_type).toBe(nodeType);
     expect(node.id).toBe(`${nodeType}-1`);
     expect(node.config).toBeTruthy();
     expect(Array.isArray(node.inputs)).toBe(true);
     expect(Array.isArray(node.outputs)).toBe(true);
   });
 
-  it('can be removed from a node list, leaving the rest intact', () => {
-    const node = kind.create(`${nodeType}-1`);
-    const other = kind.create(`${nodeType}-2`);
-    const nodes: GraphNode[] = [node, other];
-    const remaining = nodes.filter((n) => n.id !== node.id);
-    expect(remaining).toEqual([other]);
-  });
-
-  it('declares default inputs/outputs without throwing', () => {
-    expect(() => kind.create(`${nodeType}-ports`)).not.toThrow();
-    const node = kind.create(`${nodeType}-ports`);
-    expect(Array.isArray(node.inputs)).toBe(true);
-    expect(Array.isArray(node.outputs)).toBe(true);
-  });
-
-  it('has a Panel, loaded only when the node is opened', () => {
-    // Every node type has settings; only page furniture does not (see the
-    // widget suite below). Lazy, so that a deployed tool, which draws pages
-    // and never edits them, never loads a panel.
+  it('has a Panel, loaded only when the node is opened -- or is a page, and never opened', () => {
+    // A page is edited in the GUI editor and its node dialog is never opened
+    // (App.tsx), so a panel of its own is one nobody can reach -- which the
+    // gui node's was, stale copy and all.
+    if (showsPage(nodeType)) {
+      expect(element.Panel).toBeUndefined();
+      return;
+    }
+    // Every other node type has settings; only page furniture does not (see
+    // the widget suite below). Lazy, so that a deployed tool, which draws
+    // pages and never edits them, never loads a panel.
     expect(isLazy(element.Panel)).toBe(true);
     if (element.AdvancedPanel) expect(isLazy(element.AdvancedPanel)).toBe(true);
   });
@@ -101,23 +89,15 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
     }
   });
 
-  it('describes what it emits, or is a node with nothing to say', () => {
+  it('describes what it emits', () => {
     const node = kind.create(`${nodeType}-out`);
-    // An output node ends the graph, so it has no downstream to describe to.
-    const expected = nodeType === 'output' ? undefined : expect.any(String);
-    expect(element.describeOutput?.(node)).toEqual(expected);
+    // Its declared output by default. An output node ends the graph and is
+    // never asked, since nothing is wired out of it; it answers all the same.
+    expect(element.describeOutput(node)).toEqual(expect.any(String));
   });
 });
 
 describe.each(Object.entries(WIDGET_BUILDERS))('gui widget element: %s', (widgetKind, element) => {
-  it('can be added to and removed from a widget list', () => {
-    const widget = makeWidget(widgetKind as GuiWidget['kind']);
-    const widgets: GuiWidget[] = [widget, { ...widget, id: 'w2' }];
-    const remaining = widgets.filter((w) => w.id !== widget.id);
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0].id).toBe('w2');
-  });
-
   it('contributes ports through the engine, which is the only place they exist', () => {
     // Not `element.ports`: the editor kept its own copy of that until the two
     // disagreed about whether a text box accepts anything or only text. The

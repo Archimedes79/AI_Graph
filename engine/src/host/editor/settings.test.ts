@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -45,7 +46,8 @@ describe('what the dialog sees', () => {
   it('names the file it would create when none exists yet', async () => {
     const { file, env } = await own();
     expect(settingsPath('/nowhere', env)).toBe(file);
-    expect(status('/nowhere', env).settings_file_exists).toBe(false);
+    expect(status('/nowhere', env).settings_file).toBe(file);
+    expect(existsSync(file)).toBe(false);
   });
 });
 
@@ -73,7 +75,16 @@ describe('what a save may change', () => {
     const { dir } = await own();
     const nested = join(dir, 'deep', 'ai-settings.json');
     const seen = await save({ endpoints: { ollama: 'http://x' } }, '/nowhere', { AI_GRAPH_SETTINGS: nested });
-    expect(seen.settings_file_exists).toBe(true);
+    expect(seen.settings_file).toBe(nested);
+    expect(existsSync(nested)).toBe(true);
+  });
+
+  it('keeps an ai or codegen section written by hand', async () => {
+    // The dialog saves keys and endpoints only; the models a hand-written file
+    // names are still what a run and ✨ are pointed at.
+    const { file, env } = await own({ ai: { provider: 'openai' }, codegen: { provider: 'anthropic', model: 'c' } });
+    await save({ api_keys: { openai: 'k' } }, '/nowhere', env);
+    expect(readSettingsFile(file)).toMatchObject({ ai: { provider: 'openai' }, codegen: { provider: 'anthropic', model: 'c' } });
   });
 });
 

@@ -1,87 +1,77 @@
 import { useState } from 'react';
-import type { GraphNode } from '@/graph';
+import type { Graph, GraphNode } from '@/graph';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { SentRequest } from '@engine/host/api.ts';
 import { useGraphStore } from '@/store/graphStore';
-import { lastRunInputs } from '@/authoring/generationContext';
-import NodeTryIt from '@/authoring/NodeTryIt';
-import { clip } from '@/authoring/TryItPanel';
-import { tryValues, useTryValues } from '@/authoring/tryValues';
+import { readFilePorts } from '@/authoring/generationContext';
+import { runsPerItem } from '@/authoring/nodeStepRules';
+import { clip } from '@/authoring/TryItInline';
 import { DANGER_TEXT, DIM, DIMMER, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
 import { AiNodeRunner } from '@engine/elements/nodes/ai/AiNodeRunner.ts';
-import { assemblePrompt, promptText } from '@engine/elements/nodes/ai/prompt.ts';
+import { assemblePrompt } from '@engine/elements/nodes/ai/prompt.ts';
 
 const ai = new AiNodeRunner();
 
 /**
- * The request this node sends, as the model will read it -- inside the panel
- * every element is tried out in.
- *
- * Built by the engine's own `assemblePrompt`, from the node as it stands in
- * the dialog right now, so what is shown is what a run does. The values are the
- * panel's: the last run's, the graph's, or a sentence typed for the purpose.
- *
- * It is also the honest answer to "do I have to describe the output format?":
- * no -- run it once, look at what came back, and if that is the shape you want,
- * keep it as the example the model is told to follow.
+ * Whether the request for the *example* can be put together here, as it is:
+ * only when a run would send exactly `assemblePrompt` of it. Not when a file
+ * on a port is read into its text first, not when a list is asked about one
+ * item at a time, not when pictures are split off, and not when a run.js of
+ * the person's own decides what to ask -- then the engine is asked, by running
+ * the node with made-up answers, and it shows each request a run would send.
+ * A port the example has no value for is not read and not fanned out.
  */
-export default function PromptPreview({ node, setConfig }: {
-  node: GraphNode;
-  setConfig: (key: string, value: unknown) => void;
-}) {
-  const executionResult = useGraphStore((s) => s.executionResult);
-  const rfEdges = useGraphStore((s) => s.rfEdges);
-  const typed = useTryValues((state) => state.typed[node.id]);
-  const fetched = useTryValues((state) => state.fetched[node.id]);
-  const { values } = tryValues(node.id, node.inputs.map((port) => port.id), lastRunInputs(node.id, executionResult) ?? {}, {
-    typed: { [node.id]: typed ?? {} }, fetched: { [node.id]: fetched ?? {} },
-  });
-
-  const wired = new Set(rfEdges.filter((edge) => edge.target === node.id).map((edge) => edge.targetHandle));
+export function previewIsLocal(node: GraphNode, example: Record<string, unknown>, reads: string[]): boolean {
   const settings = ai.config(node as never);
-  // A port with no value yet is shown by name -- but only one that is wired:
-  // an unconnected port sends nothing, and a preview that put a placeholder
-  // there would be showing a request the run never makes.
+  if (settings.runCode || settings.sendImages) return false;
+  if (reads.some((port) => example[port] !== undefined)) return false;
+  const fansOut = runsPerItem(node) && node.inputs.some((port) => port.multi && Array.isArray(example[port.id]));
+  return !fansOut;
+}
+
+/**
+ * What the model receives, for the example in step 1: the instructions, and
+ * the message its inputs are laid out in.
+ *
+ * Put together here with the engine's own `assemblePrompt` when that is all a
+ * run does; otherwise asked of the engine, which runs the node the way a run
+ * does -- files read, once per item, pictures split off -- with made-up
+ * answers and nothing sent to a model. It was always put together here, and
+ * then said "exactly what the model will receive" over a path where the model
+ * gets the file's text, and over all the stories joined where it gets one.
+ */
+export default function PromptPreview({ node, example, graph }: {
+  node: GraphNode;
+  example: Record<string, unknown> | undefined;
+  /** The graph with this node as the dialog holds it (`NodePanelProps.steps.graph`). */
+  graph: () => Graph;
+}) {
+  const nodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
+  const edges = useGraphStore((s) => s.rfEdges);
+
+  const wired = new Set(edges.filter((edge) => edge.target === node.id).map((edge) => edge.targetHandle));
+  const settings = ai.config(node as never);
+  // A port with no value in the example is shown by name -- but only one that
+  // is wired: an unconnected port sends nothing, and a preview that put a
+  // placeholder there would be showing a request the run never makes.
+  const values = example ?? {};
   const given = Object.fromEntries(
     node.inputs
       .filter((port) => values[port.id] !== undefined || wired.has(port.id))
       .map((port) => [port.id, values[port.id] ?? `⟨${port.name || port.id}⟩`]),
   );
+
+  if (!previewIsLocal(node, values, readFilePorts(node, nodes, edges))) {
+    // Only the example's own values: a placeholder must not be read as a file name.
+    return <EngineRequests node={node} inputs={values} own={!!settings.runCode} graph={graph} />;
+  }
   const shown = assemblePrompt(settings, given);
-
   return (
-    <NodeTryIt
-      node={node}
-      title="What the model receives"
-      renderResult={(result) => {
-        const answer = promptText(result.outputs?.output);
-        return (
-          <div className="mt-1">
-            <pre className="text-xs rounded px-2 py-1.5 whitespace-pre-wrap overflow-auto" style={{ background: SUNKEN, color: TEXT, maxHeight: 220 }}>
-              {answer}
-            </pre>
-            {answer && (
-              <button
-                className="text-xs px-2 py-0.5 rounded mt-1"
-                style={NEUTRAL_BUTTON}
-                onClick={() => setConfig('output_example', answer)}
-                title="Tell the model to answer in this same shape from now on"
-              >
-                Keep this as the format to follow
-              </button>
-            )}
-          </div>
-        );
-      }}
-    >
-      {settings.runCode ? <OwnRunRequests node={node} inputs={given} /> : (
-        <>
-          <Part label="Instructions" hint="system" text={shown.system} empty="(none — the model gets the message alone)" />
-          <Part label="Message" hint="user" text={shown.user} empty="(nothing is wired in yet)" />
-        </>
-      )}
-
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium" style={{ color: MUTED }}>What the model receives, for the example in step 1</p>
+      <Part label="Instructions" hint="system" text={shown.system} empty="(none — the model gets the message alone)" />
+      <Part label="Message" hint="user" text={shown.user} empty="(nothing is wired in yet)" />
       {shown.unknown.length > 0 && (
         <p className="text-xs" style={{ color: DANGER_TEXT }}>
           Nothing is wired to {shown.unknown.map((name) => `{{${name}}}`).join(', ')} — it is sent as nothing.
@@ -94,24 +84,23 @@ export default function PromptPreview({ node, setConfig }: {
           after the message. Nothing wired in is ever left out.
         </p>
       )}
-    </NodeTryIt>
+    </div>
   );
 }
 
 /**
- * What a run.js someone changed asks. Its questions cannot be assembled here --
- * it may ask twice, or ask something else -- so it is run, by the engine, with
- * made-up answers: nothing reaches a model.
+ * What a run asks, found by running the node -- its own run.js, or the
+ * engine's -- with made-up answers: its questions cannot be assembled here.
  */
-function OwnRunRequests({ node, inputs }: { node: GraphNode; inputs: Record<string, unknown> }) {
+function EngineRequests({ node, inputs, own, graph }: {
+  node: GraphNode; inputs: Record<string, unknown>; own: boolean; graph: () => Graph;
+}) {
   const [asked, setAsked] = useState<{ requests: SentRequest[]; error: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const show = async () => {
     setBusy(true);
     try {
-      const graph = useGraphStore.getState().exportGraph();
-      graph.nodes = graph.nodes.map((n) => (n.id === node.id ? node : n));
-      setAsked(await call('nodeRequests', { ...graph, node_id: node.id, inputs }));
+      setAsked(await call('nodeRequests', { ...graph(), node_id: node.id, inputs }));
     } catch (error) {
       setAsked({ requests: [], error: errorText(error, 'It could not be run.') });
     } finally {
@@ -120,18 +109,22 @@ function OwnRunRequests({ node, inputs }: { node: GraphNode; inputs: Record<stri
   };
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button className="text-xs px-2 py-1 rounded" style={NEUTRAL_BUTTON} onClick={show} disabled={busy}
-          title="Run your run.js with made-up answers and show each question it asks. Nothing is sent to a model.">
-          {busy ? '…' : asked ? 'Show again' : 'Show what your run.js asks'}
+          title="Run this node on the example with made-up answers, and show each request it sends. Nothing is sent to a model.">
+          {busy ? '…' : asked ? 'Show again' : 'Show what the model receives'}
         </button>
-        <span className="text-xs" style={{ color: DIMMER }}>run.js is yours: what it asks is found by running it, with made-up answers.</span>
+        <span className="text-xs" style={{ color: DIMMER }}>
+          {own
+            ? 'run.js is yours: what it asks is found by running it, with made-up answers.'
+            : 'Files are read, and a list is asked about one item at a time: found by running it, with made-up answers.'}
+        </span>
       </div>
       {asked?.error && <p className="text-xs" style={{ color: DANGER_TEXT }}>{asked.error}</p>}
       {asked && !asked.error && !asked.requests.length && <p className="text-xs" style={{ color: DIM }}>It asked the model nothing.</p>}
       {asked?.requests.map((request, index) => (
         <div key={index} className="space-y-1">
-          {asked.requests.length > 1 && <p className="text-xs font-medium" style={{ color: MUTED }}>Question {index + 1}</p>}
+          {asked.requests.length > 1 && <p className="text-xs font-medium" style={{ color: MUTED }}>Request {index + 1} of {asked.requests.length}</p>}
           <Part label="Instructions" hint="system" text={request.system} empty="(none)" />
           <Part label="Message" hint={request.images ? `user, with ${request.images} image${request.images > 1 ? 's' : ''}` : 'user'} text={request.prompt} empty="(empty)" />
         </div>

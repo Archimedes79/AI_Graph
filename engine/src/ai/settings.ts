@@ -48,7 +48,7 @@ export function candidatePaths(
 }
 
 export interface SettingsFile {
-  ai?: { provider?: string; model?: string; force?: boolean };
+  ai?: { provider?: string; model?: string };
   codegen?: { provider?: string; model?: string };
   api_keys?: Record<string, string>;
   /** Keyed by provider name: `endpoints.lmstudio`. */

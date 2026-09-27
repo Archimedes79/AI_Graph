@@ -14,11 +14,14 @@ import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execut
 import { RUN_PORT } from '../execution/triggers.ts';
 import { names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
+import { resultKeys } from '../elements/NodeRunner.ts';
 import { mismatches, portMisfit, readInterface } from '../execution/interface.ts';
 import { filePorts } from '../execution/fileInputs.ts';
 import { parseExamples } from '../execution/examples.ts';
 import { INTERFACE_FILE } from './interfaceFile.ts';
-import { FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
+import {
+  FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, isProjectFolder, loadGraph, nodeFolder, projectFolderOf, projectTexts, readStructure,
+} from './folder.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
 
@@ -79,18 +82,15 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
 
     // The same trap, one setting over: "once per item" fans out over the inputs
     // declared as lists. With none, the node runs once, on the whole list, and
-    // nothing says it was asked to do otherwise.
-    // Only where a list really arrives: "once per item" is what every node is
-    // created with, and on a node no list reaches it means nothing.
+    // nothing says it was asked to do otherwise. Only where a list really
+    // arrives: on a node no list reaches, "once per item" means nothing.
     const listArrives = graph.edges.some((edge) => {
       if (edge.target_node_id !== node.id) return false;
       const source = graph.nodes.find((candidate) => candidate.id === edge.source_node_id);
       const ports = source && (registry.node(source.node_type)?.derivedPorts(source, registry)?.outputs ?? source.outputs);
       return ports?.find((port) => port.id === edge.source_port_id)?.multi === true;
     });
-    // And only on a node whose ports are its own to declare: a page's follow from its blocks.
-    const ownPorts = element.derivedPorts(node, registry) === null;
-    if (ownPorts && listArrives && element.batchMode(node) === 'per_item' && !node.inputs.some((port) => port.multi)) {
+    if (listArrives && element.batchMode(node) === 'per_item' && !node.inputs.some((port) => port.multi)) {
       problems.push({
         where,
         problem: 'It is set to run once per item, but none of its inputs is declared as a list -- so it runs once, on everything at once.',
@@ -165,6 +165,54 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
   return problems;
 }
 
+/**
+ * What is worth saying about a graph that runs as it is: advice, which fails
+ * neither `check` nor a save over MCP.
+ *
+ * Two output nodes under one label both reach the run's result, but only the
+ * last under that label: whoever reads the result by it gets one of them, and
+ * may not know of the other. Every output node an older editor made started
+ * as "Result", so this is easy to do and hard to see. It is not a problem,
+ * because such a graph runs and always meant this: counted as one, graphs
+ * that passed `check` failed it, and save_graph refused to write them back.
+ * Only at the top: a graph inside a node hands its outputs up by node id,
+ * not by label.
+ */
+export function notesIn(graph: Graph): Problem[] {
+  return sharedResultLabels(graph);
+}
+
+/**
+ * Output nodes whose result is not handed on under their label: they share
+ * it, or it is the key another's result already has. Said with the keys the
+ * run really uses (`resultKeys`).
+ */
+function sharedResultLabels(graph: Graph): Problem[] {
+  const keys = resultKeys(graph.nodes, registry);
+  const byLabel = new Map<string, string[]>();
+  for (const node of graph.nodes) {
+    if (!keys.has(node.id)) continue;
+    const label = registry.node(node.node_type)!.resultLabel(node);
+    byLabel.set(label, [...(byLabel.get(label) ?? []), node.id]);
+  }
+  const problems: Problem[] = [];
+  for (const [label, ids] of byLabel) {
+    const moved = ids.filter((id) => keys.get(id) !== label);
+    if (!moved.length) continue;
+    const holder = ids.find((id) => keys.get(id) === label);
+    const elsewhere = moved.map((id) => `"${keys.get(id)}"`).join(', ');
+    problems.push({
+      where: `${ids.length > 1 ? 'nodes' : 'node'} ${names(ids)}`,
+      problem: ids.length > 1
+        ? `These output nodes share the label "${label}". The run's result keeps each, but `
+          + `${holder ? `only "${holder}" under "${label}": ${elsewhere} for the rest.` : `under ${elsewhere}.`}`
+        : `Its label "${label}" is the key another output's result is handed on under, so the run's result keeps it under ${elsewhere}.`,
+      fix: 'Give every output node its own output_label.',
+    });
+  }
+  return problems;
+}
+
 /** The same problem, said about a graph that is inside a node. */
 function within(problem: Problem, inside: string): Problem {
   return inside ? { ...problem, where: `${inside}${problem.where}` } : problem;
@@ -226,8 +274,14 @@ function interfaceProblems(node: GraphNode, where: string): Problem[] {
  * belongs to no node (the node was deleted, or renamed in \`flow.json\` by
  * hand), and a file in a node's folder that nothing reads -- `prompt.md` where
  * an AI node reads `system.md` is a text somebody wrote and nobody will ever send.
+ *
+ * Which files a node reads is asked of the folder's structure, before any
+ * text is read in, as `readProject` asks it. Asked of the loaded graph, an
+ * input holding the selector an older save kept in `select.js` named no such
+ * file, and the files it had just been read from were called unread.
  */
-export async function folderProblems(folder: string, graph: Graph): Promise<Problem[]> {
+export async function folderProblems(folder: string): Promise<Problem[]> {
+  const { graph } = await readStructure(folder);
   const found: Problem[] = [];
   const expected = new Map<string, Set<string>>();
   for (const text of projectTexts(graph)) {
@@ -247,12 +301,11 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
   // A node that holds a graph holds a project folder: its own flow.json and
   // layout.json belong there, and what is under them is that project's, looked
   // at below by the same function.
-  const nested = new Map<string, Graph>();
+  const nested = new Set<string>();
   for (const node of graph.nodes) {
-    const held = registry.node(node.node_type)?.nestedGraph(node);
-    if (!held) continue;
+    if (!registry.node(node.node_type)?.nestedGraph(node)) continue;
     const dir = nodeFolder(node.id);
-    nested.set(dir, held);
+    nested.add(dir);
     // Every node's folder is in `expected` already, from the loop above.
     for (const name of [FLOW_FILE, LAYOUT_FILE]) expected.get(dir)!.add(name);
   }
@@ -267,9 +320,10 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
     const reads = expected.get(relative);
     for (const entry of entries) {
       const path = `${relative}/${entry.name}`;
-      // Its own project: checked as one, not walked as part of this one.
-      if (entry.isDirectory() && entry.name === NODES_DIR && nested.has(relative)) {
-        found.push(...(await folderProblems(join(folder, relative), nested.get(relative)!))
+      // Its own project: checked as one, not walked as part of this one. A
+      // `nodes/` there without a flow.json is read by nobody, and said below.
+      if (entry.isDirectory() && entry.name === NODES_DIR && nested.has(relative) && isProjectFolder(join(folder, relative))) {
+        found.push(...(await folderProblems(join(folder, relative)))
           .map((problem) => ({ ...problem, where: `${relative}/${problem.where}` })));
         continue;
       }
@@ -297,18 +351,18 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
   return found;
 }
 
-/** Everything wrong with the graph or project at *path*: the `check` command's answer. */
-export async function checkPath(path: string): Promise<{ problems: Problem[]; graph: Graph | null }> {
+/** Everything wrong with the graph or project at *path*, and the advice beside it: the `check` command's answer. */
+export async function checkPath(path: string): Promise<{ problems: Problem[]; notes: Problem[]; graph: Graph | null }> {
   let graph: Graph;
   try {
     graph = await loadGraph(path);
   } catch (error) {
-    return { problems: [{ where: path, problem: (error as Error).message, fix: 'Fix the file so it can be read.' }], graph: null };
+    return { problems: [{ where: path, problem: (error as Error).message, fix: 'Fix the file so it can be read.' }], notes: [], graph: null };
   }
   const problems = problemsIn(graph);
   const folder = projectFolderOf(path);
-  if (folder) problems.push(...await folderProblems(folder, graph));
-  return { problems, graph };
+  if (folder) problems.push(...await folderProblems(folder));
+  return { problems, notes: notesIn(graph), graph };
 }
 
 /**

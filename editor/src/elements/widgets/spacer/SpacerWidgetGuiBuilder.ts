@@ -8,6 +8,13 @@ export class SpacerWidgetGuiBuilder extends StaticWidgetGuiBuilder {
 
   readonly label = 'Gap';
 
+  paletteEntries() {
+    return [
+      { mode: 'horizontal', label: this.label, icon: '␣', also: 'space spacer' },
+      { mode: 'vertical', label: 'Vertical gap', icon: '┆' },
+    ];
+  }
+
   override readonly defaultMode = 'horizontal';
 
   /**

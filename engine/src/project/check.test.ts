@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { parseGraph, type Graph } from '../graph.ts';
-import { checkPath, problemsIn } from './check.ts';
+import { checkPath, notesIn, problemsIn } from './check.ts';
 import { forgetSeen, writeProject } from './folder.ts';
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
@@ -58,6 +58,46 @@ describe('what check finds in a graph', () => {
   it('finds a message placeholder no input fills', () => {
     const problems = problemsIn(graph({ template: 'There are {{totl}} of {{input}}.' }));
     expect(problems).toEqual([expect.objectContaining({ problem: 'Its message template asks for {{totl}}, and it has no input "totl".' })]);
+  });
+
+  it('notes two output nodes under one label, of which the run\'s result keys only the last by it', () => {
+    // A note and not a problem: every output node an older editor made was
+    // "Result", such a graph runs, and it passed check and saved over MCP.
+    const made = graph();
+    made.nodes[2].config.output_label = 'Answer';
+    made.nodes.push(
+      { ...made.nodes[2], id: 'also', config: { write_mode: 'window', output_label: 'Answer' } },
+      { ...made.nodes[2], id: 'other', config: { write_mode: 'window', output_label: 'Count' } },
+    );
+    made.edges.push(
+      { id: 'e3', source_node_id: 'say', source_port_id: 'output', target_node_id: 'also', target_port_id: 'value' },
+      { id: 'e4', source_node_id: 'count', source_port_id: 'total', target_node_id: 'other', target_port_id: 'value' },
+    );
+    expect(problemsIn(made)).toEqual([]);
+    expect(notesIn(made)).toEqual([expect.objectContaining({
+      where: 'nodes "show", "also"',
+      problem: expect.stringMatching(/share the label "Answer".*only "also" under "Answer": "Answer \(show\)" for the rest/),
+      fix: 'Give every output node its own output_label.',
+    })]);
+  });
+
+  it('names the keys the run really uses, where a label is the key a repeat would be given', () => {
+    // It said the repeat was under the key of the node labelled so, whose own
+    // value the run then dropped.
+    const made = graph();
+    made.nodes[2].config.output_label = 'Answer';
+    made.nodes.push(
+      { ...made.nodes[2], id: 'clash', config: { write_mode: 'window', output_label: 'Answer (show)' } },
+      { ...made.nodes[2], id: 'also', config: { write_mode: 'window', output_label: 'Answer' } },
+    );
+    made.edges.push(
+      { id: 'e3', source_node_id: 'say', source_port_id: 'output', target_node_id: 'also', target_port_id: 'value' },
+      { id: 'e4', source_node_id: 'say', source_port_id: 'output', target_node_id: 'clash', target_port_id: 'value' },
+    );
+    expect(notesIn(made)).toEqual([expect.objectContaining({
+      where: 'nodes "show", "also"',
+      problem: expect.stringMatching(/only "also" under "Answer": "Answer \(show\) 2" for the rest/),
+    })]);
   });
 });
 
@@ -167,6 +207,24 @@ describe('what check finds in a project folder', () => {
     // Every node has a folder since each is given its interface.json; an empty one is as fine.
     await mkdir(join(dir, 'nodes', 'show'), { recursive: true });
     expect((await checkPath(dir)).problems).toEqual([]);
+  });
+
+  it('asks which files a node reads as the loader asked it, before the files were read in', async () => {
+    // An older save kept a file input's own selector in select.js and task.md.
+    // The loader reads them in; asked again of the loaded node, which now
+    // holds them, the element names neither, and check called both unread.
+    const picks = parseGraph({
+      metadata: { name: 'Picks' },
+      nodes: [{ id: 'file', node_type: 'input', label: 'File', inputs: [], outputs: [], config: { input_mode: 'file', value: 'a.csv' } }],
+      edges: [],
+    });
+    await writeProject(dir, picks);
+    await writeFile(join(dir, 'nodes', 'file', 'select.js'), 'function run(inputs) { return { files: inputs.files.slice(0, 1) }; }\n');
+    await writeFile(join(dir, 'nodes', 'file', 'task.md'), 'Only the first file.');
+
+    const { problems, graph: read } = await checkPath(dir);
+    expect(read!.nodes[0].config.selector_prompt).toBe('Only the first file.');
+    expect(problems.filter((problem) => problem.where.startsWith('nodes/'))).toEqual([]);
   });
 
   it('reports a project that cannot be read, rather than failing', async () => {

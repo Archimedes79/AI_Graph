@@ -54,7 +54,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
             </h3>
             <p className="text-xs mb-3" style={{ color: DIM }}>
               Used by every ✨ Generate action in the editor — code, system prompts, selector
-              code, plot transforms, output formats and whole graphs. Set once here, for this
+              code, plot transforms, data formats and whole graphs. Set once here, for this
               browser; it is never saved into a graph, so a graph you share carries no model
               choice of yours.
             </p>
@@ -65,6 +65,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               onModelChange={(model) => setGenAI({ model })}
               allowDefault
               defaultLabel="Server default (AI_GRAPH_GEN_PROVIDER / ai-settings.json)"
+              defaultTarget="generation"
             />
           </section>
 
@@ -83,16 +84,16 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               onProviderChange={(provider) => setAiDefaults({ provider })}
               onModelChange={(model) => setAiDefaults({ model })}
               allowDefault
-              defaultLabel="Unset (falls back to Ollama / llama3)"
+              defaultLabel="Unset (this machine's default)"
+              readByRuns
             />
             <div
               className="text-xs rounded-lg px-3 py-2 mt-3"
               style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}
             >
               When this graph is deployed, whoever runs it can point it somewhere else without
-              editing it — <code>--ai-provider</code>/<code>--ai-model</code> on the command
-              line, an <code>AI_GRAPH_AI_PROVIDER</code> environment variable, or an{' '}
-              <code>ai-settings.json</code> next to the executable all take precedence over this.
+              editing it — an <code>AI_GRAPH_AI_PROVIDER</code> environment variable or an{' '}
+              <code>ai-settings.json</code> next to the executable both take precedence over this.
             </div>
           </section>
 

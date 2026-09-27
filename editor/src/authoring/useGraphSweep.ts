@@ -8,15 +8,14 @@
 import { useCallback, useRef, useState } from 'react';
 import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
 import type { GenerateResponse } from '@/api/client';
-import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
-import { inferInterface } from '@engine/execution/interface.ts';
+import { shapeToKeep, useGraphStore } from '@/store/graphStore';
+import { graphEdge } from '@/document/wires';
+import { showsPage } from '@/document/guiWidgets';
 import { nodeFacts } from './nodeFacts';
+import { blockFacts } from './blockFacts';
 import { WIDGET_BUILDERS, NODE_BUILDERS } from '@/elements/registry';
 import { buildGeneration, nodeFields, widgetFields } from './generation';
-import {
-  connectedFormatContext, lastRunContext, lastRunWidgetInput, readFilePorts,
-} from './generationContext';
-import { missingExamples, sampleFromPredecessors, sweep, type SweepTarget, type SweepUnit } from './graphSweep';
+import { missingExamples, sampleFromPredecessors, sweep, writtenBody, type SweepTarget, type SweepUnit } from './graphSweep';
 
 export interface SweepState {
   run: () => Promise<void>;
@@ -37,19 +36,12 @@ export function useGraphSweep(): SweepState {
     const live = () => useGraphStore.getState();
     const nodesOf = () => live().rfNodes.map((item) => item.data.graphNode);
     const rfEdges = () => live().rfEdges;
-    const dslEdges = (): GraphEdge[] => rfEdges().map((edge) => ({
-      id: edge.id,
-      source_node_id: edge.source,
-      target_node_id: edge.target,
-      source_port_id: edge.sourceHandle ?? '',
-      target_port_id: edge.targetHandle ?? '',
-    } as GraphEdge));
+    const dslEdges = (): GraphEdge[] => rfEdges().map(graphEdge);
 
     const missing = missingExamples(nodesOf(), dslEdges());
     if (missing.length) {
-      setMessage(`❌ ${missing.map((n) => n.label || n.id).join(', ')}: attach a default file, or say what `
-        + 'the files contain. Without either, the first node is written against nothing and every node '
-        + 'after it inherits the guess.');
+      setMessage(`❌ ${missing.map((n) => n.label || n.id).join(', ')}: give it a file or folder to read by default. `
+        + 'Without one, the first node is written against nothing and every node after it inherits the guess.');
       return;
     }
 
@@ -57,13 +49,15 @@ export function useGraphSweep(): SweepState {
     // it is generated against real values even when the graph has never run.
     const produced = new Map<string, Record<string, unknown>>();
 
-    const guiNodes = new Set(nodesOf().filter((n) => NODE_BUILDERS[n.node_type]?.holdsWidgets).map((n) => n.id));
+    const guiNodes = new Set(nodesOf().filter((n) => showsPage(n.node_type)).map((n) => n.id));
 
     /**
      * One block on a page, generated exactly as its own ✨ button would.
      *
-     * The same `buildGeneration` the block editor calls, so a sweep and a
-     * button cannot drift apart -- and the sample is what the block before it
+     * The same `buildGeneration` and the same `blockFacts` the block editor
+     * uses, so a sweep and a button cannot drift apart -- they had: the sweep
+     * sent no colour scheme, and neither said where the sample came from. When
+     * the block has nothing of its own, the sample is what the block before it
      * just produced, which is the whole point of sweeping rather than pressing
      * buttons one at a time.
      */
@@ -94,14 +88,17 @@ export function useGraphSweep(): SweepState {
         });
       };
 
+      // The same facts its own ✨ button sends; before any run and without an
+      // example, what the nodes before it just returned in this sweep.
+      const facts = blockFacts(node.id, widget, nodesOf(), rfEdges(), live().executionResult, live().metadata.gui_scheme);
+      const predecessors = facts.sampleInputs ? undefined : sampleFromPredecessors(target, rfEdges(), produced, guiNodes);
       const unit = buildGeneration({
         element: widget.kind,
         generation: spec,
         subject: widget,
         fields: widgetFields(widget, onChange),
-        exampleFile: (widget.example_file ?? '').trim(),
-        sampleInputs: lastRunWidgetInput(node.id, widget.id, live().executionResult)
-          ?? sampleFromPredecessors(target, rfEdges(), produced, guiNodes),
+        ...facts,
+        ...(predecessors ? { sampleInputs: predecessors, sampleOrigin: 'what the nodes before it just returned' } : {}),
       });
       return {
         ...unit,
@@ -125,9 +122,11 @@ export function useGraphSweep(): SweepState {
       if (spec.available && !spec.available(current)) return undefined;
 
       // Never overwrite a body somebody already has. A sweep fills a graph in;
-      // rewriting working code because a button was pressed is not that.
-      const written = String((current.config as unknown as Record<string, unknown>)[spec.targetField] ?? '').trim();
-      if (written) return undefined;
+      // rewriting working code because a button was pressed is not that. What
+      // a new node of the kind starts with is nobody's work, though: every
+      // input node used to carry a starter selector, and counting it as written
+      // left every folder's selector ungenerated.
+      if (writtenBody(current, spec.targetField)) return undefined;
 
       const setConfig = (key: string, value: unknown) => {
         const node_ = nodesOf().find((n) => n.id === current.id);
@@ -142,7 +141,10 @@ export function useGraphSweep(): SweepState {
       );
 
       const facts = nodeFacts(current, nodesOf(), rfEdges(), live().executionResult);
-      const predecessors = facts.sampleInputs ? undefined : sampleFromPredecessors(target, rfEdges(), produced, guiNodes);
+      // Its own example wins, as in its dialog; what the nodes before it just
+      // returned stands in only where the node has nothing else to go on.
+      const ownSample = facts.sampleInputs || element.exampleInput(current);
+      const predecessors = ownSample ? undefined : sampleFromPredecessors(target, rfEdges(), produced, guiNodes);
       const unit = buildGeneration({
         element: node.node_type,
         generation: spec,
@@ -153,18 +155,13 @@ export function useGraphSweep(): SweepState {
         ...facts,
         // Before a run, what the nodes before it produced in this sweep.
         ...(predecessors ? { sampleInputs: predecessors, sampleOrigin: 'what the nodes before it just returned' } : {}),
-        graphContext: NODE_BUILDERS[current.node_type]?.outputContract === 'format' ? undefined : [
-          connectedFormatContext(current.id, nodesOf(), rfEdges()),
-          lastRunContext(current.id, live().executionResult, readFilePorts(current)),
-        ].filter(Boolean).join('\n\n'),
         // What it turns out to return is kept as this node's shape, which is
         // what the next node is then generated against.
-        recordShape: keepsOutputInterface(current)
-          ? (outputs) => {
-            const now = nodesOf().find((n) => n.id === current.id);
-            if (now && !now.config.output_schema) setConfig('output_schema', inferInterface(outputs));
-          }
-          : undefined,
+        recordShape: (outputs) => {
+          const now = nodesOf().find((n) => n.id === current.id);
+          const kept = now && shapeToKeep(now, outputs);
+          if (kept) setConfig('output_schema', kept);
+        },
       });
       return {
         ...unit,

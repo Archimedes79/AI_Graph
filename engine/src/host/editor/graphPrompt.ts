@@ -25,7 +25,7 @@ const SHAPE = `You are an expert at authoring Graph DSL documents for a visual n
 
 The JSON document must have this exact shape:
 {
-  "metadata": {"name": str, "version": str, "description": str, "author": str, "tags": [str, ...]},
+  "metadata": {"name": str, "description": str},
   "nodes": [
     {
       "id": str, "node_type": str, "label": str, "description": str,
@@ -38,7 +38,7 @@ The JSON document must have this exact shape:
   "edges": [{"id": str, "source_node_id": str, "source_port_id": str, "target_node_id": str, "target_port_id": str}, ...]
 }
 
-Valid node_type values: ${NODE_TYPES}. An "input" node's config.input_mode selects text, file, or directory input. A "data" node is persisted graph memory with one optional input port named "input" and one output port named "output". Define data nodes before code or ai nodes when a workflow has known intermediate contracts. Set config.data_format to text or structure; put the precise schema, field names, types, nesting, and constraints in config.data_format_prompt; and initialize config.data_value when useful. Connected code and ai nodes must honor those source and target contracts. There is no dedicated merge/split node type: fan-in (multiple edges into one multi input port) and fan-out (one output wired to many inputs) are pure edge wiring, and any merge/split-style aggregation (concat/sum/count/json_list a set of inputs, or splitting text into a list) should be written as a "code" node. For a display-only output, use node_type "output" with config.write_mode = "window" (shows the result in a text window). Every node must declare its own inputs and outputs port arrays, even if empty, and every port id must be unique within its node. Edges must reference existing node ids and port ids declared on those nodes.`;
+Valid node_type values: ${NODE_TYPES}. What each one keeps in its config is said below. There is no dedicated merge/split node type: fan-in (multiple edges into one multi input port) and fan-out (one output wired to many inputs) are pure edge wiring, and any merge/split-style aggregation (concat/sum/count/json_list a set of inputs, or splitting text into a list) should be written as a "code" node. Every node must declare its own inputs and outputs port arrays, even if empty, and every port id must be unique within its node. Edges must reference existing node ids and port ids declared on those nodes.`;
 
 /** Where each node type keeps the thing it actually does: one line from every kind, and what only two of them share. */
 const FILE_WORK = `- code and ai, working on FILES: an input port with data_type "file_path" receives a path, or a list of paths from a directory input's "files". Set config.read_file_inputs = true and the node is handed each file's TEXT instead of its path. Set config.batch_mode = "per_item" and mark that port "multi": true, and the node runs ONCE PER FILE, its results collected into a list; with batch_mode = "whole_list" it runs once and gets the whole list. So "do X to every file in a folder" is: directory input --files--> one code or ai node (file_path port, multi, read_file_inputs, per_item). Never chain a second input node to read the files, and never read files yourself in code.`;
@@ -61,18 +61,11 @@ Never leave a code or ai node as the end of a branch: its result would go nowher
 /**
  * The ports the engine derives rather than reads.
  *
- * These names are not a convention a graph may choose: `InputNodeRunner.derivedPorts`
- * emits exactly these, and an edge naming anything else is attached to a port
- * that will never carry a value.
+ * These names are not a convention a graph may choose: the kinds that derive
+ * their ports say which above, from the code that derives them, and an edge
+ * naming anything else is attached to a port that will never carry a value.
  */
-const DERIVED_PORTS = `The ports of an input node and of a gui node are DERIVED by the engine from their settings, not taken from this document. Declare exactly these or the edges will carry nothing:
-- input with input_mode "text": one output "output".
-- input with input_mode "file": outputs "content" (the file's text) and "path"; one input "path" that overrides the configured one.
-- input with input_mode "directory": outputs "files" (a list of paths, multi) and "count"; one input "path".
-- trigger: one output "fired", a boolean that is true in the round the trigger started. Wire it into a node's "__run", or into a named boolean input of a code node.
-- gui: every block contributes "<block id>_out", "<block id>_in", or both. A block is {"id", "kind", "label", "w" (1-16 columns), "h" (rows), ...}; kinds are text (mode heading|body|caption, value = the words), divider, input_picker (mode file|directory, value = path), text_io (mode input|output), select (options = one per line), slider (min, max, step), button, chat, table, plot_window, image_view.
-- a "chat" block keeps the conversation itself and contributes "<id>_out" (the message just sent), "<id>_history" (everything before it) and "<id>_in" (the reply). A chatbot is therefore TWO nodes: a gui node with one chat block, and an ai node with inputs "history" and "message" wired from it and its "output" wired back to "<id>_in". Do not add data or code nodes to hold the conversation.
-Every other node type names its own ports, and a code node's returned keys must match its output port ids exactly.`;
+const DERIVED_PORTS = `Where a node type's ports are DERIVED by the engine from its settings -- as said above for the ones that do -- declare exactly those ports, or the edges will carry nothing. Every other node type names its own ports, and a code node's returned keys must match its output port ids exactly.`;
 
 /**
  * What starts a run, for a graph that has a page.
@@ -93,7 +86,7 @@ const TRIGGERS = `A page can start the graph itself. A "button" block, a "chat" 
 const EXAMPLE = `A complete, working example:
 \`\`\`json
 {
-  "metadata": {"name": "Count rows", "version": "1.0", "description": "", "author": "", "tags": []},
+  "metadata": {"name": "Count rows", "description": ""},
   "nodes": [
     {"id": "source", "node_type": "input", "label": "CSV", "description": "",
      "position": {"x": 80, "y": 120},

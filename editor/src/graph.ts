@@ -18,6 +18,13 @@ import type {
 
 export type { DataType, EngineGraph, ExecutionResult, GraphEdge, NodeResult, NodeType, Port, PortKind, WidgetKind };
 
+/**
+ * An edge as the canvas holds it, which port of which node feeds which: the
+ * loose shape a ReactFlow edge satisfies, handles possibly null. Not the saved
+ * `GraphEdge`, whose fields are named for the file.
+ */
+export type Wire = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
+
 export type AIProvider =
   'default' | 'ollama' | 'openai' | 'openai_compatible' | 'anthropic' | 'lmstudio' | 'google' | 'github_copilot';
 
@@ -51,8 +58,10 @@ export interface GraphNode extends Omit<EngineNode, 'config'> {
 export type NodeConfig = {
   ai_model: string;
   ai_provider: AIProvider;
-  batch_concurrency: number;
-  batch_mode: 'per_item' | 'whole_list';
+  /** code and ai only (`NodeRunner.fansOut`): how many items of a fan-out run at once, 0 for the run's default. */
+  batch_concurrency?: number;
+  /** code and ai only: run once per item. Another kind's file may still carry it from an older editor; nothing reads it there. */
+  batch_mode?: 'per_item' | 'whole_list';
   catch_errors?: boolean;
   code: string;
   code_prompt: string;
@@ -60,13 +69,15 @@ export type NodeConfig = {
   data_format_prompt: string;
   data_prompt: string;
   data_value?: unknown;
+  /** An example file the 📎 of an older version attached: step 1 offers to take it in, and it is never written anew. */
   example_file: string;
   extensions: string;
   gui_widgets: GuiWidget[];
   input_mode: 'text' | 'file' | 'directory';
-  output_format: 'text' | 'json' | 'csv' | 'csv_list' | 'custom' | 'example';
+  /** An older node's picked format: nothing writes it now, and json or csv is read into the words (`outputWords`). */
+  output_format?: 'text' | 'json' | 'csv' | 'csv_list' | 'custom' | 'example';
   output_format_prompt: string;
-  /** An answer to imitate, recorded from a test run (`output_format: 'example'`). */
+  /** An answer to imitate, recorded from a test run. */
   output_example?: string;
   /** The message an ai node sends, with `{{port}}` where a port's value goes. Empty: send what arrived. */
   prompt_template?: string;
@@ -103,21 +114,34 @@ export type NodeConfig = {
  * One block on a page. Ports are never edited by hand: they are derived from
  * this list by the engine (`GuiNodeRunner.derivedPorts`), so a block's `id` must
  * stay stable once assigned -- it is what keeps edges attached across edits.
+ *
+ * Beyond who it is and how it is drawn, a block holds only its own kind's
+ * settings, so they are optional here: a divider has no selector, and a block
+ * written by hand, by ✨ or over MCP leaves out what it does not set. Read one
+ * the way its runner does -- `select_all_files` missing means every file.
  */
 export type GuiWidget = {
+  /** A chart's, a table's or an image's transform. */
   code?: string;
-  code_prompt: string;
-  example_file: string;
-  extensions: string;
+  code_prompt?: string;
+  /**
+   * The one example input a transform is written and tried against: the text
+   * of `{"value": …}`, as it is handed the value (`example.json`).
+   */
+  example?: string;
+  /** An example file an older version of the block editor attached; step 1 offers to take it in. */
+  example_file?: string;
+  /** `input_picker`: the file types a folder's listing keeps. */
+  extensions?: string;
   h?: number;
   id: string;
   kind: WidgetKind;
   label: string;
   mode?: string;
-  recursive: boolean;
-  select_all_files: boolean;
-  selector_code: string;
-  selector_prompt: string;
+  recursive?: boolean;
+  select_all_files?: boolean;
+  selector_code?: string;
+  selector_prompt?: string;
   tone: 'plain' | 'raised' | 'sunken' | 'accent';
   /** Draw a frame regardless of the tone; unset lets the tone decide. */
   border?: boolean;

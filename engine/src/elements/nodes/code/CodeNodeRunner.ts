@@ -50,6 +50,9 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
     return logicFrom(node, 'code', CODE_FIELDS);
   }
 
+  /** Its body is written for one item, so a list can be handed to it an item at a time. */
+  override readonly fansOut = true;
+
   async execute(
     node: GraphNode,
     inputs: Record<string, unknown>,

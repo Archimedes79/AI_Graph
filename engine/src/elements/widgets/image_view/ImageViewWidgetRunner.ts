@@ -20,13 +20,17 @@ export class ImageViewWidgetRunner extends TransformingDisplayRunner {
    * A failure is shown, not raised — the same rule as a failing transform.
    * Nothing downstream depends on a picture, and taking the whole node down
    * would take every sibling block's output with it.
+   *
+   * So a failure that arrives here -- a transform's, already a "⚠" message --
+   * is shown as it is. Loaded as a path, it came out as "Not a recognised
+   * image file: <the folder>\⚠ img: transform failed: …".
    */
   override async displayValue(widget: Widget, value: unknown, runtime: Runtime): Promise<unknown> {
     if (Array.isArray(value)) {
       return Promise.all(value.map((item) => this.displayValue(widget, item, runtime)));
     }
     if (typeof value !== 'string' || !value.trim()) return value;
-    if (isInlineUrl(value)) return value;
+    if (isInlineUrl(value) || value.startsWith('⚠ ')) return value;
     try {
       return await imageDataUrl(value, runtime.files);
     } catch (error) {
@@ -36,9 +40,17 @@ export class ImageViewWidgetRunner extends TransformingDisplayRunner {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  override receives(): string {
-    return 'an image file path or URL, or a list of them -- not the picture\'s bytes.';
+  /**
+   * A path, which the block reads itself. The formats are the ones
+   * `imageMediaType` knows; the editor said SVG as well, which a run refuses.
+   */
+  override draws(): string {
+    return 'an image file path or URL, or a list of them -- not the picture\'s bytes: the block reads '
+      + 'each file and shows the picture. PNG, JPEG, GIF, WebP and BMP are recognised.';
   }
+
+  /** What `displayValue` above reads. */
+  override readonly readsPaths = true;
 
   /** The same snippet contract as a chart, with a different destination: a path. */
   override generation(): Generation {

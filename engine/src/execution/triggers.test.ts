@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { type Graph, type GraphEdge, type GraphNode } from '../graph.ts';
+import { type Graph, type GraphNode } from '../graph.ts';
 import { executeGraph, memoryFeedbackEdges } from './executor.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
 import { RUN_PORT, graphTriggers, triggeredNodes } from './triggers.ts';
 import { LastOutputs } from './reuse.ts';
+import { edge, graphOf, quietRuntime } from '../../test/fakes.ts';
 
 /** A code node needs a body to be allowed to run; the fake runner ignores what it says. */
 const BODY = { code: 'function run(inputs) { return inputs; }' };
@@ -21,15 +22,6 @@ function node(id: string, type = 'code', given: Record<string, unknown> = {}, po
     outputs: (ports.out ?? []).map((name) => port(name, 'output')),
   };
 }
-
-function edge(id: string, from: string, fromPort: string, to: string, toPort: string): GraphEdge {
-  return { id, source_node_id: from, source_port_id: fromPort, target_node_id: to, target_port_id: toPort };
-}
-
-const graphOf = (nodes: GraphNode[], edges: GraphEdge[]): Graph => ({
-  metadata: { name: 't', version: '1', description: '', author: '', tags: [], ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
-  nodes, edges,
-});
 
 /** A page with two buttons, a message box and two displays: two tools in one window. */
 function twoTools(): Graph {
@@ -56,12 +48,7 @@ function twoTools(): Graph {
 }
 
 const ran: string[] = [];
-const runtime: Runtime = {
-  files: { read: async () => '', write: async () => {}, list: async () => [], resolve: (p) => p, exists: async () => true },
-  code: { run: async (_body, inputs) => inputs },
-  ai: { complete: async () => '' },
-  report: (event) => { if (event.type === 'node_start') ran.push(event.node_id); },
-};
+const runtime = quietRuntime({ report: (event) => { if (event.type === 'node_start') ran.push(event.node_id); } });
 
 describe('triggeredNodes', () => {
   it('runs what the event is wired to, and what that needs', () => {

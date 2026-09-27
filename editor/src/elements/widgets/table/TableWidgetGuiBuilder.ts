@@ -10,17 +10,19 @@ export class TableWidgetGuiBuilder extends TransformingDisplayGuiBuilder {
 
   readonly label = 'Table';
 
-  readonly transformTitle = 'Row transform (optional)';
+  paletteEntries() {
+    return [{ label: this.label, icon: '▦', also: 'rows grid data' }];
+  }
 
-  readonly transformHelp = 'The code must return {"value": <rows>} — a list of objects sharing their keys (the keys become the columns), or a list of lists whose first row is the header. Leave empty to show the incoming value as-is.';
+  readonly runner = new TableWidgetRunner();
+
+  readonly shows = this.drawsAnd('Its code hands them on as {"value": rows}.');
 
   override readonly generation: ElementGeneration<GuiWidget> = {
-    ...fromEngine(new TableWidgetRunner().generation()),
-    promptLabel: 'Prompt',
-    promptPlaceholder: 'Describe the rows you want, e.g. one row per file with name, size and date.',
-    bodyLabel: 'Optional transform — run(inputs) receives {"value"} and returns {"value"}',
-    mono: true,
-    bodyPlaceholder: 'Leave empty to show the incoming rows as-is.',
+    ...fromEngine(this.runner.generation()),
+    promptLabel: 'What the table should show',
+    promptPlaceholder: 'e.g. one row per file, with its name, size and date',
+    bodyLabel: 'Code — run(inputs) receives {"value"} and returns {"value": rows}',
     bodyHeight: 90,
   };
 }

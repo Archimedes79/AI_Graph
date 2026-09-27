@@ -29,4 +29,10 @@ describe('a slider', () => {
     expect(element.ports(w).outputs[0]).toMatchObject({ id: 'w_out', data_type: 'number' });
     expect(await element.execute(w)).toEqual({ w_out: 42 });
   });
+
+  it('says on its port the range that can arrive, as the run clamps it', () => {
+    const element = new SliderWidgetRunner();
+    expect(element.ports(widget({ min: 1, max: 5, step: 0.5 })).outputs[0].description).toBe('a number from 1 to 5 in steps of 0.5');
+    expect(element.ports(widget({ min: 5, max: 5 })).outputs[0].description).toBe('a number from 5 to 6 in steps of 1');
+  });
 });

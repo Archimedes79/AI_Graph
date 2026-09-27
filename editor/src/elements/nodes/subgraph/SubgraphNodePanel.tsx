@@ -1,5 +1,6 @@
 import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, PRIMARY_BUTTON } from '@/ui/theme';
 import { useGraphStore } from '@/store/graphStore';
+import { untracked } from '@/store/portRenames';
 import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
@@ -23,11 +24,13 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
   /**
    * In. The draft is taken first -- as "open in your own editor" does -- and
    * then the dialog goes, because what is behind it is about to be a
-   * different graph.
+   * different graph. Taken as a Save takes it: without the marks the dialog
+   * put on its ports (`trackPorts`), which are the dialog's and never stored.
+   * No renames go with it: this node's ports are a view of the graph inside.
    */
   const enter = () => {
     const store = useGraphStore.getState();
-    store.updateNode(node.id, node);
+    store.updateNode(node.id, untracked(node));
     store.setEditingNode(null);
     store.openSubgraph(node.id);
   };

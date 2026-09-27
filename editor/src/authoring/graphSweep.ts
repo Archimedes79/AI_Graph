@@ -19,8 +19,10 @@
 
 import { memoryFeedbackEdges, topologicalLevels } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
-import type { GraphEdge, GraphNode, GuiWidget } from '@/graph';
-import { guiWidgetPorts } from '@/document/guiWidgets';
+import { shippedText } from '@engine/elements/ElementRunner.ts';
+import type { GraphEdge, GraphNode, GuiWidget, Wire } from '@/graph';
+import { guiWidgetPorts, showsPage } from '@/document/guiWidgets';
+import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 
 /** What happened to one node. */
@@ -125,7 +127,7 @@ export function generationOrder(nodes: GraphNode[], edges: GraphEdge[]): SweepTa
   const portOwner = new Map<string, string>();
 
   for (const node of nodes) {
-    const widgets = NODE_BUILDERS[node.node_type]?.holdsWidgets && Array.isArray(node.config.gui_widgets)
+    const widgets = showsPage(node.node_type) && Array.isArray(node.config.gui_widgets)
       ? node.config.gui_widgets as GuiWidget[]
       : [];
     const blocks = widgets.filter((widget) => {
@@ -250,14 +252,28 @@ export async function* sweep<T>(
 }
 
 /**
+ * Whether *node* holds a body of its own in *field*: something, and not what a
+ * new node of its kind starts with -- the starter code of a code node -- nor a
+ * text its element once shipped, such as the selector every input node used to
+ * be given (`TextFile.earlier`). A sweep writes what nobody wrote, and leaves
+ * alone what somebody did.
+ */
+export function writtenBody(node: GraphNode, field: string): boolean {
+  const text = (value: unknown): string => String(value ?? '').trim();
+  const written = text((node.config as unknown as Record<string, unknown>)[field]);
+  const starter = text((NODE_KINDS[node.node_type]?.create(node.id).config as unknown as Record<string, unknown> | undefined)?.[field]);
+  const kept = registry.node(node.node_type)?.texts(node as never).find((file) => file.field === field);
+  return !!written && written !== starter && !(kept && shippedText(written, kept));
+}
+
+/**
  * The nodes a sweep would have to guess at, before it starts.
  *
  * A node at the head of the graph has no predecessor to describe its data, so
- * it has to say what it holds: an attached sample (the strong form — the model
- * sees the real thing) or a stated contract (the weak one). With neither, the
- * first generation is written against nothing and the mistake is carried the
- * whole way down. Saying so before ten model calls start is cheaper than
- * reading it in the results.
+ * it has to have something real to read: a default file or folder, which the
+ * nodes after it are then shown. Without one, the first generation is written
+ * against nothing and the mistake is carried the whole way down. Saying so
+ * before ten model calls start is cheaper than reading it in the results.
  */
 export function missingExamples(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
   const fed = new Set(edges.map((edge) => edge.target_node_id));
@@ -265,9 +281,6 @@ export function missingExamples(nodes: GraphNode[], edges: GraphEdge[]): GraphNo
   // (`NodeGuiBuilder.missingExample`): an input in file mode, a page's file picker.
   return nodes.filter((node) => NODE_BUILDERS[node.node_type]?.missingExample(node, fed.has(node.id)) ?? false);
 }
-
-/** An edge as ReactFlow holds it: which port feeds which. */
-export interface WiredEdge { source: string; sourceHandle?: string | null; target: string; targetHandle?: string | null }
 
 /**
  * What *nodeId* would receive, assembled from what its predecessors returned
@@ -282,7 +295,7 @@ export interface WiredEdge { source: string; sourceHandle?: string | null; targe
  */
 export function sampleFromPredecessors(
   target: SweepTarget,
-  edges: WiredEdge[],
+  edges: Wire[],
   produced: Map<string, Record<string, unknown>>,
   guiNodes: Set<string> = new Set(),
 ): Record<string, unknown> | undefined {

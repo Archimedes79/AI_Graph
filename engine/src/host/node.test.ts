@@ -1,5 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { nodeCode } from './node.ts';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { nodeCode, nodeFiles } from './node.ts';
+
+describe('writing a file', () => {
+  it('makes the folders it goes into, as an output writing into a new folder needs', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-write-'));
+    try {
+      const path = join(dir, 'results', 'by country', 'items_1.txt');
+      await nodeFiles.write(path, 'alpha');
+      expect(await readFile(path, 'utf8')).toBe('alpha');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('removes a file an earlier run left, and does nothing where there is none', async () => {
+    // What an output writing into a folder clears of its earlier run's files.
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-remove-'));
+    try {
+      const path = join(dir, 'value_2.txt');
+      await nodeFiles.write(path, 'last run');
+      await nodeFiles.remove!(path);
+      expect(await nodeFiles.exists(path)).toBe(false);
+      await nodeFiles.remove!(path);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 /** What a body that does not run says: one sentence a person can act on. */
 describe('the sandbox', () => {

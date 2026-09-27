@@ -22,11 +22,10 @@
 // "Text for 'Greeting': " in front of the JSON and nobody could parse it.
 
 import { createInterface } from 'node:readline/promises';
-import type { Graph } from '../graph.ts';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/check.ts';
-import { executeGraph, executeNode, inputsFor, nodeName } from '../execution/executor.ts';
-import { runExamples } from '../execution/examples.ts';
+import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
+import { testGraph } from '../execution/examples.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
@@ -102,6 +101,15 @@ export function parseArgs(argv: string[]): CliOptions {
       options.mcp = true;
     } else if (arg === '--mcp-root') {
       options.mcpRoot = argv[++i] ?? '';
+    } else if (arg.startsWith('--')) {
+      // A flag this command does not know is a mistake to say, not a file to
+      // look for: taken as the graph, `--ai-provider openai g.json` went
+      // looking for a graph called "--ai-provider", and after the graph it
+      // was dropped without a word.
+      throw new Error(
+        `Unknown option "${arg}". This command knows --inputs, --every, --limit, --bundle, `
+          + '--serve, --port, --editor, --host, --mcp and --mcp-root.',
+      );
     } else if (!options.graphPath) {
       options.graphPath = arg;
     }
@@ -320,19 +328,21 @@ async function runMcp(options: CliOptions): Promise<number> {
 /**
  * Say what is wrong with each graph or project, without running anything.
  * The result on stdout, one problem per paragraph; exit code 1 when there is
- * any, so a CI job fails on a broken graph before anyone opens it.
+ * any, so a CI job fails on a broken graph before anyone opens it. Advice
+ * (`notesIn`) is said after it, and fails nothing.
  */
 async function runCheck(paths: string[]): Promise<number> {
   let failed = 0;
   for (const path of paths.length ? paths : ['.']) {
-    const { problems, graph } = await checkPath(path);
+    const { problems, notes, graph } = await checkPath(path);
     if (!problems.length) {
       process.stdout.write(`✓ ${path}: ${graph!.nodes.length} nodes, ${graph!.edges.length} edges\n`);
-      continue;
+    } else {
+      failed += 1;
+      process.stdout.write(`✗ ${path}: ${problems.length} problem${problems.length === 1 ? '' : 's'}\n`);
+      for (const { where, problem, fix } of problems) process.stdout.write(`  ${where}: ${problem}\n    → ${fix}\n`);
     }
-    failed += 1;
-    process.stdout.write(`✗ ${path}: ${problems.length} problem${problems.length === 1 ? '' : 's'}\n`);
-    for (const { where, problem, fix } of problems) process.stdout.write(`  ${where}: ${problem}\n    → ${fix}\n`);
+    for (const { where, problem, fix } of notes) process.stdout.write(`  note: ${where}: ${problem}\n    → ${fix}\n`);
   }
   return failed ? 1 : 0;
 }
@@ -348,36 +358,17 @@ async function runTests(argv: string[]): Promise<number> {
   const paths = argv.filter((arg, index) => !arg.startsWith('--') && argv[index - 1] !== '--node');
   let failed = 0;
   for (const path of paths.length ? paths : ['.']) {
-    let tested = 0;
-    // A node that holds a graph holds nodes with examples of their own, and
-    // they are tested here for the same reason `check` descends: the graph
-    // inside is part of this project, not a second one.
-    for (const { graph, inside } of everyGraphIn(await loadGraph(path))) {
-      const nodes = graph.nodes.filter((node) => (only ? node.id === only : String(node.config.examples ?? '').trim()));
-      tested += nodes.length;
-      for (const node of nodes) {
-        for (const result of await runExamples(graph, node.id, { runtime: nodeRuntime(), registry, offline })) {
-          const mark = { pass: '✓', fail: '✗', error: '✗', skipped: '·' }[result.status];
-          process.stdout.write(`${mark} ${path} ${inside}${node.id}: ${result.title}${result.status === 'skipped' ? ' (skipped)' : ''}\n`);
-          for (const line of result.status === 'skipped' ? [] : result.details) process.stdout.write(`    ${line}\n`);
-          if (result.status === 'fail' || result.status === 'error') failed += 1;
-        }
-      }
+    // Every depth: the graph a node holds is part of this project (`testGraph`).
+    const { tested, results } = await testGraph(await loadGraph(path), { runtime: () => nodeRuntime(), registry, offline, only });
+    for (const { inside, nodeId, result } of results) {
+      const mark = { pass: '✓', fail: '✗', error: '✗', skipped: '·' }[result.status];
+      process.stdout.write(`${mark} ${path} ${inside}${nodeId}: ${result.title}${result.status === 'skipped' ? ' (skipped)' : ''}\n`);
+      for (const line of result.status === 'skipped' ? [] : result.details) process.stdout.write(`    ${line}\n`);
+      if (result.status === 'fail' || result.status === 'error') failed += 1;
     }
     if (!tested) process.stdout.write(`· ${path}: ${only ? `no node "${only}"` : 'no node has examples'}\n`);
   }
   return failed ? 1 : 0;
-}
-
-/** The graph loaded, and every graph its nodes hold, with the way down to each. */
-function everyGraphIn(graph: Graph, inside = ''): { graph: Graph; inside: string }[] {
-  return [
-    { graph, inside },
-    ...graph.nodes.flatMap((node) => {
-      const held = registry.node(node.node_type)?.nestedGraph(node);
-      return held ? everyGraphIn(held, `${inside}${node.id} ▸ `) : [];
-    }),
-  ];
 }
 
 /**
@@ -388,11 +379,8 @@ function everyGraphIn(graph: Graph, inside = ''): { graph: Graph; inside: string
 async function runNodeCommand([path, nodeId, given]: string[]): Promise<number> {
   if (!path || !nodeId) throw new Error('Usage: run-node <graph or project> <node id> [\'{"port": value}\']');
   const graph = await loadGraph(path);
-  applyRuntimeValues(graph, {}, registry);
-  const inputs = given
-    ? JSON.parse(given) as Record<string, unknown>
-    : (await inputsFor(graph, nodeId, { runtime: nodeRuntime(), registry })).inputs;
-  const result = await executeNode(graph, nodeId, inputs, { runtime: nodeRuntime(), registry });
+  const inputs = given ? JSON.parse(given) as Record<string, unknown> : undefined;
+  const { result } = await runNodeAlone(graph, nodeId, inputs, { runtime: nodeRuntime(), registry });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   return result.status === 'error' ? 1 : 0;
 }

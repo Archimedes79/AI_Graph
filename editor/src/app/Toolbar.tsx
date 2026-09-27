@@ -5,16 +5,16 @@ import {
 import ToolbarButton, { ToolbarSeparator } from '@/ui/ToolbarButton';
 import { showsPage, widgetFiresRun } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
-import { call, downloadBundle, type AICall, type Requirement } from '@/api/client';
+import { ApiError, call, downloadBundle, watchGeneration, type AICall } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { Graph } from '@/graph';
-import { applyRuntimeValues } from '@engine/execution/runtimeValues.ts';
-import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { useDeliveredRun } from '@/page/useDeliveredRun';
 import { genAI } from '@/store/settingsStore';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
 import LiveGeneration from '@/authoring/LiveGeneration';
+import SubgraphTrail from './SubgraphTrail';
 import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
 /**
@@ -64,17 +64,6 @@ export default function Toolbar({
   currentFilePath, saveStatus, onShowInterface, interfaceShown,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
-  const subgraphStack = useGraphStore((s) => s.subgraphStack);
-  const closeSubgraph = useGraphStore((s) => s.closeSubgraph);
-  // The graph at the top, then one step per node gone into. `depth` is how
-  // many levels remain when you are standing on that step.
-  const trail = subgraphStack.length === 0 ? [] : [
-    { depth: 0, name: subgraphStack[0].graph.metadata.name || 'Graph' },
-    ...subgraphStack.map((frame, level) => ({
-      depth: level + 1,
-      name: frame.graph.nodes.find((node) => node.id === frame.nodeId)?.label || frame.nodeId,
-    })),
-  ];
   const sweep = useGraphSweep();
   // Subscribed to so the toolbar re-renders when the graph changes and the
   // "✅ Saved" line below can stop claiming something that is no longer true.
@@ -83,26 +72,23 @@ export default function Toolbar({
   const isDirty = useGraphStore((s) => s.isDirty);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const isExecuting = useGraphStore((s) => s.isExecuting);
-  const exportGraph = useGraphStore((s) => s.exportGraph);
-  const runGraph = useGraphStore((s) => s.runGraph);
   const stopRun = useGraphStore((s) => s.stopRun);
   const runProgress = useGraphStore((s) => s.runProgress);
   const isProject = useGraphStore((s) => s.isProject);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
-  // Subscribe to the stack lengths, not to canUndo/canRedo: selecting a function
-  // never changes identity, so the buttons would never re-enable.
+  // Subscribe to the stack lengths, not to a function that reads them: selecting
+  // a function never changes identity, so the buttons would never re-enable.
   const undoAvailable = useGraphStore((s) => s.past.length > 0);
   const redoAvailable = useGraphStore((s) => s.future.length > 0);
   const executionResult = useGraphStore((s) => s.executionResult);
   const loadGraph = useGraphStore((s) => s.loadGraph);
-  const updateNode = useGraphStore((s) => s.updateNode);
 
   const [showDeploy, setShowDeploy] = useState(false);
   const [deployBusy, setDeployBusy] = useState('');
   const [deployError, setDeployError] = useState('');
-  const [pendingRequirements, setPendingRequirements] = useState<Requirement[] | null>(null);
-  const [pendingGraph, setPendingGraph] = useState<Graph | null>(null);
+  // Asking what the graph needs, then running: the delivered page's own steps.
+  const delivered = useDeliveredRun();
 
   const [openingTool, setOpeningTool] = useState('');
 
@@ -141,35 +127,10 @@ export default function Toolbar({
       onShowInterface();
       return;
     }
-
-    const graph = exportGraph();
-    try {
-      const requirements = await call('requirements', graph);
-
-      // A requirement that belongs to a block is one the *page* asks for, and
-      // the page is a better place to answer it than a dialog: it has the
-      // label, the Browse button and the rest of the form around it. So show
-      // the page instead of asking, and let the next Run go through. Already
-      // looking at the page, that would be a button that does nothing, and the
-      // dialog below asks instead.
-      const onThePage = requirements.filter((r) => r.widget_id);
-      if (onThePage.length > 0 && !interfaceShown) {
-        onShowInterface();
-        return;
-      }
-
-      // What is left belongs to nodes with nothing on the page — an input set
-      // to ask, an output set to ask where to write. Those have nowhere else
-      // to be answered.
-      if (requirements.length > 0) {
-        setPendingGraph(graph);
-        setPendingRequirements(requirements);
-        return;
-      }
-    } catch {
-      // If the requirements check itself fails, fall back to running directly.
-    }
-    await runGraph(graph);
+    // Without a page, what the graph asks belongs to nodes -- an input set to
+    // ask, an output set to ask where to write -- and the dialog asks it. (A
+    // question a block asks comes from a page, which returned above.)
+    await delivered.run(null);
   };
 
   /**
@@ -198,30 +159,6 @@ export default function Toolbar({
     } catch (error) {
       setOpeningTool(errorText(error, 'The tool could not be opened.'));
     }
-  };
-
-  const handlePromptSubmit = (values: Record<string, string>) => {
-    if (!pendingGraph) return;
-    const graph: Graph = JSON.parse(JSON.stringify(pendingGraph));
-    // Where an answer goes is each element's own business (`applyRuntimeValue`:
-    // an input keeps it as its value, a page in the widget that asked) -- the
-    // engine's code, run here, rather than a second copy of it.
-    applyRuntimeValues(graph, values, engineRegistry);
-    // Persist the answers back into the graph itself, not just into the copy
-    // about to run -- otherwise the picked file or text is forgotten the moment
-    // the run ends and has to be retyped every time.
-    const answered = new Set(Object.keys(values).map((key) => key.split('::')[0]));
-    for (const node of graph.nodes) {
-      if (answered.has(node.id)) updateNode(node.id, { config: node.config });
-    }
-    setPendingRequirements(null);
-    setPendingGraph(null);
-    runGraph(graph);
-  };
-
-  const handlePromptCancel = () => {
-    setPendingRequirements(null);
-    setPendingGraph(null);
   };
 
   // Both deploy actions used to have no busy state and no error handling, so a
@@ -259,6 +196,7 @@ export default function Toolbar({
   };
 
   const handleGenerateGraph = async () => {
+    setAiCalls([]);
     if (!aiDescription.trim()) {
       setAiError('Please describe the graph you want first.');
       return;
@@ -266,21 +204,18 @@ export default function Toolbar({
     setAiGenerating(true);
     setAiError('');
     setAiResult(null);
-    setAiCalls([]);
-    const progressId = `graph-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const watching = window.setInterval(async () => {
-      try {
-        const { calls } = await call('generationProgress', { id: progressId });
-        if (calls.length) setAiCalls(calls);
-      } catch { /* a poll that fails changes nothing */ }
-    }, 500);
     try {
-      const result = await call('generateGraph', { description: aiDescription, progress_id: progressId, ...genAI() });
+      const result = await watchGeneration(
+        (progressId) => call('generateGraph', { description: aiDescription, progress_id: progressId, ...genAI() }),
+        setAiCalls,
+      );
       setAiResult(result);
     } catch (e) {
       setAiError(errorText(e, 'Failed to generate graph.'));
+      // The whole failing exchange, replies included, as a node's ✨ keeps it:
+      // the failing case is the one where what was asked matters.
+      if (e instanceof ApiError && e.body.calls) setAiCalls(e.body.calls);
     } finally {
-      window.clearInterval(watching);
       setAiGenerating(false);
     }
   };
@@ -342,27 +277,7 @@ export default function Toolbar({
           {currentFilePath ?? 'Untitled — not saved'}
         </span>
 
-        {/* Where you are, and the way back out. Each crumb leaves as many
-            levels as it takes to get there; the last one is where you stand. */}
-        {trail.length > 1 && (
-          <div className="flex items-center gap-1 text-xs">
-            {trail.map((step, index) => (
-              <span key={step.depth} className="flex items-center gap-1">
-                {index > 0 && <span style={{ color: DIMMER }}>▸</span>}
-                <button
-                  type="button"
-                  className="px-2 py-0.5 rounded"
-                  style={{ color: index === trail.length - 1 ? TEXT : MUTED }}
-                  disabled={index === trail.length - 1}
-                  title={index === trail.length - 1 ? 'You are here' : `Back out to ${step.name}`}
-                  onClick={() => { while (useGraphStore.getState().subgraphStack.length > step.depth) closeSubgraph(); }}
-                >
-                  {step.name}
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
+        <SubgraphTrail />
 
         <div className="flex-1" />
 
@@ -558,9 +473,9 @@ export default function Toolbar({
       )}
 
       <RequirementsDialog
-        requirements={pendingRequirements}
-        onSubmit={handlePromptSubmit}
-        onCancel={handlePromptCancel}
+        requirements={delivered.requirements}
+        onSubmit={delivered.submit}
+        onCancel={delivered.cancel}
       />
 
       {/* AI Graph modal */}
@@ -615,7 +530,7 @@ export default function Toolbar({
               disabled={aiGenerating}
             />
 
-            {aiGenerating && (
+            {(aiGenerating || (aiError && aiCalls.length > 0)) && (
               <div className="mt-3">
                 <LiveGeneration calls={aiCalls} minHeight={140} />
               </div>

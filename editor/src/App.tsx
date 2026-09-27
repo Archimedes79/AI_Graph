@@ -7,15 +7,16 @@ import Sidebar from '@/app/Sidebar';
 import GraphCanvas from '@/canvas/GraphCanvas';
 import DesignerTab from '@/page/DesignerTab';
 import PreviewTab from '@/page/PreviewTab';
+import TopGraphOnly from '@/page/TopGraphOnly';
 import ViewTabs, { type EditorView } from '@/app/ViewTabs';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import NodeEditor from '@/canvas/NodeEditor';
-import ConnectorEditor from '@/canvas/ConnectorEditor';
 import ResultsPanel from '@/app/ResultsPanel';
 
 import SettingsDialog from '@/app/SettingsDialog';
 import Modal from '@/ui/Modal';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
+import OutputWindows from '@/dialogs/OutputWindows';
 
 import { useGraphStore } from '@/store/graphStore';
 import { call } from '@/api/client';
@@ -27,19 +28,16 @@ export default function App() {
   const addNode = useGraphStore((s) => s.addNode);
   const editingNodeId = useGraphStore((s) => s.editingNodeId);
   const setEditingNode = useGraphStore((s) => s.setEditingNode);
-  const editingPort = useGraphStore((s) => s.editingPort);
-  const setEditingPort = useGraphStore((s) => s.setEditingPort);
   const loadGraph = useGraphStore((s) => s.loadGraph);
   // Saving and exporting are about the whole document, whichever level of it
   // the canvas is showing; running is about the level you are looking at.
   const rootGraph = useGraphStore((s) => s.rootGraph);
-  const setRFNodes = useGraphStore((s) => s.setRFNodes);
-  const setRFEdges = useGraphStore((s) => s.setRFEdges);
+  const newGraph = useGraphStore((s) => s.newGraph);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const currentFilePath = useGraphStore((s) => s.currentFilePath);
   const setCurrentFilePath = useGraphStore((s) => s.setCurrentFilePath);
   const isDirty = useGraphStore((s) => s.isDirty);
-  const markSaved = useGraphStore((s) => s.markSaved);
+  const save = useGraphStore((s) => s.save);
   const isProject = useGraphStore((s) => s.isProject);
   const insideSubgraph = useGraphStore((s) => s.subgraphStack.length > 0);
   const takeDiskChanges = useGraphStore((s) => s.takeDiskChanges);
@@ -227,11 +225,7 @@ export default function App() {
 
   const handleNewGraph = () => {
     if (!confirmDiscard('Start a new graph?')) return;
-    setRFNodes([]);
-    setRFEdges([]);
-    setMetadata({ name: 'Untitled Graph', description: '', author: '', tags: [], version: '1.0.0' });
-    setCurrentFilePath(null);
-    markSaved();
+    newGraph();
   };
 
   // Path-based Load/Save/Save As -- a small modal collects the absolute
@@ -264,14 +258,14 @@ export default function App() {
   /**
    * Open the project again from disk: for the flow, or a node's settings or
    * ports, changing outside -- a git pull, a merge. Code and prompts need no
-   * such thing: they are watched (below).
+   * such thing: they are watched (below). It is Open, of the same path.
    */
   const handleReloadProject = async () => {
     if (!currentFilePath) return;
     if (!confirmDiscard('Reload the project from disk?')) return;
     setSaveStatus('Reloading…');
     try {
-      const result = await call('reloadGraph', { path: currentFilePath });
+      const result = await call('openGraph', { path: currentFilePath });
       loadGraph(result.graph);
       setCurrentFilePath(result.path, result.project);
       setSaveStatus('✅ Reloaded from disk');
@@ -321,9 +315,8 @@ export default function App() {
     }
     setSaveStatus('Saving\u2026');
     try {
-      await call('saveGraph', { path: currentFilePath, graph: rootGraph() });
-      markSaved();
-      setSaveStatus(`\u2705 Saved to ${currentFilePath}`);
+      const saved = await save();
+      setSaveStatus(`\u2705 Saved to ${saved.path}`);
     } catch (error) {
       setSaveStatus(`\u274c ${errorText(error, 'Save failed')}`);
     }
@@ -383,10 +376,8 @@ export default function App() {
         if (useGraphStore.getState().metadata.name === 'Untitled Graph') {
           setMetadata({ name: (path.split(/[\\/]/).filter(Boolean).pop() ?? '').replace(/\.json$/i, '') || 'Untitled Graph' });
         }
-        const result = await call('saveGraph', { path, graph: rootGraph() });
-        setCurrentFilePath(result.path, result.project);
-        markSaved();
-        setSaveStatus(`\u2705 Saved to ${result.path}`);
+        const saved = await save(path);
+        setSaveStatus(`\u2705 Saved to ${saved.path}`);
       }
       setFilePrompt(null);
     } catch (error) {
@@ -452,8 +443,13 @@ export default function App() {
           <GraphCanvas active={view === 'graph'} />
           <ResultsPanel />
         </div>
-        {view === 'design' && <DesignerTab />}
-        {view === 'preview' && <PreviewTab />}
+        {/* The page is the top graph's: inside a node's graph there is none to
+            build or try, and these would act on the graph in there. */}
+        {view === 'design' && <TopGraphOnly><DesignerTab /></TopGraphOnly>}
+        {view === 'preview' && <TopGraphOnly><PreviewTab /></TopGraphOnly>}
+
+        {/* What a run opened, over whichever view is showing: once, here. */}
+        <OutputWindows />
 
         {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
 
@@ -461,14 +457,6 @@ export default function App() {
           <NodeEditor
             nodeId={editingNodeId}
             onClose={() => setEditingNode(null)}
-          />
-        )}
-
-        {editingPort && (
-          <ConnectorEditor
-            nodeId={editingPort.nodeId}
-            portId={editingPort.portId}
-            onClose={() => setEditingPort(null)}
           />
         )}
 

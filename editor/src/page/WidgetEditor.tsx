@@ -1,20 +1,20 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense } from 'react';
 import { BLOCKS } from './blocks';
 import type { GuiWidget } from '@/graph';
 import { guiWidgetPorts, widgetFiresRun } from '@/document/guiWidgets';
 import { useGenerate } from '@/authoring/useGenerate';
-import { buildGeneration, widgetFields } from '@/authoring/generation';
+import { buildGeneration, widgetFields, type GenerationRequest } from '@/authoring/generation';
 import { widgetLogic } from '@/authoring/logic';
 import { WIDGET_BUILDERS } from '@/elements/registry';
-import { errorText } from '@/api/errorText';
+import type { WidgetSteps } from '@/elements/WidgetGuiBuilder';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
-import { lastRunWidgetInput } from '@/authoring/generationContext';
+import { useWhatSends } from '@/authoring/WhatSends';
 import { useGraphStore } from '@/store/graphStore';
 import { GUI_GRID_COLUMNS } from '@/document/layout';
-import { describeScheme, schemeVars } from '@/ui/scheme';
-import TryItPanel from '@/authoring/TryItPanel';
-import { sampleFor } from '@/authoring/tryValues';
-import { call } from '@/api/client';
+import { schemeVars } from '@/ui/scheme';
+import { blockFacts, blockFeeds, blockFromTheGraph } from '@/authoring/blockFacts';
+import { tryBlock } from '@/authoring/blockStepRules';
+import OpenInMyEditor from '@/authoring/OpenInMyEditor';
 import { TONES, TONE_LABELS, type Tone } from '@/ui/tone';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, WELL } from '@/ui/theme';
 
@@ -29,7 +29,8 @@ interface WidgetEditorProps {
 
 /**
  * What the widget selected on the designer canvas *is*: its name, its mode, and
- * whatever body it authors.
+ * whatever body it authors -- in the four steps, drawn by its own panel, with
+ * Try it under the body rather than at the foot of the editor.
  *
  * This was a list editor holding every widget at once, next to a designer
  * holding the same list again -- two editable views of one thing, plus ↑↓
@@ -42,20 +43,33 @@ export default function WidgetEditor({
   widget, nodeId, onChange, onRemove,
 }: WidgetEditorProps) {
   const executionResult = useGraphStore((s) => s.executionResult);
-  const isProject = useGraphStore((s) => s.isProject);
-  const [externalStatus, setExternalStatus] = useState('');
-  // Start expanded when there is already a body: collapsed-by-default is right
-  // for an empty section and wrong for a full one -- hiding code the user (or
-  // the AI) has written is exactly how "where did my code go?" happens.
-  const [expanded, setExpanded] = useState(false);
   const generate = useGenerate();
 
-  useEffect(() => {
-    setExpanded(!!((widget?.code ?? '').trim() || (widget?.selector_code ?? '').trim()));
-    // Only when another widget is shown: collapsing a body while someone types
-    // into it would be the opposite of the point.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [widget?.id]);
+  /**
+   * The one ✨ Generate request, for whichever widget kind asks -- the button
+   * and "what ✨ sends" send the same.
+   *
+   * This was an `isPlot` ternary threaded through eight lines -- prompt field,
+   * guard, success message, contract, both port names, target field -- which is
+   * a kind-switch in a shared shell, the thing the element contract exists to
+   * prevent. Each widget declares it now (`WidgetGuiBuilder.generation`), and
+   * what it is told is what the graph sweep tells it too (`blockFacts`): what
+   * feeds the block, the page's scheme, and step 1's example, or the last
+   * run's value, with where it came from.
+   */
+  const request = (): GenerationRequest<GuiWidget> | undefined => {
+    const spec = widget ? WIDGET_BUILDERS[widget.kind].generation : undefined;
+    if (!widget || !spec) return undefined;
+    const state = useGraphStore.getState();
+    return {
+      element: widget.kind,
+      generation: spec,
+      subject: widget,
+      fields: widgetFields(widget, onChange),
+      ...blockFacts(nodeId, widget, state.rfNodes.map((item) => item.data.graphNode), state.rfEdges, executionResult, state.metadata.gui_scheme),
+    };
+  };
+  const sends = useWhatSends(request, widget ? `${nodeId}::${widget.id}` : '');
 
   if (!widget) {
     return (
@@ -67,43 +81,43 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
 
   const element = WIDGET_BUILDERS[widget.kind];
   const Panel = element.Panel;
-  const subject = `${nodeId}::${widget.id}`;
   const View = BLOCKS[widget.kind].View;
   const logic = widgetLogic(widget);
 
-  /**
-   * The one ✨ Generate handler, for whichever widget kind asks.
-   *
-   * This was an `isPlot` ternary threaded through eight lines -- prompt field,
-   * guard, success message, contract, both port names, target field -- which is
-   * a kind-switch in a shared shell, the thing the element contract exists to
-   * prevent. Each widget declares it now
-   * (`WidgetGuiBuilder.generation`) and this component treats them
-   * all alike.
-   */
   const handleGenerate = () => {
-    const spec = element.generation;
-    if (!spec) return;
-    return generate.run(buildGeneration({
-      element: widget.kind,
-      generation: spec,
-      subject: widget,
-      fields: widgetFields(widget, (patch) => {
-        onChange(patch);
-        // Show what was just written, rather than reporting success over a
-        // section the user would have to know to open.
-        setExpanded(true);
-      }),
-      exampleFile: (widget.example_file ?? '').trim(),
-      // What a block draws is seen on this page, in this scheme -- and the model
-      // writing it cannot see either. Said, not enforced: see `describeScheme`.
-      graphContext: describeScheme(useGraphStore.getState().metadata.gui_scheme),
-      // The real thing that reached this block last run. A chart transform
-      // written against actual rows beats one written against a description of
-      // them, and the verify pass can then run it for real.
-      sampleInputs: sampleFor(subject, ['value'], lastRunWidgetInput(nodeId, widget.id, executionResult)),
-    }), widget.id);
+    const asked = request();
+    if (asked) generate.run(buildGeneration(asked), widget.id);
   };
+
+  // In a project, a block's code is a file of its own, one folder below its
+  // page's. Keyed by the block, so one block's "Opened in …" is not said of
+  // the next one selected.
+  const openInEditor = logic
+    ? <OpenInMyEditor key={widget.id} nodeId={nodeId} widgetId={widget.id} />
+    : undefined;
+
+  // What only this shell knows, for a block that authors a body: the page it
+  // sits on, and the page it is drawn in. The panel places each in its step.
+  const steps: WidgetSteps | undefined = element.generation ? {
+    feeds: blockFeeds(nodeId, widget, useGraphStore.getState().rfNodes.map((item) => item.data.graphNode), useGraphStore.getState().rfEdges),
+    fromGraph: guiWidgetPorts(widget).inputs.length
+      ? () => blockFromTheGraph(nodeId, widget, executionResult, () => useGraphStore.getState().exportGraph())
+      : undefined,
+    tryIt: (values) => tryBlock(widget, values),
+    // What comes back is drawn by the block itself, at the block's own
+    // proportions: the chart, looked at, before the graph has ever run.
+    renderResult: (result) => (
+      <div
+        className="mt-1 rounded overflow-hidden"
+        style={{ aspectRatio: `${widget.w ?? 8} / ${widget.h ?? 4}`, maxHeight: 260, border: `1px solid ${LINE}`, ...schemeVars(useGraphStore.getState().metadata.gui_scheme) }}
+      >
+        <View widget={widget} value={result.shown} incoming={result.shown} onChange={() => {}} />
+      </div>
+    ),
+    preview: sends.preview,
+    sent: sends.sent,
+    openInEditor,
+  } : undefined;
 
   return (
     <div className="px-3 py-3 rounded-lg" style={WELL}>
@@ -177,15 +191,12 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
         <Panel
           builder={element}
           widget={widget}
-          generation={element.generation}
           fields={widgetFields(widget, onChange)}
           onUpdate={onChange}
-          expanded={expanded}
-          onToggleExpand={() => setExpanded((prev) => !prev)}
           generating={generate.isGenerating(widget.id)}
           message={generate.message(widget.id)}
           onGenerate={handleGenerate}
-          canGenerate={!!element.generation && (element.generation.available?.(widget) ?? true)}
+          steps={steps}
         />
         </Suspense>
         </GenerationReport>
@@ -280,62 +291,6 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
           )}
         </div>
       </details>
-
-      {/* A block that reshapes what it is shown is tried like any other element
-          -- and what comes back is drawn by the block itself, at the block's own
-          proportions: the chart, looked at, before the graph has ever run. */}
-      {element.generation && logic?.kind === 'code' && guiWidgetPorts(widget).inputs.length > 0 && (
-        <div className="mt-3">
-          <TryItPanel
-            subject={subject}
-            title="Try it: what arrives, and what this block shows"
-            ports={[{ id: 'value', name: 'what arrives' }]}
-            observed={lastRunWidgetInput(nodeId, widget.id, executionResult) ?? {}}
-            context={describeScheme(useGraphStore.getState().metadata.gui_scheme)}
-            onFetch={async () => {
-              const got = await call('nodeInputs', { ...useGraphStore.getState().exportGraph(), node_id: nodeId });
-              const arrived = got.inputs[`${widget.id}_in`];
-              return { inputs: arrived === undefined ? {} : { value: arrived }, error: got.error };
-            }}
-            onTest={async (values) => call('runBlock', { widget, value: values.value })}
-            renderResult={(result) => (
-              <div
-                className="mt-1 rounded overflow-hidden"
-                style={{ aspectRatio: `${widget.w ?? 8} / ${widget.h ?? 4}`, maxHeight: 260, border: `1px solid ${LINE}`, ...schemeVars(useGraphStore.getState().metadata.gui_scheme) }}
-              >
-                <View widget={widget} value={result.shown} incoming={result.shown} onChange={() => {}} />
-              </div>
-            )}
-          />
-        </div>
-      )}
-
-      {/* In a project, a block's code is a file of its own, one folder below its page's. */}
-      {logic && isProject && (
-        <div className="mt-3">
-          <button
-            className="text-xs px-3 py-1.5 rounded-lg"
-            style={{ border: `1px solid ${LINE}`, color: MUTED }}
-            title="Saves the project, then opens this block's file — in VS Code when it is installed"
-            onClick={async () => {
-              const state = useGraphStore.getState();
-              if (!state.currentFilePath) return;
-              try {
-                setExternalStatus('Saving, then opening…');
-                await call('saveGraph', { path: state.currentFilePath, graph: state.rootGraph() });
-                state.markSaved();
-                const opened = await call('openExternal', { graph_path: state.currentFilePath, node_id: nodeId, widget_id: widget.id });
-                setExternalStatus(`Opened in ${opened.with}: ${opened.path}. What you save there appears here by itself.`);
-              } catch (error) {
-                setExternalStatus(errorText(error, 'Could not open the file.'));
-              }
-            }}
-          >
-            ↗ Open in my editor
-          </button>
-          {externalStatus && <p className="text-xs mt-1" style={{ color: MUTED }}>{externalStatus}</p>}
-        </div>
-      )}
     </div>
   );
 }

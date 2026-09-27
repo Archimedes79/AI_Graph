@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PlotWindowWidgetRunner } from './PlotWindowWidgetRunner.ts';
+import { parseGraph } from '../../../graph.ts';
+import { problemsIn } from '../../../project/check.ts';
 
 /**
  * A chart is the one block a run does not draw.
@@ -28,22 +30,53 @@ describe('a chart, from the engine', () => {
       expect(wrapped).toMatch(/height: \d+/);
     });
 
-    it('leaves a body that still defines run() exactly as it is', () => {
-      // Every chart written before this one defines `run`. A wrapper appended
-      // to it would declare a second `run` and quietly win.
-      const old = 'function run(inputs) { return { value: inputs.value }; }';
-      expect(probeWith(old)).toBe(old);
-      const assigned = 'const run = (inputs) => ({ value: inputs.value });';
-      expect(probeWith(assigned)).toBe(assigned);
+    /** The wrapped body, run the way the sandbox runs one: `run(inputs, node)`, with a node that could ask a model. */
+    const probe = (body: string, value: unknown) => new Function(`${probeWith(body)}\nreturn run({ value: ${JSON.stringify(value)} }, { llm: async () => 'asked' });`)() as Promise<unknown>;
+
+    it('calls a body that still defines run() as the page does: with the value and a window, never the node', async () => {
+      // Every chart written before draw() defines `run`, and the page calls it
+      // `run({ value }, window)`. Left as it was, the probe handed it a node
+      // that could ask a model, and a body asking `node.llm` passed here and
+      // failed on every page.
+      await expect(probe('function run(inputs, window) { return { value: [inputs.value, window.width > 0] }; }', 3))
+        .resolves.toEqual({ value: [3, true] });
+      await expect(probe('const run = (inputs) => ({ value: inputs.value });', [4])).resolves.toEqual({ value: [4] });
+      await expect(probe('async function run(inputs, node) { return { value: await node.llm({ prompt: "x" }) }; }', 1))
+        .rejects.toThrow(/node\.llm is not a function/);
     });
 
-    it('unwraps either shape a draw may answer with', () => {
-      // `draw` may return the value, or `{ value }` as a transform did.
-      const bare = new Function(`${probeWith('function draw(d) { return [1]; }')}\nreturn run({ value: null });`)();
-      expect(bare).toEqual({ value: [1] });
-      const wrapped = new Function(`${probeWith('function draw(d) { return { value: [2] }; }')}\nreturn run({ value: null });`)();
-      expect(wrapped).toEqual({ value: [2] });
+    it('has no require, as a worker has none', async () => {
+      await expect(probe('function draw() { return [require("node:fs") ? 1 : 0]; }', null)).rejects.toThrow(/require is not a function/);
     });
+
+    it('says so when the body defines neither function', async () => {
+      await expect(probe('const points = [1];', null)).rejects.toThrow(/defines neither draw\(data, window\) nor run\(inputs\)/);
+    });
+
+    it('unwraps either shape a draw may answer with', async () => {
+      // `draw` may return the value, or `{ value }` as a transform did.
+      await expect(probe('function draw(d) { return [1]; }', null)).resolves.toEqual({ value: [1] });
+      await expect(probe('function draw(d) { return { value: [2] }; }', null)).resolves.toEqual({ value: [2] });
+      await expect(probe('function draw(d) { return { kind: "line", title: "T", points: [3] }; }', null))
+        .resolves.toEqual({ value: { kind: 'line', title: 'T', points: [3] } });
+    });
+  });
+
+  it('never asks a bundle for a model: its body runs in the page, which has none to ask', () => {
+    const asking = { id: 'c', kind: 'plot_window', label: '', w: 8, h: 4, tone: 'plain', config: { code: 'async function run(i, node) { return node.llm({}); }' } } as const;
+    expect(element.deployNeeds(asking as never).asksAi).toBe(false);
+  });
+
+  it('is reported by `check` when its code asks a model, which it cannot do in the page', () => {
+    // The bug: such a chart failed on every page with "node.llm is not a
+    // function" while `check` printed ✓ for its graph.
+    const page = (code: string) => parseGraph({
+      nodes: [{ id: 'page', node_type: 'gui', config: { gui_widgets: [{ id: 'temps', kind: 'plot_window', label: 'Temperatures', code }] } }],
+    });
+    const asking = problemsIn(page('async function run(inputs, node) { return { value: await node.llm({ prompt: "Plot it." }) }; }'));
+    expect(asking).toEqual([expect.objectContaining({ where: expect.stringContaining('block "temps"'), problem: expect.stringContaining('asks a model (node.llm)') })]);
+    // Saying there is none, in passing, is no call.
+    expect(problemsIn(page('// no node.llm in a page\nfunction draw(data) { return data ?? []; }'))).toEqual([]);
   });
 
   describe('what the contract asks for', () => {
@@ -60,6 +93,15 @@ describe('a chart, from the engine', () => {
 
     it('no longer teaches a fixed frame, which was only ever a way round not knowing', () => {
       expect(contract).not.toMatch(/viewBox="0 0 \d+ \d+"/);
+    });
+
+    it('is the whole frame the body is written in: the function, and a worker with neither Node nor a model', () => {
+      // The generator puts it where the function goes, in place of a node's
+      // run(inputs) skeleton and Node's rules, which contradicted it.
+      expect(contract).toMatch(/^Complete this function\. Keep its name and its two parameters/);
+      expect(contract).toContain('function draw(data, window) {');
+      expect(contract).toContain('no `require`');
+      expect(contract).toContain('no `node.llm`');
     });
   });
 });

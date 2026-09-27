@@ -1,18 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import Modal from '@/ui/Modal';
-import { call } from '@/api/client';
+import { call, type BrowseEntry } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import {
   ACCENT_TEXT, DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT,
 } from '@/ui/theme';
-
-export interface BrowseEntry {
-  name: string;
-  path: string;
-  is_dir: boolean;
-  /** A folder with a flow.json: a project, which is chosen rather than walked into. */
-  project?: boolean;
-}
 
 interface FileBrowserDialogProps {
   /**
@@ -95,6 +87,8 @@ export default function FileBrowserDialog({
   const canConfirm =
     mode === 'directory' ? !!path : mode === 'save' ? !!path && !!fileName.trim() : !!selected;
 
+  // Its Enter keys are its own and go no further: opened from "Before
+  // running…", an Enter typed here to open a folder also started the run.
   const confirm = () => {
     if (mode === 'directory') return onPick(path);
     if (mode === 'save') return onPick(join(path, fileName.trim()));
@@ -156,7 +150,7 @@ export default function FileBrowserDialog({
             style={FIELD}
             value={path}
             onChange={(e) => setPath(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') load(path); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); load(path); } }}
             aria-label="Current path"
           />
           <button
@@ -232,7 +226,7 @@ export default function FileBrowserDialog({
               style={FIELD}
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && canConfirm) confirm(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); if (canConfirm) confirm(); } }}
               placeholder={projects ? 'my_graph  (or my_graph.json for one file)' : 'my_graph.json'}
             />
           </div>

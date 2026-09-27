@@ -15,7 +15,7 @@
 // folder says. No file system: `folder.ts` reads the files, and so can a test
 // or a page that already has their contents.
 
-import { parseGraph, type Graph, type GraphEdge, type GraphMetadata } from '../graph.ts';
+import { defaultMetadata, parseGraph, type Graph, type GraphEdge, type GraphMetadata } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
 import { NotAGraph } from '../errors.ts';
 import { interfaceFrom } from './interfaceFile.ts';
@@ -50,7 +50,7 @@ function sorted<T extends Record<string, unknown>>(record: T): T {
 
 /** The graph's settings, with every one still at its default left out: the flow says what is particular. */
 function particular(metadata: GraphMetadata): Record<string, unknown> {
-  const plain = parseGraph({ nodes: [], edges: [] }).metadata as unknown as Record<string, unknown>;
+  const plain = defaultMetadata() as unknown as Record<string, unknown>;
   const given = metadata as unknown as Record<string, unknown>;
   const { name, description, ...rest } = given;
   const differs = (key: string): boolean => JSON.stringify(given[key]) !== JSON.stringify(plain[key]);

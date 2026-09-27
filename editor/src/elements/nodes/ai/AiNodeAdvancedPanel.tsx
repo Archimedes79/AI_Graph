@@ -1,6 +1,7 @@
 import type { AIProvider } from '@/graph';
 import BatchAndFileInputOptions from '../../fields/BatchAndFileInputOptions';
 import ProviderModelSelect from '../../fields/ProviderModelSelect';
+import { useGraphStore } from '@/store/graphStore';
 import { DIMMER, FIELD, MUTED } from '@/ui/theme';
 import RunCode from '@/authoring/RunCode';
 import { AI_RUN, LLM_CALLS_PER_RUN, isStandardRun } from '@engine/elements/nodes/ai/runTemplate.ts';
@@ -13,6 +14,7 @@ import type { NodeAdvancedPanelProps } from '../../NodeGuiBuilder';
  * made a node look like it needed eleven decisions before it would run.
  */
 export default function AiNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPanelProps) {
+  const graphDefault = useGraphStore((s) => s.metadata.ai_defaults);
   return (
     <>
       <div>
@@ -26,6 +28,8 @@ export default function AiNodeAdvancedPanel({ node, setConfig }: NodeAdvancedPan
           onModelChange={(m) => setConfig('ai_model', m)}
           allowDefault
           defaultLabel="Use the graph's default (⚙ Settings)"
+          readByRuns
+          graphDefault={graphDefault}
         />
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
           Leave this on the graph's default unless this one node must always use a specific

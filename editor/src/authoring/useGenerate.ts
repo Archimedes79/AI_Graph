@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { errorText } from '@/api/errorText';
-import { ApiError, call, type AICall } from '@/api/client';
+import { ApiError, watchGeneration, type AICall } from '@/api/client';
 
 export interface GenerateOptions<T> {
   /**
@@ -46,7 +46,6 @@ export function useGenerate() {
   const [transcripts, setTranscripts] = useState<Record<string, AICall[]>>({});
   // The same thing while it is still happening, so the wait is not a blank box.
   const [live, setLive] = useState<Record<string, AICall[]>>({});
-  const polling = useRef<Record<string, number>>({});
   /**
    * A finished generation, waiting to be taken.
    *
@@ -71,28 +70,11 @@ export function useGenerate() {
     setActiveKey(key);
     setMessage(options.pending ?? 'Generating…', key);
 
-    // A generation is several model calls over a minute or more. Asking every
-    // half second for what has gone out so far turns that wait into something
-    // a person can read and judge -- the prompt, the context, each step -- so
-    // a wrong answer can be understood rather than only re-rolled.
-    const progressId = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // What has gone out so far, while it runs: a wrong answer can then be
+    // understood rather than only re-rolled.
     setLive((prev) => ({ ...prev, [key]: [] }));
-    polling.current[key] = window.setInterval(async () => {
-      try {
-        const { calls } = await call('generationProgress', { id: progressId });
-        if (calls.length) setLive((prev) => ({ ...prev, [key]: calls }));
-      } catch {
-        // A poll that fails changes nothing: the generation is what matters.
-      }
-    }, 500);
-
-    const stopPolling = () => {
-      window.clearInterval(polling.current[key]);
-      delete polling.current[key];
-    };
-
     try {
-      const result = await options.run(progressId);
+      const result = await watchGeneration(options.run, (calls) => setLive((prev) => ({ ...prev, [key]: calls })));
       // Kept whether or not it worked out: a transcript is opened when
       // something went wrong, so the failing case is the one that needs it.
       const calls = (result as { calls?: AICall[] })?.calls;
@@ -110,7 +92,6 @@ export function useGenerate() {
       if (calls) setTranscripts((prev) => ({ ...prev, [key]: calls }));
       setMessage(`❌ ${errorText(error, options.failure ?? 'Generation failed')}`, key);
     } finally {
-      stopPolling();
       setActiveKey(null);
     }
   }, [setMessage]);
@@ -142,7 +123,6 @@ export function useGenerate() {
       setLive((prev) => ({ ...prev, [key]: [] }));
       setMessage('Discarded. Nothing changed.', key);
     },
-    setMessage,
     run,
   };
 }

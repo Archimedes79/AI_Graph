@@ -11,12 +11,12 @@
 // no answer -- with the request still running on the other side.
 import {
   API, pathFor,
-  type Failure, type RequestOf, type ResponseOf, type RouteName,
+  type AICall, type Failure, type RequestOf, type ResponseOf, type RouteName,
 } from '@engine/host/api.ts';
 import type { EngineGraph, Graph } from '@/graph';
 
 export type {
-  AICall, BrowsePage, GenerateRequest, GenerateResponse, ProbeReport, ProviderStatus, Requirement,
+  AICall, BrowseEntry, BrowsePage, GenerateRequest, GenerateResponse, ProbeReport, ProviderStatus, Requirement,
   RunSnapshot, RunTrigger, SettingsPatch, SettingsStatus, ToolAiSettings,
 } from '@engine/host/api.ts';
 export type { ScheduleState } from '@engine/host/schedule.ts';
@@ -44,8 +44,8 @@ type EditorView<T> =
 /**
  * Call one route of the contract.
  *
- * GET and DELETE carry the request on the query; POST as a JSON body, or as
- * the bytes themselves for a raw route. `:params` are filled into the path.
+ * GET and DELETE carry the request on the query; POST as a JSON body.
+ * `:params` are filled into the path.
  */
 export async function call<K extends RouteName>(name: K, request?: RequestOf<K>): Promise<EditorView<ResponseOf<K>>> {
   const route = API[name];
@@ -54,12 +54,7 @@ export async function call<K extends RouteName>(name: K, request?: RequestOf<K>)
   let body: BodyInit | undefined;
   const headers: Record<string, string> = {};
 
-  if (route.raw) {
-    const { bytes, ...query } = rest as { bytes: BodyInit };
-    url += `?${new URLSearchParams(query as Record<string, string>)}`;
-    body = bytes;
-    headers['Content-Type'] = 'application/octet-stream';
-  } else if (route.method === 'POST') {
+  if (route.method === 'POST') {
     body = JSON.stringify(rest);
     headers['Content-Type'] = 'application/json';
   } else if (Object.keys(rest).length) {
@@ -72,16 +67,51 @@ export async function call<K extends RouteName>(name: K, request?: RequestOf<K>)
     throw new ApiError(response.status, failure);
   }
   const type = response.headers.get('Content-Type') ?? '';
-  return (type.includes('application/json') ? response.json() : response.blob()) as Promise<EditorView<ResponseOf<K>>>;
+  if (type.includes('application/json')) return response.json() as Promise<EditorView<ResponseOf<K>>>;
+  // A download, named by the server (`Download`): a File, which is a Blob
+  // that also carries that name, so no caller works the name out again.
+  const blob = await response.blob();
+  const named = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ?? 'download';
+  return new File([blob], named, { type: blob.type }) as EditorView<ResponseOf<K>>;
 }
 
-/** Save the deploy bundle the way a browser saves any download. */
+/**
+ * Run a generation, and hand *onCalls* what it has sent so far while it runs.
+ *
+ * A generation is several model calls over a minute or more. Asking every half
+ * second what has gone out turns that wait into something a person can read
+ * and judge -- the prompt, the context, each step. *run* is handed the id to
+ * send as `progress_id`, which is what the engine files the calls under. A
+ * poll that fails changes nothing: the generation is what matters. The node
+ * dialogs and ✨ Generate Graph each wrote this out.
+ */
+export async function watchGeneration<T>(
+  run: (progressId: string) => Promise<T>,
+  onCalls: (calls: AICall[]) => void,
+): Promise<T> {
+  const progressId = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const polling = setInterval(async () => {
+    try {
+      const { calls } = await call('generationProgress', { id: progressId });
+      if (calls.length) onCalls(calls);
+    } catch {
+      // Nothing to do: the next poll, or the generation's own answer, says more.
+    }
+  }, 500);
+  try {
+    return await run(progressId);
+  } finally {
+    clearInterval(polling);
+  }
+}
+
+/** Save the deploy bundle the way a browser saves any download, under the name the engine gave it. */
 export async function downloadBundle(graph: RequestOf<'bundle'>): Promise<void> {
-  const zip = await call('bundle', graph) as Blob;
+  const zip = await call('bundle', graph);
   const url = URL.createObjectURL(zip);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${graph.metadata.name.toLowerCase().replace(/\s+/g, '_')}_bundle.zip`;
+  link.download = zip.name;
   link.click();
   URL.revokeObjectURL(url);
 }

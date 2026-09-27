@@ -4,7 +4,7 @@ import type { Graph } from '@/graph';
 
 const emptyGraph: Graph = {
   metadata: {
-    name: 'Undo test', version: '1.0.0', description: '', author: '', tags: [],
+    name: 'Undo test', description: '',
     ai_defaults: { provider: 'default', model: '' },
   gui_scheme: 'night',
   },
@@ -21,8 +21,8 @@ describe('undo / redo', () => {
   });
 
   it('has nothing to undo on a freshly loaded graph', () => {
-    expect(store().canUndo()).toBe(false);
-    expect(store().canRedo()).toBe(false);
+    expect(store().past).toHaveLength(0);
+    expect(store().future).toHaveLength(0);
   });
 
   it('undoes and redoes adding a node', () => {
@@ -31,7 +31,7 @@ describe('undo / redo', () => {
 
     store().undo();
     expect(nodeCount()).toBe(0);
-    expect(store().canRedo()).toBe(true);
+    expect(store().future.length).toBeGreaterThan(0);
 
     store().redo();
     expect(nodeCount()).toBe(1);
@@ -71,16 +71,16 @@ describe('undo / redo', () => {
     expect(nodeCount()).toBe(1);
     store().undo();
     expect(nodeCount()).toBe(0);
-    expect(store().canUndo()).toBe(false);
+    expect(store().past).toHaveLength(0);
   });
 
   it('a new change abandons the redo branch', () => {
     store().addNode('code', { x: 0, y: 0 });
     store().undo();
-    expect(store().canRedo()).toBe(true);
+    expect(store().future.length).toBeGreaterThan(0);
 
     store().addNode('output', { x: 0, y: 0 });
-    expect(store().canRedo()).toBe(false);
+    expect(store().future).toHaveLength(0);
   });
 
   it('a delete that commits twice still costs only one undo', () => {
@@ -124,13 +124,13 @@ describe('undo / redo', () => {
 
   it('loading a different graph clears the history', () => {
     store().addNode('code', { x: 0, y: 0 });
-    expect(store().canUndo()).toBe(true);
+    expect(store().past.length).toBeGreaterThan(0);
 
     store().loadGraph(structuredClone(emptyGraph));
     // Undoing into the previous document would restore nodes that no longer
     // belong to the graph now open.
-    expect(store().canUndo()).toBe(false);
-    expect(store().canRedo()).toBe(false);
+    expect(store().past).toHaveLength(0);
+    expect(store().future).toHaveLength(0);
   });
 
   it('keeps the history bounded', () => {

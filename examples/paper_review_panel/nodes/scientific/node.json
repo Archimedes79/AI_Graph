@@ -5,7 +5,6 @@
     "ai_model": "gemini-flash-lite-latest",
     "ai_provider": "google",
     "batch_mode": "whole_list",
-    "output_format": "text",
     "read_file_inputs": false,
     "temperature": 0.2
   }

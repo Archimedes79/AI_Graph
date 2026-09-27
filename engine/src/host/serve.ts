@@ -24,7 +24,7 @@ import { candidatePaths, configuredSettings } from '../ai/settings.ts';
 import { DEFAULT_SETTINGS } from '../ai/providers.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
-  Download, Refusal, message, readBytes, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
+  Download, Refusal, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
 } from './http.ts';
 import { browse, extensionFilter } from './browse.ts';
 import { NotFound } from '../errors.ts';
@@ -104,12 +104,14 @@ export async function serve(options: ServeOptions): Promise<Served> {
   lifecycle.own('runs in flight', () => runs.stopAll());
 
   const handlers: Handlers = {
-    // A tool's picker opens where its graph is — a bundle's own folder, which
-    // is also what its paths are relative to. The editor's opens where the
-    // editor was started, which is the same idea one level up.
-    ...toolRoutes(held, clock, runs, options.graphPath !== undefined, options.graphPath
-      ? (projectFolderOf(options.graphPath) ?? dirname(resolve(options.graphPath)))
-      : process.cwd()),
+    // Where an empty path opens the picker, decided here and nowhere else. A
+    // tool's opens where its graph is — a bundle's own folder, which is also
+    // what its paths are relative to. The editor's opens where the editor was
+    // started, which is the same idea one level up, even when it was started
+    // beside a graph.json it therefore also serves.
+    ...toolRoutes(held, clock, runs, options.graphPath !== undefined, options.editor || !options.graphPath
+      ? process.cwd()
+      : (projectFolderOf(options.graphPath) ?? dirname(resolve(options.graphPath)))),
     // Loaded, not imported: a bundle carries this file without the `editor/`
     // folder beside it, and a static import would stop every deployed tool.
     // `held` goes in so the editor can hand this server the graph it is
@@ -140,7 +142,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
         const asked = {
           ...Object.fromEntries(url.searchParams),
           ...found.params,
-          ...(route.raw ? { bytes: await readBytes(request) } : route.method === 'POST' ? await readJson(request) : {}),
+          ...(route.method === 'POST' ? await readJson(request) : {}),
         };
         const answer = await handler(asked, exchange);
         return answer instanceof Download ? sendDownload(response, answer) : sendJson(response, 200, answer);
@@ -194,7 +196,7 @@ function toolRoutes(
   clock: ReturnType<typeof schedule> | null,
   runs: RunBoard,
   ships: boolean,
-  /** Where this tool's file picker opens: the folder its graph sits in. */
+  /** Where the file picker opens: the folder a tool's graph sits in, or where the editor was started. */
   toolRoot: string,
 ): Handlers {
   return {
@@ -221,17 +223,7 @@ function toolRoutes(
       };
     },
 
-    requirements: (asked) => runtimeRequirements(parseGraph(asked), registry).map((requirement) => {
-      const [nodeId, widgetId] = requirement.key.split('::');
-      return {
-        node_id: nodeId,
-        widget_id: widgetId ?? null,
-        label: requirement.label,
-        kind: requirement.kind,
-        direction: requirement.direction,
-        current_value: requirement.current,
-      };
-    }),
+    requirements: (asked) => runtimeRequirements(parseGraph(asked), registry),
 
     startRun(asked) {
       const graph = parseGraph(asked);
@@ -258,7 +250,7 @@ function toolRoutes(
 
     stopRun: (asked) => ({ cancelled: runs.stop(asked.id) }),
 
-    // The same picker the editor has. It used to list the starting directory's
+    // The one picker, the editor's too. It used to list the starting directory's
     // files and nothing else -- no folders, no parent, no drives -- which left
     // whoever was handed the tool able to choose a file in one directory and
     // with the way up drawn as a permanently disabled button. Loopback only,
@@ -267,7 +259,8 @@ function toolRoutes(
       if (!loopback) throw new Refusal(403, 'Browsing is disabled.');
       try {
         // Empty path means the tool's own folder -- where its graph and the
-        // data beside it live -- rather than wherever it happened to be started.
+        // data beside it live -- rather than wherever it happened to be
+        // started; for the editor, where it was started (`toolRoot`).
         return await browse(asked.path ?? '', extensionFilter(asked.extensions ?? ''), toolRoot);
       } catch (error) {
         throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));

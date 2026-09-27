@@ -16,8 +16,6 @@ interface ModalProps {
   dismissOnBackdrop?: boolean;
   /** Escape closes the modal. Off while something is mid-flight. */
   dismissOnEscape?: boolean;
-  /** Raise above another modal (the connector editor opens over the node editor). */
-  zIndex?: number;
   /**
    * Cap the modal at 90vh and scroll its body. On by default: a dialog taller
    * than the window hides its own footer, so Save and Done cannot be reached
@@ -26,8 +24,16 @@ interface ModalProps {
    * must be allowed to grow past the viewport.
    */
   scrollBody?: boolean;
-  /** Fixed row between header and body, e.g. a tab bar that must not scroll. */
-  subHeader?: React.ReactNode;
+}
+
+/**
+ * Whether Escape is this dialog's to act on: only while no other dialog is
+ * open inside it. A file browser opened from a node's dialog is drawn inside
+ * it, and both hear Escape on the document -- the node's dialog closed with
+ * the browser, in the order the two happened to listen.
+ */
+export function hearsEscape(panel: Pick<Element, 'querySelector'> | null): boolean {
+  return panel !== null && panel.querySelector('[role="dialog"]') === null;
 }
 
 /**
@@ -50,9 +56,7 @@ export default function Modal({
   maxWidth = 'max-w-lg',
   dismissOnBackdrop = true,
   dismissOnEscape = true,
-  zIndex = 50,
   scrollBody = true,
-  subHeader,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -68,7 +72,7 @@ export default function Modal({
   useEffect(() => {
     if (!dismissOnEscape) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && hearsEscape(panelRef.current)) {
         event.stopPropagation();
         onClose();
       }
@@ -99,7 +103,7 @@ export default function Modal({
   return (
     <div
       className="fixed inset-0 flex items-center justify-center"
-      style={{ background: SCRIM, zIndex }}
+      style={{ background: SCRIM, zIndex: 50 }}
       onClick={dismissOnBackdrop ? onClose : undefined}
     >
       <div
@@ -119,8 +123,6 @@ export default function Modal({
           <span className="text-sm font-semibold" style={{ color: TEXT }}>{title}</span>
           <button onClick={onClose} aria-label="Close dialog" style={{ color: MUTED }}>✕</button>
         </div>
-
-        {subHeader && <div className="shrink-0">{subHeader}</div>}
 
         <div className={scrollBody ? 'flex-1 overflow-y-auto' : ''}>{children}</div>
 

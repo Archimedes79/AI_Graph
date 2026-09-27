@@ -25,7 +25,8 @@
     {
       "port": "length_out",
       "name": "Length",
-      "type": "text"
+      "type": "text",
+      "description": "one of: One sentence, Three sentences, Five bullet points"
     },
     {
       "port": "go_out",

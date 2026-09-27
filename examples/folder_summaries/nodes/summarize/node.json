@@ -6,7 +6,6 @@
     "ai_provider": "google",
     "batch_concurrency": 3,
     "batch_mode": "per_item",
-    "output_format": "text",
     "read_file_inputs": true,
     "temperature": 0.3
   }

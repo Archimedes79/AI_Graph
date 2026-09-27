@@ -3,21 +3,23 @@ import { immer } from 'zustand/middleware/immer';
 import type { Node, Edge } from 'reactflow';
 import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, NodeType } from '@/graph';
 import type { RFNodeData } from './nodeData';
+import type { PortRenames } from './portRenames';
 import { derivedNodePorts, showsPage } from '@/document/guiWidgets';
 import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { ACCENT } from '@/ui/theme';
 import { delivered } from './executionStatus';
-import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
+import { NODE_KINDS, savedNode, whenMissing } from '@/document/nodeKinds';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 import type React from 'react';
-import { applyMemory } from '@engine/graph.ts';
+import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
-import { inferInterface } from '@engine/execution/interface.ts';
+import { inferInterface, type Schema } from '@engine/execution/interface.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 import { freeId } from '@/document/ids';
+import { graphEdge } from '@/document/wires';
 import { wireOf } from '@engine/project/flow.ts';
 
 type RFNode = Node<RFNodeData>;
@@ -74,9 +76,7 @@ export interface GraphStore {
   currentRunId: string | null;
 
   // UI state
-  selectedNodeId: string | null;
   editingNodeId: string | null;
-  editingPort: { nodeId: string; portId: string } | null;
 
   // Actions
   setMetadata: (meta: Partial<GraphMetadata>) => void;
@@ -85,12 +85,14 @@ export interface GraphStore {
   addNode: (nodeType: NodeType, position: { x: number; y: number }) => string;
   /**
    * `renamed` maps a port's old id to its new one, per side, so the wires
-   * follow the rename instead of being pruned as "a port that vanished".
+   * follow the rename instead of being pruned as "a port that vanished" --
+   * and to null for a port that was removed, whose wires go even when another
+   * port has been given its name since (`portRenames`).
    */
   updateNode: (
     nodeId: string,
     updates: Partial<GraphNode>,
-    renamed?: { inputs: Record<string, string>; outputs: Record<string, string> },
+    renamed?: PortRenames,
   ) => void;
   /**
    * Wire one port to another: what dragging from a handle to a handle does.
@@ -101,9 +103,7 @@ export interface GraphStore {
   deleteNode: (nodeId: string) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
   setRFEdges: (edges: Edge[]) => void;
-  setSelectedNode: (nodeId: string | null) => void;
   setEditingNode: (nodeId: string | null) => void;
-  setEditingPort: (port: { nodeId: string; portId: string } | null) => void;
   /**
    * `ran` is the part of *result* that is new, when a page event re-ran only
    * some nodes and the rest was kept from before. Memory is settled from that
@@ -111,15 +111,25 @@ export interface GraphStore {
    * conversation a second time.
    */
   setExecutionResult: (result: ExecutionResult | null, ran?: ExecutionResult) => void;
-  setIsExecuting: (v: boolean) => void;
-  setTextOutputWindows: (windows: { nodeId: string; label: string; content: string }[]) => void;
   closeTextOutputWindow: (nodeId: string) => void;
   loadGraph: (graph: Graph) => void;
+  /**
+   * An empty graph with the engine's default settings, as a document of its
+   * own: nothing of the one before it -- its pinned AI, its colour scheme,
+   * its undo steps -- carries over.
+   */
+  newGraph: () => void;
   exportGraph: () => Graph;
   /** Go into the graph a node holds. It becomes the open document. */
   openSubgraph: (nodeId: string) => void;
   /** Come back out one level, putting what was edited back into the node that holds it. */
   closeSubgraph: () => void;
+  /**
+   * Come back out until *depth* levels are left -- 0 is the graph at the top --
+   * or as far as a run in flight allows: a level that will not close ends it,
+   * where asking again would ask forever.
+   */
+  closeSubgraphsTo: (depth: number) => void;
   /**
    * The whole document: what is open, folded back through every node it is
    * inside. What is saved, and what "unsaved" is measured against, whatever
@@ -145,13 +155,21 @@ export interface GraphStore {
   commit: () => void;
   undo: () => void;
   redo: () => void;
-  canUndo: () => boolean;
-  canRedo: () => boolean;
   /** Internal: replace the graph with a serialised snapshot (used by undo/redo). */
   applyGraphSnapshot: (json: string) => void;
   isDirty: () => boolean;
   /** Record the current graph as saved (after a successful write to disk). */
   markSaved: () => void;
+  /**
+   * Write the whole document to *path* -- the one it was opened from or last
+   * saved to, when none is given -- and be at the path it was written to.
+   *
+   * What counts as saved is the graph that was sent, not the one there is when
+   * the write comes back: an edit made while it was on its way is not on disk,
+   * and must still read as unsaved. Save, Save As and both "Open in my editor"
+   * buttons each wrote this out, and each marked the later graph saved.
+   */
+  save: (path?: string) => Promise<{ path: string }>;
   /**
    * Take in code and prompts that changed in the project folder on disk.
    *
@@ -247,11 +265,7 @@ function newId(prefix: string) {
 }
 
 function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphMetadata {
-  return {
-    ...defaultMetadata(),
-    ...(metadata ?? {}),
-    tags: Array.isArray(metadata?.tags) ? metadata.tags : [],
-  };
+  return { ...defaultMetadata(), ...(metadata ?? {}) };
 }
 
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
@@ -270,8 +284,13 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
     },
     inputs: Array.isArray(rawNode.inputs) ? rawNode.inputs : defaults.inputs,
     outputs: Array.isArray(rawNode.outputs) ? rawNode.outputs : defaults.outputs,
+    // A key the file left out means what the engine reads it as, not what a
+    // new node starts with: loading and saving must not change what a graph
+    // does. A node made in the editor starts from `create`, and once saved it
+    // carries these keys, so only a graph that never said them is filled here.
     config: {
       ...defaults.config,
+      ...whenMissing(nodeType),
       ...(rawNode.config ?? {}),
     },
   };
@@ -323,19 +342,8 @@ function normalizeGraph(graph: Graph): Graph {
   };
 }
 
-const defaultMetadata = (): GraphMetadata => ({
-  name: 'Untitled Graph',
-  version: '1.0.0',
-  description: '',
-  author: '',
-  tags: [],
-  // Which AI this graph's AI nodes call when they run, set once for the whole
-  // graph (⚙ Settings) instead of once per node. 'default' means unset, which
-  // the backend resolves to its own fallback; whoever runs a deployed copy can
-  // override it without editing the graph -- see engine/src/ai/settings.ts.
-  ai_defaults: { provider: 'default', model: '' },
-  gui_scheme: 'night',
-});
+/** The engine's defaults (`defaultMetadata`), in the editor's typed view of them. */
+const defaultMetadata = (): GraphMetadata => engineDefaults() as GraphMetadata;
 
 // How often a run in flight is polled. Fast enough that the node name keeps up
 // with a quick graph, slow enough not to flood a local server during a long one.
@@ -343,12 +351,6 @@ const RUN_POLL_INTERVAL_MS = 400;
 
 /** How many undo steps are kept. Each entry is a whole serialised graph. */
 const HISTORY_LIMIT = 50;
-
-interface NodeCallbacks {
-  onEdit: (nodeId: string) => void;
-  onDelete: (nodeId: string) => void;
-  onPortEdit: (nodeId: string, portId: string) => void;
-}
 
 /** The size a node was given, if it was given one, as ReactFlow lays it out. */
 function sizeStyle(node: GraphNode): { style: { width: number; height: number } } | Record<string, never> {
@@ -380,7 +382,7 @@ function setSize(rfn: Node<RFNodeData>): Pick<GraphNode, 'width' | 'height'> {
  * undo/redo's `applyGraphSnapshot`, so restoring a snapshot can never drift from
  * loading a file -- they were the same twenty lines twice.
  */
-function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
+function buildReactFlowGraph(graph: Graph) {
   const rfNodes: Node<RFNodeData>[] = graph.nodes.map((gn) => ({
     id: gn.id,
     type: 'graphNode',
@@ -393,7 +395,7 @@ function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
     // contents happened to measure -- and the measurement then read as an edit
     // to a graph nobody had touched.
     ...sizeStyle(gn),
-    data: { graphNode: gn, ...callbacks },
+    data: { graphNode: gn },
   }));
 
   const rfEdges: Edge[] = graph.edges.map((ge) => ({
@@ -410,19 +412,22 @@ function buildReactFlowGraph(graph: Graph, callbacks: NodeCallbacks) {
   return { rfNodes, rfEdges };
 }
 
-/** Whether this node's element keeps *field* as a file of its own: asked of the engine, never of a node type. */
-function keepsText(node: GraphNode, field: string): boolean {
-  return engineRegistry.node(node.node_type)?.texts(node).some((text) => text.field === field) ?? false;
-}
-
 /** Whether this node keeps an output interface (in its `interface.json`). */
 export function keepsOutputInterface(node: GraphNode): boolean {
   return engineRegistry.node(node.node_type)?.keepsOutputInterface ?? false;
 }
 
-/** Whether this node can keep examples (`examples.md`). */
-export function keepsExamples(node: GraphNode): boolean {
-  return keepsText(node, 'examples');
+/**
+ * The output interface *node* is to keep, measured from *outputs* it just
+ * produced -- by a run, or by ✨'s probe -- or undefined: when it keeps none,
+ * already keeps one, or nothing came out. Kept once, the first time; after
+ * that it is the contract the next runs are held to, until its Clear in the
+ * node's dialog lets the next one measure it again. One rule for the run, the
+ * dialog's ✨ and the sweep's, which each write it where their node is.
+ */
+export function shapeToKeep(node: GraphNode, outputs: Record<string, unknown> | undefined): Schema | undefined {
+  if (!keepsOutputInterface(node) || node.config.output_schema) return undefined;
+  return outputs && Object.keys(outputs).length ? inferInterface(outputs) : undefined;
 }
 
 export const useGraphStore = create<GraphStore>()(
@@ -435,9 +440,7 @@ export const useGraphStore = create<GraphStore>()(
     executionResult: null,
     isExecuting: false,
     textOutputWindows: [],
-    selectedNodeId: null,
     editingNodeId: null,
-    editingPort: null,
     subgraphStack: [],
     savedSnapshot: null,
     past: [],
@@ -459,17 +462,14 @@ export const useGraphStore = create<GraphStore>()(
     addNode: (nodeType, position) => {
       get().commit();
       const id = freeId(nodeType, get().rfNodes.map((existing) => existing.id));
-      const defaults = NODE_KINDS[nodeType].create(id);
+      const kind = NODE_KINDS[nodeType];
+      const made = kind.create(id);
+      const defaults = kind.placedAmong?.(made, get().rfNodes.map((existing: RFNode) => existing.data.graphNode)) ?? made;
       const rfNode: Node<RFNodeData> = {
         id,
         type: 'graphNode',
         position,
-        data: {
-          graphNode: defaults,
-          onEdit: (nid) => get().setEditingNode(nid),
-          onDelete: (nid) => get().deleteNode(nid),
-          onPortEdit: (nid, pid) => get().setEditingPort({ nodeId: nid, portId: pid }),
-        },
+        data: { graphNode: defaults },
       };
       set((state) => {
         state.rfNodes.push(rfNode as never);
@@ -480,10 +480,7 @@ export const useGraphStore = create<GraphStore>()(
     connect: (wire) => {
       // Named the way flow.json writes a wire, and known by its two ends: a wire
       // read from an older file keeps the id it was saved with.
-      const id = wireOf({
-        id: '', source_node_id: wire.source, source_port_id: wire.sourceHandle ?? '',
-        target_node_id: wire.target, target_port_id: wire.targetHandle ?? '',
-      });
+      const id = wireOf(graphEdge(wire));
       const joins = (edge: Edge): boolean => edge.source === wire.source && edge.target === wire.target
         && (edge.sourceHandle ?? '') === (wire.sourceHandle ?? '') && (edge.targetHandle ?? '') === (wire.targetHandle ?? '');
       if (get().rfEdges.some(joins)) return;
@@ -525,16 +522,21 @@ export const useGraphStore = create<GraphStore>()(
 
           // A port that was renamed keeps its wires. Without this the rename
           // would look like "the old port is gone" to the pruning below, and
-          // renaming `input` to `csv` would quietly cut the graph in half.
+          // renaming `input` to `csv` would quietly cut the graph in half. A
+          // port that was removed loses them here, by name, because the
+          // pruning below cannot tell it from a new port given the same name.
           if (renamed) {
+            const fate = (map: Record<string, string | null>, handle: string | null | undefined) =>
+              (handle && Object.prototype.hasOwnProperty.call(map, handle) ? map[handle] : undefined);
+            const cut = new Set<Edge>();
             for (const edge of state.rfEdges as Edge[]) {
-              if (edge.target === nodeId && edge.targetHandle && renamed.inputs[edge.targetHandle]) {
-                edge.targetHandle = renamed.inputs[edge.targetHandle];
-              }
-              if (edge.source === nodeId && edge.sourceHandle && renamed.outputs[edge.sourceHandle]) {
-                edge.sourceHandle = renamed.outputs[edge.sourceHandle];
-              }
+              const into = edge.target === nodeId ? fate(renamed.inputs, edge.targetHandle) : undefined;
+              const from = edge.source === nodeId ? fate(renamed.outputs, edge.sourceHandle) : undefined;
+              if (into === null || from === null) { cut.add(edge); continue; }
+              if (into) edge.targetHandle = into;
+              if (from) edge.sourceHandle = from;
             }
+            if (cut.size) state.rfEdges = state.rfEdges.filter((edge: Edge) => !cut.has(edge));
           }
 
           // Ports may have shrunk (e.g. a removed GUI widget) -- prune any
@@ -574,19 +576,9 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges = edges;
       }),
 
-    setSelectedNode: (nodeId) =>
-      set((state) => {
-        state.selectedNodeId = nodeId;
-      }),
-
     setEditingNode: (nodeId) =>
       set((state) => {
         state.editingNodeId = nodeId;
-      }),
-
-    setEditingPort: (port) =>
-      set((state) => {
-        state.editingPort = port;
       }),
 
     setExecutionResult: (shown, ran) =>
@@ -608,25 +600,13 @@ export const useGraphStore = create<GraphStore>()(
 
         // A run is where an output interface comes from: nodes are wired, the
         // graph runs, and what a node actually produced is the first honest
-        // statement of its outputs. Kept once, the first time it succeeds;
-        // after that it is the contract the next runs are held to, and only
-        // "Set from last run" replaces it.
+        // statement of its outputs (`shapeToKeep`), the first time it succeeds.
         for (const rfNode of state.rfNodes) {
           const node = rfNode.data.graphNode;
-          if (!keepsOutputInterface(node) || node.config.output_schema) continue;
           const ran = result.node_results.find((r) => r.node_id === node.id && r.status === 'success');
-          if (ran && Object.keys(ran.outputs ?? {}).length) node.config.output_schema = inferInterface(ran.outputs);
+          const kept = shapeToKeep(node, ran?.outputs);
+          if (kept) node.config.output_schema = kept;
         }
-      }),
-
-    setIsExecuting: (v) =>
-      set((state) => {
-        state.isExecuting = v;
-      }),
-
-    setTextOutputWindows: (windows) =>
-      set((state) => {
-        state.textOutputWindows = windows;
       }),
 
     closeTextOutputWindow: (nodeId) =>
@@ -636,13 +616,7 @@ export const useGraphStore = create<GraphStore>()(
 
     loadGraph: (graph) => {
       const normalizedGraph = normalizeGraph(graph);
-      const callbacks = {
-        onEdit: (nid: string) => get().setEditingNode(nid),
-        onDelete: (nid: string) => get().deleteNode(nid),
-        onPortEdit: (nid: string, pid: string) => get().setEditingPort({ nodeId: nid, portId: pid }),
-      };
-
-      const { rfNodes, rfEdges } = buildReactFlowGraph(normalizedGraph, callbacks);
+      const { rfNodes, rfEdges } = buildReactFlowGraph(normalizedGraph);
 
       set((state) => {
         state.metadata = normalizedGraph.metadata;
@@ -666,6 +640,8 @@ export const useGraphStore = create<GraphStore>()(
       // graph is guaranteed to read as clean.
       get().markSaved();
     },
+
+    newGraph: () => get().loadGraph({ metadata: defaultMetadata(), nodes: [], edges: [] }),
 
     openSubgraph: (nodeId) => {
       // Not while a run is in flight: its result is about to arrive, and it
@@ -714,6 +690,14 @@ export const useGraphStore = create<GraphStore>()(
       });
     },
 
+    closeSubgraphsTo: (depth) => {
+      while (get().subgraphStack.length > depth) {
+        const before = get().subgraphStack.length;
+        get().closeSubgraph();
+        if (get().subgraphStack.length === before) return;
+      }
+    },
+
     rootGraph: () => {
       const { subgraphStack } = get();
       let graph = get().exportGraph();
@@ -742,13 +726,7 @@ export const useGraphStore = create<GraphStore>()(
         });
       });
 
-      const edges: GraphEdge[] = rfEdges.map((rfe) => ({
-        id: rfe.id,
-        source_node_id: rfe.source,
-        source_port_id: rfe.sourceHandle ?? 'output',
-        target_node_id: rfe.target,
-        target_port_id: rfe.targetHandle ?? 'input',
-      }));
+      const edges: GraphEdge[] = rfEdges.map(graphEdge);
 
       return { metadata, nodes, edges };
     },
@@ -790,9 +768,6 @@ export const useGraphStore = create<GraphStore>()(
       get().applyGraphSnapshot(next);
     },
 
-    canUndo: () => get().past.length > 0,
-    canRedo: () => get().future.length > 0,
-
     /**
      * Restore a serialised graph without touching the history stacks or the
      * saved-snapshot marker -- undoing back to the last saved state must read as
@@ -801,11 +776,7 @@ export const useGraphStore = create<GraphStore>()(
      */
     applyGraphSnapshot: (json) => {
       const graph = normalizeGraph(JSON.parse(json) as Graph);
-      const { rfNodes, rfEdges } = buildReactFlowGraph(graph, {
-        onEdit: (nid: string) => get().setEditingNode(nid),
-        onDelete: (nid: string) => get().deleteNode(nid),
-        onPortEdit: (nid: string, pid: string) => get().setEditingPort({ nodeId: nid, portId: pid }),
-      });
+      const { rfNodes, rfEdges } = buildReactFlowGraph(graph);
       set((state) => {
         state.metadata = graph.metadata;
         state.rfNodes = rfNodes as never;
@@ -813,11 +784,9 @@ export const useGraphStore = create<GraphStore>()(
         // Everything that names a node of the graph that was here. Left
         // standing, each points at something that may not exist any more: a
         // result against ids that now mean other nodes, a window from another
-        // graph's run floating over this one, a selection nobody can see.
+        // graph's run floating over this one.
         state.executionResult = null;
         state.editingNodeId = null;
-        state.editingPort = null;
-        state.selectedNodeId = null;
         state.textOutputWindows = [];
       });
     },
@@ -871,17 +840,28 @@ export const useGraphStore = create<GraphStore>()(
       });
     },
 
+    save: async (path = get().currentFilePath ?? undefined) => {
+      if (!path) throw new Error('This graph has no file yet: use Save As.');
+      const graph = get().rootGraph();
+      const result = await call('saveGraph', { path, graph });
+      set((state) => {
+        state.savedSnapshot = JSON.stringify(graph);
+      });
+      get().setCurrentFilePath(result.path, result.project);
+      return { path: result.path };
+    },
+
     runGraph: async (graph, trigger = null) => {
-      const { setIsExecuting, setExecutionResult, setTextOutputWindows } = get();
+      const { setExecutionResult } = get();
       // A page event runs part of the graph, so what the rest of the page
       // shows is still true and stays: pressing "Plot" must not blank the
       // summary beside it. A full run starts from a clean slate, as before.
       const previous = trigger ? get().executionResult : null;
-      setIsExecuting(true);
-      if (!trigger) {
-        setExecutionResult(null);
-        setTextOutputWindows([]);
-      }
+      set((state) => {
+        state.isExecuting = true;
+        if (!trigger) state.textOutputWindows = [];
+      });
+      if (!trigger) setExecutionResult(null);
       try {
         // Started as a background run and polled, rather than awaited as one
         // blocking request: that is what lets the toolbar name the node in
@@ -931,9 +911,11 @@ export const useGraphStore = create<GraphStore>()(
         // person closed it.
         const opened = collectTextOutputWindows(graph, fresh);
         const again = new Set(opened.map((w) => w.nodeId));
-        setTextOutputWindows(previous
-          ? [...get().textOutputWindows.filter((w) => !again.has(w.nodeId)), ...opened]
-          : opened);
+        set((state) => {
+          state.textOutputWindows = previous
+            ? [...state.textOutputWindows.filter((w) => !again.has(w.nodeId)), ...opened]
+            : opened;
+        });
       } catch (error) {
         setExecutionResult({
           status: 'error',

@@ -108,13 +108,19 @@ describe('deployment boundary', () => {
   });
 
   /**
-   * The builder halves, as a whole rather than member by member.
+   * The builders, as a whole rather than member by member: a tool never loads
+   * a `GuiBuilder` class, nor either registry that hands them out. That is the
+   * bytes being absent, not only the calls, so a member added to a
+   * `GuiBuilder` tomorrow is kept out of a tool whichever bar it lands under
+   * (`elements/times.test.ts` holds that the run-time bar is empty).
    *
-   * `elements/times.test.ts` holds that a tool calls nothing build-time; this
-   * holds the stronger thing, that a tool never loads the classes at all. Both
-   * are wanted: the first is about the code being right, the second about the
-   * bytes being absent, and a member added to a `GuiBuilder` tomorrow is caught
-   * here whichever bar it lands under.
+   * It used to have one exception, `store/graphStore.ts`, on the grounds that
+   * the store is shared with the editor and a tool has no button for adding a
+   * node or saving. Half of that was true, and the half that was not is the
+   * whole point: `create` runs on every *load* and `saved` on every run, both
+   * of which a delivered tool does -- and reaching into the builder for them
+   * is what put the builder in the bundle. Those facts are `nodeKinds.ts` now,
+   * what a node *is*, and the store asks that instead.
    */
   it.each(['elements/registry.ts', 'elements/widgets/roster.ts'])(
     'does not pull the builder registry %s into a deployed bundle',
@@ -122,6 +128,10 @@ describe('deployment boundary', () => {
       expect([...reachable], `${module} is reachable from runtime/main.tsx`).not.toContain(module);
     },
   );
+
+  it('never loads a GuiBuilder class, even one imported without the registry', () => {
+    expect([...reachable].filter((path) => /GuiBuilder\.ts$/.test(path))).toEqual([]);
+  });
 
   it('draws the page and loads a graph from the halves that are delivered', () => {
     // The other side of the rule above: absent *because the page gets what it

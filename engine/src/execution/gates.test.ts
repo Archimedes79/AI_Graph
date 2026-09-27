@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
+import type { Graph, GraphNode } from '../graph.ts';
 import { executeGraph } from './executor.ts';
-import type { Runtime } from '../elements/Runtime.ts';
+import { edge, graphOf, quietRuntime } from '../../test/fakes.ts';
 import { registry } from '../elements/registry.ts';
 import { RUN_PORT } from './triggers.ts';
 import { Latch } from './latch.ts';
@@ -27,21 +27,11 @@ function node(id: string, type = 'code', config: Record<string, unknown> = {}, p
   };
 }
 
-const edge = (id: string, from: string, fromPort: string, to: string, toPort: string): GraphEdge =>
-  ({ id, source_node_id: from, source_port_id: fromPort, target_node_id: to, target_port_id: toPort });
-
-const graphOf = (nodes: GraphNode[], edges: GraphEdge[]): Graph => ({
-  metadata: { name: 'gates', version: '1', description: '', author: '', tags: [], ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
-  nodes, edges,
-});
-
 let ran: string[] = [];
-const runtime: Runtime = {
-  files: { read: async () => '', write: async () => {}, list: async () => [], resolve: (p) => p, exists: async () => true },
+const runtime = quietRuntime({
   code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) as Record<string, unknown> },
-  ai: { complete: async () => '' },
   report: (event) => { if (event.type === 'node_start') ran.push(event.node_id); },
-};
+});
 
 /**
  * Read → Summarize, on a page: the button opens the reader's ◆, the length is

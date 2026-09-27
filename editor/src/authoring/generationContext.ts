@@ -1,9 +1,10 @@
-import type { ExecutionResult, GraphNode } from '@/graph';
+import type { ExecutionResult, GraphNode, Wire } from '@/graph';
 // This module reads the element registry, so no element's `…GuiBuilder.ts` may import
 // it: that would be a cycle through the registry (see `outputFormat.ts`).
 import { NODE_BUILDERS } from '@/elements/registry';
+import { graphEdge } from '@/document/wires';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import { filePorts } from '@engine/execution/fileInputs.ts';
+import { filePorts, type FileGraph } from '@engine/execution/fileInputs.ts';
 
 /**
  * What the ✨ Generate buttons tell the AI about the world around a node.
@@ -12,16 +13,14 @@ import { filePorts } from '@engine/execution/fileInputs.ts';
  * actually wired to and what really flowed through it. Without them a model has
  * to guess the shape of its inputs, and a small local model guesses badly.
  *
- * Two independent sources, both optional and both cheap:
- *
- *  - `connectedFormatContext` — the *declared* contracts of the neighbours, from
- *    the graph itself.
- *  - `lastRunContext` — the *observed* values from the most recent run. Run once,
- *    then generate, and the model sees real data instead of a description of it.
+ * They are facts, not sentences: which node feeds each input and what it hands
+ * on (`inputSources`), where each output goes and what the node there wants
+ * (`outputTargets`), what arrived on the last run (`lastRunInputs`). The
+ * engine's brief (`engine/src/host/editor/brief.ts`) is the one place they are
+ * put into words, for a body, a system prompt and a data node's format alike.
+ * They used to reach a data node's and a file selector's ✨ a second time, as
+ * sentences written here, beside the brief.
  */
-
-/** How many characters of a sampled value to include before truncating. */
-const SAMPLE_BUDGET = 1200;
 
 /**
  * What a node emits, in one line.
@@ -32,78 +31,46 @@ const SAMPLE_BUDGET = 1200;
  * changes.
  */
 export function describeNodeOutput(node: GraphNode): string {
-  return NODE_BUILDERS[node.node_type]?.describeOutput?.(node) ?? '';
+  return NODE_BUILDERS[node.node_type]?.describeOutput(node) ?? '';
 }
 
 /**
- * The declared contracts of everything wired directly to *nodeId*.
- *
- * This used to consider `data` nodes only, so a code node fed by a file input or
- * by another code node was generated with no idea what it would receive -- which
- * is most graphs.
+ * The input ports a path arrives on: typed `file_path`, or `any` and wired
+ * from an output that hands on paths -- the engine's own rule
+ * (`fileInputs.ts#filePorts`), asked with the wiring, as a run asks it. A
+ * file picked as step 1's example for one of these is kept as its path, which
+ * is what a run hands the node there, read or not.
  */
-export function connectedFormatContext(
-  nodeId: string,
-  nodes: GraphNode[],
-  edges: Array<{ source: string; target: string; targetHandle?: string | null }>,
-): string {
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  // A Set, because two ports wired to the same neighbour are two edges but one
-  // fact: repeating it only spends the model's attention on nothing.
-  const lines = new Set<string>();
-
-  for (const edge of edges) {
-    if (edge.target === nodeId) {
-      const source = nodeById.get(edge.source);
-      if (!source) continue;
-      const described = describeNodeOutput(source);
-      if (!described) continue;
-      lines.add(NODE_BUILDERS[source.node_type].describeAsSource(source, described));
-    }
-    if (edge.source === nodeId) {
-      const target = nodeById.get(edge.target);
-      if (!target) continue;
-      lines.add(NODE_BUILDERS[target.node_type].describeAsTarget(target, edge.targetHandle ?? undefined));
-    }
-  }
-  return [...lines].join('\n');
-}
-
-function preview(value: unknown): string {
-  if (value === null || value === undefined) return 'null';
-  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-  if (text === undefined) return String(value);
-  return text.length > SAMPLE_BUDGET ? `${text.slice(0, SAMPLE_BUDGET)}\n… (truncated)` : text;
+export function pathPorts(node: GraphNode, nodes: GraphNode[] = [], edges: Wire[] = []): string[] {
+  const graph: FileGraph = { nodes: nodes as FileGraph['nodes'], edges: edges.map(graphEdge) };
+  return filePorts(node, graph, engineRegistry);
 }
 
 /**
- * What actually arrived on this node's input ports the last time the graph ran.
- *
- * The single most informative thing available, and it was going unused: the
- * store already holds it, and a description of a CSV is a poor substitute for
- * eight of its rows. Absent before the first run, which is exactly when there is
- * nothing to say.
- */
-/**
- * The raw values this node's input ports received on the last run.
- *
- * `lastRunContext` above renders the same values as prose for the model to read.
- * This is the machine-readable half: the server runs the generated function
- * against it and repairs the code if it fails (see
- * engine/src/host/editor/generate.ts). Undefined when the node has never run, which turns the
- * verification pass off rather than inventing a sample.
- */
-/**
- * The input ports a running node is handed a file's text on.
+ * The input ports a running node is handed a file's text on: the path ports
+ * of a node that reads its file inputs.
  *
  * A sample holds what came off the wire -- the path. The server reads these
  * before it shows the sample to the model or tries the code on it, as a run
  * does; asked of the engine's element, so the two cannot disagree on which.
+ *
+ * With the wiring, because the run asks with it: a port typed `any` is read
+ * when what is wired into it declares a path. Asked without it, such a port --
+ * in a graph written by hand, by the MCP server or by a model, which the
+ * editor's wiring never retyped -- was told to ✨ as a path, and the code was
+ * tried on a filename while the run handed it the text.
  */
-export function readFilePorts(node: GraphNode): string[] {
-  return engineRegistry.node(node.node_type)?.readsFileInputs(node) ? filePorts(node) : [];
+export function readFilePorts(node: GraphNode, nodes: GraphNode[] = [], edges: Wire[] = []): string[] {
+  return engineRegistry.node(node.node_type)?.readsFileInputs(node) ? pathPorts(node, nodes, edges) : [];
 }
 
+/**
+ * The raw values this node's input ports received on the last run: shown to
+ * the model as the sample, and what the server runs the generated function
+ * against, repairing the code if it fails (see
+ * engine/src/host/editor/generate.ts). Undefined when the node has never run, which turns the
+ * verification pass off rather than inventing a sample.
+ */
 export function lastRunInputs(
   nodeId: string,
   result: ExecutionResult | null,
@@ -111,45 +78,6 @@ export function lastRunInputs(
   const inputs = result?.node_results?.find((r) => r.node_id === nodeId)?.inputs;
   if (!inputs || Object.keys(inputs).length === 0) return undefined;
   return inputs;
-}
-
-/**
- * What arrived at one block on a page, last run, shaped as its transform sees it.
- *
- * A block's transform is handed `{value: <what came in>}`, and until this
- * existed it was generated against nothing at all: the node editor passed the
- * last run's inputs and the block editor passed none, so asking for a chart
- * meant asking a model to guess what it would be charting.
- */
-export function lastRunWidgetInput(
-  nodeId: string,
-  widgetId: string,
-  result: ExecutionResult | null,
-): Record<string, unknown> | undefined {
-  const inputs = result?.node_results?.find((r) => r.node_id === nodeId)?.inputs;
-  const arrived = inputs?.[`${widgetId}_in`];
-  return arrived === undefined ? undefined : { value: arrived };
-}
-
-/**
- * *asFiles* names the ports the node is handed a file's text on: what the run
- * recorded there is the path, and quoting it as "the value received" tells the
- * model to expect a filename where the code will get the content.
- */
-export function lastRunContext(nodeId: string, result: ExecutionResult | null, asFiles: string[] = []): string {
-  const nodeResult = result?.node_results?.find((r) => r.node_id === nodeId);
-  const inputs = nodeResult?.inputs;
-  if (!inputs || Object.keys(inputs).length === 0) return '';
-
-  const lines = Object.entries(inputs).map(([port, value]) => {
-    if (asFiles.includes(port)) {
-      const what = Array.isArray(value) ? `a list of ${value.length} texts, one per file` : 'the text of one file';
-      return `- ${port}: ${what}, already read -- the node is handed the text, never a path.`;
-    }
-    const shape = Array.isArray(value) ? `list of ${value.length}` : typeof value;
-    return `- ${port} (${shape}):\n${preview(value)}`;
-  });
-  return `Actual values this node received on its last run -- generate against these, not against a guess:\n${lines.join('\n')}`;
 }
 
 /**
@@ -165,11 +93,15 @@ export function lastRunContext(nodeId: string, result: ExecutionResult | null, a
  * A port fed by several nodes (fan-in) names them all: that a value is a list
  * *because two nodes write into it* is exactly the case generated code gets
  * wrong when it assumes a scalar.
+ *
+ * *withEmits*, for ✨: each source followed by what that node says it hands
+ * on, so the model is told the wire and the declaration behind it in one line.
  */
 export function inputSources(
   nodeId: string,
   nodes: GraphNode[],
-  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+  edges: Wire[],
+  withEmits = false,
 ): Record<string, string> {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byPort: Record<string, string[]> = {};
@@ -177,8 +109,14 @@ export function inputSources(
     if (edge.target !== nodeId) continue;
     const source = byId.get(edge.source);
     if (!source) continue;
-    const port = source.outputs.find((p) => p.id === edge.sourceHandle)?.name;
-    (byPort[edge.targetHandle ?? 'input'] ??= []).push(port ? `"${source.label}" (port "${port}")` : `"${source.label}"`);
+    const port = source.outputs.find((p) => p.id === edge.sourceHandle);
+    let said = port ? `"${source.label}" (port "${port.name}")` : `"${source.label}"`;
+    // The port's own words first, then what the node declares of its output.
+    const emits = withEmits
+      ? [...new Set([port?.description?.trim(), describeNodeOutput(source)].filter(Boolean))].join('; ')
+      : '';
+    if (emits) said += `, which hands on: ${emits}`;
+    (byPort[edge.targetHandle ?? 'input'] ??= []).push(said);
   }
   return Object.fromEntries(
     Object.entries(byPort).map(([port, origins]) => [port, [...new Set(origins)].join(' + ')]),
@@ -194,7 +132,7 @@ export function inputSources(
 export function outputTargets(
   nodeId: string,
   nodes: GraphNode[],
-  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+  edges: Wire[],
   withWants = false,
 ): Record<string, string> {
   const byId = new Map(nodes.map((node) => [node.id, node]));
@@ -212,32 +150,5 @@ export function outputTargets(
   }
   return Object.fromEntries(
     Object.entries(byPort).map(([port, targets]) => [port, [...new Set(targets)].join(' + ')]),
-  );
-}
-
-/**
- * `inputSources`, each followed by what that node says it hands on: for ✨,
- * which is told the wire and the declaration behind it in one line.
- */
-export function inputOrigins(
-  nodeId: string,
-  nodes: GraphNode[],
-  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
-): Record<string, string> {
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  const byPort: Record<string, string[]> = {};
-  for (const edge of edges) {
-    if (edge.target !== nodeId) continue;
-    const source = byId.get(edge.source);
-    if (!source) continue;
-    const port = source.outputs.find((p) => p.id === edge.sourceHandle);
-    let said = port ? `"${source.label}" (port "${port.name}")` : `"${source.label}"`;
-    // The port's own words first, then what the node declares of its output.
-    const emits = [...new Set([port?.description?.trim(), describeNodeOutput(source)].filter(Boolean))].join('; ');
-    if (emits) said += `, which hands on: ${emits}`;
-    (byPort[edge.targetHandle ?? 'input'] ??= []).push(said);
-  }
-  return Object.fromEntries(
-    Object.entries(byPort).map(([port, origins]) => [port, [...new Set(origins)].join(' + ')]),
   );
 }

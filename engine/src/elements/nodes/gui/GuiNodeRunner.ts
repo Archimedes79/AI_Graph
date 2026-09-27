@@ -81,8 +81,11 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
       outputs.push(...own.outputs);
       // A block told to catch its failures grows the port to put one on --
       // here, once, rather than in each of eleven block kinds. Named after the
-      // block for the same reason its other ports are: a page has many.
-      if (element.catchesErrors(widget)) outputs.push(errorPort(widget));
+      // block for the same reason its other ports are: a page has many. Only
+      // a block that hands something on can fail in a run (`execute`); one
+      // that only shows -- a text box switched to "Output" -- kept a port the
+      // editor no longer offers to take away, which sent `{}` on every run.
+      if (own.outputs.length && element.catchesErrors(widget)) outputs.push(errorPort(widget));
     }
     return { inputs, outputs };
   }
@@ -165,7 +168,15 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     // neither. See `WidgetRunner.bodyDrawsOnThePage`.
     if (element.bodyDrawsOnThePage) return element.displayValue(widget, value, runtime);
     const transformed = await element.runSnippet(widget, { value }, runtime);
-    return element.displayValue(widget, transformed.value ?? value, runtime);
+    // A block with no transform is handed back what it was given, `value`
+    // included. One whose transform returned no `value` has a broken
+    // transform, and says so: shown the raw input instead, it looked like a
+    // block without one. An explicit null is what the transform said to show.
+    if (!('value' in transformed)) {
+      const returned = Object.keys(transformed);
+      return `⚠ ${widget.id}: its transform returned no "value"${returned.length ? ` (only ${returned.map((key) => `"${key}"`).join(', ')})` : ''}.`;
+    }
+    return element.displayValue(widget, transformed.value, runtime);
   }
 
   /** A picker with nothing chosen is a question, and its block is who to ask. */
@@ -213,7 +224,11 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  /** A block's ports are named after its id, so an id that is missing or shared is two blocks on one port. */
+  /**
+   * A block's ports are named after its id, so an id that is missing or
+   * shared is two blocks on one port. What is wrong with one block as it is
+   * written, the block says itself (`WidgetRunner.problems`).
+   */
   override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
     const found: Problem[] = [];
     const seen = new Set<string>();
@@ -224,19 +239,34 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
         found.push({ where, problem: `More than one block has the id "${block.id}".`, fix: 'Give every block on the page its own id.' });
       }
       seen.add(block.id);
-      if (!BY_KIND.has(block.kind)) {
+      const element = BY_KIND.get(block.kind);
+      if (!element) {
         found.push({
           where: `${where}, block "${block.id}"`,
           problem: `Unknown block kind "${block.kind}".`,
           fix: `Use one of: ${[...BY_KIND.keys()].join(', ')}.`,
         });
+      } else {
+        found.push(...element.problems(block, `${where}, block "${block.id}"`));
       }
     }
     return found;
   }
 
+  /**
+   * The page's blocks, and every kind of block with what it says of itself
+   * (`WidgetRunner.graphAuthorNote`): a kind is listed by being registered,
+   * so the prompt cannot leave one out, as its hand-kept list once left out
+   * the spacer.
+   */
   override graphAuthorNote(): string {
-    return `config.gui_widgets is the list of blocks on the page.`;
+    const kinds = [...BY_KIND.values()].map((element) => {
+      const note = element.graphAuthorNote();
+      return `  - ${element.widgetKind}${note ? `: ${note}` : ''}`;
+    });
+    return 'config.gui_widgets is the list of blocks on the page. A block is {"id", "kind", "label", "w" (1-16 columns), '
+      + '"h" (rows), ...}. The page\'s ports are DERIVED from its blocks, not taken from this document: every block '
+      + `contributes "<block id>_out", "<block id>_in", or both, "<id>" standing for its id. The kinds:\n${kinds.join('\n')}`;
   }
 
   override whatRuns(): WhatRuns {

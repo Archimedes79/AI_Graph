@@ -1,11 +1,33 @@
 // A widget's build-time half, in the browser: the mirror of `engine/src/elements/WidgetRunner.ts`.
 
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { GuiWidget, WidgetKind } from '@/graph';
-import type { ElementGeneration, FieldAccess } from '@/authoring/generation';
+import type { FieldAccess } from '@/authoring/generation';
+import type { TryResult } from '@/authoring/TryItInline';
 import { DEFAULT_WIDGET_SPAN } from '@/document/layout';
 import type { Tone } from '@/ui/tone';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
+
+/**
+ * What only the shell can hand a panel laid out in the four steps: the page
+ * the block sits on, and the page it is drawn in. The panel places each where
+ * its step is.
+ */
+export interface WidgetSteps {
+  /** What is wired into the block, in words -- `"Rows" (port "rows")` -- or '' while nothing is. */
+  feeds: string;
+  /** ⟳ From the graph: what arrives at the block -- on the last run, else from what feeds it, run now. Absent for a block nothing can feed. */
+  fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
+  /** The block run by itself on *values*, the way a run runs it. */
+  tryIt: (values: Record<string, unknown>) => Promise<TryResult>;
+  /** What came out, drawn by the block itself, at its own proportions. */
+  renderResult: (result: TryResult) => ReactNode;
+  /** "What ✨ sends", beside ✨, and what it sends, under it. */
+  preview?: ReactNode;
+  sent?: ReactNode;
+  /** "Open in my editor", under the body, in a project. */
+  openInEditor?: ReactNode;
+}
 
 /** What the widget editor hands every widget panel. */
 export interface WidgetPanelProps {
@@ -13,16 +35,33 @@ export interface WidgetPanelProps {
   builder: WidgetGuiBuilder;
   widget: GuiWidget;
   onUpdate: (patch: Partial<GuiWidget>) => void;
-  /** Present when the element authors a body; see `ElementGuiBuilder.generation`. */
-  generation?: ElementGeneration<GuiWidget>;
   fields: FieldAccess;
   generating: boolean;
   message?: string;
   onGenerate: () => void;
-  canGenerate: boolean;
-  /** The panel's authored body is unfolded. */
-  expanded: boolean;
-  onToggleExpand: () => void;
+  /** For a block that authors a body: see `WidgetSteps`. */
+  steps?: WidgetSteps;
+}
+
+/** One entry of the page designer's palette: a kind in one of its modes, as a person looks for it. */
+export interface PaletteEntry {
+  /** Omitted: the kind's `defaultMode`. */
+  mode?: string;
+  label: string;
+  icon: string;
+  /** Other words someone might type for this when searching. */
+  also?: string;
+}
+
+/** What a block typed in where it stands is handed by the page designer (`WidgetGuiBuilder.InlineEditor`). */
+export interface InlineEditorProps {
+  widget: GuiWidget;
+  /** One grid cell's size in pixels, so the box can say how many rows its text needs. */
+  cell: number;
+  /** The rows the block has now. */
+  rows: number;
+  onText: (value: string) => void;
+  onRows: (rows: number) => void;
 }
 
 let created = 0;
@@ -49,13 +88,26 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
   readonly defaultMode: string = '';
 
   /**
-   * The widget *is* its text: a heading, a paragraph. Selected on the page
-   * being built, it becomes a box to type in, where the words stand.
+   * What the page designer's palette offers of this kind: one entry, or one
+   * per mode that a person reaches for as a thing of its own -- a heading and
+   * a paragraph are both `text`. Where each stands in the palette is the
+   * palette's layout (`page/DesignerPalette.tsx`); what it is called, its icon
+   * and the words it is found by are the kind's.
    */
-  readonly inlineText?: boolean;
+  abstract paletteEntries(): readonly PaletteEntry[];
 
-  /** Drawn on the canvas under the widget's input port: what last arrived there. */
-  readonly CanvasPreview?: ComponentType<{ data: unknown }>;
+  /**
+   * The widget *is* its text: a heading, a paragraph. Selected on the page
+   * being built, this takes its place, a box to type in where the words stand.
+   */
+  readonly InlineEditor?: ComponentType<InlineEditorProps>;
+
+  /**
+   * Drawn on the canvas under the widget's input port: what last arrived
+   * there, as the block shows it. Handed the block too, because what it shows
+   * can be its own code's work -- a chart's draw() -- and not what arrived.
+   */
+  readonly CanvasPreview?: ComponentType<{ widget: GuiWidget; data: unknown }>;
 
   /** Said under "⚡ Using this starts the graph", for a widget that can be told to. */
   readonly runOnChangeHint: string =
@@ -73,8 +125,13 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
 
   /**
    * A new widget of this kind, as the palette puts it on a page: the
-   * counterpart of `NodeGuiBuilder.create`. No position -- the order of the list is the
+   * counterpart of `NODE_KINDS[type].create` (document/nodeKinds.ts). No position -- the order of the list is the
    * position, so a new widget simply goes last.
+   *
+   * What every block has, and then what this kind keeps (`initialSettings`).
+   * Every kind's settings used to be spread onto every block, so a divider was
+   * saved with a folder selector's code, an options list and an example file,
+   * and graph.json carried settings no runner of that kind reads.
    */
   create(label = '', mode = this.defaultMode): GuiWidget {
     created += 1;
@@ -82,19 +139,9 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
       id: `widget-${created}-${Date.now()}`,
       kind: this.widgetKind,
       label,
-      value: '',
-      extensions: '',
-      mode,
+      ...(mode ? { mode } : {}),
       ...this.defaultSpan(mode),
       tone: this.defaultTone(mode),
-      code: '',
-      recursive: false,
-      select_all_files: true,
-      selector_prompt: '',
-      selector_code: '',
-      code_prompt: '',
-      example_file: '',
-      options: '',
       ...this.initialSettings(),
     };
   }
@@ -114,7 +161,7 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
     return 'plain';
   }
 
-  /** What a new widget of this kind holds beyond the common fields: a dropdown's first options. */
+  /** What a new widget of this kind holds beyond the common fields, and only what it reads: a dropdown's first options. */
   protected initialSettings(): Partial<GuiWidget> {
     return {};
   }

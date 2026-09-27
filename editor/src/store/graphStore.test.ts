@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { useGraphStore } from './graphStore';
+import { shapeToKeep, useGraphStore } from './graphStore';
 import type { Graph, GraphNode } from '@/graph';
-import { guiWidgetPorts } from '@/document/guiWidgets';
+import { guiWidgetPorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
+import { NODE_KINDS } from '@/document/nodeKinds';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { parseGraph } from '@engine/graph.ts';
+import { executeGraph } from '@engine/execution/executor.ts';
+import { answers as runAnswers } from '../../test/engineAnswers';
 
 // The same defaults every node type is created with. Copied out field by field
 // here once, which meant adding a field to NodeConfig broke this file for a
@@ -28,7 +33,7 @@ function graphNode(overrides: Partial<GraphNode>): GraphNode {
 function loadTestGraph(nodes: GraphNode[], edges: Graph['edges'] = []) {
   useGraphStore.getState().loadGraph({
     metadata: {
-      name: 'Test', version: '1.0.0', description: '', author: '', tags: [],
+      name: 'Test', description: '',
       ai_defaults: { provider: 'default', model: '' },
   gui_scheme: 'night',
     },
@@ -47,6 +52,25 @@ describe('graphStore.currentFilePath', () => {
 
     useGraphStore.getState().setCurrentFilePath('/tmp/loaded.json');
     expect(useGraphStore.getState().currentFilePath).toBe('/tmp/loaded.json');
+  });
+});
+
+describe('graphStore.newGraph', () => {
+  it('starts from the engine\'s defaults, keeping nothing of the graph before it', () => {
+    // "New graph" used to merge a name and four other keys into the old
+    // metadata: a pinned AI and a colour scheme were saved into the new one,
+    // and Undo brought the old graph's nodes back.
+    loadTestGraph([graphNode({ id: 'old' })]);
+    useGraphStore.getState().setMetadata({ ai_defaults: { provider: 'openai', model: 'gpt' }, gui_scheme: 'paper' });
+    useGraphStore.getState().setCurrentFilePath('/tmp/old', true);
+    useGraphStore.getState().setRFNodes([]);
+    useGraphStore.getState().newGraph();
+    const state = useGraphStore.getState();
+    expect(state.metadata).toEqual(parseGraph({ nodes: [], edges: [] }).metadata);
+    expect(state.rfNodes).toEqual([]);
+    expect(state.past).toEqual([]);
+    expect(state.currentFilePath).toBeNull();
+    expect(state.isDirty()).toBe(false);
   });
 });
 
@@ -90,6 +114,28 @@ describe('graphStore.updateNode edge pruning', () => {
     expect(remainingEdges[0].id).toBe('e1');
   });
 
+  it('keeps the wire from a block\'s error port through a later edit of the page', () => {
+    // What the designer does on every edit: the page's new blocks, their ports
+    // synced, handed to updateNode -- whose pruning cut this wire as soon as
+    // anybody renamed a block, because the synced ports had no `_error`.
+    const pick = { ...WIDGET_BUILDERS.select.create('Pick'), catch_errors: true };
+    const page = syncGuiNodePorts(graphNode({ id: 'gui1', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [pick] } }));
+    const sink = graphNode({
+      id: 'sink',
+      node_type: 'output',
+      inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
+    });
+    loadTestGraph([page, sink], [
+      { id: 'e1', source_node_id: 'gui1', source_port_id: `${pick.id}_error`, target_node_id: 'sink', target_port_id: 'value' },
+    ]);
+
+    const stored = useGraphStore.getState().rfNodes.find((n) => n.id === 'gui1')!.data.graphNode;
+    const renamed = { ...stored.config.gui_widgets[0], label: 'Choose' };
+    useGraphStore.getState().updateNode('gui1', syncGuiNodePorts({ ...stored, config: { ...stored.config, gui_widgets: [renamed] } }));
+
+    expect(useGraphStore.getState().rfEdges.map((edge) => edge.sourceHandle)).toEqual([`${pick.id}_error`]);
+  });
+
   it('leaves edges alone when the update does not touch ports', () => {
     const a = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
     const b = graphNode({
@@ -121,6 +167,122 @@ describe('graphStore.loadGraph gui port sync', () => {
     const loaded = useGraphStore.getState().rfNodes[0].data.graphNode;
     expect(loaded.inputs.map((p) => p.id)).toEqual([`${widget.id}_in`]);
     expect(loaded.outputs.map((p) => p.id)).toEqual([`${widget.id}_out`]);
+  });
+});
+
+/**
+ * A graph written by hand, by the MCP server or by a model leaves keys out, and
+ * the engine reads each missing one some way. Opening such a graph and saving
+ * it must not change what it does: the editor used to fill a missing key with
+ * what a *new* node starts with, and then save that. A code node with no
+ * batch_mode ran once on the whole list from the command line and once per
+ * item after one Save in the editor; an output node with no label came back
+ * keyed "Result" instead of by its id.
+ *
+ * The mirror of `elements/savedConfig.test.ts`, asking the same questions
+ * (`test/engineAnswers.ts`): that one holds a saved node to the full one, this
+ * one holds a loaded node to the file it was loaded from.
+ * Not `config()` itself: it spells a setting as it is stored, and a missing
+ * provider and 'default' are one and the same provider to a run.
+ */
+describe('graphStore.loadGraph: a key the file leaves out', () => {
+  const answers = (node: GraphNode) => runAnswers(node, ['config']);
+
+  /** Each node type as a file might say it: its ports, and not one setting. */
+  const bare = Object.values(NODE_KINDS).map((kind) => {
+    const made = kind.create('n');
+    return { ...made, config: {} as GraphNode['config'] };
+  });
+
+  it.each(bare.map((node) => [node.node_type, node]))(
+    '%s: opened and saved, the engine runs it as the file said',
+    (_type, node) => {
+      loadTestGraph([node]);
+      const saved = useGraphStore.getState().exportGraph().nodes[0];
+      expect(answers(saved)).toEqual(answers(node));
+    },
+  );
+
+  it('keeps a structure data node without a value holding nothing, not ""', () => {
+    // The engine reads a missing value as null for a structure; filled from a
+    // new node's '' it came back from one Save as a string.
+    const node = { ...NODE_KINDS.data.create('n'), config: { data_format: 'structure' } as GraphNode['config'] };
+    loadTestGraph([node]);
+    const saved = useGraphStore.getState().exportGraph().nodes[0];
+    expect(runAnswers(saved)).toEqual(runAnswers(node));
+  });
+
+  it('keeps two unlabelled outputs apart in the run\'s result, as the command line does', async () => {
+    const text = (id: string, value: string) => ({ ...NODE_KINDS.input.create(id), config: { value } as GraphNode['config'] });
+    const show = (id: string) => ({ ...NODE_KINDS.output.create(id), config: {} as GraphNode['config'] });
+    const file: Graph = {
+      metadata: { name: 'T', description: '', ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night' },
+      nodes: [text('a', 'alpha'), text('b', 'beta'), show('first'), show('second')],
+      edges: [
+        { id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'first', target_port_id: 'value' },
+        { id: 'e2', source_node_id: 'b', source_port_id: 'output', target_node_id: 'second', target_port_id: 'value' },
+      ],
+    };
+    const run = async (graph: Graph) => Object.keys((await executeGraph(parseGraph(JSON.parse(JSON.stringify(graph))), {
+      registry: engineRegistry,
+      runtime: {
+        files: { resolve: (path) => path, exists: async () => false, read: async () => '', write: async () => {}, list: async () => [] },
+        code: { run: async () => ({}) },
+        ai: { complete: async () => '' },
+      },
+    })).outputs).sort();
+
+    useGraphStore.getState().loadGraph(file);
+    expect(await run(useGraphStore.getState().exportGraph())).toEqual(await run(file));
+  });
+
+  it('still starts a node made in the editor per item, and keys its output "Result"', () => {
+    loadTestGraph([]);
+    const code = useGraphStore.getState().addNode('code', { x: 0, y: 0 });
+    const output = useGraphStore.getState().addNode('output', { x: 0, y: 0 });
+    const saved = useGraphStore.getState().exportGraph().nodes;
+    expect(saved.find((node) => node.id === code)!.config.batch_mode).toBe('per_item');
+    expect(saved.find((node) => node.id === output)!.config).toMatchObject({ output_label: 'Result', write_mode: 'window' });
+  });
+
+  it('writes "once per item" only on the kinds that can run so', () => {
+    // It used to be saved on every node, and an output node writing to a file
+    // then wrote each item of a list over the last.
+    loadTestGraph([]);
+    const ids = (['ai', 'code', 'output', 'data', 'gui', 'input', 'subgraph', 'trigger'] as const)
+      .map((type) => [type, useGraphStore.getState().addNode(type, { x: 0, y: 0 })] as const);
+    const saved = useGraphStore.getState().exportGraph().nodes;
+    const perItem = ids.filter(([, id]) => 'batch_mode' in saved.find((node) => node.id === id)!.config).map(([type]) => type);
+    expect(perItem).toEqual(['ai', 'code']);
+  });
+
+  it('labels each new output node its own way, as check asks', () => {
+    // Two outputs sharing a label keep only the last under it, and `check` says so.
+    loadTestGraph([graphNode({ id: 'kept', node_type: 'output', config: { output_label: 'Result 2' } as GraphNode['config'] })]);
+    const labels = [0, 1, 2].map(() => useGraphStore.getState().addNode('output', { x: 0, y: 0 }))
+      .map((id) => useGraphStore.getState().exportGraph().nodes.find((node) => node.id === id)!.config.output_label);
+    expect(labels).toEqual(['Result', 'Result 3', 'Result 4']);
+  });
+
+  it('writes no output_format on a new node, and keeps an older one\'s as it was', () => {
+    // A choice nothing offers any more: 'text' was saved into every ai and code node.
+    loadTestGraph([graphNode({ id: 'old', node_type: 'ai', config: { output_format: 'json' } as GraphNode['config'] })]);
+    const ai = useGraphStore.getState().addNode('ai', { x: 0, y: 0 });
+    const code = useGraphStore.getState().addNode('code', { x: 0, y: 0 });
+    const saved = useGraphStore.getState().exportGraph().nodes;
+    expect(saved.find((node) => node.id === ai)!.config).not.toHaveProperty('output_format');
+    expect(saved.find((node) => node.id === code)!.config).not.toHaveProperty('output_format');
+    expect(saved.find((node) => node.id === 'old')!.config.output_format).toBe('json');
+  });
+
+  it('keeps an older file\'s batch_mode on another kind as it was, unread', () => {
+    loadTestGraph([graphNode({ id: 'shown', node_type: 'output', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
+    expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');
+  });
+
+  it('keeps what the file did say', () => {
+    loadTestGraph([graphNode({ id: 'each', node_type: 'code', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
+    expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');
   });
 });
 
@@ -167,6 +329,9 @@ describe('graphStore: what a run remembered', () => {
 
   it('puts a value that came back around a loop into the block it arrived at', () => {
     const { widget, node } = gui('text_io');
+    // A box that only shows: what arrives is all it holds. One a person also
+    // types into keeps what they typed -- the case below.
+    widget.mode = 'output';
     loadTestGraph([node]);
     useGraphStore.getState().setExecutionResult({
       status: 'success', node_results: [],
@@ -174,6 +339,19 @@ describe('graphStore: what a run remembered', () => {
     } as never);
     // Structured values stay structured: a chart's points are not text.
     expect(stored(widget.id).value).toEqual([{ x: 1, y: 2 }]);
+  });
+
+  it('leaves what a person typed in a box they type into, whatever came back around the loop', () => {
+    // The reply is shown from what the run delivered. Kept as the box's value,
+    // it was the next message: the model's answer sent back as the person's.
+    const { widget, node } = gui('text_io');
+    widget.value = 'my question';
+    loadTestGraph([node]);
+    useGraphStore.getState().setExecutionResult({
+      status: 'success', node_results: [],
+      memory: [{ node_id: 'gui1', port_id: `${widget.id}_in`, value: 'the model reply' }],
+    } as never);
+    expect(stored(widget.id).value).toBe('my question');
   });
 
   it('lets the block say what arriving means: a reply becomes a turn of the conversation', () => {
@@ -270,6 +448,16 @@ describe('graphStore, a project open on disk', () => {
     ran('seven');
     expect(nodeById('count').config.output_schema).toMatchObject({ properties: { total: { type: 'integer' } } });
   });
+
+  it('keeps a measured shape by one rule, whoever measured it: once, of something, for a node that keeps one', () => {
+    // The run, the dialog's ✨ and the sweep's each wrote their own copy of it.
+    const code = NODE_KINDS.code.create('c');
+    expect(shapeToKeep(code, { total: 1 })).toMatchObject({ properties: { total: { type: 'integer' } } });
+    expect(shapeToKeep(code, {})).toBeUndefined();
+    expect(shapeToKeep(code, undefined)).toBeUndefined();
+    expect(shapeToKeep({ ...code, config: { ...code.config, output_schema: { type: 'object' } } }, { total: 1 })).toBeUndefined();
+    expect(shapeToKeep(NODE_KINDS.data.create('d'), { output: 1 })).toBeUndefined();
+  });
 });
 
 describe('graphStore, a graph just opened', () => {
@@ -328,7 +516,7 @@ describe('graphStore, a graph just opened', () => {
 describe('a graph inside a node', () => {
   const inner = (nodes: unknown[] = []) => ({
     metadata: {
-      name: 'Inner', version: '1.0.0', description: '', author: '', tags: [],
+      name: 'Inner', description: '',
       ai_defaults: { provider: 'default', model: '' }, gui_scheme: 'night',
     },
     nodes,
@@ -384,16 +572,16 @@ describe('a graph inside a node', () => {
   it('gives each level its own undo, and lets neither reach the other', () => {
     loadTestGraph([holder()]);
     store().openSubgraph('part');
-    expect(store().canUndo()).toBe(false);
+    expect(store().past).toHaveLength(0);
 
     store().addNode('output', { x: 0, y: 0 });
-    expect(store().canUndo()).toBe(true);
+    expect(store().past.length).toBeGreaterThan(0);
     store().undo();
     expect(store().rfNodes).toHaveLength(0);
 
     store().closeSubgraph();
     // Outside, the history is the one that was left here.
-    expect(store().canUndo()).toBe(false);
+    expect(store().past).toHaveLength(0);
     expect(store().rfNodes.map((n) => n.id)).toEqual(['part']);
   });
 
@@ -443,7 +631,7 @@ describe('a graph inside a node', () => {
 
     // One Ctrl+Z used to throw away everything built inside, because nothing
     // in there had ever been a step out here.
-    expect(store().canUndo()).toBe(true);
+    expect(store().past.length).toBeGreaterThan(0);
     const built = (store().rfNodes[0].data.graphNode.config.subgraph as Graph).nodes.length;
     expect(built).toBe(2);
     store().undo();
@@ -456,7 +644,27 @@ describe('a graph inside a node', () => {
     loadTestGraph([holder()]);
     store().openSubgraph('part');
     store().closeSubgraph();
-    expect(store().canUndo()).toBe(false);
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('comes back out to the top, one level at a time', () => {
+    loadTestGraph([holder(inner([{ ...holder(), id: 'deeper', label: 'Deeper' }]))]);
+    store().openSubgraph('part');
+    store().openSubgraph('deeper');
+    store().closeSubgraphsTo(0);
+    expect(store().subgraphStack).toHaveLength(0);
+    expect(store().rfNodes.map((n) => n.id)).toEqual(['part']);
+  });
+
+  it('stops where a level will not close, rather than asking forever', () => {
+    // A run in flight keeps the level it runs on open. Asked in a loop until
+    // the stack is short enough, that loop never ended.
+    loadTestGraph([holder()]);
+    store().openSubgraph('part');
+    useGraphStore.setState({ isExecuting: true });
+    store().closeSubgraphsTo(0);
+    expect(store().subgraphStack).toHaveLength(1);
+    useGraphStore.setState({ isExecuting: false });
   });
 
   it('will not change level while a run is in flight', () => {
@@ -470,11 +678,9 @@ describe('a graph inside a node', () => {
   it('leaves nothing of the level behind when it swaps', () => {
     loadTestGraph([holder()]);
     useGraphStore.setState({
-      selectedNodeId: 'part',
       textOutputWindows: [{ nodeId: 'part', label: 'Result', content: 'from the level above' }],
     });
     store().openSubgraph('part');
-    expect(store().selectedNodeId).toBeNull();
     expect(store().textOutputWindows).toEqual([]);
   });
 
@@ -498,66 +704,6 @@ describe('a graph inside a node', () => {
     loadTestGraph([graphNode({ id: 'other' })]);
     expect(store().subgraphStack).toHaveLength(0);
     expect(store().rootGraph().nodes.map((n) => n.id)).toEqual(['other']);
-  });
-});
-
-describe('graphStore.updateNode: a renamed port keeps its wires', () => {
-  /**
-   * A port's id is the name a body reads it by — `inputs.csv`, `{ figure }` —
-   * so the ports editor edits exactly that. To the pruning above, a rename
-   * looks like "the old port is gone", and renaming `input` to `csv` would
-   * quietly cut the graph in half. The dialog says which id became which.
-   */
-  const wiredPair = () => {
-    const source = graphNode({
-      id: 'page',
-      outputs: [{ id: 'file_out', name: 'File', kind: 'output', data_type: 'file_path', multi: false, required: false, description: '' }],
-    });
-    const code = graphNode({
-      id: 'code',
-      node_type: 'code',
-      inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
-    });
-    loadTestGraph([source, code], [
-      { id: 'e1', source_node_id: 'page', source_port_id: 'file_out', target_node_id: 'code', target_port_id: 'input' },
-    ]);
-    return code;
-  };
-
-  it('moves the wire onto the new id instead of dropping it', () => {
-    const code = wiredPair();
-    useGraphStore.getState().updateNode(
-      'code',
-      { inputs: [{ ...code.inputs[0], id: 'csv', data_type: 'file_path' }], outputs: code.outputs },
-      { inputs: { input: 'csv' }, outputs: {} },
-    );
-    const edges = useGraphStore.getState().rfEdges;
-    expect(edges).toHaveLength(1);
-    expect(edges[0].targetHandle).toBe('csv');
-  });
-
-  it('still drops a wire whose port was really removed', () => {
-    const code = wiredPair();
-    useGraphStore.getState().updateNode('code', { inputs: [], outputs: code.outputs }, { inputs: {}, outputs: {} });
-    expect(useGraphStore.getState().rfEdges).toHaveLength(0);
-  });
-
-  it('renames an output, which is the other end of the same problem', () => {
-    const code = wiredPair();
-    loadTestGraph(
-      [graphNode({ id: 'code', node_type: 'code', inputs: code.inputs, outputs: code.outputs }),
-        graphNode({ id: 'sink', node_type: 'output', inputs: [{ id: 'value', name: 'Value', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }] })],
-      [{ id: 'e1', source_node_id: 'code', source_port_id: 'output', target_node_id: 'sink', target_port_id: 'value' }],
-    );
-    useGraphStore.getState().updateNode(
-      'code',
-      { inputs: code.inputs, outputs: [{ ...code.outputs[0], id: 'figure' }] },
-      { inputs: {}, outputs: { output: 'figure' } },
-    );
-    const edges = useGraphStore.getState().rfEdges;
-    expect(edges).toHaveLength(1);
-    expect(edges[0].sourceHandle).toBe('figure');
   });
 });
 

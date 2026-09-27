@@ -1,7 +1,8 @@
 import { WidgetRunner, type Widget } from '../../WidgetRunner.ts';
 import { port } from '../../port.ts';
-
-export type TextIoRole = 'input' | 'output' | 'both';
+import type { RawConfig } from '../../../graph.ts';
+import { asText } from './text.ts';
+import { textIoRole, type TextIoRole } from './role.ts';
 
 export interface TextIoConfig {
   value: string;
@@ -13,11 +14,9 @@ export class TextIoWidgetRunner extends WidgetRunner<TextIoConfig> {
   readonly widgetKind = 'text_io' as const;
 
   config(widget: Widget): TextIoConfig {
-    const role = String(widget.config.mode ?? 'both');
-    return {
-      value: String(widget.config.value ?? ''),
-      role: (['input', 'output', 'both'].includes(role) ? role : 'both') as TextIoRole,
-    };
+    // Read as text: a graph saved while a reply could settle here may hold
+    // an object, and that is sent as what the box shows, not "[object Object]".
+    return { value: asText(widget.config.value), role: textIoRole(widget.config.mode) };
   }
 
   ports(widget: Widget) {
@@ -40,11 +39,25 @@ export class TextIoWidgetRunner extends WidgetRunner<TextIoConfig> {
     const incoming = inputs[`${widget.id}_in`];
     if (role === 'input') return { [`${widget.id}_out`]: value };
 
-    // "both": what the user typed wins; an empty box falls back to what arrived.
-    if (value) return { [`${widget.id}_out`]: value };
-    if (Array.isArray(incoming)) return { [`${widget.id}_out`]: incoming.map(String).join('\n') };
-    return { [`${widget.id}_out`]: incoming ?? '' };
+    // "both": what the user typed wins; an empty box falls back to what
+    // arrived -- as the text it shows, because the port says text and a node
+    // wired to it was told so.
+    return { [`${widget.id}_out`]: value || asText(incoming) };
   }
+
+  /**
+   * What comes back around a loop is shown, not typed.
+   *
+   * A box that only shows keeps what arrived: that is all it holds. A box a
+   * person types into keeps what they typed. In "both" the reply is shown
+   * above the typing box from what the run delivered, and settling it into
+   * the value made it the next message -- the model's answer sent back to the
+   * model as though the person had said it.
+   */
+  override settle(stored: RawConfig, value: unknown): void {
+    if (textIoRole(stored.mode) === 'output') stored.value = value;
+  }
+
   /**
    * A box that sends on Enter holds a message, and a message is said once:
    * clear it when a run has delivered it, so the box is ready for the next
@@ -53,5 +66,12 @@ export class TextIoWidgetRunner extends WidgetRunner<TextIoConfig> {
    */
   override clearsValueAfterRun(widget: Widget): boolean {
     return this.config(widget).role !== 'output' && this.firesRun(widget);
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override graphAuthorNote(): string {
+    return 'mode input (typed into; "<id>_out"), output (shows what arrives on "<id>_in") or both '
+      + '(typed into and showing; both ports), which is what a block without a mode is';
   }
 }

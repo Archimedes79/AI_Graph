@@ -1,8 +1,9 @@
 import React from 'react';
 import type { WidgetViewProps } from '../WidgetView';
-import { valueToText } from '../WidgetView';
-import { effectiveTextIoMode } from './mode';
+import { asText } from '@engine/elements/widgets/text_io/text.ts';
+import { textIoRole } from '@engine/elements/widgets/text_io/role.ts';
 import { DIMMER, FIELD, LINE, SUNKEN, TEXT } from '@/ui/theme';
+import { widgetFiresRun } from '@/document/guiWidgets';
 
 /** Runtime text_io widget.
  * - "input": text area the user types in (drives graph via output port)
@@ -10,11 +11,12 @@ import { DIMMER, FIELD, LINE, SUNKEN, TEXT } from '@/ui/theme';
  * - "both": shows incoming value above, user text area below
  */
 export default function TextIoWidgetView({ widget, value, incoming, onChange, onTrigger }: WidgetViewProps) {
-  const mode = effectiveTextIoMode(widget);
-  const text = valueToText(value);
+  const mode = textIoRole(widget.mode);
+  const text = asText(value);
   // In a box that sends, Enter sends and Shift+Enter is the newline -- what
   // every messenger does. In one that does not, Enter is just a newline.
-  const sends = widget.run_on_change === true;
+  // Whether it sends is the engine's answer, the one the page acts on.
+  const sends = widgetFiresRun(widget);
   const sendOnEnter = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!sends || event.key !== 'Enter' || event.shiftKey) return;
     event.preventDefault();
@@ -50,7 +52,7 @@ export default function TextIoWidgetView({ widget, value, incoming, onChange, on
   // "both": the last run's reply above, the user's next message below. The two
   // panes read different props on purpose -- feeding both from one value is
   // what used to make the reply disappear as soon as the user started typing.
-  const incomingText = valueToText(incoming);
+  const incomingText = asText(incoming);
   return (
     <div className="flex flex-col gap-2 h-full">
       <div
@@ -62,7 +64,7 @@ export default function TextIoWidgetView({ widget, value, incoming, onChange, on
       <textarea
         className="w-full rounded-lg px-2 py-1.5 text-sm resize-none"
         style={{ ...FIELD, minHeight: 60 }}
-        value={valueToText(value)}
+        value={asText(value)}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={sendOnEnter}
         placeholder="Your message…"

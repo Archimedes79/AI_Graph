@@ -56,6 +56,46 @@ describe('the graph prompt', () => {
     }
   });
 
+  it('says which derived input ports carry a number, not text', () => {
+    // A port named without its type reads as text, and a graph built on that
+    // reading adds "3" to "4" and gets "34". Every derived number port is
+    // named with what it holds, so a directory's count is used as a count.
+    const element = new InputNodeRunner();
+    const node = (mode: string): GraphNode => ({
+      id: 'i', node_type: 'input', label: '', description: '', position: { x: 0, y: 0 },
+      inputs: [], outputs: [], config: { input_mode: mode },
+    });
+    const numbers = ['text', 'file', 'directory']
+      .flatMap((mode) => element.derivedPorts(node(mode))!.outputs)
+      .filter((port) => port.data_type === 'number');
+    expect(numbers.map((port) => port.id)).toContain('count');
+    for (const port of numbers) {
+      expect(GRAPH_SYSTEM, `${port.id} is said to be a number`).toContain(`"${port.id}" (a number`);
+    }
+  });
+
+  it('names each derived input port with what it holds', () => {
+    // Said from `derivedPorts`, so a type or a port changed there is changed here.
+    const element = new InputNodeRunner();
+    for (const mode of ['text', 'file', 'directory']) {
+      const derived = element.derivedPorts({ id: 'i', config: { input_mode: mode } } as unknown as GraphNode)!;
+      for (const port of [...derived.inputs, ...derived.outputs]) {
+        const holds = { text: 'text', number: 'a number', file_path: port.multi ? 'a list of file paths' : 'a file path' }[port.data_type as string];
+        expect(GRAPH_SYSTEM, `${mode}: ${port.id}`).toContain(`"${port.id}" (${holds}`);
+      }
+    }
+  });
+
+  it('lists every block kind the registry knows, each with what it says of itself', () => {
+    // The kinds used to be a hand-kept list, which never learnt of the spacer.
+    for (const kind of registry.widgetKinds()) {
+      const note = registry.widget(kind)!.graphAuthorNote();
+      expect(GRAPH_SYSTEM, kind).toContain(`  - ${kind}${note ? `: ${note}` : '\n'}`);
+    }
+    // The three modes a text box has, the default one included.
+    expect(registry.widget('text_io')!.graphAuthorNote()).toMatch(/input .*output .*both/);
+  });
+
   it('names every node type the registry knows, except the ones that say a graph is not built with them', () => {
     const silent: string[] = [];
     for (const type of registry.nodeTypes()) {

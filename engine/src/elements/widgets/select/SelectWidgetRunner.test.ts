@@ -33,4 +33,10 @@ describe('a dropdown', () => {
     expect(element.ports(w)).toEqual({ inputs: [], outputs: [expect.objectContaining({ id: 'w_out', data_type: 'text' })] });
     expect(await element.execute(w)).toEqual({ w_out: 'B' });
   });
+
+  it('says on its port which choices can arrive, so a node wired to it is told', () => {
+    const element = new SelectWidgetRunner();
+    expect(element.ports(widget({ options: 'Small\n\nMedium\nLarge' })).outputs[0].description).toBe('one of: Small, Medium, Large');
+    expect(element.ports(widget({ options: '' })).outputs[0].description).toBe('');
+  });
 });

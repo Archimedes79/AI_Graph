@@ -4,7 +4,7 @@ import type { Runtime } from '../../Runtime.ts';
 import type { GraphNode } from '../../../graph.ts';
 import { port } from '../../port.ts';
 import type { Problem } from '../../../execution/wiring.ts';
-import { parseInterval, TRIGGER_PORT } from '../../../execution/triggers.ts';
+import { parseInterval, RUN_PORT, TRIGGER_PORT } from '../../../execution/triggers.ts';
 
 export interface TriggerConfig {
   /** Fire once when the tool starts, without waiting to be asked. */
@@ -61,7 +61,7 @@ export class TriggerNodeRunner extends NodeRunner<TriggerConfig> {
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `config.trigger_on_start (true or false) and config.trigger_every ("" for never, or "30s", "5m", "2h", "1d"). It starts the graph by itself -- when the tool starts, and on that clock -- at the nodes its output is wired to; wired to nothing it starts the whole graph. Use one when a graph should run with nobody pressing anything.`;
+    return `config.trigger_on_start (true or false) and config.trigger_every ("" for never, or "30s", "5m", "2h", "1d"). It starts the graph by itself -- when the tool starts, and on that clock -- at the nodes its output is wired to; wired to nothing it starts the whole graph. Use one when a graph should run with nobody pressing anything. Its one output, "${TRIGGER_PORT}", is DERIVED, not taken from this document: a boolean that is true in the round the trigger started. Wire it into a node's "${RUN_PORT}", or into a named boolean input of a code node.`;
   }
 
   override whatRuns(): WhatRuns {

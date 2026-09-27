@@ -19,7 +19,6 @@ interface PortOnDisk {
   list?: true;
   required?: true;
   description?: string;
-  format?: string;
 }
 
 function onDisk(port: Port): PortOnDisk {
@@ -30,7 +29,6 @@ function onDisk(port: Port): PortOnDisk {
     ...(port.multi ? { list: true as const } : {}),
     ...(port.required ? { required: true as const } : {}),
     ...(port.description ? { description: port.description } : {}),
-    ...(port.format ? { format: port.format } : {}),
   };
 }
 
@@ -44,8 +42,8 @@ function fromDisk(raw: unknown, kind: PortKind, path: string): Port {
     data_type: (typeof p.type === 'string' ? p.type : 'any') as DataType,
     multi: p.list === true,
     required: p.required === true,
+    // A "format" an older save wrote is left out: nothing ever read it.
     description: typeof p.description === 'string' ? p.description : '',
-    ...(typeof p.format === 'string' && p.format ? { format: p.format } : {}),
   };
 }
 

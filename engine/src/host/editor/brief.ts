@@ -1,5 +1,5 @@
-// What ✨ Generate is told about a node: one brief, the same for code and for a
-// system prompt.
+// What ✨ Generate is told about a node: one brief, the same for code, for a
+// system prompt and for a data node's format.
 //
 // A body is written against four things, and a node already holds all four:
 //
@@ -33,10 +33,10 @@ export const BUDGET = {
   example: 400,
   format: 1200,
   outputExample: 900,
+  /** A value a probe was given, in a repair prompt. */
+  preview: 900,
   schema: 700,
   template: 800,
-  /** An attached sample file. */
-  file: 2000,
 } as const;
 
 /** *text*, cut to *limit* characters, saying how much was left out. */
@@ -46,16 +46,21 @@ export function clip(text: string, limit: number): string {
   return `${trimmed.slice(0, limit)}… (${trimmed.length - limit} more characters not shown)`;
 }
 
-/** A value as the model should read it: JSON, so a string's line breaks and a list's length are visible. */
-export function shown(value: unknown, limit: number): string {
+/** A value as JSON, cut to *limit* characters: a string's line breaks stay visible. Anything JSON cannot say, as text. */
+function jsonClip(value: unknown, limit: number): string {
   let text: string;
   try {
     text = JSON.stringify(value) ?? String(value);
   } catch {
     text = String(value);
   }
+  return clip(text, limit);
+}
+
+/** A value as the model should read it: JSON, so a string's line breaks and a list's length are visible. */
+export function shown(value: unknown, limit: number): string {
   const count = Array.isArray(value) ? `a list of ${value.length}: ` : '';
-  return count + clip(text, limit);
+  return count + jsonClip(value, limit);
 }
 
 /** One line of a person's description: newlines would break the list it sits in. */
@@ -76,6 +81,11 @@ export interface Sample {
   origin: string;
   /** What must come out for these inputs, when the sample is an example that says. */
   expect?: Record<string, unknown>;
+  /**
+   * For a node run once per item: how many items the sample had, of which
+   * `values` is the first -- what one call is handed. A run makes this many.
+   */
+  items?: number;
 }
 
 /**
@@ -89,14 +99,24 @@ export function exampleSample(examples: string | undefined): Sample | undefined 
   return first ? { values: first.inputs, origin: `the example "${first.title}"`, expect: first.expect } : undefined;
 }
 
-function inputsSection(request: GenerateRequest, kind: 'code' | 'prompt', sample?: Sample): string {
+/**
+ * What the brief is for: a body that runs (`code`), a system prompt a model
+ * is sent (`prompt`), or the format a data node holds (`format`) -- which is
+ * written against the same neighbours and sample as code, and is itself the
+ * format, so it is told none.
+ */
+export type BriefKind = 'code' | 'prompt' | 'format';
+
+function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
   const inputs = request.inputs ?? [];
-  const lines = [kind === 'code' ? '## What comes in' : '## What the model is sent'];
+  const lines = [kind === 'prompt' ? '## What the model is sent' : '## What comes in'];
   if (!inputs.length) {
     lines.push('Nothing is wired in.');
     return lines.join('\n');
   }
   let room: number = BUDGET.samples;
+  const origin = !sample?.items ? sample?.origin
+    : sample.items === 1 ? `${sample.origin}, its one item` : `${sample.origin}, the first of its ${sample.items} items`;
   for (const port of inputs) {
     const type = typeWords(request.input_types?.[port]);
     const said = oneLine(request.input_notes?.[port]);
@@ -112,14 +132,28 @@ function inputsSection(request: GenerateRequest, kind: 'code' | 'prompt', sample
       } else {
         const peek = shown(sample.values[port], Math.min(BUDGET.sample, room));
         room -= peek.length;
-        lines.push(`  sample, from ${sample.origin}: ${peek}`);
+        lines.push(`  sample, from ${origin}: ${peek}`);
       }
     }
   }
-  if (kind === 'code' && request.batch_mode) {
-    lines.push(request.batch_mode === 'whole_list'
-      ? 'A list arrives whole: `run` is called once with the full lists and must handle or reduce them.'
-      : 'A list arrives one item at a time: `run` is called once per item, with one value from each list input.');
+  // Said for a model's prompt as much as for code: a system prompt that says
+  // "summarise each of the stories" to a model sent one story is wrong the
+  // same way a `run` written for the list is. And said of what goes out: the
+  // shape a run kept and an example's expectation are of the list the calls'
+  // answers are collected into, and a body told it "must return" a list of
+  // two was written for the list.
+  if (request.batch_mode) {
+    const perItem = request.batch_mode !== 'whole_list';
+    lines.push(kind !== 'prompt'
+      ? (perItem
+        ? 'A list arrives one item at a time: `run` is called once per item, with one value from each list input. '
+          + 'What the calls return is collected into one list per output: a shape or an example below describes '
+          + 'that list, not what one call returns.'
+        : 'A list arrives whole: `run` is called once with the full lists and must handle or reduce them.')
+      : (perItem
+        ? 'A list arrives one item at a time: the model is called once per item and is sent that one item, '
+          + 'never the whole list; its answers are collected into a list.'
+        : 'A list arrives whole: the model is sent the full list in one call.'));
   }
   if (kind === 'prompt') {
     const template = request.message_template?.trim();
@@ -130,15 +164,18 @@ function inputsSection(request: GenerateRequest, kind: 'code' | 'prompt', sample
   return lines.join('\n');
 }
 
-function outputsSection(request: GenerateRequest, kind: 'code' | 'prompt'): string {
-  const outputs = (request.outputs ?? []).filter((port) => port !== 'error');
-  const lines = [kind === 'code' ? '## What goes out' : '## What the answer is for'];
-  for (const port of outputs) {
+function outputsSection(request: GenerateRequest, kind: BriefKind): string {
+  const lines = [kind === 'prompt' ? '## What the answer is for' : '## What goes out'];
+  // Without the executor's error port: `generate` drops it where a request comes in.
+  for (const port of request.outputs ?? []) {
     const said = oneLine(request.output_notes?.[port]);
     lines.push(`- \`${port}\`${said ? `: ${said}` : ''}`);
     const target = request.output_targets?.[port];
     if (target) lines.push(`  to ${target}`);
   }
+  // A format is what is being written: what the node says of its output is
+  // that format, not a given to write it against.
+  if (kind === 'format') return lines.length > 1 ? lines.join('\n') : '';
   const format = request.output_format?.trim();
   if (format) lines.push(`Format: ${clip(format, BUDGET.format)}`);
   const example = request.output_example?.trim();
@@ -171,7 +208,7 @@ function examplesSection(text: string | undefined): string {
  * Everything the node says about itself, in the order a body is written from
  * it. The task goes first and the element's fixed text last, by the caller.
  */
-export function renderBrief(request: GenerateRequest, kind: 'code' | 'prompt', sample?: Sample): string {
+export function renderBrief(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
   return [inputsSection(request, kind, sample), outputsSection(request, kind), examplesSection(request.examples)]
     .filter(Boolean).join('\n\n');
 }

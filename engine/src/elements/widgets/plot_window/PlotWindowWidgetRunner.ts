@@ -1,9 +1,15 @@
 import { TransformingDisplayRunner } from '../TransformingDisplayRunner.ts';
+import type { DeployNeeds } from '../../ElementRunner.ts';
+import type { Widget } from '../../WidgetRunner.ts';
 import type { Generation } from '../../../authoring/generation.ts';
 import { TRANSFORM_FIELDS } from '../TransformingDisplayRunner.ts';
+import type { Problem } from '../../../execution/wiring.ts';
 import { checkPlot } from './check.ts';
 
 export { PLOT_VIEW } from './view.ts';
+
+/** A call of `node.llm(…)` in a body: the call, not the name in passing. */
+const ASKS_A_MODEL = /\bnode\s*\.\s*llm\s*\(/;
 
 /** Points to draw: a list of numbers, or of {label, value}. */
 export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
@@ -24,11 +30,35 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  override receives(): string {
+  /** The data to plot, which the page draws -- a `draw()` of its own takes whatever it was written to read. */
+  override draws(): string {
     return 'the data to plot, NOT a drawing: a list of points -- numbers, or {"label": string, '
       + '"value": number} -- or an object {"kind": "bars"|"columns"|"line"|"donut", "title": string, '
       + '"points": [...]}. The chart draws it at the block\'s real size and in the page\'s colours, '
       + 'neither of which exists while the graph runs, so SVG built here would be stretched to fit.';
+  }
+
+  /**
+   * Its body runs in the page (`bodyDrawsOnThePage`), which cannot ask a
+   * model, whatever the body says: a bundle need not bring one for it.
+   */
+  override deployNeeds(_widget: Widget): DeployNeeds {
+    return { needsInterface: false, asksAi: false };
+  }
+
+  /**
+   * A body that asks a model fails on the page every time: it is handed a
+   * window there, not a node, and no page has a model to ask. ✨'s probe
+   * calls it as the page does and says so while it is written; one written
+   * by hand, or over MCP, `check` reported as fine.
+   */
+  override problems(widget: Widget, where: string): Problem[] {
+    if (!ASKS_A_MODEL.test(this.config(widget).code)) return [];
+    return [{
+      where,
+      problem: 'The chart\'s code asks a model (node.llm), and a chart is drawn in the page, which has none to ask: it fails there every time.',
+      fix: 'Ask in a node upstream and wire its answer into the chart; the chart only draws what arrives.',
+    }];
   }
 
   /**
@@ -46,8 +76,20 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
   override generation(): Generation {
     return {
       kind: 'code', fields: TRANSFORM_FIELDS,
+      // The whole frame the body is written in (the generator puts it where
+      // the function is, because `probeWith` says the page calls it): the
+      // function, where it runs, and what it may answer.
       contract: [
-        'Must expose draw(data, window) -> what to show.',
+        'Complete this function. Keep its name and its two parameters exactly as they are:',
+        '',
+        'function draw(data, window) {',
+        '  // data: what arrived at the block -- `value` above -- or null before anything has',
+        '  // window: { width, height, scheme, dark }',
+        '  return [];',
+        '}',
+        '',
+        'Must expose draw(data, window) -> what to show. The page the block is on calls it,',
+        'not the graph: its answer is drawn, and nothing downstream reads it.',
         '',
         '`data` is what arrived at the block, and is null before anything has. Draw that',
         'case too -- empty axes, or an empty list of points -- rather than throwing: it is',
@@ -99,8 +141,13 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
         'for. Do not paint a background rectangle: the block has one.',
         '',
         'Do NOT import anything: the code runs in a worker with no modules, no network and',
-        'no DOM -- data in, points or a string of SVG out. Scripts and event handlers inside',
-        'the SVG are stripped before it is drawn.',
+        'no DOM -- there is no `require` and none of Node\'s built-ins -- data in, a figure',
+        'or a string of SVG out. Scripts and event handlers inside the SVG are stripped',
+        'before it is drawn.',
+        '',
+        'It cannot ask a model either: it is handed no `node`, and there is no `node.llm`',
+        'in a page. Whatever needs a model\'s judgement is done by a node upstream, which',
+        'sends the chart its answer.',
       ].join('\n'),
       inputs: ['value'], outputs: ['value'],
       // Looked at before anyone sees it: see check.ts.
@@ -112,17 +159,28 @@ export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
        * that follows knows it: it reads the viewBox the body itself declared,
        * not these.
        *
-       * A body that still defines `run` -- every chart written before this --
-       * is left exactly as it is.
+       * It is called the way the page's worker calls it (`plot_window/draw.ts`),
+       * whatever it defines. A body that still defines `run` -- every chart
+       * written before `draw` -- is handed `({ value }, window)`, never the
+       * sandbox's `node`: one that asks `node.llm` passed the probe with a
+       * real node and then failed on every page. The body gets a scope of its
+       * own, so its `run` is not the wrapper's, and no `require`, which a
+       * worker does not have either. It starts on the wrapper's first line:
+       * an error is reported by the line it is on, and the repair is shown the
+       * body, whose line 3 must be the line 3 it is told about.
        */
-      probeWith: (body) => (/\bfunction\s+run\b|\brun\s*=/.test(body) ? body : [
-        body,
-        'function run(inputs) {',
+      probeWith: (body) => [
+        `const __probe = run; const __chart = ((require) => { ${body}`,
+        ';',
+        "  return { draw: typeof draw === 'function' ? draw : undefined, run: typeof run === 'function' && run !== __probe ? run : undefined };",
+        '})();',
+        'async function run(inputs) {',
         "  const window = { width: 640, height: 360, scheme: 'night', dark: true };",
-        '  const drawn = draw(inputs.value, window);',
-        "  return drawn && typeof drawn === 'object' && 'value' in drawn ? drawn : { value: drawn };",
+        "  if (!__chart.draw && !__chart.run) throw new Error(\"This chart's code defines neither draw(data, window) nor run(inputs).\");",
+        '  const drawn = await (__chart.draw ? __chart.draw(inputs.value, window) : __chart.run({ value: inputs.value }, window));',
+        "  return { value: drawn && typeof drawn === 'object' && 'value' in drawn ? drawn.value : drawn };",
         '}',
-      ].join('\n')),
+      ].join('\n'),
       guard: 'Please describe the chart you want first.',
       success: '✅ Chart generated!',
     };

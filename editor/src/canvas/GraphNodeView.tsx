@@ -5,7 +5,7 @@ import { useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from '@/elements/registry';
 import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { delivered } from '@/store/executionStatus';
-import { widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
+import { showsPage, widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 
 /**
@@ -34,7 +34,9 @@ const statusStyles: Record<string, { color: string; glyph: string }> = {
 };
 
 const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
-  const { graphNode, onEdit, onDelete } = data;
+  const { graphNode } = data;
+  const setEditingNode = useGraphStore((s) => s.setEditingNode);
+  const deleteNode = useGraphStore((s) => s.deleteNode);
   const executionResult = useGraphStore((s) =>
     s.executionResult?.node_results.find((r) => r.node_id === id)
   );
@@ -47,14 +49,15 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
     ? 'Did not run this round: what it produced in an earlier round stands'
     : executionResult?.status;
   const statusColor = status?.color;
-  const isGuiLike = builder?.holdsWidgets ?? false;
+  const isGuiLike = showsPage(graphNode.node_type);
   const summary = builder?.canvasSummary?.(graphNode);
 
-  const handleEdit = useCallback(() => onEdit(id), [id, onEdit]);
-  // The ✕ sits a few pixels from ✏️, deleting is immediate, it silently takes
-  // every attached edge with it, and there is no undo -- so a node that is
-  // wired into the graph asks first. An unconnected node deletes straight away,
-  // because that is the case where a confirmation is just noise.
+  const handleEdit = useCallback(() => setEditingNode(id), [id, setEditingNode]);
+  // The ✕ sits a few pixels from ✏️, deleting is immediate, and it silently
+  // takes every attached edge with it -- so a node that is wired into the
+  // graph asks first; Ctrl+Z is not where anyone should find that out. An
+  // unconnected node deletes straight away, because that is the case where a
+  // confirmation is just noise.
   const connectedEdgeCount = useGraphStore(
     (s) => s.rfEdges.filter((edge) => edge.source === id || edge.target === id).length
   );
@@ -65,9 +68,9 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
         const wires = `${connectedEdgeCount} connection${connectedEdgeCount === 1 ? '' : 's'}`;
         if (!window.confirm(`Delete "${graphNode.label}"? Its ${wires} will be removed too.`)) return;
       }
-      onDelete(id);
+      deleteNode(id);
     },
-    [connectedEdgeCount, graphNode.label, id, onDelete]
+    [connectedEdgeCount, graphNode.label, id, deleteNode]
   );
 
   return (
@@ -183,7 +186,6 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                       title={fires
                         ? `${port.description || port.name} — using this block starts the graph, from whatever this is wired to.`
                         : (port.description || port.name)}
-                      onClick={(e) => { e.stopPropagation(); data.onPortEdit(id, port.id); }}
                     />
                     <span className="text-xs truncate" style={{ color: fires ? '#fbbf24' : '#86efac' }}>
                       {fires && <span title="Using this block starts the graph">⚡ </span>}
@@ -224,12 +226,11 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                           flexShrink: 0,
                         }}
                         title={port.description || port.name}
-                        onClick={(e) => { e.stopPropagation(); data.onPortEdit(id, port.id); }}
                       />
                     </div>
                     {CanvasPreview && (
                       <div className="mt-1 mb-1 w-full">
-                        <CanvasPreview data={executionResult?.display?.[previewWidget!.id] ?? executionResult?.inputs?.[port.id]} />
+                        <CanvasPreview widget={previewWidget!} data={executionResult?.display?.[previewWidget!.id] ?? executionResult?.inputs?.[port.id]} />
                       </div>
                     )}
                   </React.Fragment>
@@ -281,10 +282,6 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                     flexShrink: 0,
                   }}
                   title={port.description || port.name}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    data.onPortEdit(id, port.id);
-                  }}
                 />
                 <span className="text-xs" style={{ color: MUTED }}>
                   {port.name}
@@ -360,10 +357,6 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                 flexShrink: 0,
               }}
               title={port.description || port.name}
-              onClick={(event) => {
-                event.stopPropagation();
-                data.onPortEdit(id, port.id);
-              }}
             />
           </div>
         ))}

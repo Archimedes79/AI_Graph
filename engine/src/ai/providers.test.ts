@@ -58,6 +58,21 @@ describe('the OpenAI-style providers', () => {
     const ai = aiService({ provider: 'lmstudio', model: '' });
     await expect(ai.complete({ prompt: 'x' })).rejects.toThrow(/No model configured/);
   });
+
+  it('does not send a provider the node names the model of the machine\'s own provider', async () => {
+    const calls = stubFetch([openAiReply('never asked')]);
+    const ai = aiService({ provider: 'google', model: 'gemini-flash', apiKeys: { openai: 'k' } });
+    await expect(ai.complete({ prompt: 'x', provider: 'openai', model: '' }))
+      .rejects.toThrow(/No model configured for provider 'openai'/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('still gives the machine\'s model to a node that names the machine\'s own provider', async () => {
+    const calls = stubFetch([openAiReply('the answer')]);
+    const ai = aiService({ provider: 'lmstudio', model: 'local' });
+    await ai.complete({ prompt: 'x', provider: 'lmstudio' });
+    expect(calls[0].body.model).toBe('local');
+  });
 });
 
 describe('anthropic and ollama, which do not fit the table', () => {

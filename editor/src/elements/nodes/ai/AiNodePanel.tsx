@@ -1,22 +1,22 @@
 import { useRef } from 'react';
-import AuthoredBodyEditor from '@/authoring/AuthoredBodyEditor';
-import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, MUTED } from '@/ui/theme';
+import NodeSteps from '@/authoring/NodeSteps';
+import { promptText } from '@engine/elements/nodes/ai/prompt.ts';
+import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
 import PromptPreview from './PromptPreview';
-import Step from '@/authoring/Step';
+import { keptAnswer } from './keptAnswer';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 /**
- * What someone writes for an ai node, in the order the request is built:
- * what it should do, the instructions that became, the message its inputs are
- * laid out in -- and then the request itself, as the model will read it.
+ * An ai node: the four steps, its body the instructions the model gets, with
+ * the message its inputs are laid out in beside them -- both are how the
+ * request is written -- and, in Try it, that request as the model receives it
+ * for the example, then its answer.
  *
  * Everything that is a knob rather than a sentence lives in `AiNodeAdvancedPanel`,
  * folded away below: a node works without anyone opening it.
  */
-export default function AiNodePanel({
-  node, setConfig, generation, fields, generating, message, onGenerate,
-  contextFile, onContextFileChange, steps,
-}: NodePanelProps) {
+export default function AiNodePanel(props: NodePanelProps) {
+  const { node, setConfig } = props;
   const template = useRef<HTMLTextAreaElement | null>(null);
 
   /** Put `{{port}}` where the cursor is, the way clicking a field name should. */
@@ -64,35 +64,56 @@ export default function AiNodePanel({
           style={{ ...FIELD, minHeight: 96 }}
           value={String(node.config.prompt_template ?? '')}
           onChange={(e) => setConfig('prompt_template', e.target.value)}
-          placeholder={laidOut || 'Add an input above, then place it here as {{name}}.'}
+          placeholder={laidOut || 'Add an input in step 1, then place it here as {{name}}.'}
           spellCheck={false}
           aria-label="Message template"
         />
       </div>
   );
 
-  return (
+  // What its step 2 keeps as an example: an answer the model is shown to
+  // imitate, sent on every run -- never checked, as an answer is never the
+  // same twice.
+  const answerBox = (
     <>
-      <AuthoredBodyEditor
-        generation={generation}
-        fields={fields}
-        exampleFile={contextFile}
-        onExampleFileChange={onContextFileChange}
-        generating={generating}
-        message={message}
-        onGenerate={onGenerate}
-        title={node.label}
-        steps={steps && {
-          ...steps,
-          bodyHint: 'The instructions the model gets with every request. ✨ Generate writes them from steps 1 to 3; the answer format from step 3 is added after them by itself.',
-        }}
-      >
-        {messageBox}
-      </AuthoredBodyEditor>
-
-      {steps
-        ? <Step n={5} title="Try it" hint="Exactly what the model will receive, and its answer on sample values."><PromptPreview node={node} setConfig={setConfig} /></Step>
-        : <PromptPreview node={node} setConfig={setConfig} />}
+      <div className="flex items-center justify-between mb-1 gap-3">
+        <label className="text-xs font-medium" style={{ color: MUTED }}>Example answer</label>
+        {node.config.output_example && (
+          <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} onClick={() => setConfig('output_example', '')}>Clear</button>
+        )}
+      </div>
+      <p className="text-xs mb-1" style={{ color: DIMMER }}>
+        Shown to the model on every run, to answer in the same shape with new content. Keep one from Try it below, or write it.
+      </p>
+      <textarea
+        className="w-full rounded-lg px-2 py-1.5 text-sm font-mono resize-y"
+        style={{ ...FIELD, minHeight: 56 }}
+        value={String(node.config.output_example ?? '')}
+        onChange={(event) => setConfig('output_example', event.target.value)}
+        placeholder="An answer you liked"
+        spellCheck={false}
+        aria-label="Example answer"
+      />
     </>
+  );
+
+  return (
+    <NodeSteps
+      {...props}
+      subject="the model"
+      wordsHint="Only needed when something reads the answer. Sent to the model after its instructions on every run, and to ✨ Generate here and in the nodes this one feeds."
+      answer={{ field: answerBox, keep: (result) => setConfig('output_example', keptAnswer(node, result.outputs)) }}
+      body={{
+        title: 'Instructions',
+        hint: 'What the model is told with every request, and the message its inputs are laid out in. ✨ Generate writes the instructions from steps 1 to 3; the words and the example answer of step 2 are added after them by themselves.',
+        beside: messageBox,
+      }}
+      request={(example, graph) => <PromptPreview node={node} example={example} graph={graph} />}
+      renderResult={(result) => (
+        <pre className="text-xs rounded px-2 py-1.5 mt-1 whitespace-pre-wrap overflow-auto" style={{ background: SUNKEN, color: TEXT, maxHeight: 220 }}>
+          {promptText(result.outputs?.output)}
+        </pre>
+      )}
+    />
   );
 }

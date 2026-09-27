@@ -1,9 +1,9 @@
-import { effectiveTextIoMode } from './mode';
+import { textIoRole } from '@engine/elements/widgets/text_io/role.ts';
 import { DIM, FIELD_ON_SURFACE, MUTED } from '@/ui/theme';
 import type { WidgetPanelProps } from '../../WidgetGuiBuilder';
 
 export default function TextIoWidgetPanel({ widget, onUpdate }: WidgetPanelProps) {
-  const mode = effectiveTextIoMode(widget);
+  const mode = textIoRole(widget.mode);
 
   return (
     <div className="space-y-2">

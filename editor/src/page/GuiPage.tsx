@@ -40,19 +40,23 @@ export interface SurfaceBlock {
 
 /** The gui nodes contributing to the page, in graph order. */
 export function useGuiNodes(): GraphNode[] {
-  const rfNodes = useGraphStore((s) => s.rfNodes);
-  return rfNodes
-    .map((n) => n.data.graphNode as GraphNode)
-    .filter((n) => showsPage(n.node_type));
+  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode)).guiNodes;
 }
 
 /** Every block on the page, with the node that owns it. */
 export function useSurfaceBlocks(): SurfaceBlock[] {
-  const rfNodes = useGraphStore((s) => s.rfNodes);
-  return rfNodes
-    .map((n) => n.data.graphNode as GraphNode)
-    .filter((n) => showsPage(n.node_type))
-    .flatMap((node) => node.config.gui_widgets.map((widget) => ({ node, widget })));
+  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode)).blocks;
+}
+
+/**
+ * The page *nodes* make: the gui nodes in graph order, and every block on
+ * them with the node that owns it. The hooks above read it as it was
+ * rendered; an edit that lands later -- a ✨ result accepted a minute on --
+ * reads it from the store as it is then.
+ */
+export function pageOf(nodes: GraphNode[]): { guiNodes: GraphNode[]; blocks: SurfaceBlock[] } {
+  const guiNodes = nodes.filter((n) => showsPage(n.node_type));
+  return { guiNodes, blocks: guiNodes.flatMap((node) => node.config.gui_widgets.map((widget) => ({ node, widget }))) };
 }
 
 /**
@@ -61,7 +65,8 @@ export function useSurfaceBlocks(): SurfaceBlock[] {
  * `incoming` is what the last run delivered to its input port; the widget's own
  * value is what it stores, including an edit still being typed. They are kept
  * apart so that a widget which both shows and accepts text does not overwrite
- * the reply the user is reading.
+ * the reply the user is reading -- and so that what it shows as its value is
+ * what a run sends from it: its own (`BlockKind.ownsValue`).
  */
 export function blockValue(
   block: SurfaceBlock,
@@ -69,7 +74,7 @@ export function blockValue(
   overrides?: Record<string, string>,
 ): unknown {
   const own = overrides?.[block.widget.id] ?? block.widget.value ?? '';
-  if (BLOCKS[block.widget.kind]?.ownsValue) return own;
+  if (BLOCKS[block.widget.kind]?.ownsValue?.(block.widget)) return own;
   return incoming !== undefined && overrides?.[block.widget.id] === undefined ? incoming : own;
 }
 
@@ -86,12 +91,11 @@ export function shownOn(result: ExecutionResult | null, nodeId: string, widgetId
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */
 export function PageGrid({
-  children, minRows, gridRef, onCell,
+  children, minRows, onCell,
 }: {
   children: React.ReactNode;
   /** Keep this much height when empty, so there is a page to aim at. */
   minRows?: number;
-  gridRef?: React.MutableRefObject<HTMLDivElement | null>;
   /**
    * The measured cell size, whenever it changes.
    *
@@ -111,10 +115,7 @@ export function PageGrid({
 
   return (
     <div
-      ref={(node) => {
-        (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (gridRef) gridRef.current = node;
-      }}
+      ref={ref}
       data-gui-surface
       style={{
         ...gridStyle(cell),

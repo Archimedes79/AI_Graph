@@ -11,8 +11,14 @@ import type { Runners } from './NodeRunner.ts';
 /** Reading and writing files, wherever this engine happens to run. */
 export interface FileService {
   read(path: string, mode?: 'text' | 'binary'): Promise<string>;
+  /** Creates the folders the path runs through when they are not there yet. */
   write(path: string, content: string, mode?: 'text' | 'binary'): Promise<void>;
   list(path: string, options?: { recursive?: boolean; extensions?: string[] }): Promise<string[]>;
+  /**
+   * Deletes the file at *path*; nothing when there is none. Optional: where a
+   * host cannot delete, what would be deleted stays.
+   */
+  remove?(path: string): Promise<void>;
   resolve(path: string): string;
   exists(path: string): Promise<boolean>;
 }
@@ -79,6 +85,36 @@ export interface AiRequest {
 
 export interface AiService {
   complete(request: AiRequest): Promise<string>;
+}
+
+/** A provider and a model, as a request names them or a default supplies them. */
+export interface ModelChoice {
+  provider: string;
+  model: string;
+}
+
+/**
+ * *asked* with its blanks filled from *home*: a graph's AI default, or the
+ * machine's.
+ *
+ * A model belongs to its provider. A request that names no provider goes to
+ * *home*'s, and a request with no model is lent *home*'s model only when it
+ * goes to *home*'s provider -- the graph's Gemini model sent to OpenAI is a
+ * request that can only fail. A *home* that names no provider still lends its
+ * model to a request that names none either.
+ *
+ * One rule, applied twice by a run: with the graph's default
+ * (`withGraphDefaults`), then with the machine's (`aiService`). The editor's
+ * model box folds the two the same way to say what an empty model will mean,
+ * so it lives here, where both halves and the page can read it.
+ */
+export function lent(asked: Partial<ModelChoice>, home: Partial<ModelChoice>): ModelChoice {
+  const pinned = asked.provider && asked.provider !== 'default' ? asked.provider : '';
+  const own = home.provider && home.provider !== 'default' ? home.provider : '';
+  return {
+    provider: pinned || own || (asked.provider ?? ''),
+    model: asked.model || (!pinned || pinned === own ? home.model ?? '' : ''),
+  };
 }
 
 /** Tool servers opened for the length of one node's run, then closed. */

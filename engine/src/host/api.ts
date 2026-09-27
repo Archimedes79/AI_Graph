@@ -18,11 +18,12 @@
 // serves to whoever opens it; an `editor` route exists only while building,
 // and a server without the editor answers it with 404.
 
-import type { ExecutionResult, Graph, NodeResult } from '../graph.ts';
+import type { ExecutionResult, Graph, GraphMetadata, NodeResult } from '../graph.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/changes.ts';
 import type { ExampleResult } from '../execution/examples.ts';
+import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 
 export type { TextChange };
 
@@ -46,7 +47,6 @@ export interface RunSnapshot {
   cancelled: boolean;
   completed: number;
   total: number;
-  running: string[];
   current_label: string;
   item_done: number;
   item_total: number;
@@ -56,16 +56,12 @@ export interface RunSnapshot {
   result: ExecutionResult | null;
 }
 
-/** A path the graph needs before it can run, as the "before running" dialog asks for it. */
-export interface Requirement {
-  node_id: string;
-  /** The block inside a page that asks, when it is a block. */
-  widget_id: string | null;
-  label: string;
-  kind: 'text' | 'file' | 'directory';
-  direction: 'input' | 'output';
-  current_value: string;
-}
+/**
+ * A path the graph needs before it can run, as the "before running" dialog
+ * asks for it: the engine's own question, keyed as its answer is written back
+ * (`applyRuntimeValues`), so no end takes the key apart or builds it again.
+ */
+export type Requirement = RuntimeRequirement;
 
 /** `project`: a folder with a `flow.json` in it, which opens rather than being walked into. */
 export interface BrowseEntry { name: string; path: string; is_dir: boolean; project?: boolean }
@@ -94,14 +90,10 @@ export interface Watched { progress_id?: string }
 
 /** One element's body to write. The element's own `Generation` decides the rest. */
 export interface GenerateRequest {
-  /** A node type or block kind. */
-  element?: string;
-  /** For the one generation that belongs to no element: an output-format description. */
-  kind?: string;
+  /** A node type or block kind: whose `Generation` says what is written and how. */
+  element: string;
   description: string;
   context?: string;
-  /** A file whose content is appended to the context, read on the server. */
-  context_file?: string;
   inputs?: string[];
   outputs?: string[];
   /** Real port values from the last run; enables the verify-and-repair pass. */
@@ -146,10 +138,22 @@ export interface GenerateRequest {
   output_format?: string;
   /** An answer or result to imitate (`output.example.md`), when one was kept. */
   output_example?: string;
-  /** Where `sample_inputs` came from, for the model: `the last run`, `the values typed into "Try it"`. */
+  /** Where `sample_inputs` came from, for the model: `the last run`, `the example in step 1`. */
   sample_origin?: string;
   /** How a list on an input arrives: one item per run (`per_item`) or whole (`whole_list`). */
   batch_mode?: 'per_item' | 'whole_list';
+  /**
+   * The input ports declared as lists (`Port.multi`): what a run fans out over
+   * when the node runs once per item, so what the sample is cut by for one
+   * call. Sent with `batch_mode`; absent, nothing fans out.
+   */
+  multi_inputs?: string[];
+  /**
+   * The output ports declared as lists: what a run per item collects into a
+   * list, where one declared single hands a lone answer on as it came. Sent
+   * with `batch_mode`; absent, none is declared a list.
+   */
+  multi_outputs?: string[];
   /**
    * Build the request and hand it back without sending it: what ✨ *would*
    * send, through the same code that sends it, so the preview cannot differ.
@@ -171,16 +175,22 @@ export interface AICall {
   error: string | null;
 }
 
-/** What running generated code against real data revealed. `skipped`: no sample, one pass. */
+/**
+ * What running generated code against real data revealed. `skipped`: no
+ * sample, one pass; `ok` passed the first try, `repaired` the second.
+ */
 export interface ProbeReport {
   status: 'skipped' | 'ok' | 'repaired' | 'failed';
-  attempts: number;
   error: string;
   missing_outputs: string[];
   /** What the element itself found wrong with a result that ran: a chart off its frame, NaN in the markup. */
   problems?: string[];
-  output_preview: string;
-  /** What the code actually returned, whole -- the next node's sample, not a peek at it. */
+  /**
+   * What the node hands on from the sample, whole -- the next node's sample,
+   * not a peek at it. For a node run once per item that is not one call's
+   * return: the probe runs one item, and its answer is collected the way a
+   * run collects it, a list even for one item on an output declared a list.
+   */
   outputs?: Record<string, unknown>;
 }
 
@@ -189,17 +199,13 @@ export interface GenerateResponse {
   result: string;
   explanation: string;
   probe: ProbeReport;
-  /** Every model call this generation made, in order. */
+  /** Every model call this generation made, in order. For a preview, the one request, unsent. */
   calls: AICall[];
-  /** Set when the request asked for a preview: `calls` holds the one request, unsent. */
-  preview?: boolean;
 }
 
 /** The settings dialog's view of `ai-settings.json`: whether a key is set, never the key. */
 export interface SettingsStatus {
   settings_file: string;
-  settings_file_exists: boolean;
-  endpoint_keys: Record<string, string>;
   endpoints: Record<string, string>;
   credentials: Record<string, { configured: boolean; source: string }>;
 }
@@ -209,8 +215,6 @@ export interface SettingsPatch {
   api_keys?: Record<string, string>;
   /** Providers whose stored key is to be removed -- distinct from "left blank". */
   clear_keys?: string[];
-  ai?: { provider?: string; model?: string; force?: boolean };
-  codegen?: { provider?: string; model?: string };
 }
 
 /** Which providers answer right now, and where the two default targets resolve to. */
@@ -220,7 +224,7 @@ export interface ProviderStatus {
   gen_target: Target;
 }
 
-/** A graph file on disk, as Open, Save and Reload return it. */
+/** A graph file on disk, as Open (and so Reload) and Save return it. */
 /** `project`: the path is a project folder, whose code and prompts are files of their own. */
 export interface GraphFile { path: string; graph: Graph; project: boolean }
 
@@ -244,14 +248,12 @@ export interface Route<Req, Res> {
   /** `:name` segments are path parameters, handed over as `name`. */
   path: string;
   for: 'tool' | 'editor';
-  /** The body is bytes, not JSON: handed over as `bytes` (and sent as the file itself). */
-  raw?: true;
   /** Phantom: carries the types, never set. */
   readonly types?: { request: Req; response: Res };
 }
 
-function route<Req, Res>(method: Method, path: string, audience: 'tool' | 'editor', raw?: true): Route<Req, Res> {
-  return raw ? { method, path, for: audience, raw } : { method, path, for: audience };
+function route<Req, Res>(method: Method, path: string, audience: 'tool' | 'editor'): Route<Req, Res> {
+  return { method, path, for: audience };
 }
 
 type RunGraph = Graph & { trigger?: RunTrigger | null };
@@ -288,32 +290,38 @@ export const API = {
   runNode: route<OnNode & { inputs: Record<string, unknown> }, NodeResult>('POST', '/api/execute/node', 'editor'),
   /** What one node would ask a model on the inputs given -- its run, with every answer made up and nothing sent. */
   nodeRequests: route<OnNode & { inputs: Record<string, unknown> }, { requests: SentRequest[]; error: string | null }>('POST', '/api/execute/node/requests', 'editor'),
-  /** One value through one block's transform, as the page would show it. */
-  runBlock: route<{ widget: unknown; value: unknown }, BlockResult>('POST', '/api/execute/block', 'editor'),
+  /**
+   * One value through one block's transform, as the page would show it -- with
+   * the graph's metadata, so code that asks a model asks the one a run of this
+   * graph asks (`ai_defaults`), not the machine's.
+   */
+  runBlock: route<{ widget: unknown; value: unknown; metadata?: Partial<GraphMetadata> }, BlockResult>('POST', '/api/execute/block', 'editor'),
   /** What would arrive at a node: what feeds it is run, the node is not. */
   nodeInputs: route<OnNode, { inputs: Record<string, unknown>; error: string | null }>('POST', '/api/execute/inputs', 'editor'),
   /** Run a node's examples.md: each example's inputs, held to what it expects. */
   testNode: route<OnNode, { results: ExampleResult[] }>('POST', '/api/execute/examples', 'editor'),
 
-  /** A project folder or a single graph file: see `project/folder.ts`. */
+  /**
+   * A project folder or a single graph file: see `project/folder.ts`. Also
+   * Reload: the same path opened again, after its `flow.json`, or a node's
+   * settings or ports, changed outside the editor.
+   */
   openGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),
   /** A `.json` path is written as one file; any other path as a project folder. */
   saveGraph: route<{ path: string; graph: Graph }, GraphFile>('POST', '/api/graphs/file/save', 'editor'),
   /** Project folders with this name under where the editor runs: for a folder dropped onto the page. */
   findProjects: route<{ name: string }, { paths: string[] }>('GET', '/api/graphs/find', 'editor'),
-  /** Open the same path again: after its `flow.json`, or a node's settings or ports, changed outside the editor. */
-  reloadGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/reload', 'editor'),
   /** The code and prompts of an open project that changed on disk since last asked. */
   projectChanges: route<{ path: string }, { changes: TextChange[] }>('GET', '/api/graphs/file/changes', 'editor'),
 
   generate: route<GenerateRequest & ModelChoice & Watched, GenerateResponse>('POST', '/api/ai/generate', 'editor'),
   /** What the generation with this id has sent and received so far. */
-  generationProgress: route<{ id: string }, { calls: AICall[]; done: boolean }>('GET', '/api/ai/generate/progress', 'editor'),
+  generationProgress: route<{ id: string }, { calls: AICall[] }>('GET', '/api/ai/generate/progress', 'editor'),
   generateGraph: route<{ description: string; context?: string } & ModelChoice & Watched, { graph: Graph; explanation: string }>(
     'POST', '/api/ai/generate-graph', 'editor'),
 
-  /** The graph as a deployable zip. */
-  bundle: route<Graph, Blob>('POST', '/api/deploy/bundle', 'editor'),
+  /** The graph as a deployable zip, named by the server (`<graph name>_bundle.zip`). */
+  bundle: route<Graph, File>('POST', '/api/deploy/bundle', 'editor'),
   /**
    * Hand this server the graph to serve as a tool, so `runtime.html` can be
    * opened against it — the deployed page, in its own window, without zipping
@@ -327,12 +335,8 @@ export const API = {
   saveAiSettings: route<SettingsPatch, SettingsStatus>('POST', '/api/ai/settings', 'editor'),
   providers: route<void, ProviderStatus>('GET', '/api/ai/providers', 'editor'),
 
-  detectFormat: route<{ path: string }, { format: string }>('POST', '/api/files/detect-format', 'editor'),
   /** A node's (or block's) body file in a project -- `nodes/<id>/code.js` -- in the person's own editor. Loopback only: it starts a program. */
   openExternal: route<{ graph_path: string; node_id: string; widget_id?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
-  /** The file is the body and its name rides on the query: nothing multipart to get wrong. */
-  attach: route<{ name: string; bytes: Uint8Array | Blob }, { path: string; name: string }>('POST', '/api/files/attachments', 'editor', true),
-  detach: route<{ path: string }, { ok: true }>('DELETE', '/api/files/attachments', 'editor'),
 } as const;
 
 export type Api = typeof API;

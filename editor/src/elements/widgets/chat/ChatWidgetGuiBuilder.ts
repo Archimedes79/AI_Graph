@@ -13,6 +13,10 @@ export class ChatWidgetGuiBuilder extends WidgetGuiBuilder {
 
   readonly label = 'Chat';
 
+  paletteEntries() {
+    return [{ label: this.label, icon: '💬', also: 'conversation messages bot' }];
+  }
+
   /** A conversation needs room to be one: the full width, and most of a screen. */
   protected override defaultSpan() {
     return { w: 16, h: 9 };

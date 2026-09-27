@@ -38,6 +38,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry, NODES, WIDGETS } from '../elements/registry.ts';
+import { shippedText } from '../elements/ElementRunner.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 import { FLOW_FILE, flowOf, graphFrom } from './flow.ts';
@@ -211,9 +212,7 @@ function fromFile(content: string, json: boolean, path: string): unknown {
 
 /** Nobody's own: nothing, or a text the element itself once shipped. */
 function isStandard(value: unknown, text: { standard?: string; earlier?: readonly string[] }): boolean {
-  if (isBlank(value)) return true;
-  const plain = (s: string) => s.replace(/\r\n/g, '\n').trim();
-  return typeof value === 'string' && [text.standard ?? '', ...(text.earlier ?? [])].some((known) => plain(known) === plain(value));
+  return isBlank(value) || shippedText(value, text);
 }
 
 /** Nothing written: no file for it. A JSON value that is an empty object says nothing either. */
@@ -311,8 +310,12 @@ async function readIfThere(path: string, what: string, guard?: Guard): Promise<u
  * The structure of the project in *folder*: every node with its settings and
  * ports, and the wires -- without the writing, which `readProject` adds.
  * Returns the files it read, for whoever has to watch them.
+ *
+ * What an element keeps in files is asked of this graph, as `readProject`
+ * asks it: an element may name a file only while the node does not hold its
+ * text yet, and asked again once the text is read in, the answer differs.
  */
-async function readStructure(folder: string, guard?: Guard): Promise<{ graph: Graph; files: string[] }> {
+export async function readStructure(folder: string, guard?: Guard): Promise<{ graph: Graph; files: string[] }> {
   const flowPath = join(folder, FLOW_FILE);
   if (!existsSync(flowPath)) {
     const graphPath = join(folder, GRAPH_FILE);

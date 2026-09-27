@@ -34,17 +34,3 @@ export interface WidgetViewProps {
   /** A run is in flight. For a block that shows waiting: a chat's typing dots. */
   busy?: boolean;
 }
-
-/** Best-effort rendering of an arbitrary port value as display text. */
-export function valueToText(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
-  // A list of names reads as lines; a list of paragraphs -- a summary per file --
-  // needs air between them, or three answers read as one.
-  if (Array.isArray(value)) {
-    const items = value.map(valueToText);
-    return items.join(items.some((item) => item.length > 80) ? '\n\n' : '\n');
-  }
-  if (typeof value === 'object') return JSON.stringify(value, null, 2);
-  return String(value);
-}

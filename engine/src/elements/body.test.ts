@@ -5,6 +5,7 @@ import { runBody } from './body.ts';
 import { registry } from './registry.ts';
 import { selectFiles } from './fileSelection.ts';
 import { Logic } from '../authoring/logic.ts';
+import { quietRuntime } from '../../test/fakes.ts';
 
 /**
  * One way to run a body: whichever element it belongs to, it is handed the
@@ -13,8 +14,8 @@ import { Logic } from '../authoring/logic.ts';
 
 function watching(): { runtime: Runtime; seen: { body: string; context?: BodyContext }[] } {
   const seen: { body: string; context?: BodyContext }[] = [];
-  const runtime: Runtime = {
-    files: { read: async () => '', write: async () => {}, list: async () => ['a.txt', 'b.txt'], resolve: (p) => p, exists: async () => true },
+  const runtime = quietRuntime({
+    files: { list: async () => ['a.txt', 'b.txt'] },
     code: {
       run: async (body, inputs, _signal, context) => {
         seen.push({ body, context });
@@ -22,7 +23,7 @@ function watching(): { runtime: Runtime; seen: { body: string; context?: BodyCon
       },
     },
     ai: { complete: async () => 'an answer' },
-  };
+  });
   return { runtime, seen };
 }
 

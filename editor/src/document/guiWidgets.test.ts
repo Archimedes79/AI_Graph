@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GraphNode } from '@/graph';
-import { syncGuiNodePorts, guiWidgetPorts, widgetFiresRun, widgetOfPort } from './guiWidgets';
+import { derivedNodePorts, syncGuiNodePorts, guiWidgetPorts, widgetFiresRun, widgetOfPort } from './guiWidgets';
 import { DEFAULT_WIDGET_SPAN } from './layout';
 import { baseNodeConfig } from './baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
@@ -117,6 +117,19 @@ describe('syncGuiNodePorts', () => {
     expect(afterRemoval.outputs.find((p) => p.id === `${c.id}_out`)).toEqual(beforeCOut);
     expect(afterRemoval.inputs.find((p) => p.id === `${b.id}_in`)).toBeUndefined();
     expect(afterRemoval.outputs.find((p) => p.id === `${b.id}_out`)).toBeUndefined();
+  });
+
+  it('gives a block that catches its failures the port to put one on, as a load does', () => {
+    // The designer's every edit goes through here. It used to add up the
+    // blocks' own ports and leave out `<id>_error`, which only the engine adds:
+    // ticking "catch" grew nothing, and after a reload had grown it, the next
+    // edit of any block took it away again -- and its wire with it.
+    let node = blankGuiNode();
+    const pick = { ...WIDGET_BUILDERS.select.create('Pick'), catch_errors: true };
+    node.config.gui_widgets = [pick];
+    node = syncGuiNodePorts(node);
+    expect(node.outputs.map((p) => p.id)).toEqual([`${pick.id}_out`, `${pick.id}_error`]);
+    expect(syncGuiNodePorts(node).outputs).toEqual(derivedNodePorts(node)!.outputs);
   });
 });
 

@@ -1,0 +1,193 @@
+import React, { useRef, useState } from 'react';
+import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
+import { errorText } from '@/api/errorText';
+import CodeField from './CodeField';
+import { asExampleText, exampleObject } from './examplePair';
+import { contentValue, readFileAsRun, storedPath } from './readAsRun';
+import { useTyped } from './useTyped';
+import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
+
+/**
+ * What a picked file puts on *port*: its path where a path is what arrives
+ * there -- the example then holds what a run hands the node, and a node that
+ * reads its files reads it exactly as a run does, every time -- and otherwise
+ * the file's content, parsed when it is JSON.
+ */
+export async function pickedValue(path: string, port: string, pathPorts: string[]): Promise<unknown> {
+  if (pathPorts.includes(port)) return storedPath(path);
+  return contentValue(await readFileAsRun(path));
+}
+
+/** The example text with *port* set to *value*. */
+export function withPortValue(text: string, port: string, value: unknown): string {
+  // A file picked into an example that is empty or does not parse yet starts it afresh.
+  return asExampleText({ ...exampleObject(text), [port]: value });
+}
+
+interface Props {
+  /** The example as stored: a JSON object keyed by input port. */
+  text: string;
+  /** Stores the example as typed or filled, and says what it reads back as (see `useTyped`). */
+  onText: (text: string) => string;
+  /** Why the text cannot be used as it stands, or ''. */
+  error?: string;
+  /** The ports a file can be picked for. */
+  ports: { id: string; name?: string }[];
+  /** The ports a path arrives on (`pathPorts`): a file picked for one is kept as its path. */
+  pathPorts: string[];
+  /** ⟳ From the graph: what really arrives here, and a word on where it came from. */
+  fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
+  /**
+   * An example file an older version of the dialog attached, not yet taken
+   * in, and how to let it go: once it is taken in, or when the person says so.
+   */
+  earlierFile?: { path: string; drop: () => void };
+  /** One line under the field. */
+  note?: React.ReactNode;
+  /** The field's words when it is empty. */
+  placeholder?: string;
+  /**
+   * Draw the example's own field. A node whose example is kept, and edited,
+   * somewhere of its own -- what a data node holds -- has only the ways to
+   * fill it here.
+   */
+  showField?: boolean;
+  /** What the example is called, above the buttons. */
+  label?: string;
+}
+
+/**
+ * Step 1's example input: one set of values, keyed by input port, that the
+ * node is tried on, written against, and tested with.
+ *
+ * Two ways to fill it, and typing is editing what they filled. What really
+ * arrives -- the last run's values, or what the graph delivers when what feeds
+ * the node is run. Or a file. There used to be six places a sample came from,
+ * and each consumer read a different few of them; the 📎 among them was an
+ * uploaded copy that was only ever pasted into ✨'s prompt, never run.
+ */
+export default function ExampleInputField({
+  text, onText, error, ports, pathPorts, fromGraph, earlierFile, note, placeholder, showField = true, label = 'Example input',
+}: Props) {
+  const [typed, type] = useTyped(text, onText);
+  // What the box holds now, for a file read that ends after more was typed:
+  // the file's value is put into that, not into the box as it was clicked.
+  const latest = useRef(typed);
+  latest.current = typed;
+  const [busy, setBusy] = useState<'' | 'graph' | 'file'>('');
+  const [said, setSaid] = useState('');
+  const [failure, setFailure] = useState('');
+  const [browsing, setBrowsing] = useState(false);
+  const [port, setPort] = useState(ports[0]?.id ?? '');
+  const into = ports.some((candidate) => candidate.id === port) ? port : ports[0]?.id ?? '';
+
+  const fetch = async () => {
+    if (!fromGraph) return;
+    setBusy('graph'); setFailure(''); setSaid('');
+    try {
+      const got = await fromGraph();
+      if (Object.keys(got.values).length) type(asExampleText(got.values));
+      setSaid(got.said);
+    } catch (reason) {
+      setFailure(errorText(reason, 'The graph could not be run up to here.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  /** Puts the file at *path* into the example, and says whether it could. */
+  const take = async (path: string): Promise<boolean> => {
+    if (!into) return false;
+    setBusy('file'); setFailure(''); setSaid('');
+    try {
+      const value = await pickedValue(path, into, pathPorts);
+      type(withPortValue(latest.current, into, value));
+      setSaid(pathPorts.includes(into)
+        ? `“${into}” holds the file's path, as a run hands it on.`
+        : `“${into}” holds what the file says.`);
+      return true;
+    } catch (reason) {
+      setFailure(errorText(reason, 'The file could not be read.'));
+      return false;
+    } finally {
+      setBusy('');
+    }
+  };
+  // Taken in, the file is the example, and the offer has done its work.
+  const takeEarlier = async (earlier: { path: string; drop: () => void }) => {
+    if (await take(earlier.path)) earlier.drop();
+  };
+  // It is offered whether or not there is an example already: hidden then, an
+  // older node's file was neither shown nor sent anywhere, and no one could
+  // tell it was there.
+  const replaces = exampleObject(typed)?.[into] !== undefined;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs font-medium" style={{ color: MUTED, flex: '1 1 8rem' }}>{label}</label>
+        {fromGraph && (
+          <button className="text-xs px-2 py-1 rounded" style={{ ...NEUTRAL_BUTTON, opacity: busy ? 0.5 : 1 }}
+            disabled={busy !== ''} onClick={fetch}
+            title="What really arrives here: the last run's values, or -- before any run -- what the nodes that feed this one deliver when they are run now">
+            {busy === 'graph' ? 'Running upstream…' : '⟳ From the graph'}
+          </button>
+        )}
+        {ports.length > 0 && (
+          <>
+            {ports.length > 1 && (
+              <select className="rounded px-1.5 py-1 text-xs" style={FIELD} value={into}
+                onChange={(event) => setPort(event.target.value)} aria-label="Input a file is picked for">
+                {ports.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name || candidate.id}</option>)}
+              </select>
+            )}
+            <button className="text-xs px-2 py-1 rounded" style={{ ...NEUTRAL_BUTTON, opacity: busy ? 0.5 : 1 }}
+              disabled={busy !== ''} onClick={() => setBrowsing(true)}
+              title={pathPorts.includes(into)
+                ? 'Pick a file: its path goes into the example, as a run hands it on -- and is read the way a run reads it'
+                : 'Pick a file: what it says goes into the example -- parsed, when it is JSON'}>
+              {busy === 'file' ? 'Reading…' : '📂 From a file…'}
+            </button>
+          </>
+        )}
+      </div>
+      {earlierFile && into && (
+        <p className="text-xs flex flex-wrap items-center gap-2" style={{ color: DIMMER }}>
+          <span className="flex-1 min-w-0">
+            An example file was attached here before: {earlierFile.path}
+            {replaces ? `. Using it replaces what the example gives “${into}”.` : ''}
+          </span>
+          <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} disabled={busy !== ''}
+            onClick={() => void takeEarlier(earlierFile)} title={earlierFile.path}>
+            Use the example file from before
+          </button>
+          <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} disabled={busy !== ''}
+            onClick={earlierFile.drop} aria-label="Drop the example file from before">
+            ✕
+          </button>
+        </p>
+      )}
+      {showField && (
+        <CodeField
+          value={typed}
+          onChange={type}
+          language="javascript"
+          placeholder={placeholder ?? `{ ${(ports.length ? ports : [{ id: 'input' }]).map((candidate) => `"${candidate.id}": …`).join(', ')} }`}
+          minHeight={72}
+          title={label}
+        />
+      )}
+      {error && <p className="text-xs" style={{ color: DANGER_TEXT }}>{error}</p>}
+      {failure && <p className="text-xs" style={{ color: DANGER_TEXT }}>{failure}</p>}
+      {said && !failure && <p className="text-xs" style={{ color: DIMMER }}>{said}</p>}
+      {note}
+      {browsing && (
+        <FileBrowserDialog
+          mode="file"
+          onPick={(path) => { setBrowsing(false); void take(path); }}
+          onClose={() => setBrowsing(false)}
+        />
+      )}
+    </div>
+  );
+}

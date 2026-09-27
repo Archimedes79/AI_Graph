@@ -8,6 +8,14 @@ export class TextIoWidgetGuiBuilder extends WidgetGuiBuilder {
 
   readonly label = 'Text box';
 
+  paletteEntries() {
+    return [
+      { mode: 'input', label: 'Text input', icon: '⌨️', also: 'field box type prompt' },
+      { mode: 'output', label: 'Text output', icon: '📄', also: 'result answer display' },
+      { mode: 'both', label: 'Text in & out', icon: '↔️', also: 'both editable' },
+    ];
+  }
+
   override readonly Panel = lazy(() => import('./TextIoWidgetPanel'));
 
   override readonly defaultMode = 'both';
@@ -18,5 +26,10 @@ export class TextIoWidgetGuiBuilder extends WidgetGuiBuilder {
   /** A box you type into looks like one; a box that only shows text does not. */
   protected override defaultTone(mode: string) {
     return mode === 'output' ? 'plain' as const : 'sunken' as const;
+  }
+
+  /** What is typed into it, nothing yet. */
+  protected override initialSettings() {
+    return { value: '' };
   }
 }

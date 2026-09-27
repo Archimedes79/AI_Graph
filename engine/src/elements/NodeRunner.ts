@@ -84,6 +84,15 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   readonly isResult: boolean = false;
 
   /**
+   * What this node's outputs are called in the run's result, when it is one:
+   * its id, unless the element keeps a name of its own. The run keys the result
+   * by it and `check` compares it, so both ask here.
+   */
+  resultLabel(node: GraphNode): string {
+    return node.id;
+  }
+
+  /**
    * Whether this node is where its graph meets whatever holds it: `'in'` for a
    * value handed down, `'out'` for one handed back up.
    *
@@ -180,16 +189,26 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   }
 
   /**
+   * This kind can be set to run once per item (`config.batch_mode`): its body
+   * is written by a person or ✨ for one item, and "Run once per item" is its
+   * setting. Every other kind takes what arrives whole, whatever an older file
+   * says -- the editor used to write `per_item` on every node, and an output
+   * node that fanned out wrote each item over the same file.
+   */
+  readonly fansOut: boolean = false;
+
+  /**
    * Whether this node runs once for the whole list or once per item.
    *
    * A declaration, not an implementation: the fan-out itself belongs to the
    * executor, so "run this once per element" works the same for a code node and
    * an AI node and would work for a third kind without either being told. Both
    * used to carry their own copy of the loop, and the copies had begun to
-   * differ in what an empty list meant.
+   * differ in what an empty list meant. A file that leaves the key out means
+   * the whole list.
    */
   batchMode(node: GraphNode): 'whole' | 'per_item' {
-    return node.config.batch_mode === 'per_item' ? 'per_item' : 'whole';
+    return this.fansOut && node.config.batch_mode === 'per_item' ? 'per_item' : 'whole';
   }
 
   /** How many items of a fan-out may be in flight at once. */
@@ -329,4 +348,39 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
     return [];
   }
 
+}
+
+/**
+ * The key each result node's outputs are handed on under in a run's result,
+ * by node id, in graph order: its label (`resultLabel`), or -- where a later
+ * node in graph order already has that key -- the label with the node's id
+ * after it, and a number after that while even that is taken.
+ *
+ * The last node under a label keeps it because the last one always had it: a
+ * run used to write each result under its label in graph order, so the later
+ * replaced the earlier, and a graph saved then -- every output node started as
+ * "Result" -- still finds the same value under the same key. The keys told
+ * apart by an id are only additions.
+ *
+ * Decided over the whole graph, not over the nodes a round ran, so a node's
+ * key does not change with which ran beside it; and asked by the run and by
+ * `check` alike, so what `check` says the keys are is what they are. Every key
+ * is checked against every key handed out before it: a label of the form
+ * "Result (second)" used to be given to a repeated "Result" too, and one of
+ * the two values was dropped from the result without a word.
+ */
+export function resultKeys(nodes: GraphNode[], elements: Runners): Map<string, string> {
+  const keys = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const node of [...nodes].reverse()) {
+    const element = elements.node(node.node_type);
+    if (!element?.isResult || keys.has(node.id)) continue;
+    const label = element.resultLabel(node);
+    const told = `${label} (${node.id})`;
+    let key = taken.has(label) ? told : label;
+    for (let n = 2; taken.has(key); n += 1) key = `${told} ${n}`;
+    taken.add(key);
+    keys.set(node.id, key);
+  }
+  return new Map([...keys].reverse());
 }

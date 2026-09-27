@@ -21,10 +21,22 @@ import type { GraphNode, NodeConfig, NodeType } from '@/graph';
 import { derivedNodePorts } from './guiWidgets';
 import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
 import { TriggerNodeRunner } from '@engine/elements/nodes/trigger/TriggerNodeRunner.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { baseNodeConfig } from './baseNodeConfig';
 
-/** Kept even at its starting value: the executor reads it whether or not anyone set it. */
-const ALWAYS_SAVED = ['batch_mode'];
+/**
+ * What a code or ai node without `batch_mode` means (`NodeRunner.batchMode`).
+ *
+ * A node made here starts per item, and says so in the file (it is one of its
+ * settings). A node without the key -- written by hand, by the MCP server, by a
+ * model -- runs once on the whole list, and filling it from `create` turned
+ * that into per item on the first Save, without anyone touching the setting:
+ * the command line and the editor ran the same file two ways.
+ */
+const WHOLE_WHEN_MISSING: Partial<NodeConfig> = { batch_mode: 'whole_list' };
+
+/** How a code or ai node made here starts: once per item, as many at once as the run allows. */
+const PER_ITEM: Partial<NodeConfig> = { batch_mode: 'per_item', batch_concurrency: 0 };
 
 const SUBGRAPH = new SubgraphNodeRunner();
 const TRIGGER = new TriggerNodeRunner();
@@ -35,7 +47,12 @@ const TRIGGER = new TriggerNodeRunner();
 // code for the blurb. What the type is for is the field's placeholder instead
 // (`NodeGuiBuilder.hint`).
 
-const CODE_STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
+/**
+ * The code a new code node starts with. The code dialog shows the same text as
+ * its placeholder, and the graph sweep counts it as nobody's work: one text,
+ * so the three cannot drift apart.
+ */
+export const CODE_STARTER = 'function run(inputs) {\n  return { output: inputs.input ?? "" };\n}\n';
 
 export interface NodeKind {
   /** A node of this type with nothing set: what a new one is, and what a loaded one falls back to. */
@@ -48,15 +65,29 @@ export interface NodeKind {
    * node never reads.
    */
   settings: readonly (keyof NodeConfig)[];
+  /**
+   * What this kind's element reads a key a file leaves out as, where that is
+   * not what `create` starts a new node with. Loading fills a missing key from
+   * here first, so that opening a graph and saving it never changes what it does.
+   */
+  whenMissing?: Partial<NodeConfig>;
+  /**
+   * A node just made, beside *others* already in the graph: what it starts as
+   * where that depends on what is there. `create` alone is what a loaded node
+   * falls back to, and must not depend on its neighbours.
+   */
+  placedAmong?(node: GraphNode, others: GraphNode[]): GraphNode;
   /** Running this node puts its result in a window of its own. */
   showsResultWindow?(node: GraphNode): boolean;
 }
 
 export const NODE_KINDS: Record<NodeType, NodeKind> = {
   input: {
+    // Not the selector, nor what an older dialog let a person say the files
+    // contain: kept once somebody wrote them, and left out while empty, so a
+    // text or file input -- which selects nothing -- saves no selector (B21).
     settings: [
-      'input_mode', 'value', 'prompt_at_runtime', 'recursive', 'extensions', 'select_all_files',
-      'selector_prompt', 'selector_code', 'example_file', 'output_format_prompt', 'catch_errors',
+      'input_mode', 'value', 'prompt_at_runtime', 'recursive', 'extensions', 'select_all_files', 'catch_errors',
     ],
     create(id) {
       // A new input starts in text mode, and its ports follow from that -- asked
@@ -78,9 +109,12 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
   ai: {
     settings: [
       'ai_provider', 'ai_model', 'system_prompt', 'temperature', 'prompt_template',
-      'output_format', 'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
-      'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors', 'examples', 'run_code',
+      'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
+      'read_file_inputs', 'batch_mode', 'batch_concurrency', 'catch_errors', 'examples', 'run_code',
     ],
+    // A new node starts with a system prompt to show where one goes; a file
+    // without one sends none, and a Save must not start sending ours.
+    whenMissing: { ...WHOLE_WHEN_MISSING, system_prompt: '' },
     create: (id) => ({
       id,
       node_type: 'ai',
@@ -99,15 +133,19 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
         { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'any', multi: true, required: false, description: 'What to ask. A list asks once per item.' },
       ],
       outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: true, required: false, description: 'The answer. One per item when the prompt was a list.' }],
-      config: { ...baseNodeConfig(), system_prompt: 'You are a helpful assistant.' },
+      config: { ...baseNodeConfig(), ...PER_ITEM, system_prompt: 'You are a helpful assistant.' },
     }),
   },
 
   code: {
     settings: [
-      'code', 'code_prompt', 'output_schema', 'examples', 'output_format', 'output_format_prompt',
-      'read_file_inputs', 'batch_concurrency', 'example_file', 'catch_errors',
+      'code', 'code_prompt', 'output_schema', 'examples', 'output_format_prompt',
+      'read_file_inputs', 'batch_mode', 'batch_concurrency', 'catch_errors',
     ],
+    // The starter body is for a node made here. A file without code is a node
+    // with no code -- which `check` says -- not one that quietly hands its
+    // input on after a Save.
+    whenMissing: { ...WHOLE_WHEN_MISSING, code: '' },
     create: (id) => ({
       id,
       node_type: 'code',
@@ -115,13 +153,20 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       description: '',
       position: { x: 0, y: 0 },
       inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-      outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: 'One result per input item' }],
-      config: { ...baseNodeConfig(), code: CODE_STARTER },
+      // No description on the output: "one result per item" was true only while
+      // step 1 said "Run once per item", and ✨ is told that by the brief itself.
+      outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
+      config: { ...baseNodeConfig(), ...PER_ITEM, code: CODE_STARTER },
     }),
   },
 
   data: {
-    settings: ['data_value', 'data_format', 'data_prompt', 'data_format_prompt', 'example_file'],
+    settings: ['data_value', 'data_format', 'data_prompt', 'data_format_prompt'],
+    // A file without a value holds nothing, which is null for a structure and
+    // '' for text (`DataNodeRunner.config`). One null says both, since the
+    // engine reads it as '' for text. A new node's '' made a structure hand
+    // on a string after one Save.
+    whenMissing: { data_value: null },
     create: (id) => ({
       id,
       node_type: 'data',
@@ -136,6 +181,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
 
   output: {
     settings: ['output_label', 'write_mode', 'value', 'prompt_at_runtime'],
+    // No label is the node's id as the key of the run's result, and no
+    // write_mode writes nothing and opens no window (`OutputNodeRunner.config`,
+    // `finalOutputs`). Filled with a new node's 'Result', a second output left
+    // unlabelled came back from one Save under the same key as the first.
+    whenMissing: { output_label: '', write_mode: 'none' },
     showsResultWindow: (node) => node.config.write_mode === 'window',
     create: (id) => ({
       id,
@@ -152,6 +202,19 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       // the setting is the one node whose whole point would be missing.
       config: { ...baseNodeConfig(), output_label: 'Result', write_mode: 'window' },
     }),
+    // Its own label, "Result 2" beside a "Result": two results that share one
+    // keep only the last under it in the run's result, and `check` says so.
+    // The labels taken are asked the way `check` asks them, of every element
+    // that is a result.
+    placedAmong(node, others) {
+      const taken = new Set(others.flatMap((other) => {
+        const element = engineRegistry.node(other.node_type);
+        return element?.isResult ? [element.resultLabel(other)] : [];
+      }));
+      let label = 'Result';
+      for (let n = 2; taken.has(label); n += 1) label = `Result ${n}`;
+      return { ...node, config: { ...node.config, output_label: label } };
+    },
   },
 
   gui: {
@@ -202,13 +265,21 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
 };
 
 /**
+ * What a node of this type, read from a file, takes each key the file left out
+ * to mean -- before `create`'s starting values, which are for a new node.
+ */
+export function whenMissing(nodeType: NodeType): Partial<NodeConfig> {
+  return NODE_KINDS[nodeType].whenMissing ?? {};
+}
+
+/**
  * The node as a graph file keeps it: its own settings, and any other key only
  * when it no longer holds the value every node starts with. Loading fills the
  * rest back in from `create`, so nothing is lost either way.
  */
 export function savedNode(node: GraphNode): GraphNode {
   const untouched: Record<string, unknown> = baseNodeConfig();
-  const own = new Set<string>([...ALWAYS_SAVED, ...NODE_KINDS[node.node_type].settings]);
+  const own = new Set<string>(NODE_KINDS[node.node_type].settings);
   const config = Object.fromEntries(Object.entries(node.config)
     .filter(([key, value]) => own.has(key) || JSON.stringify(value) !== JSON.stringify(untouched[key])));
   return { ...node, config: config as NodeConfig };

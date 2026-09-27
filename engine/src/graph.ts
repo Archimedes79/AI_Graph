@@ -37,8 +37,6 @@ export interface Port {
   multi: boolean;
   required: boolean;
   description: string;
-  /** How a wired file is read, when the element reads files at all. */
-  format?: string | null;
 }
 
 /** An element's stored settings. Its own element narrows this; nothing else may. */
@@ -65,12 +63,14 @@ export interface GraphEdge {
   target_port_id: string;
 }
 
+/**
+ * A graph's own settings. Keys an older file carries beside these -- a
+ * `version`, an `author`, `tags` -- are nobody's to read, and are kept as the
+ * file wrote them.
+ */
 export interface GraphMetadata {
   name: string;
-  version: string;
   description: string;
-  author: string;
-  tags: string[];
   ai_defaults: { provider: string; model: string };
   gui_scheme: string;
 }
@@ -141,21 +141,31 @@ export function applyMemory(
   }
 }
 
-const DEFAULT_METADATA: GraphMetadata = {
-  name: 'Untitled Graph',
-  version: '1.0.0',
-  description: '',
-  author: '',
-  tags: [],
-  ai_defaults: { provider: 'default', model: '' },
-  gui_scheme: 'night',
-};
+/**
+ * A graph's settings when nothing says otherwise: a new graph's, and what an
+ * older file that leaves one out means. The one statement of them -- the
+ * editor starts a new graph from it, and `flow.json` leaves out what equals
+ * it. A fresh object each call, so no two graphs share an `ai_defaults`.
+ */
+export function defaultMetadata(): GraphMetadata {
+  return {
+    name: 'Untitled Graph',
+    description: '',
+    // Which AI this graph's AI nodes call when they run, set once for the
+    // whole graph (⚙ Settings) instead of once per node. 'default' means
+    // unset, which the running engine resolves to its own fallback; whoever
+    // runs a deployed copy can override it without editing the graph -- see
+    // ai/settings.ts.
+    ai_defaults: { provider: 'default', model: '' },
+    gui_scheme: 'night',
+  };
+}
 
 /**
  * Read a graph from parsed JSON, filling in what an older file omits.
  *
  * Deliberately forgiving about *shape* and strict about *identity*: a file
- * missing `metadata.tags` is a file from last month, while a node without an
+ * missing `metadata.gui_scheme` is a file from last month, while a node without an
  * id is not a graph. Per-field migrations belong to the element that owns the
  * field, not here — that is what stopped `graph.py` from accumulating a
  * `_migrate_…` function per historical mistake.
@@ -167,7 +177,7 @@ export function parseGraph(raw: unknown): Graph {
   const edges = Array.isArray(source.edges) ? source.edges : [];
 
   return {
-    metadata: { ...DEFAULT_METADATA, ...(source.metadata as object ?? {}) },
+    metadata: { ...defaultMetadata(), ...(source.metadata as object ?? {}) },
     nodes: nodes.map(parseNode),
     edges: edges.map(parseEdge),
   };

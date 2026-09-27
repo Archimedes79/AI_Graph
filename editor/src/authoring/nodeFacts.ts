@@ -1,31 +1,43 @@
 import type { Edge } from 'reactflow';
 import type { ExecutionResult, GraphNode } from '@/graph';
 import type { GenerationRequest } from './generation';
-import { inputOrigins, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
-import { outputExampleText, outputFormatText } from './outputFormat';
-import { sampleFor, sampleOrigin } from './tryValues';
+import { inputSources, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
+import { outputExampleText } from './outputFormat';
+import { readPair } from './examplePair';
 import { NODE_BUILDERS } from '@/elements/registry';
+
+/** A sample, where it came from, and which of its ports hold a path the engine is to read. */
+interface Sample { values: Record<string, unknown>; origin: string; read: string[] }
 
 /**
  * Before any run: what the nodes wired in hold without running -- a typed
- * text, a stored value. Only when every wired input has one: half a sample
- * would be tried on the code as if the other half were empty.
+ * text, a stored value, the file an input node reads. Only when every wired
+ * input has one: half a sample would be tried on the code as if the other
+ * half were empty.
+ *
+ * A file is sent as its path, and named as a port to read: the engine reads
+ * it the way a run reads a file before it shows the sample or tries code on
+ * it -- so a node fed by a file input is written against that file's rows, not
+ * against a guess, before the graph has ever run.
  */
-function restingValues(
-  node: GraphNode, nodes: GraphNode[], edges: Edge[],
-): { values: Record<string, unknown>; origin: string } | undefined {
+function restingValues(node: GraphNode, nodes: GraphNode[], edges: Edge[]): Sample | undefined {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const values: Record<string, unknown> = {};
+  const read: string[] = [];
   const from = new Set<string>();
   for (const edge of edges) {
     if (edge.target !== node.id || !edge.targetHandle) continue;
     const source = byId.get(edge.source);
-    const value = source && edge.sourceHandle ? NODE_BUILDERS[source.node_type]?.restingValue(source, edge.sourceHandle) : undefined;
+    const element = source && NODE_BUILDERS[source.node_type];
+    if (!element || !edge.sourceHandle) return undefined;
+    const file = element.restingFile(source, edge.sourceHandle);
+    const value = file ?? element.restingValue(source, edge.sourceHandle);
     if (value === undefined) return undefined;
     values[edge.targetHandle] = value;
-    from.add(`"${source!.label}"`);
+    if (file) read.push(edge.targetHandle);
+    from.add(`"${source.label}"`);
   }
-  return Object.keys(values).length ? { values, origin: `what ${[...from].join(' and ')} holds now` } : undefined;
+  return Object.keys(values).length ? { values, read, origin: `what ${[...from].join(' and ')} holds now` } : undefined;
 }
 
 /**
@@ -35,12 +47,17 @@ function restingValues(
  * prompt, and cuts what is long to a budget.
  *
  *     task            the node's request (the element's prompt field)
- *     what comes in   each input: type, description, where from and what
- *                     that node hands on, and one sample
- *     what goes out   each output: description, where to and what the node
- *                     there wants; the format in words; an example; the
- *                     shape a run kept
+ *     what comes in   each input: type, where from and what that node hands
+ *                     on, and one sample
+ *     what goes out   each output: where to and what the node there wants;
+ *                     the format in words; an example; the shape a run kept
  *     examples        the node's `examples.md`
+ *
+ * The sample is the node's example (step 1) when it has one: the engine reads
+ * it from `examples` itself, so that what the example expects is checked too.
+ * Without one, it is what arrived on the last run, and before any run what the
+ * nodes wired in hold now. An example file the 📎 of an older version attached
+ * is not a second sample beside these: step 1 offers to take it in.
  *
  * The node dialog, the graph sweep and "what ✨ sends" all ask this one
  * function, so none of them can tell the model less than the others.
@@ -51,18 +68,31 @@ export function nodeFacts(
   edges: Edge[],
   executionResult: ExecutionResult | null,
 ): Omit<GenerationRequest<GraphNode>, 'element' | 'generation' | 'subject' | 'fields'> {
+  const element = NODE_BUILDERS[node.node_type];
   const inputs = node.inputs.map((port) => port.id);
-  const observed = lastRunInputs(node.id, executionResult);
   const whole = node.config.batch_mode === 'whole_list';
-  const tried = sampleFor(node.id, inputs, observed);
-  const resting = tried ? undefined : restingValues(node, nodes, edges);
+  const given = element?.exampleInput(node);
+  const example = given && Object.keys(given).length ? given : undefined;
+  // The engine reads a complete first pair from `examples.md` by itself, and
+  // then also checks what it expects; any other example is sent as it is.
+  const pair = readPair(node.config.examples);
+  const read = !!example && pair.complete && JSON.stringify(pair.input) === JSON.stringify(example);
+  const observed = lastRunInputs(node.id, executionResult);
+  const sample: Sample | undefined = read ? undefined
+    : example ? { values: example, origin: 'the example in step 1', read: [] }
+      : observed ? { values: observed, origin: 'the last run', read: [] } : restingValues(node, nodes, edges);
   return {
+    // All of them: the error port is the executor's, and the engine drops it
+    // where a request comes in (`generate`).
     ports: { inputs, outputs: node.outputs.map((port) => port.id) },
-    exampleFile: node.config.example_file,
-    sampleInputs: tried ?? resting?.values,
-    sampleOrigin: tried ? sampleOrigin(node.id, inputs, observed) : resting?.origin,
-    inputSources: inputOrigins(node.id, nodes, edges),
-    readFilePorts: readFilePorts(node),
+    lists: {
+      inputs: node.inputs.filter((port) => port.multi).map((port) => port.id),
+      outputs: node.outputs.filter((port) => port.multi).map((port) => port.id),
+    },
+    sampleInputs: sample?.values,
+    sampleOrigin: example ? 'the example in step 1' : sample?.origin,
+    inputSources: inputSources(node.id, nodes, edges, true),
+    readFilePorts: [...new Set([...readFilePorts(node, nodes, edges), ...(sample?.read ?? [])])],
     // What a body is handed on each port: one item of a list input, unless the
     // node takes lists whole.
     inputTypes: Object.fromEntries(node.inputs.map((port) => {
@@ -71,12 +101,14 @@ export function nodeFacts(
       return [port.id, list ? `list of ${base === 'any' ? 'values' : base}` : base];
     })),
     batchMode: node.inputs.some((port) => port.multi) ? (whole ? 'whole_list' : 'per_item') : undefined,
+    // What a port carries is no longer written per port; what older graphs
+    // said there is kept, and still sent.
     portNotes: {
       inputs: Object.fromEntries(node.inputs.map((port) => [port.id, port.description ?? ''])),
       outputs: Object.fromEntries(node.outputs.map((port) => [port.id, port.description ?? ''])),
     },
     outputTargets: outputTargets(node.id, nodes, edges, true),
-    outputFormat: outputFormatText(node.config),
+    outputFormat: element?.outputFormatFor(node) ?? '',
     outputExample: outputExampleText(node.config),
     outputSchema: node.config.output_schema,
     examples: node.config.examples,

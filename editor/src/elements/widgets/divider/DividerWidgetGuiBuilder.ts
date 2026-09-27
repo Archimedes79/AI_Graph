@@ -8,6 +8,13 @@ export class DividerWidgetGuiBuilder extends StaticWidgetGuiBuilder {
 
   readonly label = 'Divider';
 
+  paletteEntries() {
+    return [
+      { mode: 'horizontal', label: this.label, icon: '➖', also: 'line rule hr' },
+      { mode: 'vertical', label: 'Vertical divider', icon: '│' },
+    ];
+  }
+
   override readonly defaultMode = 'horizontal';
 
   /**

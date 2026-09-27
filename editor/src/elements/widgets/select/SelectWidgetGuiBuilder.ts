@@ -8,6 +8,10 @@ export class SelectWidgetGuiBuilder extends WidgetGuiBuilder {
 
   readonly label = 'Dropdown';
 
+  paletteEntries() {
+    return [{ label: this.label, icon: '▾', also: 'select choice options' }];
+  }
+
   override readonly Panel = lazy(() => import('./SelectWidgetPanel'));
 
   protected override defaultSpan() {

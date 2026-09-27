@@ -36,8 +36,14 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
     return DATA_TEXTS;
   }
 
+  /**
+   * Holding nothing is said in the node's own kind: empty text for a text
+   * node, and null for a structure. A cleared structure used to hand on "",
+   * which `inputs.input ?? []` lets through as a string, and which was not the
+   * nothing the neighbour's ✨ had been shown.
+   */
   config(node: GraphNode): DataConfig {
-    return { value: node.config.data_value ?? '' };
+    return { value: node.config.data_value ?? (node.config.data_format === 'structure' ? null : '') };
   }
 
   /**
@@ -70,7 +76,11 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `config.data_value is what it remembers between runs.`;
+    return 'persisted graph memory, with one optional input port named "input" and one output port named "output". '
+      + 'config.data_value is what it remembers between runs; initialize it when useful. Set config.data_format to text or '
+      + 'structure, and put the precise schema -- field names, types, nesting and constraints -- in config.data_format_prompt. '
+      + 'Define data nodes before code or ai nodes when a workflow has known intermediate contracts: connected code and '
+      + 'ai nodes must honor those source and target contracts.';
   }
 
   override whatRuns(): WhatRuns {

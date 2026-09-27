@@ -84,6 +84,17 @@ describe('a project folder', () => {
     expect(await text('nodes/page/chart/task.md')).toBe('Bars.\n');
   });
 
+  it('keeps a block\'s example input in a file of its own, as it was typed', async () => {
+    const graph = sample();
+    const example = '{\n  "value": [{ "city": "Oslo", "people": 700000 }]\n}';
+    graph.nodes[3].config.gui_widgets = [{ id: 'rows', kind: 'table', label: 'Rows', code: '', code_prompt: '', example }];
+    await writeProject(dir, graph);
+    expect(await text('nodes/page/rows/example.json')).toBe(`${example}\n`);
+    expect(JSON.parse(await text('nodes/page/node.json')).config.gui_widgets[0]).toEqual({ id: 'rows', kind: 'table', label: 'Rows' });
+    const read = await readProject(dir);
+    expect((read.nodes.find((n) => n.id === 'page')!.config.gui_widgets as Record<string, unknown>[])[0].example).toBe(example);
+  });
+
   it('says the flow once, in flow.json, and nothing about any node there', async () => {
     await writeProject(dir, sample());
     expect(JSON.parse(await text('flow.json'))).toEqual({
@@ -137,6 +148,17 @@ describe('a project folder', () => {
       ...edge, id: `${edge.source_node_id}.${edge.source_port_id} -> ${edge.target_node_id}.${edge.target_port_id}`,
     })));
     expect(read.metadata.name).toBe('Sample');
+  });
+
+  it('keeps the settings an older file carries that nothing reads, as it wrote them', async () => {
+    // version, author and tags are no setting of the graph's any more; a file
+    // that has them keeps them through an open and a save, whatever they say.
+    const graph = sample();
+    Object.assign(graph.metadata, { version: '1.0.0', author: 'Ada', tags: [] });
+    await writeProject(dir, graph);
+    const read = await readProject(dir);
+    expect(read.metadata).toMatchObject({ version: '1.0.0', author: 'Ada', tags: [] });
+    expect(JSON.parse(await text('flow.json'))).toMatchObject({ version: '1.0.0', author: 'Ada', tags: [] });
   });
 
   it('writes the same bytes for the same graph, so an unchanged save is no change', async () => {

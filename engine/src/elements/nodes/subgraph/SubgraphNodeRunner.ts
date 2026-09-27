@@ -1,10 +1,9 @@
-import { NodeRunner } from '../../NodeRunner.ts';
-import type { TextFile, WhatRuns } from '../../ElementRunner.ts';
+import { NodeRunner, type Runners } from '../../NodeRunner.ts';
+import type { DeployNeeds, TextFile, WhatRuns } from '../../ElementRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
-import { port } from '../../port.ts';
-import type { Problem } from '../../../execution/wiring.ts';
-import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedUp, type Runners } from './boundary.ts';
+import { errorOutput, type Problem } from '../../../execution/wiring.ts';
+import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedUp } from './boundary.ts';
 import { runBody } from '../../body.ts';
 import { GRAPH_RUNS_PER_BODY, SUBGRAPH_RUN, SUBGRAPH_RUN_TEMPLATES, isStandardGraphRun } from './runTemplate.ts';
 
@@ -87,7 +86,7 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
     if (!this.catchesErrors(node)) return ports;
     return {
       inputs: ports.inputs,
-      outputs: [...ports.outputs, port('error', 'Error', 'output', 'text', false, 'Set when the graph inside failed')],
+      outputs: [...ports.outputs, errorOutput('Set when the graph inside failed')],
     };
   }
 
@@ -170,6 +169,19 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
       return { by: 'body', where: 'run.js', does: 'Calls run(inputs, node) in run.js, sandboxed; each node.graph(inputs) in it runs the graph in this folder once and resolves to what reached its output nodes.' };
     }
     return this.engineRuns('Runs the graph in its folder, whole, with what arrives standing in for its input nodes, and hands on what reaches its output nodes.');
+  }
+
+  /**
+   * A run.js somebody changed is a body, and every body may ask a model: one
+   * that mentions `llm` is taken to, by the rule `ElementRunner.deployNeeds`
+   * applies to every other body. Asked here because this node's body runs
+   * through `execute`, not `logic()`, so the base class never sees it -- and a
+   * bundle of a part that asks a model around a graph with no ai node in it
+   * said nothing about a provider, and stopped at its first question.
+   * What the graph inside needs, `bundleNeeds` follows on its own.
+   */
+  override deployNeeds(node: GraphNode): DeployNeeds {
+    return { needsInterface: false, asksAi: /\bllm\b/.test(this.config(node).runCode) };
   }
 
   /**

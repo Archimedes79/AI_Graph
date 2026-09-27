@@ -15,7 +15,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseGraph, type Graph } from '../../graph.ts';
-import { executeNode, inputsFor } from '../../execution/executor.ts';
+import { executeNode, inputsFor, withGraphDefaults } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExamples } from '../../execution/examples.ts';
 import { GuiNodeRunner, parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
@@ -27,7 +27,6 @@ import { nodeRuntime } from '../node.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile, SentRequest } from '../api.ts';
 import * as files from './files.ts';
-import { browse, extensionFilter } from '../browse.ts';
 import { NotAGraph, NotFound } from '../../errors.ts';
 import * as settings from './settings.ts';
 import * as project from '../../project/folder.ts';
@@ -72,7 +71,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
     }
   }
 
-  /** Open, Save and Reload, with the project layer's refusals as the statuses the page reads. */
+  /** Open (and so Reload) and Save, with the project layer's refusals as the statuses the page reads. */
   async function onFile(path: string, action: string, work: (path: string) => Promise<GraphFile['graph']>): Promise<GraphFile> {
     if (!path) throw new Refusal(400, "Missing required field 'path'");
     const full = resolve(expandHome(path));
@@ -117,7 +116,11 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     async runBlock(asked) {
       try {
-        const shown = await new GuiNodeRunner().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
+        // A block alone is no graph for the executor to apply its defaults
+        // to, so they are applied here, as a run applies them: code that asks
+        // a model is tried on the model the graph's run would ask.
+        const runtime = withGraphDefaults(nodeRuntime(), parseGraph({ metadata: asked.metadata }));
+        const shown = await new GuiNodeRunner().showBlock(parseWidget(asked.widget), asked.value, runtime);
         return { status: 'success', shown, error: null };
       } catch (error) {
         return { status: 'error', shown: null, error: message(error) };
@@ -132,24 +135,12 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       return { inputs, error: failed ? `${failed.node_id}: ${failed.error}` : null };
     },
 
-    // The same browser a deployed tool serves (`host/browse.ts`), opening where
-    // the editor was started rather than in a home folder of dot-directories.
-    async browse(asked, { loopback }) {
-      if (!loopback) throw new Refusal(403, 'Browsing is disabled.');
-      try {
-        return await browse(asked.path ?? '', extensionFilter(asked.extensions ?? ''));
-      } catch (error) {
-        throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));
-      }
-    },
-
     openGraph: (asked) => onFile(asked.path, 'load', (path) => project.loadGraph(path)),
     saveGraph: (asked) => onFile(asked.path, 'save', async (path) => {
       const graph = parseGraph(asked.graph);
       await project.saveGraph(path, graph);
       return graph;
     }),
-    reloadGraph: (asked) => onFile(asked.path, 'reload', (path) => project.loadGraph(path)),
 
     findProjects: async (asked, { loopback }) => {
       if (!loopback) throw new Refusal(403, 'Looking for projects is only offered on this machine.');
@@ -173,13 +164,14 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
         ai: runtime.ai,
         code: runtime.code,
         files: runtime.files,
-        generationFor: (name) => registry.node(name)?.generation() ?? registry.widget(name)?.generation(),
+        generationFor: (name) => registry.generation(name),
         target: await settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? ''),
         calls,
       });
     }),
 
-    generationProgress: (asked) => ({ calls: generating.get(asked.id) ?? [], done: !generating.has(asked.id) }),
+    // Whether it ended is the generate call's own answer arriving, not this.
+    generationProgress: (asked) => ({ calls: generating.get(asked.id) ?? [] }),
 
     generateGraph: (asked) => watched(asked.progress_id, async (calls) => {
       const target = await settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? '');
@@ -229,15 +221,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     providers: () => settings.providerStatus(),
 
-    async detectFormat(asked) {
-      if (!asked.path) throw new Refusal(400, "Missing required field 'path'");
-      try {
-        return { format: await files.detectFormat(asked.path) };
-      } catch (error) {
-        throw new Refusal(404, message(error));
-      }
-    },
-
     async openExternal(asked, { loopback }) {
       if (!loopback) throw new Refusal(403, 'Opening files is only offered on this machine.');
       if (!asked.graph_path || !asked.node_id) throw new Refusal(400, "Missing 'graph_path' or 'node_id'.");
@@ -249,20 +232,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       } catch (error) {
         if (error instanceof Refusal) throw error;
         throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));
-      }
-    },
-
-    async attach(asked) {
-      const name = asked.name || 'attachment';
-      return { path: await files.saveAttachment(name, Buffer.from(asked.bytes as Uint8Array)), name };
-    },
-
-    async detach(asked) {
-      try {
-        await files.deleteAttachment(asked.path ?? '');
-        return { ok: true };
-      } catch (error) {
-        throw new Refusal(400, message(error));
       }
     },
   };

@@ -8,6 +8,10 @@ export class SliderWidgetGuiBuilder extends WidgetGuiBuilder {
 
   readonly label = 'Slider';
 
+  paletteEntries() {
+    return [{ label: this.label, icon: '🎚️', also: 'number range' }];
+  }
+
   override readonly Panel = lazy(() => import('./SliderWidgetPanel'));
 
   override readonly runOnChangeHint =

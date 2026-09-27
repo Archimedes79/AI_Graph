@@ -1,30 +1,7 @@
 import { WidgetRunner, type Widget } from '../../WidgetRunner.ts';
 import type { RawConfig } from '../../../graph.ts';
 import { port } from '../../port.ts';
-
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  text: string;
-}
-
-export interface ChatConfig {
-  /** Everything said so far, oldest first. */
-  messages: ChatMessage[];
-  /** What the person just sent and nobody has answered yet. */
-  pending: string;
-}
-
-function read(raw: unknown): ChatConfig {
-  const stored = (raw && typeof raw === 'object' ? raw : {}) as { messages?: unknown; pending?: unknown };
-  const messages = Array.isArray(stored.messages) ? stored.messages : [];
-  return {
-    messages: messages
-      .map((entry) => entry as Partial<ChatMessage>)
-      .filter((entry) => typeof entry?.text === 'string')
-      .map((entry) => ({ role: entry.role === 'assistant' ? 'assistant' as const : 'user' as const, text: String(entry.text) })),
-    pending: typeof stored.pending === 'string' ? stored.pending : '',
-  };
-}
+import { chatValue, type ChatMessage, type ChatValue } from './value.ts';
 
 /** The conversation as a model reads it: one turn per paragraph, who said it in front. */
 export function transcript(messages: ChatMessage[]): string {
@@ -48,11 +25,11 @@ export function transcript(messages: ChatMessage[]): string {
  * exactly as it was, with the message still in hand to send again, rather
  * than a transcript ending in a question nobody answered.
  */
-export class ChatWidgetRunner extends WidgetRunner<ChatConfig> {
+export class ChatWidgetRunner extends WidgetRunner<ChatValue> {
   readonly widgetKind = 'chat' as const;
 
-  config(widget: Widget): ChatConfig {
-    return read(widget.config.value);
+  config(widget: Widget): ChatValue {
+    return chatValue(widget.config.value);
   }
 
   ports(widget: Widget) {
@@ -84,7 +61,7 @@ export class ChatWidgetRunner extends WidgetRunner<ChatConfig> {
 
   /** The reply closes the turn: question and answer go into the transcript together. */
   override settle(stored: RawConfig, value: unknown): void {
-    const { messages, pending } = read(stored.value);
+    const { messages, pending } = chatValue(stored.value);
     const reply = Array.isArray(value) ? value.map(String).join('\n\n') : String(value ?? '');
     if (!reply.trim()) return;
     stored.value = {
@@ -95,5 +72,14 @@ export class ChatWidgetRunner extends WidgetRunner<ChatConfig> {
       ],
       pending: '',
     };
+  }
+
+  // ── Build time ────────────────────────────────────────────────────────────
+
+  override graphAuthorNote(): string {
+    return 'keeps the conversation itself and contributes "<id>_out" (the message just sent), "<id>_history" '
+      + '(everything before it) and "<id>_in" (the reply). A chatbot is therefore TWO nodes: a gui node with one chat '
+      + 'block, and an ai node with inputs "history" and "message" wired from it and its "output" wired back to '
+      + '"<id>_in". Do not add data or code nodes to hold the conversation.';
   }
 }

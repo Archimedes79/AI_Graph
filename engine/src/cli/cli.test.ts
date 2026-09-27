@@ -46,4 +46,9 @@ describe('parseArgs', () => {
   it('is not an MCP server unless asked', () => {
     expect(parseArgs(['g.json']).mcp).toBeUndefined();
   });
+
+  it('refuses a flag it does not know, rather than reading it as the graph or dropping it', () => {
+    expect(() => parseArgs(['--ai-provider', 'openai', 'g.json'])).toThrow(/Unknown option "--ai-provider"/);
+    expect(() => parseArgs(['g.json', '--ai-force'])).toThrow(/Unknown option "--ai-force"/);
+  });
 });

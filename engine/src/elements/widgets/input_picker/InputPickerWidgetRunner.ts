@@ -75,6 +75,10 @@ export class InputPickerWidgetRunner extends WidgetRunner<PickerConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
+  override graphAuthorNote(): string {
+    return 'mode file|directory, value = the path';
+  }
+
   /** The same declaration the input node hands out; see `generation.ts`. */
   override generation(): Generation {
     return SELECTOR_GENERATION;

@@ -1,5 +1,6 @@
 import type { GraphNode } from '@/graph';
 import { readInterface, schemaOutline } from '@engine/execution/interface.ts';
+import { outputWords } from '@engine/elements/nodes/ai/prompt.ts';
 
 /**
  * What a node says its output is: one declaration, read three ways -- by ✨
@@ -9,23 +10,18 @@ import { readInterface, schemaOutline } from '@engine/execution/interface.ts';
  * It used to be a choice of six formats, of which only "custom" and "example"
  * sent the words and the example anyone wrote: pick JSON and the description
  * under it was kept, shown -- and never read by a model. Now the words are the
- * declaration. A format picked in an older version that the words do not
- * mention yet is put in front of them, so nothing it said is lost.
+ * declaration. A format picked in an older version is put in front of them by
+ * the engine's own reading (`outputWords`), so the words box shows what a run
+ * sends, and saves it once edited.
  *
- * A module of its own, depending on nothing but the graph's types, because an
- * element's `…GuiBuilder.ts` imports it: anything that reached the element
- * registry from here would make a cycle.
+ * A module of its own, depending on nothing but the graph's types and engine
+ * modules that import nothing, because an element's `…GuiBuilder.ts` imports
+ * it: anything that reached the element registry from here would make a cycle.
  */
-
-/** The older formats that said something the words may not, in words. */
-const LEGACY: Record<string, string> = { json: 'JSON', csv: 'CSV', csv_list: 'CSV' };
 
 /** The output format in words, as the node declares it -- empty when it declares none. */
 export function outputFormatText(config: GraphNode['config']): string {
-  const words = String(config.output_format_prompt ?? '').trim();
-  const legacy = LEGACY[String(config.output_format ?? '')];
-  if (legacy && !words.toUpperCase().includes(legacy)) return words ? `${legacy}. ${words}` : legacy;
-  return words;
+  return outputWords(config);
 }
 
 /** An answer or result to imitate, when one was kept. */

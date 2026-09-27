@@ -1,10 +1,11 @@
 import type { WidgetViewProps } from '../WidgetView';
 import { FIELD } from '@/ui/theme';
+import { selectChoice, selectOptions } from '@engine/elements/widgets/select/choice.ts';
 
-/** Runtime select widget: a dropdown over the block's own option list. */
+/** Runtime select widget: a dropdown over the block's own option list, standing where a run reads it. */
 export default function SelectWidgetView({ widget, value, onChange, onTrigger }: WidgetViewProps) {
-  const options = String(widget.options ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
-  const current = typeof value === 'string' && options.includes(value) ? value : (options[0] ?? '');
+  const options = selectOptions(widget.options);
+  const current = selectChoice(options, value);
 
   return (
     <select

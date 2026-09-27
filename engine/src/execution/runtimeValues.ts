@@ -9,7 +9,7 @@
 // element that wants to prompt says so in its own file and nothing here changes.
 
 import type { Graph, GraphNode } from '../graph.ts';
-import type { NodeRunner } from '../elements/NodeRunner.ts';
+import type { Runners } from '../elements/NodeRunner.ts';
 
 export interface RuntimeRequirement {
   /** `nodeId`, or `nodeId::widgetId` for a block inside a page. */
@@ -22,11 +22,7 @@ export interface RuntimeRequirement {
   current: string;
 }
 
-export interface Registry {
-  node(type: string): NodeRunner<unknown> | undefined;
-}
-
-export function runtimeRequirements(graph: Graph, registry: Registry): RuntimeRequirement[] {
+export function runtimeRequirements(graph: Graph, registry: Runners): RuntimeRequirement[] {
   const asked: RuntimeRequirement[] = [];
   for (const node of graph.nodes) {
     const element = registry.node(node.node_type);
@@ -42,19 +38,25 @@ export function runtimeRequirements(graph: Graph, registry: Registry): RuntimeRe
  * A key of `nodeId::widgetId` reaches a block inside a page; a plain node id
  * reaches the node. The element decides where the value lands, because only it
  * knows what it stores — the same reason it decides what it remembers.
+ *
+ * Returns the ids of the nodes it wrote into, for a caller that keeps the
+ * answers beyond this run: the key is read here and nowhere else.
  */
 export function applyRuntimeValues(
   graph: Graph,
   values: Record<string, string>,
-  registry: Registry,
-): void {
+  registry: Runners,
+): Set<string> {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const answered = new Set<string>();
   for (const [key, value] of Object.entries(values)) {
     const [nodeId, widgetId] = key.split('::');
     const node = byId.get(nodeId);
     if (!node) continue;
     registry.node(node.node_type)?.applyRuntimeValue(node, widgetId ?? null, value);
+    answered.add(nodeId);
   }
+  return answered;
 }
 
 /** The default an unanswered question falls back to. */

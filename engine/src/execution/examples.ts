@@ -24,7 +24,7 @@
 
 import type { Graph } from '../graph.ts';
 import type { Runtime } from '../elements/Runtime.ts';
-import type { Registry } from './executor.ts';
+import type { Runners } from '../elements/NodeRunner.ts';
 import { executeNode, withGraphDefaults } from './executor.ts';
 import { mismatches } from './interface.ts';
 
@@ -40,20 +40,42 @@ export interface NodeExample {
 const BLOCK = /```([^\n`]*)\n([\s\S]*?)```/g;
 
 /**
+ * Where an example begins: a `## ` heading. Exported with `exampleBlocks`
+ * because the editor edits the file's first example in place, and it must cut
+ * the file where a run splits it.
+ */
+export const EXAMPLE_SECTION = /^## +/m;
+
+/** A fenced block of one example, by what its info words say it is, and where it stands in the section. */
+export interface ExampleBlock {
+  role: 'input' | 'expect' | 'judge' | '';
+  start: number;
+  end: number;
+  body: string;
+}
+
+/** The fenced blocks of one example's section, in order. A block that is none of the three has no role and is prose. */
+export function exampleBlocks(section: string): ExampleBlock[] {
+  return [...section.matchAll(BLOCK)].map((match) => {
+    const words = match[1].trim().toLowerCase().split(/\s+/);
+    const role = words.includes('input') ? 'input' : words.includes('expect') ? 'expect' : words.includes('judge') ? 'judge' : '';
+    return { role, start: match.index!, end: match.index! + match[0].length, body: match[2] };
+  });
+}
+
+/**
  * The examples in *text*, and what is wrong with the ones that cannot be read.
  * Lenient about everything else: prose between the blocks is for people.
  */
 export function parseExamples(text: string): { examples: NodeExample[]; problems: string[] } {
   const examples: NodeExample[] = [];
   const problems: string[] = [];
-  const sections = text.replace(/\r\n/g, '\n').split(/^## +/m).slice(1);
+  const sections = text.replace(/\r\n/g, '\n').split(EXAMPLE_SECTION).slice(1);
   for (const section of sections) {
     const title = section.split('\n', 1)[0].trim() || `Example ${examples.length + 1}`;
     const example: NodeExample = { title, inputs: {} };
     let hasInput = false;
-    for (const [, info, body] of section.matchAll(BLOCK)) {
-      const words = info.trim().toLowerCase().split(/\s+/);
-      const role = words.includes('input') ? 'input' : words.includes('expect') ? 'expect' : words.includes('judge') ? 'judge' : '';
+    for (const { role, body } of exampleBlocks(section)) {
       if (role === 'judge') {
         example.judge = body.trim();
         continue;
@@ -82,11 +104,6 @@ export function parseExamples(text: string): { examples: NodeExample[]; problems
     if (hasInput && (example.expect || example.judge)) examples.push(example);
   }
   return { examples, problems };
-}
-
-/** One example, written the way `parseExamples` reads it: for "add this run as an example". */
-export function formatExample(title: string, inputs: Record<string, unknown>, expect: Record<string, unknown>): string {
-  return `## ${title}\n\n\`\`\`json input\n${JSON.stringify(inputs, null, 2)}\n\`\`\`\n\n\`\`\`json expect\n${JSON.stringify(expect, null, 2)}\n\`\`\`\n`;
 }
 
 /**
@@ -143,7 +160,7 @@ const JUDGE_SYSTEM = 'You check whether an answer meets a criterion. Reply with 
 export async function runExamples(
   graph: Graph,
   nodeId: string,
-  options: { runtime: Runtime; registry: Registry; offline?: boolean },
+  options: { runtime: Runtime; registry: Runners; offline?: boolean },
 ): Promise<ExampleResult[]> {
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node) return [{ title: nodeId, status: 'error', details: [`No node "${nodeId}".`] }];
@@ -185,4 +202,43 @@ export async function runExamples(
     results.push({ title: example.title, status: details.length ? 'fail' : 'pass', details, outputs: ran.outputs });
   }
   return results;
+}
+
+/** The graph, and every graph its nodes hold, each with the way down to it (`outer ▸ `). */
+export function everyGraphIn(graph: Graph, registry: Runners, inside = ''): { graph: Graph; inside: string }[] {
+  return [
+    { graph, inside },
+    ...graph.nodes.flatMap((node) => {
+      const held = registry.node(node.node_type)?.nestedGraph(node);
+      return held ? everyGraphIn(held, registry, `${inside}${node.id} ▸ `) : [];
+    }),
+  ];
+}
+
+/** One example's result, and the node it belongs to, with the way down to it. */
+export interface TestedExample { inside: string; nodeId: string; result: ExampleResult }
+
+/**
+ * Run the examples of every node that keeps some, or only of the nodes with
+ * the id *only* -- at every depth, because the graph a node holds is part of
+ * the same project, as `check` also says. The one runner behind `test` on the
+ * command line and `test_graph` over MCP: the second once looked at the top
+ * graph only, and skipped every example inside a node without a word.
+ * `tested` counts the nodes whose examples ran; none means nothing matched.
+ */
+export async function testGraph(
+  graph: Graph,
+  options: { runtime: () => Runtime; registry: Runners; offline?: boolean; only?: string },
+): Promise<{ tested: number; results: TestedExample[] }> {
+  const results: TestedExample[] = [];
+  let tested = 0;
+  for (const { graph: level, inside } of everyGraphIn(graph, options.registry)) {
+    const nodes = level.nodes.filter((node) => (options.only ? node.id === options.only : String(node.config.examples ?? '').trim()));
+    tested += nodes.length;
+    for (const node of nodes) {
+      const ran = await runExamples(level, node.id, { runtime: options.runtime(), registry: options.registry, offline: options.offline });
+      results.push(...ran.map((result) => ({ inside, nodeId: node.id, result })));
+    }
+  }
+  return { tested, results };
 }

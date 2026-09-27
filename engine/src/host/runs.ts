@@ -22,7 +22,6 @@ class Run {
   readonly id: string;
   readonly total: number;
   completed = 0;
-  running: string[] = [];
   currentLabel = '';
   itemDone = 0;
   itemTotal = 0;
@@ -48,7 +47,6 @@ class Run {
       cancelled: this.cancelled,
       completed: this.completed,
       total: this.total,
-      running: this.running,
       current_label: this.currentLabel,
       item_done: this.itemDone,
       item_total: this.itemTotal,
@@ -88,14 +86,10 @@ export class RunBoard {
         run.lastActivity = Date.now();
         if (event.type === 'node_start') {
           run.currentLabel = graph.nodes.find((n) => n.id === event.node_id)?.label ?? event.node_id;
-          run.running = [...run.running, event.node_id];
           run.itemDone = 0;
           run.itemTotal = 0;
         }
-        if (event.type === 'node_done') {
-          run.completed += 1;
-          run.running = run.running.filter((id) => id !== event.node_id);
-        }
+        if (event.type === 'node_done') run.completed += 1;
         if (event.type === 'batch') {
           run.itemDone = event.done;
           run.itemTotal = event.total;

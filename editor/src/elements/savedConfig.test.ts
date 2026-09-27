@@ -10,22 +10,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
-import { registry } from '@engine/elements/registry.ts';
-import type { GraphNode as EngineNode } from '@engine/graph.ts';
 import type { GraphNode, NodeConfig } from '@/graph';
-
-/** What a run asks a node's element before and while running it. None of them runs anything. */
-const QUESTIONS = [
-  'config', 'batchMode', 'batchConcurrency', 'readsFileInputs', 'catchesErrors', 'needsInput',
-  'derivedPorts', 'runtimeRequirements', 'referencedPaths', 'logic',
-] as const;
-
-function answers(node: GraphNode): Record<string, string> {
-  const element = registry.node(node.node_type) as unknown as Record<string, (node: EngineNode) => unknown>;
-  return Object.fromEntries(QUESTIONS
-    .filter((question) => typeof element[question] === 'function')
-    .map((question) => [question, JSON.stringify(element[question](node as EngineNode)) ?? 'undefined']));
-}
+import { answers } from '../../test/engineAnswers';
 
 /** Each node type as created, and once more in every mode that changes what it reads. */
 function variants(): GraphNode[] {
@@ -54,6 +40,20 @@ describe('NodeGuiBuilder.saved', () => {
     expect(Object.keys(lean.config).length).toBeLessThan(Object.keys(node.config).length / 3);
     expect(lean.config).toMatchObject({ output_label: 'Result', write_mode: 'window' });
     expect(lean.config).not.toHaveProperty('system_prompt');
+  });
+
+  it('saves no selector for an input nobody wrote one for, in any mode, and keeps one somebody did', () => {
+    // Every input node used to carry a starter selector, saved into the graph
+    // of text and file inputs, which select nothing (B21).
+    for (const mode of ['text', 'file', 'directory'] as const) {
+      const node = NODE_KINDS.input.create('n');
+      node.config.input_mode = mode;
+      expect(savedNode(node).config, mode).not.toHaveProperty('selector_code');
+      expect(savedNode(node).config, mode).not.toHaveProperty('selector_prompt');
+    }
+    const node = NODE_KINDS.input.create('n');
+    node.config = { ...node.config, input_mode: 'directory', selector_prompt: 'Only the CSVs.', selector_code: 'function run(i) { return i; }' };
+    expect(savedNode(node).config).toMatchObject({ selector_prompt: 'Only the CSVs.', selector_code: 'function run(i) { return i; }' });
   });
 
   it('keeps a key it does not own once somebody changed it', () => {

@@ -15,11 +15,11 @@ import type { LogicFields } from './logic.ts';
 /**
  * Which generator writes the body, and so which prompt it is written with.
  *
- * `code` and `prompt` are the two bodies that run; `data_format` and
- * `output_format` are contracts written for *other* elements to be generated
- * against, which is a different prompt and a different result.
+ * `code` and `prompt` are the two bodies that run; `data_format` is a
+ * contract written for *other* elements to be generated against, which is a
+ * different prompt and a different result.
  */
-export type GenerationKind = 'code' | 'prompt' | 'output_format' | 'data_format';
+export type GenerationKind = 'code' | 'prompt' | 'data_format';
 
 /** One element's answer to "how does an AI write this?". */
 export interface Generation {
@@ -61,6 +61,13 @@ export interface Generation {
    * the size of the block and the page's scheme. The probe still wants to
    * execute it once before anyone sees it, so the element says here how to
    * make it runnable: a wrapper, and a window standing in for the real one.
+   *
+   * It says one thing more, because it is the same fact: an element that calls
+   * the body itself also frames it. Its `contract` is then placed where the
+   * function to complete goes, in place of a node's skeleton, output keys and
+   * Node rules, which would each contradict it (`framedByElement` in
+   * `host/editor/generate.ts`). So a `probeWith` without a contract that opens
+   * with the function to complete leaves the model with no frame at all.
    *
    * Absent for every other element, which means "as it is".
    */

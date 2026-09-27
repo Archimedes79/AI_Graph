@@ -128,7 +128,8 @@ describe('authoring_guide', () => {
     expect(text).toContain('Graph DSL');
     expect(text).toContain('__run');
     expect(text).toMatch(/Node types this engine runs: .*\bgui\b/);
-    expect(text).toMatch(/Block kinds a gui node can hold: .*\bbutton\b/);
+    // The block kinds are the prompt's own, listed by the gui element from the registry.
+    expect(text).toContain('  - button');
   });
 });
 
@@ -337,6 +338,22 @@ describe('save_graph', () => {
     expect(JSON.parse(await readFile(join(root, 'hello.json'), 'utf8')).nodes[0].config.value).toBe('two');
   });
 
+  it('writes a graph whose output nodes share a label, as an older editor made them, and says so', async () => {
+    // Every output node an older editor made was "Result". Such a graph runs,
+    // and an agent that only edited one a little could not write it back.
+    const twice = graphOf(
+      [textInput('a', 'first'), textInput('b', 'second'), output('out1'), output('out2')],
+      [edge('e1', 'a.output', 'out1.value'), edge('e2', 'b.output', 'out2.value')],
+    );
+    const saved = await answer(toolsWith(), 'save_graph', { path: 'twice.json', graph: twice });
+    expect(saved.isError).toBeUndefined();
+    expect(saved.json.saved).toBe('twice.json');
+    expect(saved.json.notes[0].problem).toMatch(/share the label "Result".*only "out2" under "Result"/);
+    const checked = (await answer(toolsWith(), 'validate_graph', { path: 'twice.json' })).json;
+    expect(checked.valid).toBe(true);
+    expect(checked.notes).toHaveLength(1);
+  });
+
   it('refuses a graph with problems, returns them, and writes nothing', async () => {
     const saved = await answer(toolsWith(), 'save_graph', { path: 'bad.json', graph: graphOf([code('alone')]) });
     expect(saved.isError).toBe(true);
@@ -506,6 +523,22 @@ describe('one node at a time', () => {
       { node: 'work', example: 'Passes', status: 'pass' },
       { node: 'work', example: 'Fails', status: 'fail', details: ['output.out is "ran on b"; expected "something else"'] },
     ]);
+  });
+
+  it('test_graph also runs the examples of a node inside another, as `test` does', async () => {
+    // It looked at the top graph only, and skipped these without a word.
+    const holder = {
+      id: 'part', node_type: 'subgraph', label: 'part', description: '', position: { x: 0, y: 0 }, inputs: [], outputs: [],
+      config: { subgraph: chain(example('Inside', 'c', 'ran on c')) },
+    };
+    await writeFile(join(root, 'g.json'), JSON.stringify(graphOf([holder])));
+    const tested = await answer(toolsWith(), 'test_graph', { path: 'g.json' });
+    expect(tested.json).toEqual({ passed: true, results: [{ node: 'part ▸ work', example: 'Inside', status: 'pass' }] });
+    const one = await answer(toolsWith(), 'test_graph', { path: 'g.json', node_id: 'work' });
+    expect(one.json.results).toHaveLength(1);
+    const wrong = await toolsWith().call('test_graph', { path: 'g.json', node_id: 'ghost' });
+    expect(wrong.isError).toBe(true);
+    expect(wrong.text).toMatch(/"part", "greeting", "work", "result"/);
   });
 
   it('validate_graph on a project also finds what is wrong with its folder', async () => {

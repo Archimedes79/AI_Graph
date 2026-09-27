@@ -29,7 +29,7 @@ export interface PromptSettings {
   systemPrompt: string;
   /** The message, with `{{port}}` where a port's value goes. Empty: send what arrived. */
   template: string;
-  outputFormat: string;
+  /** What the node says about its answer, in words (`outputWords`): what a person wrote, an older node's format in front. */
   outputFormatPrompt: string;
   /** An answer to imitate, when the format was learned from a run rather than described. */
   outputExample: string;
@@ -67,31 +67,43 @@ export function placeholders(template: string): string[] {
 }
 
 /**
+ * What a node says about its output, in words: what a person wrote -- the
+ * node's `output.md` -- with the sentence an older node's picked format stood
+ * for in front.
+ *
+ * `output_format` was a choice of formats once; the words are the declaration
+ * now, and nothing writes the choice any more. A node that still carries json
+ * or csv is read as if the sentence were written in its words, so the run, the
+ * dialog's words box, ✨ and the nodes it feeds all read one text -- and the
+ * words box, once edited, saves what the run was already sending. A kept
+ * example stands for the format itself (`formatInstruction`), so under one the
+ * old choice says nothing.
+ */
+export function outputWords(config: { output_format?: unknown; output_format_prompt?: unknown; output_example?: unknown }): string {
+  const format = String(config.output_format ?? '');
+  const rule = String(config.output_example ?? '').trim() ? ''
+    : format === 'json' ? 'Respond with JSON and nothing else.'
+      : format.startsWith('csv') ? 'Respond with CSV and nothing else.'
+        : '';
+  return [rule, String(config.output_format_prompt ?? '').trim()].filter(Boolean).join('\n\n');
+}
+
+/**
  * What the node was told to ask for, as sentences the model can follow.
  *
  * The description of the answer -- `output.md` in a project -- is sent
- * whenever it says anything, whatever format is picked: it is what the person
- * wrote for the model about its output, and a file somebody wrote for the
- * model that the model never sees is a trap. The format adds its own sentence
- * in front: JSON, CSV, or the example to imitate -- which, like the
- * description, is sent whenever there is one.
+ * whenever it says anything: it is what the person wrote for the model about
+ * its output, and a file somebody wrote for the model that the model never
+ * sees is a trap. A kept example adds its own sentence in front.
  */
 export function formatInstruction(settings: PromptSettings): string {
-  const format = settings.outputFormat;
-  const described = settings.outputFormatPrompt.trim();
-  let rule = '';
-  // An example is followed whenever one was kept, whatever the format says:
-  // it was kept to be followed, and sent only under one setting it was a
-  // file the model never saw.
-  if (settings.outputExample.trim()) {
-    rule = 'Answer in exactly the same format as this example -- the same structure, '
-      + `the same fields, new content:\n\n${settings.outputExample.trim()}`;
-  } else if (format === 'json') {
-    rule = 'Respond with JSON and nothing else.';
-  } else if (format.startsWith('csv')) {
-    rule = 'Respond with CSV and nothing else.';
-  }
-  return [rule, described].filter(Boolean).join('\n\n');
+  // An example is followed whenever one was kept: it was kept to be
+  // followed, and sent only under one setting it was a file the model never saw.
+  const rule = settings.outputExample.trim()
+    ? 'Answer in exactly the same format as this example -- the same structure, '
+      + `the same fields, new content:\n\n${settings.outputExample.trim()}`
+    : '';
+  return [rule, settings.outputFormatPrompt.trim()].filter(Boolean).join('\n\n');
 }
 
 /**
