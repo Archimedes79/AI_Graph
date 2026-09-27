@@ -526,7 +526,9 @@ wrote, what comes out?* — built in the same four steps:
   never says where a dropped file is; the editor finds the one file of that name and size
   in its folder and three levels of folders below it (not in `node_modules`, `dist`,
   `build` or a name beginning with a dot), and says so, and where it looked, when there is
-  none or several. Typing is editing what they
+  none or several. A file's text dropped before its input said **Read the file at this
+  path** -- a wire from a folder's files ticks it -- is no path to read: step 1 says so,
+  and Try it waits for the file to be dropped again. Typing is editing what they
   filled. A node with no inputs has no example: Try it runs it on nothing.
 - **▶ Try it**, under the body in step 4, runs just this element on that example, through
   the same steps a run takes (the same model, the files of the inputs that say so read

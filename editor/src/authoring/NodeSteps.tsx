@@ -16,7 +16,7 @@ import { readFilePorts } from './generationContext';
 import { outputFormatText } from './outputFormat';
 import type { ChangeAsked } from './generation';
 import {
-  exampleFor, keptExpect, lastRunOf, listPorts, ownOutputs, runsPerItem, tryInputs, tryKey, whatCameOf, withPerItem,
+  exampleFor, keptExpect, lastRunOf, listPorts, ownOutputs, runsPerItem, tryInputs, tryKey, unreadablePaths, whatCameOf, withPerItem,
 } from './nodeStepRules';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED } from '@/ui/theme';
 
@@ -111,6 +111,10 @@ export default function NodeSteps({
   // A node that takes nothing in has no example to fill, unless one was written before.
   const exampled = node.inputs.length > 0 || !!pair.inputText.trim();
   const tried = tryInputs(node, pair.input);
+  // A file's text where the node reads a file at a path: said in step 1, and
+  // not tried -- it can only fail, on a file that has that text for a name.
+  const unreadable = unreadablePaths(node, pair.input);
+  const canTry = !!tried && !unreadable.length;
   const trying = useTry(
     tryKey(node, tried, generation?.promptField),
     () => tryNode(steps!.graph(), node, tried ?? {}, pair),
@@ -135,8 +139,8 @@ export default function NodeSteps({
   useEffect(() => {
     if (written === triedWritten.current) return;
     triedWritten.current = written;
-    if (tried) void trying.start();
-  }, [written, tried, trying]);
+    if (canTry) void trying.start();
+  }, [written, canTry, trying]);
   const write = async (change?: ChangeAsked): Promise<boolean> => {
     const done = await onGenerate(change);
     if (done) setWritten((count) => count + 1);
@@ -180,6 +184,15 @@ export default function NodeSteps({
               <p className="text-xs" style={{ color: DANGER_TEXT }}>
                 It gives {named(strayInputs)}, which no input is called: nothing reads {strayInputs.length > 1 ? 'them' : 'it'} by
                 that name, and <code>check</code> reports it. Rename or remove it here.
+              </p>
+            )}
+            {unreadable.length > 0 && (
+              <p className="text-xs" style={{ color: DANGER_TEXT }}>
+                {unreadable.length > 1
+                  ? `${named(unreadable)} read the files at the paths they are given (“Read the file at this path”), but the example gives them no paths`
+                  : `${named(unreadable)} reads the file at the path it is given (“Read the file at this path”), but the example gives it no path`}
+                {' '}-- a file's text, most likely, dropped before the box was ticked. Drop the file here again, or pick it
+                with 📂 From a file…, and its path goes in.
               </p>
             )}
             {pair.others > 0 && (
@@ -253,8 +266,10 @@ export default function NodeSteps({
       />
       {body.beside}
       <TryItInline
-        canRun={!!tried}
-        whyNot={broken ? 'The example in step 1 is not an object keyed by input port.' : 'Fill step 1\'s example first: ⟳ from the graph, 📂 from a file, or drop a file on it.'}
+        canRun={canTry}
+        whyNot={broken ? 'The example in step 1 is not an object keyed by input port.'
+          : unreadable.length ? `The example gives ${named(unreadable)} no path to read the file at: see step 1.`
+            : 'Fill step 1\'s example first: ⟳ from the graph, 📂 from a file, or drop a file on it.'}
         busy={trying.busy}
         onTry={() => void trying.start()}
         tried={shown}

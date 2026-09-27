@@ -4,9 +4,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
+import { useGraphStore } from '@/store/graphStore';
 import { nodeFields } from './generation';
-import { withExpect, withInput } from './examplePair';
+import { readPair, withExpect, withInput } from './examplePair';
 import { ChangeIt } from './TryItInline';
+import { dropExample } from './droppedFile';
+import { readFilePorts } from './generationContext';
+import { unreadablePaths } from './nodeStepRules';
 import AiNodePanel from '@/elements/nodes/ai/AiNodePanel';
 import CodeNodePanel from '@/elements/nodes/code/CodeNodePanel';
 
@@ -69,6 +73,31 @@ describe.each(['code', 'ai'] as const)('a %s node\'s step 2', (type) => {
     const tryIt = html.slice(html.indexOf('aria-label="Try it"'));
     expect(tryIt).toContain('aria-label="Say what to change"');
     expect(tryIt).not.toContain('✨ Fix');
+  });
+});
+
+describe('a file dropped on a node, and a wire drawn to it after, that reads the file', () => {
+  const store = () => useGraphStore.getState();
+  const stored = (id: string) => store().rfNodes.find((item) => item.id === id)!.data.graphNode as GraphNode;
+
+  it('is said in step 1 -- the example holds the file\'s text where a path is read -- and not tried as a path', async () => {
+    const folder = NODE_KINDS.input.create('folder');
+    folder.config.input_mode = 'directory';
+    store().loadGraph({ metadata: { name: 'T', description: '', gui_scheme: 'night' }, nodes: [folder, NODE_KINDS.code.create('reader')], edges: [] });
+    // Dropped while nothing said the file is read: what it says is the example.
+    await dropExample('reader', 'input', { name: 'people.csv', size: 10, text: async () => 'name\nAnna' });
+    // Wiring the folder's files in ticks "Read the file at this path" (`graphStore.connect`).
+    store().connect({ source: 'folder', sourceHandle: 'files', target: 'reader', targetHandle: 'input' });
+    const reader = stored('reader');
+    expect(readFilePorts(reader)).toEqual(['input']);
+    expect(unreadablePaths(reader, readPair(reader.config.examples).input)).toEqual(['input']);
+    const html = drawn(reader);
+    expect(html).toContain('“input” reads the file at the path it is given (“Read the file at this path”), but the example gives it no path');
+    // ▶ Try it opened "name\nAnna" as a path, and failed on ENOENT.
+    expect(html).toMatch(/<button disabled=""[^>]*title="The example gives “input” no path to read the file at: see step 1\.">▶ Try it<\/button>/);
+    // A path is one: the file dropped again, now that it is read, is its path.
+    expect(unreadablePaths(reader, { input: 'data/people.csv' })).toEqual([]);
+    expect(unreadablePaths(reader, { input: ['a.csv', 'b.csv'] })).toEqual([]);
   });
 });
 

@@ -10,6 +10,7 @@ import type { ExampleResult } from '@engine/execution/examples.ts';
 import type { Refine } from '@engine/host/api.ts';
 import type { Tried } from './TryItInline';
 import { asExampleText, readPair, withInput } from './examplePair';
+import { readFilePorts } from './generationContext';
 
 /** What a node hands on, without the executor's own error port: what a body returns, and an example expects. */
 export function ownOutputs(outputs: Record<string, unknown> | undefined): Record<string, unknown> {
@@ -73,6 +74,20 @@ export function withPerItem(node: GraphNode, perItem: boolean, lists: string[] =
  */
 export function tryInputs(node: GraphNode, example: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   return example ?? (node.inputs.length ? undefined : {});
+}
+
+/**
+ * The inputs that read the file at the path they are given ("Read the file
+ * at this path": ticked by hand, or by a wire from paths, `graphStore.connect`)
+ * whose example value cannot be a path: a text of several lines, a value that
+ * is not text. A file dropped before the box was ticked put its text there,
+ * and ▶ Try it then opened that text as a path and failed on ENOENT -- with
+ * ✨ Fix offered to repair a body that had never run.
+ */
+export function unreadablePaths(node: GraphNode, example: Record<string, unknown> | undefined): string[] {
+  const path = (value: unknown) => value === null || value === undefined || (typeof value === 'string' && !/[\r\n]/.test(value));
+  const read = (value: unknown) => (Array.isArray(value) ? value.every(path) : path(value));
+  return readFilePorts(node).filter((port) => !!example && port in example && !read(example[port]));
 }
 
 /**
