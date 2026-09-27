@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { showsPage } from '@/document/guiWidgets';
 import { ReactFlowProvider } from 'reactflow';
 
@@ -14,6 +14,7 @@ import NodeEditor from '@/canvas/NodeEditor';
 import ResultsPanel from '@/app/ResultsPanel';
 
 import SettingsDialog from '@/app/SettingsDialog';
+import { DiskChanges } from '@/app/diskChanges';
 import Modal from '@/ui/Modal';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 import OutputWindows from '@/dialogs/OutputWindows';
@@ -274,6 +275,7 @@ export default function App() {
     }
   };
 
+  const disk = useRef(new DiskChanges());
   // A project's code and prompts are files, and files get edited elsewhere:
   // in VS Code, by git, by an assistant. The folder is asked every second and
   // a half what changed, and what did comes in as one undo step -- no reload,
@@ -288,8 +290,11 @@ export default function App() {
     const look = async () => {
       if (document.hidden) return;
       try {
-        const { changes } = await call('projectChanges', { path: currentFilePath });
-        if (!alive || !changes.length) return;
+        // Kept whatever happens to this look: the server reports a change once.
+        disk.current.arrived(currentFilePath, (await call('projectChanges', { path: currentFilePath })).changes);
+        if (!alive) return;
+        const changes = disk.current.due(currentFilePath);
+        if (!changes.length) return;
         const refused = takeDiskChanges(changes);
         const what = changes.filter((c) => !refused.includes(c.node_id))
           .map((c) => (c.widget_id ? `${c.node_id}/${c.widget_id}` : c.node_id));
