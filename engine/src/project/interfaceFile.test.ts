@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseGraph } from '../graph.ts';
 import { forgetSeen, loadGraph, saveGraph } from './folder.ts';
-import { checkPath } from './check.ts';
+import { checkPath } from './folderCheck.ts';
 import { NotAGraph } from '../errors.ts';
 
 const port = (id: string, kind: 'input' | 'output', type = 'text', extra: Record<string, unknown> = {}) =>

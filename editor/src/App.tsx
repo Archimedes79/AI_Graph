@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { showsPage } from '@/document/guiWidgets';
 import { ReactFlowProvider } from 'reactflow';
 
@@ -14,6 +14,7 @@ import NodeEditor from '@/canvas/NodeEditor';
 import ResultsPanel from '@/app/ResultsPanel';
 
 import SettingsDialog from '@/app/SettingsDialog';
+import GraphProblems from '@/app/GraphProblems';
 import { DiskChanges } from '@/app/diskChanges';
 import Modal from '@/ui/Modal';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
@@ -111,6 +112,16 @@ export default function App() {
 
     return parsed as Graph;
   }, []);
+
+  // What Load Graph would load, as it stands in the box: `check`'s word on
+  // it is said under the box, before it is loaded (`GraphProblems`).
+  const pasted = useMemo(() => {
+    try {
+      return parseGraphJson(jsonImportValue);
+    } catch {
+      return null;
+    }
+  }, [jsonImportValue, parseGraphJson]);
 
   /**
    * Load a graph JSON dropped anywhere on the window.
@@ -572,6 +583,7 @@ export default function App() {
                     {jsonImportError}
                   </div>
                 )}
+                {pasted && <GraphProblems graph={pasted} />}
 
               {copyStatus && (
                 <div className="text-xs" style={{ color: MUTED }}>

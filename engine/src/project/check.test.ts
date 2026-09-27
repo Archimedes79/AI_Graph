@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { parseGraph, type Graph } from '../graph.ts';
-import { checkPath, problemsIn } from './check.ts';
+import { problemsIn } from './check.ts';
+import { checkPath } from './folderCheck.ts';
 import { forgetSeen, writeProject } from './folder.ts';
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
