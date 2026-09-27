@@ -30,6 +30,10 @@ export class OutputNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly Panel = lazy(() => import('./OutputNodePanel'));
 
+  // Its description is what the result is, which the node feeding it is told
+  // (`wantsOn`): the panel asks for it in those words, beside where it goes.
+  override readonly ownsDescription = true;
+
   // It ends a branch: nothing comes out of it. "path" is read by name.
   override readonly portEditing = { inputs: 'edit', outputs: 'none' } as const;
 

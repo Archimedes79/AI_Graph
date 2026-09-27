@@ -447,7 +447,7 @@ the same words under `runs`. There are two answers:
 | Input | `InputNodeRunner.execute` | Hands on its text; or reads the file on `path`; or lists the folder — through `select.js`, sandboxed, if files are chosen by code. |
 | Data | `DataNodeRunner.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
 | GUI | `GuiNodeRunner.execute` | Hands on what each block holds and shows what arrives; a block's own code runs sandboxed before it is shown. |
-| Output | `OutputNodeRunner.execute` | Hands on what arrives as the run's result, or writes it to its file. |
+| Output | `OutputNodeRunner.execute` | Hands on what arrives as the run's result, or writes it to its file, or each value to a file of its own in its folder. |
 | Trigger | `TriggerNodeRunner.execute` | `fired`: true in a round it began. The clock is kept by whatever holds the graph. |
 | Subgraph | `SubgraphNodeRunner.execute` | Runs the graph in its folder, whole, by the engine that runs this one. |
 

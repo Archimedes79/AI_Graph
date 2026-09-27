@@ -1,53 +1,73 @@
-import { DIMMER, FIELD, LINE, MUTED } from '@/ui/theme';
+import React from 'react';
+import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
+import { DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
-export default function OutputNodePanel({ node, setConfig }: NodePanelProps) {
+/**
+ * An output node: where the result goes, what it is, and what it is called.
+ *
+ * What it is and where it goes are what the node feeding it is told it wants
+ * (`OutputNodeGuiBuilder.wantsOn`), so they are asked first and in those
+ * words; the name comes last, since it only labels what the first two say.
+ */
+export default function OutputNodePanel({ node, setConfig, setDescription }: NodePanelProps) {
   const mode = node.config.write_mode;
+  const writes = mode === 'file' || mode === 'directory';
+  const [browsing, setBrowsing] = React.useState(false);
 
   return (
-    <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-        {mode === 'window' ? 'Window Title' : 'Output Label'}
-      </label>
-      <input
-        className="w-full rounded-lg px-3 py-2 text-sm"
-        style={FIELD}
-        value={node.config.output_label}
-        onChange={(e) => setConfig('output_label', e.target.value)}
-      />
-
-      <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${LINE}` }}>
-        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-          Write result to disk
-        </label>
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Where the result goes</label>
         <select
           className="w-full rounded-lg px-3 py-2 text-sm"
           style={FIELD}
-          value={node.config.write_mode}
+          value={mode}
           onChange={(e) => setConfig('write_mode', e.target.value)}
+          aria-label="Where the result goes"
         >
-          <option value="none">Don't write to disk (show in Results panel only)</option>
-          <option value="window">Show in a text window (also visible in Results panel)</option>
-          <option value="file">Write to a single file</option>
-          <option value="directory">Write to a directory (one file per value)</option>
+          <option value="none">Into the run's results only</option>
+          <option value="window">Into a window of its own (and the results)</option>
+          <option value="file">Into a file</option>
+          <option value="directory">Into a folder, one file per value</option>
         </select>
 
-        {(mode === 'file' || mode === 'directory') && (
-          <>
-            <label className="block text-xs font-medium mb-1 mt-3" style={{ color: MUTED }}>
-              {mode === 'file' ? 'Default output file path' : 'Default output directory path'}
+        {writes && (
+          <div className="mt-3">
+            <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
+              {mode === 'file' ? 'File' : 'Folder'}
             </label>
-            <input
-              className="w-full rounded-lg px-3 py-2 text-sm"
-              style={FIELD}
-              value={node.config.value ?? ''}
-              onChange={(e) => setConfig('value', e.target.value)}
-              placeholder={mode === 'file' ? '/path/to/output.txt' : '/path/to/output-dir'}
-              disabled={node.config.prompt_at_runtime}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm"
+                style={FIELD}
+                value={node.config.value ?? ''}
+                onChange={(e) => setConfig('value', e.target.value)}
+                placeholder={mode === 'file' ? 'output/result.txt' : 'output/results'}
+                aria-label={mode === 'file' ? 'File' : 'Folder'}
+              />
+              <button
+                type="button"
+                className="text-xs px-3 py-2 rounded-lg flex-shrink-0"
+                style={NEUTRAL_BUTTON}
+                onClick={() => setBrowsing(true)}
+              >
+                📂 Browse…
+              </button>
+            </div>
+            {browsing && (
+              <FileBrowserDialog
+                mode={mode === 'file' ? 'save' : 'directory'}
+                initialPath={String(node.config.value ?? '')}
+                onPick={(picked) => { setConfig('value', picked); setBrowsing(false); }}
+                onClose={() => setBrowsing(false)}
+              />
+            )}
             <p className="text-xs mt-1" style={{ color: DIMMER }}>
-              Wire a value into this node's "Path" input port to set the {mode === 'file' ? 'file' : 'directory'} path
-              from elsewhere in the graph instead — it overrides the default above whenever connected.
+              {mode === 'file'
+                ? 'A text is written as it is, anything else as JSON.'
+                : 'Each value that arrives becomes a file of its own in this folder.'}
+              {' '}A path wired into the “Path” port is used instead.
             </p>
             <label className="flex items-center gap-2 mt-2 text-sm" style={{ color: MUTED }}>
               <input
@@ -55,10 +75,44 @@ export default function OutputNodePanel({ node, setConfig }: NodePanelProps) {
                 checked={!!node.config.prompt_at_runtime}
                 onChange={(e) => setConfig('prompt_at_runtime', e.target.checked)}
               />
-              Ask for path when running (web, CLI, and deployed runs)
+              Ask for the path when running (web, CLI, and deployed runs)
             </label>
-          </>
+          </div>
         )}
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>What the result is</label>
+        <textarea
+          className="w-full rounded-lg px-3 py-2 text-sm resize-y"
+          style={{ ...FIELD, minHeight: 56 }}
+          value={node.description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="e.g. one row per country, with its population"
+          aria-label="What the result is"
+        />
+        <p className="text-xs mt-1" style={{ color: DIMMER }}>
+          The node wired into this one is told this, and where the result goes, when ✨ writes it.
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
+          {mode === 'window' ? 'Its name, and the window’s title' : 'Its name in the results'}
+        </label>
+        {/* A graph file that names nothing keys the result by the node's id
+            (`whenMissing`), and the box is then empty: it says so, rather than
+            look like a name that was lost. */}
+        <input
+          className="w-full rounded-lg px-3 py-2 text-sm"
+          style={FIELD}
+          value={node.config.output_label ?? ''}
+          onChange={(e) => setConfig('output_label', e.target.value)}
+          placeholder={mode === 'window'
+            ? `Empty: the node’s id, “${node.id}”, names the result, and its label titles the window`
+            : `Empty: the node’s id, “${node.id}”, names the result`}
+          aria-label="Name of the result"
+        />
       </div>
     </div>
   );
