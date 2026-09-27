@@ -210,7 +210,6 @@ export interface GenerateResponse {
 /** The settings dialog's view of `ai-settings.json`: whether a key is set, never the key. */
 export interface SettingsStatus {
   settings_file: string;
-  settings_file_exists: boolean;
   endpoints: Record<string, string>;
   credentials: Record<string, { configured: boolean; source: string }>;
 }
@@ -220,8 +219,6 @@ export interface SettingsPatch {
   api_keys?: Record<string, string>;
   /** Providers whose stored key is to be removed -- distinct from "left blank". */
   clear_keys?: string[];
-  ai?: { provider?: string; model?: string };
-  codegen?: { provider?: string; model?: string };
 }
 
 /** Which providers answer right now, and where the two default targets resolve to. */

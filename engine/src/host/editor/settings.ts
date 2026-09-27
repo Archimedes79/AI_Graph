@@ -63,7 +63,6 @@ export function status(cwd = process.cwd(), env: Env = process.env): SettingsSta
   }
   return {
     settings_file: path,
-    settings_file_exists: existsSync(path),
     endpoints,
     credentials,
   };
@@ -95,10 +94,11 @@ export async function save(patch: SettingsPatch, cwd = process.cwd(), env: Env =
     if (key) delete apiKeys[key];
   }
 
+  // Everything else the file says -- an `ai` or `codegen` section written by
+  // hand, the tool servers -- is kept as it was: the dialog edits keys and
+  // endpoints, and the models are chosen elsewhere.
   const next: SettingsFile = {
     ...file,
-    ...(patch.ai ? { ai: { ...file.ai, ...patch.ai } } : {}),
-    ...(patch.codegen ? { codegen: { ...file.codegen, ...patch.codegen } } : {}),
     api_keys: apiKeys,
     endpoints,
   };
