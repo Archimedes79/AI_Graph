@@ -137,23 +137,11 @@ export default function App() {
         + 'does not hand over. Drop the project folder, or open it with 📂 Open.');
       return;
     }
-    let text: string;
     let graph: Graph;
     try {
-      text = await file.text();
-      graph = parseGraphJson(text);
+      graph = parseGraphJson(await file.text());
     } catch (error) {
       setSaveStatus(`❌ ${errorText(error, `Could not read ${file.name}`)}`);
-      return;
-    }
-    // The same for a project saved before flow.json: its graph.json is its
-    // wiring only, and the code, the prompts and the positions are files beside it.
-    // Loaded as it stands it would be every node stacked in one place with
-    // nothing in it -- so it is not loaded, and the way that works is named.
-    const raw = JSON.parse(text) as { nodes?: Array<{ position?: unknown }> };
-    if (file.name === 'graph.json' && raw.nodes?.length && raw.nodes.every((node) => !node.position)) {
-      setSaveStatus('❌ This is a project\'s graph.json: its code and prompts are files beside it, which a browser '
-        + 'does not hand over. Drop the project folder, or open it with 📂 Open.');
       return;
     }
     if (!confirmDiscard(`Load ${file.name}?`)) return;
