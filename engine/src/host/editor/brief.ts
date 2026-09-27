@@ -33,6 +33,8 @@ export const BUDGET = {
   example: 400,
   format: 1200,
   outputExample: 900,
+  /** A value a probe was given or returned, in a repair prompt and in its report. */
+  preview: 900,
   schema: 700,
   template: 800,
 } as const;
@@ -44,16 +46,21 @@ export function clip(text: string, limit: number): string {
   return `${trimmed.slice(0, limit)}… (${trimmed.length - limit} more characters not shown)`;
 }
 
-/** A value as the model should read it: JSON, so a string's line breaks and a list's length are visible. */
-export function shown(value: unknown, limit: number): string {
+/** A value as JSON, cut to *limit* characters: a string's line breaks stay visible. Anything JSON cannot say, as text. */
+export function jsonClip(value: unknown, limit: number): string {
   let text: string;
   try {
     text = JSON.stringify(value) ?? String(value);
   } catch {
     text = String(value);
   }
+  return clip(text, limit);
+}
+
+/** A value as the model should read it: JSON, so a string's line breaks and a list's length are visible. */
+export function shown(value: unknown, limit: number): string {
   const count = Array.isArray(value) ? `a list of ${value.length}: ` : '';
-  return count + clip(text, limit);
+  return count + jsonClip(value, limit);
 }
 
 /** One line of a person's description: newlines would break the list it sits in. */

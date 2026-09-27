@@ -26,7 +26,7 @@ import { batchItems, mergeBatchOutputs } from '../../execution/batching.ts';
 import { readPorts } from '../../execution/fileInputs.ts';
 import type { GraphNode } from '../../graph.ts';
 import { renderSkeleton } from './skeleton.ts';
-import { exampleSample, renderBrief, type Sample } from './brief.ts';
+import { BUDGET, exampleSample, jsonClip, renderBrief, type Sample } from './brief.ts';
 import { unmet } from '../../execution/examples.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
@@ -295,18 +295,9 @@ function handedOn(request: GenerateRequest, result: Record<string, unknown>): Re
 
 /** A probe is a smoke test, not a run: longer than this on one sample is not something a repair fixes. */
 const PROBE_TIMEOUT_MS = 25_000;
-const PREVIEW_LIMIT = 900;
 
-/** A short, faithful rendering of a value for the model and the user. */
-export function preview(value: unknown): string {
-  let text: string;
-  try {
-    text = JSON.stringify(value) ?? String(value);
-  } catch {
-    text = String(value);
-  }
-  return text.length > PREVIEW_LIMIT ? `${text.slice(0, PREVIEW_LIMIT)}… (+${text.length - PREVIEW_LIMIT} characters)` : text;
-}
+/** A short, faithful rendering of a value for the model and the user: the brief's own, so one prompt cuts values one way. */
+const preview = (value: unknown): string => jsonClip(value, BUDGET.preview);
 
 function describeInputs(sample: Record<string, unknown>): string {
   return Object.entries(sample).map(([key, value]) => {
