@@ -94,19 +94,17 @@ export interface ModelChoice {
 }
 
 /**
- * *asked* with its blanks filled from *home*: a graph's AI default, or the
- * machine's.
+ * *asked* with its blanks filled from *home*: the one AI setting.
  *
  * A model belongs to its provider. A request that names no provider goes to
  * *home*'s, and a request with no model is lent *home*'s model only when it
- * goes to *home*'s provider -- the graph's Gemini model sent to OpenAI is a
- * request that can only fail. A *home* that names no provider still lends its
- * model to a request that names none either.
+ * goes to *home*'s provider -- a Gemini model sent to OpenAI is a request that
+ * can only fail. A *home* that names no provider still lends its model to a
+ * request that names none either.
  *
- * One rule, applied twice by a run: with the graph's default
- * (`withGraphDefaults`), then with the machine's (`aiService`). The editor's
- * model box folds the two the same way to say what an empty model will mean,
- * so it lives here, where both halves and the page can read it.
+ * The running engine applies it (`host/node.ts`, `aiService`), and the
+ * editor's model box applies it to say what an empty model will mean, so it
+ * lives here, where both halves and the page can read it.
  */
 export function lent(asked: Partial<ModelChoice>, home: Partial<ModelChoice>): ModelChoice {
   const pinned = asked.provider && asked.provider !== 'default' ? asked.provider : '';

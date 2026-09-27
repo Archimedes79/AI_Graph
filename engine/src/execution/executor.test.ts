@@ -264,68 +264,11 @@ describe('executeGraph', () => {
   });
 });
 
-describe('the AI default a graph carries', () => {
-  /** A runtime that remembers what it was asked to call. */
-  function listening() {
-    const calls: { provider?: string; model?: string }[] = [];
-    const runtime: Runtime = {
-      ...nowhere,
-      ai: { complete: async (request) => { calls.push({ provider: request.provider, model: request.model }); return 'ok'; } },
-    };
-    return { runtime, calls };
-  }
-
-  function graphWith(defaults: { provider: string; model: string }, nodeConfig: Record<string, unknown>): Graph {
-    return {
-      metadata: { name: 'g', ai_defaults: defaults } as Graph['metadata'],
-      nodes: [node('a', 'ai', { system_prompt: 'be brief', ...nodeConfig })],
-      edges: [],
-    };
-  }
-
-  it('is what a node left on "default" calls', async () => {
-    const { runtime, calls } = listening();
-    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'default' }), { runtime, registry });
-    expect(calls).toEqual([{ provider: 'lmstudio', model: 'qwen' }]);
-  });
-
-  it('never overrides a node that named its own', async () => {
-    const { runtime, calls } = listening();
-    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'openai', ai_model: 'gpt-4o-mini' }), { runtime, registry });
-    expect(calls).toEqual([{ provider: 'openai', model: 'gpt-4o-mini' }]);
-  });
-
-  it('lends its model only to a node that calls the provider the model belongs to', async () => {
-    // A node pinned to OpenAI with its model left empty used to be sent the
-    // graph's qwen -- to OpenAI, which can only refuse it. Empty, the provider
-    // layer decides; the same provider named twice still gets the model.
-    const other = listening();
-    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'openai', ai_model: '' }), { runtime: other.runtime, registry });
-    expect(other.calls).toEqual([{ provider: 'openai', model: '' }]);
-
-    const same = listening();
-    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'lmstudio', ai_model: '' }), { runtime: same.runtime, registry });
-    expect(same.calls).toEqual([{ provider: 'lmstudio', model: 'qwen' }]);
-
-    // A graph that names only a model means the machine's provider, which
-    // is not necessarily the one this node named.
-    const unnamed = listening();
-    await executeGraph(graphWith({ provider: 'default', model: 'qwen' }, { ai_provider: 'openai', ai_model: '' }), { runtime: unnamed.runtime, registry });
-    expect(unnamed.calls).toEqual([{ provider: 'openai', model: '' }]);
-  });
-
-  it('changes nothing when the graph names nothing', async () => {
-    const { runtime, calls } = listening();
-    await executeGraph(graphWith({ provider: 'default', model: '' }, { ai_provider: 'default' }), { runtime, registry });
-    expect(calls).toEqual([{ provider: 'default', model: '' }]);
-  });
-});
-
 describe('a batch with failing items', () => {
   /** A per_item code node fed a list of three, whose runner fails on the word "bad". */
   function batchOf(items: string[], catches = false): Graph {
     return {
-      metadata: { name: 'g', ai_defaults: { provider: 'default', model: '' } } as Graph['metadata'],
+      metadata: { name: 'g' } as Graph['metadata'],
       nodes: [
         { ...node('a', 'data', { data_value: items, data_format: 'structure' }), outputs: [{ id: 'output', name: 'O', kind: 'output', data_type: 'json', multi: true, required: false, description: '' }] },
         {

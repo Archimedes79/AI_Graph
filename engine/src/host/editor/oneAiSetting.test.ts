@@ -1,0 +1,113 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { editorRoutes } from './routes.ts';
+import { nodeRuntime } from '../node.ts';
+import { executeGraph } from '../../execution/executor.ts';
+import { registry } from '../../elements/registry.ts';
+import type { GraphNode } from '../../graph.ts';
+import { graphOf } from '../../../test/fakes.ts';
+
+/**
+ * Where an AI call goes, whoever makes it: to the node's own provider and
+ * model when it pins them, and to the one AI setting otherwise -- for a run,
+ * ✨ Generate, Try it, ▶ Test and a block's Try it alike.
+ *
+ * Both are providers nobody has, so the provider layer refuses each by name
+ * before anything leaves the machine, and the refusal says where the call
+ * went. The file also still has the `codegen` section generation used to read,
+ * which must move nothing.
+ */
+
+const SETTING = 'the_one_setting';
+const PIN = 'the_nodes_own';
+let dir = '';
+
+beforeAll(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'ai-graph-one-setting-'));
+  const file = join(dir, 'ai-settings.json');
+  await writeFile(file, JSON.stringify({
+    ai: { provider: SETTING, model: 'm' },
+    codegen: { provider: 'what_codegen_said', model: 'c' },
+  }));
+  vi.stubEnv('AI_GRAPH_SETTINGS', file);
+  // The developer's own shell must not decide this either.
+  vi.stubEnv('AI_GRAPH_AI_PROVIDER', '');
+  vi.stubEnv('AI_GRAPH_AI_MODEL', '');
+});
+
+afterAll(async () => {
+  vi.unstubAllEnvs();
+  await rm(dir, { recursive: true, force: true });
+});
+
+const routes = editorRoutes();
+const loopback = { loopback: true } as never;
+const refusedBy = (provider: string) => `Unknown AI provider: ${provider}`;
+
+function asking(config: Record<string, unknown> = {}): GraphNode {
+  return {
+    id: 'ask', node_type: 'ai', label: 'Ask', description: '',
+    position: { x: 0, y: 0 }, inputs: [], outputs: [],
+    config: { system_prompt: 'be brief', prompt_template: 'Name a city.', ...config },
+  };
+}
+
+const onSetting = asking({ ai_provider: 'default', ai_model: '' });
+const pinned = asking({ ai_provider: PIN, ai_model: 'its-model' });
+
+describe('a node that pins its own model', () => {
+  it('is sent there by a run, by Try it and by ▶ Test', async () => {
+    const run = await executeGraph(graphOf([pinned]), { runtime: nodeRuntime(), registry });
+    expect(run.node_results[0].error).toContain(refusedBy(PIN));
+
+    const tried = await routes.runNode!({ ...graphOf([pinned]), node_id: 'ask', inputs: {} } as never, loopback);
+    expect((tried as { error: string }).error).toContain(refusedBy(PIN));
+
+    const tested = await routes.testNode!({
+      ...graphOf([asking({ ai_provider: PIN, ai_model: 'its-model', examples: '## One\n```json input\n{}\n```\n```judge\nA city.\n```\n' })]),
+      node_id: 'ask',
+    } as never, loopback);
+    expect(JSON.stringify(tested)).toContain(refusedBy(PIN));
+  }, 30_000);
+});
+
+describe('everything else', () => {
+  it('goes to the one AI setting in a run, in Try it and in ▶ Test', async () => {
+    const run = await executeGraph(graphOf([onSetting]), { runtime: nodeRuntime(), registry });
+    expect(run.node_results[0].error).toContain(refusedBy(SETTING));
+
+    const tried = await routes.runNode!({ ...graphOf([onSetting]), node_id: 'ask', inputs: {} } as never, loopback);
+    expect((tried as { error: string }).error).toContain(refusedBy(SETTING));
+
+    const tested = await routes.testNode!({
+      ...graphOf([asking({ examples: '## One\n```json input\n{}\n```\n```judge\nA city.\n```\n' })]),
+      node_id: 'ask',
+    } as never, loopback);
+    expect(JSON.stringify(tested)).toContain(refusedBy(SETTING));
+  }, 30_000);
+
+  it('goes there from a block tried by itself, whose code asks a model', async () => {
+    const shown = await routes.runBlock!({
+      widget: {
+        id: 'rows', kind: 'table', label: 'Rows',
+        code: 'async function run(inputs, node) { return { value: [{ said: await node.llm({ prompt: "Name a city." }) }] }; }',
+      },
+      value: null,
+    } as never, loopback);
+    expect(String((shown as { shown: unknown }).shown)).toContain(refusedBy(SETTING));
+  }, 30_000);
+
+  it('goes there from ✨ Generate, whatever a `codegen` section says', async () => {
+    await expect(routes.generate!({ element: 'code', description: 'Count the words.' } as never, loopback))
+      .rejects.toThrow(refusedBy(SETTING));
+    await expect(routes.generateGraph!({ description: 'Count the words in a text.' } as never, loopback))
+      .rejects.toThrow(refusedBy(SETTING));
+  }, 30_000);
+
+  it('is what the editor is told it is now', async () => {
+    const status = await routes.providers!(undefined as never, loopback);
+    expect((status as { target: unknown }).target).toEqual({ provider: SETTING, model: 'm' });
+  }, 30_000);
+});

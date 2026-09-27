@@ -24,7 +24,7 @@ import { PLAIN_ASK, llmCall, type AskSettings } from './nodes/ai/ask.ts';
 export interface BodyGiven {
   /** Plain data the body sees as `node.<key>`. */
   data?: Record<string, unknown>;
-  /** What `node.llm` falls back on for whatever a call does not say. The graph's defaults, if nothing is given. */
+  /** What `node.llm` falls back on for whatever a call does not say. The one AI setting, if nothing is given. */
   ask?: AskSettings;
   /** The element's input ports, in order: how `node.llm` lists inputs a message does not place. */
   order?: string[];

@@ -9,7 +9,6 @@ import type { GuiWidget } from '@/graph';
 import { call } from '@/api/client';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { guiWidgetPorts, syncGuiNodePorts } from '@/document/guiWidgets';
-import { useGraphStore } from '@/store/graphStore';
 import type { TryResult } from './TryItInline';
 import { exampleObject } from './examplePair';
 import { runAlone } from './readAsRun';
@@ -45,10 +44,9 @@ export async function runBlockAlone(widget: GuiWidget): Promise<TryResult> {
 /**
  * The block run by itself on step 1's *values*, the way a run runs it: what
  * arrives is drawn -- through its code -- by a block that shows, and a block
- * that is a source hands on what it holds. With the graph's metadata, as a
- * run has it: code that asks a model asks the graph's, not the machine's.
+ * that is a source hands on what it holds.
  */
 export function tryBlock(widget: GuiWidget, values: Record<string, unknown>): Promise<TryResult> {
   if (!guiWidgetPorts(widget).inputs.length) return runBlockAlone(widget);
-  return call('runBlock', { widget, value: values.value ?? null, metadata: useGraphStore.getState().metadata });
+  return call('runBlock', { widget, value: values.value ?? null });
 }

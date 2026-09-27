@@ -126,12 +126,6 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
     if (!runtime.subgraph) throw new Error('A graph inside a node can only be run by the engine that runs graphs.');
     const elements = runtime.subgraph.elements;
 
-    // The graph this node sits in has already had its AI default applied to
-    // the runtime; the inner graph's own default would otherwise override it
-    // from below, which is backwards -- a graph pasted in as a subgraph should
-    // follow the tool it became part of.
-    graph.metadata.ai_defaults = { provider: 'default', model: '' };
-
     const given: Record<string, Record<string, unknown>> = {};
     for (const boundary of boundaryInputs(graph, elements)) {
       // A port nothing is wired to is not answered, and the node inside runs

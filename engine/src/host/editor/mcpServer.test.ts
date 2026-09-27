@@ -170,7 +170,7 @@ describe('generate_graph', () => {
   it('says plainly when no model is configured, and names the way round it', async () => {
     const made = await toolsWith({ target: async () => ({ provider: '', model: '' }) }).call('generate_graph', { description: 'x' });
     expect(made.isError).toBe(true);
-    expect(made.text).toMatch(/No generation model is configured/);
+    expect(made.text).toMatch(/No model is configured/);
     expect(made.text).toMatch(/authoring_guide/);
     expect(made.text).toMatch(/save_graph/);
   });

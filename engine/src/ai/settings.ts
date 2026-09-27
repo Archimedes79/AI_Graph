@@ -14,13 +14,16 @@
 //
 // The same file says which tool servers this machine has (`mcp_servers`), and
 // for those it is the *only* source -- see `configuredMcpServers` for why.
+//
+// And it holds the one AI setting, which `aiSetting` alone resolves.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { settingsFromEnv, type ProviderSettings } from './providers.ts';
+import { DEFAULT_SETTINGS, settingsFromEnv, type ProviderSettings } from './providers.ts';
 import type { McpServerConfig } from './mcp.ts';
+import type { ModelChoice } from '../elements/Runtime.ts';
 
 const FILENAME = 'ai-settings.json';
 
@@ -48,8 +51,8 @@ export function candidatePaths(
 }
 
 export interface SettingsFile {
+  /** The one AI setting (`aiSetting`), as ⚙ Settings saves it. */
   ai?: { provider?: string; model?: string };
-  codegen?: { provider?: string; model?: string };
   api_keys?: Record<string, string>;
   /** Keyed by provider name: `endpoints.lmstudio`. */
   endpoints?: Record<string, string>;
@@ -119,6 +122,98 @@ export function configuredSettings(
     apiKeys: { ...file.apiKeys, ...environment.apiKeys },
     endpoints: { ...file.endpoints, ...environment.endpoints },
   };
+}
+
+// ---------------------------------------------------------------------------
+// The one AI setting
+// ---------------------------------------------------------------------------
+
+type Env = Record<string, string | undefined>;
+
+/** A usable model when none was configured, per provider. Empty: only the user knows. */
+const DEFAULT_MODELS: Record<string, string> = {
+  ollama: 'llama3',
+  openai: 'gpt-4o-mini',
+  anthropic: 'claude-opus-5',
+  google: 'gemini-flash-lite-latest',
+  github_copilot: 'gpt-4o-mini',
+};
+
+export const LOCAL_PROVIDERS = ['ollama', 'lmstudio'] as const;
+
+/**
+ * Cached per provider, but only for a few seconds.
+ *
+ * It used to be cached for the life of the process, so swapping the loaded
+ * model in LM Studio was invisible until something asked with `refresh` --
+ * which only the status route does. A local probe is one request to a machine
+ * you are already talking to, so the cache is here to keep a burst of calls
+ * from making a burst of probes, nothing more.
+ */
+const probed = new Map<string, { models: string[] | null; at: number }>();
+const PROBE_TTL_MS = 5_000;
+
+/**
+ * The models a local provider serves right now, or null when it is not there.
+ *
+ * Asked of the provider itself rather than assumed: a machine that runs LM
+ * Studio instead of Ollama should not get connection errors out of the box.
+ * `refresh` re-asks, which the editor's status route does so starting LM
+ * Studio mid-session is noticed.
+ */
+export async function probeLocal(
+  provider: string,
+  { refresh = false, timeoutMs = 1500, cwd = process.cwd(), env = process.env as Env } = {},
+): Promise<string[] | null> {
+  if (!(LOCAL_PROVIDERS as readonly string[]).includes(provider)) return null;
+  const cached = probed.get(provider);
+  if (!refresh && cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.models;
+
+  const base = (fromFile(cwd, env).endpoints?.[provider] ?? settingsFromEnv(env).endpoints?.[provider]
+    ?? DEFAULT_SETTINGS.endpoints[provider]).replace(/\/+$/, '');
+  const url = provider === 'ollama' ? `${base}/api/tags` : `${base}/models`;
+  let models: string[] | null = null;
+  try {
+    const reply = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    const payload = await reply.json() as { models?: { name?: string }[]; data?: { id?: string }[] };
+    models = provider === 'ollama'
+      ? (payload.models ?? []).map((m) => m.name ?? '').filter(Boolean)
+      : (payload.data ?? []).map((m) => m.id ?? '').filter(Boolean);
+  } catch {
+    // Not reachable is a normal answer here, not an error.
+  }
+  probed.set(provider, { models, at: Date.now() });
+  return models;
+}
+
+/**
+ * The one AI setting: where every AI call goes that does not name its own
+ * provider and model -- ✨ Generate and its probe, Try it, ▶ Test, a block's
+ * Try it, and every run, in the editor, from the command line and in a
+ * deployed tool alike. Only a node that pins its own model is answered by
+ * anything else.
+ *
+ * Read here and nowhere else, so the editor's "now: …" and what a run calls
+ * cannot disagree. The file's `ai` section is what ⚙ Settings saves;
+ * `AI_GRAPH_AI_PROVIDER` / `AI_GRAPH_AI_MODEL` are the same setting for a
+ * machine with no dialog, and win over the file. With nothing set it is
+ * whichever local provider is running, else Ollama. A provider named without a
+ * model takes *its own* default: choosing Google and leaving the model blank
+ * once sent Google whatever LM Studio had loaded, and Google answered with a
+ * 404 that read like a broken endpoint.
+ */
+export async function aiSetting(cwd = process.cwd(), env: Env = process.env): Promise<ModelChoice> {
+  const configured = configuredSettings(env, cwd);
+  let provider = configured.provider ?? '';
+  if (!provider) {
+    for (const local of LOCAL_PROVIDERS) {
+      if (await probeLocal(local, { cwd, env })) { provider = local; break; }
+    }
+  }
+  provider ||= DEFAULT_SETTINGS.provider;
+  if (configured.model) return { provider, model: configured.model };
+  const served = await probeLocal(provider, { cwd, env });
+  return { provider, model: served?.[0] ?? DEFAULT_MODELS[provider] ?? '' };
 }
 
 /**

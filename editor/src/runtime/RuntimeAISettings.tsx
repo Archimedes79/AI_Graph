@@ -32,7 +32,7 @@ export default function RuntimeAISettings({ onClose }: { onClose: () => void }) 
         {settings && (
           <div className="rounded-lg px-3 py-2" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>
             This tool calls <strong>{settings.provider}</strong>{settings.model && <> / <strong>{settings.model}</strong></>}
-            , wherever a step was left on its default.
+            , wherever a step does not name a model of its own.
           </div>
         )}
         <p style={{ color: DIM }}>

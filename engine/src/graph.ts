@@ -71,7 +71,6 @@ export interface GraphEdge {
 export interface GraphMetadata {
   name: string;
   description: string;
-  ai_defaults: { provider: string; model: string };
   gui_scheme: string;
 }
 
@@ -145,18 +144,15 @@ export function applyMemory(
  * A graph's settings when nothing says otherwise: a new graph's, and what an
  * older file that leaves one out means. The one statement of them -- the
  * editor starts a new graph from it, and `flow.json` leaves out what equals
- * it. A fresh object each call, so no two graphs share an `ai_defaults`.
+ * it. A fresh object each call, so no two graphs share one.
+ *
+ * Which AI a graph calls is not among them: that is the machine's one AI
+ * setting (`ai/settings.ts`), or a node's own pin.
  */
 export function defaultMetadata(): GraphMetadata {
   return {
     name: 'Untitled Graph',
     description: '',
-    // Which AI this graph's AI nodes call when they run, set once for the
-    // whole graph (⚙ Settings) instead of once per node. 'default' means
-    // unset, which the running engine resolves to its own fallback; whoever
-    // runs a deployed copy can override it without editing the graph -- see
-    // ai/settings.ts.
-    ai_defaults: { provider: 'default', model: '' },
     gui_scheme: 'night',
   };
 }

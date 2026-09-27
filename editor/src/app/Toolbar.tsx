@@ -9,7 +9,6 @@ import { ApiError, call, downloadBundle, watchGeneration, type AICall } from '@/
 import { errorText } from '@/api/errorText';
 import type { Graph } from '@/graph';
 import { useDeliveredRun } from '@/page/useDeliveredRun';
-import { genAI } from '@/store/settingsStore';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
@@ -206,7 +205,7 @@ export default function Toolbar({
     setAiResult(null);
     try {
       const result = await watchGeneration(
-        (progressId) => call('generateGraph', { description: aiDescription, progress_id: progressId, ...genAI() }),
+        (progressId) => call('generateGraph', { description: aiDescription, progress_id: progressId }),
         setAiCalls,
       );
       setAiResult(result);
@@ -406,7 +405,7 @@ export default function Toolbar({
         <ToolbarButton
           icon={Settings}
           label="Settings"
-          title="API keys and server addresses, the AI that writes code for you, this graph's runtime AI, and what starts the graph"
+          title="The AI that generates, tests and runs, API keys and server addresses, and what starts the graph"
           onClick={onOpenSettings}
         />
 

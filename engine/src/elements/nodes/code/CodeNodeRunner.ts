@@ -68,14 +68,14 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
     // `readsFileInputs`), so this stays one call.
     //
     // It may ask a model, as an ai node's `run.js` does: `await node.llm({ prompt })`,
-    // answered by the process that holds the keys, on the graph's default model.
+    // answered by the process that holds the keys, on the one AI setting's model.
     return logic.run(inputs, runtime);
   }
 
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `config.code holds JavaScript as "function run(inputs) { ... }", returning an object whose keys are exactly this node's output port ids. config.code_prompt is the request it was written from. Use only what Node has built in; there is no package manager. The function may be async and is handed a second argument, node: "await node.llm({ prompt: '...' })" asks the graph's model a question and resolves to its answer as text -- use it when code has to decide what to ask, or ask in a loop; for one question, use an ai node instead.`;
+    return `config.code holds JavaScript as "function run(inputs) { ... }", returning an object whose keys are exactly this node's output port ids. config.code_prompt is the request it was written from. Use only what Node has built in; there is no package manager. The function may be async and is handed a second argument, node: "await node.llm({ prompt: '...' })" asks the configured model a question and resolves to its answer as text -- use it when code has to decide what to ask, or ask in a loop; for one question, use an ai node instead.`;
   }
 
   override whatRuns(): WhatRuns {

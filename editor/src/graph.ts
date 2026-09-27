@@ -38,12 +38,6 @@ export interface Graph {
 }
 
 export interface GraphMetadata extends EngineMetadata {
-  /**
-   * The graph's own answer to "which AI should my `default` AI nodes use?".
-   * The lowest-priority source: the environment, an `ai-settings.json` beside
-   * a deployed tool, or a CLI flag override it at run time.
-   */
-  ai_defaults: { provider: AIProvider; model: string };
   gui_scheme: 'night' | 'paper' | 'office' | 'graphite' | 'anthracite';
 }
 

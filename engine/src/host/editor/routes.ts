@@ -15,7 +15,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseGraph, type Graph } from '../../graph.ts';
-import { executeNode, inputsFor, withGraphDefaults } from '../../execution/executor.ts';
+import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExamples } from '../../execution/examples.ts';
 import { GuiNodeRunner, parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
@@ -24,6 +24,7 @@ import { writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
 import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
 import { nodeRuntime } from '../node.ts';
+import { aiSetting } from '../../ai/settings.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile, SentRequest } from '../api.ts';
 import * as files from './files.ts';
@@ -116,11 +117,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     async runBlock(asked) {
       try {
-        // A block alone is no graph for the executor to apply its defaults
-        // to, so they are applied here, as a run applies them: code that asks
-        // a model is tried on the model the graph's run would ask.
-        const runtime = withGraphDefaults(nodeRuntime(), parseGraph({ metadata: asked.metadata }));
-        const shown = await new GuiNodeRunner().showBlock(parseWidget(asked.widget), asked.value, runtime);
+        const shown = await new GuiNodeRunner().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
         return { status: 'success', shown, error: null };
       } catch (error) {
         return { status: 'error', shown: null, error: message(error) };
@@ -165,7 +162,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
         code: runtime.code,
         files: runtime.files,
         generationFor: (name) => registry.generation(name),
-        target: await settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? ''),
+        target: await aiSetting(),
         calls,
       });
     }),
@@ -174,7 +171,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
     generationProgress: (asked) => ({ calls: generating.get(asked.id) ?? [] }),
 
     generateGraph: (asked) => watched(asked.progress_id, async (calls) => {
-      const target = await settings.generationTarget(asked.ai_provider ?? '', asked.ai_model ?? '');
+      const target = await aiSetting();
       const { graph, explanation } = await gen.generateGraph(
         asked.description ?? '', asked.context ?? '', { ai: nodeRuntime().ai, target, calls },
       );

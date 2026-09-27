@@ -83,7 +83,7 @@ describe('what a text box keeps from a loop', () => {
       config: { code: 'function run() {}' },
     };
     const graph: Graph = {
-      metadata: { name: 'loop', ai_defaults: { provider: 'default', model: '' } } as Graph['metadata'],
+      metadata: { name: 'loop' } as Graph['metadata'],
       nodes: [page, answer],
       edges: [
         { id: 'ask', source_node_id: 'page', source_port_id: 'box_out', target_node_id: 'answer', target_port_id: 'question' },
