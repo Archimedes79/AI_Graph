@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { GraphNode } from '@/graph';
-import { NODE_KINDS, whenMissing } from '@/document/nodeKinds';
+import { NODE_KINDS } from '@/document/nodeKinds';
+import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { nodeFields } from '@/authoring/generation';
 import OutputNodePanel from './OutputNodePanel';
@@ -18,7 +19,7 @@ function panel(node: GraphNode): string {
 /** An output node as a graph file that names nothing loads: its id keys the result. */
 function unnamed(): GraphNode {
   const node = NODE_KINDS.output.create('totals');
-  return { ...node, config: { ...node.config, ...whenMissing('output') } };
+  return { ...node, config: baseNodeConfig() };
 }
 
 describe('an output node\'s panel', () => {

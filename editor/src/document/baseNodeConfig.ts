@@ -1,10 +1,20 @@
 import type { NodeConfig } from '@/graph';
 
 /**
- * The one `NodeConfig` shape every node type starts from -- every
- * `NODE_KINDS[type].create()` spreads and overrides this rather than
- * repeating the full field list. Verbatim extraction of the object literal
- * each create() used to build inline.
+ * Every setting's one default: what the engine reads a key as when a graph
+ * leaves it out.
+ *
+ * So it is three things at once. What a node read from a file is filled with
+ * where the file says nothing (`normalizeGraphNode`); what a save leaves out,
+ * key by key, because it says nothing the engine would not assume
+ * (`savedNode`); and what every `NODE_KINDS[type].create()` starts from, so a
+ * panel can read any field with a type. A new node that starts differently
+ * -- a code node per item, an output node with a window -- says so in
+ * `create`, and that is what its file then carries.
+ *
+ * One default per key: a second one, for what a *loaded* node lacks, is what
+ * turned a graph written by hand into a different graph after one Save.
+ * `savedConfig.test.ts` and `graphStore.test.ts` hold these to the engine.
  */
 export function baseNodeConfig(): NodeConfig {
   return {
@@ -15,9 +25,6 @@ export function baseNodeConfig(): NodeConfig {
     extensions: '',
     select_all_files: true,
     selector_prompt: '',
-    // Empty, as a folder picker's starts: an empty selector keeps every file,
-    // which is all the starter it used to hold did -- saved into the graph of
-    // every text and file input, which select nothing (B21).
     selector_code: '',
     // 'default' -> the one AI setting in ⚙ Settings (engine/src/ai/settings.ts
     // `aiSetting`), until someone pins this node to a provider of its own.
@@ -32,12 +39,18 @@ export function baseNodeConfig(): NodeConfig {
     data_prompt: '',
     data_format_prompt: '',
     output_format_prompt: '',
-    output_label: 'Result',
+    // No label is the node's id as the key of the run's result.
+    output_label: '',
     write_mode: 'none',
-    // No batch_mode nor batch_concurrency: only code and ai run once per item
-    // (`NodeRunner.fansOut`), and they start with both (`nodeKinds.ts`).
+    // Once on the whole list (`NodeRunner.batchMode`), as many at once as the run allows.
+    batch_mode: 'whole_list',
+    batch_concurrency: 0,
     read_file_inputs: false,
     send_images: false,
+    catch_errors: false,
     gui_widgets: [],
+    task: '',
+    trigger_on_start: true,
+    trigger_every: '',
   };
 }

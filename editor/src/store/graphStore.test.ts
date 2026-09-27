@@ -263,11 +263,6 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     expect(labels).toEqual(['Result', 'Result 3', 'Result 4']);
   });
 
-  it('keeps an older file\'s batch_mode on another kind as it was, unread', () => {
-    loadTestGraph([graphNode({ id: 'shown', node_type: 'output', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
-    expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');
-  });
-
   it('keeps what the file did say', () => {
     loadTestGraph([graphNode({ id: 'each', node_type: 'code', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
     expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');

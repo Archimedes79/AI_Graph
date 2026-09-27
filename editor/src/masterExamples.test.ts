@@ -131,9 +131,9 @@ function shapeOf(graph: Graph): { nodes: string[]; blocks: string[]; wires: stri
     wires: graph.edges.map((edge) => `${name.get(edge.source_node_id)}.${portName(edge.source_node_id, edge.source_port_id)} -> ${name.get(edge.target_node_id)}.${portName(edge.target_node_id, edge.target_port_id)}`).sort(),
     // Which inputs a node will not run without, once they are wired: step 1's "needed".
     needed: graph.nodes.flatMap((node) => node.inputs.filter((port) => port.required).map((port) => `${node.node_type}.${port.id}`)).sort(),
-    // How each node that authors a body takes a list: what "Run once per item" sets.
+    // How each node that authors a body takes a list: what "Run once per item" sets, as a run reads it.
     lists: graph.nodes.filter((node) => node.node_type === 'code' || node.node_type === 'ai')
-      .map((node) => `${node.node_type} ${node.config.batch_mode}: ${node.inputs.filter((port) => port.multi).map((port) => port.id).join(', ') || 'none fan out'}`).sort(),
+      .map((node) => `${node.node_type} ${registry.node(node.node_type)!.batchMode(node as never)}: ${node.inputs.filter((port) => port.multi).map((port) => port.id).join(', ') || 'none fan out'}`).sort(),
   };
 }
 

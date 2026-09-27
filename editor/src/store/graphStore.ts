@@ -9,7 +9,8 @@ import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { ACCENT } from '@/ui/theme';
 import { delivered } from './executionStatus';
-import { NODE_KINDS, savedNode, whenMissing } from '@/document/nodeKinds';
+import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
+import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 import type React from 'react';
 import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
@@ -298,15 +299,10 @@ function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
     },
     inputs: Array.isArray(rawNode.inputs) ? rawNode.inputs : defaults.inputs,
     outputs: Array.isArray(rawNode.outputs) ? rawNode.outputs : defaults.outputs,
-    // A key the file left out means what the engine reads it as, not what a
-    // new node starts with: loading and saving must not change what a graph
-    // does. A node made in the editor starts from `create`, and once saved it
-    // carries these keys, so only a graph that never said them is filled here.
-    config: {
-      ...defaults.config,
-      ...whenMissing(nodeType),
-      ...(rawNode.config ?? {}),
-    },
+    // A key the file left out means what the engine reads it as -- its one
+    // default -- not what a new node starts with: loading and saving must not
+    // change what a graph does.
+    config: { ...baseNodeConfig(), ...(rawNode.config ?? {}) },
   };
 
   // Where the element derives its ports -- a gui node from its blocks, an

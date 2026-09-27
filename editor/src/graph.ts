@@ -53,10 +53,10 @@ export type NodeConfig = {
   ai_model: string;
   ai_provider: AIProvider;
   /** code and ai only (`NodeRunner.fansOut`): how many items of a fan-out run at once, 0 for the run's default. */
-  batch_concurrency?: number;
-  /** code and ai only: run once per item. Another kind's file may still carry it from an older editor; nothing reads it there. */
-  batch_mode?: 'per_item' | 'whole_list';
-  catch_errors?: boolean;
+  batch_concurrency: number;
+  /** code and ai only: run once per item. */
+  batch_mode: 'per_item' | 'whole_list';
+  catch_errors: boolean;
   code: string;
   code_prompt: string;
   data_format: 'text' | 'structure';
@@ -81,12 +81,12 @@ export type NodeConfig = {
   /** Tool servers an ai node may call, one per line: a URL, or a name this machine configured. */
   mcp_servers?: string;
   /** A trigger node: fire when the tool starts, and again this often (`5m`). */
-  trigger_on_start?: boolean;
-  trigger_every?: string;
+  trigger_on_start: boolean;
+  trigger_every: string;
   /** The graph a subgraph node holds: its own project folder on disk. */
   subgraph?: unknown;
   /** What a node is meant to do, written before it is filled in: `task.md` in a project. */
-  task?: string;
+  task: string;
   output_label: string;
   prompt_at_runtime: boolean;
   read_file_inputs: boolean;
