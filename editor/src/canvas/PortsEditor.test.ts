@@ -16,7 +16,7 @@ describe('the ports editor', () => {
       inputs: [port('history', 'history', 'input', 'text'), needed(port('message', 'message', 'input', 'text'))],
       outputs: [port('output', 'output', 'output', 'text')],
       onChange: () => {},
-      inputLists: false,
+      stepped: true,
     }));
     const boxes = html.match(/<input type="checkbox"[^>]*aria-label="input needed"[^>]*>/g) ?? [];
     expect(boxes).toHaveLength(2);
@@ -37,5 +37,17 @@ describe('the ports editor', () => {
     expect(ticks[0]).toContain('checked');
     expect(ticks[1]).not.toContain('checked');
     expect(drawn(false)).not.toContain('Read the file at this path');
+  });
+
+  it('has no type and no "list" per port for a node built in the four steps -- a list follows "Run once per item"', () => {
+    const drawn = (stepped: boolean) => renderToStaticMarkup(createElement(PortsEditor, {
+      inputs: [port('csv', 'csv', 'input', 'file_path')], outputs: [port('rows', 'rows', 'output', 'json')], onChange: () => {}, stepped,
+    }));
+    expect(drawn(true)).not.toContain('aria-label="input type"');
+    expect(drawn(true)).not.toContain('aria-label="output type"');
+    expect(drawn(true)).not.toContain('list</label>');
+    // A node without the steps -- an output node -- still says them per port.
+    expect(drawn(false)).toContain('aria-label="input type"');
+    expect(drawn(false).match(/list<\/label>/g)).toHaveLength(2);
   });
 });

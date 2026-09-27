@@ -6,6 +6,7 @@
 
 import type { GraphNode, Wire } from '@/graph';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
+import type { ExampleResult } from '@engine/execution/examples.ts';
 import { asExampleText, readPair, withInput } from './examplePair';
 
 /** What a node hands on, without the executor's own error port: what a body returns, and an example expects. */
@@ -41,12 +42,15 @@ export function runsPerItem(node: GraphNode): boolean {
 
 /**
  * *node*, told to run once per item of the lists that arrive, or once on
- * them whole: `batch_mode` and the inputs that fan out, set together, because
- * either one alone does nothing -- per item with no input declared a list runs
- * once on everything, and a list input on a whole-list node is handed whole.
- * Per item, the inputs *lists* names fan out (every one not typed `list`,
- * when it names none yet: what arrives is not known before it has); whole,
- * none do.
+ * them whole: `batch_mode`, the inputs that fan out and the outputs that hand
+ * on a list, set together, because none of them does anything alone -- per
+ * item with no input declared a list runs once on everything, and a list
+ * input on a whole-list node is handed whole. Per item, the inputs *lists*
+ * names fan out (every one not typed `list`, when it names none yet: what
+ * arrives is not known before it has); whole, none do. And a list follows:
+ * per item, every output hands on the list of the answers, and the node it
+ * feeds is told so; whole, none says it does. There is no "list" box on a
+ * port of its own any more.
  */
 export function withPerItem(node: GraphNode, perItem: boolean, lists: string[] = []): GraphNode {
   const fans = (port: GraphNode['inputs'][number]) => perItem && (lists.length ? lists.includes(port.id) : !takesListWhole(port));
@@ -54,6 +58,8 @@ export function withPerItem(node: GraphNode, perItem: boolean, lists: string[] =
     ...node,
     config: { ...node.config, batch_mode: perItem ? 'per_item' : 'whole_list' },
     inputs: node.inputs.map((port) => (port.multi === fans(port) ? port : { ...port, multi: fans(port) })),
+    // The error port says why, once, whatever the node runs on.
+    outputs: node.outputs.map((port) => (port.id === ERROR_PORT || port.multi === perItem ? port : { ...port, multi: perItem })),
   };
 }
 
@@ -91,10 +97,27 @@ export function exampleFor(node: GraphNode, examples: string): string {
 }
 
 /**
- * What came out of a try, as step 2's expected output: every output the node
- * hands on, as JSON -- what `test` then holds each later version to. Trimming
- * it to the fields that matter is the person's to do.
+ * What came out of a try, as the example's expected output: every output the
+ * node hands on, as JSON -- what Try it and `test` then hold each later
+ * version to. Trimming it to the fields that matter is the person's to do.
  */
 export function keptExpect(outputs: Record<string, unknown> | undefined): string {
   return asExampleText(ownOutputs(outputs));
+}
+
+/**
+ * How the examples after the first did, in one line under Try it: "and 2
+ * more: pass" -- or how many did what, and the first reason one did not.
+ * It replaced a ▶ Test button of its own in step 2.
+ */
+export function othersLine(results: ExampleResult[]): string {
+  if (!results.length) return '';
+  const count = (status: ExampleResult['status']) => results.filter((result) => result.status === status).length;
+  if (count('pass') === results.length) return `and ${results.length} more: pass`;
+  const said = ([['pass', 'pass'], ['fail', 'fail'], ['error', 'cannot run'], ['skipped', 'skipped']] as const)
+    .filter(([status]) => count(status))
+    .map(([status, word]) => `${count(status)} ${word}`);
+  const first = results.find((result) => result.status === 'fail' || result.status === 'error');
+  const why = first ? ` -- “${first.title}”: ${first.details[0] ?? 'no reason was given'}` : '';
+  return `and ${results.length} more: ${said.join(', ')}${why}`;
 }

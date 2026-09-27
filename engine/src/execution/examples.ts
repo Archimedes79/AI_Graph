@@ -156,8 +156,12 @@ const JUDGE_SYSTEM = 'You check whether an answer meets a criterion. Reply with 
   + 'then one short sentence saying why. Judge only the criterion, not style or anything else.';
 
 /**
- * Run *nodeId*'s examples. Each runs the node alone, the way ▶ Test does,
+ * Run *nodeId*'s examples. Each runs the node alone, the way ▶ Try it does,
  * on the example's inputs; nothing upstream runs.
+ *
+ * One result per example, in the file's order -- so the first is the node
+ * dialog's example, which Try it shows -- and then one for each section that
+ * cannot be read.
  *
  * *offline*: nothing asks a model -- an AI node's examples and every judged
  * expectation are skipped, which is how CI runs them.
@@ -170,7 +174,7 @@ export async function runExamples(
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node) return [{ title: nodeId, status: 'error', details: [`No node "${nodeId}".`] }];
   const { examples, problems } = parseExamples(String(node.config.examples ?? ''));
-  const results: ExampleResult[] = problems.map((problem) => ({ title: 'examples.md', status: 'error' as const, details: [problem] }));
+  const results: ExampleResult[] = [];
   const element = options.registry.node(node.node_type);
   const asksModel = element?.asksModel(node) === true;
   const { runtime } = options;
@@ -205,7 +209,7 @@ export async function runExamples(
     }
     results.push({ title: example.title, status: details.length ? 'fail' : 'pass', details, outputs: ran.outputs });
   }
-  return results;
+  return [...results, ...problems.map((problem) => ({ title: 'examples.md', status: 'error' as const, details: [problem] }))];
 }
 
 /** The graph, and every graph its nodes hold, each with the way down to it (`outer ▸ `). */

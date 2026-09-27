@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { parseExamples } from '@engine/execution/examples.ts';
-import { exampleFor, keptExpect, listPorts, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
+import { exampleFor, keptExpect, listPorts, othersLine, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
 import { readPair, withExpect, withInput } from './examplePair';
+import { errorOutput } from '@engine/execution/wiring.ts';
 
 describe('"Keep this result"', () => {
   it('keeps what a code node gave as its example\'s expected output, which `test` then holds it to', () => {
@@ -28,6 +29,15 @@ describe('"Run once per item"', () => {
     expect(perItem.config.batch_mode).toBe('per_item');
     expect(perItem.inputs.map((port) => port.multi)).toEqual([true, false]);
     expect(runsPerItem(perItem)).toBe(true);
+  });
+
+  it('makes each output hand on a list per item, and none whole: a list follows it, with no box of its own', () => {
+    // The error port "catch failures" adds says why once, whatever the node runs on.
+    const node = NODE_KINDS.code.create('worker');
+    node.outputs.push(errorOutput('Why it failed.'));
+    const multi = (made: typeof node) => made.outputs.map((port) => `${port.id}${port.multi ? ' list' : ''}`);
+    expect(multi(withPerItem(node, true))).toEqual(['output list', 'error']);
+    expect(multi(withPerItem(node, false))).toEqual(['output', 'error']);
   });
 
   it('hands an input typed List its list whole, even to a node run per item', () => {
@@ -68,6 +78,16 @@ describe('▶ Try it', () => {
     const node = NODE_KINDS.code.create('maker');
     node.inputs = [];
     expect(tryInputs(node, undefined)).toEqual({});
+  });
+
+  it('says how the other examples did in one line, which replaced a ▶ Test of its own', () => {
+    const passed = { title: 'Two', status: 'pass' as const, details: [] };
+    expect(othersLine([])).toBe('');
+    expect(othersLine([passed, { ...passed, title: 'Three' }])).toBe('and 2 more: pass');
+    expect(othersLine([passed, { title: 'Wrong', status: 'fail', details: ['output.output is 4; expected 5'] }]))
+      .toBe('and 2 more: 1 pass, 1 fail -- “Wrong”: output.output is 4; expected 5');
+    expect(othersLine([{ title: 'examples.md', status: 'error', details: ['"Broken": no ```json input block.'] }]))
+      .toBe('and 1 more: 1 cannot run -- “examples.md”: "Broken": no ```json input block.');
   });
 });
 

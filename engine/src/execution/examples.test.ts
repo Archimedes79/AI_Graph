@@ -122,4 +122,11 @@ describe('runExamples', () => {
     const results = await runExamples(graphWith('code', section('Broken', [block('json input', '{')])), 'n', { runtime: runtime(), registry });
     expect(results.every((result) => result.status === 'error')).toBe(true);
   });
+
+  it('says what it cannot read after what it ran, so the first result is the first example -- the one the dialog tries', async () => {
+    const results = await runExamples(graphWith('code', section('Broken', [block('json input', '{')]) + one('Two', 1, 2)), 'n', { runtime: runtime(), registry });
+    expect(results[0]).toMatchObject({ title: 'Two', status: 'pass' });
+    expect(results.slice(1).every((result) => result.title === 'examples.md' && result.status === 'error')).toBe(true);
+    expect(results.length).toBeGreaterThan(1);
+  });
 });

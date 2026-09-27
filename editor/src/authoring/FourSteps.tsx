@@ -33,7 +33,7 @@ export default function FourSteps({ comesIn, comesOut, task, body }: Props) {
       <Step n={1} title="What comes in" hint="What arrives on each input, and one example of it: what it is tried on, written against and tested with.">
         {comesIn}
       </Step>
-      <Step n={2} title="What comes out" hint="What each output hands on. The next node is written against it.">
+      <Step n={2} title="What comes out" hint="Where each output goes and what the node there wants, as the graph says it -- and your words for what it leaves out. The next node is written against it.">
         {comesOut}
       </Step>
       <Step n={3} title={task.title ?? 'What should it do?'} hint={task.hint ?? 'In your own words. ✨ Generate writes step 4 from this and steps 1 and 2.'}>

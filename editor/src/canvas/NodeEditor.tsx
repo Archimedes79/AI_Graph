@@ -176,10 +176,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
   const Panel = element.Panel;
 
-  // What each port is wired to, in words, shown under the port.
+  // What each port is wired to, in words, shown under the port -- and for an
+  // output, what the node there wants of it: what the graph says it must be.
   const wiring = {
     inputs: inputSources(node.id, graphNodes, graphEdges),
-    outputs: outputTargets(node.id, graphNodes, graphEdges),
+    outputs: outputTargets(node.id, graphNodes, graphEdges, true),
   };
   const setPorts = (ports: { inputs: Port[]; outputs: Port[] }) =>
     setNode((prev) => (prev ? withPorts(prev, ports) : prev));
@@ -196,7 +197,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       hints={{ inputs: element.portHint('inputs', node), outputs: element.portHint('outputs', node) }}
       wiring={wiring}
       readsFiles={engineRegistry.node(node.node_type)?.readsFileInputs ?? false}
-      inputLists={!stepped}
+      stepped={stepped}
       caught={caught}
     />
   );

@@ -105,16 +105,18 @@ describe.each(['code', 'ai'] as const)('a %s node\'s step 1', (type) => {
   });
 });
 
-describe('step 2', () => {
-  it('has no box of its own for an answer an ai node liked: that is a shape, kept in its words', () => {
-    const html = panel(made('ai'));
-    expect(html).not.toContain('Example answer');
-    expect(html).not.toContain('>Example output</label>');
-  });
-
-  it('asks a code node for the output its example must give, not for an answer', () => {
-    const html = panel(made('code'));
-    expect(html).toContain('>Example output</label>');
-    expect(html).not.toContain('Example answer');
+describe('a code and an ai node', () => {
+  it('are laid out alike: the same sections in the same order, and only the body differs', () => {
+    // Everything but the body's own words, in the order the page draws it.
+    const landmarks = (html: string) => [
+      'aria-label="What comes in"', 'the input ports', 'Example input', 'aria-label="What comes out"', 'the output ports',
+      'What comes out, in words', 'Shape kept from a run', 'aria-label="What should it do?"',
+      '>✨ Generate</button>', 'aria-label="Try it"', '▶ Try it', 'aria-label="Judged by a model"',
+    ].map((mark) => html.indexOf(mark));
+    for (const type of ['code', 'ai'] as const) {
+      const at = landmarks(panel(made(type, { examples: example(`{ "${made(type).inputs[0].id}": "a" }`) })));
+      expect(at.every((index) => index >= 0), `${type}: ${at}`).toBe(true);
+      expect(at, type).toEqual([...at].sort((a, b) => a - b));
+    }
   });
 });

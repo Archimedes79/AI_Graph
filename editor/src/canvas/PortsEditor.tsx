@@ -22,10 +22,13 @@ import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/th
  * is why it is the field that is edited, and why renaming one carries its wires
  * (`graphStore.updateNode`).
  *
- * What a port carries is not written here. An input's is what is wired into it,
- * said on the line under it; an output's is said once, in step 2's words. A box
- * per port said it a second time, and "list" on an input was half of a
- * setting whose other half was folded away: it is step 1's "Run once per item".
+ * What a port carries is not written here for a node built in the four steps
+ * (`stepped`). An input's is what is wired into it, said on the line under it,
+ * and whether its file is read; an output's is said once, in step 2's words.
+ * A type box per port said it a second time, and a "list" box was half of a
+ * setting whose other half was folded away: a list follows step 1's "Run once
+ * per item", on both sides. Only a node without the steps -- an output node --
+ * still has a type and a "list" per port.
  */
 
 /** Every type a port can carry, with what each one means for the value on the wire. */
@@ -61,14 +64,14 @@ interface SideProps {
   wiring: Record<string, string>;
   /** Offer "Read the file at this path" on each input: the node is handed the file's text there. */
   readsFiles: boolean;
-  /** Offer "list" on each port: see `PortsEditor.inputLists`. */
-  lists: boolean;
+  /** Offer a type and "list" on each port: see `PortsEditor.stepped`. */
+  perPort: boolean;
   /** Why these ports cannot be saved as they are named, or '' (`portIdProblems`). */
   problem: string;
   onChange: (ports: Port[]) => void;
 }
 
-function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, lists, problem, onChange }: SideProps) {
+function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, perPort, problem, onChange }: SideProps) {
   const set = (at: number, patch: Partial<Port>) => {
     onChange(ports.map((port, i) => (i === at ? { ...port, ...patch } : port)));
   };
@@ -116,29 +119,27 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, li
               )}
               {editable && (
                 <>
-                  <select
-                    className="rounded px-1.5 py-1 text-xs"
-                    style={FIELD}
-                    value={port.data_type}
-                    aria-label={`${kind} type`}
-                    onChange={(e) => set(at, { data_type: e.target.value as DataType })}
-                  >
-                    {TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                  </select>
-                  {/* An output that hands on a list says so: the node it feeds
-                      then runs once per item unless it takes the list whole. An
-                      input says it only where no step 1 asks "Run once per item". */}
-                  {lists && (
-                    <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
-                      title={kind === 'input' ? 'Arrives as a list -- several values, or one per wired node' : 'Hands on a list: the next node runs once per item unless it takes the whole list'}>
-                      <input type="checkbox" checked={port.multi} onChange={(e) => set(at, { multi: e.target.checked })} />
-                      list
-                    </label>
+                  {perPort && (
+                    <>
+                      <select
+                        className="rounded px-1.5 py-1 text-xs"
+                        style={FIELD}
+                        value={port.data_type}
+                        aria-label={`${kind} type`}
+                        onChange={(e) => set(at, { data_type: e.target.value as DataType })}
+                      >
+                        {TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                      </select>
+                      <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
+                        title={kind === 'input' ? 'Arrives as a list -- several values, or one per wired node' : 'Hands on a list: the next node runs once per item unless it takes the whole list'}>
+                        <input type="checkbox" checked={port.multi} onChange={(e) => set(at, { multi: e.target.checked })} />
+                        list
+                      </label>
+                    </>
                   )}
                   {/* The run reads it on inputs only (`nothingToDo`): a chat's
                       model must not be asked with the history alone because
-                      nobody typed a message. Offered whatever `lists` says:
-                      the ai and code nodes that need it have a step 1. */}
+                      nobody typed a message. */}
                   {kind === 'input' && (
                     <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
                       title="Needed: when it is wired and nothing arrives on it, this node does not run that round">
@@ -215,10 +216,11 @@ interface PortsEditorProps {
   /** Offer "Read the file at this path" on each input: the node's kind reads its files (`readsFileInputs`). */
   readsFiles?: boolean;
   /**
-   * Offer "list" on each input. Only where no step 1 asks "Run once per item",
-   * which sets it together with what it does nothing without.
+   * The node is built in the four steps (`NodeGuiBuilder.stepped`): no type
+   * and no "list" per port. A list follows step 1's "Run once per item", which
+   * sets it together with what it does nothing without, on both sides.
    */
-  inputLists?: boolean;
+  stepped?: boolean;
   /** Whether the node catches its failures, so that its last "error" output is the one that switch added. */
   caught?: boolean;
 }
@@ -227,7 +229,7 @@ const EDIT_BOTH = { inputs: 'edit', outputs: 'edit' } as const;
 const NO_WIRES = { inputs: {}, outputs: {} };
 
 export default function PortsEditor({
-  inputs, outputs, onChange, side = 'both', editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, readsFiles = false, inputLists = false,
+  inputs, outputs, onChange, side = 'both', editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, readsFiles = false, stepped = false,
   caught = false,
 }: PortsEditorProps) {
   // The Error output belongs to the catch-failures switch, which adds and
@@ -244,14 +246,14 @@ export default function PortsEditor({
       {showInputs && (
         <Side
           title="Takes in" kind="input" ports={inputs} fixed={[]} editing={editing.inputs}
-          hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} lists={inputLists} problem={editing.inputs === 'edit' ? problems.inputs : ''}
+          hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} perPort={!stepped} problem={editing.inputs === 'edit' ? problems.inputs : ''}
           onChange={(next) => onChange({ inputs: next, outputs })}
         />
       )}
       {showOutputs && (
         <Side
           title="Hands out" kind="output" ports={ownOutputs} fixed={fixedOutputs} editing={editing.outputs}
-          hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} lists problem={editing.outputs === 'edit' ? problems.outputs : ''}
+          hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} perPort={!stepped} problem={editing.outputs === 'edit' ? problems.outputs : ''}
           onChange={(next) => onChange({ inputs, outputs: [...next, ...fixedOutputs] })}
         />
       )}
