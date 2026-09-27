@@ -11,6 +11,7 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import { guiWidgetPorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
 import type { TryResult } from './TryItInline';
+import { exampleObject } from './examplePair';
 
 /**
  * Why step 1's example of a block cannot be used as it stands, or ''. Empty is
@@ -18,14 +19,7 @@ import type { TryResult } from './TryItInline';
  * draws that case too.
  */
 export function exampleProblem(text: string | undefined): string {
-  const trimmed = String(text ?? '').trim();
-  if (!trimmed) return '';
-  try {
-    const value = JSON.parse(trimmed);
-    if (value && typeof value === 'object' && !Array.isArray(value)) return '';
-  } catch {
-    // Said below, the same as a value that parses to something else.
-  }
+  if (!String(text ?? '').trim() || exampleObject(text)) return '';
   return 'The example is not an object keyed by what arrives yet, like {"value": …}. It is kept as typed, but nothing can be tried on it.';
 }
 

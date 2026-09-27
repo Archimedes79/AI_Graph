@@ -55,10 +55,16 @@ function cut(text: string): { before: string; first: string; after: string; othe
   return { before: normal.slice(0, start), first, after, others: after ? after.split(EXAMPLE_SECTION).length - 1 : 0 };
 }
 
-/** An object keyed by port, or undefined: what `parseExamples` accepts as a block. */
-function asObject(text: string): Record<string, unknown> | undefined {
+/**
+ * An example as values: an object keyed by port, or undefined while *text* is
+ * empty or is not one -- what `parseExamples` accepts as a block. The one
+ * reading of an example's text, for a node's pair and a block's step 1 alike.
+ */
+export function exampleObject(text: string | undefined): Record<string, unknown> | undefined {
+  const trimmed = String(text ?? '').trim();
+  if (!trimmed) return undefined;
   try {
-    const value = JSON.parse(text);
+    const value = JSON.parse(trimmed);
     return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
   } catch {
     return undefined;
@@ -74,9 +80,9 @@ export function readPair(text: string | undefined): ExamplePair {
   const judge = blocks.find((block) => block.role === 'judge');
   const pair: ExamplePair = {
     inputText: input?.body.trimEnd() ?? '',
-    input: input ? asObject(input.body) : undefined,
+    input: input ? exampleObject(input.body) : undefined,
     expectText: expect?.body.trimEnd() ?? '',
-    expect: expect ? asObject(expect.body) : undefined,
+    expect: expect ? exampleObject(expect.body) : undefined,
     judge: judge?.body.trim() || undefined,
     title: first ? first.replace(EXAMPLE_SECTION, '').split('\n', 1)[0].trim() : '',
     others,

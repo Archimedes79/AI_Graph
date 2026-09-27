@@ -7,6 +7,7 @@ import { guiWidgetPorts } from '@/document/guiWidgets';
 import { describeScheme } from '@/ui/scheme';
 import type { GenerationRequest } from './generation';
 import { inputOrigins, inputSources, lastRunWidgetInput } from './generationContext';
+import { exampleObject } from './examplePair';
 
 /** What is wired into the block, in words -- `"Rows" (port "rows")` -- or '' while nothing is. */
 export function blockFeeds(nodeId: string, widget: GuiWidget, nodes: GraphNode[], edges: Wire[]): string {
@@ -42,14 +43,7 @@ export async function blockFromTheGraph(
  * while it is empty, or is not one yet.
  */
 export function blockExample(widget: GuiWidget): Record<string, unknown> | undefined {
-  const text = String(widget.example ?? '').trim();
-  if (!text) return undefined;
-  try {
-    const value = JSON.parse(text);
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-  } catch {
-    return undefined;
-  }
+  return exampleObject(widget.example);
 }
 
 /**

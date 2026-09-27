@@ -2,20 +2,10 @@ import React, { useState } from 'react';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 import { errorText } from '@/api/errorText';
 import CodeField from './CodeField';
-import { asExampleText } from './examplePair';
+import { asExampleText, exampleObject } from './examplePair';
 import { contentValue, readFileAsRun, storedPath } from './readAsRun';
 import { useTyped } from './useTyped';
 import { DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
-
-/** The example as values, or {} while it is empty or does not parse: a file picked into it is added to what is there. */
-function valuesOf(text: string): Record<string, unknown> {
-  try {
-    const value = JSON.parse(text);
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  } catch {
-    return {};
-  }
-}
 
 /**
  * What a picked file puts on *port*: its path where a path is what arrives
@@ -30,7 +20,8 @@ export async function pickedValue(path: string, port: string, pathPorts: string[
 
 /** The example text with *port* set to *value*. */
 export function withPortValue(text: string, port: string, value: unknown): string {
-  return asExampleText({ ...valuesOf(text), [port]: value });
+  // A file picked into an example that is empty or does not parse yet starts it afresh.
+  return asExampleText({ ...exampleObject(text), [port]: value });
 }
 
 interface Props {
