@@ -192,11 +192,15 @@ export function lastRunContext(nodeId: string, result: ExecutionResult | null, a
  * A port fed by several nodes (fan-in) names them all: that a value is a list
  * *because two nodes write into it* is exactly the case generated code gets
  * wrong when it assumes a scalar.
+ *
+ * *withEmits*, for ✨: each source followed by what that node says it hands
+ * on, so the model is told the wire and the declaration behind it in one line.
  */
 export function inputSources(
   nodeId: string,
   nodes: GraphNode[],
   edges: Wire[],
+  withEmits = false,
 ): Record<string, string> {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byPort: Record<string, string[]> = {};
@@ -204,8 +208,14 @@ export function inputSources(
     if (edge.target !== nodeId) continue;
     const source = byId.get(edge.source);
     if (!source) continue;
-    const port = source.outputs.find((p) => p.id === edge.sourceHandle)?.name;
-    (byPort[edge.targetHandle ?? 'input'] ??= []).push(port ? `"${source.label}" (port "${port}")` : `"${source.label}"`);
+    const port = source.outputs.find((p) => p.id === edge.sourceHandle);
+    let said = port ? `"${source.label}" (port "${port.name}")` : `"${source.label}"`;
+    // The port's own words first, then what the node declares of its output.
+    const emits = withEmits
+      ? [...new Set([port?.description?.trim(), describeNodeOutput(source)].filter(Boolean))].join('; ')
+      : '';
+    if (emits) said += `, which hands on: ${emits}`;
+    (byPort[edge.targetHandle ?? 'input'] ??= []).push(said);
   }
   return Object.fromEntries(
     Object.entries(byPort).map(([port, origins]) => [port, [...new Set(origins)].join(' + ')]),
@@ -239,32 +249,5 @@ export function outputTargets(
   }
   return Object.fromEntries(
     Object.entries(byPort).map(([port, targets]) => [port, [...new Set(targets)].join(' + ')]),
-  );
-}
-
-/**
- * `inputSources`, each followed by what that node says it hands on: for ✨,
- * which is told the wire and the declaration behind it in one line.
- */
-export function inputOrigins(
-  nodeId: string,
-  nodes: GraphNode[],
-  edges: Wire[],
-): Record<string, string> {
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  const byPort: Record<string, string[]> = {};
-  for (const edge of edges) {
-    if (edge.target !== nodeId) continue;
-    const source = byId.get(edge.source);
-    if (!source) continue;
-    const port = source.outputs.find((p) => p.id === edge.sourceHandle);
-    let said = port ? `"${source.label}" (port "${port.name}")` : `"${source.label}"`;
-    // The port's own words first, then what the node declares of its output.
-    const emits = [...new Set([port?.description?.trim(), describeNodeOutput(source)].filter(Boolean))].join('; ');
-    if (emits) said += `, which hands on: ${emits}`;
-    (byPort[edge.targetHandle ?? 'input'] ??= []).push(said);
-  }
-  return Object.fromEntries(
-    Object.entries(byPort).map(([port, origins]) => [port, [...new Set(origins)].join(' + ')]),
   );
 }

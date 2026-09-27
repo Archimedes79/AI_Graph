@@ -1,7 +1,7 @@
 import type { Edge } from 'reactflow';
 import type { ExecutionResult, GraphNode } from '@/graph';
 import type { GenerationRequest } from './generation';
-import { inputOrigins, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
+import { inputSources, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
 import { outputExampleText } from './outputFormat';
 import { readPair } from './examplePair';
 import { NODE_BUILDERS } from '@/elements/registry';
@@ -91,7 +91,7 @@ export function nodeFacts(
     },
     sampleInputs: sample?.values,
     sampleOrigin: example ? 'the example in step 1' : sample?.origin,
-    inputSources: inputOrigins(node.id, nodes, edges),
+    inputSources: inputSources(node.id, nodes, edges, true),
     readFilePorts: [...new Set([...readFilePorts(node, nodes, edges), ...(sample?.read ?? [])])],
     // What a body is handed on each port: one item of a list input, unless the
     // node takes lists whole.

@@ -6,7 +6,7 @@ import { call } from '@/api/client';
 import { guiWidgetPorts } from '@/document/guiWidgets';
 import { describeScheme } from '@/ui/scheme';
 import type { GenerationRequest } from './generation';
-import { inputOrigins, inputSources, lastRunWidgetInput } from './generationContext';
+import { inputSources, lastRunWidgetInput } from './generationContext';
 import { exampleObject } from './examplePair';
 
 /** What is wired into the block, in words -- `"Rows" (port "rows")` -- or '' while nothing is. */
@@ -79,7 +79,7 @@ export function blockFacts(
   const sample = example ? { values: example, origin: 'the example in step 1' }
     : observed ? { values: observed, origin: 'the last run' } : undefined;
   const port = guiWidgetPorts(widget).inputs[0]?.id;
-  const feeds = port ? inputOrigins(nodeId, nodes, edges)[port] : undefined;
+  const feeds = port ? inputSources(nodeId, nodes, edges, true)[port] : undefined;
   return {
     graphContext: [
       feeds ? `What arrives at this block -- its "value" -- comes from ${feeds}.` : '',

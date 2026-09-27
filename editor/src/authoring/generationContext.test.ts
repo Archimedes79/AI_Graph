@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { connectedFormatContext, lastRunContext, describeNodeOutput, outputTargets, pathPorts, readFilePorts } from './generationContext';
+import { connectedFormatContext, lastRunContext, describeNodeOutput, inputSources, outputTargets, pathPorts, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
 import { nodeFacts } from './nodeFacts';
 import { NODE_BUILDERS } from '@/elements/registry';
@@ -201,6 +201,17 @@ describe('what a node is wired to, as the dialog and ✨ say it', () => {
       { source: 'worker', target: 'shown', sourceHandle: 'output', targetHandle: 'value' },
     ]);
     expect(targets).toEqual({ output: '"Report" (port "Value")' });
+  });
+
+  it('names what feeds each input -- plainly for the dialog, with what it hands on for ✨', () => {
+    const ai = NODE_KINDS.ai.create('writer');
+    ai.label = 'Writer';
+    ai.config.output_format_prompt = 'one short paragraph';
+    const code = NODE_KINDS.code.create('worker');
+    const wires = [{ source: 'writer', target: 'worker', sourceHandle: 'output', targetHandle: 'input' }];
+    expect(inputSources('worker', [ai, code], wires)).toEqual({ input: '"Writer" (port "Output")' });
+    expect(inputSources('worker', [ai, code], wires, true).input)
+      .toMatch(/^"Writer" \(port "Output"\), which hands on: .*one short paragraph/);
   });
 
   it('tells a node feeding a chart block what the chart wants -- the block says it', () => {
