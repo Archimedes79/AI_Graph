@@ -153,7 +153,9 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       description: '',
       position: { x: 0, y: 0 },
       inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-      outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: 'One result per input item' }],
+      // No description on the output: "one result per item" was true only while
+      // step 1 said "Run once per item", and ✨ is told that by the brief itself.
+      outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
       config: { ...baseNodeConfig(), ...PER_ITEM, code: CODE_STARTER },
     }),
   },
