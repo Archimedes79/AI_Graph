@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { BOX_TEXT } from '@/document/layout';
 import { WidgetGuiBuilder } from '../../WidgetGuiBuilder';
 
 export class TextIoWidgetGuiBuilder extends WidgetGuiBuilder {
@@ -22,6 +23,11 @@ export class TextIoWidgetGuiBuilder extends WidgetGuiBuilder {
 
   override readonly runOnChangeHint =
     'Enter sends what was typed (Shift+Enter is a new line), and the box is emptied once it has been delivered.';
+
+  /** What arrives is shown as text in a box, which wraps at its width and scrolls when there is more. */
+  override textShown(): string {
+    return `${BOX_TEXT.fontSize} px text that wraps and scrolls`;
+  }
 
   /** A box you type into looks like one; a box that only shows text does not. */
   protected override defaultTone(mode: string) {

@@ -85,6 +85,30 @@ export function resolveWidgetLayout(widgets: GuiWidget[]): WidgetPlacement[] {
 }
 
 /**
+ * A block's size on a page at its full width, in pixels -- its cells and the
+ * gaps between them -- and the cells it spans. The page never needs the sum,
+ * since the browser's grid does it; a node wired into the block does, to write
+ * what it sends for the room there is (`GuiNodeGuiBuilder.wantsOn`). On a
+ * narrower page every cell shrinks alike (`cellSize`), so this is the most the
+ * block gets.
+ */
+export function blockSize(widget: GuiWidget): { w: number; h: number; width: number; height: number } {
+  const [{ w, h }] = resolveWidgetLayout([widget]);
+  const pixels = (cells: number) => cells * GUI_MAX_CELL + (cells - 1) * GUI_GAP;
+  return { w, h, width: pixels(w), height: pixels(h) };
+}
+
+/**
+ * The text in a box on the page -- what a text box shows and is typed into:
+ * 14 px on 20 px lines, as Tailwind's `text-sm`, which the other boxes (a
+ * dropdown, the field under a chat) still ask for by that name. Held here
+ * because a node that writes into a box is told how large its text is
+ * (`WidgetGuiBuilder.textShown`), and a size said in one place while drawn
+ * from another drifts apart unnoticed.
+ */
+export const BOX_TEXT = { fontSize: 14, lineHeight: '20px' } as const;
+
+/**
  * The side of one square cell for a container of *containerWidth* pixels.
  *
  * Below the capped width the cells shrink with the container, so the same page

@@ -34,4 +34,11 @@ describe('a table on the page', () => {
     expect(shown('just a sentence')).toContain('just a sentence');
     expect(shown(undefined)).toContain('No data yet');
   });
+
+  it('offers to save its rows, and nothing while there are none', () => {
+    const save = 'Save this table as a CSV file';
+    expect(shown([{ city: 'Oslo', people: 700000 }])).toContain(save);
+    expect(shown(undefined)).not.toContain(save);
+    expect(shown('just a sentence')).not.toContain(save);
+  });
 });

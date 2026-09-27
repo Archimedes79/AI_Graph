@@ -9,6 +9,14 @@ import { DIM, DIMMER, HOVER, LINE, MUTED, RAISE, TEXT } from '@/ui/theme';
  */
 const MARGIN = { left: 46, right: 14, top: 16, bottom: 30 };
 
+/**
+ * The chart's text, in pixels: every label -- an axis, a category, a value, a
+ * legend -- and the title, or what stands in the title's place while there is
+ * nothing to plot. Named because the node feeding the chart is told them
+ * (`PlotWindowWidgetGuiBuilder.textShown`), so a label it writes can fit.
+ */
+export const CHART_TEXT = { label: 11, title: 13 } as const;
+
 interface PlotWidgetProps {
   data: unknown;
   width?: number;
@@ -193,6 +201,15 @@ export function asDrawing(data: unknown): string | null {
 }
 
 /**
+ * Whether *data* is drawn as a picture -- finished SVG, or a figure with points
+ * -- rather than said: a chart still waiting, a figure's title alone, or what
+ * arrived and is no figure. What there is to save of a chart.
+ */
+export function drawsSomething(data: unknown): boolean {
+  return asDrawing(data) !== null || Boolean(toFigure(data)?.points.length);
+}
+
+/**
  * A chart, dependency-free, drawn from a figure at the size the block is.
  *
  * It draws its own axes: a value scale and the category names. Without them
@@ -269,7 +286,7 @@ export default function PlotChart({ data, width = 220, height = 90 }: PlotWidget
       style={{ background: RAISE, borderRadius: 4 }}
     >
       {titleH > 0 && (
-        <text x={margin.left} y={margin.top + 8} fontSize={13} fontWeight={600} fill={TEXT}>
+        <text x={margin.left} y={margin.top + 8} fontSize={CHART_TEXT.title} fontWeight={600} fill={TEXT}>
           {fit(plotted!.title, frame.width - margin.left - margin.right)}
         </text>
       )}
@@ -291,7 +308,7 @@ function Empty({ frame, margin, top, text }: Common & { text: string }) {
   return (
     <text
       x={frame.width / 2} y={top + (frame.height - top - margin.bottom) / 2}
-      textAnchor="middle" fontSize={13} fill={DIMMER}
+      textAnchor="middle" fontSize={CHART_TEXT.title} fill={DIMMER}
     >
       {fit(text, frame.width - 16)}
     </text>
@@ -319,7 +336,7 @@ function ValueAxis({ frame, margin, top, min, range, vertical }: Common & { vert
             />
             <text
               x={vertical ? margin.left - 5 : x} y={vertical ? y + 3 : top + plotH + 14}
-              textAnchor={vertical ? 'end' : 'middle'} fontSize={11} fill={DIMMER}
+              textAnchor={vertical ? 'end' : 'middle'} fontSize={CHART_TEXT.label} fill={DIMMER}
             >
               {axisLabel(tick)}
             </text>
@@ -355,7 +372,7 @@ function Upright({ figure, ...common }: Common & { figure: Figure }) {
           key={`label-${i}`}
           x={figure.kind === 'line' ? alongX(i) : margin.left + i * slot + slot / 2}
           y={top + plotH + 26}
-          textAnchor="middle" fontSize={11} fill={MUTED}
+          textAnchor="middle" fontSize={CHART_TEXT.label} fill={MUTED}
         >
           {fit(p.label, slot)}
         </text>
@@ -427,7 +444,7 @@ function Bars({ figure, ...common }: Common & { figure: Figure }) {
             {margin.labelled && slot > 12 && (
               <text
                 x={left - 8} y={y + bar / 2 + 4}
-                textAnchor="end" fontSize={11} fill={MUTED}
+                textAnchor="end" fontSize={CHART_TEXT.label} fill={MUTED}
               >
                 {fit(p.label, left - 10)}
               </text>
@@ -441,7 +458,7 @@ function Bars({ figure, ...common }: Common & { figure: Figure }) {
             {margin.labelled && slot > 12 && (
               <text
                 x={left + w + 6} y={y + bar / 2 + 4}
-                fontSize={11} fill={DIM}
+                fontSize={CHART_TEXT.label} fill={DIM}
               >
                 {axisLabel(p.value)}
               </text>
@@ -503,7 +520,7 @@ function Donut({ figure, ...common }: Common & { figure: Figure }) {
           <text x={cx} y={cy - 1} textAnchor="middle" fontSize={Math.min(20, radius / 2.4)} fontWeight={600} fill={TEXT}>
             {axisLabel(total)}
           </text>
-          <text x={cx} y={cy + 15} textAnchor="middle" fontSize={11} fill={DIMMER}>in total</text>
+          <text x={cx} y={cy + 15} textAnchor="middle" fontSize={CHART_TEXT.label} fill={DIMMER}>in total</text>
         </>
       )}
       {withLegend && points.slice(0, 8).map((p, i) => {
@@ -512,10 +529,10 @@ function Donut({ figure, ...common }: Common & { figure: Figure }) {
         return (
           <g key={i}>
             <rect x={x} y={y - 9} width={11} height={11} rx={3} style={{ fill: colour(i) }} />
-            <text x={x + 18} y={y} fontSize={11} fill={MUTED}>
+            <text x={x + 18} y={y} fontSize={CHART_TEXT.label} fill={MUTED}>
               {fit(p.label, frame.width - x - 90)}
             </text>
-            <text x={frame.width - margin.right} y={y} textAnchor="end" fontSize={11} fill={DIM}>
+            <text x={frame.width - margin.right} y={y} textAnchor="end" fontSize={CHART_TEXT.label} fill={DIM}>
               {`${axisLabel(p.value)} · ${(100 * p.value / total).toFixed(1)}%`}
             </text>
           </g>

@@ -1,5 +1,6 @@
 import { TableWidgetRunner } from '@engine/elements/widgets/table/TableWidgetRunner.ts';
 import { DisplayWidgetGuiBuilder } from '../DisplayWidgetGuiBuilder';
+import { TABLE_TEXT } from './TableWidgetView';
 
 export class TableWidgetGuiBuilder extends DisplayWidgetGuiBuilder {
   readonly widgetKind = 'table';
@@ -13,4 +14,9 @@ export class TableWidgetGuiBuilder extends DisplayWidgetGuiBuilder {
   }
 
   readonly runner = new TableWidgetRunner();
+
+  /** Its rows, at the size the table draws them. */
+  override textShown(): string {
+    return `${TABLE_TEXT} px rows`;
+  }
 }
