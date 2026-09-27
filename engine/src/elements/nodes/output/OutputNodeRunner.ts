@@ -72,7 +72,36 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
     node.config.value = value;
   }
 
-  async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
+  async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime): Promise<Record<string, unknown>> {
+    const paths = inputs[WRITE_PATH_PORT];
+    if (Array.isArray(paths) && this.config(node).mode !== 'none') return this.writeToEach(node, inputs, paths, runtime);
+    return this.writeOnce(node, inputs, runtime);
+  }
+
+  /**
+   * A list of paths wired in, with "list" ticked on `path`: the first value to
+   * the first path, the second to the second. An output node no longer runs
+   * once per item, and a file per computed name is the one thing that did for
+   * it -- kept for the graphs that were built on it.
+   */
+  private async writeToEach(node: GraphNode, inputs: Record<string, unknown>, paths: unknown[], runtime: Runtime): Promise<Record<string, unknown>> {
+    const lists = new Set(node.inputs.filter((port) => port.multi && port.id !== WRITE_PATH_PORT).map((port) => port.id));
+    const written: unknown[] = [];
+    for (const [index, path] of paths.entries()) {
+      const item: Record<string, unknown> = { [WRITE_PATH_PORT]: path };
+      for (const [key, value] of Object.entries(inputs)) {
+        if (key !== WRITE_PATH_PORT) item[key] = lists.has(key) && Array.isArray(value) ? value[index] ?? null : value;
+      }
+      const result = await this.writeOnce(node, item, runtime);
+      if (result.written_path !== undefined) written.push(result.written_path);
+      if (Array.isArray(result.written_paths)) written.push(...result.written_paths);
+    }
+    const values: Record<string, unknown> = { ...inputs };
+    delete values[WRITE_PATH_PORT];
+    return { ...values, written_paths: written };
+  }
+
+  private async writeOnce(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime): Promise<Record<string, unknown>> {
     const settings = this.config(node);
     // A wired `path` sets the target at run time and always wins over the
     // configured one; it is a control input, not a value to report back.

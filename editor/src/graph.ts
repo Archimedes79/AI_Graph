@@ -58,8 +58,10 @@ export interface GraphNode extends Omit<EngineNode, 'config'> {
 export type NodeConfig = {
   ai_model: string;
   ai_provider: AIProvider;
-  batch_concurrency: number;
-  batch_mode: 'per_item' | 'whole_list';
+  /** code and ai only (`NodeRunner.fansOut`): how many items of a fan-out run at once, 0 for the run's default. */
+  batch_concurrency?: number;
+  /** code and ai only: run once per item. Another kind's file may still carry it from an older editor; nothing reads it there. */
+  batch_mode?: 'per_item' | 'whole_list';
   catch_errors?: boolean;
   code: string;
   code_prompt: string;

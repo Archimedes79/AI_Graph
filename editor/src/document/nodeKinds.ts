@@ -23,20 +23,19 @@ import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNode
 import { TriggerNodeRunner } from '@engine/elements/nodes/trigger/TriggerNodeRunner.ts';
 import { baseNodeConfig } from './baseNodeConfig';
 
-/** Kept even at its starting value: the executor reads it whether or not anyone set it. */
-const ALWAYS_SAVED = ['batch_mode'];
-
 /**
- * What a key a file leaves out means to the engine, for every node, where that
- * is not what a new node starts with.
+ * What a code or ai node without `batch_mode` means (`NodeRunner.batchMode`).
  *
- * A node made here starts per item, and says so in the file (`ALWAYS_SAVED`).
- * A node without the key -- written by hand, by the MCP server, by a model --
- * runs once on the whole list (`NodeRunner.batchMode`), and filling it from
- * `create` turned that into per item on the first Save, without anyone touching
- * the setting: the command line and the editor ran the same file two ways.
+ * A node made here starts per item, and says so in the file (it is one of its
+ * settings). A node without the key -- written by hand, by the MCP server, by a
+ * model -- runs once on the whole list, and filling it from `create` turned
+ * that into per item on the first Save, without anyone touching the setting:
+ * the command line and the editor ran the same file two ways.
  */
-const WHEN_MISSING: Partial<NodeConfig> = { batch_mode: 'whole_list' };
+const WHOLE_WHEN_MISSING: Partial<NodeConfig> = { batch_mode: 'whole_list' };
+
+/** How a code or ai node made here starts: once per item, as many at once as the run allows. */
+const PER_ITEM: Partial<NodeConfig> = { batch_mode: 'per_item', batch_concurrency: 0 };
 
 const SUBGRAPH = new SubgraphNodeRunner();
 const TRIGGER = new TriggerNodeRunner();
@@ -99,11 +98,11 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
     settings: [
       'ai_provider', 'ai_model', 'system_prompt', 'temperature', 'prompt_template',
       'output_format', 'output_format_prompt', 'output_example', 'mcp_servers', 'send_images',
-      'read_file_inputs', 'batch_concurrency', 'catch_errors', 'examples', 'run_code',
+      'read_file_inputs', 'batch_mode', 'batch_concurrency', 'catch_errors', 'examples', 'run_code',
     ],
     // A new node starts with a system prompt to show where one goes; a file
     // without one sends none, and a Save must not start sending ours.
-    whenMissing: { system_prompt: '' },
+    whenMissing: { ...WHOLE_WHEN_MISSING, system_prompt: '' },
     create: (id) => ({
       id,
       node_type: 'ai',
@@ -122,19 +121,19 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
         { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'any', multi: true, required: false, description: 'What to ask. A list asks once per item.' },
       ],
       outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: true, required: false, description: 'The answer. One per item when the prompt was a list.' }],
-      config: { ...baseNodeConfig(), system_prompt: 'You are a helpful assistant.' },
+      config: { ...baseNodeConfig(), ...PER_ITEM, system_prompt: 'You are a helpful assistant.' },
     }),
   },
 
   code: {
     settings: [
       'code', 'code_prompt', 'output_schema', 'examples', 'output_format', 'output_format_prompt',
-      'read_file_inputs', 'batch_concurrency', 'catch_errors',
+      'read_file_inputs', 'batch_mode', 'batch_concurrency', 'catch_errors',
     ],
     // The starter body is for a node made here. A file without code is a node
     // with no code -- which `check` says -- not one that quietly hands its
     // input on after a Save.
-    whenMissing: { code: '' },
+    whenMissing: { ...WHOLE_WHEN_MISSING, code: '' },
     create: (id) => ({
       id,
       node_type: 'code',
@@ -143,7 +142,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       position: { x: 0, y: 0 },
       inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
       outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: 'One result per input item' }],
-      config: { ...baseNodeConfig(), code: CODE_STARTER },
+      config: { ...baseNodeConfig(), ...PER_ITEM, code: CODE_STARTER },
     }),
   },
 
@@ -238,7 +237,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
  * to mean -- before `create`'s starting values, which are for a new node.
  */
 export function whenMissing(nodeType: NodeType): Partial<NodeConfig> {
-  return { ...WHEN_MISSING, ...(NODE_KINDS[nodeType].whenMissing ?? {}) };
+  return NODE_KINDS[nodeType].whenMissing ?? {};
 }
 
 /**
@@ -248,7 +247,7 @@ export function whenMissing(nodeType: NodeType): Partial<NodeConfig> {
  */
 export function savedNode(node: GraphNode): GraphNode {
   const untouched: Record<string, unknown> = baseNodeConfig();
-  const own = new Set<string>([...ALWAYS_SAVED, ...NODE_KINDS[node.node_type].settings]);
+  const own = new Set<string>(NODE_KINDS[node.node_type].settings);
   const config = Object.fromEntries(Object.entries(node.config)
     .filter(([key, value]) => own.has(key) || JSON.stringify(value) !== JSON.stringify(untouched[key])));
   return { ...node, config: config as NodeConfig };

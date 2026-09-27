@@ -224,6 +224,22 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     expect(saved.find((node) => node.id === output)!.config).toMatchObject({ output_label: 'Result', write_mode: 'window' });
   });
 
+  it('writes "once per item" only on the kinds that can run so', () => {
+    // It used to be saved on every node, and an output node writing to a file
+    // then wrote each item of a list over the last.
+    loadTestGraph([]);
+    const ids = (['ai', 'code', 'output', 'data', 'gui', 'input', 'subgraph', 'trigger'] as const)
+      .map((type) => [type, useGraphStore.getState().addNode(type, { x: 0, y: 0 })] as const);
+    const saved = useGraphStore.getState().exportGraph().nodes;
+    const perItem = ids.filter(([, id]) => 'batch_mode' in saved.find((node) => node.id === id)!.config).map(([type]) => type);
+    expect(perItem).toEqual(['ai', 'code']);
+  });
+
+  it('keeps an older file\'s batch_mode on another kind as it was, unread', () => {
+    loadTestGraph([graphNode({ id: 'shown', node_type: 'output', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
+    expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');
+  });
+
   it('keeps what the file did say', () => {
     loadTestGraph([graphNode({ id: 'each', node_type: 'code', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
     expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');

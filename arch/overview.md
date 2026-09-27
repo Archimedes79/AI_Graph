@@ -174,6 +174,7 @@ classDiagram
     display()
     eventPorts()
     settleMemory()
+    fansOut
     batchMode()
     readsFileInputs()
     blocks()

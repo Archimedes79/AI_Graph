@@ -92,6 +92,9 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
     return logicFrom(node, 'prompt', PROMPT_FIELDS);
   }
 
+  /** Its body is written for one item, so a list can be handed to it an item at a time. */
+  override readonly fansOut = true;
+
   /** What is wired in is the question: with all of it empty there is nothing to ask. */
   override needsInput(): boolean {
     return true;

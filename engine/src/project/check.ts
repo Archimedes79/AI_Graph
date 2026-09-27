@@ -79,19 +79,15 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
 
     // The same trap, one setting over: "once per item" fans out over the inputs
     // declared as lists. With none, the node runs once, on the whole list, and
-    // nothing says it was asked to do otherwise.
-    // Only where a list really arrives: the editor creates every node "once per
-    // item" (a graph file that leaves batch_mode out means the whole list), and
-    // on a node no list reaches it means nothing.
+    // nothing says it was asked to do otherwise. Only where a list really
+    // arrives: on a node no list reaches, "once per item" means nothing.
     const listArrives = graph.edges.some((edge) => {
       if (edge.target_node_id !== node.id) return false;
       const source = graph.nodes.find((candidate) => candidate.id === edge.source_node_id);
       const ports = source && (registry.node(source.node_type)?.derivedPorts(source, registry)?.outputs ?? source.outputs);
       return ports?.find((port) => port.id === edge.source_port_id)?.multi === true;
     });
-    // And only on a node whose ports are its own to declare: a page's follow from its blocks.
-    const ownPorts = element.derivedPorts(node, registry) === null;
-    if (ownPorts && listArrives && element.batchMode(node) === 'per_item' && !node.inputs.some((port) => port.multi)) {
+    if (listArrives && element.batchMode(node) === 'per_item' && !node.inputs.some((port) => port.multi)) {
       problems.push({
         where,
         problem: 'It is set to run once per item, but none of its inputs is declared as a list -- so it runs once, on everything at once.',

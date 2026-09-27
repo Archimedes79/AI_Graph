@@ -37,9 +37,8 @@ export function baseNodeConfig(): NodeConfig {
     output_format_prompt: '',
     output_label: 'Result',
     write_mode: 'none',
-    batch_mode: 'per_item',
-    // 0 = follow the run's default concurrency; see NodeConfig.batch_concurrency.
-    batch_concurrency: 0,
+    // No batch_mode nor batch_concurrency: only code and ai run once per item
+    // (`NodeRunner.fansOut`), and they start with both (`nodeKinds.ts`).
     read_file_inputs: false,
     send_images: false,
     gui_widgets: [],

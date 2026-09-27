@@ -189,16 +189,26 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   }
 
   /**
+   * This kind can be set to run once per item (`config.batch_mode`): its body
+   * is written by a person or ✨ for one item, and "Run once per item" is its
+   * setting. Every other kind takes what arrives whole, whatever an older file
+   * says -- the editor used to write `per_item` on every node, and an output
+   * node that fanned out wrote each item over the same file.
+   */
+  readonly fansOut: boolean = false;
+
+  /**
    * Whether this node runs once for the whole list or once per item.
    *
    * A declaration, not an implementation: the fan-out itself belongs to the
    * executor, so "run this once per element" works the same for a code node and
    * an AI node and would work for a third kind without either being told. Both
    * used to carry their own copy of the loop, and the copies had begun to
-   * differ in what an empty list meant.
+   * differ in what an empty list meant. A file that leaves the key out means
+   * the whole list.
    */
   batchMode(node: GraphNode): 'whole' | 'per_item' {
-    return node.config.batch_mode === 'per_item' ? 'per_item' : 'whole';
+    return this.fansOut && node.config.batch_mode === 'per_item' ? 'per_item' : 'whole';
   }
 
   /** How many items of a fan-out may be in flight at once. */
