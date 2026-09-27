@@ -12,7 +12,7 @@ import { MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
  * App.tsx).
  *
  * *before* runs once the click is taken and before the save, for a dialog
- * whose draft must reach the store first; what is saved is read after it.
+ * whose last changes must reach the store first; what is saved is read after it.
  * Whether the node has a body to open is the caller's to ask.
  */
 export default function OpenInMyEditor({ nodeId, before }: {

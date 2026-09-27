@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import type { Graph } from '@/graph';
 import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { unmet } from '@engine/execution/examples.ts';
@@ -18,7 +18,7 @@ import { exampleFor, keptExpect, listPorts, runsPerItem, tryInputs, tryKey, with
 import { DANGER_TEXT, DIMMER, FIELD, MUTED } from '@/ui/theme';
 
 type Props = Pick<NodePanelProps,
-  'builder' | 'node' | 'setConfig' | 'updateNode' | 'setInvalid' | 'fields' | 'generating' | 'message' | 'onGenerate' | 'steps'
+  'builder' | 'node' | 'setConfig' | 'updateNode' | 'fields' | 'generating' | 'message' | 'onGenerate' | 'steps'
 > & {
   /** Step 4 in this element's words, and what it lays out under its body: an ai node's message. */
   body: { title: string; hint: string; beside?: React.ReactNode };
@@ -73,7 +73,7 @@ const noExpectation = (examples: string): string => {
  * wherever a sample is asked for.
  */
 export default function NodeSteps({
-  builder, node, setConfig, updateNode, setInvalid, fields, generating, message, onGenerate, steps,
+  builder, node, setConfig, updateNode, fields, generating, message, onGenerate, steps,
   body, subject, request, renderResult, wordsHint, keep: keepOwn,
 }: Props) {
   const generation = builder.generation;
@@ -82,10 +82,9 @@ export default function NodeSteps({
 
   const examples = String(node.config.examples ?? '');
   const pair = readPair(examples);
-  const inputError = pair.inputText.trim() && !pair.input
-    ? 'The example input is not an object keyed by input port yet, like {"input": "…"}. It cannot be saved like this.'
-    : '';
-  useEffect(() => setInvalid('example input', inputError), [inputError, setInvalid]);
+  // What the dialog stores is always an object; an examples.md written by
+  // hand may hold something else, which is said rather than run.
+  const broken = !!pair.inputText.trim() && !pair.input;
   /**
    * The examples changed from what the node holds when the change lands, not
    * from this render's copy: a fill that waits on a run upstream or a file
@@ -135,7 +134,6 @@ export default function NodeSteps({
           editExamples((current) => withInput(current, text));
           return readPair(withInput(examples, text)).inputText;
         }}
-        error={inputError}
         ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
         reads={readFilePorts(node)}
         fromGraph={steps.fromGraph}
@@ -218,8 +216,8 @@ export default function NodeSteps({
       />
       {body.beside}
       <TryItInline
-        canRun={!!tried && !inputError}
-        whyNot={inputError ? 'The example in step 1 is not an object yet.' : 'Fill step 1\'s example first: ⟳ from the graph, or 📂 from a file.'}
+        canRun={!!tried}
+        whyNot={broken ? 'The example in step 1 is not an object keyed by input port.' : 'Fill step 1\'s example first: ⟳ from the graph, or 📂 from a file.'}
         busy={trying.busy}
         onTry={() => void trying.start()}
         tried={trying.tried}

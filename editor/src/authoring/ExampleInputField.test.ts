@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import ExampleInputField, { withPortValue } from './ExampleInputField';
+import ExampleInputField, { exampleProblem, withPortValue } from './ExampleInputField';
 import { relativeTo } from './readAsRun';
 
 describe('step 1\'s example input', () => {
@@ -20,6 +20,15 @@ describe('step 1\'s example input', () => {
     expect(JSON.parse(withPortValue('{"top": 5}', 'csv', 'data/people.csv'))).toEqual({ top: 5, csv: 'data/people.csv' });
     // What does not parse yet is not kept around a picked file.
     expect(JSON.parse(withPortValue('{"top": ', 'csv', 'a'))).toEqual({ csv: 'a' });
+  });
+
+  it('is stored only as an object keyed by port, or as nothing: half-typed JSON waits in the box', () => {
+    // With no Save to wait for, what is typed is stored as it is typed -- so
+    // what does not parse yet must not be, or the example that did is lost.
+    expect(exampleProblem('{"input": ')).toMatch(/Not an object keyed by input port yet/);
+    expect(exampleProblem('["a"]')).toMatch(/Not an object/);
+    expect(exampleProblem('{"input": "a"}')).toBe('');
+    expect(exampleProblem('  ')).toBe('');
   });
 });
 

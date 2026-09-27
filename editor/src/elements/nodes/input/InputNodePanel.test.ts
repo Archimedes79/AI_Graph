@@ -12,7 +12,7 @@ function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(InputNodePanel, {
     builder, node, setConfig: () => {}, updateNode: () => {},
     fields: nodeFields(node, () => {}, () => {}), generating: false,
-    onGenerate: () => {}, setInvalid: () => {}, steps: { graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }) },
+    onGenerate: () => {}, steps: { graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }) },
   }));
 }
 

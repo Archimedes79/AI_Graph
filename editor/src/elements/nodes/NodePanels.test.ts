@@ -43,7 +43,7 @@ const steps = (node: GraphNode): NonNullable<NodePanelProps['steps']> => ({
 function panel(node: GraphNode): string {
   const builder = NODE_BUILDERS[node.node_type];
   const html = renderToStaticMarkup(createElement(PANELS[node.node_type]!, {
-    builder, node, setConfig: () => {}, updateNode: () => {}, setInvalid: () => {},
+    builder, node, setConfig: () => {}, updateNode: () => {},
     fields: nodeFields(node, () => {}, () => {}), generating: false, onGenerate: () => {},
     steps: steps(node),
   }));

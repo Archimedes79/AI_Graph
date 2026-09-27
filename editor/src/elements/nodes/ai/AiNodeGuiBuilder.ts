@@ -25,7 +25,7 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly AdvancedPanel = lazy(() => import('./AiNodeAdvancedPanel'));
 
-  override readonly advancedSummary = 'model, tools, files, failures';
+  override readonly advancedSummary = 'model, tools, images, failures';
 
   override readonly generation: ElementGeneration<GraphNode> = {
     ...fromEngine(new AiNodeRunner().generation()),

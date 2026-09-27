@@ -7,22 +7,29 @@ import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { readPair } from '@/authoring/examplePair';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
 
-/** What the node editor hands every node panel. A panel takes the part it needs. */
+/**
+ * What the node editor hands every node panel. A panel takes the part it needs.
+ *
+ * What a panel changes is in the graph a moment later (`canvas/nodeDialog.ts`):
+ * there is no Save to wait for. So what cannot be stored yet -- JSON that does
+ * not parse, a name another port has -- is not handed on at all: the field
+ * keeps it as typed and says why (`useTyped`).
+ */
 export interface NodePanelProps {
   /** This node type's own builder. */
   builder: NodeGuiBuilder;
   node: GraphNode;
   /**
-   * Sets one setting of the draft. *value* may instead be a function of the
-   * setting as the draft holds it when the change lands: what a write made
-   * after a wait -- a run upstream, a file read -- is merged into, so that it
-   * does not put back a copy from before the wait over what was typed meanwhile.
+   * Sets one setting. *value* may instead be a function of the setting as it
+   * is when the change lands: what a write made after a wait -- a run
+   * upstream, a file read -- is merged into, so that it does not put back a
+   * copy from before the wait over what was typed meanwhile.
    */
   setConfig: (key: string, value: unknown) => void;
-  /** Changes the draft as a whole, for a setting that is a port and a key at once ("Run once per item"). */
+  /** Changes the node as a whole, for a setting that is a port and a key at once ("Run once per item"). */
   updateNode: (change: (node: GraphNode) => GraphNode) => void;
   /**
-   * The draft's settings and description by name: what ✨ fills in, and what a
+   * The node's settings and description by name: what ✨ fills in, and what a
    * panel writes the description through. Whether the element authors a body
    * at all is its own `builder.generation`.
    */
@@ -30,13 +37,6 @@ export interface NodePanelProps {
   generating: boolean;
   message?: string;
   onGenerate: () => void;
-  /**
-   * Says that something the panel holds cannot be saved as it stands -- JSON
-   * that does not parse -- under *key*, or that it can again (''). While any
-   * reason stands the dialog will not Save, and closing asks first: a Save
-   * that silently kept the last good value lost the edit without a word.
-   */
-  setInvalid: (key: string, reason: string) => void;
   /**
    * What only the dialog has, for a panel that authors a body in the four
    * steps (`FourSteps`): the "what ✨ sends" button and what it sends, "open
@@ -50,8 +50,8 @@ export interface NodePanelProps {
     sent?: ReactNode;
     openInEditor?: ReactNode;
     /**
-     * The graph on the canvas with this node as the dialog holds it: what Try
-     * it, ▶ Test and the model's request are asked of is the edit.
+     * The graph on the canvas with this node as the dialog shows it: what Try
+     * it and the model's request are asked of is the edit.
      */
     graph: () => Graph;
     /** ⟳ From the graph: what arrives at the node -- on the last run, else from what feeds it, run now. Absent for a node nothing can feed. */
@@ -130,11 +130,11 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   }
 
   /**
-   * *after* -- the draft once a setting re-derived its ports -- with each new
+   * *after* -- the node once a setting re-derived its ports -- with each new
    * port that carries on what a port of *before* carried marked as that one
-   * (`continuing`), so its wires follow it on Save. *before* is the node as
-   * stored, whose ports the wires are on, not the draft a step earlier
-   * (`withSetting`). By default no port continues another: a derived port is
+   * (`continuing`), so its wires follow it when the dialog writes. *before* is
+   * the node as stored, whose ports the wires are on, not the dialog's node a
+   * step earlier (`withSetting`). By default no port continues another: a derived port is
    * the port of its name, or new, and a port that is gone takes its wires
    * with it.
    */
@@ -144,8 +144,8 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
 
   /**
    * What this node emits, in one line, for its neighbours' generation context.
-   * The node's declared output by default -- its words, an example, and the
-   * shape a run kept, which is the best description there is of what the next
+   * The node's declared output by default -- its words, and the shape a run
+   * kept, which is the best description there is of what the next
    * node will be handed. A node whose output is something else says that.
    */
   describeOutput(node: GraphNode): string {
@@ -165,7 +165,7 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
    * The description a saved node publishes (the "description" in its
    * nodes/<id>/node.json). Where the dialog asks what the node should do in a
    * field of its own and draws no description box (`ownsDescription`), that
-   * task *is* the description, written into it on every Save: a second text
+   * task *is* the description, written into it whenever the dialog writes: a second text
    * nobody could see or edit went on being published beside the task, and the
    * two drifted apart. An empty task leaves what was there.
    */

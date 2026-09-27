@@ -27,7 +27,7 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
 
   override readonly AdvancedPanel = lazy(() => import('./CodeNodeAdvancedPanel'));
 
-  override readonly advancedSummary = 'files, failures, how many at once';
+  override readonly advancedSummary = 'failures, how many at once';
 
   override readonly generation: ElementGeneration<GraphNode> = {
     ...fromEngine(new CodeNodeRunner().generation()),

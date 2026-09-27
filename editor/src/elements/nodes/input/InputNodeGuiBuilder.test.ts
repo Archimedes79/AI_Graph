@@ -1,32 +1,27 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { useGraphStore } from '@/store/graphStore';
-import { portRenames, trackPorts, untracked } from '@/store/portRenames';
-import { withSetting } from '@/canvas/nodeDraft';
+import { nodeDialog } from '@/canvas/nodeDialog';
 
 /**
- * Switching an input node's mode in its dialog, and saving: which wire stays.
+ * Switching an input node's mode in its dialog: which wire stays.
  *
- * Done as the dialog does it (`NodeEditor`): each choice goes through
- * `withSetting`, which re-derives the draft's ports and asks the element which
- * new port carries on an old one, and Save moves the wires by what
+ * Done as the dialog does it (`nodeDialog`): each choice goes through
+ * `withSetting`, which re-derives the node's ports and asks the element which
+ * new port carries on an old one, and the write moves the wires by what
  * `portRenames` makes of that.
  */
 const store = () => useGraphStore.getState();
-const stored = (id: string) => store().rfNodes.find((n) => n.id === id)!.data.graphNode as GraphNode;
 /** Every wire out of *source*, as "port -> target". */
 const outOf = (source: string) => store().rfEdges
   .filter((edge) => edge.source === source)
   .map((edge) => `${edge.sourceHandle} -> ${edge.target}`);
 
-/** The dialog opened on *id*, its mode chosen once for each of *modes* in turn, and saved. */
+/** The dialog opened on *id*, its mode chosen once for each of *modes* in turn -- quicker than a write -- and written. */
 function switchMode(id: string, ...modes: ('text' | 'file' | 'directory')[]) {
-  const draft = modes.reduce(
-    (node, mode) => withSetting(node, stored(id), 'input_mode', mode),
-    trackPorts(JSON.parse(JSON.stringify(stored(id)))) as GraphNode,
-  );
-  store().updateNode(id, untracked(draft), portRenames(stored(id), draft));
+  const dialog = nodeDialog(id);
+  for (const mode of modes) dialog.setConfig('input_mode', mode);
+  dialog.write();
 }
 
 beforeEach(() => {

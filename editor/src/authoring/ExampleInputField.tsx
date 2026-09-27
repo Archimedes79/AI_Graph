@@ -24,13 +24,25 @@ export function withPortValue(text: string, port: string, value: unknown): strin
   return asExampleText({ ...exampleObject(text), [port]: value });
 }
 
+/**
+ * Why *text* cannot be the example yet, or '': it must be an object keyed by
+ * input port, or nothing at all.
+ */
+export function exampleProblem(text: string): string {
+  return text.trim() && !exampleObject(text)
+    ? 'Not an object keyed by input port yet, like {"input": "…"}: it is kept once it is.'
+    : '';
+}
+
 interface Props {
   /** The example as stored: a JSON object keyed by input port. */
   text: string;
-  /** Stores the example as typed or filled, and says what it reads back as (see `useTyped`). */
+  /**
+   * Stores the example as typed or filled, and says what it reads back as (see
+   * `useTyped`). Handed only what can be stored (`exampleProblem`): the box
+   * keeps the rest as typed, and says why.
+   */
   onText: (text: string) => string;
-  /** Why the text cannot be used as it stands, or ''. */
-  error?: string;
   /** The ports a file can be picked for. */
   ports: { id: string; name?: string }[];
   /** The ports the node reads the file on (`readFilePorts`): a file picked for one is kept as its path. */
@@ -60,9 +72,12 @@ interface Props {
  * uploaded copy that was only ever pasted into ✨'s prompt, never run.
  */
 export default function ExampleInputField({
-  text, onText, error, ports, reads, fromGraph, note, showField = true, label = 'Example input',
+  text, onText, ports, reads, fromGraph, note, showField = true, label = 'Example input',
 }: Props) {
-  const [typed, type] = useTyped(text, onText);
+  // What does not parse is not stored: the graph keeps the last example that
+  // did, and the box keeps what was typed.
+  const [typed, type] = useTyped(text, (next) => (exampleProblem(next) ? text : onText(next)));
+  const error = exampleProblem(typed);
   // What the box holds now, for a file read that ends after more was typed:
   // the file's value is put into that, not into the box as it was clicked.
   const latest = useRef(typed);

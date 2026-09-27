@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import FourSteps, { TaskField } from '@/authoring/FourSteps';
 import ExampleInputField from '@/authoring/ExampleInputField';
 import GeneratedBody from '@/authoring/GeneratedBody';
@@ -18,17 +17,17 @@ import { asEditableText, convertedValue, dataKind, storedValue, type DataKind } 
  * string at the first keystroke, a string could not be edited at all under
  * Structure, and valid JSON was re-indented under the caret. Now the value
  * says what it is where it can (`dataKind`), switching the Kind converts it,
- * and a box that does not parse holds up Save rather than being dropped by it.
+ * and what a box holds that does not parse is kept as typed, and not stored.
  */
 export default function DataNodePanel({
-  builder, node, setConfig, setInvalid, fields, generating, message, onGenerate, steps,
+  builder, node, setConfig, fields, generating, message, onGenerate, steps,
 }: NodePanelProps) {
   const generation = builder.generation;
   const kind = dataKind(node);
   const held = node.config.data_value;
   const shown = asEditableText(held, kind);
   // The box keeps what is typed; the stored value is what it parses to. What
-  // does not parse is not stored -- the box says so, and Save waits for it.
+  // does not parse is not stored -- the box says so, and keeps it as typed.
   const [content, type] = useTyped(shown, (text) => {
     const result = storedValue(text, kind);
     if ('error' in result) return shown;
@@ -37,8 +36,6 @@ export default function DataNodePanel({
   });
   const typed = storedValue(content, kind);
   const contentError = 'error' in typed ? typed.error : '';
-
-  useEffect(() => setInvalid('held value', contentError), [contentError, setInvalid]);
 
   if (!generation || !steps) return null;
 
@@ -143,7 +140,7 @@ export default function DataNodePanel({
             spellCheck={false}
             aria-label="What it holds now"
           />
-          {contentError && <p className="text-xs mt-1" style={{ color: DANGER_SOFT }}>{contentError} It cannot be saved like this.</p>}
+          {contentError && <p className="text-xs mt-1" style={{ color: DANGER_SOFT }}>{contentError} It is kept once it parses.</p>}
         </div>
       </Step>
     </>

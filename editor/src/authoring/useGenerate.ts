@@ -35,9 +35,14 @@ export interface GenerateOptions<T> {
  * differently, so the same backend failure read differently depending on which
  * button you pressed.
  *
+ * What comes back is written in at once, as one undo step: Undo is how it is
+ * taken back, as for anything else changed in a node's dialog. It used to wait
+ * for Accept or Discard -- a click after every ✨, with the result on screen
+ * but not in the node, so nothing could try it. The exchange that produced it
+ * stays on screen either way (`GenerationTranscript`).
+ *
  * `key` scopes busy state and message so one component can host several
- * buttons (the widget editor has one per widget); components with a single
- * button pass nothing and get the default key.
+ * buttons; components with a single button pass nothing and get the default key.
  */
 export function useGenerate() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -46,26 +51,17 @@ export function useGenerate() {
   const [transcripts, setTranscripts] = useState<Record<string, AICall[]>>({});
   // The same thing while it is still happening, so the wait is not a blank box.
   const [live, setLive] = useState<Record<string, AICall[]>>({});
-  /**
-   * A finished generation, waiting to be taken.
-   *
-   * The result used to be written into the element the moment it arrived, and
-   * the transcript vanished with it -- so what the model had been asked, and
-   * what it answered on the way, was gone by the time there was anything to
-   * judge. It waits here until someone takes it, and until then the exchange
-   * stays on screen and whatever was there before is untouched.
-   */
-  const [pending, setPending] = useState<Record<string, { take: () => void; done: string }>>({});
 
   const setMessage = useCallback((text: string, key = '') => {
     setMessages((prev) => ({ ...prev, [key]: text }));
   }, []);
 
-  const run = useCallback(async <T,>(options: GenerateOptions<T>, key = '') => {
+  /** Generate, and write what comes back. Resolves to whether it was written. */
+  const run = useCallback(async <T,>(options: GenerateOptions<T>, key = ''): Promise<boolean> => {
     const blocked = options.guard?.();
     if (blocked) {
       setMessage(`❌ ${blocked}`, key);
-      return;
+      return false;
     }
     setActiveKey(key);
     setMessage(options.pending ?? 'Generating…', key);
@@ -78,20 +74,17 @@ export function useGenerate() {
       // Kept whether or not it worked out: a transcript is opened when
       // something went wrong, so the failing case is the one that needs it.
       const calls = (result as { calls?: AICall[] })?.calls;
-      if (calls) {
-        setTranscripts((prev) => ({ ...prev, [key]: calls }));
-        // The finished exchange, replies included -- the last poll only ever
-        // catches the questions.
-        setLive((prev) => ({ ...prev, [key]: calls }));
-      }
-      const done = typeof options.success === 'function' ? options.success(result) : options.success;
-      setPending((prev) => ({ ...prev, [key]: { take: () => options.apply(result), done } }));
-      setMessage('Done. Review it and accept — until then nothing has changed.', key);
+      if (calls) setTranscripts((prev) => ({ ...prev, [key]: calls }));
+      options.apply(result);
+      setMessage(typeof options.success === 'function' ? options.success(result) : options.success, key);
+      return true;
     } catch (error) {
       const calls = error instanceof ApiError ? error.body.calls : undefined;
       if (calls) setTranscripts((prev) => ({ ...prev, [key]: calls }));
       setMessage(`❌ ${errorText(error, options.failure ?? 'Generation failed')}`, key);
+      return false;
     } finally {
+      setLive((prev) => ({ ...prev, [key]: [] }));
       setActiveKey(null);
     }
   }, [setMessage]);
@@ -106,23 +99,6 @@ export function useGenerate() {
     transcript: (key = '') => transcripts[key] ?? [],
     /** The calls of a generation still running on this button, as they arrive. */
     liveTranscript: (key = '') => live[key] ?? [],
-    /** Whether a finished result is waiting to be taken on this button. */
-    isPending: (key = '') => Boolean(pending[key]),
-    /** Write the waiting result into the element, and put the code back on screen. */
-    accept: (key = '') => {
-      const waiting = pending[key];
-      if (!waiting) return;
-      waiting.take();
-      setPending(({ [key]: _taken, ...rest }) => rest);
-      setLive((prev) => ({ ...prev, [key]: [] }));
-      setMessage(waiting.done, key);
-    },
-    /** Leave the element as it was. The transcript stays; it is why you said no. */
-    discard: (key = '') => {
-      setPending(({ [key]: _dropped, ...rest }) => rest);
-      setLive((prev) => ({ ...prev, [key]: [] }));
-      setMessage('Discarded. Nothing changed.', key);
-    },
     run,
   };
 }

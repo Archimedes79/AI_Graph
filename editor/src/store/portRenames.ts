@@ -57,8 +57,8 @@ export function untracked(node: GraphNode): GraphNode {
 
 /**
  * *after* with each port named in *continues* (its id -> the id of the port of
- * *before* it continues) taking that port's place, so a Save moves the old
- * port's wires onto it. For ports an element derives from a setting, which no
+ * *before* it continues) taking that port's place, so the dialog's write moves
+ * the old port's wires onto it. For ports an element derives from a setting, which no
  * editor spread: they are otherwise the port of their name, or new
  * (`NodeGuiBuilder.continuePorts`).
  */
@@ -118,7 +118,7 @@ export function portRenames(before: GraphNode | undefined, after: GraphNode): Po
  * to it, the values of its examples (`examplePair.examplesFollowPorts`).
  *
  * `portRenames` answers the same question from the node as it is stored, for
- * the wires, at Save; this answers it edit by edit, so the example the dialog
+ * the wires, when the dialog writes; this answers it edit by edit, so the example the dialog
  * tries and ✨ is written against says the name the port has now. A name
  * another port still has belongs to that port, and has no fate here.
  */

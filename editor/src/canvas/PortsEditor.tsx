@@ -1,5 +1,6 @@
 import type { DataType, Port } from '@/graph';
 import type { PortEditing } from '@/elements/NodeGuiBuilder';
+import { useTyped } from '@/authoring/useTyped';
 import { caughtErrorAt, portIdProblems } from './portIds';
 import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
@@ -66,16 +67,138 @@ interface SideProps {
   readsFiles: boolean;
   /** Offer a type and "list" on each port: see `PortsEditor.stepped`. */
   perPort: boolean;
-  /** Why these ports cannot be saved as they are named, or '' (`portIdProblems`). */
-  problem: string;
+  /** Why this side could not keep *ports* as they are named, or '' (`portIdProblems`). */
+  problemOf: (ports: Port[]) => string;
   onChange: (ports: Port[]) => void;
 }
 
-function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, perPort, problem, onChange }: SideProps) {
+/** A name as a body can read it back, `inputs.<id>`: spaces and punctuation would be a port nobody can address in code. */
+const codeName = (text: string): string => text.replace(/[^A-Za-z0-9_]/g, '_');
+
+interface RowProps {
+  port: Port;
+  kind: 'input' | 'output';
+  editable: boolean;
+  perPort: boolean;
+  readsFiles: boolean;
+  /** What it is wired to, in words, or ''. */
+  wired: string;
+  /** Why the node could not keep this port under *id*, or ''. */
+  problemIf: (id: string) => string;
+  set: (patch: Partial<Port>) => void;
+  remove: () => void;
+}
+
+/**
+ * One port. Its name is stored once it is one the node can keep -- a name,
+ * not another port's, not the error port's -- and until then shown as typed,
+ * with why not: with no Save to wait for, a name typed through "" or through
+ * another port's name on its way must not be what the graph holds meanwhile.
+ */
+function PortRow({ port, kind, editable, perPort, readsFiles, wired, problemIf, set, remove }: RowProps) {
+  const [typed, type] = useTyped(port.id, (text) => {
+    const id = codeName(text);
+    if (problemIf(id)) return port.id;
+    set({ id, name: port.name === port.id ? id : port.name });
+    return id;
+  });
+  const shown = codeName(typed);
+  const problem = shown === port.id ? '' : problemIf(shown);
+
+  return (
+    <div className="space-y-1" aria-label={`${kind} ${port.id}`}>
+      <div className="flex items-center gap-1.5">
+        {editable ? (
+          <input
+            className="flex-1 min-w-0 rounded px-2 py-1 text-sm font-mono"
+            style={FIELD}
+            value={shown}
+            aria-label={`${kind} name`}
+            onChange={(e) => type(e.target.value)}
+            placeholder="name in the code"
+          />
+        ) : (
+          <span className="flex-1 min-w-0 px-2 py-1 text-sm font-mono" style={{ color: MUTED }}
+            title="Read by this name: it cannot be renamed">
+            {port.id}
+          </span>
+        )}
+        {editable && (
+          <>
+            {perPort && (
+              <>
+                <select
+                  className="rounded px-1.5 py-1 text-xs"
+                  style={FIELD}
+                  value={port.data_type}
+                  aria-label={`${kind} type`}
+                  onChange={(e) => set({ data_type: e.target.value as DataType })}
+                >
+                  {TYPES.map((one) => <option key={one.value} value={one.value}>{one.label}</option>)}
+                </select>
+                <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
+                  title={kind === 'input' ? 'Arrives as a list -- several values, or one per wired node' : 'Hands on a list: the next node runs once per item unless it takes the whole list'}>
+                  <input type="checkbox" checked={port.multi} onChange={(e) => set({ multi: e.target.checked })} />
+                  list
+                </label>
+              </>
+            )}
+            {/* The run reads it on inputs only (`nothingToDo`): a chat's
+                model must not be asked with the history alone because
+                nobody typed a message. */}
+            {kind === 'input' && (
+              <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
+                title="Needed: when it is wired and nothing arrives on it, this node does not run that round">
+                <input type="checkbox" checked={port.required} aria-label="input needed"
+                  onChange={(e) => set({ required: e.target.checked })} />
+                needed
+              </label>
+            )}
+            {/* The one way a file is read: said here, per input, and kept as
+                the port's type. A wire from something that hands on paths
+                ticks it where nobody has said anything yet (`connect`). */}
+            {kind === 'input' && readsFiles && (
+              <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
+                title="The node is handed what the file says, not its path -- on every run, in Try it and when ✨ tries its code">
+                <input type="checkbox" checked={port.data_type === 'file_path'} aria-label="Read the file at this path"
+                  onChange={(e) => set({ data_type: e.target.checked ? 'file_path' : 'any' })} />
+                Read the file at this path
+              </label>
+            )}
+            <button
+              className="text-xs px-1.5 py-1 rounded"
+              style={NEUTRAL_BUTTON}
+              title="Remove this port, and any wire on it"
+              aria-label={`Remove ${kind} ${port.id}`}
+              onClick={remove}
+            >
+              ✕
+            </button>
+          </>
+        )}
+      </div>
+      {problem && <p className="text-xs pl-1" style={{ color: DANGER_TEXT }}>{problem} It is kept as it was until the name is one it can keep.</p>}
+      {/* What the node's kind says about the port when it makes it --
+          "What to ask. A list asks once per item." -- and ✨ is told. */}
+      {port.description?.trim() && (
+        <p className="text-xs pl-1" style={{ color: DIMMER }}>{port.description.trim()}</p>
+      )}
+      <p className="text-xs pl-1" style={{ color: DIMMER }}>
+        {wired
+          ? (kind === 'input' ? `← from ${wired}` : `→ to ${wired}`)
+          : (kind === 'input' ? '← not wired yet: drag a wire onto it on the canvas' : '→ not wired yet')}
+      </p>
+    </div>
+  );
+}
+
+function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, perPort, problemOf, onChange }: SideProps) {
   const set = (at: number, patch: Partial<Port>) => {
     onChange(ports.map((port, i) => (i === at ? { ...port, ...patch } : port)));
   };
   const editable = editing === 'edit';
+  // Said of what the graph holds: a file written by hand can hold two ports of one name.
+  const problem = editable ? problemOf(ports) : '';
 
   return (
     <div>
@@ -95,100 +218,25 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, pe
 
       <div className="space-y-2">
         {ports.map((port, at) => (
-          <div key={at} className="space-y-1" aria-label={`${kind} ${port.id}`}>
-            <div className="flex items-center gap-1.5">
-              {editable ? (
-                <input
-                  className="flex-1 min-w-0 rounded px-2 py-1 text-sm font-mono"
-                  style={FIELD}
-                  value={port.id}
-                  aria-label={`${kind} name`}
-                  // Kept to what a body can read back as `inputs.<id>`: spaces and
-                  // punctuation would be a port nobody can address in code.
-                  onChange={(e) => {
-                    const id = e.target.value.replace(/[^A-Za-z0-9_]/g, '_');
-                    set(at, { id, name: port.name === port.id ? id : port.name });
-                  }}
-                  placeholder="name in the code"
-                />
-              ) : (
-                <span className="flex-1 min-w-0 px-2 py-1 text-sm font-mono" style={{ color: MUTED }}
-                  title="Read by this name: it cannot be renamed">
-                  {port.id}
-                </span>
-              )}
-              {editable && (
-                <>
-                  {perPort && (
-                    <>
-                      <select
-                        className="rounded px-1.5 py-1 text-xs"
-                        style={FIELD}
-                        value={port.data_type}
-                        aria-label={`${kind} type`}
-                        onChange={(e) => set(at, { data_type: e.target.value as DataType })}
-                      >
-                        {TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                      </select>
-                      <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
-                        title={kind === 'input' ? 'Arrives as a list -- several values, or one per wired node' : 'Hands on a list: the next node runs once per item unless it takes the whole list'}>
-                        <input type="checkbox" checked={port.multi} onChange={(e) => set(at, { multi: e.target.checked })} />
-                        list
-                      </label>
-                    </>
-                  )}
-                  {/* The run reads it on inputs only (`nothingToDo`): a chat's
-                      model must not be asked with the history alone because
-                      nobody typed a message. */}
-                  {kind === 'input' && (
-                    <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
-                      title="Needed: when it is wired and nothing arrives on it, this node does not run that round">
-                      <input type="checkbox" checked={port.required} aria-label="input needed"
-                        onChange={(e) => set(at, { required: e.target.checked })} />
-                      needed
-                    </label>
-                  )}
-                  {/* The one way a file is read: said here, per input, and kept as
-                      the port's type. A wire from something that hands on paths
-                      ticks it where nobody has said anything yet (`connect`). */}
-                  {kind === 'input' && readsFiles && (
-                    <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
-                      title="The node is handed what the file says, not its path -- on every run, in Try it and when ✨ tries its code">
-                      <input type="checkbox" checked={port.data_type === 'file_path'} aria-label="Read the file at this path"
-                        onChange={(e) => set(at, { data_type: e.target.checked ? 'file_path' : 'any' })} />
-                      Read the file at this path
-                    </label>
-                  )}
-                  <button
-                    className="text-xs px-1.5 py-1 rounded"
-                    style={NEUTRAL_BUTTON}
-                    title="Remove this port, and any wire on it"
-                    aria-label={`Remove ${kind} ${port.id}`}
-                    onClick={() => onChange(ports.filter((_, i) => i !== at))}
-                  >
-                    ✕
-                  </button>
-                </>
-              )}
-            </div>
-            {/* What the node's kind says about the port when it makes it --
-                "What to ask. A list asks once per item." -- and ✨ is told. */}
-            {port.description?.trim() && (
-              <p className="text-xs pl-1" style={{ color: DIMMER }}>{port.description.trim()}</p>
-            )}
-            <p className="text-xs pl-1" style={{ color: DIMMER }}>
-              {wiring[port.id]
-                ? (kind === 'input' ? `← from ${wiring[port.id]}` : `→ to ${wiring[port.id]}`)
-                : (kind === 'input' ? '← not wired yet: drag a wire onto it on the canvas' : '→ not wired yet')}
-            </p>
-          </div>
+          <PortRow
+            key={at}
+            port={port}
+            kind={kind}
+            editable={editable}
+            perPort={perPort}
+            readsFiles={readsFiles}
+            wired={wiring[port.id] ?? ''}
+            problemIf={(id) => problemOf(ports.map((candidate, i) => (i === at ? { ...candidate, id } : candidate)))}
+            set={(patch) => set(at, patch)}
+            remove={() => onChange(ports.filter((_, i) => i !== at))}
+          />
         ))}
 
         {ports.length === 0 && (
           <p className="text-xs py-1" style={{ color: DIMMER }}>None yet.</p>
         )}
 
-        {problem && <p className="text-xs" style={{ color: DANGER_TEXT }}>{problem} It cannot be saved like this.</p>}
+        {problem && <p className="text-xs" style={{ color: DANGER_TEXT }}>{problem}</p>}
 
         {fixed.map((port) => (
           <div key={port.id} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded" style={{ color: DIMMER, border: `1px dashed ${LINE}` }}>
@@ -237,7 +285,6 @@ export default function PortsEditor({
   const errorAt = caughtErrorAt(outputs, caught);
   const ownOutputs = outputs.filter((_, at) => at !== errorAt);
   const fixedOutputs = outputs.filter((_, at) => at === errorAt);
-  const problems = portIdProblems(inputs, outputs, caught);
   const showInputs = side !== 'outputs' && editing.inputs !== 'none';
   const showOutputs = side !== 'inputs' && editing.outputs !== 'none';
 
@@ -246,14 +293,16 @@ export default function PortsEditor({
       {showInputs && (
         <Side
           title="Takes in" kind="input" ports={inputs} fixed={[]} editing={editing.inputs}
-          hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} perPort={!stepped} problem={editing.inputs === 'edit' ? problems.inputs : ''}
+          hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} perPort={!stepped}
+          problemOf={(next) => portIdProblems(next, outputs, caught).inputs}
           onChange={(next) => onChange({ inputs: next, outputs })}
         />
       )}
       {showOutputs && (
         <Side
           title="Hands out" kind="output" ports={ownOutputs} fixed={fixedOutputs} editing={editing.outputs}
-          hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} perPort={!stepped} problem={editing.outputs === 'edit' ? problems.outputs : ''}
+          hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} perPort={!stepped}
+          problemOf={(next) => portIdProblems(inputs, [...next, ...fixedOutputs], caught).outputs}
           onChange={(next) => onChange({ inputs, outputs: [...next, ...fixedOutputs] })}
         />
       )}

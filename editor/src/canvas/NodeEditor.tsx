@@ -1,11 +1,10 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import type { GraphNode, Port } from '@/graph';
+import { Suspense, useRef } from 'react';
+import type { Port } from '@/graph';
 import { shapeToKeep, useGraphStore } from '@/store/graphStore';
-import { trackPorts } from '@/store/portRenames';
 import { derivedNodePorts } from '@/document/guiWidgets';
 import PortsEditor from './PortsEditor';
-import { saveDraft, withPorts, withSetting } from './nodeDraft';
-import { portIdProblems } from './portIds';
+import { withPorts } from './nodeDraft';
+import { useNodeDialog } from './nodeDialog';
 import { NODE_BUILDERS } from '@/elements/registry';
 import type { NodePanelProps } from '@/elements/NodeGuiBuilder';
 import Modal from '@/ui/Modal';
@@ -20,87 +19,35 @@ import { nodeLogic } from '@/authoring/logic';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import OpenInMyEditor from '@/authoring/OpenInMyEditor';
-import { ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, TEXT } from '@/ui/theme';
+import type { GraphNode } from '@/graph';
+import { FIELD, LINE, MUTED, TEXT } from '@/ui/theme';
 
 interface NodeEditorProps {
   nodeId: string;
   onClose: () => void;
 }
 
+/**
+ * A node's dialog. There is no Save and no Cancel: what is changed here is in
+ * the graph a moment later, Undo takes it back, and ✕ or Esc close it with
+ * nothing lost (`nodeDialog.ts`).
+ */
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
-  const rfNode = useGraphStore((s) => s.rfNodes.find((n) => n.id === nodeId));
+  const dialog = useNodeDialog(nodeId);
   const graphNodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
   const graphEdges = useGraphStore((s) => s.rfEdges);
   // The last run's per-node values: the best generation context available, and
   // it was sitting in the store unused.
   const executionResult = useGraphStore((s) => s.executionResult);
 
-  const [node, setNode] = useState<GraphNode | null>(null);
-  // The store's copy of this node as the draft last matched it, and a newer
-  // one that arrived while the draft held edits of its own.
-  const baseline = useRef('');
-  const draft = useRef<GraphNode | null>(null);
-  draft.current = node;
-  const [newer, setNewer] = useState<GraphNode | null>(null);
   // What ✨ Generate would send, when asked: shown, not sent. The request is
-  // the one the button sends, built further down from the draft as it is then.
+  // the one the button sends, built further down from the node as it is then.
   const generationRequest = useRef<() => GenerationRequest<GraphNode> | undefined>(() => undefined);
   const sends = useWhatSends(() => generationRequest.current(), nodeId);
   // One state machine for every ✨ Generate button in this editor.
   const generate = useGenerate();
-  const generating = generate.busy;
-  const genMessage = generate.message();
-  // What the panel holds that cannot be saved as it stands, by what it is: an
-  // example that is not JSON, a value that does not parse. Save waits for it.
-  const [invalid, setInvalidAll] = useState<Record<string, string>>({});
-  const setInvalid = useCallback((key: string, reason: string) => setInvalidAll((previous) => {
-    if ((previous[key] ?? '') === reason) return previous;
-    const { [key]: _gone, ...rest } = previous;
-    return reason ? { ...rest, [key]: reason } : rest;
-  }), []);
-  const blocked = Object.values(invalid).join(' ');
-  // Ports named so that they cannot be saved -- none, twice, the error port's
-  // name -- wait for a name that can, and the ports editor says which. Only
-  // the names the person can edit: ports that follow a setting are not theirs
-  // to put right.
-  const caught = node?.config.catch_errors === true;
-  const portProblems = node ? portIdProblems(node.inputs, node.outputs, caught) : { inputs: '', outputs: '' };
-  const editable = node && derivedNodePorts(node) === null ? NODE_BUILDERS[node.node_type].portEditing : undefined;
-  const portProblem = [
-    editable?.inputs === 'edit' ? portProblems.inputs : '',
-    editable?.outputs === 'edit' ? portProblems.outputs : '',
-  ].filter(Boolean).join(' ');
-  useEffect(() => setInvalid('ports', portProblem), [portProblem, setInvalid]);
 
-  // The node can change while this dialog is open: its code edited in
-  // another editor, its interface set by a run. An untouched draft simply
-  // follows; a draft with edits of its own is not overwritten -- the person is
-  // asked which to keep.
-  useEffect(() => {
-    if (!rfNode) return;
-    const incoming = JSON.stringify(rfNode.data.graphNode);
-    if (incoming === baseline.current) return;
-    if (!draft.current || JSON.stringify(draft.current) === baseline.current) {
-      baseline.current = incoming;
-      setNode(trackPorts(JSON.parse(incoming)));
-      setNewer(null);
-    } else {
-      setNewer(JSON.parse(incoming));
-    }
-  }, [rfNode]);
-
-  const takeNewer = () => {
-    if (!newer) return;
-    baseline.current = JSON.stringify(newer);
-    setNode(trackPorts(newer));
-    setNewer(null);
-  };
-  const keepMine = () => {
-    if (!newer) return;
-    baseline.current = JSON.stringify(newer);
-    setNewer(null);
-  };
-
+  const node = dialog.node();
   if (!node) return null;
 
   // No tabs. There were two: Config, and a Preview that printed the node's own
@@ -110,38 +57,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // does something. What a node emits was a third tab for two of six types; it
   // is said in step 2 of the four steps now, in words (`OutputWordsField`).
   const element = NODE_BUILDERS[node.node_type];
+  const caught = node.config.catch_errors === true;
 
-  const save = () => {
-    // A panel said something cannot be saved as it stands; saving the rest
-    // would keep the last good value and lose the edit without a word.
-    if (blocked) return;
-    saveDraft(nodeId, rfNode?.data.graphNode, node);
-    onClose();
-  };
-
-  /**
-   * Close, but not silently over unsaved work.
-   *
-   * Everything edited here -- including a snippet an AI just spent a minute
-   * generating -- lives in this modal's draft until Save. Cancel and Escape
-   * used to discard it without a word, so "✅ Code generated!" followed by
-   * Escape lost the code and left no trace of why.
-   */
-  const closeWithGuard = () => {
-    const stored = rfNode ? JSON.stringify(rfNode.data.graphNode) : '';
-    // Something typed that could not be stored yet is an edit too, though the
-    // draft does not show it.
-    if ((blocked || JSON.stringify(node) !== stored)
-        && !window.confirm('Discard the changes to this node?')) return;
-    onClose();
-  };
-
-  const setConfig = (key: string, value: unknown) => {
-    setNode((prev) => (prev ? withSetting(prev, rfNode?.data.graphNode, key, value) : prev));
-  };
-
-  const setDescription = (value: string) =>
-    setNode((prev) => (prev ? { ...prev, description: value } : prev));
+  const setConfig = (key: string, value: unknown) => dialog.setConfig(key, value);
+  const setDescription = (value: string) => dialog.change((current) => ({ ...current, description: value }));
 
   /**
    * The one ✨ Generate handler.
@@ -163,15 +82,20 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       // What the node says about itself -- ports, samples, wiring, format,
       // shape, examples -- as facts the engine writes one brief from.
       ...nodeFacts(node, graphNodes, graphEdges, executionResult),
-      // Asked of the draft as it is when the answer comes back.
+      // Asked of the node as it is when the answer comes back.
       recordShape: (outputs) => {
-        const kept = draft.current && shapeToKeep(draft.current, outputs);
+        const current = dialog.node();
+        const kept = current && shapeToKeep(current, outputs);
         if (kept) setConfig('output_schema', kept);
       },
     });
   const handleGenerate = () => {
     const request = generationRequest.current();
-    if (request) generate.run(buildGeneration(request));
+    if (!request) return;
+    const options = buildGeneration(request);
+    // What ✨ wrote is one undo step of its own -- after what was typed before
+    // it, which is written first as the step it was.
+    void generate.run({ ...options, apply: (result) => { dialog.write(); options.apply(result); dialog.write(true); } });
   };
 
   const Panel = element.Panel;
@@ -182,8 +106,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     inputs: inputSources(node.id, graphNodes, graphEdges),
     outputs: outputTargets(node.id, graphNodes, graphEdges, true),
   };
-  const setPorts = (ports: { inputs: Port[]; outputs: Port[] }) =>
-    setNode((prev) => (prev ? withPorts(prev, ports) : prev));
+  const setPorts = (ports: { inputs: Port[]; outputs: Port[] }) => dialog.change((current) => withPorts(current, ports));
   // The ports are the person's to name, rather than following a setting.
   const ownPorts = derivedNodePorts(node) === null;
   const stepped = element.stepped && ownPorts;
@@ -201,29 +124,18 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       caught={caught}
     />
   );
-  // The draft goes into the store before the project is saved, so the file
-  // holds what the dialog shows -- and what is stored now is what the ports
-  // are called: a later Save must follow them from here, not from when the
-  // dialog opened.
-  const openInEditor = nodeLogic(node) ? (
-    <OpenInMyEditor
-      nodeId={nodeId}
-      before={() => {
-        saveDraft(nodeId, rfNode?.data.graphNode, node);
-        setNode(trackPorts(node));
-        baseline.current = JSON.stringify(node);
-      }}
-    />
-  ) : undefined;
+  // What waits is written before the project is saved, so the file holds
+  // what the dialog shows.
+  const openInEditor = nodeLogic(node) ? <OpenInMyEditor nodeId={nodeId} before={() => dialog.write()} /> : undefined;
   // For an element that authors a body, what only this shell has, for the
   // panel to place in its four steps: the port lists inside "what comes in"
   // and "what comes out" where the ports are the person's, and "what ✨ sends"
   // and "open in my editor" beside the body.
-  // And the graph with this draft in it, read when asked: what is tried, tested
-  // and fetched from the graph is the edit as it is then.
+  // And the graph with this node in it as the dialog shows it, read when
+  // asked: what is tried and fetched from the graph is the edit as it is then.
   const graph = () => {
     const whole = useGraphStore.getState().exportGraph();
-    const current = draft.current ?? node;
+    const current = dialog.node() ?? node;
     whole.nodes = whole.nodes.map((candidate) => (candidate.id === current.id ? current : candidate));
     return whole;
   };
@@ -244,47 +156,19 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           style={{ color: TEXT }}
           value={node.label}
           aria-label="Node label"
-          onChange={(e) => setNode((prev) => prev ? { ...prev, label: e.target.value } : prev)}
+          onChange={(e) => {
+            const label = e.target.value;
+            dialog.change((current) => ({ ...current, label }));
+          }}
         />
       }
-      onClose={closeWithGuard}
+      onClose={onClose}
       maxWidth="max-w-2xl"
       scrollBody
-      // The editor holds unsaved edits; a stray backdrop click must not throw
-      // them away. Escape is left working because it is what Cancel does.
+      // A stray click beside it is not a reason to close it.
       dismissOnBackdrop={false}
-      footer={
-        <>
-          <button
-            onClick={closeWithGuard}
-            className="px-4 py-2 text-sm rounded-lg"
-            style={NEUTRAL_BUTTON}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={save}
-            disabled={!!blocked}
-            className="px-4 py-2 text-sm rounded-lg font-semibold"
-            style={{ ...PRIMARY_BUTTON, opacity: blocked ? 0.5 : 1 }}
-            title={blocked || undefined}
-          >
-            Save
-          </button>
-        </>
-      }
     >
       <div className="px-6 py-5">
-          {newer && (
-            <div className="mb-4 px-3 py-2 rounded-lg text-sm flex flex-wrap items-center gap-2"
-              style={{ background: ACCENT_FILL, color: ACCENT_TEXT }} role="alert">
-              <span className="flex-1 min-w-0">
-                This node changed while it was open here — in its project files, or by a run.
-              </span>
-              <button className="text-xs px-2 py-1 rounded" style={PRIMARY_BUTTON} onClick={takeNewer}>Take that version</button>
-              <button className="text-xs px-2 py-1 rounded" style={NEUTRAL_BUTTON} onClick={keepMine}>Keep mine</button>
-            </div>
-          )}
           {/* Only for elements whose own editor does not already ask what the
               node is for. An ai node's description IS its generation prompt, so
               drawing this above it showed the same box twice. */}
@@ -303,23 +187,18 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
             </div>
           )}
 
-          <GenerationReport
-            calls={generate.transcript()}
-            live={generate.liveTranscript()}
-            review={{ pending: generate.isPending(), accept: () => generate.accept(), discard: () => generate.discard() }}
-          >
+          <GenerationReport calls={generate.transcript()} live={generate.liveTranscript()}>
           <div className="space-y-4">
               {/* A panel is its own chunk, loaded when a node is first opened. */}
               {Panel && <Suspense fallback={null}><Panel
                 builder={element}
                 node={node}
                 setConfig={setConfig}
-                updateNode={(change) => setNode((prev) => (prev ? change(prev) : prev))}
+                updateNode={(change) => dialog.change(change)}
                 fields={fields}
-                generating={generating}
-                message={genMessage}
+                generating={generate.busy}
+                message={generate.message()}
                 onGenerate={handleGenerate}
-                setInvalid={setInvalid}
                 steps={steps}
               /></Suspense>}
 

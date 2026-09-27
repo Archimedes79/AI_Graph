@@ -56,7 +56,7 @@ export function withSetting(draft: GraphNode, stored: GraphNode | undefined, key
  * An example is an object keyed by input port. A port renamed or removed in
  * step 1 carried its wire along (`portRenames`), but its value stayed under
  * the old name: Try it and ✨ ran the body with the value where it no longer
- * looks, and after Save `check` said the example gives an input the node does
+ * looks, and once written `check` said the example gives an input the node does
  * not have. Each edit carries the keys along with the port it renames, or takes
  * them away with the port it removes.
  */
@@ -69,21 +69,23 @@ export function withPorts(draft: GraphNode, ports: { inputs: Port[]; outputs: Po
 }
 
 /**
- * The node dialog's Save: *draft* into the store as node *nodeId*, its wires
- * following its ports. *before* is the node as the store holds it.
+ * What the node dialog writes: *draft* into the store as node *nodeId*, its
+ * wires following its ports. *before* is the node as the store holds it;
+ * *coalesce* names the change, so the change of the same fields just before
+ * it takes the same undo step (`graphStore.commit`).
  *
  * A port's id is the name a body reads it by, so it is edited in the dialog --
  * and an edge points at the old one. Each port of the draft remembers the id it
- * had when the dialog opened (`trackPorts`), so a renamed port takes its wires
- * along and a removed one takes them away. It used to be worked out by
- * position, which read removing a port as renaming it to the one that slid
- * into its row, and handed that port the removed one's wire.
+ * had in *before* (`trackPorts`), so a renamed port takes its wires along and a
+ * removed one takes them away. It used to be worked out by position, which read
+ * removing a port as renaming it to the one that slid into its row, and handed
+ * that port the removed one's wire.
  *
- * A function rather than a few lines inside `NodeEditor`, so a test saves a
- * dialog the way the dialog does and not a copy of it that forgot a step.
+ * A function rather than a few lines inside the dialog, so a test writes a
+ * dialog's change the way the dialog does (`nodeDialog.write`).
  */
-export function saveDraft(nodeId: string, before: GraphNode | undefined, draft: GraphNode): void {
+export function saveDraft(nodeId: string, before: GraphNode | undefined, draft: GraphNode, coalesce?: string): void {
   // What it is published as follows what it is asked to do (`publishedDescription`).
   const kept = { ...untracked(draft), description: NODE_BUILDERS[draft.node_type].publishedDescription(draft) };
-  useGraphStore.getState().updateNode(nodeId, kept, portRenames(before, draft));
+  useGraphStore.getState().updateNode(nodeId, kept, portRenames(before, draft), coalesce);
 }

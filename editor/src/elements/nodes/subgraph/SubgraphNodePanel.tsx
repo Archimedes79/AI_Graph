@@ -1,11 +1,21 @@
 import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, PRIMARY_BUTTON } from '@/ui/theme';
 import { useGraphStore } from '@/store/graphStore';
-import { untracked } from '@/store/portRenames';
 import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
 
 const ELEMENT = new SubgraphNodeRunner();
+
+/**
+ * In. The dialog goes first, because what is behind it is about to be a
+ * different graph -- and a dialog closed writes what it still holds into the
+ * graph it was opened in (`nodeDialog.watch`), before the canvas goes in.
+ */
+export function enterGraphOf(nodeId: string): void {
+  const store = useGraphStore.getState();
+  store.setEditingNode(null);
+  store.openSubgraph(nodeId);
+}
 
 /**
  * What there is to say about a node that holds a graph, which is not much:
@@ -25,20 +35,6 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
   const inner = ELEMENT.nestedGraph(node as never);
   const count = inner?.nodes.length ?? 0;
 
-  /**
-   * In. The draft is taken first -- as "open in your own editor" does -- and
-   * then the dialog goes, because what is behind it is about to be a
-   * different graph. Taken as a Save takes it: without the marks the dialog
-   * put on its ports (`trackPorts`), which are the dialog's and never stored.
-   * No renames go with it: this node's ports are a view of the graph inside.
-   */
-  const enter = () => {
-    const store = useGraphStore.getState();
-    store.updateNode(node.id, untracked(node));
-    store.setEditingNode(null);
-    store.openSubgraph(node.id);
-  };
-
   return (
     <div>
       {inner ? (
@@ -46,7 +42,7 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
           type="button"
           className="w-full mb-4 px-3 py-2 rounded-lg text-sm font-medium"
           style={{ ...PRIMARY_BUTTON, opacity: running ? 0.5 : 1 }}
-          onClick={enter}
+          onClick={() => enterGraphOf(node.id)}
           disabled={running}
           title={running ? 'A run is going on. The graph inside opens when it is over.' : undefined}
         >

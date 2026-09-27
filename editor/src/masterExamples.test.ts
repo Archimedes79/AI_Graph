@@ -1,8 +1,8 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import { useGraphStore } from '@/store/graphStore';
 import type { Graph, GraphNode, GuiWidget, NodeType, Port, WidgetKind } from '@/graph';
-import { trackPorts } from '@/store/portRenames';
-import { saveDraft, withPorts, withSetting } from '@/canvas/nodeDraft';
+import { withPorts } from '@/canvas/nodeDraft';
+import { nodeDialog } from '@/canvas/nodeDialog';
 import { newBlock } from '@/page/DesignerPalette';
 import { pageOf } from '@/page/GuiPage';
 import { insertBlock, patchBlock } from '@/page/pageWrite';
@@ -24,10 +24,11 @@ import type { Runtime } from '@engine/elements/Runtime.ts';
  * on the canvas, blocks added to the page, a setting changed in a dialog, a wire
  * dragged from one port to another. No mouse, no browser, and no copy of what
  * the editor's handlers do: a block comes from the palette's `newBlock` and
- * reaches the page through `insertBlock` and `patchBlock`, a dialog's draft is
- * edited by `withPorts` and `withSetting` and saved by `saveDraft`, a wire is
- * the store's `connect` -- the functions the designer and the node dialog call.
- * What stays in the components -- which row was clicked -- is left out.
+ * reaches the page through `insertBlock` and `patchBlock`, a node's dialog is
+ * its own `nodeDialog` -- changed as its ports editor and its fields change it,
+ * and written into the graph as it writes -- and a wire is the store's
+ * `connect`: the functions the designer and the node dialog call. What stays
+ * in the components -- which row was clicked -- is left out.
  *
  * Then three questions, of each:
  *   - is what was built sound (`check` finds nothing)?
@@ -76,38 +77,40 @@ function addBlock(kind: WidgetKind, mode: string | undefined, settings: Partial<
 }
 
 /**
- * Save a node's dialog: its name, what its ports are called, its settings --
- * and step 1's "Run once per item", ticked or not, which sets how the node
- * runs and which inputs fan out, together (`withPerItem`), for the lists step
- * 1 sees arriving. Port *types* no dialog sets. *needed* ticks step 1's
- * "needed" on those inputs (`PortsEditor`), which sets `required` on the port.
+ * Open a node's dialog and set what it asks: its name, what its ports are
+ * called, its settings -- and step 1's "Run once per item", ticked or not,
+ * which sets how the node runs and which inputs fan out and which outputs hand
+ * on a list, together (`withPerItem`), for the lists step 1 sees arriving.
+ * Port *types* no dialog sets, but a wire from a picker ticks "Read the file
+ * at this path". *needed* ticks step 1's "needed" on those inputs
+ * (`PortsEditor`), which sets `required` on the port.
  *
- * The draft is edited the way the dialog edits it (`trackPorts`, `withPorts`,
- * `withSetting`) and saved the way the dialog saves it (`saveDraft`).
+ * Done through the dialog's own `nodeDialog`: each change as its ports editor
+ * and its fields make it, and written into the graph as it writes -- closed.
  */
 function edit(nodeId: string, changes: {
   label: string; input?: string[]; output?: string; config?: Record<string, unknown>; perItem?: boolean; needed?: string[];
 }): void {
-  const stored = nodeOf(nodeId);
-  let draft = trackPorts(JSON.parse(JSON.stringify(stored)) as GraphNode);
+  const dialog = nodeDialog(nodeId);
   // A row renamed in the ports editor; past the last row, one added with + and then named.
   const renamed = (ports: Port[], names: string[], kind: Port['kind']) => names.map((name, index) => ({
     ...(ports[index] ?? { kind, data_type: 'any', multi: false, required: false, description: '' }), id: name, name,
   }));
-  draft = withPorts(draft, {
+  dialog.change((draft) => withPorts(draft, {
     inputs: (changes.input ? renamed(draft.inputs, changes.input, 'input') : draft.inputs)
       .map((port) => (changes.needed?.includes(port.id) ? { ...port, required: true } : port)),
     outputs: changes.output ? renamed(draft.outputs, [changes.output], 'output') : draft.outputs,
-  });
-  draft = { ...draft, label: changes.label };
-  for (const [key, value] of Object.entries(changes.config ?? {})) draft = withSetting(draft, stored, key, value);
+  }));
+  dialog.change((draft) => ({ ...draft, label: changes.label }));
+  for (const [key, value] of Object.entries(changes.config ?? {})) dialog.setConfig(key, value);
   if (changes.perItem !== undefined) {
-    const lists = listPorts(draft, readPair(draft.config.examples).input, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
+    const shown = dialog.node()!;
+    const lists = listPorts(shown, readPair(shown.config.examples).input, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
     // The box is there only when a list arrives; a new code or ai node's input is declared one.
     expect(lists.length).toBeGreaterThan(0);
-    draft = withPerItem(draft, changes.perItem, lists);
+    dialog.change((draft) => withPerItem(draft, changes.perItem!, lists));
   }
-  saveDraft(nodeId, stored, draft);
+  dialog.write();
 }
 
 /** Drag a wire from one handle to another. */

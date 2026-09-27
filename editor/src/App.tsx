@@ -447,6 +447,7 @@ export default function App() {
 
         {editingNodeId && !editingGuiNode && (
           <NodeEditor
+            key={editingNodeId}
             nodeId={editingNodeId}
             onClose={() => setEditingNode(null)}
           />

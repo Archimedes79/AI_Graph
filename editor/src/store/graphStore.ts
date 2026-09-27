@@ -97,12 +97,14 @@ export interface GraphStore {
    * `renamed` maps a port's old id to its new one, per side, so the wires
    * follow the rename instead of being pruned as "a port that vanished" --
    * and to null for a port that was removed, whose wires go even when another
-   * port has been given its name since (`portRenames`).
+   * port has been given its name since (`portRenames`). `coalesce` makes it
+   * one undo step with the change just before it of the same name (`commit`).
    */
   updateNode: (
     nodeId: string,
     updates: Partial<GraphNode>,
     renamed?: PortRenames,
+    coalesce?: string,
   ) => void;
   /**
    * Wire one port to another: what dragging from a handle to a handle does.
@@ -161,12 +163,22 @@ export interface GraphStore {
    * made. Committing an identical state twice is a no-op, which is what keeps a
    * delete that arrives through two paths (the node's own button and ReactFlow's
    * remove change) from costing two presses of Ctrl+Z.
+   *
+   * *coalesce* names the change -- a node and the fields a dialog wrote. A
+   * change of the same name within a moment of the last one adds to that
+   * one's undo step instead of taking one of its own: a word typed into a
+   * field is one step, not one per keystroke. Anything else in between -- an
+   * unnamed change, an undo, another document -- ends it.
    */
-  commit: () => void;
+  commit: (coalesce?: string) => void;
   undo: () => void;
   redo: () => void;
-  /** Internal: replace the graph with a serialised snapshot (used by undo/redo). */
-  applyGraphSnapshot: (json: string) => void;
+  /**
+   * Internal: replace the graph with a serialised snapshot (used by undo/redo).
+   * *keepEditing*: the node dialog stays open when its node is still there --
+   * Undo takes back what it changed, and it shows what Undo left.
+   */
+  applyGraphSnapshot: (json: string, keepEditing?: boolean) => void;
   isDirty: () => boolean;
   /** Record the current graph as saved (after a successful write to disk). */
   markSaved: () => void;
@@ -357,6 +369,16 @@ const RUN_POLL_INTERVAL_MS = 400;
 /** How many undo steps are kept. Each entry is a whole serialised graph. */
 const HISTORY_LIMIT = 50;
 
+/** How long after a named change the next one of that name still belongs to its undo step (`commit`). */
+export const COALESCE_MS = 2000;
+
+/**
+ * The last undo step a named change began or added to, and when -- or null
+ * when the last change had no name. Not state anybody draws, so not in the
+ * store: a change of the same name within `COALESCE_MS` adds to that step.
+ */
+let coalescing: { key: string; at: number } | null = null;
+
 /** The size a node was given, if it was given one, as ReactFlow lays it out. */
 function sizeStyle(node: GraphNode): { style: { width: number; height: number } } | Record<string, never> {
   return typeof node.width === 'number' && typeof node.height === 'number'
@@ -518,8 +540,8 @@ export const useGraphStore = create<GraphStore>()(
       });
     },
 
-    updateNode: (nodeId, updates, renamed) => {
-      get().commit();
+    updateNode: (nodeId, updates, renamed, coalesce) => {
+      get().commit(coalesce);
       set((state) => {
         const idx = state.rfNodes.findIndex((n: RFNode) => n.id === nodeId);
         if (idx !== -1) {
@@ -624,6 +646,7 @@ export const useGraphStore = create<GraphStore>()(
     loadGraph: (graph) => {
       const normalizedGraph = normalizeGraph(graph);
       const { rfNodes, rfEdges } = buildReactFlowGraph(normalizedGraph);
+      coalescing = null;
 
       set((state) => {
         state.metadata = normalizedGraph.metadata;
@@ -743,7 +766,13 @@ export const useGraphStore = create<GraphStore>()(
       return { metadata, nodes, edges };
     },
 
-    commit: () => {
+    commit: (coalesce) => {
+      const now = Date.now();
+      if (coalesce && coalescing?.key === coalesce && now - coalescing.at < COALESCE_MS) {
+        coalescing.at = now;
+        return;
+      }
+      coalescing = coalesce ? { key: coalesce, at: now } : null;
       const snapshot = JSON.stringify(get().exportGraph());
       set((state) => {
         if (state.past[state.past.length - 1] === snapshot) return;
@@ -765,7 +794,7 @@ export const useGraphStore = create<GraphStore>()(
         state.past.pop();
         state.future.push(current);
       });
-      get().applyGraphSnapshot(previous);
+      get().applyGraphSnapshot(previous, true);
     },
 
     redo: () => {
@@ -777,7 +806,7 @@ export const useGraphStore = create<GraphStore>()(
         state.future.pop();
         state.past.push(current);
       });
-      get().applyGraphSnapshot(next);
+      get().applyGraphSnapshot(next, true);
     },
 
     /**
@@ -786,9 +815,11 @@ export const useGraphStore = create<GraphStore>()(
      * clean again, and undoing past it as dirty, which falls out of leaving
      * `savedSnapshot` alone.
      */
-    applyGraphSnapshot: (json) => {
+    applyGraphSnapshot: (json, keepEditing = false) => {
       const graph = normalizeGraph(JSON.parse(json) as Graph);
       const { rfNodes, rfEdges } = buildReactFlowGraph(graph);
+      // Whatever came next is not a continuation of what was typed before.
+      coalescing = null;
       set((state) => {
         state.metadata = graph.metadata;
         state.rfNodes = rfNodes as never;
@@ -796,9 +827,11 @@ export const useGraphStore = create<GraphStore>()(
         // Everything that names a node of the graph that was here. Left
         // standing, each points at something that may not exist any more: a
         // result against ids that now mean other nodes, a window from another
-        // graph's run floating over this one.
+        // graph's run floating over this one. The node dialog stays for Undo,
+        // on a node that is still there: the same graph, a step back.
         state.executionResult = null;
-        state.editingNodeId = null;
+        const stays = keepEditing && graph.nodes.some((node) => node.id === state.editingNodeId);
+        if (!stays) state.editingNodeId = null;
         state.textOutputWindows = [];
       });
     },
