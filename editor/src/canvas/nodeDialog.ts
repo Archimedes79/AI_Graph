@@ -64,8 +64,6 @@ export function overlay(base: GraphNode, edited: GraphNode, fields: Iterable<str
 export interface NodeDialog {
   /** The node as the dialog shows it: the graph's, with what was changed and not yet written on top. Undefined once it is gone. */
   node(): GraphNode | undefined;
-  /** The node as the graph holds it, without what is waiting. */
-  stored(): GraphNode | undefined;
   /**
    * Change it, as the undo step *step* says: typed into a field -- the fields
    * it changes, unless *step* names the one -- written a moment later, or with
@@ -130,7 +128,6 @@ export function nodeDialog(nodeId: string): NodeDialog {
 
   const dialog: NodeDialog = {
     node,
-    stored,
     write,
     change(edit, step) {
       // Not typing: what was typed before it is a step of its own, and so is this.

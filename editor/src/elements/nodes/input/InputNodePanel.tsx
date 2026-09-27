@@ -3,7 +3,6 @@ import { listAsRun } from '@/authoring/readAsRun';
 import FolderListing from '../../fields/FolderListing';
 import { DIMMER, FIELD, MUTED } from '@/ui/theme';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
-import { InputNodeGuiBuilder } from './InputNodeGuiBuilder';
 
 /**
  * An input node: a text, or a folder -- and for a folder, its file types and
@@ -14,8 +13,7 @@ import { InputNodeGuiBuilder } from './InputNodeGuiBuilder';
  * ("Read the file at this path"), and a text here holding the path, wired into
  * that input, says which file.
  */
-export default function InputNodePanel({ builder, node, setConfig }: NodePanelProps) {
-  if (!(builder instanceof InputNodeGuiBuilder)) return null;
+export default function InputNodePanel({ node, setConfig }: NodePanelProps) {
   const isDirectory = node.config.input_mode === 'directory';
   const value = String(node.config.value ?? '');
 
