@@ -107,17 +107,19 @@ Nothing leaves the machine unless the graph itself sends it there.
   button, a chat message or a dropdown starts the graph *at the node it is wired to*, so
   one page can hold several tools.
 - **A prompt you can see** — an AI node shows the exact request the model will get,
-  tries it with ▶ Try it, and **Keep this result** makes an answer you liked the example
-  it imitates.
+  tries it with ▶ Try it, and **Keep as expected output** puts an answer you liked into
+  its words ("Answer in this shape: …"), which the model is sent every time.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
 - **A real editor** — code and prompts are written in CodeMirror, full-window on ⤢, or
   in your own editor with one click.
-- **Four steps, the same way everywhere** — an AI node, a code node and a data node are
-  each built in the same four steps: one example of what comes in, what comes out, what
-  it should do, and the body. Get the example from the graph (⟳) or a file (📂), press
-  ▶ Try it, see what comes out. The same values are
-  what ✨ Generate is written and verified against, and ▶ Test runs every example the
-  node keeps, a judge's included.
+- **Four steps, the same way everywhere** — an AI node and a code node are built in the
+  same four steps, with the same buttons in the same places: one example of what comes
+  in, what comes out, what it should do, and the body. Get the example from the graph
+  (⟳), a file (📂), or drop a file on the node; press ▶ Try it and see what comes out,
+  whether it is the expected output, and how the node's other examples did. Then say
+  what to change in one line — ✨ changes the task and the body together and tries it
+  again — or press ✨ Fix where it failed. There is no Save in the dialog: a change is in
+  the graph at once, and Undo takes it back.
 - **An MCP server** — `--mcp` lets Claude Code or Claude Desktop generate, validate, save
   and run graphs, confined to one folder.
 - **Deployment** — a self-contained bundle, a Docker Compose stack, or one executable.

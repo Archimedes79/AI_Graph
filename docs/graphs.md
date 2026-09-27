@@ -235,11 +235,12 @@ this node runs*, with the way back to the standard.
 **Do you have to describe the output format?** No. It only matters when something
 downstream has to *parse* the answer, and what the nodes it is wired to want is said
 already: step 2's words field shows it greyed while it is empty, and it is what ✨ is told
-either way. Then there are two ways to say more, and both are sent whenever they say
-anything: in words (“a JSON list of {title, score}”), or shown — press ▶ Try it, and if
-the answer has the shape you want, **Keep this result** makes it step 2's example answer.
-The node is then told to answer in that same structure with new content, and its
-neighbours are generated against it. Nothing checks the answer afterwards; a model that ignores the
+either way. To say more, there is that one field, sent whenever it says anything: write it
+(“a JSON list of {title, score}”), or show it — press ▶ Try it, and if the answer has the
+shape you want, **Keep as expected output** puts “Answer in this shape: …” with that answer
+into the words (in place of a shape kept before). The node is then told to answer in that
+same structure with new content, and its neighbours are generated against it. Nothing
+checks the answer afterwards unless its example has a judge; a model that ignores the
 format is caught by a Code node, not by this setting.
 
 Everything else — model, temperature, tools, vision, batching, failures — has a default
@@ -262,25 +263,42 @@ function run(inputs) {
 
 The AI can generate this function for you: just describe what the node should do.
 
-**The node's dialog is the order the work is done in**, the same for an AI node and a
-Data node:
+**The node's dialog is the order the work is done in**, with the same sections and the
+same buttons for an AI node -- only the body differs:
 
 ```
-1  What comes in        each input: its name, and where it is wired from
-                        + ONE example of what arrives: ⟳ From the graph, or 📂 From a file…
+1  What comes in        each input: its name, "needed", "Read the file at this path", and
+                        where it is wired from
+                        + ONE example of what arrives: ⟳ From the graph, 📂 From a file…,
+                          or a file dropped on it
                         + "Run once per item", when a list arrives
-2  What comes out       each output: its name, and where it is wired to
+2  What comes out       each output: its name, where it goes and what the node there
+                        wants -- as the graph says it, to read
                         + what comes out, in words -- greyed, what the graph already says
-                        + the example output (an AI node: the answer to imitate)
                         + the shape a run kept (output_schema in interface.json), to read
 3  What should it do?   a sentence or two, in your words
-4  Code                 the code (an AI node's instructions and message; a Data node's format),
-                        with ✨ Generate -- and ▶ Try it on step 1's example, under it
+4  Code                 the code (an AI node's instructions and message), with ✨ Generate
+                        -- and ▶ Try it on step 1's example, under it: what came out,
+                        ✓/✗ against the expected output, Keep as expected output, the
+                        judge's sentence, "and 2 more: pass" -- then ✨ Fix where it
+                        failed, and "Say what to change"
 ```
 
+There is no Save and no Cancel: a change is in the graph a moment after it is made, one
+undo step per field typed into, and ✕ or Esc close the dialog with nothing lost. What
+cannot be stored yet -- an example that is not JSON, a port name that is empty or taken --
+stays in its field with the reason. A port has no type or "list" box of its own here: an
+input's file is read where it says so, and a list follows "Run once per item".
+
 The example is kept as the first section of the node's `examples.md`: its input block is
-step 1, its expect block step 2. It is the one sample everything uses — ✨ Generate and its
-verify pass, Try it, the AI node's request, and `test`.
+step 1, its expect block what Try it holds the result to. It is the one sample everything
+uses — ✨ Generate and its verify pass, Try it, the AI node's request, and `test`.
+
+**Say what to change.** Under the result, one line: say what to change and press Enter.
+✨ changes the body there is -- from the body, what came of it (the try, else the last run)
+and your words -- restates the task to match, writes both as one undo step and tries it at
+once. Where the try or the last run failed, or fell short of the expected output or the
+judge, **✨ Fix** repairs the body from the error, the input and the body.
 
 **What ✨ Generate is told** is the same for a code node and an AI node: one brief, built
 from steps 1–3, each fact said once and everything long cut to a budget (about 8 000
@@ -297,7 +315,6 @@ characters at most), so a small local model still has room to answer:
 - `rows`: one object per customer
   to "Table" (port "Rows"), which wants rows: a list of objects with the same keys…
 Format: <the format, in your words>
-An example of what it returns: <the example, if you kept one>
 The shape it returned so far … keep it: { rows: list of { name: text, email: text } }
 ## Examples -- the result is checked against these          the first 3
 ## The function   (code)  the typed signature to complete    /   (AI) "write the system prompt…"
@@ -369,7 +386,7 @@ starts from, and what ✨ Generate is told.
 |---|---|
 | Every node | `node.json` — its name, description and settings. `interface.json` — its ports: id, type, whether a list, whether required; and `output_schema`, the shape a run kept, for a node that keeps one |
 | Code | `code.js`, `task.md`, `examples.md` |
-| AI | `run.js`, `system.md`, `message.md`, `output.md`, `output.example.md`, `examples.md` |
+| AI | `run.js`, `system.md`, `message.md`, `output.md`, `examples.md` |
 | Data | `format.md` (the contract neighbours are generated against), `task.md` |
 
 An input, an output, a trigger and a page keep no writing: all they are is settings, and a
@@ -385,8 +402,8 @@ tool reads it, the MCP server reads and writes it; `git diff` shows code as code
 
 **Editing outside.** Open any of these files in your own editor (or let git change
 them): the editor watches the folder and takes what changed in as one undo step, with
-*↻ From disk: …* on the status line. A node open in its dialog with edits of its own
-is not overwritten — the dialog asks whether to take the new version or keep yours.
+*↻ From disk: …* on the status line. A node open in its dialog shows the new version at
+once, with what was typed there in the last moment and not written yet kept on top.
 Saving refuses to overwrite a file changed outside since it was read. The toolbar's ↻
 reopens the whole project, for when `flow.json` or a node's settings or ports changed
 (a pull, a merge).
@@ -405,8 +422,8 @@ integer*, rather than the node three steps later failing on the wrong shape — 
 nodes after it are generated against it; ✨'s verify pass sets it too, from what the code
 returned on the sample. It is shown in step 2 of the node's dialog, to read, and not
 typed: **Clear** there lets the next run measure it again after a deliberate change. An
-AI node also keeps `output.md` (a description of the answer) and `output.example.md`, and
-both are sent to the model with every request.
+AI node also keeps `output.md` (a description of the answer, and the shape of an answer
+you kept), which is sent to the model with every request.
 
 **Examples: a node's own tests.** A code or AI node can keep `examples.md` — inputs, and
 what must come out. Optional; they check what was written, whoever wrote it, and ✨
@@ -427,13 +444,14 @@ Generate is shown the first few, so what it writes is written to pass them:
 An `expect` block names only the fields it cares about; anything else the node returns is
 its own business. A model's answer is never the same twice, so an AI node's example can
 have a ````judge` block instead — a sentence (*"about two sentences, in prose"*) that a
-model holds the answer to. In the node's dialog the first example is steps 1 and 2: ⟳
-From the graph fills its input with what really arrives, **Keep this result** makes what
-▶ Try it gave its expected output, and Try it says whether a result meets it. An AI node's
-step 2 asks for the judge's sentence too. A file with more examples keeps them as they
-are, and `test` runs them all; the dialog edits the first and says so, and where there is
-more to check than Try it can — a judge, the other examples — **▶ Test** in step 2 runs
-them the way `test` does.
+model holds the answer to. In the node's dialog the first example is step 1's, and the
+rest of it lives under ▶ Try it: ⟳ From the graph fills its input with what really
+arrives, Try it says whether a result is the expected output (✓/✗), **Keep as expected
+output** makes what it gave that (an AI node keeps the answer's shape in its words
+instead), and **Judged by a model** takes the judge's sentence. A file with more examples
+keeps them as they are, and `test` runs them all; where there is a judge or more examples,
+▶ Try it runs them the way `test` does and says how the others did in one line — *and 2
+more: pass*.
 
 `node engine/src/main.ts test my_tool` runs every node's examples; `--offline` asks no
 model and skips what needs one, which is how CI runs this repository's examples.
@@ -485,17 +503,22 @@ wrote, what comes out?* — built in the same four steps:
   fills it with what really arrives — the last run's values, or, before one, what the
   nodes that *feed* this element deliver when they are run now (the file picked, the CSV
   parsed, the page's fields read), not the element itself. **📂 From a file…** fills one
-  input from a file: its path, where a path is what arrives (a file path input, or one
-  wired from something that hands on paths — read as a run reads it when *read file
-  contents* is on) — kept relative to the folder the editor runs in — and otherwise what
-  the file says, parsed when it is JSON. Typing is editing what they filled. A node with
-  no inputs has no example: Try it runs it on nothing.
+  input from a file — and so does a file **dropped** on the example field, or on a node
+  with one input on the canvas, with no dialog on the way: its path where the input says
+  **Read the file at this path** (read as a run reads it, and kept relative to the folder
+  the editor runs in), otherwise what the file says, parsed when it is JSON. A browser
+  never says where a dropped file is; the editor finds the one file of that name and size
+  under its folder, and says so when there is none or several. Typing is editing what they
+  filled. A node with no inputs has no example: Try it runs it on nothing.
 - **▶ Try it**, under the body in step 4, runs just this element on that example, through
-  the same steps a run takes (the same model, wired files read into text, one
-  call per item). Nothing is saved and nothing downstream runs. An AI node shows the
-  request first, as the model receives it — put together by the engine, one request per
-  item, when the node runs per item or reads files. The result is set against step 2's
-  example output, and **Keep this result** makes it that.
+  the same steps a run takes (the same model, the files of the inputs that say so read
+  into text, one call per item). Nothing downstream runs. An AI node shows the request
+  first, as the model receives it — put together by the engine, one request per item,
+  when the node runs per item or reads files. The result is set against the example's
+  expected output, and **Keep as expected output** makes it that.
+- **Say what to change**, under the result, and **✨ Fix** where it failed: the body
+  changed or repaired from what came of it, written as one undo step and tried again at
+  once.
 - **What ✨ sends**, beside the button, shows the request word for word: the brief above.
   The example is the sample the generated body is then run against, and what it expects
   is checked before you see it; what falls short goes back to the model for one repair.

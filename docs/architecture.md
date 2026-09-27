@@ -303,7 +303,7 @@ class. Adding a kind adds one folder on each side and one line in each registry
 the editor), and nothing else changes.
 
 **2. The executor owns everything about a run.** Ordering, fan-out over lists, reading
-wired files, catching failures, stopping, idle-skipping, settling memory, and asking for
+the file on each input that says so, catching failures, stopping, idle-skipping, settling memory, and asking for
 displays are done once, in `execution/executor.ts`, for every element alike. An element
 declares (`fansOut` and `batchMode`, `readsFileInputs`, `catchesErrors`, `needsInput`, `isMemory`,
 `settlesOnArrival`); the executor carries out.
@@ -357,7 +357,8 @@ other knows, it imports it or replays its result:
    too, unless it keeps something of its own (a page, a data node, a trigger); an event's
    `true` is never handed back by `reuse.ts`; nothing is held inside a subgraph; what stood still is never settled into memory or shown a second time.
 3. **Per node.** Collect inputs → idle-skip if a required or (for an AI node) every wired
-   input came up empty → read wired files → run once, or once per item → record.
+   input came up empty → read the file on each input typed `file_path` (a code or AI node's
+   "Read the file at this path"; never guessed from the wire) → run once, or once per item → record.
    A failure marks the node and skips its dependents; with `catch_errors` it becomes an
    `error` output instead.
 4. **After the round.** `settleMemory` hands loop values to the nodes that keep them and
@@ -392,23 +393,36 @@ sentence of what it shows (`DisplayWidgetRunner.draws`, the same words the node 
 it is told).
 
 ```
-1 what comes in:  ports + ONE example   ⟳ from the graph · 📂 from a file · "run once per item"
-2 what comes out: ports + words (greyed: what the graph already says) + example output + kept shape
-3 what it should do ──✨──▶ 4 body ──▶ ▶ Try it on the example ──▶ what came out ── Keep this result ─▶ 2
-                             ▲                                        │
-                             └────────────── verified ────────────────┘
+1 what comes in:  ports ("read the file at this path") + ONE example   ⟳ · 📂 · a file dropped · "run once per item"
+2 what comes out: ports, where each goes and what it wants (read only) + ONE words field + kept shape
+3 what it should do ──✨──▶ 4 body ──▶ ▶ Try it ──▶ what came out · ✓/✗ expected · judge · "and 2 more"
+                             ▲                        │  Keep as expected output
+                             └── "Say what to change" ┘  ✨ Fix (where it failed)
 ```
 
 The example is one thing, kept once: the first section of the node's `examples.md`
 (`authoring/examplePair.ts`). It is the sample ✨ is written and
 checked against (`nodeFacts`), what Try it runs, what an AI node's request is shown for,
-and what `test` runs.
+and what `test` runs. Where the file holds a judge's sentence or more examples, Try it runs
+them the way `test` does (`testNode`), so the answer shown is the answer judged.
 
-Where the steps differ by element, the element's panel hands the difference to `NodeSteps`
-rather than `NodeSteps` asking what it draws: an AI node's panel gives its step 2 the
-example answer a model imitates and how **Keep this result** keeps one there (`answer`,
-with `elements/nodes/ai/keptAnswer.ts`); without it, step 2 is the example's expect block.
-Each panel says what its words in step 2 are for (`wordsHint`).
+An AI node and a code node have the same sections in the same order and the same buttons;
+only the body differs. Where an element keeps a result differently, its panel hands that to
+`NodeSteps` rather than `NodeSteps` asking what it draws: an AI node's answer is never the
+same twice, so its "Keep as expected output" writes "Answer in this shape: …" into its words
+(`keep`, with `elements/nodes/ai/keptAnswer.ts`); a code node's writes the example's expect
+block. Each panel says what its words in step 2 are for (`wordsHint`).
+
+**No Save.** What a node's dialog changes is written into the graph a moment later
+(`canvas/nodeDialog.ts`), one undo step per field typed into (`graphStore.commit`'s
+coalescing); Undo takes it back, and closing the dialog loses nothing. What cannot be stored
+yet -- an example that is not an object, a port name that is empty or taken -- stays in its
+field with the reason (`useTyped`), and is never written.
+
+**Changing what there is.** "Say what to change" and ✨ Fix go through the one generate path
+with `refine`: the body as it is, what came of it (the try on screen, else the last run) and
+the words -- none for a fix, which is the repair step made of the body there is. The answer
+brings the task back restated, and the dialog writes both as one step and tries it at once.
 
 **One way to run a body — on Node.** A code node's `code.js` and an ai node's or a
 subgraph node's changed `run.js` are one kind of thing, and `elements/body.ts` (`runBody`)
@@ -436,7 +450,8 @@ returns an empty chart, and passes. A node that runs once per item is probed on 
 cut from the sample by the rule the executor cuts by (`batchItems`), and its answer is
 recorded as the list a run hands on (`mergeBatchOutputs`), so the shape kept from a probe is
 the shape a run checks itself against. Every model call is recorded
-(`AICall`) and can be watched while it runs; the result waits for the person to accept it.
+(`AICall`) and can be watched while it runs; the result is written into the node at once,
+and Undo takes it back.
 
 ## A graph on disk
 
@@ -477,7 +492,8 @@ or a page that has them can do the same.
   which nodes keep one is `NodeRunner.keepsOutputInterface`) is inferred from what
   its first successful run produced ([`execution/interface.ts`](../engine/src/execution/interface.ts)),
   checked against on every later run (a message, not a failure), and handed to the next
-  node's generation. An AI node's `output.md` and `output.example.md` are also sent to the model.
+  node's generation. An AI node's `output.md` -- its words, an answer's shape kept there too --
+  is also sent to the model.
 - **Examples are tests, and the one sample.** A node's optional `examples.md`
   ([`execution/examples.ts`](../engine/src/execution/examples.ts)) is run by `test` and the
   MCP server's `test_graph`, through its one `testGraph`, at every depth of the graph; one node
@@ -505,7 +521,7 @@ or a page that has them can do the same.
 | what every node made last, for rounds its ◆ stays shut | `Latch`, in the process holding the graph; gone at restart | `NodeResult.held` |
 | the last run | the editor's store / the served page / `schedule.ts` | `ExecutionResult` |
 | keys, endpoints, MCP servers that start programs | `ai-settings.json`, machine-side, never in a graph | — |
-| the one AI setting: what ✨ Generate, Try it, ▶ Test and every run call unless a node pins its own | `ai-settings.json`'s `ai` (or `AI_GRAPH_AI_PROVIDER`/`_MODEL`), read only by `aiSetting` in [`ai/settings.ts`](../engine/src/ai/settings.ts) | `ProviderStatus.target`, for the editor's "now: …" |
+| the one AI setting: what ✨ Generate, Try it (and its judge) and every run call unless a node pins its own | `ai-settings.json`'s `ai` (or `AI_GRAPH_AI_PROVIDER`/`_MODEL`), read only by `aiSetting` in [`ai/settings.ts`](../engine/src/ai/settings.ts) | `ProviderStatus.target`, for the editor's "now: …" |
 | a node's own model | the node's config (`ai_provider`, `ai_model`) | the graph |
 
 ## Security boundaries
