@@ -50,6 +50,18 @@ describe('"Run once per item"', () => {
     expect(runsPerItem(perItem)).toBe(true);
   });
 
+  it('hands an input typed List its list whole, even to a node run per item', () => {
+    // The "list" box on each input also said which list is taken whole beside
+    // one run per item -- a stop-word list beside the words. The port's type
+    // says it now.
+    const node = NODE_KINDS.code.create('worker');
+    node.inputs.push({ ...node.inputs[0], id: 'stop', name: 'stop', data_type: 'list', multi: false });
+    const example = { input: ['alpha', 'beta'], stop: ['a', 'the'] };
+    expect(listPorts(node, example)).toEqual(['input']);
+    expect(withPerItem(node, true, listPorts(node, example)).inputs.map((port) => port.multi)).toEqual([true, false]);
+    expect(withPerItem(node, true).inputs.map((port) => port.multi)).toEqual([true, false]);
+  });
+
   it('is asked when a list arrives: in the example, by a declared list, or down a wire from one', () => {
     const node = withPerItem(NODE_KINDS.code.create('worker'), false);
     node.inputs.push({ ...node.inputs[0], id: 'words', name: 'words' });

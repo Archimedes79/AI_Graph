@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { call } from '@/api/client';
 import { keepsOutputInterface, useGraphStore } from '@/store/graphStore';
 import { unmet } from '@engine/execution/examples.ts';
@@ -73,6 +73,11 @@ export default function NodeSteps({
     setConfig('examples', next);
     return shownExpect(readPair(next).expectText);
   });
+  const lists = listPorts(node, pair.input, nodes, edges);
+  // Once asked, the question stays while the dialog is open: unticked, no
+  // input is declared a list any more, and the box would vanish under the click.
+  const askedPerItem = useRef(false);
+  if (lists.length) askedPerItem.current = true;
 
   if (!generation || !steps) return null;
 
@@ -85,7 +90,6 @@ export default function NodeSteps({
 
   const fromGraph = () => fromTheGraph(node, executionResult, graphWithDraft);
 
-  const lists = listPorts(node, pair.input, nodes, edges);
   const reads = readFilePorts(node, nodes, edges);
   const words = outputFormatText(node.config);
   const setWords = (text: string) => {
@@ -117,7 +121,7 @@ export default function NodeSteps({
           </p>
         )}
       />
-      {lists.length > 0 && (
+      {askedPerItem.current && (
         <RunOncePerItem
           checked={runsPerItem(node)}
           onChange={(perItem) => updateNode((current) => withPerItem(current, perItem, lists))}

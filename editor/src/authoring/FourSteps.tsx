@@ -85,7 +85,7 @@ export function RunOncePerItem({ checked, onChange, subject }: { checked: boolea
       </label>
       <p className="text-xs mt-0.5" style={{ color: DIMMER }}>
         {checked
-          ? `A list arrives, and ${subject} runs once for each item in it; what comes out is a list of the results.`
+          ? `A list arrives, and ${subject} runs once for each item in it; what comes out is a list of the results. An input typed “List” is handed its list whole all the same.`
           : `A list arrives, and ${subject} gets it whole, once -- for totals, summaries, merges.`}
       </p>
     </div>
