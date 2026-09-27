@@ -144,16 +144,16 @@ function codeChange(refine: Refine, sample: Sample | undefined, outputs: string[
   return parts.join('\n');
 }
 
-/** The same for a body that is prose -- a system prompt -- asked for inside `<tag>`. */
-function proseChange(refine: Refine, what: string, tag: string, sample: Sample | undefined): string {
+/** The same for a system prompt, which is asked for inside `<system_prompt>` tags. */
+function systemPromptChange(refine: Refine, sample: Sample | undefined): string {
   const change = refine.change?.trim();
   const on = sample ? ` on ${sample.origin}` : '';
-  const parts = [`## The ${what} as it is now`, refine.body.trim() || '(none yet)'];
+  const parts = ['## The system prompt as it is now', refine.body.trim() || '(none yet)'];
   if (refine.outcome?.trim()) parts.push(`## What came of it${on}`, clip(refine.outcome, BUDGET.preview));
   if (refine.error?.trim()) parts.push(`## How it failed${on}`, refine.error.trim());
   if (refine.problems?.length) parts.push('## What is wrong with what came of it', refine.problems.map((problem) => `- ${problem}`).join('\n'));
   parts.push('## What to change', change || 'Only what makes it fail, or fall short, as said above.');
-  parts.push(`Write the whole ${what} again with that change, keeping what it does not touch, inside <${tag}> tags.${change ? ` ${RESTATE}` : ''}`);
+  parts.push(`Write the whole system prompt again with that change, keeping what it does not touch, inside <system_prompt> tags.${change ? ` ${RESTATE}` : ''}`);
   return parts.join('\n\n');
 }
 
@@ -165,7 +165,7 @@ function proseChange(refine: Refine, what: string, tag: string, sample: Sample |
  */
 async function generateCode(
   ai: AiService, target: Target, request: GenerateRequest, sample?: Sample, evidence = '',
-): Promise<{ text: string; explanation: string; task?: string }> {
+): Promise<{ text: string; task?: string }> {
   const inputs = request.inputs ?? [];
   const outputs = request.outputs ?? [];
   const parts = ['Write a JavaScript function for one node of a graph. The node should:', request.description || '(not said yet)'];
@@ -185,21 +185,15 @@ async function generateCode(
   parts.push('Use only what Node has built in. There is no package manager and no `npm install`: `require` '
     + "and `import` of anything outside Node's own standard library will fail at run time.");
   const { task, rest } = taskIn(await ai.complete({ prompt: parts.join('\n'), system: CODE_SYSTEM, ...target }));
-  const code = firstCodeBlock(rest);
-  const explanation = code ? rest.slice(rest.lastIndexOf('```') + 3).trim() : rest.replace(/```(?:javascript|js)?/g, '').trim();
-  return { text: code || rest, explanation, ...(task ? { task } : {}) };
+  return { text: firstCodeBlock(rest) || rest, ...(task ? { task } : {}) };
 }
 
-/** One piece of text wrapped in `<tag>…</tag>`, the explanation after it, and the task where one was restated. */
-async function generateTagged(
-  ai: AiService, target: Target, system: string, tag: string, prompt: string,
-): Promise<{ text: string; explanation: string; task?: string }> {
-  const { task, rest } = taskIn(await ai.complete({ prompt, system, ...target }));
-  const restated = task ? { task } : {};
-  const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(rest);
-  if (match) return { text: match[1].trim(), explanation: rest.slice(match.index + match[0].length).trim(), ...restated };
+/** A system prompt, asked for inside `<system_prompt>` tags, and the task where one was restated. */
+async function generateSystemPrompt(ai: AiService, target: Target, prompt: string): Promise<{ text: string; task?: string }> {
+  const { task, rest } = taskIn(await ai.complete({ prompt, system: PROMPT_SYSTEM, ...target }));
+  const match = /<system_prompt>([\s\S]*?)<\/system_prompt>/.exec(rest);
   // A model that ignores the tags falls back to the whole reply, which beats nothing.
-  return { text: rest.trim(), explanation: '', ...restated };
+  return { text: (match ? match[1] : rest).trim(), ...(task ? { task } : {}) };
 }
 
 const PROMPT_SYSTEM =
@@ -369,7 +363,7 @@ function repairPrompt(
 async function generateVerifiedCode(
   ai: AiService, runtime: Runtime, target: Target, request: GenerateRequest,
   given: Sample | undefined, change = '',
-): Promise<{ text: string; explanation: string; task?: string; probe: ProbeReport }> {
+): Promise<{ text: string; task?: string; probe: ProbeReport }> {
   const outputs = request.outputs ?? [];
   const sample = given?.values;
   const first = await generateCode(ai, target, request, given, change);
@@ -429,7 +423,7 @@ async function generateVerifiedCode(
   // A change is repaired as the task it restated, which says the change; the
   // task from before it asks for the body the change was to replace.
   const task = asked && first.task ? { ...request, description: first.task } : request;
-  let second: { text: string; explanation: string };
+  let second: { text: string };
   try {
     second = await generateCode(ai, target, task, given, evidence);
   } catch {
@@ -437,7 +431,7 @@ async function generateVerifiedCode(
     return { ...first, probe: reportOf(attempt, 'failed') };
   }
   // The repair is asked for code alone: what the change made of the task stands.
-  const repaired = { text: second.text, explanation: second.explanation, ...(first.task ? { task: first.task } : {}) };
+  const repaired = { text: second.text, ...(first.task ? { task: first.task } : {}) };
   const again = await judge(second.text);
   if (again.reached === 3) return { ...repaired, probe: reportOf(again, 'repaired') };
   // Still not right. Keep the attempt that got further -- one that misses an
@@ -542,8 +536,8 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     switch (kind) {
       case 'code': {
         const change = refine ? codeChange(refine, sample, request.outputs ?? []) : '';
-        const { text, explanation, task, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, request, sample, change);
-        return { result: text, explanation, probe: report, calls, ...restated(task) };
+        const { text, task, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, request, sample, change);
+        return { result: text, probe: report, calls, ...restated(task) };
       }
       case 'prompt': {
         // The same brief a code node's body is written from: a system prompt
@@ -553,12 +547,12 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
           `Task: ${request.description || '(not said yet)'}`,
           renderBrief(request, 'prompt', sample),
           refine
-            ? proseChange(refine, 'system prompt', 'system_prompt', sample)
+            ? systemPromptChange(refine, sample)
             : 'Write the system prompt for the model this node calls. It is sent what is described above, '
               + 'every time the node runs, and its answer goes where the outputs go.',
         ].filter(Boolean).join('\n\n');
-        const { text, explanation, task } = await generateTagged(ai, deps.target, PROMPT_SYSTEM, 'system_prompt', prompt);
-        return { result: text, explanation, probe: notProbed(), calls, ...restated(task) };
+        const { text, task } = await generateSystemPrompt(ai, deps.target, prompt);
+        return { result: text, probe: notProbed(), calls, ...restated(task) };
       }
       default:
         throw new GenerationRefused(`Unknown generation kind '${String(kind)}'`);
@@ -568,7 +562,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
       // Recorded as a failure by `recording`; it is not one.
       const last = calls.at(-1);
       if (last) last.error = null;
-      return { result: '', explanation: '', probe: notProbed(), calls };
+      return { result: '', probe: notProbed(), calls };
     }
     if (error instanceof GenerationRefused) throw error;
     // The failing generation is the one whose transcript is worth reading.
@@ -592,15 +586,13 @@ export class GenerationFailed extends Error {
 
 /** Ask for a whole Graph DSL document from a description. The caller parses it. */
 export async function generateGraph(
-  description: string, context: string, deps: Pick<GenerateDeps, 'ai' | 'target' | 'calls'>,
+  description: string, deps: Pick<GenerateDeps, 'ai' | 'target' | 'calls'>,
 ): Promise<{ graph: unknown; explanation: string; calls: AICall[] }> {
   const calls: AICall[] = deps.calls ?? [];
   const ai = recording(deps.ai, calls);
-  const parts = ['Design a graph that does the following:', description];
-  if (context) parts.push(`\nContext:\n${context}`);
   let raw: string;
   try {
-    raw = await ai.complete({ prompt: parts.join('\n'), system: GRAPH_SYSTEM, ...deps.target });
+    raw = await ai.complete({ prompt: `Design a graph that does the following:\n${description}`, system: GRAPH_SYSTEM, ...deps.target });
   } catch (error) {
     throw new GenerationFailed(error instanceof Error ? error.message : String(error), calls);
   }

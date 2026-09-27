@@ -509,7 +509,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
 
       let generated: { graph: unknown; explanation: string };
       try {
-        generated = await generateGraph(description, '', { ai: options.ai, target });
+        generated = await generateGraph(description, { ai: options.ai, target });
       } catch (error) {
         throw new Refused(`Generation with ${target.provider} / ${target.model} failed: ${message(error).slice(0, ERROR_LIMIT)}\n`
           + `If that model is not set up or not running, configure one in the AI-Graph editor's Settings. ${otherwise}`);

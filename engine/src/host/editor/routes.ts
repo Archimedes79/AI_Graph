@@ -171,9 +171,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     generateGraph: (asked) => watched(asked.progress_id, async (calls) => {
       const target = await aiSetting();
-      const { graph, explanation } = await gen.generateGraph(
-        asked.description ?? '', asked.context ?? '', { ai: nodeRuntime().ai, target, calls },
-      );
+      const { graph, explanation } = await gen.generateGraph(asked.description ?? '', { ai: nodeRuntime().ai, target, calls });
       return { graph: parseGraph(graph), explanation };
     }),
 

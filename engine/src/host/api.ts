@@ -211,7 +211,6 @@ export interface GenerateResponse {
   result: string;
   /** The node's task, restated to fit a body changed as asked (`GenerateRequest.refine`). */
   task?: string;
-  explanation: string;
   probe: ProbeReport;
   /** Every model call this generation made, in order. For a preview, the one request, unsent. */
   calls: AICall[];
@@ -342,7 +341,7 @@ export const API = {
   generate: route<GenerateRequest & Watched, GenerateResponse>('POST', '/api/ai/generate', 'editor'),
   /** What the generation with this id has sent and received so far. */
   generationProgress: route<{ id: string }, { calls: AICall[] }>('GET', '/api/ai/generate/progress', 'editor'),
-  generateGraph: route<{ description: string; context?: string } & Watched, { graph: Graph; explanation: string }>(
+  generateGraph: route<{ description: string } & Watched, { graph: Graph; explanation: string }>(
     'POST', '/api/ai/generate-graph', 'editor'),
 
   /** The graph as a deployable zip, named by the server (`<graph name>_bundle.zip`). */

@@ -91,7 +91,7 @@ describe('a change to the body there is ("Say what to change", ✨ Fix)', () => 
     const written: Record<string, string> = {};
     buildGeneration({ ...asked(written), refine }).apply({
       result: 'function run(i) { return { output: 1, lines: 1 }; }', task: 'Count the words and the lines.',
-      explanation: '', probe: { status: 'ok', error: '', missing_outputs: [] }, calls: [],
+      probe: { status: 'ok', error: '', missing_outputs: [] }, calls: [],
     });
     expect(written).toEqual({ code: 'function run(i) { return { output: 1, lines: 1 }; }', code_prompt: 'Count the words and the lines.' });
   });
@@ -105,7 +105,7 @@ describe('a change to the body there is ("Say what to change", ✨ Fix)', () => 
   });
 
   it('says what it did: changed as said -- run on the example, which a change is not held to -- or fixed', () => {
-    const ok = { result: 'x', explanation: '', probe: { status: 'ok' as const, error: '', missing_outputs: [] }, calls: [] };
+    const ok = { result: 'x', probe: { status: 'ok' as const, error: '', missing_outputs: [] }, calls: [] };
     const said = (options: ReturnType<typeof buildGeneration>) => (typeof options.success === 'function' ? options.success(ok) : options.success);
     // "Verified against the example" said of a change that no longer gives what the example expects.
     expect(said(buildGeneration({ ...asked({}), refine, sampleOrigin: 'the example in step 1' }))).toBe('✅ Changed, and it runs on the example in step 1.');

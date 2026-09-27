@@ -46,7 +46,6 @@ describe('code', () => {
       { ai, code: runner(() => ({})), generationFor, target },
     );
     expect(reply.result).toBe('function run(inputs) { return { out: 1 }; }');
-    expect(reply.explanation).toBe('It adds.');
     expect(reply.probe.status).toBe('skipped');                 // no sample, one honest pass
     expect(ai.asked[0].prompt).toContain('function run(inputs) {');
     expect(ai.asked[0].prompt).toContain('const a = inputs["a"];');
@@ -128,7 +127,7 @@ describe('changing a body there is (refine)', () => {
     expect(asked).toContain('--- what it returned on the last run ---\n{"out": 4}');
     expect(asked).toContain('--- what to change ---\nTriple it instead.');
     expect(asked).toContain('<task></task>');
-    expect(reply).toMatchObject({ result: 'function run(i) { return { out: i.a * 3 }; }', task: 'Triple the number.', explanation: 'Now triples.' });
+    expect(reply).toMatchObject({ result: 'function run(i) { return { out: i.a * 3 }; }', task: 'Triple the number.' });
     // Tried on the sample like any body written, with the one repair behind it.
     expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 6 } });
   });
@@ -213,7 +212,7 @@ describe('changing a body there is (refine)', () => {
     );
     expect(ai.asked[0].prompt).toContain('## The system prompt as it is now\n\nName the capital of the country.');
     expect(ai.asked[0].prompt).toContain('## What to change\n\nOne word only.');
-    expect(reply).toMatchObject({ result: 'Answer in one word.', task: 'Name the capital, in one word.', explanation: 'Shorter now.' });
+    expect(reply).toMatchObject({ result: 'Answer in one word.', task: 'Name the capital, in one word.' });
   });
 });
 
@@ -569,10 +568,10 @@ describe('a node that is handed a file\'s text, not its path', () => {
 });
 
 describe('prose', () => {
-  it('takes the text between the tags and the explanation after them', async () => {
+  it('takes the text between the tags, and not what the model says after them', async () => {
     const ai = scripted(['<system_prompt>Be terse.</system_prompt>\nBecause.']);
     const reply = await generate({ element: 'ai', description: 'a terse bot' }, { ai, code: runner(() => ({})), generationFor, target });
-    expect(reply).toMatchObject({ result: 'Be terse.', explanation: 'Because.' });
+    expect(reply.result).toBe('Be terse.');
   });
 
   it('falls back to the whole reply when the model ignored the tags', async () => {
@@ -604,12 +603,12 @@ describe('refusals and failures', () => {
 describe('a whole graph', () => {
   it('parses the fenced document and keeps the explanation', async () => {
     const ai = scripted(['```json\n{"metadata":{"name":"g"},"nodes":[],"edges":[]}\n```\nDone.']);
-    const reply = await generateGraph('anything', '', { ai, target });
+    const reply = await generateGraph('anything', { ai, target });
     expect(reply.graph).toEqual({ metadata: { name: 'g' }, nodes: [], edges: [] });
     expect(reply.explanation).toBe('Done.');
   });
 
   it('fails, with the transcript, when there is no document to parse', async () => {
-    await expect(generateGraph('x', '', { ai: scripted(['no json here']), target })).rejects.toBeInstanceOf(GenerationFailed);
+    await expect(generateGraph('x', { ai: scripted(['no json here']), target })).rejects.toBeInstanceOf(GenerationFailed);
   });
 });

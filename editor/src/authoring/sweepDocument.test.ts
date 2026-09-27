@@ -36,7 +36,7 @@ describe('a ✨ sweep that ends after another graph was opened', () => {
     });
 
     answers[0]({
-      result: 'function run(inputs) { return { output: "mine" }; }', explanation: '', calls: [],
+      result: 'function run(inputs) { return { output: "mine" }; }', calls: [],
       probe: { status: 'ok', outputs: { output: 'mine' }, missing_outputs: [] } as never,
     });
     await sweeping;
