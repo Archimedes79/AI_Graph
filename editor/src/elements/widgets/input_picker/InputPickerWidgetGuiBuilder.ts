@@ -2,7 +2,7 @@ import { lazy } from 'react';
 import type { GuiWidget } from '@/graph';
 import type { ElementGeneration } from '@/authoring/generation';
 import { selectorGeneration } from '@/authoring/selectorGeneration';
-import { runBlockAlone } from '@/authoring/blockStepRules';
+import { runBlockAlone } from '@/authoring/readAsRun';
 import { InputPickerWidgetRunner } from '@engine/elements/widgets/input_picker/InputPickerWidgetRunner.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { WidgetGuiBuilder } from '../../WidgetGuiBuilder';

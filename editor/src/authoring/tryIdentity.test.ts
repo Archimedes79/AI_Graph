@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { WIDGET_BUILDERS } from '@/elements/registry';
 import { currentTry } from './TryItInline';
 import { tryKey } from './nodeStepRules';
-import { blockTryKey } from './blockStepRules';
 import { withExpect, withInput, withJudge } from './examplePair';
 
 /**
@@ -35,16 +33,5 @@ describe('a try, once what it tried has changed', () => {
     const examples = withJudge(withExpect(withInput('', '{"input": "a"}'), '{"output": "A"}'), 'Upper case.');
     const described = { ...node, config: { ...node.config, examples, output_example: 'A', output_schema: { type: 'object' }, code_prompt: 'Shout it.' } };
     expect(tryKey(described, example, 'code_prompt')).toBe(key);
-  });
-
-  it('of one block is not a try of the next block selected, however alike (B33)', () => {
-    const table = WIDGET_BUILDERS.table.create('Rows');
-    const one = { ...table, id: 'one', code: 'function run(i) { return i; }' };
-    const two = { ...one, id: 'two' };
-    const example = { value: [1] };
-    expect(blockTryKey(one, example)).not.toBe(blockTryKey(two, example));
-    expect(blockTryKey({ ...one, code: '' }, example)).not.toBe(blockTryKey(one, example));
-    expect(blockTryKey(one, { value: [2] })).not.toBe(blockTryKey(one, example));
-    expect(blockTryKey({ ...one, label: 'Renamed', w: 4, h: 9 }, example)).toBe(blockTryKey(one, example));
   });
 });

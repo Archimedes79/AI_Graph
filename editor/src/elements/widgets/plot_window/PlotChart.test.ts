@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { asDrawing, axisLabel, chartMargins, computeAxisRange, toFigure } from './PlotChart';
-import { PLOT_VIEW, PlotWindowWidgetRunner } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
+import { PLOT_VIEW } from '@engine/elements/widgets/plot_window/PlotWindowWidgetRunner.ts';
 
 describe('computeAxisRange', () => {
   it('includes 0 in the range for all-positive data', () => {
@@ -81,26 +81,15 @@ describe('room for axes', () => {
 
 describe('one coordinate system: the block', () => {
   /**
-   * There used to be two answers to "how big is a chart?" and they disagreed.
-   * The app drew into a fixed 400x240 box and scaled it into the block, while
-   * the body contract told an author to lay out for the size they were handed.
-   * At a measured 1084x470 the fixed box scaled by 1.38, so an 11px label
-   * arrived as 15px and a tenth of the width was letterbox.
+   * The app drew into a fixed 400x240 box and scaled it into the block. At a
+   * measured 1084x470 the fixed box scaled by 1.38, so an 11px label arrived
+   * as 15px and a tenth of the width was letterbox.
    *
    * There is one answer now: pixels, the block's own. What remains of the old
    * frame is margins, which were always pixels.
    */
   it('keeps no drawing space of its own to scale from', () => {
     expect(Object.keys(PLOT_VIEW)).toEqual(['margin']);
-  });
-
-  it('tells a body the same thing: lay out for the window you are handed', () => {
-    const contract = new PlotWindowWidgetRunner().generation().contract ?? '';
-    expect(contract).toContain('draw(data, window)');
-    expect(contract).toContain('window.width');
-    expect(contract).toContain('window.height');
-    // And that the empty case is the same function, not a state the app owns.
-    expect(contract).toMatch(/null before anything/);
   });
 
   it('gives a long number more room to its left than a short one', () => {

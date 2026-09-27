@@ -80,7 +80,7 @@ export function blockValue(
 
 /**
  * What a run put on one block: the engine's `display`, which is what arrived
- * *through the block's own transform*. A block that also hands something on --
+ * as the block draws it -- an image's path read into the picture. A block that also hands something on --
  * a chat, a box that is typed into and shows -- is no display, and shows what
  * arrived on its port.
  */

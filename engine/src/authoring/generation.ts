@@ -1,9 +1,9 @@
 // How an AI writes an element's body, declared by the element.
 //
 // The ✨ Generate buttons were once five hand-written call sites in the editor,
-// which is how `image_view` came to have a `code` field and no way to fill it:
-// nobody added the sixth branch. An element declares this instead, so a shell
-// renders one button per element and knows nothing about which element it is.
+// and an element one of them forgot had a body and no way to fill it. An
+// element declares this instead, so a shell renders one button per element and
+// knows nothing about which element it is.
 //
 // It lives beside `Logic` on purpose. A logic says where the body is kept and
 // who runs it; this says how the body gets written in the first place, and both
@@ -36,42 +36,11 @@ export interface Generation {
   contract?: string;
   /**
    * A sub-snippet's fixed port names. Omitted means "whatever this node is
-   * actually wired as", which is what a code node wants — a transform inside a
-   * block, by contrast, always receives `value` and returns `value`.
+   * actually wired as", which is what a code node wants -- a selector, by
+   * contrast, always receives `files` and returns `files`.
    */
   inputs?: string[];
   outputs?: string[];
-  /**
-   * What is wrong with a result that ran, in sentences the model can act on;
-   * empty when nothing is.
-   *
-   * Running proves the code runs. It does not prove the chart is a chart: a
-   * drawing can come back with the right key and NaN for every coordinate. The
-   * element that will show the result is the one that knows what to look for,
-   * so it says so here -- and the generator stays ignorant of SVG.
-   */
-  check?: (outputs: Record<string, unknown>) => string[];
-  /**
-   * The body as the *probe* must run it, for an element whose body is not
-   * called the way the sandbox calls one.
-   *
-   * The sandbox has one shape -- `run(inputs, node)` -- and that is right: it
-   * is how a graph runs a body. A chart's body is not run by a graph, though;
-   * it is run by the page, as `draw(data, window)`, because what it needs is
-   * the size of the block and the page's scheme. The probe still wants to
-   * execute it once before anyone sees it, so the element says here how to
-   * make it runnable: a wrapper, and a window standing in for the real one.
-   *
-   * It says one thing more, because it is the same fact: an element that calls
-   * the body itself also frames it. Its `contract` is then placed where the
-   * function to complete goes, in place of a node's skeleton, output keys and
-   * Node rules, which would each contradict it (`framedByElement` in
-   * `host/editor/generate.ts`). So a `probeWith` without a contract that opens
-   * with the function to complete leaves the model with no frame at all.
-   *
-   * Absent for every other element, which means "as it is".
-   */
-  probeWith?: (body: string) => string;
   /** Shown when the request field is still empty. */
   guard: string;
   /** Shown when the generated text arrives. */

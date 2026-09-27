@@ -230,7 +230,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
                     </div>
                     {CanvasPreview && (
                       <div className="mt-1 mb-1 w-full">
-                        <CanvasPreview widget={previewWidget!} data={executionResult?.display?.[previewWidget!.id] ?? executionResult?.inputs?.[port.id]} />
+                        <CanvasPreview data={executionResult?.display?.[previewWidget!.id] ?? executionResult?.inputs?.[port.id]} />
                       </div>
                     )}
                   </React.Fragment>

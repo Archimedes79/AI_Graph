@@ -12,7 +12,7 @@ import { graphOf } from '../../../test/fakes.ts';
 /**
  * Where an AI call goes, whoever makes it: to the node's own provider and
  * model when it pins them, and to the one AI setting otherwise -- for a run,
- * ✨ Generate, Try it, ▶ Test and a block's Try it alike.
+ * ✨ Generate, Try it and ▶ Test alike.
  *
  * Both are providers nobody has, so the provider layer refuses each by name
  * before anything leaves the machine, and the refusal says where the call
@@ -84,17 +84,6 @@ describe('everything else', () => {
       node_id: 'ask',
     } as never, loopback);
     expect(JSON.stringify(tested)).toContain(refusedBy(SETTING));
-  }, 30_000);
-
-  it('goes there from a block tried by itself, whose code asks a model', async () => {
-    const shown = await routes.runBlock!({
-      widget: {
-        id: 'rows', kind: 'table', label: 'Rows',
-        code: 'async function run(inputs, node) { return { value: [{ said: await node.llm({ prompt: "Name a city." }) }] }; }',
-      },
-      value: null,
-    } as never, loopback);
-    expect(String((shown as { shown: unknown }).shown)).toContain(refusedBy(SETTING));
   }, 30_000);
 
   it('goes there from ✨ Generate', async () => {

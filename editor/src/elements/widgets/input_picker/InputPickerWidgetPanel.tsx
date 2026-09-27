@@ -91,7 +91,7 @@ export default function InputPickerWidgetPanel({
         generating={generating}
         message={message}
         onGenerate={onGenerate}
-        tryIt={() => steps.tryIt({})}
+        tryIt={steps.tryIt}
         preview={steps.preview}
         sent={steps.sent}
         openInEditor={steps.openInEditor}

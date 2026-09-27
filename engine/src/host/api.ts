@@ -76,9 +76,6 @@ export interface ToolAiSettings {
   settings_file_exists: boolean;
 }
 
-/** What one block shows for one value: the editor's ▶ Test of a block. */
-export interface BlockResult { status: 'success' | 'error'; shown: unknown; error: string | null }
-
 /** A model, already resolved: which provider, which of its models. */
 export interface Target { provider: string; model: string }
 
@@ -294,8 +291,6 @@ export const API = {
   runNode: route<OnNode & { inputs: Record<string, unknown> }, NodeResult>('POST', '/api/execute/node', 'editor'),
   /** What one node would ask a model on the inputs given -- its run, with every answer made up and nothing sent. */
   nodeRequests: route<OnNode & { inputs: Record<string, unknown> }, { requests: SentRequest[]; error: string | null }>('POST', '/api/execute/node/requests', 'editor'),
-  /** One value through one block's transform, as the page would show it. */
-  runBlock: route<{ widget: unknown; value: unknown }, BlockResult>('POST', '/api/execute/block', 'editor'),
   /** What would arrive at a node: what feeds it is run, the node is not. */
   nodeInputs: route<OnNode, { inputs: Record<string, unknown>; error: string | null }>('POST', '/api/execute/inputs', 'editor'),
   /** Run a node's examples.md: each example's inputs, held to what it expects. */

@@ -394,17 +394,17 @@ describe('graphStore, a project open on disk', () => {
   });
 
   it('takes code changed on disk in as one undo step, and a clean graph stays clean', () => {
-    const page = graphNode({ id: 'page', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [{ ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' }] } });
+    const page = graphNode({ id: 'page', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [{ ...WIDGET_BUILDERS.input_picker.create('Folder', 'directory'), id: 'pick' }] } });
     loadTestGraph([codeNode(), page]);
     useGraphStore.getState().markSaved();
 
     useGraphStore.getState().takeDiskChanges([
       { node_id: 'count', widget_id: '', field: 'code', value: 'function run() { return { total: 2 }; }' },
-      { node_id: 'page', widget_id: 'chart', field: 'code', value: 'function run(i) { return i; }' },
+      { node_id: 'page', widget_id: 'pick', field: 'selector_code', value: 'function run(i) { return i; }' },
       { node_id: 'gone', widget_id: '', field: 'code', value: 'ignored' },
     ]);
     expect(nodeById('count').config.code).toContain('total: 2');
-    expect(nodeById('page').config.gui_widgets[0].code).toContain('return i');
+    expect(nodeById('page').config.gui_widgets[0].selector_code).toContain('return i');
     expect(useGraphStore.getState().isDirty()).toBe(false);
 
     useGraphStore.getState().undo();

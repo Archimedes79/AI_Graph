@@ -450,9 +450,9 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   // added to the conversation a second time, nor a window popped up again.
   for (const nodeId of held) outputs.delete(nodeId);
   const memory = settleMemory(graph, feedback, outputs, results, registry);
-  // What finished before a Stop is drawn as it is: showing it is not the work
-  // Stop was pressed for, and a stopped transform would show "Stopped" instead.
-  await showDisplays(graph, results, registry, signal?.aborted ? options.runtime : runtime);
+  // What finished before a Stop is drawn as it is: showing asks no model and
+  // runs no body, so there is nothing in it for Stop to end.
+  await showDisplays(graph, results, registry, runtime);
 
   const status: ExecutionResult['status'] = signal?.aborted
     ? 'cancelled'
@@ -920,9 +920,8 @@ function settleMemory(
  *
  * After settling, not during the node's own run: a chart on a page that also
  * holds the file picker is fed across a feedback edge, so while the page runs
- * its chart has nothing yet. Drawing then meant a block's transform was handed
- * `undefined` and the raw value was shown in its place -- on every page with
- * both an input and a display, which is most of them.
+ * its chart has nothing yet -- on every page with both an input and a display,
+ * which is most of them.
  */
 async function showDisplays(
   graph: Graph,
@@ -934,7 +933,7 @@ async function showDisplays(
     const node = graph.nodes.find((n) => n.id === result.node_id);
     const element = node && registry.node(node.node_type);
     // What stood still is shown as it was: the editor and the page keep the
-    // display they have, and a block's transform is not run for nothing.
+    // display they have, and an image is not read again for nothing.
     if (!node || !element?.hasInterface || result.status === 'error' || result.held) continue;
     result.display = await element.display(node, result.inputs, runtime);
   }

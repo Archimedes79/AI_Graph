@@ -12,7 +12,7 @@ interface PlotPoint {
   value: number;
 }
 
-/** The four shapes the app draws itself. Anything else is written as SVG by the block's own body. */
+/** The four shapes the app draws itself. Anything else arrives as SVG, written by a node upstream. */
 export type PlotKind = 'bars' | 'columns' | 'line' | 'donut';
 
 /**
@@ -149,18 +149,17 @@ function fit(label: string, slotWidth: number): string {
 }
 
 /**
- * Drawing the block's own body did itself.
+ * A drawing that arrived finished.
  *
  * The four kinds below cover the ordinary case, and nothing beyond it: a
  * scatter, two series against each other, a legend of its own. Rather than
- * growing a chart library one option at a time, a body may return finished SVG
- * and this draws it -- so what can be plotted is whatever the body can write,
- * not whatever was foreseen here.
+ * growing a chart library one option at a time, a node upstream may hand on
+ * finished SVG and this shows it -- so what can be plotted is whatever that
+ * node can write, not whatever was foreseen here.
  *
- * Scripts and event handlers are stripped. The markup is generated locally by
- * code the person asked for, but it also travels inside a graph that may be
- * handed on, and "it came from our own AI" is not a reason to run whatever
- * arrives.
+ * Scripts and event handlers are stripped. The markup is made by code the
+ * person asked for, but it also travels inside a graph that may be handed on,
+ * and "it came from our own AI" is not a reason to run whatever arrives.
  */
 export function asDrawing(data: unknown): string | null {
   if (typeof data !== 'string') return null;
@@ -186,7 +185,7 @@ export function asDrawing(data: unknown): string | null {
  * size depend on how big someone had dragged the window.
  */
 export default function PlotChart({ data, width = 220, height = 90 }: PlotWidgetProps) {
-  // Finished SVG wins: the body drew something this could not have.
+  // Finished SVG wins: a node upstream drew something this could not have.
   const drawing = asDrawing(data);
   if (drawing) {
     return (
@@ -201,8 +200,8 @@ export default function PlotChart({ data, width = 220, height = 90 }: PlotWidget
 
   const figure = toFigure(data);
 
-  // A string that is not a figure is worth showing verbatim: it is either the
-  // raw value that arrived, or a "⚠ transform failed" message from the engine.
+  // A string that is not a figure is worth showing verbatim: it is what
+  // arrived, a message from upstream as likely as not.
   const message = typeof data === 'string' ? data.trim() : '';
   if (!figure && message) {
     return (

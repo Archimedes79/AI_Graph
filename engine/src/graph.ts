@@ -85,9 +85,9 @@ export interface NodeResult {
   inputs: Record<string, unknown>;
   outputs: Record<string, unknown>;
   /**
-   * What a node with an interface shows, per block id -- after the block's own
-   * transform, which is why it is not `inputs`: those say what arrived, this
-   * says what is on the screen.
+   * What a node with an interface shows, per block id -- an image's path read
+   * into the picture, which is why it is not `inputs`: those say what arrived,
+   * this says what is on the screen.
    */
   display?: Record<string, unknown>;
   error?: string | null;

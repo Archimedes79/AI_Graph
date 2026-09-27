@@ -31,7 +31,6 @@
 import type { RawConfig } from '../graph.ts';
 import type { Logic } from '../authoring/logic.ts';
 import type { Generation } from '../authoring/generation.ts';
-import type { Runtime } from './Runtime.ts';
 
 /** What a deploy bundle must carry for this element to run elsewhere. */
 export interface DeployNeeds {
@@ -97,9 +96,6 @@ export interface WhatRuns {
   does: string;
 }
 
-/** What a failing authored snippet costs. */
-export type SnippetFailure = 'fatal' | 'cosmetic';
-
 // ---------------------------------------------------------------------------
 // The base
 // ---------------------------------------------------------------------------
@@ -145,9 +141,6 @@ export abstract class ElementRunner<S extends { id: string; config: RawConfig },
   // ── Run time ──────────────────────────────────────────────────────────────
   // What a run asks. A deployed tool needs nothing below this block.
 
-  /** A failing snippet: fatal by default, cosmetic where nothing downstream depends on it. */
-  readonly snippetFailure: SnippetFailure = 'fatal';
-
   /**
    * Whether a failure here becomes an `error` output instead of ending the run.
    *
@@ -158,30 +151,6 @@ export abstract class ElementRunner<S extends { id: string; config: RawConfig },
    */
   catchesErrors(subject: S): boolean {
     return subject.config.catch_errors === true;
-  }
-
-  /**
-   * Run this element's body, applying this element's failure policy.
-   *
-   * The running itself belongs to `Logic`; what is here is the one thing that
-   * does not -- whether a broken body costs the whole node or only the block
-   * that would have shown its result.
-   */
-  async runSnippet(
-    subject: S,
-    inputs: Record<string, unknown>,
-    runtime: Runtime,
-  ): Promise<Record<string, unknown>> {
-    const logic = this.logic(subject);
-    if (!logic) return inputs;
-    try {
-      return await logic.run(inputs, runtime);
-    } catch (error) {
-      if (this.snippetFailure !== 'cosmetic') throw error;
-      const reason = error instanceof Error ? error.message : String(error);
-      return { value: `⚠ ${subject.id}: transform failed:
-${reason}` };
-    }
   }
 
   // ── Build time ────────────────────────────────────────────────────────────

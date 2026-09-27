@@ -96,6 +96,14 @@ describe('the graph prompt', () => {
     expect(registry.widget('text_io')!.graphAuthorNote()).toMatch(/input .*output .*both/);
   });
 
+  it('offers a drawing block no code of its own: it shows what arrives', () => {
+    for (const kind of ['plot_window', 'table', 'image_view'] as const) {
+      const note = registry.widget(kind)!.graphAuthorNote()!;
+      expect(note, kind).toMatch(/^shows what arrives on "<id>_in"/);
+      expect(note, kind).not.toMatch(/config\.code|transform/);
+    }
+  });
+
   it('names every node type the registry knows, except the ones that say a graph is not built with them', () => {
     const silent: string[] = [];
     for (const type of registry.nodeTypes()) {

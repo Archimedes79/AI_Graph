@@ -8,10 +8,10 @@
 // listing. A second way of reading a file here would be a second answer to
 // "what does the node get".
 
-import type { GraphNode } from '@/graph';
+import type { GraphNode, GuiWidget } from '@/graph';
 import { call } from '@/api/client';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { derivedNodePorts } from '@/document/guiWidgets';
+import { derivedNodePorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
 import type { TryResult } from './TryItInline';
 
@@ -24,6 +24,23 @@ import type { TryResult } from './TryItInline';
 export function runAlone(node: GraphNode): Promise<TryResult> {
   const graph = { metadata: useGraphStore.getState().metadata, nodes: [node], edges: [] };
   return call('runNode', { ...graph, node_id: node.id, inputs: {} });
+}
+
+/**
+ * *widget* on a page of its own, run by itself -- nothing else of the graph is
+ * sent or run: what the block hands on, made the way a run makes it. A folder
+ * picker lists its folder here exactly as it does on the page, through the
+ * same element.
+ *
+ * A failure is said, not caught: a block told to catch its failures put the
+ * reason on its error port and handed on nothing, so a folder that does not
+ * exist was listed as "0 files".
+ */
+export async function runBlockAlone(widget: GuiWidget): Promise<TryResult> {
+  const blank = NODE_KINDS.gui.create('page');
+  const page = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [{ ...widget, catch_errors: false }] } });
+  const result = await runAlone(page);
+  return { status: result.status, shown: result.outputs?.[`${widget.id}_out`], error: result.error, messages: result.messages };
 }
 
 /** What *node* hands on, run by itself; a failed read is thrown. */

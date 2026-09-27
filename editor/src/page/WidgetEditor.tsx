@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import { BLOCKS } from './blocks';
 import type { GuiWidget } from '@/graph';
 import { guiWidgetPorts, widgetFiresRun } from '@/document/guiWidgets';
 import { useGenerate } from '@/authoring/useGenerate';
@@ -9,11 +8,8 @@ import { WIDGET_BUILDERS } from '@/elements/registry';
 import type { WidgetSteps } from '@/elements/WidgetGuiBuilder';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
 import { useWhatSends } from '@/authoring/WhatSends';
-import { useGraphStore } from '@/store/graphStore';
 import { GUI_GRID_COLUMNS } from '@/document/layout';
-import { schemeVars } from '@/ui/scheme';
-import { blockFacts, blockFeeds, blockFromTheGraph } from '@/authoring/blockFacts';
-import { tryBlock } from '@/authoring/blockStepRules';
+import { runBlockAlone } from '@/authoring/readAsRun';
 import OpenInMyEditor from '@/authoring/OpenInMyEditor';
 import { TONES, TONE_LABELS, type Tone } from '@/ui/tone';
 import { DANGER, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, WELL } from '@/ui/theme';
@@ -42,32 +38,17 @@ interface WidgetEditorProps {
 export default function WidgetEditor({
   widget, nodeId, onChange, onRemove,
 }: WidgetEditorProps) {
-  const executionResult = useGraphStore((s) => s.executionResult);
   const generate = useGenerate();
 
   /**
    * The one ✨ Generate request, for whichever widget kind asks -- the button
-   * and "what ✨ sends" send the same.
-   *
-   * This was an `isPlot` ternary threaded through eight lines -- prompt field,
-   * guard, success message, contract, both port names, target field -- which is
-   * a kind-switch in a shared shell, the thing the element contract exists to
-   * prevent. Each widget declares it now (`WidgetGuiBuilder.generation`), and
-   * what it is told is what the graph sweep tells it too (`blockFacts`): what
-   * feeds the block, the page's scheme, and step 1's example, or the last
-   * run's value, with where it came from.
+   * and "what ✨ sends" send the same. Each widget declares it
+   * (`WidgetGuiBuilder.generation`); a shared shell switches on no kind.
    */
   const request = (): GenerationRequest<GuiWidget> | undefined => {
     const spec = widget ? WIDGET_BUILDERS[widget.kind].generation : undefined;
     if (!widget || !spec) return undefined;
-    const state = useGraphStore.getState();
-    return {
-      element: widget.kind,
-      generation: spec,
-      subject: widget,
-      fields: widgetFields(widget, onChange),
-      ...blockFacts(nodeId, widget, state.rfNodes.map((item) => item.data.graphNode), state.rfEdges, executionResult, state.metadata.gui_scheme),
-    };
+    return { element: widget.kind, generation: spec, subject: widget, fields: widgetFields(widget, onChange) };
   };
   const sends = useWhatSends(request, widget ? `${nodeId}::${widget.id}` : '');
 
@@ -81,7 +62,6 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
 
   const element = WIDGET_BUILDERS[widget.kind];
   const Panel = element.Panel;
-  const View = BLOCKS[widget.kind].View;
   const logic = widgetLogic(widget);
 
   const handleGenerate = () => {
@@ -97,23 +77,9 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
     : undefined;
 
   // What only this shell knows, for a block that authors a body: the page it
-  // sits on, and the page it is drawn in. The panel places each in its step.
+  // sits on. The panel places each in its step.
   const steps: WidgetSteps | undefined = element.generation ? {
-    feeds: blockFeeds(nodeId, widget, useGraphStore.getState().rfNodes.map((item) => item.data.graphNode), useGraphStore.getState().rfEdges),
-    fromGraph: guiWidgetPorts(widget).inputs.length
-      ? () => blockFromTheGraph(nodeId, widget, executionResult, () => useGraphStore.getState().exportGraph())
-      : undefined,
-    tryIt: (values) => tryBlock(widget, values),
-    // What comes back is drawn by the block itself, at the block's own
-    // proportions: the chart, looked at, before the graph has ever run.
-    renderResult: (result) => (
-      <div
-        className="mt-1 rounded overflow-hidden"
-        style={{ aspectRatio: `${widget.w ?? 8} / ${widget.h ?? 4}`, maxHeight: 260, border: `1px solid ${LINE}`, ...schemeVars(useGraphStore.getState().metadata.gui_scheme) }}
-      >
-        <View widget={widget} value={result.shown} incoming={result.shown} onChange={() => {}} />
-      </div>
-    ),
+    tryIt: () => runBlockAlone(widget),
     preview: sends.preview,
     sent: sends.sent,
     openInEditor,

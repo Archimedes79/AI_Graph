@@ -18,7 +18,6 @@ import { parseGraph, type Graph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExamples } from '../../execution/examples.ts';
-import { GuiNodeRunner, parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
 import { registry } from '../../elements/registry.ts';
 import { writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
@@ -114,15 +113,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
     testNode: async (asked) => ({
       results: await runExamples(parseGraph(asked), String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry }),
     }),
-
-    async runBlock(asked) {
-      try {
-        const shown = await new GuiNodeRunner().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
-        return { status: 'success', shown, error: null };
-      } catch (error) {
-        return { status: 'error', shown: null, error: message(error) };
-      }
-    },
 
     async nodeInputs(asked) {
       const graph = parseGraph(asked);

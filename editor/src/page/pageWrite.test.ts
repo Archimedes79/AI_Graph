@@ -102,17 +102,18 @@ describe('a block edited on the page', () => {
   });
 
   it('changes a block on the page as it is by then, keeping what was added, renamed and deleted meanwhile', () => {
-    // Accepting a ✨ result wrote back the page from when ✨ was pressed.
+    // A change that lands late -- an answer from the engine -- wrote back the
+    // page from when it was asked for.
     insertBlock({ ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' });
     insertBlock({ ...WIDGET_BUILDERS.text.create('Gone'), id: 'gone' });
     patchBlock('chart', { label: 'Renamed' });
     removeBlock('gone');
     insertBlock({ ...WIDGET_BUILDERS.text.create('Added'), id: 'added' });
 
-    patchBlock('chart', { code: 'function draw() { return []; }' });
+    patchBlock('chart', { tone: 'accent' });
 
     expect(shown().map((w) => [w.id, w.label])).toEqual([['chart', 'Renamed'], ['added', 'Added']]);
-    expect(shown()[0].code).toBe('function draw() { return []; }');
+    expect(shown()[0].tone).toBe('accent');
   });
 
   it('changes nothing when the block was deleted meanwhile', () => {

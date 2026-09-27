@@ -212,7 +212,7 @@ describe('what a node is wired to, as the dialog and ✨ say it', () => {
       { source: 'worker', sourceHandle: 'output', target: 'page', targetHandle: 'w1_in' },
     ], true);
     expect(told.output).toContain('"Dashboard"');
-    expect(told.output).toContain('NOT a drawing');
+    expect(told.output).toContain('{"kind": "bars"|"columns"|"line"|"donut"');
   });
 });
 

@@ -11,13 +11,19 @@ const shown = (incoming: unknown) => renderToStaticMarkup(createElement(ImageVie
 
 describe('an image on the page', () => {
   it('says a value arrived that is not a path, rather than that nothing arrived', () => {
-    // The bug: a record such as {cover: "a.png"}, handed through by a block
-    // with no transform, was dropped, and the block said "Nothing to show yet
-    // -- wire a file path into it".
+    // The bug: a record such as {cover: "a.png"} was dropped, and the block
+    // said "Nothing to show yet -- wire a file path into it".
     const html = shown({ cover: 'a.png' });
     expect(html).not.toContain('Nothing to show yet');
     expect(html).toContain('shows an image file path or URL');
     expect(html).toContain('{&quot;cover&quot;:&quot;a.png&quot;}');
+    expect(html).toContain('A code node wired in before it can pick the path out of it.');
+  });
+
+  it('draws what arrives as a data URL or an http URL, a list as a contact sheet', () => {
+    const html = shown(['data:image/png;base64,AAAA', 'https://example.org/b.png']);
+    expect(html.match(/<img/g)).toHaveLength(2);
+    expect(html).toContain('2 images');
   });
 
   it('says so for such an item in a list, and draws the rest', () => {

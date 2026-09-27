@@ -139,8 +139,8 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
   }
 
   /**
-   * What each display block shows: what arrived, through the block's own
-   * transform, as the page can draw it.
+   * What each display block shows: what arrived, as the page can draw it --
+   * an image's path read into a picture (`WidgetRunner.displayValue`).
    *
    * A block nothing arrived at is left out rather than shown as nothing, so a
    * run that touched half a page leaves the other half as it was.
@@ -152,29 +152,9 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
       if (!element || element.ports(widget).outputs.length) continue;
       const value = arrived[`${widget.id}_in`];
       if (value === undefined) continue;
-      shown[widget.id] = await this.showBlock(widget, value, runtime);
+      shown[widget.id] = await element.displayValue(widget, value, runtime);
     }
     return shown;
-  }
-
-  /** One block's value, as drawn. Also what the editor's ▶ Test of a block runs. */
-  async showBlock(widget: Widget, value: unknown, runtime: Runtime): Promise<unknown> {
-    const element = BY_KIND.get(widget.kind);
-    if (!element) throw new Error(`Unknown block kind: ${widget.kind}`);
-    // A block the page draws itself is handed what arrived, untouched: its
-    // body wants the size of the block and the page's scheme, and a run knows
-    // neither. See `WidgetRunner.bodyDrawsOnThePage`.
-    if (element.bodyDrawsOnThePage) return element.displayValue(widget, value, runtime);
-    const transformed = await element.runSnippet(widget, { value }, runtime);
-    // A block with no transform is handed back what it was given, `value`
-    // included. One whose transform returned no `value` has a broken
-    // transform, and says so: shown the raw input instead, it looked like a
-    // block without one. An explicit null is what the transform said to show.
-    if (!('value' in transformed)) {
-      const returned = Object.keys(transformed);
-      return `⚠ ${widget.id}: its transform returned no "value"${returned.length ? ` (only ${returned.map((key) => `"${key}"`).join(', ')})` : ''}.`;
-    }
-    return element.displayValue(widget, transformed.value, runtime);
   }
 
   /** A picker with nothing chosen is a question, and its block is who to ask. */
@@ -268,12 +248,12 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
   }
 
   override whatRuns(): WhatRuns {
-    return this.engineRuns('Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives; a block with code of its own runs it sandboxed before showing.');
+    return this.engineRuns('Hands on what each block holds -- a pressed button as true for that round -- and shows what arrives.');
   }
 
   override deployNeeds(node: GraphNode) {
     // A gui node *is* the interface, so a bundle holding one needs the page. A
-    // block's own code may ask a model like any other body.
+    // folder picker's selector may ask a model like any other body.
     const asksAi = this.config(node).widgets.some((widget) => BY_KIND.get(widget.kind)?.deployNeeds(widget).asksAi === true);
     return { needsInterface: true, asksAi };
   }

@@ -340,7 +340,7 @@ describe('a batch with failing items', () => {
 });
 
 describe('what a run leaves on the page', () => {
-  it('shows what finished before Stop as it is, not as a transform that was stopped', async () => {
+  it('shows what finished before Stop as it arrived', async () => {
     const stop = new AbortController();
     const runtime = quietRuntime({
       code: { run: async (body, inputs, signal) => {
@@ -355,14 +355,14 @@ describe('what a run leaves on the page', () => {
     const graph = graphOf(
       [
         node('src', 'code', { code: 'function run() { return { rows: [1, 2] }; }' }),
-        node('page', 'gui', { gui_widgets: [{ id: 't', kind: 'table', code: 'function run(i) { return { value: i.value }; }' }] }),
+        node('page', 'gui', { gui_widgets: [{ id: 't', kind: 'table' }] }),
         node('slow', 'code', { code: '/* SLOW */ function run() { return { x: 1 }; }' }),
       ],
       [edge('a', 'src', 'rows', 'page', 't_in'), edge('b', 'src', 'rows', 'slow', 'rows')],
     );
     const run = await executeGraph(graph, { runtime, registry, signal: stop.signal });
     expect(run.status).toBe('cancelled');
-    expect(JSON.stringify(run.node_results.find((r) => r.node_id === 'page')!.display)).not.toContain('Stopped');
+    expect(run.node_results.find((r) => r.node_id === 'page')!.display).toEqual({ t: [1, 2] });
   });
 
   it('does not ask a model when every wire into its one port brought nothing', async () => {

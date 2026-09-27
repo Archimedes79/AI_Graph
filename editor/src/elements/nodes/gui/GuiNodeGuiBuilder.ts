@@ -5,12 +5,7 @@ import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import { widgetOfPort } from '@/document/guiWidgets';
 
-/**
- * What *widget* wants handed to it, asked of the engine's element with the
- * block as the engine holds one: its settings under `config`. Handed the flat
- * block the editor stores, the element found no code on it, so a chart whose
- * own draw() reads rows still told the node feeding it to send points.
- */
+/** What *widget* wants handed to it, asked of the engine's element with the block as the engine holds one. */
 function receives(widget: GuiWidget): string | undefined {
   return engineRegistry.widget(widget.kind)?.receives(parseWidget(widget));
 }

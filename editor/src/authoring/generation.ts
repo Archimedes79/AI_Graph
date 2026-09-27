@@ -178,13 +178,6 @@ export interface GenerationRequest<S> {
    * call and hands its answer on.
    */
   lists?: { inputs: string[]; outputs: string[] };
-  /**
-   * Sentences beside the facts, for a block on a page (`blockFacts`): what
-   * feeds it, which the engine leaves out for a snippet whose ports the
-   * element fixes, and the page's colour scheme. A node is told its
-   * neighbours as facts alone, which the engine's brief puts into words.
-   */
-  graphContext?: string;
   /** Raw last-run values, for the backend's verify-and-repair pass. */
   sampleInputs?: Record<string, unknown>;
   /**
@@ -261,7 +254,7 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
   return {
     element: request.element,
     description: fields.get(spec.promptField).trim(),
-    context: [spec.context?.(subject), request.graphContext].filter(Boolean).join('\n\n'),
+    context: spec.context?.(subject) ?? '',
     inputs: request.ports?.inputs,
     outputs: request.ports?.outputs,
     sample_inputs: request.sampleInputs,

@@ -145,9 +145,9 @@ export const SCHEMES: Scheme[] = [
  * Not per scheme: what makes eight colours distinguishable is how they sit on a
  * dark or a light ground, and there are only those two grounds. The first of
  * the eight is always the scheme's own accent, so a one-series chart matches
- * the page it is on. A generated chart reaches them as `var(--plot-1)` …
- * `var(--plot-8)`, which is how it keeps working when the scheme is changed
- * after the model has gone home.
+ * the page it is on. A chart -- or SVG that arrives at one -- reaches them as
+ * `var(--plot-1)` … `var(--plot-8)`, which is how it keeps working when the
+ * scheme is changed.
  */
 const PLOT_ON_DARK = ['#22c55e', '#f59e0b', '#ec4899', '#06b6d4', '#a78bfa', '#84cc16', '#fb923c'];
 const PLOT_ON_LIGHT = ['#15803d', '#b45309', '#be185d', '#0e7490', '#6d28d9', '#4d7c0f', '#c2410c'];
@@ -155,29 +155,6 @@ const PLOT_ON_LIGHT = ['#15803d', '#b45309', '#be185d', '#0e7490', '#6d28d9', '#
 function plotColours(id: string | undefined): string[] {
   const s = scheme(id);
   return [s.accent, ...(s.light ? PLOT_ON_LIGHT : PLOT_ON_DARK)];
-}
-
-/**
- * The page's look, in words, for a model about to draw on it.
- *
- * Information, not a rule. Whoever writes the chart -- and it may be a small
- * local model that has never heard of this app -- cannot see the page; told
- * nothing, it draws dark text on a white panel, which on the night scheme is a
- * white slab with a chart nobody asked to be white. Told what the page is and
- * which colours follow it, it can choose: follow the page where a colour only
- * tells things apart, fix it where the colour means something.
- */
-export function describeScheme(id: string | undefined): string {
-  const s = scheme(id);
-  const series = plotColours(id).map((colour, index) => `var(--plot-${index + 1}) = ${colour}`).join(', ');
-  return [
-    `The page this is drawn on: the "${s.label}" scheme, a ${s.light ? 'LIGHT' : 'DARK'} page.`,
-    `Right now its colours are -- page background ${s.sunken}, a block's surface ${s.surface}, text ${s.text} `
-      + `(this is what currentColor resolves to), quieter text ${s.muted}, hairlines ${s.line}, accent ${s.accent}.`,
-    `Series colours, chosen to be told apart on this ground: ${series}.`,
-    'The person can switch schemes later. Colours written as currentColor or var(--…) follow the switch; '
-      + 'a fixed hex stays what it is -- right for a colour that carries meaning, wrong for ordinary text.',
-  ].join('\n');
 }
 
 export function scheme(id: string | undefined): Scheme {

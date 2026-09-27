@@ -123,7 +123,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
    *
    * Everything edited here -- including a snippet an AI just spent a minute
    * generating -- lives in this modal's draft until Save. Cancel and Escape
-   * used to discard it without a word, so "✅ Transform generated!" followed by
+   * used to discard it without a word, so "✅ Code generated!" followed by
    * Escape lost the code and left no trace of why.
    */
   const closeWithGuard = () => {

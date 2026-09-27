@@ -1,186 +1,23 @@
-import { TransformingDisplayRunner } from '../TransformingDisplayRunner.ts';
-import type { DeployNeeds } from '../../ElementRunner.ts';
-import type { Widget } from '../../WidgetRunner.ts';
-import type { Generation } from '../../../authoring/generation.ts';
-import { TRANSFORM_FIELDS } from '../TransformingDisplayRunner.ts';
-import type { Problem } from '../../../execution/wiring.ts';
-import { checkPlot } from './check.ts';
+import { DisplayWidgetRunner } from '../DisplayWidgetRunner.ts';
 
 export { PLOT_VIEW } from './view.ts';
 
-/** A call of `node.llm(…)` in a body: the call, not the name in passing. */
-const ASKS_A_MODEL = /\bnode\s*\.\s*llm\s*\(/;
-
-/** Points to draw: a list of numbers, or of {label, value}. */
-export class PlotWindowWidgetRunner extends TransformingDisplayRunner {
+/** A chart of what arrives: points or a figure, drawn by the page -- or SVG, shown as it stands. */
+export class PlotWindowWidgetRunner extends DisplayWidgetRunner {
   readonly widgetKind = 'plot_window' as const;
-
-  // ── Run time ──────────────────────────────────────────────────────────────
-
-  /**
-   * The page draws this one itself.
-   *
-   * A chart's body is the only one whose answer depends on things a run cannot
-   * know: how big the block is, and which colour scheme the page is in. So it
-   * runs where those are — in the browser, in a worker, on every redraw — and a
-   * run hands the page what arrived and nothing more. See
-   * `editor/src/elements/widgets/plot_window/draw.ts`.
-   */
-  override readonly bodyDrawsOnThePage = true;
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  /** The data to plot, which the page draws -- a `draw()` of its own takes whatever it was written to read. */
+  /**
+   * What to plot. The page draws points and figures itself, at the block's
+   * real size and in its colours -- neither of which exists while the graph
+   * runs, so that is what a node should prefer to hand on. SVG is for a plot
+   * the four shapes cannot draw, and is shown as it stands.
+   */
   override draws(): string {
-    return 'the data to plot, NOT a drawing: a list of points -- numbers, or {"label": string, '
-      + '"value": number} -- or an object {"kind": "bars"|"columns"|"line"|"donut", "title": string, '
-      + '"points": [...]}. The chart draws it at the block\'s real size and in the page\'s colours, '
-      + 'neither of which exists while the graph runs, so SVG built here would be stretched to fit.';
-  }
-
-  /**
-   * Its body runs in the page (`bodyDrawsOnThePage`), which cannot ask a
-   * model, whatever the body says: a bundle need not bring one for it.
-   */
-  override deployNeeds(_widget: Widget): DeployNeeds {
-    return { needsInterface: false, asksAi: false };
-  }
-
-  /**
-   * A body that asks a model fails on the page every time: it is handed a
-   * window there, not a node, and no page has a model to ask. ✨'s probe
-   * calls it as the page does and says so while it is written; one written
-   * by hand, or over MCP, `check` reported as fine.
-   */
-  override problems(widget: Widget, where: string): Problem[] {
-    if (!ASKS_A_MODEL.test(this.config(widget).code)) return [];
-    return [{
-      where,
-      problem: 'The chart\'s code asks a model (node.llm), and a chart is drawn in the page, which has none to ask: it fails there every time.',
-      fix: 'Ask in a node upstream and wire its answer into the chart; the chart only draws what arrives.',
-    }];
-  }
-
-  /**
-   * Two ways to answer, and the second is why this is not a fixed chart.
-   *
-   * Points get the built-in bar or line chart, axes and labels included. Any
-   * other plot -- a scatter, a pie, two series, a legend of its own -- is
-   * written as SVG by the transform itself and drawn as it stands, so what can
-   * be plotted is what the model can write rather than what was foreseen here.
-   *
-   * A plotting library is still out: none is installed, the sandbox has no
-   * package manager, and a library's figure is not JSON anyway. Writing SVG
-   * needs nothing but string concatenation.
-   */
-  override generation(): Generation {
-    return {
-      kind: 'code', fields: TRANSFORM_FIELDS,
-      // The whole frame the body is written in (the generator puts it where
-      // the function is, because `probeWith` says the page calls it): the
-      // function, where it runs, and what it may answer.
-      contract: [
-        'Complete this function. Keep its name and its two parameters exactly as they are:',
-        '',
-        'function draw(data, window) {',
-        '  // data: what arrived at the block -- `value` above -- or null before anything has',
-        '  // window: { width, height, scheme, dark }',
-        '  return [];',
-        '}',
-        '',
-        'Must expose draw(data, window) -> what to show. The page the block is on calls it,',
-        'not the graph: its answer is drawn, and nothing downstream reads it.',
-        '',
-        '`data` is what arrived at the block, and is null before anything has. Draw that',
-        'case too -- empty axes, or an empty list of points -- rather than throwing: it is',
-        'what the block shows before the graph has ever run, and it is the same function.',
-        '',
-        '`window` is { width, height, scheme, dark }: the block\'s real size in pixels as it',
-        'is on screen right now, the name of the page\'s colour scheme, and whether that',
-        'scheme is a dark one. draw is called again whenever any of them changes, so a',
-        'resize or a change of scheme redraws with no run at all -- lay the chart out for',
-        'the size you are given rather than for a fixed one.',
-        '',
-        'There are two ways to answer, and the first covers most of what is asked for.',
-        '',
-        '1. A figure, which the app draws itself, at the real size of the block and in',
-        'the page\'s colours. Either a bare list -- numbers, or {"label": string,',
-        '"value": number} -- or an object saying which shape to draw:',
-        '',
-        '   {"kind": "bars" | "columns" | "line" | "donut", "title": string, "points": [...]}',
-        '',
-        '"bars" are horizontal and are the right choice whenever the categories are',
-        'names, because a name reads along its bar instead of being cropped to fit under',
-        'a column. "columns" suit a few short labels, "line" a long ordered series, and',
-        '"donut" shares out one whole. Axes, gridlines, category labels, value labels, a',
-        'legend and the totals are all drawn for you. Prefer this: it costs one object,',
-        'it redraws correctly at every size, and it follows the colour scheme.',
-        '',
-        '2. A finished SVG document, as a string starting with "<svg", for anything the',
-        'four shapes above cannot do:',
-        'a scatter, a pie, several series, your own axes, ticks, gridlines and legend.',
-        '',
-        'Open it as <svg width="100%" height="100%" viewBox="0 0 W H"',
-        'xmlns="http://www.w3.org/2000/svg">, with W and H the window.width and',
-        'window.height you were handed, and put every coordinate inside that box. You are',
-        'drawing at the size the block actually is, so a label is as many pixels as it',
-        'looks: leave about 40 on the left for value labels and 24 at the bottom for',
-        'category ones, and nothing may touch the edges -- a label drawn there is cut off.',
-        'Font sizes of 11 to 13 read well. The app draws no axes, no frame and no labels',
-        'around your SVG: everything visible is yours. Build the markup by concatenating',
-        'strings.',
-        '',
-        'Colour. window.dark says which way the scheme is up, so you may decide on it.',
-        'Beyond that, text, axes and gridlines drawn with fill="currentColor" /',
-        'stroke="currentColor" (and an opacity for the quieter ones) are readable on every',
-        'scheme, and these CSS variables resolve inside your SVG and follow it: var(--plot-1)',
-        '… var(--plot-8) are series colours chosen to be told apart, var(--ui-accent) is the',
-        'accent of the page, var(--ui-muted) quieter text, var(--ui-line) a hairline. Use',
-        'them where a colour is only there to tell things apart; use a colour of your own',
-        'wherever the colour MEANS something -- red for a limit, green for ok -- or was asked',
-        'for. Do not paint a background rectangle: the block has one.',
-        '',
-        'Do NOT import anything: the code runs in a worker with no modules, no network and',
-        'no DOM -- there is no `require` and none of Node\'s built-ins -- data in, a figure',
-        'or a string of SVG out. Scripts and event handlers inside the SVG are stripped',
-        'before it is drawn.',
-        '',
-        'It cannot ask a model either: it is handed no `node`, and there is no `node.llm`',
-        'in a page. Whatever needs a model\'s judgement is done by a node upstream, which',
-        'sends the chart its answer.',
-      ].join('\n'),
-      inputs: ['value'], outputs: ['value'],
-      // Looked at before anyone sees it: see check.ts.
-      check: checkPlot,
-      /**
-       * The page runs `draw(data, window)`; the probe has neither a page nor a
-       * block, so it wraps it in what the sandbox does call and hands it a
-       * window of a plausible size. The numbers are a stand-in and the check
-       * that follows knows it: it reads the viewBox the body itself declared,
-       * not these.
-       *
-       * It is called the way the page's worker calls it (`plot_window/draw.ts`):
-       * `draw(data, window)`, never with the sandbox's `node` -- a body that
-       * asks `node.llm` would pass the probe and fail on every page. The body
-       * gets a scope of its own and no `require`, which a worker does not have
-       * either. It starts on the wrapper's first line: an error is reported by
-       * the line it is on, and the repair is shown the body, whose line 3 must
-       * be the line 3 it is told about.
-       */
-      probeWith: (body) => [
-        `const __draw = ((require) => { ${body}`,
-        ';',
-        "  return typeof draw === 'function' ? draw : undefined;",
-        '})();',
-        'async function run(inputs) {',
-        "  const window = { width: 640, height: 360, scheme: 'night', dark: true };",
-        "  if (!__draw) throw new Error(\"This chart's code defines no draw(data, window).\");",
-        '  const drawn = await __draw(inputs.value, window);',
-        "  return { value: drawn && typeof drawn === 'object' && 'value' in drawn ? drawn.value : drawn };",
-        '}',
-      ].join('\n'),
-      guard: 'Please describe the chart you want first.',
-      success: '✅ Chart generated!',
-    };
+    return 'what to plot: a list of points -- numbers, or {"label": string, "value": number} -- or a figure '
+      + '{"kind": "bars"|"columns"|"line"|"donut", "title": string, "points": [...]}, which the chart draws at the '
+      + 'block\'s real size and in the page\'s colours. Any other plot (a scatter, several series) can arrive as a '
+      + 'finished SVG document, a string starting with "<svg" with a viewBox and width="100%" height="100%", shown as it stands.';
   }
 }

@@ -113,14 +113,6 @@ export type NodeConfig = {
  * the way its runner does -- `select_all_files` missing means every file.
  */
 export type GuiWidget = {
-  /** A chart's, a table's or an image's transform. */
-  code?: string;
-  code_prompt?: string;
-  /**
-   * The one example input a transform is written and tried against: the text
-   * of `{"value": …}`, as it is handed the value (`example.json`).
-   */
-  example?: string;
   /** `input_picker`: the file types a folder's listing keeps. */
   extensions?: string;
   h?: number;

@@ -10,18 +10,11 @@ import { ElementGuiBuilder } from './ElementGuiBuilder';
 
 /**
  * What only the shell can hand a panel laid out in the four steps: the page
- * the block sits on, and the page it is drawn in. The panel places each where
- * its step is.
+ * the block sits on. The panel places each where its step is.
  */
 export interface WidgetSteps {
-  /** What is wired into the block, in words -- `"Rows" (port "rows")` -- or '' while nothing is. */
-  feeds: string;
-  /** ⟳ From the graph: what arrives at the block -- on the last run, else from what feeds it, run now. Absent for a block nothing can feed. */
-  fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
-  /** The block run by itself on *values*, the way a run runs it. */
-  tryIt: (values: Record<string, unknown>) => Promise<TryResult>;
-  /** What came out, drawn by the block itself, at its own proportions. */
-  renderResult: (result: TryResult) => ReactNode;
+  /** The block run by itself, the way a run runs it. */
+  tryIt: () => Promise<TryResult>;
   /** "What ✨ sends", beside ✨, and what it sends, under it. */
   preview?: ReactNode;
   sent?: ReactNode;
@@ -102,12 +95,8 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
    */
   readonly InlineEditor?: ComponentType<InlineEditorProps>;
 
-  /**
-   * Drawn on the canvas under the widget's input port: what last arrived
-   * there, as the block shows it. Handed the block too, because what it shows
-   * can be its own code's work -- a chart's draw() -- and not what arrived.
-   */
-  readonly CanvasPreview?: ComponentType<{ widget: GuiWidget; data: unknown }>;
+  /** Drawn on the canvas under the widget's input port: what last arrived there, as the block shows it. */
+  readonly CanvasPreview?: ComponentType<{ data: unknown }>;
 
   /** Said under "⚡ Using this starts the graph", for a widget that can be told to. */
   readonly runOnChangeHint: string =

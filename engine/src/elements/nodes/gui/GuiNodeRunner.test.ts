@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GuiNodeRunner, parseWidget } from './GuiNodeRunner.ts';
+import { GuiNodeRunner } from './GuiNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
 import { quietRuntime } from '../../../../test/fakes.ts';
 import type { GraphNode } from '../../../graph.ts';
@@ -71,42 +71,29 @@ describe('a block that fails', () => {
   });
 });
 
-/**
- * What a display block shows, as a run and its ▶ Test both ask it.
- *
- * The body is a stand-in here: what it returns (or throws) is decided by the
- * test, so what is checked is what the block makes of that.
- */
-describe('what a block with a transform shows', () => {
-  const answering = (answer: (body: string) => Record<string, unknown>): Runtime => ({
-    ...brokenFolder,
-    files: { ...brokenFolder.files, resolve: (p) => `/project/${p}` },
-    code: { run: async (body) => answer(body) },
+/** What each display block on a page shows, once everything has arrived. */
+describe('what a display block shows', () => {
+  const noBody: Runtime = quietRuntime({
+    files: { resolve: (p) => `/project/${p}`, read: async (p) => `bytes of ${p}` },
+    code: { run: async () => { throw new Error('a block runs no code'); } },
   });
-  const block = (kind: string, code: string) => parseWidget({ id: 'img', kind, label: 'Cover', code });
+  const blocks = page([
+    { id: 'rows', kind: 'table', label: 'Rows' },
+    { id: 'img', kind: 'image_view', label: 'Cover' },
+    { id: 'chart', kind: 'plot_window', label: 'Chart' },
+  ]);
 
-  it('shows a failing image transform\'s own message -- it was loaded as a path and garbled', async () => {
-    const failing = answering(() => { throw new Error('no cover field'); });
-    const shown = await new GuiNodeRunner().showBlock(block('image_view', 'function run() {}'), { title: 'x' }, failing);
-    expect(shown).toMatch(/^⚠ img: transform failed:/);
-    expect(shown).toContain('no cover field');
-    expect(shown).not.toContain('Not a recognised image file');
+  it('is what arrived, with an image\'s path read into the picture', async () => {
+    const shown = await new GuiNodeRunner().display(blocks, { rows_in: [{ a: 1 }], img_in: 'cover.png', chart_in: null }, noBody);
+    expect(shown).toEqual({ rows: [{ a: 1 }], img: 'data:image/png;base64,bytes of /project/cover.png', chart: null });
   });
 
-  it('says so when a transform returned no "value", instead of showing the input untouched', async () => {
-    const shown = await new GuiNodeRunner().showBlock(block('table', 'function run() {}'), [{ a: 1 }], answering(() => ({ rows: [] })));
-    expect(shown).toBe('⚠ img: its transform returned no "value" (only "rows").');
-    const nothing = await new GuiNodeRunner().showBlock(block('table', 'function run() {}'), [{ a: 1 }], answering(() => ({})));
-    expect(nothing).toBe('⚠ img: its transform returned no "value".');
+  it('leaves out a block nothing arrived at, so the rest of the page stays as it was', async () => {
+    expect(await new GuiNodeRunner().display(blocks, { rows_in: [] }, noBody)).toEqual({ rows: [] });
   });
 
-  it('shows the null a transform returned, since that is what it said to show', async () => {
-    const shown = await new GuiNodeRunner().showBlock(block('table', 'function run() {}'), [{ a: 1 }], answering(() => ({ value: null })));
-    expect(shown).toBeNull();
-  });
-
-  it('still hands a block without a transform what arrived', async () => {
-    const shown = await new GuiNodeRunner().showBlock(block('table', ''), [{ a: 1 }], answering(() => { throw new Error('must not run'); }));
-    expect(shown).toEqual([{ a: 1 }]);
+  it('shows a failure that arrives at an image as it is, not read as a path', async () => {
+    const shown = await new GuiNodeRunner().display(blocks, { img_in: '⚠ upstream: no cover field' }, noBody);
+    expect(shown).toEqual({ img: '⚠ upstream: no cover field' });
   });
 });

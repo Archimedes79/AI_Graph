@@ -106,41 +106,23 @@ describe('code', () => {
   });
 
   it('generates a fixed-port snippet against its own ports, never probing the node\'s sample', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { value: [] }; }\n```']);
+    const ai = scripted(['```js\nfunction run(i) { return { files: [] }; }\n```']);
     let probed = false;
     const reply = await generate(
-      { element: 'plot_window', description: 'chart it', inputs: ['text'], outputs: ['result'], sample_inputs: { text: 'x' } },
+      { element: 'input', description: 'the markdown ones', inputs: ['text'], outputs: ['result'], sample_inputs: { text: 'x' } },
       { ai, code: runner(() => { probed = true; return {}; }), generationFor, target },
     );
     expect(probed).toBe(false);
     expect(reply.probe.status).toBe('skipped');
-    expect(ai.asked[0].prompt).toContain('- `value`');
-    expect(ai.asked[0].prompt).toContain('Must expose draw(data, window)');    // the block's own contract
+    expect(ai.asked[0].prompt).toContain('- `files`');
+    expect(ai.asked[0].prompt).toContain('Return only the selected paths');    // the selector's own contract
   });
 
-  it('asks for a chart\'s draw(data, window) in the page\'s worker, and nothing a graph\'s node is told', async () => {
-    // It was told draw(data, window), then "complete function run(inputs), keep
-    // its name", then Node's standard library -- and followed the skeleton.
-    const ai = scripted(['```js\nfunction draw(data, window) { return []; }\n```']);
-    await generate({ element: 'plot_window', description: 'a line of the temperatures' }, { ai, code: runner(() => ({})), generationFor, target });
-    const { prompt, system } = ai.asked[0];
-    expect(prompt).toContain('## The function\nComplete this function. Keep its name and its two parameters');
-    expect(prompt).toContain('function draw(data, window) {');
-    expect(prompt).toContain('runs in a worker');
-    expect(prompt).not.toContain('function run(inputs)');
-    expect(prompt).not.toContain('one node of a graph');
-    expect(prompt).not.toContain('Node has built in');
-    expect(prompt).not.toContain('Downstream nodes');
-    expect(prompt).not.toContain('## Also');                                   // the contract is the frame, said once
-    expect(system).not.toContain('node.llm');
-    expect(system).not.toContain('downstream nodes');
-  });
-
-  it('still asks a table\'s transform for run(inputs) in the sandbox, which is where it runs', async () => {
-    const ai = scripted(['```js\nfunction run(inputs) { return { value: [] }; }\n```']);
-    await generate({ element: 'table', description: 'one row per file' }, { ai, code: runner(() => ({})), generationFor, target });
-    expect(ai.asked[0].prompt).toContain('function run(inputs) {');
-    expect(ai.asked[0].prompt).toContain('Node has built in');
+  it('is not offered for a block that shows what arrives: it has no code to write', async () => {
+    for (const kind of ['plot_window', 'table', 'image_view']) {
+      await expect(generate({ element: kind, description: 'x' }, { ai: scripted([]), code: runner(() => ({})), generationFor, target }))
+        .rejects.toThrow(GenerationRefused);
+    }
   });
 });
 
@@ -231,17 +213,17 @@ describe('what the node says about itself reaches the model', () => {
     const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
     await generate(rows, { ai, code: runner(() => ({})), generationFor, target });
     expect(ai.asked[0].prompt).not.toContain('chart');
-    expect(registry.widget('plot_window')?.receives({} as never)).toContain('NOT a drawing');
-    expect(registry.widget('table')?.receives({} as never)).toContain('column header');
+    expect(registry.widget('plot_window')?.receives(parseWidget({ id: 'b', kind: 'plot_window' }))).toContain('draws at the block\'s real size');
+    expect(registry.widget('table')?.receives(parseWidget({ id: 'b', kind: 'table' }))).toContain('column header');
   });
 
-  it('tells the node upstream to pre-shape nothing when the block reshapes what arrives itself', () => {
-    // A chart whose draw() reads rows was still said to want points, so the
-    // node feeding it was written to hand it points, which its draw() read as rows.
+  it('tells the node upstream what a drawing block takes, whatever an old block still carries', () => {
+    // A block reshapes nothing itself: the node wired into it hands it what it draws.
     for (const kind of ['plot_window', 'table', 'image_view'] as const) {
       const element = registry.widget(kind)!;
-      expect(element.receives(parseWidget({ id: 'b', kind, code: '' }))).toBeTruthy();
-      expect(element.receives(parseWidget({ id: 'b', kind, code: 'function draw(rows) { return rows.map((r) => r.temp); }' }))).toBeUndefined();
+      const plain = element.receives(parseWidget({ id: 'b', kind }));
+      expect(plain).toBeTruthy();
+      expect(element.receives(parseWidget({ id: 'b', kind, code: 'function draw(rows) { return rows; }' }))).toBe(plain);
     }
   });
 
@@ -555,85 +537,5 @@ describe('a whole graph', () => {
 
   it('fails, with the transcript, when there is no document to parse', async () => {
     await expect(generateGraph('x', '', { ai: scripted(['no json here']), target })).rejects.toBeInstanceOf(GenerationFailed);
-  });
-});
-
-describe('a block\'s snippet is looked at before anyone sees it', () => {
-  const sample = { value: [{ t: '08:00', temp: 61 }, { t: '08:05', temp: 64 }] };
-  const blank = '<svg width="100%" height="100%" viewBox="0 0 400 240"><circle cx="NaN" cy="40" r="3"/></svg>';
-  const drawn = '<svg width="100%" height="100%" viewBox="0 0 400 240"><circle cx="60" cy="40" r="3"/></svg>';
-
-  it('runs a chart transform on the sample the block editor sent -- it used to be thrown away', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { value: "GOOD" }; }\n```']);
-    const reply = await generate(
-      { element: 'plot_window', description: 'a line', sample_inputs: sample },
-      { ai, code: runner(() => ({ value: drawn })), generationFor, target },
-    );
-    expect(reply.probe).toMatchObject({ status: 'ok' });
-  });
-
-  it('hands a drawing full of NaN back with the reason, and keeps the repair', async () => {
-    const ai = scripted([
-      '```js\nfunction run(i) { return { value: "FIRST" }; }\n```',
-      '```js\nfunction run(i) { return { value: "SECOND" }; }\n```',
-    ]);
-    const reply = await generate(
-      { element: 'plot_window', description: 'a line', sample_inputs: sample },
-      { ai, code: runner((body) => ({ value: body.includes('SECOND') ? drawn : blank })), generationFor, target },
-    );
-    expect(reply.probe).toMatchObject({ status: 'repaired', problems: [] });
-    expect(reply.result).toContain('SECOND');
-    // The second request carries what was found, in words the model can act on.
-    expect(ai.asked[1].prompt).toContain('what is wrong with what it produced');
-    expect(ai.asked[1].prompt).toContain('cx="NaN"');
-  });
-
-  it('keeps the attempt that got further when the repair is no better, and says what remains', async () => {
-    const ai = scripted([
-      '```js\nfunction run(i) { return { value: "FIRST" }; }\n```',
-      '```js\nfunction run(i) { throw new Error("worse"); }\n```',
-    ]);
-    const reply = await generate(
-      { element: 'plot_window', description: 'a line', sample_inputs: sample },
-      { ai, code: runner((body) => { if (body.includes('worse')) throw new Error('worse'); return { value: blank }; }), generationFor, target },
-    );
-    expect(reply.result).toContain('FIRST');
-    expect(reply.probe.status).toBe('failed');
-    expect(reply.probe.problems?.[0]).toMatch(/not numbers/);
-  });
-
-  it('tries a chart the way its page draws it: a body asking node.llm fails here, and a figure passes', async () => {
-    // The page's worker hands draw() a window, not a node. With a node here, the
-    // question was answered, the probe and `check` said ✓, and the page failed.
-    const ai = scripted([
-      '```js\nasync function draw(data, node) { return await node.llm({ prompt: "chart it" }); }\n```',
-      '```js\nfunction draw(data, window) { return { kind: "line", title: "Temperature", points: data.map((row) => ({ label: row.t, value: row.temp })) }; }\n```',
-    ]);
-    const reply = await generate({ element: 'plot_window', description: 'a line', sample_inputs: sample }, { ai, code: nodeCode, generationFor, target });
-    expect(ai.asked).toHaveLength(2);                                  // nobody answered the chart's question
-    expect(ai.asked[1].prompt).toContain('node.llm is not a function');
-    expect(reply.probe).toMatchObject({ status: 'repaired', problems: [] });
-    expect(reply.probe.outputs).toEqual({ value: { kind: 'line', title: 'Temperature', points: [{ label: '08:00', value: 61 }, { label: '08:05', value: 64 }] } });
-  }, 30_000);
-
-  it('tells the repair the line of the chart\'s body an error is on, as the body is shown to it', async () => {
-    // The wrapper that calls it as the page does stood two lines above it, and
-    // the repair was told of a line 5 in a body of four.
-    const ai = scripted([
-      '```js\nfunction draw(data, window) {\n  const rows = data;\n  return rows.nope.map((row) => row.temp);\n}\n```',
-      '```js\nfunction draw(data) { return data.map((row) => row.temp); }\n```',
-    ]);
-    const reply = await generate({ element: 'plot_window', description: 'a line', sample_inputs: sample }, { ai, code: nodeCode, generationFor, target });
-    expect(ai.asked[1].prompt).toMatch(/reading 'map'\)[\s\S]*\bline 3, column \d+/);
-    expect(reply.probe.status).toBe('repaired');
-  }, 30_000);
-
-  it('still ignores a sample keyed by the node\'s ports, which a block\'s snippet does not have', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { value: [] }; }\n```']);
-    const reply = await generate(
-      { element: 'plot_window', description: 'a line', sample_inputs: { chart_in: [1, 2] } },
-      { ai, code: runner(() => { throw new Error('must not run'); }), generationFor, target },
-    );
-    expect(reply.probe.status).toBe('skipped');
   });
 });

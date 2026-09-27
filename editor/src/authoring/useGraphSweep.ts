@@ -12,7 +12,6 @@ import { shapeToKeep, useGraphStore } from '@/store/graphStore';
 import { graphEdge } from '@/document/wires';
 import { showsPage } from '@/document/guiWidgets';
 import { nodeFacts } from './nodeFacts';
-import { blockFacts } from './blockFacts';
 import { WIDGET_BUILDERS, NODE_BUILDERS } from '@/elements/registry';
 import { buildGeneration, nodeFields, widgetFields } from './generation';
 import { missingExamples, sampleFromPredecessors, sweep, writtenBody, type SweepTarget, type SweepUnit } from './graphSweep';
@@ -72,16 +71,7 @@ export async function sweepGraph({ say, stopped }: { say: (message: string) => v
     },
   });
 
-  /**
-   * One block on a page, generated exactly as its own ✨ button would.
-   *
-   * The same `buildGeneration` and the same `blockFacts` the block editor
-   * uses, so a sweep and a button cannot drift apart -- they had: the sweep
-   * sent no colour scheme, and neither said where the sample came from. When
-   * the block has nothing of its own, the sample is what the block before it
-   * just produced, which is the whole point of sweeping rather than pressing
-   * buttons one at a time.
-   */
+  /** One block on a page, generated exactly as its own ✨ button would. */
   const unitForWidget = (
     target: SweepTarget & { widget: GuiWidget },
   ): SweepUnit<GenerateResponse> | undefined => {
@@ -109,17 +99,9 @@ export async function sweepGraph({ say, stopped }: { say: (message: string) => v
       });
     };
 
-    // The same facts its own ✨ button sends; before any run and without an
-    // example, what the nodes before it just returned in this sweep.
-    const facts = blockFacts(node.id, widget, nodesOf(), rfEdges(), live().executionResult, live().metadata.gui_scheme);
-    const predecessors = facts.sampleInputs ? undefined : sampleFromPredecessors(target, rfEdges(), produced, guiNodes);
+    // The same request its own ✨ button sends.
     return inThisGraph(buildGeneration({
-      element: widget.kind,
-      generation: spec,
-      subject: widget,
-      fields: widgetFields(widget, onChange),
-      ...facts,
-      ...(predecessors ? { sampleInputs: predecessors, sampleOrigin: 'what the nodes before it just returned' } : {}),
+      element: widget.kind, generation: spec, subject: widget, fields: widgetFields(widget, onChange),
     }), target.key);
   };
 

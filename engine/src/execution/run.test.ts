@@ -28,15 +28,7 @@ function runtime(over: Partial<Runtime> = {}): Runtime {
   });
 }
 
-/**
- * A page with a number field and a display, and a code node between them: the
- * ordinary loop.
- *
- * The display is a `table`, not a chart. A chart's body is run by the page when
- * it draws (`WidgetRunner.bodyDrawsOnThePage`), so a run hands it what arrived
- * and transforms nothing -- which is asserted on its own below. Every other
- * display still has its transform run here, and that is what this exercises.
- */
+/** A page with a number field and a table, and a code node between them: the ordinary loop. */
 function loop(): Graph {
   return parseGraph({
     nodes: [
@@ -44,7 +36,7 @@ function loop(): Graph {
         id: 'page', node_type: 'gui',
         config: { gui_widgets: [
           { id: 'n', kind: 'slider', min: 0, max: 100, value: 21 },
-          { id: 'shown', kind: 'table', code: '/* SHOUT */ function run(i) { return i; }' },
+          { id: 'shown', kind: 'table' },
         ] },
       },
       { id: 'double', node_type: 'code', inputs: [port('n')], outputs: [port('out')], config: { code: '/* DOUBLE */' } },
@@ -57,45 +49,44 @@ function loop(): Graph {
 }
 
 describe('what a page shows', () => {
-  it('runs a block\'s transform on a value that came back around the loop', async () => {
+  it('shows a value that came back around the loop', async () => {
     // The value reaches the page across a feedback edge, after the page ran.
-    // The transform used to run during the page's own turn, on `undefined`,
-    // and the raw 42 was shown in its place.
+    // What it showed used to be made during the page's own turn, on
+    // `undefined`, and the 42 never reached the screen.
     const result = await executeGraph(loop(), { runtime: runtime(), registry });
     const page = result.node_results.find((r) => r.node_id === 'page')!;
     expect(page.inputs.shown_in).toBe(42);
-    expect(page.display).toEqual({ shown: 'shown(42)' });
+    expect(page.display).toEqual({ shown: 42 });
   });
 
-  it('says what arrived in `inputs` and what is on the screen in `display`', async () => {
-    const result = await executeGraph(loop(), { runtime: runtime(), registry });
-    const page = result.node_results.find((r) => r.node_id === 'page')!;
-    expect(page.inputs.shown_in).not.toEqual(page.display!.shown);
-  });
-
-  /**
-   * A chart is the one display a run does not transform.
-   *
-   * Its body wants the block's size and the page's colour scheme, and a run
-   * knows neither -- so it is run by the page, on every redraw, and what a run
-   * puts on the screen is what arrived. The body here would be loud about
-   * having run; the point is that it did not.
-   */
-  it('hands a chart what arrived, because the page runs its body when it draws', async () => {
-    const graph = parseGraph({
+  /** One of each drawing block, each fed by a node of its own; a block that still carries `code` is shouting. */
+  function drawing(): Graph {
+    const text = (id: string, value: string) => ({ id, node_type: 'input', config: { input_mode: 'text', value }, outputs: [port('output')] });
+    const into = (from: string, block: string) => ({ id: from, source_node_id: from, source_port_id: 'output', target_node_id: 'page', target_port_id: `${block}_in` });
+    return parseGraph({
       nodes: [
-        { id: 'n', node_type: 'input', config: { input_mode: 'text', value: '7' }, outputs: [port('output')] },
+        text('points', '[1, 2, 3]'), text('rows', 'Oslo'), text('picture', 'cover.png'),
         {
           id: 'page', node_type: 'gui',
-          config: { gui_widgets: [{ id: 'chart', kind: 'plot_window', code: '/* SHOUT */ function run(i) { return i; }' }] },
+          config: { gui_widgets: [
+            { id: 'chart', kind: 'plot_window', code: '/* SHOUT */' },
+            { id: 'table', kind: 'table', code: '/* SHOUT */' },
+            { id: 'image', kind: 'image_view', code: '/* SHOUT */' },
+          ] },
         },
       ],
-      edges: [{ id: 'e', source_node_id: 'n', source_port_id: 'output', target_node_id: 'page', target_port_id: 'chart_in' }],
+      edges: [into('points', 'chart'), into('rows', 'table'), into('picture', 'image')],
     });
-    const result = await executeGraph(graph, { runtime: runtime(), registry });
+  }
+
+  it('shows what arrives at a chart, a table or an image, and runs no code for any of them', async () => {
+    const files = { ...quietRuntime().files, read: async (path: string) => `bytes of ${path}` };
+    const result = await executeGraph(drawing(), { runtime: runtime({ files }), registry });
     const page = result.node_results.find((r) => r.node_id === 'page')!;
-    expect(page.inputs.chart_in).toBe('7');
-    expect(page.display).toEqual({ chart: '7' });
+    // Not "shown(…)": a block has no code, and an old `code` key is not read.
+    expect(page.display).toEqual({ chart: '[1, 2, 3]', table: 'Oslo', image: 'data:image/png;base64,bytes of cover.png' });
+    // What arrived and what is on the screen are told apart: an image's path is read into the picture.
+    expect(page.inputs.image_in).toBe('cover.png');
   });
 });
 

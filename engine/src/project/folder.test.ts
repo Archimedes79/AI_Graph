@@ -44,7 +44,7 @@ function sample(): Graph {
       {
         id: 'page', node_type: 'gui', label: 'Page', position: { x: 900, y: 20 },
         inputs: [port('chart_in', 'input')], outputs: [],
-        config: { gui_widgets: [{ id: 'chart', kind: 'plot_window', label: 'Chart', code: 'function run(i) { return i; }', code_prompt: 'Bars.' }] },
+        config: { gui_widgets: [{ id: 'chart', kind: 'plot_window', label: 'Chart' }] },
       },
     ],
     edges: [
@@ -82,19 +82,8 @@ describe('a project folder', () => {
     expect(await text('nodes/say/message.md')).toBe('There are {{total}} files.\n');
     expect(await text('nodes/say/output.md')).toBe('One sentence.\n');
     expect(await text('nodes/folder/select.js')).toContain('i.files');
-    expect(await text('nodes/page/chart/code.js')).toContain('return i');
-    expect(await text('nodes/page/chart/task.md')).toBe('Bars.\n');
-  });
-
-  it('keeps a block\'s example input in a file of its own, as it was typed', async () => {
-    const graph = sample();
-    const example = '{\n  "value": [{ "city": "Oslo", "people": 700000 }]\n}';
-    graph.nodes[3].config.gui_widgets = [{ id: 'rows', kind: 'table', label: 'Rows', code: '', code_prompt: '', example }];
-    await writeProject(dir, graph);
-    expect(await text('nodes/page/rows/example.json')).toBe(`${example}\n`);
-    expect(JSON.parse(await text('nodes/page/node.json')).config.gui_widgets[0]).toEqual({ id: 'rows', kind: 'table', label: 'Rows' });
-    const read = await readProject(dir);
-    expect((read.nodes.find((n) => n.id === 'page')!.config.gui_widgets as Record<string, unknown>[])[0].example).toBe(example);
+    // A chart has no writing of its own: it draws what arrives.
+    expect(existsSync(join(dir, 'nodes/page/chart'))).toBe(false);
   });
 
   it('says the flow once, in flow.json, and nothing about any node there', async () => {
@@ -251,8 +240,8 @@ describe('what a folder could write and not read back', () => {
       nodes: [{
         id: 'page', node_type: 'gui', label: 'Page', position: { x: 0, y: 0 }, inputs: [], outputs: [],
         config: { gui_widgets: [
-          { id: 'chart', kind: 'table', code: 'function run(i) { return { value: "FIRST" }; }' },
-          { id: 'chart', kind: 'table', code: 'function run(i) { return { value: "SECOND" }; }' },
+          { id: 'chart', kind: 'input_picker', mode: 'directory', selector_code: 'function run(i) { return { files: ["FIRST"] }; }' },
+          { id: 'chart', kind: 'input_picker', mode: 'directory', selector_code: 'function run(i) { return { files: ["SECOND"] }; }' },
         ] },
       }],
       edges: [],
@@ -355,8 +344,8 @@ describe('two editors on one folder', () => {
     expect(await changesOnDisk(dir)).toEqual([{ node_id: 'say', widget_id: '', field: 'system_prompt', value: 'You count carefully.' }]);
     expect(await changesOnDisk(dir)).toEqual([]);
 
-    await rm(join(dir, 'nodes/page/chart/task.md'));
-    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'page', widget_id: 'chart', field: 'code_prompt', value: '' }]);
+    await rm(join(dir, 'nodes/count/task.md'));
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', widget_id: '', field: 'code_prompt', value: '' }]);
 
     // A change taken in is no conflict for the next save.
     const graph = await readProject(dir);
