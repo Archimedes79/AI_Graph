@@ -1,18 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import Modal from '@/ui/Modal';
-import { call } from '@/api/client';
+import { call, type BrowseEntry } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import {
   ACCENT_TEXT, DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT,
 } from '@/ui/theme';
-
-export interface BrowseEntry {
-  name: string;
-  path: string;
-  is_dir: boolean;
-  /** A folder with a flow.json: a project, which is chosen rather than walked into. */
-  project?: boolean;
-}
 
 interface FileBrowserDialogProps {
   /**

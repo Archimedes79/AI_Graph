@@ -16,7 +16,7 @@ import {
 import type { EngineGraph, Graph } from '@/graph';
 
 export type {
-  AICall, BrowsePage, GenerateRequest, GenerateResponse, ProbeReport, ProviderStatus, Requirement,
+  AICall, BrowseEntry, BrowsePage, GenerateRequest, GenerateResponse, ProbeReport, ProviderStatus, Requirement,
   RunSnapshot, RunTrigger, SettingsPatch, SettingsStatus, ToolAiSettings,
 } from '@engine/host/api.ts';
 export type { ScheduleState } from '@engine/host/schedule.ts';
