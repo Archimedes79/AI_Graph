@@ -51,14 +51,27 @@ export default function InputNodePanel({
         {isText ? 'Text' : isDirectory ? 'Directory' : 'File'}
       </label>
       <div className="flex items-center gap-2">
-        <input
-          className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm"
-          style={FIELD}
-          value={path}
-          onChange={(e) => setConfig('value', e.target.value)}
-          placeholder={isText ? 'Enter default text…' : isDirectory ? '/path/to/directory' : '/path/to/file'}
-          aria-label={isText ? 'Text' : isDirectory ? 'Directory' : 'File'}
-        />
+        {/* Text in a box that keeps its line breaks: a one-line field dropped
+            them at the first edit of a text pasted in. */}
+        {isText ? (
+          <textarea
+            className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm resize-y"
+            style={{ ...FIELD, minHeight: 72 }}
+            value={path}
+            onChange={(e) => setConfig('value', e.target.value)}
+            placeholder="Enter default text…"
+            aria-label="Text"
+          />
+        ) : (
+          <input
+            className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm"
+            style={FIELD}
+            value={path}
+            onChange={(e) => setConfig('value', e.target.value)}
+            placeholder={isDirectory ? '/path/to/directory' : '/path/to/file'}
+            aria-label={isDirectory ? 'Directory' : 'File'}
+          />
+        )}
         {!isText && (
           <button
             type="button"
@@ -147,8 +160,27 @@ export default function InputNodePanel({
     </div>
   );
 
+  // A file and a folder alike: the browser offers only these for a file, and a
+  // folder's listing keeps only these. It was shown for a folder alone, while
+  // the browser for one file filtered by it all the same.
+  const typesField = !isText && (
+    <div>
+      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
+        File types (comma-separated, e.g. .md, .txt)
+      </label>
+      <input
+        className="w-full rounded-lg px-3 py-2 text-sm font-mono"
+        style={FIELD}
+        value={node.config.extensions ?? ''}
+        onChange={(e) => setConfig('extensions', e.target.value)}
+        placeholder="Leave empty for all file types"
+        aria-label="File types"
+      />
+    </div>
+  );
+
   if (!isDirectory || !generation || !steps) {
-    return <div className="space-y-4">{modeField}{valueField}{said}{catchFailures}</div>;
+    return <div className="space-y-4">{modeField}{valueField}{typesField}{said}{catchFailures}</div>;
   }
 
   return (
@@ -158,18 +190,7 @@ export default function InputNodePanel({
         folder={(
           <div className="space-y-3">
             {valueField}
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
-                File types (comma-separated, e.g. .md, .txt)
-              </label>
-              <input
-                className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                style={FIELD}
-                value={node.config.extensions ?? ''}
-                onChange={(e) => setConfig('extensions', e.target.value)}
-                placeholder="Leave empty for all file types"
-              />
-            </div>
+            {typesField}
             <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
               <input
                 type="checkbox"
