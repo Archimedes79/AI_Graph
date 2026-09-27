@@ -1,7 +1,8 @@
 import React from 'react';
+import type { GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { WIDGET_BUILDERS } from '@/elements/registry';
-import { blockValue, GuiBlock, PageGrid, shownOn, type SurfaceBlock } from './GuiPage';
+import { blockValue, GuiBlock, PageGrid, shownOn } from './GuiPage';
 import { moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { cellsFromDrag, resolveWidgetLayout, GUI_GRID_COLUMNS, GUI_MAX_CELL } from '@/document/layout';
 import QuickInsert from './QuickInsert';
@@ -33,13 +34,15 @@ import { ACCENT, DIMMER, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
  * same page.
  */
 export default function DesignerSurface({
-  blocks, onWidgetValue, onWidgetTrigger, selectedId, onSelect, overrides, dropIndex,
+  pageId, widgets, onWidgetValue, onWidgetTrigger, selectedId, onSelect, overrides, dropIndex,
   insertAt, onInsertAt, onInsert,
 }: {
-  blocks: SurfaceBlock[];
-  onWidgetValue: (block: SurfaceBlock, value: unknown) => void;
+  /** The page's node, whose run result the blocks show; none before the first block makes it. */
+  pageId: string | undefined;
+  widgets: GuiWidget[];
+  onWidgetValue: (widget: GuiWidget, value: unknown) => void;
   /** A block was used: the same event the delivered page gets, because the blocks here are live. */
-  onWidgetTrigger: (block: SurfaceBlock, value?: unknown) => void;
+  onWidgetTrigger: (widget: GuiWidget, value?: unknown) => void;
   selectedId: string | null;
   onSelect: (widgetId: string | null) => void;
   overrides?: Record<string, string>;
@@ -54,7 +57,7 @@ export default function DesignerSurface({
   const busy = useGraphStore((s) => s.isExecuting);
   // Reported by the grid below, because only the grid element knows it.
   const [cell, setCell] = React.useState(GUI_MAX_CELL);
-  const placements = resolveWidgetLayout(blocks.map((b) => b.widget));
+  const placements = resolveWidgetLayout(widgets);
 
   // Every change goes through `pageWrite`, which reads the page from the store
   // when the change lands: what this render drew may be a keystroke old.
@@ -120,9 +123,8 @@ export default function DesignerSurface({
           zero pixels tall and there is nothing to aim a first element at. */}
       <PageGrid minRows={4} onCell={setCell}>
         {placements.map((placement, index) => {
-          const block = blocks[index];
           const { widget } = placement;
-          const incoming = shownOn(executionResult, block.node.id, widget.id);
+          const incoming = pageId ? shownOn(executionResult, pageId, widget.id) : undefined;
           const selected = widget.id === selectedId;
           // A block that is its own words is typed where it stands: the kind says how.
           const InPlace = selected ? WIDGET_BUILDERS[widget.kind]?.InlineEditor : undefined;
@@ -136,9 +138,9 @@ export default function DesignerSurface({
               <GuiBlock
                 placement={placement}
                 incoming={incoming}
-                value={blockValue(block, incoming, overrides)}
-                onChange={(next) => onWidgetValue(block, next)}
-                onTrigger={(next) => onWidgetTrigger(block, next)}
+                value={blockValue(widget, incoming, overrides)}
+                onChange={(next) => onWidgetValue(widget, next)}
+                onTrigger={(next) => onWidgetTrigger(widget, next)}
                 busy={busy}
                 blockRef={(element) => {
                   if (element) blockRefs.current.set(widget.id, element);

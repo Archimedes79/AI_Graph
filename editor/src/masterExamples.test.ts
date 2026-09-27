@@ -4,7 +4,7 @@ import type { Graph, GraphNode, GuiWidget, NodeType, Port, WidgetKind } from '@/
 import { withPorts } from '@/canvas/nodeDraft';
 import { nodeDialog } from '@/canvas/nodeDialog';
 import { newBlock } from '@/page/DesignerPalette';
-import { pageOf } from '@/page/GuiPage';
+import { pageOf } from '@/document/guiWidgets';
 import { insertBlock, patchBlock } from '@/page/pageWrite';
 import { listPorts, withPerItem } from '@/authoring/nodeStepRules';
 import { readPair } from '@/authoring/examplePair';
@@ -72,7 +72,7 @@ const pageId = (): string => pageNow().page!.id;
  * designer's own steps (`newBlock`, `insertBlock`, then `patchBlock`).
  */
 function addBlock(kind: WidgetKind, mode: string | undefined, settings: Partial<GuiWidget>): string {
-  const block = newBlock(kind, mode, pageNow().blocks.map((b) => b.widget.id));
+  const block = newBlock(kind, mode, pageNow().widgets.map((taken) => taken.id));
   insertBlock(block);
   patchBlock(block.id, settings);
   return block.id;

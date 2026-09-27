@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { insertBlock, moveBlock, patchBlock, removeBlock } from './pageWrite';
-import { pageOf } from './GuiPage';
+import { usePageEvents } from './GuiPage';
+import { pageOf } from '@/document/guiWidgets';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { WIDGET_BUILDERS } from '@/elements/registry';
@@ -21,7 +24,7 @@ function guiNode(id: string, widgets: GuiWidget[]): GraphNode {
 
 const store = () => useGraphStore.getState();
 const page = () => pageOf(store().rfNodes.map((n) => n.data.graphNode as GraphNode));
-const shown = () => page().blocks.map((b) => b.widget);
+const shown = () => page().widgets;
 
 describe('the page', () => {
   beforeEach(() => store().newGraph());
@@ -113,6 +116,24 @@ describe('a block edited on the page', () => {
 
     expect(shown().map((w) => [w.id, w.label])).toEqual([['chart', 'Renamed'], ['added', 'Added']]);
     expect(shown()[0].tone).toBe('accent');
+  });
+
+  it('is changed here when it is used, too -- on the Page tab, in the preview, in a tool: what it holds already is no undo step', () => {
+    // A block used on the page wrote the page's blocks itself, beside this
+    // file, and took an undo step for a value the block already held.
+    insertBlock({ ...WIDGET_BUILDERS.text_io.create('Ask'), id: 'ask', value: 'hello' });
+    let events: ReturnType<typeof usePageEvents> | undefined;
+    function Using() {
+      events = usePageEvents();
+      return null;
+    }
+    renderToStaticMarkup(createElement(Using));
+    const undo = store().past.length;
+    events!.setWidgetValue(shown()[0], 'hello');
+    expect(store().past.length).toBe(undo);
+    events!.setWidgetValue(shown()[0], 'hello there');
+    expect(shown()[0].value).toBe('hello there');
+    expect(store().past.length).toBe(undo + 1);
   });
 
   it('changes nothing when the block was deleted meanwhile: not even an undo step', () => {

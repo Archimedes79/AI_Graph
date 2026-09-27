@@ -10,12 +10,13 @@
 // the character that made the box grow was lost. A ✨ result accepted a minute
 // after it was asked for did the same to every edit made meanwhile.
 //
-// The designer's surface, its side panel and `masterExamples.test.ts`, which
-// builds the examples the way a person does, all call these functions.
+// The designer's surface, its side panel, a block used on the page -- in the
+// designer, the preview and a delivered tool alike (`usePageEvents`) -- and
+// `masterExamples.test.ts`, which builds the examples the way a person does,
+// all call these functions.
 import type { GraphNode, GuiWidget } from '@/graph';
 import { besideTheRest, useGraphStore } from '@/store/graphStore';
-import { syncGuiNodePorts } from '@/document/guiWidgets';
-import { pageOf } from './GuiPage';
+import { pageOf, syncGuiNodePorts } from '@/document/guiWidgets';
 
 /** The page as the store holds it now. */
 function pageNow(): GraphNode | undefined {

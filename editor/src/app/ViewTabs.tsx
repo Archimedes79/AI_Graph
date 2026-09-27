@@ -1,4 +1,4 @@
-import { useSurfaceBlocks } from '@/page/GuiPage';
+import { usePage } from '@/page/GuiPage';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE } from '@/ui/theme';
 
 export type EditorView = 'graph' | 'design' | 'preview';
@@ -27,7 +27,7 @@ export default function ViewTabs({
   view, onChange,
 }: { view: EditorView; onChange: (view: EditorView) => void }) {
   // How many blocks the page has, so the tab says whether there is one.
-  const blockCount = useSurfaceBlocks().length;
+  const blockCount = usePage().widgets.length;
 
   return (
     <div className="flex items-center gap-1 px-3 flex-shrink-0" style={{ background: SURFACE, borderBottom: `1px solid ${LINE}` }}>

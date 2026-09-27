@@ -3,7 +3,7 @@ import { createElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import PageHeading from './PageHeading';
 import { insertBlock } from './pageWrite';
-import { pageOf } from './GuiPage';
+import { pageOf } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import type { GraphNode } from '@/graph';
@@ -46,7 +46,7 @@ describe('above the page: the tool\'s name and what it does, which are the graph
 
 describe('the tool\'s name and description, typed above the page', () => {
   const store = () => useGraphStore.getState();
-  const blocks = () => pageOf(store().rfNodes.map((n) => n.data.graphNode as GraphNode)).blocks.length;
+  const blocks = () => pageOf(store().rfNodes.map((n) => n.data.graphNode as GraphNode)).widgets.length;
   beforeEach(() => { vi.useFakeTimers(); store().newGraph(); });
   afterEach(() => { vi.useRealTimers(); });
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GuiSurfacePage, useSurfaceBlocks } from './GuiPage';
+import { GuiSurfacePage, usePage } from './GuiPage';
 import { useDeliveredRun } from './useDeliveredRun';
 import DeliveredHeader from './DeliveredHeader';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
@@ -23,7 +23,7 @@ import { DANGER_TEXT, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN } from '@/ui/t
  * pop-out, the same tool detached.
  */
 export default function PreviewTab() {
-  const blocks = useSurfaceBlocks();
+  const blocks = usePage().widgets;
   const delivered = useDeliveredRun();
   const [opening, setOpening] = useState('');
 

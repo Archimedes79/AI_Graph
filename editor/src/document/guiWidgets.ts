@@ -71,6 +71,15 @@ export function showsPage(nodeType: string): boolean {
 }
 
 /**
+ * The page among *nodes* -- the first node that carries the interface: a graph
+ * has one -- and its blocks. None of either before the first block makes it.
+ */
+export function pageOf(nodes: GraphNode[]): { page: GraphNode | undefined; widgets: GuiWidget[] } {
+  const page = nodes.find((node) => showsPage(node.node_type));
+  return { page, widgets: page?.config.gui_widgets ?? [] };
+}
+
+/**
  * Whether using this block starts the graph -- the engine's answer, for the
  * same reason the ports are: a page that fires on something the engine would
  * not call an event starts runs nobody wired.

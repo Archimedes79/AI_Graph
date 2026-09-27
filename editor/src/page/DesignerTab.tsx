@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { WidgetKind } from '@/graph';
+import type { GuiWidget, WidgetKind } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { newBlock, type PaletteEntry } from './DesignerPalette';
-import { usePage, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
+import { usePage, usePageEvents } from './GuiPage';
 import { insertBlock, moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { liveTypedValues } from './typedValues';
 import PageHeading from './PageHeading';
@@ -19,8 +19,7 @@ import { ACCENT, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/
 export default function DesignerTab() {
   const metadata = useGraphStore((s) => s.metadata);
   const setMetadata = useGraphStore((s) => s.setMetadata);
-  const blocks = useSurfaceBlocks();
-  const page = usePage();
+  const { page, widgets } = usePage();
   const events = usePageEvents();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // What was typed into a live block, shown in place of what arrived there --
@@ -28,9 +27,9 @@ export default function DesignerTab() {
   // edit that replaced it, ends it (`liveTypedValues`). The value itself is
   // stored as it is typed; this only decides which of the two a block shows.
   const [typed, setTyped] = useState<Record<string, string>>({});
-  const overrides = liveTypedValues(typed, blocks);
+  const overrides = liveTypedValues(typed, widgets);
 
-  const selected = blocks.find((b) => b.widget.id === selectedId)?.widget ?? null;
+  const selected = widgets.find((widget) => widget.id === selectedId) ?? null;
 
   // Every change to the page goes through `pageWrite`, which reads it from the
   // store when the change lands: a block's editor may hand its change on long
@@ -38,7 +37,7 @@ export default function DesignerTab() {
 
   /** Add a block to the page, where it was asked for -- at the end by default. */
   const addWidget = (kind: WidgetKind, mode?: string, at?: number) => {
-    const widget = newBlock(kind, mode, blocks.map((b) => b.widget.id));
+    const widget = newBlock(kind, mode, widgets.map((taken) => taken.id));
     insertBlock(widget, at);
     setSelectedId(widget.id);
   };
@@ -102,9 +101,9 @@ export default function DesignerTab() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [dragEntry, blocks.length]);
+  }, [dragEntry, widgets.length]);
 
-  const selectedIndex = blocks.findIndex((b) => b.widget.id === selectedId);
+  const selectedIndex = widgets.findIndex((widget) => widget.id === selectedId);
 
   /** Move the selected block one place along the page. */
   const moveSelected = (delta: -1 | 1) => {
@@ -129,7 +128,7 @@ export default function DesignerTab() {
         // After the block in hand, or at the end of the page: where the next
         // thing would go if this were a document, which it is.
         event.preventDefault();
-        setInsertAt(selectedIndex === -1 ? blocks.length : selectedIndex + 1);
+        setInsertAt(selectedIndex === -1 ? widgets.length : selectedIndex + 1);
         return;
       }
       if (!selectedId) return;
@@ -148,12 +147,12 @@ export default function DesignerTab() {
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
-  /** A live edit in a widget: remembered locally, and stored on its own node. */
-  const setWidgetValue = (block: SurfaceBlock, value: unknown) => {
+  /** A live edit in a block: remembered here, and stored as the page stores it (`usePageEvents`). */
+  const setWidgetValue = (widget: GuiWidget, value: unknown) => {
     // Only text is remembered as an edit in progress; a block that stores
     // something richer holds it itself and has no half-typed state to protect.
-    if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
-    patchBlock(block.widget.id, { value });
+    if (typeof value === 'string') setTyped((prev) => ({ ...prev, [widget.id]: value }));
+    events.setWidgetValue(widget, value);
   };
 
   return (
@@ -169,11 +168,12 @@ export default function DesignerTab() {
         >
           <DesignerSurface
             dropIndex={dragEntry ? dropIndex : null}
-            blocks={blocks}
+            pageId={page?.id}
+            widgets={widgets}
             onWidgetValue={setWidgetValue}
-            onWidgetTrigger={(block, value) => {
-              if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
-              events.fire(block, value);
+            onWidgetTrigger={(widget, value) => {
+              if (typeof value === 'string') setTyped((prev) => ({ ...prev, [widget.id]: value }));
+              events.fire(widget, value);
             }}
             selectedId={selectedId}
             onSelect={setSelectedId}
