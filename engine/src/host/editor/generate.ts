@@ -540,14 +540,17 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     : undefined;
 
   // A change to a body is written from the same brief as a body from nothing,
-  // with the body there is, what came of it and what to change beside it.
+  // with the body there is, what came of it and what to change beside it --
+  // and only a change restates the task: nothing else asks for it, and a task
+  // a model offered unasked is not written over the person's.
   const { refine } = request;
+  const restated = (task: string | undefined) => (task && refine?.change?.trim() ? { task } : {});
   try {
     switch (kind) {
       case 'code': {
         const change = refine ? codeChange(refine, sample, request.outputs ?? []) : '';
         const { text, explanation, task, probe: report } = await generateVerifiedCode(ai, { code: deps.code, ai, files: deps.files ?? NO_FILES }, deps.target, request, context, sample, change);
-        return { result: text, explanation, probe: report, calls, ...(task ? { task } : {}) };
+        return { result: text, explanation, probe: report, calls, ...restated(task) };
       }
       case 'prompt': {
         // The same brief a code node's body is written from: a system prompt
@@ -563,7 +566,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
               + 'every time the node runs, and its answer goes where the outputs go.',
         ].filter(Boolean).join('\n\n');
         const { text, explanation, task } = await generateTagged(ai, deps.target, PROMPT_SYSTEM, 'system_prompt', prompt);
-        return { result: text, explanation, probe: notProbed(), calls, ...(task ? { task } : {}) };
+        return { result: text, explanation, probe: notProbed(), calls, ...restated(task) };
       }
       case 'data_format': {
         // Written against what the node is wired to and what it holds, told
@@ -576,7 +579,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
           refine ? proseChange(refine, 'format', 'data_format', sample) : '',
         ].filter(Boolean).join('\n\n');
         const { text, explanation, task } = await generateTagged(ai, deps.target, DATA_FORMAT_SYSTEM, 'data_format', prompt);
-        return { result: text, explanation, probe: notProbed(), calls, ...(task ? { task } : {}) };
+        return { result: text, explanation, probe: notProbed(), calls, ...restated(task) };
       }
       default:
         throw new GenerationRefused(`Unknown generation kind '${String(kind)}'`);

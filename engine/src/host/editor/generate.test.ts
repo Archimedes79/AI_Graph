@@ -133,6 +133,16 @@ describe('changing a body there is (refine)', () => {
     expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 6 } });
   });
 
+  it('brings no task back where no change was asked, whatever the model offered: the person\'s task is not written over', async () => {
+    const ai = scripted(['<system_prompt>You name capitals.</system_prompt>\n<task>Something else entirely.</task>']);
+    const reply = await generate(
+      { element: 'ai', description: 'Name the capital.', inputs: ['prompt'], outputs: ['output'] },
+      { ai, code: runner(() => ({})), generationFor, target },
+    );
+    expect(reply.result).toBe('You name capitals.');
+    expect(reply.task).toBeUndefined();
+  });
+
   it('fixes code from how it failed, the inputs it failed on and the body: the repair step, and the task stays', async () => {
     const ai = scripted(['```js\nfunction run(i) { return { out: String(i.a).length }; }\n```']);
     const reply = await generate(

@@ -69,7 +69,8 @@ const noExpectation = (examples: string): string => {
  *   3  the task
  *   4  the body, and ▶ Try it on the example under it: what came out, whether
  *      it is what the example expects, "Keep as expected output", the judge's
- *      word, and how the other examples did
+ *      word, and how the other examples did -- then ✨ Fix where it failed, and
+ *      "Say what to change". What ✨ writes is tried at once.
  *
  * The same pair is what ✨ is written and tried against (`nodeFacts`), what
  * the model's request is shown for, and what `test` runs: one example,
@@ -149,8 +150,8 @@ export default function NodeSteps({
   const named = (keys: string[]) => keys.map((key) => `“${key}”`).join(', ');
   // A change to the body there is, as "Say what to change" and ✨ Fix ask it:
   // the body, what came of it -- and, for a fix, nothing more to change.
-  const change = (words?: string): ChangeAsked => ({
-    refine: { body: fields.get(generation.targetField), ...(words ? { change: words } : {}), ...came?.said },
+  const change = (said?: string): ChangeAsked => ({
+    refine: { body: fields.get(generation.targetField), ...(said ? { change: said } : {}), ...came?.said },
     ...(came?.sample ? { sample: came.sample } : {}),
   });
   const bodyWord = `the ${body.title.toLowerCase()}`;
@@ -269,7 +270,7 @@ export default function NodeSteps({
             busy={generating}
             fix={came?.failed ? () => void write(change()) : undefined}
             failure={!trying.tried && came?.failed ? came.said.error : undefined}
-            onSay={(words) => write(change(words))}
+            onSay={(said) => write(change(said))}
             body={bodyWord}
           />
         )}
