@@ -15,6 +15,7 @@ import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
 import LiveGeneration from '@/authoring/LiveGeneration';
+import SubgraphTrail from './SubgraphTrail';
 import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
 /**
@@ -64,17 +65,6 @@ export default function Toolbar({
   currentFilePath, saveStatus, onShowInterface, interfaceShown,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
-  const subgraphStack = useGraphStore((s) => s.subgraphStack);
-  const closeSubgraph = useGraphStore((s) => s.closeSubgraph);
-  // The graph at the top, then one step per node gone into. `depth` is how
-  // many levels remain when you are standing on that step.
-  const trail = subgraphStack.length === 0 ? [] : [
-    { depth: 0, name: subgraphStack[0].graph.metadata.name || 'Graph' },
-    ...subgraphStack.map((frame, level) => ({
-      depth: level + 1,
-      name: frame.graph.nodes.find((node) => node.id === frame.nodeId)?.label || frame.nodeId,
-    })),
-  ];
   const sweep = useGraphSweep();
   // Subscribed to so the toolbar re-renders when the graph changes and the
   // "✅ Saved" line below can stop claiming something that is no longer true.
@@ -342,27 +332,7 @@ export default function Toolbar({
           {currentFilePath ?? 'Untitled — not saved'}
         </span>
 
-        {/* Where you are, and the way back out. Each crumb leaves as many
-            levels as it takes to get there; the last one is where you stand. */}
-        {trail.length > 1 && (
-          <div className="flex items-center gap-1 text-xs">
-            {trail.map((step, index) => (
-              <span key={step.depth} className="flex items-center gap-1">
-                {index > 0 && <span style={{ color: DIMMER }}>▸</span>}
-                <button
-                  type="button"
-                  className="px-2 py-0.5 rounded"
-                  style={{ color: index === trail.length - 1 ? TEXT : MUTED }}
-                  disabled={index === trail.length - 1}
-                  title={index === trail.length - 1 ? 'You are here' : `Back out to ${step.name}`}
-                  onClick={() => { while (useGraphStore.getState().subgraphStack.length > step.depth) closeSubgraph(); }}
-                >
-                  {step.name}
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
+        <SubgraphTrail />
 
         <div className="flex-1" />
 
