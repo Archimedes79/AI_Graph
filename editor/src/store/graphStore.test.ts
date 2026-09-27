@@ -235,6 +235,14 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     expect(perItem).toEqual(['ai', 'code']);
   });
 
+  it('labels each new output node its own way, as check asks', () => {
+    // `check` reports two outputs sharing a label, and save_graph refuses them.
+    loadTestGraph([graphNode({ id: 'kept', node_type: 'output', config: { output_label: 'Result 2' } as GraphNode['config'] })]);
+    const labels = [0, 1, 2].map(() => useGraphStore.getState().addNode('output', { x: 0, y: 0 }))
+      .map((id) => useGraphStore.getState().exportGraph().nodes.find((node) => node.id === id)!.config.output_label);
+    expect(labels).toEqual(['Result', 'Result 3', 'Result 4']);
+  });
+
   it('writes no output_format on a new node, and keeps an older one\'s as it was', () => {
     // A choice nothing offers any more: 'text' was saved into every ai and code node.
     loadTestGraph([graphNode({ id: 'old', node_type: 'ai', config: { output_format: 'json' } as GraphNode['config'] })]);

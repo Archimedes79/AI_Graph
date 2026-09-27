@@ -21,6 +21,7 @@ import type { GraphNode, NodeConfig, NodeType } from '@/graph';
 import { derivedNodePorts } from './guiWidgets';
 import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
 import { TriggerNodeRunner } from '@engine/elements/nodes/trigger/TriggerNodeRunner.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { baseNodeConfig } from './baseNodeConfig';
 
 /**
@@ -65,6 +66,12 @@ export interface NodeKind {
    * here first, so that opening a graph and saving it never changes what it does.
    */
   whenMissing?: Partial<NodeConfig>;
+  /**
+   * A node just made, beside *others* already in the graph: what it starts as
+   * where that depends on what is there. `create` alone is what a loaded node
+   * falls back to, and must not depend on its neighbours.
+   */
+  placedAmong?(node: GraphNode, others: GraphNode[]): GraphNode;
   /** Running this node puts its result in a window of its own. */
   showsResultWindow?(node: GraphNode): boolean;
 }
@@ -183,6 +190,19 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       // the setting is the one node whose whole point would be missing.
       config: { ...baseNodeConfig(), output_label: 'Result', write_mode: 'window' },
     }),
+    // Its own label, "Result 2" beside a "Result": two results that share one
+    // keep only the first under it in the run's result, `check` reports it,
+    // and the MCP server's save_graph refuses the graph. The labels taken are
+    // asked the way `check` asks them, of every element that is a result.
+    placedAmong(node, others) {
+      const taken = new Set(others.flatMap((other) => {
+        const element = engineRegistry.node(other.node_type);
+        return element?.isResult ? [element.resultLabel(other)] : [];
+      }));
+      let label = 'Result';
+      for (let n = 2; taken.has(label); n += 1) label = `Result ${n}`;
+      return { ...node, config: { ...node.config, output_label: label } };
+    },
   },
 
   gui: {
