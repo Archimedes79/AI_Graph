@@ -46,9 +46,7 @@ editor, a deployed page, the command line.
 | **Something on the page** | the block itself | the same |
 
 **An event is a boolean that is true for one round.** A trigger's port, a button's port:
-`true` in the round that event started, `false` in every round something else started. A
-graph saved when "at start" and "every" were two settings has been given a Trigger node,
-wired to nothing, which is what they meant.
+`true` in the round that event started, `false` in every round something else started.
 
 A trigger's time is kept by whatever runs the graph, not by a browser tab. A deployed tool's
 **server** holds the clock (`engine/src/host/schedule.ts`): it runs with nobody watching,
@@ -274,7 +272,7 @@ Data node — and for every block on a page that has code of its own:
 2  What comes out       each output: its name, and where it is wired to
                         + what comes out, in words -- greyed, what the graph already says
                         + the example output (an AI node: the answer to imitate)
-                        + the shape a run kept (output.schema.json), to read
+                        + the shape a run kept (output_schema in interface.json), to read
 3  What should it do?   a sentence or two, in your words
 4  Code                 the code (an AI node's instructions and message; a Data node's format),
                         with ✨ Generate -- and ▶ Try it on step 1's example, under it
@@ -400,7 +398,7 @@ inline, which is what a download, an import and a deploy bundle carry. A folder 
 before `flow.json` — a `graph.json` holding the structure — opens too, and is saved in
 this shape.
 
-**Output interfaces.** A code node's outputs are described by a JSON Schema,
+**Output interfaces.** A code or AI node's outputs are described by a JSON Schema,
 `output_schema` in its `interface.json`. You do not write it first: wire the nodes, run the graph, and the
 first successful run sets it from what the node produced. From then on every run is
 checked against it — a node that breaks its interface says so on its result, *Does not
@@ -409,39 +407,14 @@ integer*, rather than the node three steps later failing on the wrong shape — 
 nodes after it are generated against it; ✨'s verify pass sets it too, from what the code
 returned on the sample. It is shown in step 2 of the node's dialog, to read, and not
 typed: **Clear** there lets the next run measure it again after a deliberate change. An
-AI node has `output.md` instead: a description of the answer that is sent to the model
-with every request.
+AI node also keeps `output.md` (a description of the answer) and `output.example.md`, and
+both are sent to the model with every request.
 
 **Examples: a node's own tests.** A code or AI node can keep `examples.md` — inputs, and
 what must come out. Optional; they check what was written, whoever wrote it, and ✨
 Generate is shown the first few, so what it writes is written to pass them:
 
 ````markdown
-### What runs, and where
-
-Every node's panel ends with *What this node runs*. There are two answers:
-
-- **A body in the node's folder** — JavaScript somebody wrote, or a model did. Always the
-  same shape, `async function run(inputs, node)`, returning an object keyed by output port;
-  always in a sandboxed process of its own; always able to ask a model through
-  `await node.llm(...)` without ever seeing a key.
-- **The engine**, for the kinds whose work is the engine's own. The line names the class
-  and method, so the code is one click away.
-
-| Node | What runs | In one sentence |
-|---|---|---|
-| Code | `code.js`, sandboxed | Calls `run(inputs, node)` and hands on what it returns. |
-| AI | `run.js` | Unchanged: the engine makes the one model call it describes (`system.md`, `message.md` filled from the inputs). Changed: it runs sandboxed like any body, and each `node.llm(...)` is a call made for it. |
-| Input | `InputNodeRunner.execute` | Hands on its text; or reads the file on `path`; or lists the folder — through `select.js`, sandboxed, if files are chosen by code. |
-| Data | `DataNodeRunner.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
-| GUI | `GuiNodeRunner.execute` | Hands on what each block holds and shows what arrives; a block's own code runs sandboxed before it is shown. |
-| Output | `OutputNodeRunner.execute` | Hands on what arrives as the run's result, or writes it to its file, or each value to a file of its own in its folder. |
-| Trigger | `TriggerNodeRunner.execute` | `fired`: true in a round it began. The clock is kept by whatever holds the graph. |
-| Subgraph | `SubgraphNodeRunner.execute` | Runs the graph in its folder, whole, by the engine that runs this one. |
-
-The sentences come from the elements themselves (`whatRuns`), so the panel, the folder and
-this table cannot drift apart without a test noticing the class or method is gone.
-
 ## The three largest, largest first
 
 ```json input
@@ -479,6 +452,31 @@ into that port does not give according to its output interface. That last one is
 need meets a supply: either the example asks for the wrong thing, or the node before it
 has to deliver it. It exits with 1 when it finds anything, so a CI job fails on a broken
 graph; this repository checks its examples that way.
+
+### What runs, and where
+
+Every node's panel ends with *What this node runs*. There are two answers:
+
+- **A body in the node's folder** — JavaScript somebody wrote, or a model did. Always the
+  same shape, `async function run(inputs, node)`, returning an object keyed by output port;
+  always in a sandboxed process of its own; always able to ask a model through
+  `await node.llm(...)` without ever seeing a key.
+- **The engine**, for the kinds whose work is the engine's own. The line names the class
+  and method, so the code is one click away.
+
+| Node | What runs | In one sentence |
+|---|---|---|
+| Code | `code.js`, sandboxed | Calls `run(inputs, node)` and hands on what it returns. |
+| AI | `run.js` | Unchanged: the engine makes the one model call it describes (`system.md`, `message.md` filled from the inputs). Changed: it runs sandboxed like any body, and each `node.llm(...)` is a call made for it. |
+| Input | `InputNodeRunner.execute` | Hands on its text; or reads the file on `path`; or lists the folder — through `select.js`, sandboxed, if files are chosen by code. |
+| Data | `DataNodeRunner.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
+| GUI | `GuiNodeRunner.execute` | Hands on what each block holds and shows what arrives; a block's own code runs sandboxed before it is shown. |
+| Output | `OutputNodeRunner.execute` | Hands on what arrives as the run's result, or writes it to its file, or — in directory mode — each value, each item of a list, to a file of its own in a folder it makes when it is not there yet. |
+| Trigger | `TriggerNodeRunner.execute` | `fired`: true in a round it began. The clock is kept by whatever holds the graph. |
+| Subgraph | `SubgraphNodeRunner.execute` | Runs the graph in its folder, whole, by the engine that runs this one. |
+
+The sentences come from the elements themselves (`whatRuns`), so the panel, the folder and
+this table cannot drift apart without a test noticing the class or method is gone.
 
 ### Trying an element out: the same way everywhere
 
