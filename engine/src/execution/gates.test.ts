@@ -336,6 +336,28 @@ describe('a node that keeps something of its own', () => {
   });
 });
 
+describe('a result handed back from an earlier run', () => {
+  it('is what a later round with a shut gate holds, not the value before it', async () => {
+    // Made X, then Y, then X again -- reused this time -- and then the ◆ stays shut.
+    const latch = new Latch();
+    const reuse = new LastOutputs();
+    const build = (value: string, open: boolean) => graphOf(
+      [
+        node('src', 'code', { code: `function run() { return { v: "${value}" }; }` }, { out: ['v'] }),
+        node('flag', 'code', { code: `function run() { return { open: ${open} }; }` }, { out: ['open'] }),
+        node('c', 'code', { code: 'function run(i) { return { out: i.x }; }' }, { in: ['x'], out: ['out'] }),
+      ],
+      [edge('s', 'src', 'v', 'c', 'x'), edge('g', 'flag', 'open', 'c', RUN_PORT)],
+    );
+    const only = new Set(['src', 'flag', 'c']);
+    const round = (value: string, open: boolean) => executeGraph(build(value, open), { runtime, registry, latch, reuse, only });
+    await round('X', true);
+    await round('Y', true);
+    expect(result(await round('X', true), 'c')!.messages?.[0]).toMatch(/Reused/);
+    expect(result(await round('X', false), 'c')).toMatchObject({ held: true, outputs: { out: 'X' } });
+  });
+});
+
 describe('an event is a moment', () => {
   it('is never handed back from an earlier round by the reuse cache', async () => {
     const latch = new Latch();

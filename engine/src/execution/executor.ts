@@ -401,6 +401,8 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         const kept = key && context(nodeId) ? options.reuse!.get(key) : undefined;
         if (kept) {
           outputs.set(nodeId, kept);
+          // What it hands on now is what it made last, for a later round its ◆ stays shut in.
+          options.latch?.set(graph, node, kept, keepsItsOwn(nodeId));
           results.push({
             node_id: nodeId, status: 'success', inputs, outputs: kept, error: null,
             messages: ['Reused from an earlier run: nothing it depends on has changed.'],
