@@ -12,7 +12,7 @@ function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(OutputNodePanel, {
     builder: NODE_BUILDERS.output, node, setConfig: () => {}, updateNode: () => {},
     fields: nodeFields(node, () => {}, () => {}), generating: false,
-    onGenerate: () => {},
+    onGenerate: async () => false,
   }));
 }
 

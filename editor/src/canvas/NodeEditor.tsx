@@ -9,7 +9,7 @@ import { NODE_BUILDERS } from '@/elements/registry';
 import type { NodePanelProps } from '@/elements/NodeGuiBuilder';
 import Modal from '@/ui/Modal';
 import { useGenerate } from '@/authoring/useGenerate';
-import { buildGeneration, nodeFields, type GenerationRequest } from '@/authoring/generation';
+import { buildGeneration, nodeFields, withChange, type ChangeAsked, type GenerationRequest } from '@/authoring/generation';
 import { useWhatSends } from '@/authoring/WhatSends';
 import { inputSources, outputTargets } from '@/authoring/generationContext';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
@@ -89,13 +89,14 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
         if (kept) setConfig('output_schema', kept);
       },
     });
-  const handleGenerate = () => {
+  const handleGenerate = async (change?: ChangeAsked): Promise<boolean> => {
     const request = generationRequest.current();
-    if (!request) return;
-    const options = buildGeneration(request);
-    // What ✨ wrote is one undo step of its own -- after what was typed before
-    // it, which is written first as the step it was.
-    void generate.run({ ...options, apply: (result) => { dialog.write(); options.apply(result); dialog.write(true); } });
+    if (!request) return false;
+    const options = buildGeneration(withChange(request, change));
+    // What ✨ wrote -- a body, and with a change the task beside it -- is one
+    // undo step of its own, after what was typed before it, which is written
+    // first as the step it was.
+    return generate.run({ ...options, apply: (result) => { dialog.write(); options.apply(result); dialog.write(true); } });
   };
 
   const Panel = element.Panel;

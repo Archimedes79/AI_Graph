@@ -2,6 +2,7 @@ import type { GraphNode } from '@/graph';
 import { call, type AICall, type GenerateRequest, type GenerateResponse, type ProbeReport } from '@/api/client';
 import type { GenerateOptions } from './useGenerate';
 import type { Generation } from '@engine/authoring/generation.ts';
+import type { Refine } from '@engine/host/api.ts';
 
 /**
  * The ✨ Generate button, declared by the element instead of written out by the
@@ -111,20 +112,20 @@ export function nodeFields(
  * only the element's own check or the example's expected output found fault
  * with the result, it says that, and not that it does not run.
  */
-export function probeMessage(probe: ProbeReport | undefined, fallback: string, origin?: string): string {
+export function probeMessage(probe: ProbeReport | undefined, fallback: string, origin?: string, done = 'Generated'): string {
   const on = origin ?? 'the sample';
   switch (probe?.status) {
     case 'ok':
-      return `✅ Generated and verified against ${on}.`;
+      return `✅ ${done} and verified against ${on}.`;
     case 'repaired':
-      return `✅ Generated. The first attempt failed on ${on}; this one runs.`;
+      return `✅ ${done}. The first attempt failed on ${on}; this one runs.`;
     case 'failed': {
-      if (probe.error) return `⚠️ Generated, but it does not run yet: ${probe.error}`;
-      if (probe.missing_outputs.length) return `⚠️ Generated, but it does not return ${probe.missing_outputs.join(', ')} yet.`;
+      if (probe.error) return `⚠️ ${done}, but it does not run yet: ${probe.error}`;
+      if (probe.missing_outputs.length) return `⚠️ ${done}, but it does not return ${probe.missing_outputs.join(', ')} yet.`;
       const problems = probe.problems ?? [];
       return problems.length
-        ? `⚠️ Generated and it runs on ${on}, but the result is not right yet: ${problems.join('; ')}`
-        : `⚠️ Generated, but it could not be verified against ${on}.`;
+        ? `⚠️ ${done} and it runs on ${on}, but the result is not right yet: ${problems.join('; ')}`
+        : `⚠️ ${done}, but it could not be verified against ${on}.`;
     }
     default:
       return fallback;
@@ -183,6 +184,12 @@ export interface GenerationRequest<S> {
   /** The output format, in the person's words (`output.md`) -- sent whenever it says anything. */
   outputFormat?: string;
   /**
+   * Change the body there is instead of writing one anew: "Say what to
+   * change", or ✨ Fix with nothing to change but how it failed. What comes
+   * back brings the task along, restated to fit, and both are written.
+   */
+  refine?: Refine;
+  /**
    * Keep what the generated body actually returned, as the node's output
    * shape, when it has none yet.
    *
@@ -194,6 +201,26 @@ export interface GenerationRequest<S> {
    * anyway.
    */
   recordShape?: (outputs: Record<string, unknown>) => void;
+}
+
+/**
+ * What a panel asks of ✨ beyond writing the body anew (`NodePanelProps.onGenerate`):
+ * a change to the body there is -- and the inputs what came of it came from,
+ * where those are not step 1's example: a run's.
+ */
+export interface ChangeAsked {
+  refine: Refine;
+  sample?: { values: Record<string, unknown>; origin: string };
+}
+
+/** *request*, asked to change its body as *change* says, on the inputs that change came of. */
+export function withChange<S>(request: GenerationRequest<S>, change: ChangeAsked | undefined): GenerationRequest<S> {
+  if (!change) return request;
+  return {
+    ...request,
+    refine: change.refine,
+    ...(change.sample ? { sampleInputs: change.sample.values, sampleOrigin: change.sample.origin } : {}),
+  };
 }
 
 /** Only the entries that say something: an empty description is not a note. */
@@ -230,6 +257,7 @@ export function generateRequest<S>(request: GenerationRequest<S>): GenerateReque
     multi_outputs: request.lists?.outputs,
     output_targets: request.outputTargets && Object.keys(request.outputTargets).length ? request.outputTargets : undefined,
     output_format: request.outputFormat?.trim() || undefined,
+    refine: request.refine,
   };
 }
 
@@ -244,19 +272,32 @@ export async function previewGeneration<S>(request: GenerationRequest<S>): Promi
 }
 
 /**
+ * Why *request* cannot be sent yet, or undefined. A body is written from the
+ * task; a change needs something to change -- words, or how it failed -- and
+ * no task: the task comes back with it.
+ */
+export function generationGuard<S>(request: GenerationRequest<S>): string | undefined {
+  const { refine, generation: spec } = request;
+  if (refine) return refine.change?.trim() || refine.error?.trim() || refine.problems?.length ? undefined : 'Say what to change first.';
+  return request.fields.get(spec.promptField).trim() ? undefined : (spec.guard ?? 'Please add a prompt first.');
+}
+
+/**
  * Turn an element's declaration into the options `useGenerate().run` takes.
  * A node's dialog and the graph sweep both call exactly this, so a button and
- * a sweep generate through one code path.
+ * a sweep generate through one code path -- and a change to the body there is
+ * goes the same way, with its task written beside the body it came with.
  */
 export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptions<GenerateResponse> {
-  const { generation: spec, fields } = request;
-  const prompt = fields.get(spec.promptField).trim();
+  const { generation: spec, fields, refine } = request;
+  // What it did, in a word: written anew, changed as said, or repaired.
+  const done = !refine ? 'Generated' : refine.change?.trim() ? 'Changed' : 'Fixed';
 
   return {
-    guard: () => (prompt ? undefined : (spec.guard ?? 'Please add a prompt first.')),
-    pending: 'Generating…',
-    success: (result) => probeMessage(result.probe, spec.success ?? '✅ Generated!', request.sampleOrigin),
-    failure: 'Generation failed',
+    guard: () => generationGuard(request),
+    pending: refine ? 'Changing…' : 'Generating…',
+    success: (result) => probeMessage(result.probe, refine ? `✅ ${done}.` : spec.success ?? '✅ Generated!', request.sampleOrigin, done),
+    failure: refine ? 'The change failed' : 'Generation failed',
     run: (progressId?: string) => call('generate', {
       ...generateRequest(request),
       // Only a single ✨ button passes one; a sweep runs unattended.
@@ -264,6 +305,8 @@ export function buildGeneration<S>(request: GenerationRequest<S>): GenerateOptio
     }),
     apply: (result) => {
       fields.set(spec.targetField, result.result);
+      // What it does now, said with the body that does it: the two change together.
+      if (result.task?.trim()) fields.set(spec.promptField, result.task.trim());
 
       const outputs = result.probe?.outputs;
       if (request.recordShape && outputs && Object.keys(outputs).length) request.recordShape(outputs);

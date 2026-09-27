@@ -4,8 +4,8 @@ import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { ExampleResult } from '@engine/execution/examples.ts';
 import type { ExamplePair } from './examplePair';
-import { othersLine, ownOutputs } from './nodeStepRules';
-import { ACCENT_TEXT, DANGER_TEXT, DIMMER, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, TEXT } from '@/ui/theme';
+import { othersLine } from './nodeStepRules';
+import { ACCENT_TEXT, DANGER_TEXT, DIMMER, FIELD, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, TEXT } from '@/ui/theme';
 
 /** What trying a node gave. */
 export interface TryResult {
@@ -111,6 +111,59 @@ export function useTry(of: string, run: () => Promise<Tried>): { busy: boolean; 
   return { busy, tried: currentTry(held, of), start };
 }
 
+/**
+ * What can be done about what came out, in few clicks: ✨ Fix where it failed
+ * -- the body repaired from how it failed, the input it failed on and the body
+ * as it is -- and "Say what to change": a sentence, Enter, and ✨ changes the
+ * task and the body together from the body there is, what came of it and the
+ * sentence; what it wrote is tried at once, and one Undo takes it back.
+ */
+export function ChangeIt({ busy, fix, failure, onSay, body }: {
+  busy: boolean;
+  /** ✨ Fix, where something failed. */
+  fix?: () => void;
+  /** Where it failed, when that is not the try on screen: the last run's error. */
+  failure?: string;
+  /** Asks for the change; resolves to whether it was made. */
+  onSay: (change: string) => Promise<boolean>;
+  /** What the body is called: "the code", "the instructions". */
+  body: string;
+}) {
+  const [said, setSaid] = useState('');
+  const say = async () => {
+    if (!said.trim() || busy) return;
+    if (await onSay(said.trim())) setSaid('');
+  };
+  return (
+    <div className="space-y-2">
+      {failure && <p className="text-xs" style={{ color: DANGER_TEXT }}>The last run failed here: {clip(failure, 300)}</p>}
+      {fix && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button className="text-xs px-2 py-1 rounded" style={{ background: SUCCESS, color: 'white', opacity: busy ? 0.5 : 1 }}
+            disabled={busy} onClick={fix} title={`Repair ${body} from how it failed, the input it failed on and ${body} as it is`}>
+            ✨ Fix
+          </button>
+          <span className="text-xs" style={{ color: DIMMER }}>From how it failed, the input and {body}.</span>
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <label className="text-xs whitespace-nowrap" style={{ color: MUTED }} htmlFor="say-what-to-change">Say what to change</label>
+        <input
+          id="say-what-to-change"
+          className="flex-1 min-w-0 rounded px-2 py-1 text-xs"
+          style={{ ...FIELD, opacity: busy ? 0.6 : 1 }}
+          value={said}
+          disabled={busy}
+          onChange={(event) => setSaid(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void say(); } }}
+          placeholder={`e.g. “Also count the words” -- Enter: ✨ changes the task and ${body} together, and tries it`}
+          aria-label="Say what to change"
+        />
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   /** Step 1 holds an example to run on. */
   canRun: boolean;
@@ -122,9 +175,10 @@ interface Props {
   tried: Tried | null;
   /**
    * Where what came out falls short of the example's expected output, one line
-   * each; empty when it meets it, undefined when nothing is expected.
+   * each; empty when it meets it, undefined when nothing is expected or nothing
+   * came out.
    */
-  verdict?: (outputs: Record<string, unknown>) => string[] | undefined;
+  gaps?: string[];
   /** The expected output the example keeps, to see and to drop; absent while it keeps none. */
   expected?: { text: string; onForget: () => void; note?: React.ReactNode };
   /** "Keep as expected output", and what it does for this node, in a sentence. */
@@ -148,10 +202,9 @@ interface Props {
  * be step 2's -- an example output box, a judge, an example answer and a
  * ▶ Test of their own -- while what they were about showed down here.
  */
-export default function TryItInline({ canRun, whyNot, busy, onTry, tried, verdict, expected, keep, renderResult, judge, after, children }: Props) {
+export default function TryItInline({ canRun, whyNot, busy, onTry, tried, gaps, expected, keep, renderResult, judge, after, children }: Props) {
   const { result = null, failure = '', judged, others } = tried ?? {};
   const ran = !!result && result.status !== 'error' && result.status !== 'skipped';
-  const gaps = ran ? verdict?.(ownOutputs(result.outputs)) : undefined;
   const more = others?.length ? othersLine(others) : '';
 
   return (
@@ -194,7 +247,7 @@ export default function TryItInline({ canRun, whyNot, busy, onTry, tried, verdic
           )}
           {ran && result.error && <p className="text-xs mt-1" style={{ color: DANGER_TEXT }}>{result.error}</p>}
           {ran && !!result.messages?.length && <p className="text-xs mt-1" style={{ color: DIMMER }}>{result.messages.join(' ')}</p>}
-          {gaps && (
+          {ran && gaps && (
             <p className="text-xs mt-1" style={{ color: gaps.length ? DANGER_TEXT : SUCCESS }}>
               {gaps.length ? `✗ Not the expected output: ${gaps.join('; ')}` : '✓ It gives the expected output.'}
             </p>

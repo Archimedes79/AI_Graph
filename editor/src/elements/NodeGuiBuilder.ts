@@ -2,7 +2,7 @@
 
 import type { ComponentType, ReactNode } from 'react';
 import type { Graph, GraphNode, NodeType } from '@/graph';
-import type { FieldAccess } from '@/authoring/generation';
+import type { ChangeAsked, FieldAccess } from '@/authoring/generation';
 import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { readPair } from '@/authoring/examplePair';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
@@ -36,7 +36,12 @@ export interface NodePanelProps {
   fields: FieldAccess;
   generating: boolean;
   message?: string;
-  onGenerate: () => void;
+  /**
+   * ✨: write the body anew -- or, asked with *change*, change the body there
+   * is ("Say what to change", ✨ Fix). Resolves to whether something was
+   * written, as one undo step.
+   */
+  onGenerate: (change?: ChangeAsked) => Promise<boolean>;
   /**
    * What only the dialog has, for a panel that authors a body in the four
    * steps (`FourSteps`): the "what ✨ sends" button and what it sends, "open

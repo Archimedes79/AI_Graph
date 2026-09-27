@@ -6,6 +6,7 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { nodeFields } from './generation';
 import { withExpect, withInput } from './examplePair';
+import { ChangeIt } from './TryItInline';
 import AiNodePanel from '@/elements/nodes/ai/AiNodePanel';
 import CodeNodePanel from '@/elements/nodes/code/CodeNodePanel';
 
@@ -16,7 +17,7 @@ function drawn(node: GraphNode): string {
   return renderToStaticMarkup(createElement(Panel, {
     builder, node, setConfig: () => {}, updateNode: () => {},
     fields: nodeFields(node, () => {}, () => {}), generating: false,
-    onGenerate: () => {}, steps: { graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }) },
+    onGenerate: async () => false, steps: { graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }) },
   }));
 }
 
@@ -61,5 +62,24 @@ describe.each(['code', 'ai'] as const)('a %s node\'s step 2', (type) => {
     const tryIt = html.slice(html.indexOf('aria-label="Try it"'));
     expect(tryIt).toContain('▶ Try it');
     expect(tryIt).toContain('aria-label="Judged by a model"');
+  });
+
+  it('asks what to change under the result, one line, sent with Enter -- and offers ✨ Fix only where it failed', () => {
+    const html = drawn(NODE_KINDS[type].create(type));
+    const tryIt = html.slice(html.indexOf('aria-label="Try it"'));
+    expect(tryIt).toContain('aria-label="Say what to change"');
+    expect(tryIt).not.toContain('✨ Fix');
+  });
+});
+
+describe('what can be done about what came out', () => {
+  it('is ✨ Fix where something failed, beside "Say what to change"', () => {
+    const drawnWith = (fix?: () => void, failure?: string) => renderToStaticMarkup(createElement(ChangeIt, {
+      busy: false, fix, failure, onSay: async () => true, body: 'the code',
+    }));
+    expect(drawnWith(() => {})).toContain('✨ Fix');
+    expect(drawnWith(() => {}, 'boom')).toContain('The last run failed here: boom');
+    expect(drawnWith()).not.toContain('✨ Fix');
+    expect(drawnWith()).toContain('aria-label="Say what to change"');
   });
 });

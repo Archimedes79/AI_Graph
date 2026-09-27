@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { parseExamples } from '@engine/execution/examples.ts';
-import { exampleFor, keptExpect, listPorts, othersLine, runsPerItem, tryInputs, withPerItem } from './nodeStepRules';
+import { exampleFor, keptExpect, listPorts, othersLine, runsPerItem, tryInputs, whatCameOf, withPerItem } from './nodeStepRules';
 import { readPair, withExpect, withInput } from './examplePair';
 import { errorOutput } from '@engine/execution/wiring.ts';
 
@@ -78,6 +78,22 @@ describe('▶ Try it', () => {
     const node = NODE_KINDS.code.create('maker');
     node.inputs = [];
     expect(tryInputs(node, undefined)).toEqual({});
+  });
+
+  it('says what came of the body, for a change asked of it: from the try on screen, else from the last run', () => {
+    const ran = { status: 'success', outputs: { output: 'Paris', error: null } };
+    expect(whatCameOf({ result: ran }, undefined, undefined)).toEqual({ said: { outcome: 'Paris' }, failed: false });
+    // Something to fix: it failed, or falls short of what is expected, or of the judge's sentence.
+    expect(whatCameOf({ result: { status: 'error', error: 'boom' } }, undefined, undefined)).toEqual({ said: { error: 'boom' }, failed: true });
+    expect(whatCameOf({ result: ran, judged: 'It is not a capital.' }, ['output is "Paris"; expected "Rome"'], undefined)).toEqual({
+      said: { outcome: 'Paris', problems: ['output is "Paris"; expected "Rome"', 'judged by a model: It is not a capital.'] }, failed: true,
+    });
+    // No try: the last run, and the inputs it failed on.
+    const run = { node_id: 'n', status: 'error' as const, inputs: { prompt: 'France?' }, outputs: {}, error: 'The model is not answering.' };
+    expect(whatCameOf(null, undefined, run)).toEqual({
+      said: { error: 'The model is not answering.' }, failed: true, sample: { values: { prompt: 'France?' }, origin: 'the last run' },
+    });
+    expect(whatCameOf(null, undefined, undefined)).toBeUndefined();
   });
 
   it('says how the other examples did in one line, which replaced a ▶ Test of its own', () => {

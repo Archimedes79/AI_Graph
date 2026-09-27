@@ -41,7 +41,7 @@ export default function GeneratedBody({ generation, fields, generating, message,
         <div className="flex items-center gap-2">
           {preview}
           <button
-            onClick={onGenerate}
+            onClick={() => onGenerate()}
             disabled={generating}
             className="text-xs px-2 py-1 rounded"
             style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}

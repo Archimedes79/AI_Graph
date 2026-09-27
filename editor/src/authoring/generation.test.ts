@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import type { ProbeReport } from '@/api/client';
-import { generateRequest, nodeFields, probeMessage } from './generation';
+import { buildGeneration, generateRequest, nodeFields, probeMessage, withChange } from './generation';
 import { nodeFacts } from './nodeFacts';
 
 describe('the request ✨ Generate sends', () => {
@@ -68,5 +68,53 @@ describe('what is said after ✨', () => {
     expect(said).toBe('⚠️ Generated and it runs on the last run, but the result is not right yet: a label runs off the chart');
     expect(probeMessage(report({ missing_outputs: ['figure'] }), 'done')).toBe('⚠️ Generated, but it does not return figure yet.');
     expect(probeMessage(report({ error: 'x is not defined' }), 'done')).toBe('⚠️ Generated, but it does not run yet: x is not defined');
+  });
+});
+
+describe('a change to the body there is ("Say what to change", ✨ Fix)', () => {
+  /** A code node's request, its fields written into *written*. */
+  const asked = (written: Record<string, string>, task = 'Count the words.') => {
+    const node = NODE_KINDS.code.create('worker');
+    node.config.code_prompt = task;
+    const fields = {
+      get: (field: string) => written[field] ?? String((node.config as Record<string, unknown>)[field] ?? ''),
+      set: (field: string, value: string) => { written[field] = value; },
+    };
+    return { element: 'code', generation: NODE_BUILDERS.code.generation!, subject: node, fields };
+  };
+  const refine = { body: 'function run(i) { return { output: 1 }; }', change: 'Also count the lines.', outcome: '1' };
+
+  it('is sent through the one generate request, with the body there is, what came of it and what to change', () => {
+    expect(generateRequest({ ...asked({}), refine }).refine).toEqual(refine);
+  });
+
+  it('writes the task it comes back with beside the body, so the two say the same thing', () => {
+    const written: Record<string, string> = {};
+    buildGeneration({ ...asked(written), refine }).apply({
+      result: 'function run(i) { return { output: 1, lines: 1 }; }', task: 'Count the words and the lines.',
+      explanation: '', probe: { status: 'ok', error: '', missing_outputs: [] }, calls: [],
+    });
+    expect(written).toEqual({ code: 'function run(i) { return { output: 1, lines: 1 }; }', code_prompt: 'Count the words and the lines.' });
+  });
+
+  it('needs something to change -- words, or how it failed -- and no task, which comes back with it', () => {
+    expect(buildGeneration({ ...asked({}, ''), refine }).guard?.()).toBeUndefined();
+    expect(buildGeneration({ ...asked({}, ''), refine: { body: 'x', error: 'boom' } }).guard?.()).toBeUndefined();
+    expect(buildGeneration({ ...asked({}), refine: { body: 'x' } }).guard?.()).toBe('Say what to change first.');
+    // Written anew, a body still needs its task.
+    expect(buildGeneration(asked({}, '')).guard?.()).toBeTruthy();
+  });
+
+  it('says what it did: changed as said, or fixed', () => {
+    const ok = { result: 'x', explanation: '', probe: { status: 'ok' as const, error: '', missing_outputs: [] }, calls: [] };
+    const said = (options: ReturnType<typeof buildGeneration>) => (typeof options.success === 'function' ? options.success(ok) : options.success);
+    expect(said(buildGeneration({ ...asked({}), refine, sampleOrigin: 'the example in step 1' }))).toBe('✅ Changed and verified against the example in step 1.');
+    expect(said(buildGeneration({ ...asked({}), refine: { body: 'x', error: 'boom' }, sampleOrigin: 'the last run' }))).toBe('✅ Fixed and verified against the last run.');
+  });
+
+  it('is tried on what it came of: a run\'s inputs, where it came of a run', () => {
+    const request = withChange(asked({}), { refine: { body: 'x', error: 'boom' }, sample: { values: { input: 'a' }, origin: 'the last run' } });
+    expect(request).toMatchObject({ sampleInputs: { input: 'a' }, sampleOrigin: 'the last run', refine: { error: 'boom' } });
+    expect(withChange(asked({}), undefined).refine).toBeUndefined();
   });
 });

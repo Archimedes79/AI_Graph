@@ -44,7 +44,7 @@ function panel(node: GraphNode): string {
   const builder = NODE_BUILDERS[node.node_type];
   const html = renderToStaticMarkup(createElement(PANELS[node.node_type]!, {
     builder, node, setConfig: () => {}, updateNode: () => {},
-    fields: nodeFields(node, () => {}, () => {}), generating: false, onGenerate: () => {},
+    fields: nodeFields(node, () => {}, () => {}), generating: false, onGenerate: async () => false,
     steps: steps(node),
   }));
   // A panel draws nothing when it is not handed what it needs: every

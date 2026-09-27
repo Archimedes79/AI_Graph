@@ -4,9 +4,11 @@
 // asked the same way by the dialog and by `masterExamples.test.ts`, which
 // builds the examples through these steps.
 
-import type { GraphNode, Wire } from '@/graph';
+import type { GraphNode, NodeResult, Wire } from '@/graph';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
 import type { ExampleResult } from '@engine/execution/examples.ts';
+import type { Refine } from '@engine/host/api.ts';
+import type { Tried } from './TryItInline';
 import { asExampleText, readPair, withInput } from './examplePair';
 
 /** What a node hands on, without the executor's own error port: what a body returns, and an example expects. */
@@ -103,6 +105,41 @@ export function exampleFor(node: GraphNode, examples: string): string {
  */
 export function keptExpect(outputs: Record<string, unknown> | undefined): string {
   return asExampleText(ownOutputs(outputs));
+}
+
+/** What a body gave, as a model reads it: one output's text as it is, several as JSON. */
+function asOutcome(outputs: Record<string, unknown> | undefined): string {
+  const own = ownOutputs(outputs);
+  const values = Object.values(own);
+  if (values.length === 1 && typeof values[0] === 'string') return values[0];
+  return JSON.stringify(values.length === 1 ? values[0] : own, null, 2) ?? '';
+}
+
+/**
+ * What came of the body, as a change to it is asked with ("Say what to
+ * change", ✨ Fix): from the try on screen -- what came out, or how it failed,
+ * and what it falls short of (*gaps*, the judge's word) -- or, with none, from
+ * the last run of the node, whose inputs it then came of. Undefined while
+ * neither said anything. `failed`: there is something to fix.
+ */
+export function whatCameOf(
+  tried: Tried | null, gaps: string[] | undefined, lastRun: NodeResult | undefined,
+): { said: Omit<Refine, 'body' | 'change'>; failed: boolean; sample?: { values: Record<string, unknown>; origin: string } } | undefined {
+  const result = tried?.result;
+  if (result && result.status !== 'skipped') {
+    const problems = [...(gaps ?? []), ...(tried?.judged ? [`judged by a model: ${tried.judged}`] : [])];
+    const error = result.status === 'error' ? result.error || 'It failed, and gave no reason.' : '';
+    return {
+      said: { ...(error ? { error } : { outcome: asOutcome(result.outputs) }), ...(problems.length ? { problems } : {}) },
+      failed: !!error || problems.length > 0,
+    };
+  }
+  if (!tried && (lastRun?.status === 'error' || lastRun?.status === 'success')) {
+    const error = lastRun.status === 'error' ? lastRun.error || 'It failed, and gave no reason.' : '';
+    const ran = Object.keys(lastRun.inputs ?? {}).length ? { values: lastRun.inputs, origin: 'the last run' } : undefined;
+    return { said: error ? { error } : { outcome: asOutcome(lastRun.outputs) }, failed: !!error, ...(ran ? { sample: ran } : {}) };
+  }
+  return undefined;
 }
 
 /**
