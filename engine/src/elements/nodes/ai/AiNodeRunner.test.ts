@@ -105,6 +105,24 @@ describe('what an AI node sends', () => {
     });
   });
 
+  it('keeps the words of a list that holds images and words', async () => {
+    // A photo and its caption, wired in as one list: the caption is not an image, and not nothing.
+    await withImage(async (path) => {
+      const { runtime, asked } = recording();
+      await element.execute(aiNode({ send_images: true }), { photos: [path, 'caption: a red barn'] }, runtime);
+      expect(asked[0].images).toHaveLength(1);
+      expect(asked[0].prompt).toBe('caption: a red barn');
+    });
+  });
+
+  it('sends a temperature only when the node sets one', async () => {
+    const { runtime, asked } = recording();
+    await element.execute(aiNode(), { question: 'x' }, runtime);
+    await element.execute(aiNode({ temperature: 0.3 }), { question: 'x' }, runtime);
+    expect(asked[0]).not.toHaveProperty('temperature');
+    expect(asked[1].temperature).toBe(0.3);
+  });
+
   it('leaves an image path as prompt text when the toggle is off', async () => {
     await withImage(async (path) => {
       const { runtime, asked } = recording();

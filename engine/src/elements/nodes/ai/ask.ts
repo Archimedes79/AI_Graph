@@ -15,7 +15,8 @@ import { LLM_CALLS_PER_RUN } from './runTemplate.ts';
 export interface AskSettings extends PromptSettings {
   provider: string;
   model: string;
-  temperature: number;
+  /** Only when the node sets one: current models refuse a sampling parameter nobody asked for. */
+  temperature?: number;
   sendImages: boolean;
   /** Tool servers the model may call while answering: URLs, or names this machine configured. */
   toolServers: string[];
@@ -24,7 +25,7 @@ export interface AskSettings extends PromptSettings {
 /** Nothing said: the one AI setting's model, plain text, no tools. What a code node's `node.llm` starts from. */
 export const PLAIN_ASK: AskSettings = {
   systemPrompt: '', template: '', outputFormatPrompt: '', outputExample: '',
-  provider: 'default', model: '', temperature: 0.7, sendImages: false, toolServers: [],
+  provider: 'default', model: '', sendImages: false, toolServers: [],
 };
 
 /**
@@ -52,17 +53,18 @@ export async function askModel(
       //
       // Read here, not passed as a path: the provider's machine is not this
       // one, so a filename would arrive as a filename and the model would
-      // dutifully talk about the filename.
+      // dutifully talk about the filename. What is not an image in a mixed
+      // list -- a caption beside a photo -- stays in the prompt.
       const candidates = Array.isArray(value) ? value : [value];
-      const urls: string[] = [];
+      const words: unknown[] = [];
       for (const candidate of candidates) {
         const url = await asImageUrl(candidate, runtime);
-        if (url) urls.push(url);
+        if (url) images.push(url);
+        else words.push(candidate);
       }
-      if (urls.length) {
-        images.push(...urls);
-        continue;
-      }
+      if (!words.length) continue;
+      text[name] = Array.isArray(value) ? words : value;
+      continue;
     }
     text[name] = value;
   }
@@ -76,7 +78,7 @@ export async function askModel(
     system,
     provider: settings.provider,
     model: settings.model,
-    temperature: settings.temperature,
+    ...(settings.temperature === undefined ? {} : { temperature: settings.temperature }),
     ...(images.length ? { images } : {}),
   };
 

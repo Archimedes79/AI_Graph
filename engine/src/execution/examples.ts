@@ -188,7 +188,6 @@ export async function runExamples(
         const verdict = await runtime.ai.complete({
           system: JUDGE_SYSTEM,
           prompt: `Criterion:\n${example.judge}\n\nAnswer:\n${JSON.stringify(ran.outputs, null, 2)}`,
-          temperature: 0,
           ...(node.config.ai_provider ? { provider: String(node.config.ai_provider) } : {}),
           ...(node.config.ai_model ? { model: String(node.config.ai_model) } : {}),
         });

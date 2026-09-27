@@ -165,7 +165,7 @@ async function generateCode(
       + "and `import` of anything outside Node's own standard library will fail at run time.");
   }
   const system = framed ? FRAMED_CODE_SYSTEM : CODE_SYSTEM;
-  const raw = await ai.complete({ prompt: parts.join('\n'), system, temperature: 0.2, ...target });
+  const raw = await ai.complete({ prompt: parts.join('\n'), system, ...target });
   const code = firstCodeBlock(raw);
   const explanation = code ? raw.slice(raw.lastIndexOf('```') + 3).trim() : raw.replace(/```(?:javascript|js)?/g, '').trim();
   return { text: code || raw, explanation };
@@ -173,9 +173,9 @@ async function generateCode(
 
 /** One piece of text wrapped in `<tag>…</tag>`, and the explanation after it. */
 async function generateTagged(
-  ai: AiService, target: Target, system: string, tag: string, prompt: string, temperature = 0.3,
+  ai: AiService, target: Target, system: string, tag: string, prompt: string,
 ): Promise<{ text: string; explanation: string }> {
-  const raw = await ai.complete({ prompt, system, temperature, ...target });
+  const raw = await ai.complete({ prompt, system, ...target });
   const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(raw);
   if (match) return { text: match[1].trim(), explanation: raw.slice(match.index + match[0].length).trim() };
   // A model that ignores the tags falls back to the whole reply, which beats nothing.
@@ -621,7 +621,7 @@ export async function generateGraph(
   if (context) parts.push(`\nContext:\n${context}`);
   let raw: string;
   try {
-    raw = await ai.complete({ prompt: parts.join('\n'), system: GRAPH_SYSTEM, temperature: 0.2, ...deps.target });
+    raw = await ai.complete({ prompt: parts.join('\n'), system: GRAPH_SYSTEM, ...deps.target });
   } catch (error) {
     throw new GenerationFailed(error instanceof Error ? error.message : String(error), calls);
   }

@@ -69,7 +69,7 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
       systemPrompt: String(c.system_prompt ?? ''),
       provider: String(c.ai_provider ?? ''),
       model: String(c.ai_model ?? ''),
-      temperature: Number(c.temperature ?? 0.7),
+      ...(typeof c.temperature === 'number' ? { temperature: c.temperature } : {}),
       sendImages: c.send_images === true,
       template: String(c.prompt_template ?? ''),
       outputFormatPrompt: outputWords(c),
