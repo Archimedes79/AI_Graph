@@ -16,7 +16,7 @@ import ResultsPanel from '@/app/ResultsPanel';
 import SettingsDialog from '@/app/SettingsDialog';
 import GraphProblems from '@/app/GraphProblems';
 import { DiskChanges } from '@/app/diskChanges';
-import { droppedProject } from '@/app/windowDrops';
+import { droppedProject, landedInCodeField } from '@/app/windowDrops';
 import Modal from '@/ui/Modal';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 
@@ -189,6 +189,8 @@ export default function App() {
       // example field is theirs, and does not arrive here: they stop it.
       if (!file) return;
       event.preventDefault();
+      // One dropped into a code box arrives, and its editor has typed it in.
+      if (landedInCodeField(event.target)) return;
       // Only answerable while the event lasts: afterwards the item is gone.
       if (event.dataTransfer?.items?.[0]?.webkitGetAsEntry()?.isDirectory) void handleProjectFolderDrop(file.name);
       else void handleGraphFileDrop(file);

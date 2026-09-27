@@ -6,6 +6,13 @@ export type CodeLanguage = 'javascript' | 'markdown';
 // Loaded when a body is first drawn, never before: see CodeSurface.
 const Surface = React.lazy(() => import('./CodeSurface'));
 
+/**
+ * What marks a code box on the page, for whoever must know that a drop landed
+ * in one: its editor types in the text of a file dropped into it, where it was
+ * dropped, and the drop is the box's (`app/windowDrops.ts`).
+ */
+export const CODE_FIELD = '[data-code-field]';
+
 interface CodeFieldProps {
   value: string;
   onChange: (value: string) => void;
@@ -66,7 +73,7 @@ export default function CodeField({
   }, [large]);
 
   return (
-    <div className="relative">
+    <div className="relative" data-code-field="">
       <Suspense fallback={plain}>
         <Surface
           value={value} onChange={onChange} language={language} placeholder={placeholder}
