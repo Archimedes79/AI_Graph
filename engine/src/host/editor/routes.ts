@@ -15,7 +15,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseGraph, type Graph } from '../../graph.ts';
-import { executeNode, inputsFor } from '../../execution/executor.ts';
+import { executeNode, inputsFor, withGraphDefaults } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExamples } from '../../execution/examples.ts';
 import { GuiNodeRunner, parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
@@ -117,7 +117,11 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     async runBlock(asked) {
       try {
-        const shown = await new GuiNodeRunner().showBlock(parseWidget(asked.widget), asked.value, nodeRuntime());
+        // A block alone is no graph for the executor to apply its defaults
+        // to, so they are applied here, as a run applies them: code that asks
+        // a model is tried on the model the graph's run would ask.
+        const runtime = withGraphDefaults(nodeRuntime(), parseGraph({ metadata: asked.metadata }));
+        const shown = await new GuiNodeRunner().showBlock(parseWidget(asked.widget), asked.value, runtime);
         return { status: 'success', shown, error: null };
       } catch (error) {
         return { status: 'error', shown: null, error: message(error) };

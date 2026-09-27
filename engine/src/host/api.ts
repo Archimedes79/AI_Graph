@@ -18,7 +18,7 @@
 // serves to whoever opens it; an `editor` route exists only while building,
 // and a server without the editor answers it with 404.
 
-import type { ExecutionResult, Graph, NodeResult } from '../graph.ts';
+import type { ExecutionResult, Graph, GraphMetadata, NodeResult } from '../graph.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/changes.ts';
@@ -303,8 +303,12 @@ export const API = {
   runNode: route<OnNode & { inputs: Record<string, unknown> }, NodeResult>('POST', '/api/execute/node', 'editor'),
   /** What one node would ask a model on the inputs given -- its run, with every answer made up and nothing sent. */
   nodeRequests: route<OnNode & { inputs: Record<string, unknown> }, { requests: SentRequest[]; error: string | null }>('POST', '/api/execute/node/requests', 'editor'),
-  /** One value through one block's transform, as the page would show it. */
-  runBlock: route<{ widget: unknown; value: unknown }, BlockResult>('POST', '/api/execute/block', 'editor'),
+  /**
+   * One value through one block's transform, as the page would show it -- with
+   * the graph's metadata, so code that asks a model asks the one a run of this
+   * graph asks (`ai_defaults`), not the machine's.
+   */
+  runBlock: route<{ widget: unknown; value: unknown; metadata?: Partial<GraphMetadata> }, BlockResult>('POST', '/api/execute/block', 'editor'),
   /** What would arrive at a node: what feeds it is run, the node is not. */
   nodeInputs: route<OnNode, { inputs: Record<string, unknown>; error: string | null }>('POST', '/api/execute/inputs', 'editor'),
   /** Run a node's examples.md: each example's inputs, held to what it expects. */
