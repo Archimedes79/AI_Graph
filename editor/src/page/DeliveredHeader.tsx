@@ -3,27 +3,26 @@ import { useGraphStore } from '@/store/graphStore';
 import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
 
 /**
- * The bar above the delivered page: what this tool is, its ▶ Run, how the last
- * run went.
+ * The bar above the delivered page: what this tool is -- the graph's name and
+ * description -- its ▶ Run, and how the last run went.
  *
  * ▶ Run here is not a second kind of run. It is the tool's own OK button --
  * what an application offers when its window has nothing of its own to press,
- * and what it still offers when it has: "go, on what is on the page now". It
- * belongs above the page, in both places the page is shown, because that is
- * where the person looking at the page can see it.
+ * and what it still offers when it has: "go, on what is on the page now".
  *
- * Both hosts draw it: `runtime/RuntimeApp.tsx` for a tool someone was handed,
- * and the editor's Preview tab. The editor's toolbar has a ▶ Run too, and it
- * means the thing one level up -- *start this*, which for a graph with a page
- * is opening the window this bar sits on.
+ * Both hosts draw the bar: `runtime/RuntimeApp.tsx` for a tool someone was
+ * handed, with its ▶ Run, and the editor's Preview tab, without one -- there
+ * the toolbar's ▶ Run is the one, on every tab, and a second beside it was a
+ * second name for the same press.
  */
 export default function DeliveredHeader({
   onRun, ready = true, tools, note,
 }: {
-  onRun: () => void;
+  /** The tool's ▶ Run; none, and there is no button. */
+  onRun?: () => void;
   /** False while the graph is still being fetched: a deployed tool's first moment. */
   ready?: boolean;
-  /** Buttons of the host's own, left of ▶ Run — a deployed tool's ⚙ AI Settings. */
+  /** Buttons of the host's own, left of ▶ Run — a deployed tool's ⚙ AI Settings, the preview's pop-out. */
   tools?: ReactNode;
   /** Said right of ▶ Run: a deployed tool's clock. */
   note?: ReactNode;
@@ -50,19 +49,21 @@ export default function DeliveredHeader({
       <div className="flex-1" />
 
       {tools}
-      <button
-        onClick={onRun}
-        disabled={!ready || isExecuting}
-        className="px-4 py-1.5 text-xs rounded-lg font-semibold shrink-0"
-        style={{
-          background: !ready || isExecuting ? '#374151' : ACCENT,
-          color: 'white',
-          opacity: !ready || isExecuting ? 0.7 : 1,
-        }}
-        title="Run this tool on what is on the page now. Anything it still needs is asked for first."
-      >
-        {isExecuting ? '⏳ Running…' : '▶ Run'}
-      </button>
+      {onRun && (
+        <button
+          onClick={onRun}
+          disabled={!ready || isExecuting}
+          className="px-4 py-1.5 text-xs rounded-lg font-semibold shrink-0"
+          style={{
+            background: !ready || isExecuting ? '#374151' : ACCENT,
+            color: 'white',
+            opacity: !ready || isExecuting ? 0.7 : 1,
+          }}
+          title="Run this tool on what is on the page now. Anything it still needs is asked for first."
+        >
+          {isExecuting ? '⏳ Running…' : '▶ Run'}
+        </button>
+      )}
       {note}
       {statusLabel && (
         <span className="text-xs font-medium whitespace-nowrap" style={{ color: status === 'error' ? DANGER_TEXT : MUTED }}>

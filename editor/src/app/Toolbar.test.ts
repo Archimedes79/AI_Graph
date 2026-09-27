@@ -22,7 +22,7 @@ function toolbar(): string {
   return renderToStaticMarkup(createElement(Toolbar, {
     onNewGraph: () => {}, onSave: () => {}, onSaveAs: () => {}, onReloadProject: () => {}, onLoad: () => {},
     onInjectJson: () => {}, onOpenSettings: () => {}, confirmDiscard: () => true,
-    currentFilePath: '/p/graph', saveStatus: '', onShowInterface: () => {}, interfaceShown: false,
+    currentFilePath: '/p/graph', saveStatus: '',
   }));
 }
 
@@ -49,6 +49,29 @@ describe('opening another graph', () => {
     expect(graphBusy(false, false)).toBeNull();
     expect(graphBusy(true, false)).toMatch(/run/);
     expect(graphBusy(false, true)).toMatch(/✨/);
+  });
+});
+
+describe('▶ Run', () => {
+  it('is one button that runs the graph, the same with a page as without: never a Start that only opens the page', () => {
+    // A graph with a page had ▶ Start, which switched to the Preview tab, whose
+    // header then had a ▶ Run of its own: three names for starting one graph.
+    const page = { id: 'page', node_type: 'gui', label: 'Page', inputs: [], outputs: [],
+      config: { gui_widgets: [{ id: 'go', kind: 'button', label: 'Go', tone: 'plain' }] } };
+    const before = open.rfNodes;
+    (open as { rfNodes: unknown[] }).rfNodes = [{ id: 'page', data: { graphNode: page } }];
+    try {
+      const html = toolbar();
+      const run = html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*Run<\/button>/)?.[0] ?? '';
+      expect(run).toContain('Run the whole graph');
+      expect(html).not.toMatch(/>Start</);
+    } finally {
+      (open as { rfNodes: unknown[] }).rfNodes = before;
+    }
+  });
+
+  it('leaves the Deploy button one thing to do: the zip, with no menu to open first', () => {
+    expect(button(toolbar(), 'Deploy')).toMatch(/title="Download this graph as a tool of its own/);
   });
 });
 
