@@ -42,7 +42,6 @@ export interface NodePanelProps {
    * steps (`FourSteps`): the "what ✨ sends" button and what it sends, "open
    * in my editor" -- and, where the ports are the person's to name
    * (`stepped`), the two port lists, for "What comes in" and "What comes out".
-   * The mirror of a block's `WidgetSteps`.
    */
   steps?: {
     inputs?: ReactNode;
