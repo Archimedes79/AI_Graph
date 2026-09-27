@@ -22,7 +22,7 @@ describe('a ✨ sweep that ends after another graph was opened', () => {
   it('writes nothing into the graph open now, whose node shares the id, and says why (B30)', async () => {
     store().newGraph();
     const id = store().addNode('code', { x: 0, y: 0 });
-    store().updateNode(id, { config: { ...nodeOf(id).config, code_prompt: 'Count the words.' } });
+    store().updateNode(id, { config: { ...nodeOf(id).config, prompt: 'Count the words.' } });
 
     const said: string[] = [];
     const sweeping = sweepGraph({ say: (message) => said.push(message), stopped: () => false });

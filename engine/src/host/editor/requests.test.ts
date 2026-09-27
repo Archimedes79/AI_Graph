@@ -47,7 +47,15 @@ describe('what a node would ask', () => {
     expect(error).toBeNull();
     expect(asked.map((request) => request.prompt)).toEqual([
       'List facts about owls',
-      "Check these: ⟨the model's answer to question 1⟩",
+      'Check these: "⟨the model\'s answer to question 1⟩"',
     ]);
+  });
+
+  it('is asked of a node whose answer is parsed as JSON without failing on the stand-in', async () => {
+    const graph = asking('');
+    graph.nodes[0].outputs = [{ ...port('output', 'output'), data_type: 'json' }];
+    const { requests: asked, error } = await requests(graph);
+    expect(error).toBeNull();
+    expect(asked).toHaveLength(1);
   });
 });

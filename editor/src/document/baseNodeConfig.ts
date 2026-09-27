@@ -29,7 +29,7 @@ export function baseNodeConfig(): NodeConfig {
     ai_model: '',
     system_prompt: '',
     code: '',
-    code_prompt: '',
+    prompt: '',
     data_value: null,
     data_format: 'text',
     output_format_prompt: '',
@@ -40,7 +40,6 @@ export function baseNodeConfig(): NodeConfig {
     send_images: false,
     catch_errors: false,
     gui_widgets: [],
-    task: '',
     trigger_on_start: true,
     trigger_every: '',
   };

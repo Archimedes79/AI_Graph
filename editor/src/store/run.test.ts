@@ -88,10 +88,10 @@ describe('what the last run says of a node, in its dialog', () => {
     });
     await running;
     // "The last run failed here", and ✨ Fix -- asked the way the dialog asks.
-    const said = () => whatCameOf(null, undefined, lastRunOf(nodeOf(code), store().executionResult, store().ranAs, 'code_prompt'));
+    const said = () => whatCameOf(null, undefined, lastRunOf(nodeOf(code), store().executionResult, store().ranAs, 'prompt'));
     expect(said()).toMatchObject({ failed: true, said: { error: 'inputs.input.toUpperCase is not a function' } });
     // What only describes it changes nothing: its task, its example.
-    store().updateNode(code, { config: { ...nodeOf(code).config, code_prompt: 'Shout it.', examples: '## The example\n\n```json input\n{"input": "a"}\n```\n' } });
+    store().updateNode(code, { config: { ...nodeOf(code).config, prompt: 'Shout it.', examples: '## The example\n\n```json input\n{"input": "a"}\n```\n' } });
     expect(said()).toMatchObject({ failed: true });
     // The body fixed by hand, or by ✨: that run said nothing about this one.
     store().updateNode(code, { config: { ...nodeOf(code).config, code: 'function run(inputs) { return { output: String(inputs.input).toUpperCase() }; }' } });

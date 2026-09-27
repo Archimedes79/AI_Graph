@@ -48,7 +48,7 @@ function asking(config: Record<string, unknown> = {}): GraphNode {
   return {
     id: 'ask', node_type: 'ai', label: 'Ask', description: '',
     position: { x: 0, y: 0 }, inputs: [], outputs: [],
-    config: { system_prompt: 'be brief', prompt_template: 'Name a city.', ...config },
+    config: { system_prompt: 'be brief', message_template: 'Name a city.', ...config },
   };
 }
 

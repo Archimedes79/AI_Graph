@@ -20,7 +20,7 @@ function graph(overrides: { schema?: unknown; template?: string } = {}): Graph {
       },
       {
         id: 'say', node_type: 'ai', label: 'Say', inputs: [port('total', 'input')], outputs: [port('output', 'output')],
-        config: { system_prompt: 'Report.', prompt_template: overrides.template ?? 'There are {{total}}.' },
+        config: { system_prompt: 'Report.', message_template: overrides.template ?? 'There are {{total}}.' },
       },
       { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: {} },
     ],
@@ -117,7 +117,7 @@ describe('what check finds in a setting that would silently do nothing', () => {
         { id: 'folder', kind: 'input_picker', mode: 'directory' }, { id: 'shown', kind: 'text_io', mode: 'output' },
       ] } },
       { id: 'each', node_type: 'ai', inputs: [{ ...port('story', 'input'), ...story }], outputs: [port('output', 'output')],
-        config: { system_prompt: 'Summarise.', prompt_template: '{{story}}', ...config } },
+        config: { system_prompt: 'Summarise.', message_template: '{{story}}', ...config } },
     ],
     edges: [
       { id: 'a', source_node_id: 'page', source_port_id: 'folder_out', target_node_id: 'each', target_port_id: 'story' },
@@ -311,7 +311,7 @@ describe('a graph inside a node', () => {
   });
 
   it('calls a described but empty part out, because that is a plan and not a graph', () => {
-    const problems = problemsIn(holder(inner([]), { task: 'Summarise the paper.' }));
+    const problems = problemsIn(holder(inner([]), { prompt: 'Summarise the paper.' }));
     expect(said(problems)).toContainEqual(expect.stringContaining('described and empty'));
   });
 

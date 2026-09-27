@@ -22,11 +22,11 @@ export default function AiNodePanel(props: NodePanelProps) {
   /** Put `{{port}}` where the cursor is, the way clicking a field name should. */
   const place = (portId: string) => {
     const box = template.current;
-    const current = String(node.config.prompt_template ?? '');
+    const current = String(node.config.message_template ?? '');
     const token = `{{${portId}}}`;
     const at = box ? box.selectionStart : current.length;
     const end = box ? box.selectionEnd : current.length;
-    setConfig('prompt_template', current.slice(0, at) + token + current.slice(end));
+    setConfig('message_template', current.slice(0, at) + token + current.slice(end));
     requestAnimationFrame(() => {
       box?.focus();
       box?.setSelectionRange(at + token.length, at + token.length);
@@ -62,8 +62,8 @@ export default function AiNodePanel(props: NodePanelProps) {
           ref={template}
           className="w-full rounded-lg px-3 py-2 text-sm font-mono resize-y"
           style={{ ...FIELD, minHeight: 96 }}
-          value={String(node.config.prompt_template ?? '')}
-          onChange={(e) => setConfig('prompt_template', e.target.value)}
+          value={String(node.config.message_template ?? '')}
+          onChange={(e) => setConfig('message_template', e.target.value)}
           placeholder={laidOut || 'Add an input in step 1, then place it here as {{name}}.'}
           spellCheck={false}
           aria-label="Message template"

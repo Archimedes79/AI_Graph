@@ -3,8 +3,8 @@
 // Every node that does anything authored does it the same way: someone writes a
 // request, an AI turns it into a body, and the body is what runs. A code node
 // and an AI node are instances of that one sentence, and they differ only in
-// which config keys hold the two halves — `code`/`code_prompt` here,
-// `system_prompt`/the node's own description there.
+// which config keys hold the two halves — `prompt`/`code` here,
+// `prompt`/`system_prompt` there.
 //
 // That difference was expressed as strings: an element returned the *names* of
 // its fields and the caller reached into an untyped bag to find them, and the
@@ -29,10 +29,13 @@ export type LogicKind = 'code' | 'prompt';
 export interface LogicFields {
   /** The config key holding the body. */
   body: string;
-  /** The config key holding the request that produced it. */
+  /** The config key holding what produced it: `prompt.md`, the template and the request (`authoring/promptFile.ts`). */
   prompt: string;
-  /** The request lives on the node itself (its description), not in config. */
-  promptOnSubject?: boolean;
+  /**
+   * The config key holding how the inputs are laid out in the message, where
+   * the body is instructions sent to a model: written with them by ✨.
+   */
+  message?: string;
 }
 
 /**

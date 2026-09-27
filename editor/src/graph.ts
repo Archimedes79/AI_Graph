@@ -58,7 +58,14 @@ export type NodeConfig = {
   batch_mode: 'per_item' | 'whole_list';
   catch_errors: boolean;
   code: string;
-  code_prompt: string;
+  /**
+   * What ✨ Generate is sent -- the template, then the request after its
+   * `Prompt:` line (`@engine/authoring/promptFile.ts`): `prompt.md` in a
+   * project. A subgraph node's is a bare request: what the part is for.
+   */
+  prompt: string;
+  /** The requests sent before, newest first: `prompt.history.md` in a project. */
+  prompt_history?: string;
   /** A data node: what kind of value it holds. */
   data_format: 'text' | 'structure';
   /** A data node: the value it holds, and hands on until something arrives. */
@@ -68,12 +75,14 @@ export type NodeConfig = {
   input_mode: 'text' | 'directory';
   /** The output format in words: `output.md` in a project. */
   output_format_prompt: string;
-  /** The message an ai node sends, with `{{port}}` where a port's value goes. Empty: send what arrived. */
-  prompt_template?: string;
+  /** The message an ai node sends, with `{{port}}` where a port's value goes: `message.md`. Empty: send what arrived. */
+  message_template?: string;
   /** An ai node's `run.js` when somebody changed it; absent or empty for the standard one. */
   run_code?: string;
   /** Inputs and what must come out, as Markdown: `examples.md` in a project. See engine `execution/examples.ts`. */
   examples?: string;
+  /** The files an example reads, by the name it gives them ("example/rows.csv"): `example/` in a project. See engine `execution/exampleFiles.ts`. */
+  example_files?: Record<string, string>;
   /** A code node's output interface (JSON Schema), set from a run: in its `interface.json` in a project. */
   output_schema?: unknown;
   /** Tool servers an ai node may call, one per line: a URL, or a name this machine configured. */
@@ -83,8 +92,6 @@ export type NodeConfig = {
   trigger_every: string;
   /** The graph a subgraph node holds: its own project folder on disk. */
   subgraph?: unknown;
-  /** What a node is meant to do, written before it is filled in: `task.md` in a project. */
-  task: string;
   prompt_at_runtime: boolean;
   recursive: boolean;
   send_images: boolean;

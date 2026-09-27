@@ -82,11 +82,34 @@ export interface Target { provider: string; model: string }
 /** Lets the page watch a generation's transcript while it runs. */
 export interface Watched { progress_id?: string }
 
-/** One element's body to write. The element's own `Generation` decides the rest. */
+/**
+ * One element's writing to do: its body, one example of what arrives at it,
+ * or the definition of what goes out. The element's own `Generation` decides
+ * the rest.
+ */
 export interface GenerateRequest {
   /** A node type: whose `Generation` says what is written and how. */
   element: string;
-  description: string;
+  /**
+   * What ✨ is sent: the node's `prompt.md`, a template naming `{Input Needs}`,
+   * `{Output Example}` and `{Graph}` with the request after its `Prompt:`
+   * line -- or a bare request, which is sent in the standard template. See
+   * `authoring/promptFile.ts`.
+   */
+  prompt: string;
+  /**
+   * What to write: the body (the default); `example`, one example input for
+   * the node and the files it reads; `output`, its output definition (`output.md`).
+   */
+  write?: 'body' | 'example' | 'output';
+  /** The graph around the node, in words: what `{Graph}` says. Absent: "Not given." */
+  graph_context?: string;
+  /**
+   * The node's example files, by the name an example gives each
+   * ("example/rows.csv"): a sample that names one is read from them, and so
+   * is what the probe reads.
+   */
+  example_files?: Record<string, string>;
   inputs?: string[];
   outputs?: string[];
   /** Real port values from the last run; enables the verify-and-repair pass. */
@@ -147,9 +170,9 @@ export interface GenerateRequest {
   multi_outputs?: string[];
   /**
    * Change the body there is, instead of writing one from nothing: "Say what
-   * to change" and ✨ Fix in a node's dialog. The answer brings the task along
-   * when there was something to change (`GenerateResponse.task`), restated to
-   * say what the changed body does, so the two are changed together.
+   * to change" and ✨ Fix in a node's dialog. The answer brings the request
+   * along when there was something to change (`GenerateResponse.request`),
+   * restated to say what the changed body does, so the two are changed together.
    */
   refine?: Refine;
   /**
@@ -207,10 +230,24 @@ export interface ProbeReport {
 }
 
 export interface GenerateResponse {
-  /** The generated text. Which field it belongs in is the caller's business. */
+  /**
+   * The generated text: the body, or the output definition. Which field it
+   * belongs in is the caller's business. Empty for an example, which is `example`.
+   */
   result: string;
-  /** The node's task, restated to fit a body changed as asked (`GenerateRequest.refine`). */
-  task?: string;
+  /**
+   * The node's request, restated to fit a body changed as asked
+   * (`GenerateRequest.refine`): what follows `Prompt:` in its `prompt.md` now.
+   */
+  request?: string;
+  /** How an ai node's inputs are laid out in its message, written with its instructions: `message.md`. */
+  message_template?: string;
+  /**
+   * One example of what arrives at the node, keyed by input id -- an input
+   * that reads a file naming one of `files` ("example/<name>") -- and those
+   * files' text. With `write: 'example'`.
+   */
+  example?: { inputs: Record<string, unknown>; files: Record<string, string> };
   probe: ProbeReport;
   /** Every model call this generation made, in order. For a preview, the one request, unsent. */
   calls: AICall[];

@@ -22,14 +22,14 @@ describe('going into a node\'s graph from its dialog', () => {
     store().setEditingNode('part');
     const dialog = nodeDialog('part');
     const stop = dialog.watch(() => {});
-    dialog.setConfig('task', 'Summarise');
+    dialog.setConfig('prompt', 'Summarise');
     enterGraphOf('part');
     stop();
 
     expect(store().subgraphStack).toHaveLength(1);
     store().closeSubgraph();
     const part = stored('part')!;
-    expect(part.config.task).toBe('Summarise');
+    expect(part.config.prompt).toBe('Summarise');
     for (const kept of [...part.inputs, ...part.outputs]) {
       expect(Object.getOwnPropertySymbols(kept)).toEqual([]);
     }

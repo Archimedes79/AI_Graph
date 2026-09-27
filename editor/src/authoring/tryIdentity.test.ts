@@ -20,18 +20,18 @@ describe('a try, once what it tried has changed', () => {
   it('belongs to a node\'s body, settings, ports and example input', () => {
     const node = NODE_KINDS.code.create('c');
     const example = { input: 'a' };
-    const key = tryKey(node, example, 'code_prompt');
-    expect(tryKey({ ...node, config: { ...node.config, code: 'function run() { return {}; }' } }, example, 'code_prompt')).not.toBe(key);
-    expect(tryKey(node, { input: 'b' }, 'code_prompt')).not.toBe(key);
-    expect(tryKey({ ...node, outputs: [] }, example, 'code_prompt')).not.toBe(key);
+    const key = tryKey(node, example, 'prompt');
+    expect(tryKey({ ...node, config: { ...node.config, code: 'function run() { return {}; }' } }, example, 'prompt')).not.toBe(key);
+    expect(tryKey(node, { input: 'b' }, 'prompt')).not.toBe(key);
+    expect(tryKey({ ...node, outputs: [] }, example, 'prompt')).not.toBe(key);
   });
 
   it('is still the try after what it only describes changed: the expectation, the judge, the kept shape, the request', () => {
     const node = NODE_KINDS.code.create('c');
     const example = { input: 'a' };
-    const key = tryKey(node, example, 'code_prompt');
+    const key = tryKey(node, example, 'prompt');
     const examples = withJudge(withExpect(withInput('', '{"input": "a"}'), '{"output": "A"}'), 'Upper case.');
-    const described = { ...node, config: { ...node.config, examples, output_schema: { type: 'object' }, code_prompt: 'Shout it.' } };
-    expect(tryKey(described, example, 'code_prompt')).toBe(key);
+    const described = { ...node, config: { ...node.config, examples, output_schema: { type: 'object' }, prompt: 'Shout it.' } };
+    expect(tryKey(described, example, 'prompt')).toBe(key);
   });
 });

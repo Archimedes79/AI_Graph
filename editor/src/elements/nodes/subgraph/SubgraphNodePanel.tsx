@@ -64,8 +64,8 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
           className="w-full rounded-lg px-3 py-2 text-sm"
           style={FIELD}
           rows={3}
-          value={node.config.task ?? ''}
-          onChange={(e) => setConfig('task', e.target.value)}
+          value={node.config.prompt ?? ''}
+          onChange={(e) => setConfig('prompt', e.target.value)}
           placeholder="e.g. Take a paper, and give back a one-paragraph summary and a verdict"
         />
         <p className="text-xs mt-1" style={{ color: DIMMER }}>

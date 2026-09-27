@@ -118,7 +118,7 @@ describe('a node with nothing to do', () => {
       { id: 'page', node_type: 'gui', config: { gui_widgets: [{ id: 'chat', kind: 'chat', value: { messages: [], pending } }] } },
       {
         id: 'ai', node_type: 'ai', inputs: [port('message', { required: true })], outputs: [port('output')],
-        config: { ai_model: 'm', prompt_template: 'User: {{message}}' },
+        config: { ai_model: 'm', message_template: 'User: {{message}}' },
       },
     ],
     edges: [

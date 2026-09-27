@@ -4,21 +4,31 @@ import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
+import { STANDARD_PROMPT } from '../../../authoring/promptFile.ts';
 import type { Problem } from '../../../execution/wiring.ts';
 
 /** What a code node stores. Its own fields, and no one else's. */
-const CODE_FIELDS: LogicFields = { body: 'code', prompt: 'code_prompt' };
+const CODE_FIELDS: LogicFields = { body: 'code', prompt: 'prompt' };
 
 export interface CodeConfig {
   code: string;
 }
 
-/** What this keeps in files of its own in a project folder: see `NodeRunner.texts`. */
+/**
+ * What this keeps in files of its own in a project folder (see
+ * `NodeRunner.texts`), in the order a node is built: what comes in, what goes
+ * out, what ✨ is asked, and the code.
+ */
 const CODE_TEXTS: readonly TextFile[] = [
-  { field: 'code', file: 'code.js' },
-  { field: 'code_prompt', file: 'task.md' },
-  // Optional: inputs, and the outputs they must give. See `execution/examples.ts`.
+  // Optional: inputs, and the outputs they must give -- the first is the example. See `execution/examples.ts`.
   { field: 'examples', file: 'examples.md' },
+  // What goes out, in words: each output, its format, an example of it.
+  { field: 'output_format_prompt', file: 'output.md' },
+  // What ✨ Generate is sent: the template, then the request. See `authoring/promptFile.ts`.
+  { field: 'prompt', file: 'prompt.md', standard: STANDARD_PROMPT },
+  // The requests sent before, newest first.
+  { field: 'prompt_history', file: 'prompt.history.md' },
+  { field: 'code', file: 'code.js' },
 ];
 
 /**
@@ -77,7 +87,7 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `config.code holds JavaScript as "function run(inputs) { ... }", returning an object whose keys are exactly this node's output port ids. config.code_prompt is the request it was written from. Use only what Node has built in; there is no package manager. The function may be async and is handed a second argument, node: "await node.llm({ prompt: '...' })" asks the configured model a question and resolves to its answer as text -- use it when code has to decide what to ask, or ask in a loop; for one question, use an ai node instead.`;
+    return `config.code holds JavaScript as "function run(inputs) { ... }", returning an object whose keys are exactly this node's output port ids. config.prompt is the request it was written from, in a sentence or two of plain words. Use only what Node has built in; there is no package manager. The function may be async and is handed a second argument, node: "await node.llm({ prompt: '...' })" asks the configured model a question and resolves to its answer as text -- use it when code has to decide what to ask, or ask in a loop; for one question, use an ai node instead.`;
   }
 
   override whatRuns(): WhatRuns {
@@ -106,7 +116,7 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
   override generation(): Generation {
     return {
       kind: 'code', fields: CODE_FIELDS,
-      guard: 'Please add a code generation prompt first.',
+      guard: 'Say what this node should do first.',
       success: '✅ Code generated!',
     };
   }

@@ -42,7 +42,7 @@ describe('a data node holding nothing', () => {
 });
 
 describe('a data node is its value', () => {
-  it('keeps no writing of its own and has no body to write: no task.md, no format.md, no ✨', () => {
+  it('keeps no writing of its own and has no body to write: no prompt.md, no format.md, no ✨', () => {
     // It had a task and a format beside the value, each a file of its own and
     // a ✨ of its own, and the neighbours were written against the format
     // while they were handed the value.

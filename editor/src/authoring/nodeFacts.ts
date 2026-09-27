@@ -39,16 +39,18 @@ function restingValues(node: GraphNode, nodes: GraphNode[], edges: Edge[]): Samp
 
 /**
  * Everything a node says about itself that ✨ Generate writes its body from,
- * as facts rather than sentences: the engine turns them into one brief
- * (`engine/src/host/editor/brief.ts`), the same for code and for a system
- * prompt, and cuts what is long to a budget.
+ * as facts rather than sentences: the engine turns them into the variables of
+ * the node's `prompt.md` (`engine/src/host/editor/brief.ts`), the same for
+ * code and for a system prompt, and cuts what is long to a budget.
  *
- *     task            the node's request (the element's prompt field)
  *     what comes in   each input: type, where from and what that node hands
- *                     on, and one sample
+ *                     on, and one sample -- a file it names read from the
+ *                     node's example files
  *     what goes out   each output: where to and what the node there wants;
  *                     the format in words; the shape a run kept
  *     examples        the node's `examples.md`
+ *
+ * The request is not among them: it is the element's prompt field, sent whole.
  *
  * The sample is the node's example (step 1) when it has one: the engine reads
  * it from `examples` itself, so that what the example expects is checked too.
@@ -105,6 +107,7 @@ export function nodeFacts(
     outputFormat: outputFormatText(node.config),
     outputSchema: node.config.output_schema,
     examples: node.config.examples,
-    messageTemplate: node.config.prompt_template,
+    exampleFiles: node.config.example_files,
+    messageTemplate: node.config.message_template,
   };
 }

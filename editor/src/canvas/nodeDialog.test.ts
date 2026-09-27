@@ -34,11 +34,11 @@ afterEach(() => { vi.useRealTimers(); });
 describe('a change in a node\'s dialog', () => {
   it('is shown at once, and in the graph a moment later', () => {
     const dialog = nodeDialog('code');
-    dialog.setConfig('code_prompt', 'Count the words.');
-    expect(dialog.node()?.config.code_prompt).toBe('Count the words.');
-    expect(stored('code').config.code_prompt).toBe('');
+    dialog.setConfig('prompt', 'Count the words.');
+    expect(dialog.node()?.config.prompt).toBe('Count the words.');
+    expect(stored('code').config.prompt).toBe('');
     vi.advanceTimersByTime(WRITE_AFTER_MS);
-    expect(stored('code').config.code_prompt).toBe('Count the words.');
+    expect(stored('code').config.prompt).toBe('Count the words.');
     // What it is asked to do is what it publishes, as a Save did.
     expect(stored('code').description).toBe('Count the words.');
   });
@@ -47,14 +47,14 @@ describe('a change in a node\'s dialog', () => {
     const dialog = nodeDialog('code');
     const before = store().past.length;
     for (const text of ['C', 'Co', 'Cou', 'Count']) {
-      dialog.setConfig('code_prompt', text);
+      dialog.setConfig('prompt', text);
       vi.advanceTimersByTime(WRITE_AFTER_MS);
     }
-    expect(stored('code').config.code_prompt).toBe('Count');
+    expect(stored('code').config.prompt).toBe('Count');
     expect(store().past.length).toBe(before + 1);
     store().undo();
-    expect(stored('code').config.code_prompt).toBe('');
-    expect(dialog.node()?.config.code_prompt).toBe('');
+    expect(stored('code').config.prompt).toBe('');
+    expect(dialog.node()?.config.prompt).toBe('');
   });
 
   it('written as its own step, is not added to what was typed before it: what ✨ writes is undone alone', () => {
@@ -69,11 +69,11 @@ describe('a change in a node\'s dialog', () => {
 
   it('keeps what changed in the graph meanwhile -- a shape a run kept -- under what waits to be written', () => {
     const dialog = nodeDialog('code');
-    dialog.setConfig('code_prompt', 'Shout it.');
+    dialog.setConfig('prompt', 'Shout it.');
     store().updateNode('code', { config: { ...stored('code').config, output_schema: { type: 'object' } } });
-    expect(dialog.node()?.config).toMatchObject({ code_prompt: 'Shout it.', output_schema: { type: 'object' } });
+    expect(dialog.node()?.config).toMatchObject({ prompt: 'Shout it.', output_schema: { type: 'object' } });
     dialog.write();
-    expect(stored('code').config).toMatchObject({ code_prompt: 'Shout it.', output_schema: { type: 'object' } });
+    expect(stored('code').config).toMatchObject({ prompt: 'Shout it.', output_schema: { type: 'object' } });
   });
 
   it('takes a renamed port\'s wire along, keystroke by keystroke', () => {
@@ -89,28 +89,28 @@ describe('a change in a node\'s dialog', () => {
     store().setEditingNode('code');
     const dialog = nodeDialog('code');
     const stop = dialog.watch(() => {});
-    dialog.setConfig('code_prompt', 'Keep me.');
+    dialog.setConfig('prompt', 'Keep me.');
     store().setEditingNode(null);
-    expect(stored('code').config.code_prompt).toBe('Keep me.');
+    expect(stored('code').config.prompt).toBe('Keep me.');
     stop();
   });
 
   it('never lands in another graph opened meanwhile, which may have a node of the same id', () => {
     const dialog = nodeDialog('code');
-    dialog.setConfig('code_prompt', 'Meant for the first graph.');
+    dialog.setConfig('prompt', 'Meant for the first graph.');
     store().loadGraph({ metadata: { name: 'Other', description: '', gui_scheme: 'night' }, nodes: [NODE_KINDS.code.create('code')], edges: [] });
     dialog.write();
     vi.advanceTimersByTime(WRITE_AFTER_MS);
-    expect(stored('code').config.code_prompt).toBe('');
+    expect(stored('code').config.prompt).toBe('');
     expect(dialog.node()).toBeUndefined();
   });
 
   it('is written first when the graph is saved with Ctrl+S, so the file holds what the dialog shows', () => {
     const dialog = nodeDialog('code');
-    dialog.setConfig('code_prompt', 'Saved with it.');
+    dialog.setConfig('prompt', 'Saved with it.');
     // The dialog hears the key first (capture); the save is the page's, after it.
     writeBeforeKey(dialog)({ ctrlKey: true, metaKey: false, key: 's' });
-    expect(store().rootGraph().nodes.find((node) => node.id === 'code')?.config.code_prompt).toBe('Saved with it.');
+    expect(store().rootGraph().nodes.find((node) => node.id === 'code')?.config.prompt).toBe('Saved with it.');
   });
 });
 
@@ -122,12 +122,12 @@ describe('what a run keeps, landing while a word is typed', () => {
 
   it('ends the word\'s undo step: Undo takes back what was typed after it, and leaves what the run kept', () => {
     const dialog = nodeDialog('code');
-    dialog.setConfig('code_prompt', 'C'); vi.advanceTimersByTime(WRITE_AFTER_MS);
+    dialog.setConfig('prompt', 'C'); vi.advanceTimersByTime(WRITE_AFTER_MS);
     ranWithMemory();
     // Well within the moment in which typing into the same field adds to its step.
-    dialog.setConfig('code_prompt', 'Co'); vi.advanceTimersByTime(WRITE_AFTER_MS);
+    dialog.setConfig('prompt', 'Co'); vi.advanceTimersByTime(WRITE_AFTER_MS);
     store().undo();
-    expect(stored('code').config.code_prompt).toBe('C');
+    expect(stored('code').config.prompt).toBe('C');
     expect(stored('history').config.data_value).toBe('turn 1');
   });
 });

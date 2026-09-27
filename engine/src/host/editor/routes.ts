@@ -95,13 +95,15 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
     // The node's own run -- its run.js, if someone changed it -- with a model
     // that answers every question with a stand-in and remembers the question.
     // Tool servers are opened for nothing: the stand-in never calls a tool.
+    // The stand-in is a JSON string, so a node whose answer is parsed as JSON
+    // parses it too, rather than failing on an answer nobody gave.
     async nodeRequests(asked) {
       const requests: SentRequest[] = [];
       const runtime = nodeRuntime({
         ai: {
           complete: async (request) => {
             requests.push({ system: request.system ?? '', prompt: request.prompt, images: request.images?.length ?? 0 });
-            return `⟨the model's answer to question ${requests.length}⟩`;
+            return JSON.stringify(`⟨the model's answer to question ${requests.length}⟩`);
           },
         },
         tools: { open: async () => ({ specs: [], call: async () => '', close: async () => {} }) },

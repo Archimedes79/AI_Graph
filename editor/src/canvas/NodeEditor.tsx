@@ -171,8 +171,8 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     >
       <div className="px-6 py-5">
           {/* Only for elements whose own editor does not already ask what the
-              node is for. An ai node's description IS its generation prompt, so
-              drawing this above it showed the same box twice. */}
+              node is for. A code or ai node's request is published as its
+              description, so drawing this above it would be a second text. */}
           {!element.ownsDescription && (
             <div className="mb-4">
               <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>

@@ -209,7 +209,7 @@ describe('summarize a folder: choose a folder, read the summaries', () => {
     const folder = addBlock('input_picker', 'directory', { label: 'Folder', extensions: '.txt', value: 'stories', run_on_change: true });
     const summaries = addBlock('text_io', 'output', { label: 'Summaries' });
     const summarize = drop('ai', 560);
-    edit(summarize, { label: 'Each file', input: ['story'], config: { system_prompt: 'Summarize the story in two sentences.', prompt_template: '{{story}}' }, perItem: true });
+    edit(summarize, { label: 'Each file', input: ['story'], config: { system_prompt: 'Summarize the story in two sentences.', message_template: '{{story}}' }, perItem: true });
     wire(page, `${folder}_out`, summarize, 'story');
     wire(summarize, 'output', page, `${summaries}_in`);
     return { graph: store().rootGraph(), page, folder, summaries };
@@ -236,7 +236,7 @@ describe('chat: a page with a chat block, and a model', () => {
     const page = pageId();
     const chat = addBlock('chat', undefined, {});
     const assistant = drop('ai', 560);
-    edit(assistant, { label: 'Assistant', input: ['history', 'message'], config: { system_prompt: 'You are a friendly assistant.', prompt_template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}' }, perItem: false, needed: ['message'] });
+    edit(assistant, { label: 'Assistant', input: ['history', 'message'], config: { system_prompt: 'You are a friendly assistant.', message_template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}' }, perItem: false, needed: ['message'] });
     wire(page, `${chat}_out`, assistant, 'message');
     wire(page, `${chat}_history`, assistant, 'history');
     wire(assistant, 'output', page, `${chat}_in`);

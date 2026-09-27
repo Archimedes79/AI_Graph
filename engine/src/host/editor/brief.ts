@@ -1,24 +1,29 @@
-// What ✨ Generate is told about a node: one brief, the same for code and for
-// a system prompt.
+// What ✨ Generate is told about a node: the three variables of its
+// `prompt.md`, the same for code and for a model's instructions.
 //
-// A body is written against four things, and a node already holds all four:
+// A body is written against what a node already holds, and the node's
+// `prompt.md` says where each part goes (`authoring/promptFile.ts`):
 //
-//     the task        what it should do, in the person's words
-//     what comes in   each input -- its type, what it holds, where it is wired
-//                     from and what that node hands on -- and one real sample
-//     what goes out   each output, where it goes and what the node there
-//                     wants; the format in words; the kept shape
-//     examples        inputs, and what must come out
+//     {Input Needs}      each input -- its type, what it holds, where it is
+//                        wired from and what that node hands on, whether its
+//                        file is read -- and one real sample
+//     {Output Example}   each output, where it goes and what the node there
+//                        wants; the output definition in words; the kept
+//                        shape; and the examples, what must come out
+//     {Graph}            the graph around the node, in words
 //
-// They used to reach the model from five places in five wordings, some of
+// The request itself is the person's, after `Prompt:`.
+//
+// These used to reach the model from five places in five wordings, some of
 // them twice (a neighbour line *and* a skeleton comment for the same wire),
 // some not at all (the format description unless "custom" was picked, the
 // examples, the example inputs), and a sample file in full, however large.
 // Here each is said once, in a fixed order, and everything that can be long is
-// cut to a budget: the brief has to leave a small local model room to answer.
+// cut to a budget: the prompt has to leave a small local model room to answer.
 
 import { parseExamples } from '../../execution/examples.ts';
 import { schemaOutline as outline } from '../../execution/interface.ts';
+import type { PromptVariable } from '../../authoring/promptFile.ts';
 import type { GenerateRequest } from '../api.ts';
 
 /** How much of each part is shown, in characters. Together about 8 000 at most. */
@@ -36,6 +41,8 @@ export const BUDGET = {
   preview: 900,
   schema: 700,
   template: 800,
+  /** The graph around the node. */
+  graph: 2000,
 } as const;
 
 /** *text*, cut to *limit* characters, saying how much was left out. */
@@ -101,13 +108,16 @@ export function exampleSample(examples: string | undefined): Sample | undefined 
 /** What the brief is for: a body that runs (`code`), or a system prompt a model is sent (`prompt`). */
 export type BriefKind = 'code' | 'prompt';
 
-function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
+/**
+ * What `{Input Needs}` says: each input -- its type, what it holds, whether
+ * its file is read, where it is wired from and what that node hands on -- and
+ * the sample, when there is one.
+ */
+export function inputNeeds(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
   const inputs = request.inputs ?? [];
-  const lines = [kind === 'prompt' ? '## What the model is sent' : '## What comes in'];
-  if (!inputs.length) {
-    lines.push('Nothing is wired in.');
-    return lines.join('\n');
-  }
+  if (!inputs.length) return 'Nothing is wired in.';
+  const lines: string[] = [];
+  const reads = new Set(request.read_file_ports ?? []);
   let room: number = BUDGET.samples;
   const origin = !sample?.items ? sample?.origin
     : sample.items === 1 ? `${sample.origin}, its one item` : `${sample.origin}, the first of its ${sample.items} items`;
@@ -115,6 +125,7 @@ function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sampl
     const type = typeWords(request.input_types?.[port]);
     const said = oneLine(request.input_notes?.[port]);
     lines.push(`- \`${port}\`${type ? ` (${type})` : ''}${said ? `: ${said}` : ''}`);
+    if (reads.has(port)) lines.push('  a path: the node reads the file there, and is handed its text');
     const source = request.input_sources?.[port];
     // A request that says nothing of the wiring -- one the editor did not
     // make -- is told none, rather than that every input is unwired.
@@ -152,31 +163,10 @@ function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sampl
   if (kind === 'prompt') {
     const template = request.message_template?.trim();
     lines.push(template
-      ? `They are laid out in the message like this, {{name}} standing for that input's value:\n${clip(template, BUDGET.template)}`
+      ? `They are laid out in the message like this now, {{name}} standing for that input's value:\n${clip(template, BUDGET.template)}`
       : 'They are sent one after another as they arrive, with nothing around them.');
   }
   return lines.join('\n');
-}
-
-function outputsSection(request: GenerateRequest, kind: BriefKind): string {
-  const lines = [kind === 'prompt' ? '## What the answer is for' : '## What goes out'];
-  // Without the executor's error port: `generate` drops it where a request comes in.
-  for (const port of request.outputs ?? []) {
-    const said = oneLine(request.output_notes?.[port]);
-    lines.push(`- \`${port}\`${said ? `: ${said}` : ''}`);
-    const target = request.output_targets?.[port];
-    if (target) lines.push(`  to ${target}`);
-  }
-  const format = request.output_format?.trim();
-  if (format) lines.push(`Format: ${clip(format, BUDGET.format)}`);
-  const schema = request.output_schema;
-  if (schema && typeof schema === 'object') {
-    lines.push(`The shape it returned so far, which the nodes after it were built against -- keep it: ${clip(outline(schema), BUDGET.schema)}`);
-  }
-  if (kind === 'prompt' && format) {
-    lines.push('The format is added after the system prompt by itself, at run time: the system prompt need not repeat it, and must not contradict it.');
-  }
-  return lines.length > 1 ? lines.join('\n') : '';
 }
 
 /**
@@ -184,13 +174,13 @@ function outputsSection(request: GenerateRequest, kind: BriefKind): string {
  * and a change is not held to them (`generate.ts`): said as the check, they
  * asked for the body the change replaces.
  */
-function examplesSection(text: string | undefined, changing: boolean): string {
+function examplesPart(text: string | undefined, changing: boolean): string {
   if (!text?.trim()) return '';
   const { examples } = parseExamples(text);
   if (!examples.length) return '';
   const lines = [changing
-    ? '## Examples -- written before this change: where one disagrees with the change, the change wins'
-    : '## Examples -- the result is checked against these'];
+    ? 'Examples -- written before this change: where one disagrees with the change, the change wins:'
+    : 'Examples -- the result is checked against these:'];
   for (const example of examples.slice(0, BUDGET.examples)) {
     lines.push(`- ${example.title}`, `  in: ${shown(example.inputs, BUDGET.example)}`);
     if (example.expect) lines.push(`  must return, at least: ${shown(example.expect, BUDGET.example)}`);
@@ -201,11 +191,39 @@ function examplesSection(text: string | undefined, changing: boolean): string {
 }
 
 /**
- * Everything the node says about itself, in the order a body is written from
- * it. The task goes first and the element's fixed text last, by the caller.
+ * What `{Output Example}` says: each output, where it goes and what the node
+ * there wants; the output definition, in the node's words; the shape a run
+ * kept; and the examples, what must come out.
  */
-export function renderBrief(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
-  const changing = !!request.refine?.change?.trim();
-  return [inputsSection(request, kind, sample), outputsSection(request, kind), examplesSection(request.examples, changing)]
-    .filter(Boolean).join('\n\n');
+export function outputExample(request: GenerateRequest): string {
+  const lines: string[] = [];
+  // Without the executor's error port: `generate` drops it where a request comes in.
+  for (const port of request.outputs ?? []) {
+    const said = oneLine(request.output_notes?.[port]);
+    lines.push(`- \`${port}\`${said ? `: ${said}` : ''}`);
+    const target = request.output_targets?.[port];
+    if (target) lines.push(`  to ${target}`);
+  }
+  const format = request.output_format?.trim();
+  if (format) lines.push(`Its output definition (output.md):\n${clip(format, BUDGET.format)}`);
+  const schema = request.output_schema;
+  if (schema && typeof schema === 'object') {
+    lines.push(`The shape it returned so far, which the nodes after it were built against -- keep it: ${clip(outline(schema), BUDGET.schema)}`);
+  }
+  const examples = examplesPart(request.examples, !!request.refine?.change?.trim());
+  if (examples) lines.push(examples);
+  return lines.length ? lines.join('\n') : 'Nothing is said about it yet.';
+}
+
+/**
+ * What the three variables of a node's `prompt.md` say, filled from the
+ * request: the inputs with *sample* where there is one, the outputs and the
+ * examples, and the graph around the node.
+ */
+export function promptVariables(request: GenerateRequest, kind: BriefKind, sample?: Sample): Record<PromptVariable, string> {
+  return {
+    'Input Needs': inputNeeds(request, kind, sample),
+    'Output Example': outputExample(request),
+    Graph: request.graph_context?.trim() ? clip(request.graph_context, BUDGET.graph) : 'Not given.',
+  };
 }

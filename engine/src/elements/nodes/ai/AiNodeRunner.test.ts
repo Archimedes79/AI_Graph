@@ -160,3 +160,41 @@ describe('a call that fails', () => {
     await expect(element.execute(aiNode({ catch_errors: true }), {}, failing)).rejects.toThrow('no content');
   });
 });
+
+/**
+ * A node that maps whatever arrives onto a fixed format: its output typed json
+ * hands on the value the answer writes out, not a text of it.
+ */
+describe('an answer on an output typed json', () => {
+  const element = new AiNodeRunner();
+  const answering = (reply: string): Runtime => ({
+    files: nodeFiles,
+    code: { run: async (_body, inputs) => inputs },
+    ai: { complete: async () => reply },
+  });
+  const typed = (dataType: string): GraphNode => ({
+    ...aiNode(),
+    outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: dataType as never, multi: false, required: false, description: '' }],
+  });
+
+  it('is handed on as the value, a ```json fence around it taken off', async () => {
+    expect(await element.execute(typed('json'), {}, answering('{"rows": [1, 2]}'))).toEqual({ output: { rows: [1, 2] } });
+    expect(await element.execute(typed('json'), {}, answering('```json\n[{"a": 1}]\n```'))).toEqual({ output: [{ a: 1 }] });
+    expect(await element.execute(typed('json'), {}, answering('  ```\n"text"\n```\n'))).toEqual({ output: 'text' });
+  });
+
+  it('fails the node when it is not JSON, saying how it began', async () => {
+    await expect(element.execute(typed('json'), {}, answering('Sure! Here are the rows: {"rows": []}')))
+      .rejects.toThrow(/not JSON, and this node's output is typed json\. It began: "Sure! Here are the rows/);
+  });
+
+  it('is the answer as it came on an output typed otherwise', async () => {
+    expect(await element.execute(typed('text'), {}, answering('{"rows": []}'))).toEqual({ output: '{"rows": []}' });
+  });
+
+  it('is left to a run.js of one\'s own, which hands on what it returns', async () => {
+    const own = { ...typed('json'), config: { run_code: 'async function run() { return { output: "as it is" }; }' } };
+    const runtime = { ...answering('{}'), code: { run: async () => ({ output: 'as it is' }) } };
+    expect(await element.execute(own, {}, runtime)).toEqual({ output: 'as it is' });
+  });
+});

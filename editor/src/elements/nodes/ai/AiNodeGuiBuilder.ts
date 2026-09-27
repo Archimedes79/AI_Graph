@@ -16,8 +16,9 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-ai, #2d1b4e)';
 
-  // The description IS this element's generation prompt, drawn by its own
-  // panel -- a second Description field above it showed the same box twice.
+  // Step 3 asks what it should do, and that request is published as its
+  // description (`publishedDescription`), as a code node's is: a second box
+  // would be a second text.
   override readonly ownsDescription = true;
 
   override readonly Panel = lazy(() => import('./AiNodePanel'));

@@ -27,7 +27,7 @@ function aiNode(config: Record<string, unknown> = {}): GraphNode {
     id: 'say', node_type: 'ai', label: 'Say', description: '', position: { x: 0, y: 0 },
     inputs: [port('text', 'input'), port('length', 'input')], outputs: [port('output', 'output')],
     config: {
-      system_prompt: 'You summarize.', prompt_template: 'Length: {{length}}\n\n{{text}}',
+      system_prompt: 'You summarize.', message_template: 'Length: {{length}}\n\n{{text}}',
       ai_provider: 'default', ai_model: 'm', temperature: 0.2, ...config,
     },
   };

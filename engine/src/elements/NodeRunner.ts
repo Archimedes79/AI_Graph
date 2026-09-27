@@ -95,7 +95,7 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
    * folder. Everything else it stores stays in its `node.json`.
    *
    * Fixed names rather than ones made from a label: a folder holding
-   * `code.js`, `task.md` and `examples.md` says what each file is
+   * `code.js`, `prompt.md` and `examples.md` says what each file is
    * before it is opened, and renaming a node renames nothing on disk.
    */
   texts(_node: GraphNode): readonly TextFile[] {

@@ -5,6 +5,7 @@ import type { Graph, GraphNode, NodeResult, NodeType } from '@/graph';
 import type { ChangeAsked, ElementGeneration, FieldAccess } from '@/authoring/generation';
 import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { asExampleText, readPair, withInput } from '@/authoring/examplePair';
+import { requestOf } from '@engine/authoring/promptFile.ts';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
 import { previewOf, type PortPreviews } from './resultPreview';
 
@@ -185,15 +186,16 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
    * The description a saved node publishes (the "description" in its
    * nodes/<id>/node.json). Where the dialog asks what the node should do in a
    * field of its own and draws no description box (`ownsDescription`), that
-   * task *is* the description, written into it whenever the dialog writes: a second text
-   * nobody could see or edit went on being published beside the task, and the
-   * two drifted apart. An empty task leaves what was there.
+   * request *is* the description, written into it whenever the dialog writes: a
+   * second text nobody could see or edit went on being published beside the
+   * request, and the two drifted apart. The request alone, not the template
+   * of the `prompt.md` it ends; an empty one leaves what was there.
    */
   publishedDescription(node: GraphNode): string {
     const field = this.generation?.promptField;
-    if (!this.ownsDescription || !field || field === 'description') return node.description;
-    const task = String((node.config as unknown as Record<string, unknown>)[field] ?? '').trim();
-    return task || node.description;
+    if (!this.ownsDescription || !field) return node.description;
+    const request = requestOf(String((node.config as unknown as Record<string, unknown>)[field] ?? '')).trim();
+    return request || node.description;
   }
 
   /** A line of what the node holds, shown on the canvas under its ports. Nothing, for most. */

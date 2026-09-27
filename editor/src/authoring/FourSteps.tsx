@@ -1,4 +1,5 @@
 import type React from 'react';
+import { requestOf, withRequest } from '@engine/authoring/promptFile.ts';
 import Step from './Step';
 import type { ElementGeneration, FieldAccess } from './generation';
 import { DIMMER, FIELD, MUTED } from '@/ui/theme';
@@ -45,17 +46,21 @@ export default function FourSteps({ comesIn, comesOut, task, body }: Props) {
   );
 }
 
-/** Step 3's one field: the node's request, wherever it keeps it. */
+/**
+ * Step 3's one field: the node's request -- what follows `Prompt:` in its
+ * `prompt.md`. The template before it is the file's, and stays as it is.
+ */
 export function TaskField({ generation, fields }: {
   generation: ElementGeneration;
   fields: FieldAccess;
 }) {
+  const prompt = fields.get(generation.promptField);
   return (
     <textarea
       className="w-full rounded-lg px-3 py-2 text-sm resize-y"
       style={{ ...FIELD, minHeight: 80 }}
-      value={fields.get(generation.promptField)}
-      onChange={(event) => fields.set(generation.promptField, event.target.value)}
+      value={requestOf(prompt)}
+      onChange={(event) => fields.set(generation.promptField, withRequest(prompt, event.target.value))}
       placeholder={generation.promptPlaceholder}
       aria-label={generation.promptLabel ?? 'What it should do'}
     />

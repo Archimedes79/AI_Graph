@@ -44,8 +44,8 @@ export class SubgraphNodeGuiBuilder extends NodeGuiBuilder {
 
   /** What it is for, before anyone has looked inside. */
   override canvasSummary(node: GraphNode): string | undefined {
-    const task = String(node.config.task ?? '').trim();
-    return task ? task.split('\n')[0] : undefined;
+    const said = String(node.config.prompt ?? '').trim();
+    return said ? said.split('\n')[0] : undefined;
   }
 
 }

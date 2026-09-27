@@ -30,7 +30,7 @@ describe('watching a generation while it runs', () => {
   it('fills the array that was handed in, before it returns', async () => {
     const calls: AICall[] = [];
     const running = generate(
-      { element: 'ai', description: 'be brief' },
+      { element: 'ai', prompt: 'be brief' },
       { ai: slow(['written'], 120), code: never, generationFor, target, calls },
     );
 
@@ -48,7 +48,7 @@ describe('watching a generation while it runs', () => {
   it('is the same array the reply carries, so nothing is counted twice', async () => {
     const calls: AICall[] = [];
     const reply = await generate(
-      { element: 'ai', description: 'x' },
+      { element: 'ai', prompt: 'x' },
       { ai: slow(['ok'], 1), code: never, generationFor, target, calls },
     );
     expect(reply.calls).toBe(calls);

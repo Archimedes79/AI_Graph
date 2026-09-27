@@ -415,7 +415,7 @@ describe('graphStore, a project open on disk', () => {
     loadTestGraph([codeNode()]);
     useGraphStore.getState().markSaved();
     useGraphStore.getState().updateNode('count', { label: 'Renamed here' });
-    useGraphStore.getState().takeDiskChanges([{ node_id: 'count', field: 'code_prompt', value: 'Count.' }]);
+    useGraphStore.getState().takeDiskChanges([{ node_id: 'count', field: 'prompt', value: 'Count.' }]);
     expect(useGraphStore.getState().isDirty()).toBe(true);
     expect(nodeById('count').label).toBe('Renamed here');
   });

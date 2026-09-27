@@ -8,7 +8,7 @@ describe('what a saved node publishes as its description', () => {
     // says what it is" while the task said something else entirely.
     const node = NODE_KINDS.code.create('reader');
     node.description = 'Reads the chosen file and says what it is';
-    node.config.code_prompt = 'Pass the file\'s text on, and describe the file in one line.';
+    node.config.prompt = 'Pass the file\'s text on, and describe the file in one line.';
     expect(NODE_BUILDERS.code.publishedDescription(node)).toBe('Pass the file\'s text on, and describe the file in one line.');
   });
 

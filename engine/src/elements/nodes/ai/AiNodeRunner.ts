@@ -5,15 +5,17 @@ import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
 import { names, type Problem } from '../../../execution/wiring.ts';
+import { STANDARD_PROMPT } from '../../../authoring/promptFile.ts';
 import { runBody } from '../../body.ts';
 import { askModel, type AskSettings } from './ask.ts';
 import { ALL_INPUTS, outputWords, placeholders } from './prompt.ts';
 import { AI_RUN, isStandardRun } from './runTemplate.ts';
 
-/** Where an ai node keeps its two halves; used by both declarations below. */
-const PROMPT_FIELDS: LogicFields = {
-  body: 'system_prompt', prompt: 'description', promptOnSubject: true,
-};
+/** Where an ai node keeps what it is asked and what it writes; used by both declarations below. */
+const PROMPT_FIELDS: LogicFields = { body: 'system_prompt', prompt: 'prompt', message: 'message_template' };
+
+/** The one port the answer goes out on. */
+const ANSWER = 'output';
 
 export interface AiConfig extends AskSettings {
   /** `run.js` when somebody changed it; empty for the standard one. */
@@ -26,16 +28,24 @@ function serverList(raw: unknown): string[] {
   return entries.map((entry) => String(entry).trim()).filter(Boolean);
 }
 
-/** What this keeps in files of its own in a project folder: see `NodeRunner.texts`. */
+/**
+ * What this keeps in files of its own in a project folder (see
+ * `NodeRunner.texts`), in the order a node is built -- the same as a code
+ * node's, with the instructions and the message where its code is.
+ */
 const AI_TEXTS: readonly TextFile[] = [
-  // What the node does with the rest of this folder: see `runTemplate.ts`.
-  { field: 'run_code', file: 'run.js', standard: AI_RUN },
-  { field: 'system_prompt', file: 'system.md' },
-  { field: 'prompt_template', file: 'message.md' },
+  // Optional: inputs, and what the answer must meet -- the first is the example. See `execution/examples.ts`.
+  { field: 'examples', file: 'examples.md' },
   // What the model is told its answer must look like.
   { field: 'output_format_prompt', file: 'output.md' },
-  // Optional: inputs, and what the answer must meet. See `execution/examples.ts`.
-  { field: 'examples', file: 'examples.md' },
+  // What ✨ Generate is sent: the template, then the request. See `authoring/promptFile.ts`.
+  { field: 'prompt', file: 'prompt.md', standard: STANDARD_PROMPT },
+  // The requests sent before, newest first.
+  { field: 'prompt_history', file: 'prompt.history.md' },
+  { field: 'system_prompt', file: 'system.md' },
+  { field: 'message_template', file: 'message.md' },
+  // What the node does with the rest of this folder: see `runTemplate.ts`.
+  { field: 'run_code', file: 'run.js', standard: AI_RUN },
 ];
 
 /**
@@ -69,7 +79,7 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
       model: String(c.ai_model ?? ''),
       ...(typeof c.temperature === 'number' ? { temperature: c.temperature } : {}),
       sendImages: c.send_images === true,
-      template: String(c.prompt_template ?? ''),
+      template: String(c.message_template ?? ''),
       outputFormatPrompt: outputWords(c),
       toolServers: serverList(c.mcp_servers),
       runCode: isStandardRun(String(c.run_code ?? '')) ? '' : String(c.run_code),
@@ -83,8 +93,6 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
    * makes it.
    */
   override logic(node: GraphNode): Logic {
-    // The request is the node's own description, not a config field: an ai
-    // node's description IS what you asked the model to be.
     return logicFrom(node, 'prompt', PROMPT_FIELDS);
   }
 
@@ -104,12 +112,20 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
    * a process to make it: same function, same request (a test holds them to
    * that), without a process per item of a thousand-row batch. A `run.js`
    * somebody changed is a body like any other: it runs where bodies run, and
-   * asks for its calls.
+   * asks for its calls -- and hands on what it returns, as it returns it.
+   *
+   * An answer on a port typed `json` is the value it writes out (`jsonAnswer`):
+   * a node that maps whatever arrives onto a fixed format hands on that
+   * format, not a text of it.
    */
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const settings = this.config(node);
     const order = node.inputs.map((port) => port.id);
-    if (!settings.runCode) return { output: await askModel(settings, inputs, runtime, order) };
+    if (!settings.runCode) {
+      const answer = await askModel(settings, inputs, runtime, order);
+      const json = node.outputs.find((port) => port.id === ANSWER)?.data_type === 'json';
+      return { [ANSWER]: json ? jsonAnswer(answer) : answer };
+    }
 
     return runBody(settings.runCode, inputs, runtime, {
       data: {
@@ -123,18 +139,18 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `the node's own "description" field says what it is for, and config.system_prompt is the standing instruction. Everything wired into it is sent as the message; with more than one input, lay them out in config.prompt_template using {{port_id}} placeholders, for example "Conversation so far: {{history}} User: {{message}}" with line breaks between the parts. The reply arrives on the node's single output port, "output".`;
+    return `config.prompt is the request, in a sentence or two of plain words, and config.system_prompt is the standing instruction written from it. Everything wired into it is sent as the message; with more than one input, lay them out in config.message_template using {{port_id}} placeholders, for example "Conversation so far: {{history}} User: {{message}}" with line breaks between the parts. The reply arrives on the node's single output port, "output"; give that port data_type "json" and the reply is parsed as JSON and handed on as the value, so say in config.output_format_prompt what the JSON holds.`;
   }
 
   override whatRuns(node: GraphNode): WhatRuns {
     return isStandardRun(this.config(node).runCode)
-      ? { by: 'engine', where: 'run.js', does: 'Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as "output". Unchanged, run.js is made by the engine itself; a test holds the two to the same request.' }
+      ? { by: 'engine', where: 'run.js', does: 'Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as "output", parsed as JSON where that port is typed json. Unchanged, run.js is made by the engine itself; a test holds the two to the same request.' }
       : { by: 'body', where: 'run.js', does: 'Calls run(inputs, node) in run.js, sandboxed; each node.llm(...) in it is a model call made for it by the process that holds the keys.' };
   }
 
   /** A placeholder nobody fills is sent to the model as the literal "{{name}}". */
   override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
-    const template = String(node.config.prompt_template ?? '');
+    const template = String(node.config.message_template ?? '');
     if (!template.trim()) return [];
     const inputs = new Set(node.inputs.map((port) => port.id));
     return placeholders(template)
@@ -146,11 +162,11 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
       }));
   }
 
-  /** The one element whose request lives on the node rather than in its config. */
+  /** Its instructions and the message they are sent with, written together from its `prompt.md`. */
   override generation(): Generation {
     return {
       kind: 'prompt', fields: PROMPT_FIELDS,
-      guard: 'Please add a description first.',
+      guard: 'Say what this node should do first.',
       success: '✅ Prompt generated!',
     };
   }
@@ -158,5 +174,23 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
   /** Always, whatever its body says: asking the model is what this node is. */
   override deployNeeds() {
     return { needsInterface: false, asksAi: true };
+  }
+}
+
+/**
+ * A model's answer as the JSON it is: the value it writes out, with a ```json
+ * fence around the whole of it taken off. An answer that is not JSON fails the
+ * node, saying how it began -- handed on as text, it reaches the node after it
+ * as a string where a record was promised, and fails there, further from why.
+ */
+function jsonAnswer(answer: string): unknown {
+  const said = answer.trim();
+  const fenced = /^```[^\n`]*\n([\s\S]*?)\n?[ \t]*```$/.exec(said);
+  try {
+    return JSON.parse(fenced ? fenced[1] : said);
+  } catch {
+    const start = said.length > 160 ? `${said.slice(0, 160)}…` : said;
+    throw new Error(`The model's answer is not JSON, and this node's output is typed json. It began: "${start}". `
+      + 'Say in its output words (output.md) that the answer is JSON and nothing else, or type the output as text.');
   }
 }

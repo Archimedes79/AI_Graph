@@ -9,15 +9,16 @@ import { GRAPH_RUNS_PER_BODY, SUBGRAPH_RUN, isStandardGraphRun } from './runTemp
 export interface SubgraphConfig {
   /** The graph this node holds. An empty one for a node nobody has filled in yet. */
   graph: Graph | null;
-  /** What it is meant to do, for a person and for the day an AI fills it in. */
-  task: string;
+  /** What it is meant to do -- its request, a bare one -- for a person and for the day an AI fills it in. */
+  prompt: string;
   /** A run.js somebody changed; '' while it is the standard, which runs the graph once. */
   runCode: string;
 }
 
 /** What this keeps in files of its own in a project folder: see `NodeRunner.texts`. */
 const SUBGRAPH_TEXTS: readonly TextFile[] = [
-  { field: 'task', file: 'task.md' },
+  // What it is for: a node's request is its prompt.md, here a bare one (`authoring/promptFile.ts`).
+  { field: 'prompt', file: 'prompt.md' },
   { field: 'run_code', file: 'run.js', standard: SUBGRAPH_RUN },
 ];
 
@@ -52,7 +53,7 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
 
   config(node: GraphNode): SubgraphConfig {
     const runCode = String(node.config.run_code ?? '');
-    return { graph: readGraph(node.config.subgraph), task: String(node.config.task ?? ''), runCode: isStandardGraphRun(runCode) ? '' : runCode };
+    return { graph: readGraph(node.config.subgraph), prompt: String(node.config.prompt ?? ''), runCode: isStandardGraphRun(runCode) ? '' : runCode };
   }
 
   /**
@@ -192,7 +193,7 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
 
     const found: Problem[] = [];
     const inside = `${where} ▸ `;
-    if (!held.nodes.length && this.config(node).task.trim()) {
+    if (!held.nodes.length && this.config(node).prompt.trim()) {
       found.push({
         where,
         problem: 'This part is described and empty: it says what it should do and does nothing.',

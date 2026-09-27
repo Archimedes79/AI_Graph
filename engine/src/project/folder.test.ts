@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import { parseGraph, type Graph } from '../graph.ts';
 import { NotAGraph } from '../errors.ts';
+import { STANDARD_PROMPT } from '../authoring/promptFile.ts';
 import { problemsIn } from './check.ts';
 import {
   FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, nodeFileOf, projectFolderOf, readProject, saveGraph, writeProject,
@@ -28,7 +29,7 @@ function sample(): Graph {
         inputs: [port('files', 'input')], outputs: [port('total', 'output')],
         config: {
           code: 'function run(inputs) {\n  return { total: inputs.files.length };\n}',
-          code_prompt: 'Count the files.',
+          prompt: 'Count the files.',
           output_schema: { type: 'object', properties: { total: { type: 'integer' } }, required: ['total'] },
           batch_mode: 'whole_list',
         },
@@ -37,7 +38,7 @@ function sample(): Graph {
         id: 'say', node_type: 'ai', label: 'Say it', position: { x: 600, y: 20 },
         inputs: [port('total', 'input')], outputs: [port('output', 'output')],
         config: {
-          system_prompt: 'You report counts.', prompt_template: 'There are {{total}} files.',
+          system_prompt: 'You report counts.', message_template: 'There are {{total}} files.',
           output_format_prompt: 'One sentence.', temperature: 0.2,
         },
       },
@@ -76,7 +77,7 @@ describe('a project folder', () => {
   it('keeps each piece of writing in a file named for what it is', async () => {
     await writeProject(dir, sample());
     expect(await text('nodes/count/code.js')).toBe('function run(inputs) {\n  return { total: inputs.files.length };\n}\n');
-    expect(await text('nodes/count/task.md')).toBe('Count the files.\n');
+    expect(await text('nodes/count/prompt.md')).toBe('Count the files.\n');
     expect(JSON.parse(await text('nodes/count/interface.json')).output_schema).toMatchObject({ properties: { total: { type: 'integer' } } });
     expect(await text('nodes/say/system.md')).toBe('You report counts.\n');
     expect(await text('nodes/say/message.md')).toBe('There are {{total}} files.\n');
@@ -146,10 +147,21 @@ describe('a project folder', () => {
   it('has no file for empty writing, and removes the file of writing that was emptied', async () => {
     const graph = sample();
     await writeProject(dir, graph);
-    graph.nodes[1].config.code_prompt = '';
+    graph.nodes[2].config.system_prompt = '';
     await writeProject(dir, graph);
-    expect(existsSync(join(dir, 'nodes/count/task.md'))).toBe(false);
-    expect(existsSync(join(dir, 'nodes/count/code.js'))).toBe(true);
+    expect(existsSync(join(dir, 'nodes/say/system.md'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes/say/message.md'))).toBe(true);
+  });
+
+  it('writes the standard prompt where nobody wrote a request, so the folder shows what ✨ is sent', async () => {
+    const graph = sample();
+    graph.nodes[1].config.prompt = '';
+    await writeProject(dir, graph);
+    expect(await text('nodes/count/prompt.md')).toBe(`${STANDARD_PROMPT}\n`);
+    expect(await text('nodes/say/prompt.md')).toBe(`${STANDARD_PROMPT}\n`);
+    // Nobody's own words, so nothing of the node's: it reads back as no request.
+    forgetSeen();
+    expect((await readProject(dir)).nodes[1].config).not.toHaveProperty('prompt');
   });
 
   it('removes a deleted node\'s files, and nothing a person put there', async () => {
@@ -292,7 +304,7 @@ describe('a node\'s example files', () => {
     expect(await text('nodes/say/examples.md')).toBe('');
     await expect(nodeFileOf(dir, 'count', 'example/gone.csv')).rejects.toThrow(/no example file example\/gone\.csv yet/);
     for (const file of ['node.json', '../say/system.md', 'example/../code.js']) {
-      await expect(nodeFileOf(dir, 'count', file), file).rejects.toThrow(/is not one of the files of "count": it keeps code\.js/);
+      await expect(nodeFileOf(dir, 'count', file), file).rejects.toThrow(/is not one of the files of "count": it keeps examples\.md, output\.md, prompt\.md, prompt\.history\.md, code\.js, and the example files/);
     }
   });
 
@@ -448,8 +460,8 @@ describe('two editors on one folder', () => {
     expect(await changesOnDisk(dir)).toEqual([{ node_id: 'say', field: 'system_prompt', value: 'You count carefully.' }]);
     expect(await changesOnDisk(dir)).toEqual([]);
 
-    await rm(join(dir, 'nodes/count/task.md'));
-    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'code_prompt', value: '' }]);
+    await rm(join(dir, 'nodes/count/prompt.md'));
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'prompt', value: '' }]);
 
     // A change taken in is no conflict for the next save.
     const graph = await readProject(dir);
@@ -501,7 +513,7 @@ describe('a graph inside a node', () => {
         id: 'part', node_type: 'subgraph', label: 'The hard part', position: { x: 10, y: 10 },
         inputs: [], outputs: [],
         config: {
-          task: 'Summarise a paper.',
+          prompt: 'Summarise a paper.',
           subgraph: {
             metadata: { name: 'Inner' },
             nodes: [
@@ -522,7 +534,7 @@ describe('a graph inside a node', () => {
   it('is a project folder of its own, and is out of the node.json above it', async () => {
     await writeProject(dir, nested());
 
-    expect(await text('nodes/part/task.md')).toBe('Summarise a paper.\n');
+    expect(await text('nodes/part/prompt.md')).toBe('Summarise a paper.\n');
     expect(JSON.parse(await text('nodes/part/flow.json')).name).toBe('Inner');
     // The inner node's body is a file down there, the same as anywhere else.
     expect(await text('nodes/part/nodes/shorten/code.js')).toContain('i.text.slice');

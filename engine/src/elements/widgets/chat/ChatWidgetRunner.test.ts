@@ -59,7 +59,7 @@ describe('a chatbot is a page and a model', () => {
         id: 'ai', node_type: 'ai',
         inputs: [{ id: 'history', name: 'history' }, { id: 'message', name: 'message' }],
         outputs: [{ id: 'output', name: 'output' }],
-        config: { ai_model: 'm', prompt_template: '{{history}}\n\nUser: {{message}}' },
+        config: { ai_model: 'm', message_template: '{{history}}\n\nUser: {{message}}' },
       },
     ],
     edges: [

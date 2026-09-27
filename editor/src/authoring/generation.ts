@@ -2,6 +2,7 @@ import type { GraphNode } from '@/graph';
 import { call, type AICall, type GenerateRequest, type GenerateResponse, type ProbeReport } from '@/api/client';
 import type { GenerateOptions } from './useGenerate';
 import type { Generation } from '@engine/authoring/generation.ts';
+import { requestOf, withRequest } from '@engine/authoring/promptFile.ts';
 import type { Refine } from '@engine/host/api.ts';
 
 /**
@@ -28,11 +29,12 @@ import type { Refine } from '@engine/host/api.ts';
  */
 export function fromEngine(
   generation: Generation | undefined,
-): Pick<ElementGeneration, 'promptField' | 'targetField' | 'language' | 'guard' | 'success'> {
+): Pick<ElementGeneration, 'promptField' | 'targetField' | 'messageField' | 'language' | 'guard' | 'success'> {
   if (!generation) throw new Error('This element declares no generation in the engine; the editor cannot offer one.');
   return {
-    promptField: generation.fields.promptOnSubject ? 'description' : generation.fields.prompt,
+    promptField: generation.fields.prompt,
     targetField: generation.fields.body,
+    ...(generation.fields.message ? { messageField: generation.fields.message } : {}),
     // Code is JavaScript; a system prompt is prose, as the file that keeps it
     // says (`code.js`, `system.md`).
     language: generation.kind === 'code' ? 'javascript' : 'markdown',
@@ -43,12 +45,15 @@ export function fromEngine(
 
 export interface ElementGeneration {
   /**
-   * Field holding the user's request. `'description'` means the node's own
-   * description rather than a config key -- the ai node's request lives there.
+   * Field holding what ✨ is sent: the node's `prompt.md`, a template and the
+   * person's request after its `Prompt:` line. A request box edits only the
+   * request (`requestOf`, `withRequest`).
    */
   promptField: string;
   /** Field the generated text is written into. */
   targetField: string;
+  /** Field the message layout ✨ writes beside the body goes into, where it writes one: an ai node's. */
+  messageField?: string;
   /** Shown when the prompt field is empty. */
   guard?: string;
   /** Shown when it worked, unless the result has more to say (see probe). */
@@ -162,6 +167,8 @@ export interface GenerationRequest {
   outputSchema?: unknown;
   /** The node's examples (`examples.md`): what it is checked against, so what it is written to satisfy. */
   examples?: string;
+  /** The files its example reads (`example/` in a project): a sample that names one is read from them. */
+  exampleFiles?: Record<string, string>;
   /** An ai node's message template: how its inputs are laid out for the model. */
   messageTemplate?: string;
   /**
@@ -234,7 +241,9 @@ export function generateRequest(request: GenerationRequest): GenerateRequest {
   const { generation: spec, fields } = request;
   return {
     element: request.element,
-    description: fields.get(spec.promptField).trim(),
+    // All of prompt.md: the template is the person's as much as the request is.
+    prompt: fields.get(spec.promptField),
+    example_files: request.exampleFiles && Object.keys(request.exampleFiles).length ? request.exampleFiles : undefined,
     inputs: request.ports?.inputs,
     outputs: request.ports?.outputs,
     sample_inputs: request.sampleInputs,
@@ -268,20 +277,20 @@ export async function previewGeneration(request: GenerationRequest): Promise<AIC
 
 /**
  * Why *request* cannot be sent yet, or undefined. A body is written from the
- * task; a change needs something to change -- words, or how it failed -- and
- * no task: the task comes back with it.
+ * request; a change needs something to change -- words, or how it failed --
+ * and no request: the request comes back with it.
  */
 export function generationGuard(request: GenerationRequest): string | undefined {
   const { refine, generation: spec } = request;
   if (refine) return refine.change?.trim() || refine.error?.trim() || refine.problems?.length ? undefined : 'Say what to change first.';
-  return request.fields.get(spec.promptField).trim() ? undefined : (spec.guard ?? 'Please add a prompt first.');
+  return requestOf(request.fields.get(spec.promptField)).trim() ? undefined : (spec.guard ?? 'Say what this node should do first.');
 }
 
 /**
  * Turn an element's declaration into the options `useGenerate().run` takes.
  * A node's dialog and the graph sweep both call exactly this, so a button and
  * a sweep generate through one code path -- and a change to the body there is
- * goes the same way, with its task written beside the body it came with.
+ * goes the same way, with its request written beside the body it came with.
  */
 export function buildGeneration(request: GenerationRequest): GenerateOptions<GenerateResponse> {
   const { generation: spec, fields, refine } = request;
@@ -301,8 +310,11 @@ export function buildGeneration(request: GenerationRequest): GenerateOptions<Gen
     }),
     apply: (result) => {
       fields.set(spec.targetField, result.result);
-      // What it does now, said with the body that does it: the two change together.
-      if (result.task?.trim()) fields.set(spec.promptField, result.task.trim());
+      // How what is wired in reaches the model, written with the instructions for it.
+      if (spec.messageField && result.message_template !== undefined) fields.set(spec.messageField, result.message_template);
+      // What it does now, said with the body that does it: the two change
+      // together. After `Prompt:`, where the request is; the template stays.
+      if (result.request?.trim()) fields.set(spec.promptField, withRequest(fields.get(spec.promptField), result.request.trim()));
 
       const outputs = result.probe?.outputs;
       if (request.recordShape && outputs && Object.keys(outputs).length) request.recordShape(outputs);

@@ -2,12 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import type { ProbeReport } from '@/api/client';
+import { STANDARD_PROMPT, withRequest } from '@engine/authoring/promptFile.ts';
 import { buildGeneration, generateRequest, nodeFields, probeMessage, withChange } from './generation';
 import { nodeFacts } from './nodeFacts';
 
 describe('the request ✨ Generate sends', () => {
   const node = NODE_KINDS.code.create('worker');
-  node.config.code_prompt = 'Sum the sizes';
+  node.config.prompt = withRequest('', 'Sum the sizes');
+  node.config.example_files = { 'example/sizes.csv': 'name,size\na,1' };
   node.inputs[0].description = 'one file per row, with a size';
   node.outputs[0].description = '';
   node.config.examples = '## one\n```json input\n{"input": 1}\n```';
@@ -24,6 +26,7 @@ describe('the request ✨ Generate sends', () => {
     },
     outputSchema: node.config.output_schema,
     examples: node.config.examples,
+    exampleFiles: node.config.example_files,
   });
 
   it('carries what the dialog says about the ports, leaving out the empty ones', () => {
@@ -31,14 +34,22 @@ describe('the request ✨ Generate sends', () => {
     expect(request.output_notes).toBeUndefined();
   });
 
-  it('carries the kept shape and the examples', () => {
+  it('carries the kept shape, the examples and the files they read', () => {
     expect(request.output_schema).toEqual({ type: 'object' });
     expect(request.examples).toContain('## one');
+    expect(request.example_files).toEqual({ 'example/sizes.csv': 'name,size\na,1' });
   });
 
   it('is what the preview asks for too: the preview only adds the flag', () => {
-    expect(request.description).toBe('Sum the sizes');
+    // All of prompt.md: the template is the person's as much as the request is.
+    expect(request.prompt).toBe(`${STANDARD_PROMPT}Sum the sizes`);
     expect('preview' in request).toBe(false);
+  });
+
+  it('carries the files the node\'s example reads, as the node holds them', () => {
+    const facts = nodeFacts(node, [node], [], null);
+    expect(generateRequest({ element: 'code', generation: NODE_BUILDERS.code.generation!, fields, ...facts }).example_files)
+      .toEqual({ 'example/sizes.csv': 'name,size\na,1' });
   });
 
   it('says which ports are declared lists, so the probe cuts and collects as a run does', () => {
@@ -74,7 +85,7 @@ describe('a change to the body there is ("Say what to change", ✨ Fix)', () => 
   /** A code node's request, its fields written into *written*. */
   const asked = (written: Record<string, string>, task = 'Count the words.') => {
     const node = NODE_KINDS.code.create('worker');
-    node.config.code_prompt = task;
+    node.config.prompt = withRequest('', task);
     const fields = {
       get: (field: string) => written[field] ?? String((node.config as Record<string, unknown>)[field] ?? ''),
       set: (field: string, value: string) => { written[field] = value; },
@@ -87,13 +98,27 @@ describe('a change to the body there is ("Say what to change", ✨ Fix)', () => 
     expect(generateRequest({ ...asked({}), refine }).refine).toEqual(refine);
   });
 
-  it('writes the task it comes back with beside the body, so the two say the same thing', () => {
+  it('writes the request it comes back with beside the body, after Prompt:, so the two say the same thing', () => {
     const written: Record<string, string> = {};
     buildGeneration({ ...asked(written), refine }).apply({
-      result: 'function run(i) { return { output: 1, lines: 1 }; }', task: 'Count the words and the lines.',
+      result: 'function run(i) { return { output: 1, lines: 1 }; }', request: 'Count the words and the lines.',
       probe: { status: 'ok', error: '', missing_outputs: [] }, calls: [],
     });
-    expect(written).toEqual({ code: 'function run(i) { return { output: 1, lines: 1 }; }', code_prompt: 'Count the words and the lines.' });
+    expect(written).toEqual({
+      code: 'function run(i) { return { output: 1, lines: 1 }; }', prompt: `${STANDARD_PROMPT}Count the words and the lines.`,
+    });
+  });
+
+  it('writes an ai node\'s message with its instructions, where the answer brings one', () => {
+    const written: Record<string, string> = {};
+    const node = NODE_KINDS.ai.create('ask');
+    const fields = { get: (field: string) => written[field] ?? String((node.config as Record<string, unknown>)[field] ?? ''), set: (field: string, value: string) => { written[field] = value; } };
+    const apply = (reply: { result: string; message_template?: string }) => buildGeneration({ element: 'ai', generation: NODE_BUILDERS.ai.generation!, fields })
+      .apply({ ...reply, probe: { status: 'skipped', error: '', missing_outputs: [] }, calls: [] });
+    apply({ result: 'Summarise.', message_template: 'Story:\n{{prompt}}' });
+    expect(written).toEqual({ system_prompt: 'Summarise.', message_template: 'Story:\n{{prompt}}' });
+    apply({ result: 'Summarise briefly.' });
+    expect(written.message_template).toBe('Story:\n{{prompt}}');
   });
 
   it('needs something to change -- words, or how it failed -- and no task, which comes back with it', () => {
