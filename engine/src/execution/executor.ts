@@ -32,6 +32,7 @@ import type { Latch } from './latch.ts';
 import { mismatches } from './interface.ts';
 import { ERROR_PORT, fatalProblems, unrunnable } from './wiring.ts';
 import { applyRuntimeValues } from './runtimeValues.ts';
+import { exampleFilesOf, withExampleFiles } from './exampleFiles.ts';
 
 /** Ids of the fewest edges that must be ignored to make the graph acyclic. */
 export function memoryFeedbackEdges(
@@ -624,6 +625,11 @@ export async function inputsFor(
  * and "it fails, like this" is an answer -- the answer a run would give: a
  * node with nothing to do stands still, one that catches its failures puts
  * them on its error port, and a broken interface is said.
+ *
+ * A node tried by itself is tried on its example, mostly, and an example that
+ * reads a file names one of the node's own ("example/rows.csv"): those are
+ * read from the node's example files (`exampleFiles.ts`). A run of the graph
+ * never looks there.
  */
 export async function executeNode(
   graph: Graph,
@@ -638,7 +644,7 @@ export async function executeNode(
   }
   const why = nothingToDo(element, node, inputs, graph.edges, memoryFeedbackEdges(graph.nodes, graph.edges, options.registry));
   if (why) return { node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [why] };
-  const { runtime } = options;
+  const runtime = { ...options.runtime, files: withExampleFiles(options.runtime.files, exampleFilesOf(node)) };
   try {
     const arrived = await readInputs(node, inputs, runtime, options.registry);
     const { produced, failures } = await runNode(

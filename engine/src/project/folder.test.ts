@@ -8,7 +8,7 @@ import { parseGraph, type Graph } from '../graph.ts';
 import { NotAGraph } from '../errors.ts';
 import { problemsIn } from './check.ts';
 import {
-  FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, projectFolderOf, readProject, saveGraph, writeProject,
+  FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, nodeFileOf, projectFolderOf, readProject, saveGraph, writeProject,
 } from './folder.ts';
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
@@ -202,6 +202,106 @@ describe('a project folder', () => {
     await saveGraph(join(dir, 'graph.json'), read);
     expect(existsSync(join(dir, 'graph.json'))).toBe(true);
     expect(existsSync(join(dir, 'flow.json'))).toBe(false);
+  });
+});
+
+/** The files a node's example reads: a folder of them, `nodes/<id>/example/`, and one setting in the graph. */
+describe('a node\'s example files', () => {
+  const withFiles = (files: Record<string, string>): Graph => {
+    const graph = sample();
+    graph.nodes[1].config.example_files = files;
+    return graph;
+  };
+  const countOf = (graph: Graph) => graph.nodes.find((node) => node.id === 'count')!;
+
+  it('are files in the node\'s example folder, byte for byte, and out of its node.json', async () => {
+    await writeProject(dir, withFiles({ 'example/rows.csv': 'name\r\nAda\r\n', 'example/notes.txt': '﻿no newline at the end' }));
+    expect(await readFile(join(dir, 'nodes/count/example/rows.csv'), 'utf8')).toBe('name\r\nAda\r\n');
+    expect(await readFile(join(dir, 'nodes/count/example/notes.txt'), 'utf8')).toBe('﻿no newline at the end');
+    expect(JSON.parse(await text('nodes/count/node.json')).config).not.toHaveProperty('example_files');
+  });
+
+  it('read back as they were written', async () => {
+    const files = { 'example/rows.csv': 'name\r\nAda\r\n', 'example/notes.txt': '﻿no newline at the end' };
+    await writeProject(dir, withFiles(files));
+    forgetSeen();
+    expect(countOf(await readProject(dir)).config.example_files).toEqual(files);
+    // A node without any has none.
+    expect((await readProject(dir)).nodes.find((node) => node.id === 'say')!.config).not.toHaveProperty('example_files');
+  });
+
+  it('go when the node no longer holds them -- and a file somebody dropped in since stays', async () => {
+    const graph = withFiles({ 'example/a.csv': 'a', 'example/b.csv': 'b' });
+    await writeProject(dir, graph);
+    await writeFile(join(dir, 'nodes/count/example/mine.csv'), 'mine');
+    graph.nodes[1].config.example_files = { 'example/a.csv': 'a' };
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'nodes/count/example/b.csv'))).toBe(false);
+    expect(await text('nodes/count/example/a.csv')).toBe('a');
+    expect(await text('nodes/count/example/mine.csv')).toBe('mine');
+    delete graph.nodes[1].config.example_files;
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'nodes/count/example/a.csv'))).toBe(false);
+    expect(await text('nodes/count/example/mine.csv')).toBe('mine');
+  });
+
+  it('are only the text in the folder: a picture there is left alone, and never tidied away', async () => {
+    await writeProject(dir, withFiles({ 'example/a.csv': 'a' }));
+    await writeFile(join(dir, 'nodes/count/example/photo.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]));
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(countOf(read).config.example_files).toEqual({ 'example/a.csv': 'a' });
+    await writeProject(dir, read);
+    expect(await readFile(join(dir, 'nodes/count/example/photo.png'))).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]));
+    expect(await changesOnDisk(dir)).toEqual([]);
+  });
+
+  it('are refused, before anything is written, when one is named so it could not be', async () => {
+    await expect(writeProject(dir, withFiles({ 'example/../code.js': 'x' }))).rejects.toThrow(/"example\/\.\.\/code\.js" among them/);
+    expect(existsSync(join(dir, 'flow.json'))).toBe(false);
+  });
+
+  it('come back as one change, the whole of what is there now, when one changes, comes or goes', async () => {
+    await writeProject(dir, withFiles({ 'example/a.csv': 'a', 'example/b.csv': 'b' }));
+    expect(await changesOnDisk(dir)).toEqual([]);
+
+    await touch(join(dir, 'nodes/count/example/a.csv'), 'a, changed');
+    expect(await changesOnDisk(dir)).toEqual([
+      { node_id: 'count', field: 'example_files', value: { 'example/a.csv': 'a, changed', 'example/b.csv': 'b' } },
+    ]);
+    expect(await changesOnDisk(dir)).toEqual([]);
+
+    await rm(join(dir, 'nodes/count/example/b.csv'));
+    await writeFile(join(dir, 'nodes/count/example/c.csv'), 'c');
+    expect(await changesOnDisk(dir)).toEqual([
+      { node_id: 'count', field: 'example_files', value: { 'example/a.csv': 'a, changed', 'example/c.csv': 'c' } },
+    ]);
+    expect(await changesOnDisk(dir)).toEqual([]);
+
+    // Taken in, they are no conflict for the next save.
+    await expect(writeProject(dir, await readProject(dir))).resolves.toBeUndefined();
+  });
+
+  it('can be opened, as can each text the node keeps -- and nothing else of its folder', async () => {
+    await writeProject(dir, withFiles({ 'example/a.csv': 'a' }));
+    expect(await nodeFileOf(dir, 'count')).toBe('count/code.js');
+    expect(await nodeFileOf(dir, 'count', 'example/a.csv')).toBe('count/example/a.csv');
+    expect(await nodeFileOf(dir, 'count', 'example\\a.csv')).toBe('count/example/a.csv');
+    // A text nobody has written yet is made, empty, so there is something to open.
+    expect(await nodeFileOf(dir, 'say', 'examples.md')).toBe('say/examples.md');
+    expect(await text('nodes/say/examples.md')).toBe('');
+    await expect(nodeFileOf(dir, 'count', 'example/gone.csv')).rejects.toThrow(/no example file example\/gone\.csv yet/);
+    for (const file of ['node.json', '../say/system.md', 'example/../code.js']) {
+      await expect(nodeFileOf(dir, 'count', file), file).rejects.toThrow(/is not one of the files of "count": it keeps code\.js/);
+    }
+  });
+
+  it('refuse a save over one changed outside since it was read', async () => {
+    const graph = withFiles({ 'example/a.csv': 'a' });
+    await writeProject(dir, graph);
+    await touch(join(dir, 'nodes/count/example/a.csv'), 'theirs');
+    graph.nodes[1].config.example_files = { 'example/a.csv': 'mine' };
+    await expect(writeProject(dir, graph)).rejects.toThrow(/nodes\/count\/example\/a\.csv/);
   });
 });
 

@@ -30,11 +30,12 @@ describe('openExternal', () => {
     await expect(openExternal(join(dir, 'sub'), '../b.txt')).rejects.toBeInstanceOf(NotOpenable);
   });
 
-  it('refuses anything that is not a node\'s .js or .md', async () => {
+  it('refuses anything that is not text a node keeps: nothing a system would run', async () => {
     const { openExternal, NotOpenable } = await import('./files.ts');
     const dir = await sandbox();
-    await expect(openExternal(dir, 'b.txt')).rejects.toBeInstanceOf(NotOpenable);
+    await writeFile(join(dir, 'run.bat'), 'echo hi');
     await expect(openExternal(dir, 'blob.bin')).rejects.toBeInstanceOf(NotOpenable);
+    await expect(openExternal(dir, 'run.bat')).rejects.toBeInstanceOf(NotOpenable);
   });
 
   it('says the graph must be saved when the file is not there yet', async () => {

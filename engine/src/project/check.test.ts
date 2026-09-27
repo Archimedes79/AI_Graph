@@ -185,12 +185,12 @@ describe('what check finds in a project folder', () => {
     await writeProject(dir, graph());
     await mkdir(join(dir, 'nodes', 'old_step'));
     await writeFile(join(dir, 'nodes', 'old_step', 'code.js'), '');
-    await writeFile(join(dir, 'nodes', 'say', 'prompt.md'), 'Written, never sent.');
+    await writeFile(join(dir, 'nodes', 'say', 'instructions.md'), 'Written, never sent.');
 
     const { problems } = await checkPath(dir);
     expect(problems.map((p) => [p.where, p.problem])).toEqual([
       ['nodes/old_step', 'This folder belongs to no node in flow.json.'],
-      ['nodes/say/prompt.md', 'Nothing reads this file.'],
+      ['nodes/say/instructions.md', 'Nothing reads this file.'],
     ]);
     expect(problems[1].fix).toMatch(/"system.md"/);
   });
@@ -199,6 +199,14 @@ describe('what check finds in a project folder', () => {
     await writeProject(dir, graph());
     // Every node has a folder since each is given its interface.json; an empty one is as fine.
     await mkdir(join(dir, 'nodes', 'show'), { recursive: true });
+    expect((await checkPath(dir)).problems).toEqual([]);
+  });
+
+  it('is content with any file in a node\'s example folder: an example may name each', async () => {
+    await writeProject(dir, graph());
+    await mkdir(join(dir, 'nodes', 'count', 'example'), { recursive: true });
+    await writeFile(join(dir, 'nodes', 'count', 'example', 'rows.csv'), 'name\nAda\n');
+    await writeFile(join(dir, 'nodes', 'count', 'example', 'photo.png'), Buffer.from([0x89, 0x50]));
     expect((await checkPath(dir)).problems).toEqual([]);
   });
 
