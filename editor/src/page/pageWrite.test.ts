@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { patchBlock, routePage } from './pageWrite';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { insertBlock, moveBlock, patchBlock, removeBlock, routePage } from './pageWrite';
 import { pageOf } from './GuiPage';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import type { GraphNode, GuiWidget } from '@/graph';
 import { WIDGET_BUILDERS } from '@/elements/registry';
+import { useGraphStore } from '@/store/graphStore';
 
 function guiNode(id: string, widgets: GuiWidget[]): GraphNode {
   return {
@@ -79,25 +80,59 @@ describe('routePage', () => {
   });
 });
 
-describe('a block changed after a wait', () => {
-  it('changes that block on the page as it is by then, keeping what was added, renamed and deleted meanwhile', () => {
+// ── Changing the page as the store holds it ────────────────────────────────
+
+const store = () => useGraphStore.getState();
+const page = () => pageOf(store().rfNodes.map((n) => n.data.graphNode as GraphNode));
+const shown = () => page().blocks.map((b) => b.widget);
+
+describe('a block edited on the page', () => {
+  beforeEach(() => store().newGraph());
+
+  it('keeps the keystroke that made a heading grow: the text and the height land together (B31)', () => {
+    // A box that grows as it is typed into changes its block twice in one
+    // keystroke: the text, then the height. The height was written onto the
+    // page as it had been drawn, and put the text back from before the key.
+    insertBlock({ ...WIDGET_BUILDERS.text.create('', 'heading'), id: 'text', value: 'Hel', w: 16, h: 1 });
+    const undo = store().past.length;
+    patchBlock('text', { value: 'Hell' });
+    patchBlock('text', { h: 2 });
+    expect(shown()[0]).toMatchObject({ value: 'Hell', h: 2 });
+    expect(store().past.length).toBe(undo + 2);
+  });
+
+  it('changes a block on the page as it is by then, keeping what was added, renamed and deleted meanwhile', () => {
     // Accepting a ✨ result wrote back the page from when ✨ was pressed.
-    const chart = { ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' };
-    const added = { ...WIDGET_BUILDERS.text.create('Added'), id: 'added' };
-    // Pressed on a page of the chart and a block "gone"; meanwhile the chart
-    // was renamed, "gone" deleted, and another block added.
-    const now = guiNode('gui1', [{ ...chart, label: 'Renamed' }, added]);
-    const page = pageOf([now]);
+    insertBlock({ ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' });
+    insertBlock({ ...WIDGET_BUILDERS.text.create('Gone'), id: 'gone' });
+    patchBlock('chart', { label: 'Renamed' });
+    removeBlock('gone');
+    insertBlock({ ...WIDGET_BUILDERS.text.create('Added'), id: 'added' });
 
-    const writes = patchBlock(page.guiNodes, page.blocks, 'chart', { code: 'function draw() { return []; }' });
+    patchBlock('chart', { code: 'function draw() { return []; }' });
 
-    expect(writes).toHaveLength(1);
-    expect(writes[0].widgets.map((w) => [w.id, w.label])).toEqual([['chart', 'Renamed'], ['added', 'Added']]);
-    expect(writes[0].widgets[0].code).toBe('function draw() { return []; }');
+    expect(shown().map((w) => [w.id, w.label])).toEqual([['chart', 'Renamed'], ['added', 'Added']]);
+    expect(shown()[0].code).toBe('function draw() { return []; }');
   });
 
   it('changes nothing when the block was deleted meanwhile', () => {
-    const page = pageOf([guiNode('gui1', [{ ...WIDGET_BUILDERS.text.create('A'), id: 'a' }])]);
-    expect(patchBlock(page.guiNodes, page.blocks, 'chart', { label: 'x' })).toEqual([]);
+    insertBlock({ ...WIDGET_BUILDERS.text.create('A'), id: 'a' });
+    const before = JSON.stringify(store().exportGraph());
+    patchBlock('chart', { label: 'x' });
+    expect(JSON.stringify(store().exportGraph())).toBe(before);
+  });
+
+  it('makes the page\'s node for the first block, and moves a block by place or onto another', () => {
+    for (const id of ['a', 'b', 'c']) insertBlock({ ...WIDGET_BUILDERS.text.create(id), id });
+    expect(page().guiNodes).toHaveLength(1);
+    moveBlock('c', 0);
+    expect(shown().map((w) => w.id)).toEqual(['c', 'a', 'b']);
+    moveBlock('c', 'b');
+    expect(shown().map((w) => w.id)).toEqual(['a', 'b', 'c']);
+    moveBlock('a', 7);
+    expect(shown().map((w) => w.id)).toEqual(['a', 'b', 'c']);
+    insertBlock({ ...WIDGET_BUILDERS.divider.create(''), id: 'd' }, 1);
+    expect(shown().map((w) => w.id)).toEqual(['a', 'd', 'b', 'c']);
   });
 });
+

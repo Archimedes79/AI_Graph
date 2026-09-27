@@ -68,6 +68,18 @@ export function tryInputs(node: GraphNode, example: Record<string, unknown> | un
 }
 
 /**
+ * What ▶ Try it would try now, as text (`TryItInline`'s `of`): the node as it
+ * runs -- its ports and settings -- and *tried*, what it runs on. Not what
+ * only describes it: *request*, the field it was written from; the example's
+ * expectation and judge; the shape and the answer a try may keep.
+ */
+export function tryKey(node: GraphNode, tried: Record<string, unknown> | undefined, request?: string): string {
+  const runs: Record<string, unknown> = { ...node.config };
+  for (const key of ['examples', 'output_example', 'output_schema', request ?? '']) delete runs[key];
+  return JSON.stringify([node.inputs, node.outputs, runs, tried ?? null]);
+}
+
+/**
  * *examples* ready for step 2 to write a check into. A node with no inputs is
  * run on nothing (`tryInputs`), and has no box to type that into, so its
  * example's input is `{}` from the first check on. A node with inputs waits

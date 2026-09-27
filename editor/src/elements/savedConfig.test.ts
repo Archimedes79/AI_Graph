@@ -1,17 +1,29 @@
 /**
- * A saved node carries its own settings, not every field every node starts with
- * -- and the engine cannot tell the difference.
+ * A saved node carries what is not a default, not every field every node starts
+ * with -- and the engine cannot tell the difference.
  *
- * `savedNode` drops a key its node does not own when it still holds the
- * value every node is created with. That is only safe while the engine reads a
- * missing key the same way it reads that value, so this asks the engine's own
- * element, for every node type and every mode, the questions a run asks, and
- * holds the lean node to the full node's answers.
+ * `savedNode` drops every key that still holds its one default
+ * (`baseNodeConfig`). That is only safe while the engine reads a missing key
+ * the same way it reads that value, so this asks the engine's own element,
+ * for every node type and every mode, the questions a run asks, and holds the
+ * lean node to the full node's answers.
  */
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
 import type { GraphNode, NodeConfig } from '@/graph';
-import { answers } from '../../test/engineAnswers';
+import { answers as engineAnswers } from '../../test/engineAnswers';
+
+/**
+ * The engine's answers, with an ai node's provider as a run takes it: left out
+ * and 'default' are one provider, the one AI setting (`lent`), and `config`
+ * spells them apart.
+ */
+function answers(node: GraphNode): Record<string, string> {
+  const all = engineAnswers(node);
+  const config = JSON.parse(all.config ?? '{}') as { provider?: string };
+  if (config.provider === '') config.provider = 'default';
+  return { ...all, config: JSON.stringify(config) };
+}
 
 /** Each node type as created, and once more in every mode that changes what it reads. */
 function variants(): GraphNode[] {
@@ -34,17 +46,21 @@ describe('NodeGuiBuilder.saved', () => {
     },
   );
 
-  it('leaves out what the node does not own, and keeps what it owns', () => {
-    const node = NODE_KINDS.output.create('n');
-    const lean = savedNode(node);
-    expect(Object.keys(lean.config).length).toBeLessThan(Object.keys(node.config).length / 3);
-    expect(lean.config).toMatchObject({ output_label: 'Result', write_mode: 'window' });
-    expect(lean.config).not.toHaveProperty('system_prompt');
+  it('writes, for a new node, only what it starts with that is no default', () => {
+    // One default per key: a key a new node holds at its default says nothing
+    // the engine would not assume, and is left out of its file.
+    const saved = Object.fromEntries(Object.entries(NODE_KINDS).map(([type, kind]) => [type, savedNode(kind.create('n')).config]));
+    expect(saved.input).toEqual({});
+    expect(saved.data).toEqual({});
+    expect(saved.gui).toEqual({});
+    expect(saved.trigger).toEqual({});
+    expect(saved.output).toEqual({ output_label: 'Result', write_mode: 'window' });
+    expect(Object.keys(saved.ai).sort()).toEqual(['batch_mode', 'system_prompt']);
+    expect(Object.keys(saved.code).sort()).toEqual(['batch_mode', 'code']);
+    expect(Object.keys(saved.subgraph)).toEqual(['subgraph']);
   });
 
   it('saves no selector for an input nobody wrote one for, in any mode, and keeps one somebody did', () => {
-    // Every input node used to carry a starter selector, saved into the graph
-    // of text and file inputs, which select nothing (B21).
     for (const mode of ['text', 'file', 'directory'] as const) {
       const node = NODE_KINDS.input.create('n');
       node.config.input_mode = mode;
@@ -56,7 +72,7 @@ describe('NodeGuiBuilder.saved', () => {
     expect(savedNode(node).config).toMatchObject({ selector_prompt: 'Only the CSVs.', selector_code: 'function run(i) { return i; }' });
   });
 
-  it('keeps a key it does not own once somebody changed it', () => {
+  it('keeps any key once somebody changed it from its default', () => {
     const node = NODE_KINDS.output.create('n');
     node.config.temperature = 0.1;
     expect(savedNode(node).config.temperature).toBe(0.1);

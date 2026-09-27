@@ -29,7 +29,23 @@ function asText(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
+/**
+ * What a try gave, while it is a try of what would be tried now (*now*), and
+ * null once the body, the settings or the example moved on: "Keep this
+ * result" and ✓ must describe what is there, not what was there when ▶ was
+ * pressed.
+ */
+export function currentTry<T>(held: { of: string; value: T } | null, now: string): T | null {
+  return held && held.of === now ? held.value : null;
+}
+
 interface Props {
+  /**
+   * What would be tried now, as text (`tryKey`, `blockTryKey`): the element as
+   * it runs and the example it runs on. A result is shown while it is a result
+   * of this, and not after.
+   */
+  of: string;
   /** Step 1 holds an example to run on. */
   canRun: boolean;
   /** Why it cannot run, when it cannot. */
@@ -59,18 +75,20 @@ interface Props {
  * nowhere else, a hint that promised to keep a result nothing could keep, and
  * an editable box that stored its clipped display text when it was edited.
  */
-export default function TryItInline({ canRun, whyNot, run, verdict, onKeep, renderResult, children }: Props) {
+export default function TryItInline({ of, canRun, whyNot, run, verdict, onKeep, renderResult, children }: Props) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<TryResult | null>(null);
-  const [failure, setFailure] = useState('');
-  const [kept, setKept] = useState(false);
+  const [held, setHeld] = useState<{ of: string; value: { result?: TryResult; failure?: string; kept?: boolean } } | null>(null);
+  const { result = null, failure = '', kept = false } = currentTry(held, of) ?? {};
 
   const test = async () => {
-    setBusy(true); setFailure(''); setResult(null); setKept(false);
+    // What is tried is what is there as ▶ is pressed; an edit made while it
+    // runs makes what comes back a try of something else.
+    const tried = of;
+    setBusy(true); setHeld(null);
     try {
-      setResult(await run());
+      setHeld({ of: tried, value: { result: await run() } });
     } catch (error) {
-      setFailure(errorText(error, 'It could not be tried.'));
+      setHeld({ of: tried, value: { failure: errorText(error, 'It could not be tried.') } });
     } finally {
       setBusy(false);
     }
@@ -126,7 +144,7 @@ export default function TryItInline({ canRun, whyNot, run, verdict, onKeep, rend
           {ran && onKeep && (
             <div className="flex items-center gap-2 mt-1">
               <button className="text-xs px-2 py-0.5 rounded" style={NEUTRAL_BUTTON}
-                onClick={() => { onKeep(result); setKept(true); }}
+                onClick={() => { onKeep(result); setHeld((now) => now && { ...now, value: { ...now.value, kept: true } }); }}
                 title="Make what came out step 2's example output">
                 Keep this result
               </button>

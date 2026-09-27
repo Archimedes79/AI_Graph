@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import type { GraphNode, GuiWidget, WidgetKind } from '@/graph';
+import type { WidgetKind } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
-import { syncGuiNodePorts } from '@/document/guiWidgets';
 import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { newBlock, type PaletteEntry } from './DesignerPalette';
-import { pageOf, useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
-import { patchBlock, routePage, type PageWrite } from './pageWrite';
+import { useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
+import { insertBlock, moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { liveTypedValues } from './typedValues';
 import PageHeading from './PageHeading';
 import WidgetEditor from './WidgetEditor';
@@ -22,7 +21,6 @@ import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } 
  */
 export default function DesignerTab() {
   const updateNode = useGraphStore((s) => s.updateNode);
-  const addNode = useGraphStore((s) => s.addNode);
   const guiScheme = useGraphStore((s) => s.metadata.gui_scheme);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const blocks = useSurfaceBlocks();
@@ -39,46 +37,14 @@ export default function DesignerTab() {
   const ownerOf = (widgetId: string) => blocks.find((b) => b.widget.id === widgetId)?.node ?? null;
   const selected = blocks.find((b) => b.widget.id === selectedId)?.widget ?? null;
 
-  const write = (writes: PageWrite[]) => {
-    for (const { node, widgets } of writes) {
-      updateNode(node.id, syncGuiNodePorts({ ...node, config: { ...node.config, gui_widgets: widgets } }));
-    }
-  };
-  /** Write a new page back to the nodes it is stored in (see pageWrite.ts). */
-  const applyWidgets = (next: GuiWidget[]) => write(routePage(guiNodes, blocks, next));
-  /**
-   * Change one block, on the page as the store holds it now: a block's
-   * editor may hand its change on long after it was drawn (`patchBlock`).
-   */
-  const updateBlock = (widgetId: string, patch: Partial<GuiWidget>) => {
-    const now = pageOf(useGraphStore.getState().rfNodes.map((n) => n.data.graphNode as GraphNode));
-    write(patchBlock(now.guiNodes, now.blocks, widgetId, patch));
-  };
+  // Every change to the page goes through `pageWrite`, which reads it from the
+  // store when the change lands: a block's editor may hand its change on long
+  // after it was drawn.
 
-  /**
-   * Add a block to the page, at the end -- the order is the position.
-   *
-   * With no gui node in the graph yet, one is created to hold it. The page is
-   * the thing being built; that it needs a node behind it is bookkeeping, and
-   * making someone go to the other tab to satisfy the bookkeeping first is the
-   * kind of step a tool should take on itself.
-   */
+  /** Add a block to the page, where it was asked for -- at the end by default. */
   const addWidget = (kind: WidgetKind, mode?: string, at?: number) => {
     const widget = newBlock(kind, mode, blocks.map((b) => b.widget.id));
-    if (guiNodes.length > 0) {
-      const next = blocks.map((b) => b.widget);
-      next.splice(at ?? next.length, 0, widget);
-      applyWidgets(next);
-    } else {
-      const nodeId = addNode('gui', { x: 240, y: 160 });
-      const created = useGraphStore.getState().rfNodes
-        .find((n) => n.id === nodeId)?.data.graphNode as GraphNode | undefined;
-      if (!created) return;
-      updateNode(nodeId, syncGuiNodePorts({
-        ...created,
-        config: { ...created.config, gui_widgets: [widget] },
-      }));
-    }
+    insertBlock(widget, at);
     setSelectedId(widget.id);
   };
   // The drop below is wired once per drag, and must add to the page as it is
@@ -147,17 +113,12 @@ export default function DesignerTab() {
 
   /** Move the selected block one place along the page. */
   const moveSelected = (delta: -1 | 1) => {
-    const to = selectedIndex + delta;
-    if (selectedIndex === -1 || to < 0 || to >= blocks.length) return;
-    const next = blocks.map((b) => b.widget);
-    const [moved] = next.splice(selectedIndex, 1);
-    next.splice(to, 0, moved);
-    applyWidgets(next);
+    if (selected) moveBlock(selected.id, selectedIndex + delta);
   };
 
   const removeSelected = () => {
     if (!selected) return;
-    applyWidgets(blocks.filter((b) => b.widget.id !== selected.id).map((b) => b.widget));
+    removeBlock(selected.id);
     setSelectedId(null);
   };
 
@@ -197,14 +158,7 @@ export default function DesignerTab() {
     // Only text is remembered as an edit in progress; a block that stores
     // something richer holds it itself and has no half-typed state to protect.
     if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
-    updateNode(block.node.id, {
-      config: {
-        ...block.node.config,
-        gui_widgets: block.node.config.gui_widgets.map(
-          (w) => (w.id === block.widget.id ? { ...w, value } : w),
-        ),
-      },
-    });
+    patchBlock(block.widget.id, { value });
   };
 
   return (
@@ -221,7 +175,6 @@ export default function DesignerTab() {
           <DesignerSurface
             dropIndex={dragEntry ? dropIndex : null}
             blocks={blocks}
-            onChange={applyWidgets}
             onWidgetValue={setWidgetValue}
             onWidgetTrigger={(block, value) => {
               if (typeof value === 'string') setTyped((prev) => ({ ...prev, [block.widget.id]: value }));
@@ -264,7 +217,7 @@ export default function DesignerTab() {
         <WidgetEditor
           widget={selected}
           nodeId={selected ? ownerOf(selected.id)?.id ?? '' : ''}
-          onChange={(patch) => { if (selected) updateBlock(selected.id, patch); }}
+          onChange={(patch) => { if (selected) patchBlock(selected.id, patch); }}
           onRemove={removeSelected}
         />
         {selected && new Set(blocks.map((b) => b.node.id)).size > 1 && (

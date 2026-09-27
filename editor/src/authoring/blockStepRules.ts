@@ -24,6 +24,17 @@ export function exampleProblem(text: string | undefined): string {
 }
 
 /**
+ * What ▶ Try it would try now, as text (`TryItInline`'s `of`): the block --
+ * which one, and what it runs -- and *example*, what it runs on. Not how it
+ * looks, nor the request its code was written from.
+ */
+export function blockTryKey(widget: GuiWidget, example: Record<string, unknown> | undefined): string {
+  const runs: Record<string, unknown> = { ...widget };
+  for (const key of ['label', 'tone', 'border', 'background', 'w', 'h', 'example', 'code_prompt']) delete runs[key];
+  return JSON.stringify([runs, example ?? null]);
+}
+
+/**
  * *widget* on a page of its own, run by itself -- nothing else of the graph is
  * sent or run: what the block hands on, made the way a run makes it. A folder
  * picker lists its folder and runs its selector here exactly as it does on the

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { GraphNode } from '@/graph';
+import { schemaOutline } from '@engine/execution/interface.ts';
 import { DIMMER, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
 
 interface OutputInterfaceProps {
@@ -7,20 +8,17 @@ interface OutputInterfaceProps {
   setConfig: (key: string, value: unknown) => void;
 }
 
-/** The kept shape in one line -- `output: list of text` -- with the JSON Schema a click away. */
-interface SchemaPart { type?: string; items?: SchemaPart; properties?: Record<string, SchemaPart> }
-
-function outline(schema: unknown): string {
-  const type = (s: SchemaPart | undefined): string => {
-    if (!s || typeof s !== 'object') return 'anything';
-    if (s.type === 'array') return `list of ${type(s.items)}`;
-    if (s.type === 'object' && s.properties) return `{ ${Object.keys(s.properties).join(', ')} }`;
-    const words: Record<string, string> = { string: 'text', integer: 'number' };
-    return (s.type && words[s.type]) ?? s.type ?? 'anything';
-  };
-  const properties = (schema as SchemaPart | null)?.properties;
-  if (!properties || typeof properties !== 'object') return type(schema as SchemaPart);
-  return Object.entries(properties).map(([port, part]) => `${port}: ${type(part)}`).join(' · ');
+/**
+ * The kept shape in one line, a port at a time -- `output: list of text` --
+ * with the JSON Schema a click away. Each port as the engine outlines a shape
+ * for ✨ and the nodes after this one (`schemaOutline`): a second outline here
+ * said "number" where they were told "whole number", and printed a list of
+ * types as "number,string".
+ */
+export function outline(schema: unknown): string {
+  const properties = (schema as { properties?: unknown } | null)?.properties;
+  if (!properties || typeof properties !== 'object') return schemaOutline(schema);
+  return Object.entries(properties).map(([port, part]) => `${port}: ${schemaOutline(part)}`).join(' · ');
 }
 
 /**

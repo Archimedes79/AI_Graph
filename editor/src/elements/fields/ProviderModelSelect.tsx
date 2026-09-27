@@ -6,7 +6,7 @@ import { lent } from '@engine/elements/Runtime.ts';
 
 // Single source of truth for the provider dropdown -- previously duplicated
 // verbatim in AiNodePanel.tsx, CodeNodePanel.tsx, and WidgetEditor.tsx.
-const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
+export const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
   // Shown only where the caller names it (`defaultLabel`): on a node it is the
   // one AI setting, in ⚙ Settings it is that setting left unset.
   default: 'Default',

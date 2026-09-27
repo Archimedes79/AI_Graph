@@ -80,9 +80,9 @@ export default function OutputNodePanel({ node, setConfig, fields }: NodePanelPr
         <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           {mode === 'window' ? 'Its name, and the window’s title' : 'Its name in the results'}
         </label>
-        {/* A graph file that names nothing keys the result by the node's id
-            (`whenMissing`), and the box is then empty: it says so, rather than
-            look like a name that was lost. */}
+        {/* A graph file that names nothing keys the result by the node's id,
+            and the box is then empty: it says so, rather than look like a
+            name that was lost. */}
         <input
           className="w-full rounded-lg px-3 py-2 text-sm"
           style={FIELD}

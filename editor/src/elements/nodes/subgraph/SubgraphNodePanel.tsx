@@ -17,6 +17,10 @@ const ELEMENT = new SubgraphNodeRunner();
  * would be a second place for them to live.
  */
 export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
+  // No level opens while a run is going: its result is for the graph on the
+  // canvas (`openSubgraph`). Pressed then, the button closed the dialog and
+  // opened nothing, and said nothing.
+  const running = useGraphStore((s) => s.isExecuting);
   const ports = ELEMENT.derivedPorts(node as never, engineRegistry) ?? { inputs: [], outputs: [] };
   const inner = ELEMENT.nestedGraph(node as never);
   const count = inner?.nodes.length ?? 0;
@@ -41,8 +45,10 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
         <button
           type="button"
           className="w-full mb-4 px-3 py-2 rounded-lg text-sm font-medium"
-          style={PRIMARY_BUTTON}
+          style={{ ...PRIMARY_BUTTON, opacity: running ? 0.5 : 1 }}
           onClick={enter}
+          disabled={running}
+          title={running ? 'A run is going on. The graph inside opens when it is over.' : undefined}
         >
           Open this graph ▸
         </button>

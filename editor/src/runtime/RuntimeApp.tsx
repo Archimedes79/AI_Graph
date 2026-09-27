@@ -8,6 +8,7 @@ import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import OutputWindows from '@/dialogs/OutputWindows';
 import DeliveredHeader from '@/page/DeliveredHeader';
 import RuntimeAISettings from './RuntimeAISettings';
+import { watchSchedule } from './watchSchedule';
 import { call, type ScheduleState } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN, TEXT } from '@/ui/theme';
@@ -63,29 +64,17 @@ export default function RuntimeApp() {
   const seenRound = useRef(0);
   useEffect(() => {
     if (!ready) return undefined;
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const look = async () => {
-      try {
-        const state = await call('schedule');
-        if (!alive) return;
-        setSchedule(state);
-        if (state.result && state.runs !== seenRound.current && !useGraphStore.getState().isExecuting) {
-          seenRound.current = state.runs;
-          // Laid over what the page shows, not in place of it: a clock's round
-          // runs what its trigger is wired to, and the summary somebody asked
-          // for a minute ago is not part of that.
-          const shown = useGraphStore.getState().executionResult;
-          setExecutionResult(shown ? mergeResults(shown, state.result) : state.result, state.result);
-        }
-        // Nothing scheduled: asked once, and that is the end of it.
-        if (state.scheduled) timer = setTimeout(look, 2000);
-      } catch {
-        // An older server has no schedule to report. Nothing to watch.
+    return watchSchedule(() => call('schedule'), (state) => {
+      setSchedule(state);
+      if (state.result && state.runs !== seenRound.current && !useGraphStore.getState().isExecuting) {
+        seenRound.current = state.runs;
+        // Laid over what the page shows, not in place of it: a clock's round
+        // runs what its trigger is wired to, and the summary somebody asked
+        // for a minute ago is not part of that.
+        const shown = useGraphStore.getState().executionResult;
+        setExecutionResult(shown ? mergeResults(shown, state.result) : state.result, state.result);
       }
-    };
-    void look();
-    return () => { alive = false; if (timer) clearTimeout(timer); };
+    });
   }, [ready, setExecutionResult]);
 
   // A backend error can be several lines long; it belongs in the body, not
