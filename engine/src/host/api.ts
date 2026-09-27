@@ -23,6 +23,7 @@ import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/changes.ts';
 import type { ExampleResult } from '../execution/examples.ts';
+import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 
 export type { TextChange };
 
@@ -55,16 +56,12 @@ export interface RunSnapshot {
   result: ExecutionResult | null;
 }
 
-/** A path the graph needs before it can run, as the "before running" dialog asks for it. */
-export interface Requirement {
-  node_id: string;
-  /** The block inside a page that asks, when it is a block. */
-  widget_id: string | null;
-  label: string;
-  kind: 'text' | 'file' | 'directory';
-  direction: 'input' | 'output';
-  current_value: string;
-}
+/**
+ * A path the graph needs before it can run, as the "before running" dialog
+ * asks for it: the engine's own question, keyed as its answer is written back
+ * (`applyRuntimeValues`), so no end takes the key apart or builds it again.
+ */
+export type Requirement = RuntimeRequirement;
 
 /** `project`: a folder with a `flow.json` in it, which opens rather than being walked into. */
 export interface BrowseEntry { name: string; path: string; is_dir: boolean; project?: boolean }

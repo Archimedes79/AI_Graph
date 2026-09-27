@@ -38,19 +38,25 @@ export function runtimeRequirements(graph: Graph, registry: Runners): RuntimeReq
  * A key of `nodeId::widgetId` reaches a block inside a page; a plain node id
  * reaches the node. The element decides where the value lands, because only it
  * knows what it stores — the same reason it decides what it remembers.
+ *
+ * Returns the ids of the nodes it wrote into, for a caller that keeps the
+ * answers beyond this run: the key is read here and nowhere else.
  */
 export function applyRuntimeValues(
   graph: Graph,
   values: Record<string, string>,
   registry: Runners,
-): void {
+): Set<string> {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const answered = new Set<string>();
   for (const [key, value] of Object.entries(values)) {
     const [nodeId, widgetId] = key.split('::');
     const node = byId.get(nodeId);
     if (!node) continue;
     registry.node(node.node_type)?.applyRuntimeValue(node, widgetId ?? null, value);
+    answered.add(nodeId);
   }
+  return answered;
 }
 
 /** The default an unanswered question falls back to. */

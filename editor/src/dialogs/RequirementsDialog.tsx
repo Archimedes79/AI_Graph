@@ -31,14 +31,11 @@ export default function RequirementsDialog({ requirements, onSubmit, onCancel }:
   /** Key of the requirement whose picker is open, or '' for none. */
   const [browsing, setBrowsing] = useState('');
 
-  // Widget-scoped requirements are keyed "{node_id}::{widget_id}", matching
-  // the engine's `applyRuntimeValues` convention; plain node requirements
-  // use node_id alone.
-  const keyFor = (req: Requirement) => (req.widget_id ? `${req.node_id}::${req.widget_id}` : req.node_id);
-
+  // Answers are kept by each question's own key, the one the engine writes
+  // them back by (`applyRuntimeValues`).
   useEffect(() => {
     if (requirements) {
-      setValues(Object.fromEntries(requirements.map((r) => [keyFor(r), r.current_value || ''])));
+      setValues(Object.fromEntries(requirements.map((r) => [r.key, r.current || ''])));
     }
   }, [requirements]);
 
@@ -46,13 +43,13 @@ export default function RequirementsDialog({ requirements, onSubmit, onCancel }:
 
   // Only input-direction requirements are mandatory; output paths are optional.
   const missing = (requirements ?? [])
-    .filter((r) => r.direction === 'input' && (values[keyFor(r)] ?? '').trim().length === 0)
+    .filter((r) => r.direction === 'input' && (values[r.key] ?? '').trim().length === 0)
     .map((r) => r.label);
   const canSubmit = !!requirements && missing.length === 0;
 
   // Which picker the open Browse… belongs to: a directory requirement picks a
   // folder, a file requirement picks a file.
-  const browsingKind = (requirements ?? []).find((r) => keyFor(r) === browsing)?.kind ?? 'file';
+  const browsingKind = (requirements ?? []).find((r) => r.key === browsing)?.kind ?? 'file';
 
   return (
     <>
@@ -103,7 +100,7 @@ export default function RequirementsDialog({ requirements, onSubmit, onCancel }:
             }}
           >
             {requirements.map((req, index) => (
-              <div key={keyFor(req)}>
+              <div key={req.key}>
                 <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
                   {KIND_ICON[req.kind] ?? '📄'}{' '}
                   {req.kind === 'text'
@@ -117,8 +114,8 @@ export default function RequirementsDialog({ requirements, onSubmit, onCancel }:
                   <input
                     className={`flex-1 min-w-0 rounded-lg px-3 py-2 text-sm ${req.kind === 'text' ? '' : 'font-mono'}`}
                     style={FIELD}
-                    value={values[keyFor(req)] ?? ''}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [keyFor(req)]: e.target.value }))}
+                    value={values[req.key] ?? ''}
+                    onChange={(e) => setValues((prev) => ({ ...prev, [req.key]: e.target.value }))}
                     placeholder={
                       req.kind === 'text' ? 'Enter text…' : req.kind === 'directory' ? '/path/to/directory' : '/path/to/file'
                     }
@@ -131,7 +128,7 @@ export default function RequirementsDialog({ requirements, onSubmit, onCancel }:
                       type="button"
                       className="text-xs px-3 py-2 rounded-lg flex-shrink-0"
                       style={NEUTRAL_BUTTON}
-                      onClick={() => setBrowsing(keyFor(req))}
+                      onClick={() => setBrowsing(req.key)}
                     >
                       Browse…
                     </button>

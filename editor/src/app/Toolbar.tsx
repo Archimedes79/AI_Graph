@@ -5,11 +5,10 @@ import {
 import ToolbarButton, { ToolbarSeparator } from '@/ui/ToolbarButton';
 import { showsPage, widgetFiresRun } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
-import { call, downloadBundle, type AICall, type Requirement } from '@/api/client';
+import { call, downloadBundle, type AICall } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { Graph } from '@/graph';
-import { applyRuntimeValues } from '@engine/execution/runtimeValues.ts';
-import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { useDeliveredRun } from '@/page/useDeliveredRun';
 import { genAI } from '@/store/settingsStore';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
@@ -73,8 +72,6 @@ export default function Toolbar({
   const isDirty = useGraphStore((s) => s.isDirty);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const isExecuting = useGraphStore((s) => s.isExecuting);
-  const exportGraph = useGraphStore((s) => s.exportGraph);
-  const runGraph = useGraphStore((s) => s.runGraph);
   const stopRun = useGraphStore((s) => s.stopRun);
   const runProgress = useGraphStore((s) => s.runProgress);
   const isProject = useGraphStore((s) => s.isProject);
@@ -86,13 +83,12 @@ export default function Toolbar({
   const redoAvailable = useGraphStore((s) => s.future.length > 0);
   const executionResult = useGraphStore((s) => s.executionResult);
   const loadGraph = useGraphStore((s) => s.loadGraph);
-  const updateNode = useGraphStore((s) => s.updateNode);
 
   const [showDeploy, setShowDeploy] = useState(false);
   const [deployBusy, setDeployBusy] = useState('');
   const [deployError, setDeployError] = useState('');
-  const [pendingRequirements, setPendingRequirements] = useState<Requirement[] | null>(null);
-  const [pendingGraph, setPendingGraph] = useState<Graph | null>(null);
+  // Asking what the graph needs, then running: the delivered page's own steps.
+  const delivered = useDeliveredRun();
 
   const [openingTool, setOpeningTool] = useState('');
 
@@ -131,35 +127,10 @@ export default function Toolbar({
       onShowInterface();
       return;
     }
-
-    const graph = exportGraph();
-    try {
-      const requirements = await call('requirements', graph);
-
-      // A requirement that belongs to a block is one the *page* asks for, and
-      // the page is a better place to answer it than a dialog: it has the
-      // label, the Browse button and the rest of the form around it. So show
-      // the page instead of asking, and let the next Run go through. Already
-      // looking at the page, that would be a button that does nothing, and the
-      // dialog below asks instead.
-      const onThePage = requirements.filter((r) => r.widget_id);
-      if (onThePage.length > 0 && !interfaceShown) {
-        onShowInterface();
-        return;
-      }
-
-      // What is left belongs to nodes with nothing on the page — an input set
-      // to ask, an output set to ask where to write. Those have nowhere else
-      // to be answered.
-      if (requirements.length > 0) {
-        setPendingGraph(graph);
-        setPendingRequirements(requirements);
-        return;
-      }
-    } catch {
-      // If the requirements check itself fails, fall back to running directly.
-    }
-    await runGraph(graph);
+    // Without a page, what the graph asks belongs to nodes -- an input set to
+    // ask, an output set to ask where to write -- and the dialog asks it. (A
+    // question a block asks comes from a page, which returned above.)
+    await delivered.run(null);
   };
 
   /**
@@ -188,30 +159,6 @@ export default function Toolbar({
     } catch (error) {
       setOpeningTool(errorText(error, 'The tool could not be opened.'));
     }
-  };
-
-  const handlePromptSubmit = (values: Record<string, string>) => {
-    if (!pendingGraph) return;
-    const graph: Graph = JSON.parse(JSON.stringify(pendingGraph));
-    // Where an answer goes is each element's own business (`applyRuntimeValue`:
-    // an input keeps it as its value, a page in the widget that asked) -- the
-    // engine's code, run here, rather than a second copy of it.
-    applyRuntimeValues(graph, values, engineRegistry);
-    // Persist the answers back into the graph itself, not just into the copy
-    // about to run -- otherwise the picked file or text is forgotten the moment
-    // the run ends and has to be retyped every time.
-    const answered = new Set(Object.keys(values).map((key) => key.split('::')[0]));
-    for (const node of graph.nodes) {
-      if (answered.has(node.id)) updateNode(node.id, { config: node.config });
-    }
-    setPendingRequirements(null);
-    setPendingGraph(null);
-    runGraph(graph);
-  };
-
-  const handlePromptCancel = () => {
-    setPendingRequirements(null);
-    setPendingGraph(null);
   };
 
   // Both deploy actions used to have no busy state and no error handling, so a
@@ -528,9 +475,9 @@ export default function Toolbar({
       )}
 
       <RequirementsDialog
-        requirements={pendingRequirements}
-        onSubmit={handlePromptSubmit}
-        onCancel={handlePromptCancel}
+        requirements={delivered.requirements}
+        onSubmit={delivered.submit}
+        onCancel={delivered.cancel}
       />
 
       {/* AI Graph modal */}

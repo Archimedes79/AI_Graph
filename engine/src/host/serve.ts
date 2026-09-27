@@ -223,17 +223,7 @@ function toolRoutes(
       };
     },
 
-    requirements: (asked) => runtimeRequirements(parseGraph(asked), registry).map((requirement) => {
-      const [nodeId, widgetId] = requirement.key.split('::');
-      return {
-        node_id: nodeId,
-        widget_id: widgetId ?? null,
-        label: requirement.label,
-        kind: requirement.kind,
-        direction: requirement.direction,
-        current_value: requirement.current,
-      };
-    }),
+    requirements: (asked) => runtimeRequirements(parseGraph(asked), registry),
 
     startRun(asked) {
       const graph = parseGraph(asked);
