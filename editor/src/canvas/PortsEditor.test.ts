@@ -50,4 +50,20 @@ describe('the ports editor', () => {
     expect(drawn(false)).toContain('aria-label="input type"');
     expect(drawn(false).match(/list<\/label>/g)).toHaveLength(2);
   });
+
+  it('offers "whole list" on an input while the node runs once per item, beside another that fans out', () => {
+    // A stop-word list taken whole beside the words took editing interface.json by hand.
+    const words = { ...port('words', 'words', 'input', 'any'), multi: true };
+    const stop = port('stop', 'stop', 'input', 'any');
+    const drawn = (perItem: boolean, inputs: Port[]) => renderToStaticMarkup(createElement(PortsEditor, {
+      inputs, outputs: [], onChange: () => {}, stepped: true, perItem,
+    }));
+    const ticks = drawn(true, [words, stop]).match(/<input type="checkbox"[^>]*aria-label="whole list"[^>]*>/g) ?? [];
+    // The stop words are handed whole; the words, the one list left to run over, are not offered it.
+    expect(ticks).toHaveLength(1);
+    expect(ticks[0]).toContain('checked');
+    expect(drawn(true, [words, { ...stop, multi: true }]).match(/aria-label="whole list"/g)).toHaveLength(2);
+    expect(drawn(false, [words, stop])).not.toContain('whole list');
+    expect(drawn(true, [words])).not.toContain('whole list');
+  });
 });

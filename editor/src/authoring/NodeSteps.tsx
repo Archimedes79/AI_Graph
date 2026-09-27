@@ -209,6 +209,8 @@ export default function NodeSteps({
           checked={runsPerItem(node)}
           onChange={(perItem) => updateNode((current) => withPerItem(current, perItem, lists), ONCE)}
           subject={subject}
+          // Beside another input, one can be taken whole (`PortsEditor.perItem`).
+          wholeLists={!!steps.inputs && node.inputs.length > 1}
         />
       )}
     </>

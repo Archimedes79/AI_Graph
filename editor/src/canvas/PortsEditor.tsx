@@ -1,6 +1,7 @@
 import type { DataType, Port } from '@/graph';
 import { ONCE, type PortEditing, type UndoStep } from '@/elements/NodeGuiBuilder';
 import { useTyped } from '@/authoring/useTyped';
+import { wholeList } from '@/authoring/nodeStepRules';
 import { caughtErrorAt, portIdProblems } from './portIds';
 import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
@@ -28,8 +29,10 @@ import { DANGER_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/th
  * and whether its file is read; an output's is said once, in step 2's words.
  * A type box per port said it a second time, and a "list" box was half of a
  * setting whose other half was folded away: a list follows step 1's "Run once
- * per item", on both sides. Only a node without the steps -- an output node --
- * still has a type and a "list" per port.
+ * per item", on both sides -- and while the node runs per item, an input can
+ * be taken whole instead ("whole list"), a stop-word list beside the words it
+ * runs over. Only a node without the steps -- an output node -- still has a
+ * type and a "list" per port.
  */
 
 /** Every type a port can carry, with what each one means for the value on the wire. */
@@ -67,6 +70,8 @@ interface SideProps {
   readsFiles: boolean;
   /** Offer a type and "list" on each port: see `PortsEditor.stepped`. */
   perPort: boolean;
+  /** The node runs once per item: see `PortsEditor.perItem`. */
+  perItem: boolean;
   /** Why this side could not keep *ports* as they are named, or '' (`portIdProblems`). */
   problemOf: (ports: Port[]) => string;
   /** A name typed is typing; a box ticked, a port added or removed, a step of its own (`ONCE`). */
@@ -82,6 +87,11 @@ interface RowProps {
   editable: boolean;
   perPort: boolean;
   readsFiles: boolean;
+  /**
+   * Offer "whole list": the node runs once per item, and another input is
+   * fanned out -- the last one taken whole would be no run per item at all.
+   */
+  wholeOffered: boolean;
   /** What it is wired to, in words, or ''. */
   wired: string;
   /** Why the node could not keep this port under *id*, or ''. */
@@ -96,7 +106,7 @@ interface RowProps {
  * with why not: with no Save to wait for, a name typed through "" or through
  * another port's name on its way must not be what the graph holds meanwhile.
  */
-function PortRow({ port, kind, editable, perPort, readsFiles, wired, problemIf, set, remove }: RowProps) {
+function PortRow({ port, kind, editable, perPort, readsFiles, wholeOffered, wired, problemIf, set, remove }: RowProps) {
   const [typed, type] = useTyped(port.id, (text) => {
     const id = codeName(text);
     if (problemIf(id)) return port.id;
@@ -166,6 +176,15 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wired, problemIf, 
                 Read the file at this path
               </label>
             )}
+            {/* What a run per item hands on whole, beside the list it runs over. */}
+            {kind === 'input' && wholeOffered && (
+              <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
+                title="Handed whole to every run of an item -- a stop-word list beside the words the node runs over -- instead of one item at a time">
+                <input type="checkbox" checked={!port.multi} aria-label="whole list"
+                  onChange={(e) => set(wholeList(port, e.target.checked), ONCE)} />
+                whole list
+              </label>
+            )}
             <button
               className="text-xs px-1.5 py-1 rounded"
               style={NEUTRAL_BUTTON}
@@ -193,7 +212,7 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wired, problemIf, 
   );
 }
 
-function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, perPort, problemOf, onChange }: SideProps) {
+function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, perPort, perItem, problemOf, onChange }: SideProps) {
   const set = (at: number, patch: Partial<Port>, step?: UndoStep) => {
     onChange(ports.map((port, i) => (i === at ? { ...port, ...patch } : port)), step);
   };
@@ -226,6 +245,7 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, readsFiles, pe
             editable={editable}
             perPort={perPort}
             readsFiles={readsFiles}
+            wholeOffered={perItem && ports.some((other, i) => i !== at && other.multi)}
             wired={wiring[port.id] ?? ''}
             problemIf={(id) => problemOf(ports.map((candidate, i) => (i === at ? { ...candidate, id } : candidate)))}
             set={(patch, step) => set(at, patch, step)}
@@ -270,6 +290,11 @@ interface PortsEditorProps {
    * sets it together with what it does nothing without, on both sides.
    */
   stepped?: boolean;
+  /**
+   * The node runs once per item (`runsPerItem`): an input can be handed its
+   * list whole instead ("whole list", `wholeList`), where another fans out.
+   */
+  perItem?: boolean;
   /** Whether the node catches its failures, so that its last "error" output is the one that switch added. */
   caught?: boolean;
 }
@@ -279,7 +304,7 @@ const NO_WIRES = { inputs: {}, outputs: {} };
 
 export default function PortsEditor({
   inputs, outputs, onChange, side = 'both', editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, readsFiles = false, stepped = false,
-  caught = false,
+  perItem = false, caught = false,
 }: PortsEditorProps) {
   // The Error output belongs to the catch-failures switch, which adds and
   // removes it. Editing it here would let the two disagree.
@@ -294,7 +319,7 @@ export default function PortsEditor({
       {showInputs && (
         <Side
           title="Takes in" kind="input" ports={inputs} fixed={[]} editing={editing.inputs}
-          hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} perPort={!stepped}
+          hint={hints.inputs} wiring={wiring.inputs} readsFiles={readsFiles} perPort={!stepped} perItem={perItem}
           problemOf={(next) => portIdProblems(next, outputs, caught).inputs}
           onChange={(next, step) => onChange({ inputs: next, outputs }, step)}
         />
@@ -302,7 +327,7 @@ export default function PortsEditor({
       {showOutputs && (
         <Side
           title="Hands out" kind="output" ports={ownOutputs} fixed={fixedOutputs} editing={editing.outputs}
-          hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} perPort={!stepped}
+          hint={hints.outputs} wiring={wiring.outputs} readsFiles={false} perPort={!stepped} perItem={false}
           problemOf={(next) => portIdProblems(inputs, [...next, ...fixedOutputs], caught).outputs}
           onChange={(next, step) => onChange({ inputs, outputs: [...next, ...fixedOutputs] }, step)}
         />

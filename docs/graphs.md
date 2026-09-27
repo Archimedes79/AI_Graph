@@ -280,7 +280,7 @@ same buttons for an AI node -- only the body differs:
 
 ```
 1  What comes in        each input: its name, "needed", "Read the file at this path", and
-                        where it is wired from
+                        where it is wired from -- run per item, "whole list" too
                         + ONE example of what arrives: ⟳ From the graph, 📂 From a file…,
                           or a file dropped on it
                         + "Run once per item", when a list arrives
@@ -300,7 +300,9 @@ There is no Save and no Cancel: a change is in the graph a moment after it is ma
 undo step per field typed into, and ✕ or Esc close the dialog with nothing lost. What
 cannot be stored yet -- an example that is not JSON, a port name that is empty or taken --
 stays in its field with the reason. A port has no type or "list" box of its own here: an
-input's file is read where it says so, and a list follows "Run once per item".
+input's file is read where it says so, and a list follows "Run once per item" -- beside
+which an input ticked **whole list** is handed its list whole, a stop-word list beside the
+words the node runs over.
 
 The example is kept as the first section of the node's `examples.md`: its input block is
 step 1, its expect block what Try it holds the result to. It is the one sample everything

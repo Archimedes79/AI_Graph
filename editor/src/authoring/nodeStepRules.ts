@@ -4,7 +4,7 @@
 // asked the same way by the dialog and by `masterExamples.test.ts`, which
 // builds the examples through these steps.
 
-import type { ExecutionResult, GraphNode, NodeResult, Wire } from '@/graph';
+import type { ExecutionResult, GraphNode, NodeResult, Port, Wire } from '@/graph';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
 import type { ExampleResult } from '@engine/execution/examples.ts';
 import type { Refine } from '@engine/host/api.ts';
@@ -18,16 +18,29 @@ export function ownOutputs(outputs: Record<string, unknown> | undefined): Record
 }
 
 /**
- * An input typed `list` takes a list whole, whatever else does: a stop-word
- * list beside the words a node runs once per item on. Its type says so, so it
- * never fans out.
+ * An input ticked "whole list" takes a list whole, whatever else does: a
+ * stop-word list beside the words a node runs once per item on. The tick types
+ * it `list` (`wholeList`), so it never fans out.
  */
-const takesListWhole = (port: GraphNode['inputs'][number]): boolean => port.data_type === 'list';
+const takesListWhole = (port: Port): boolean => port.data_type === 'list';
+
+/**
+ * *port* handed its list whole ("whole list", step 1, while the node runs once
+ * per item) -- or, *whole* false, one item at a time again. Whole, it is typed
+ * `list` too: that is how it stays whole when "Run once per item" is ticked
+ * again (`withPerItem`), what `check` holds a wire into it to, and what ✨ is
+ * told it is handed. An input that reads its files keeps that type, and is
+ * only not fanned out. It took editing the node's interface.json by hand.
+ */
+export function wholeList(port: Port, whole: boolean): Port {
+  if (whole) return { ...port, multi: false, ...(port.data_type === 'file_path' ? {} : { data_type: 'list' as const }) };
+  return { ...port, multi: true, ...(takesListWhole(port) ? { data_type: 'any' as const } : {}) };
+}
 
 /**
  * The input ports a list arrives on, one at a time when the node runs per
  * item: one whose example value is a list, one declared a list, or one wired
- * from an output that hands on a list -- but not one typed `list`.
+ * from an output that hands on a list -- but not one ticked "whole list".
  */
 export function listPorts(node: GraphNode, example: Record<string, unknown> | undefined, nodes: GraphNode[] = [], edges: Wire[] = []): string[] {
   const byId = new Map(nodes.map((candidate) => [candidate.id, candidate]));
@@ -49,11 +62,12 @@ export function runsPerItem(node: GraphNode): boolean {
  * on a list, set together, because none of them does anything alone -- per
  * item with no input declared a list runs once on everything, and a list
  * input on a whole-list node is handed whole. Per item, the inputs *lists*
- * names fan out (every one not typed `list`, when it names none yet: what
- * arrives is not known before it has); whole, none do. And a list follows:
+ * names fan out (every one not ticked "whole list", when it names none yet:
+ * what arrives is not known before it has); whole, none do. And a list follows:
  * per item, every output hands on the list of the answers, and the node it
- * feeds is told so; whole, none says it does. There is no "list" box on a
- * port of its own any more.
+ * feeds is told so; whole, none says it does. A port has no "list" box of its
+ * own: while the node runs per item, an input can only be taken whole instead
+ * ("whole list", `wholeList`).
  */
 export function withPerItem(node: GraphNode, perItem: boolean, lists: string[] = []): GraphNode {
   const fans = (port: GraphNode['inputs'][number]) => perItem && (lists.length ? lists.includes(port.id) : !takesListWhole(port));

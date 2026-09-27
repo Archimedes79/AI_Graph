@@ -14,6 +14,7 @@ import { useWhatSends } from '@/authoring/WhatSends';
 import { inputSources, outputTargets } from '@/authoring/generationContext';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { nodeFacts } from '@/authoring/nodeFacts';
+import { runsPerItem } from '@/authoring/nodeStepRules';
 import { fromTheGraph } from '@/authoring/fromTheGraph';
 import { nodeLogic } from '@/authoring/logic';
 import { GenerationReport } from '@/authoring/GenerationTranscript';
@@ -122,6 +123,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
       wiring={wiring}
       readsFiles={engineRegistry.node(node.node_type)?.readsFileInputs ?? false}
       stepped={stepped}
+      perItem={stepped && runsPerItem(node)}
       caught={caught}
     />
   );

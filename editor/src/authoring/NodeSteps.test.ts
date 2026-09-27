@@ -8,6 +8,7 @@ import { useGraphStore } from '@/store/graphStore';
 import { nodeFields } from './generation';
 import { readPair, withExpect, withInput } from './examplePair';
 import { ChangeIt } from './TryItInline';
+import { RunOncePerItem } from './FourSteps';
 import { dropExample } from './droppedFile';
 import { readFilePorts } from './generationContext';
 import { unreadablePaths } from './nodeStepRules';
@@ -98,6 +99,15 @@ describe('a file dropped on a node, and a wire drawn to it after, that reads the
     // A path is one: the file dropped again, now that it is read, is its path.
     expect(unreadablePaths(reader, { input: 'data/people.csv' })).toEqual([]);
     expect(unreadablePaths(reader, { input: ['a.csv', 'b.csv'] })).toEqual([]);
+  });
+});
+
+describe('"Run once per item"', () => {
+  it('tells of the "whole list" tick where there is one -- not of a type no step can set', () => {
+    const said = (wholeLists: boolean) => renderToStaticMarkup(createElement(RunOncePerItem, { checked: true, onChange: () => {}, subject: 'this code', wholeLists }));
+    expect(said(true)).toContain('An input ticked “whole list” above is handed its list whole instead.');
+    expect(said(false)).not.toContain('whole list');
+    expect(said(true)).not.toContain('typed “List”');
   });
 });
 

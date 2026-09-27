@@ -66,9 +66,12 @@ export function TaskField({ generation, fields }: {
  * "Run once per item": step 1's one question about a list, asked only when a
  * list arrives. It was two controls in two places -- a "list" box on each
  * input and "run once on the whole input array" folded away -- that only did
- * anything together.
+ * anything together. Ticked, an input can be taken whole beside it ("whole
+ * list" on the input, where the node has several: *wholeLists*).
  */
-export function RunOncePerItem({ checked, onChange, subject }: { checked: boolean; onChange: (perItem: boolean) => void; subject: string }) {
+export function RunOncePerItem({ checked, onChange, subject, wholeLists = false }: {
+  checked: boolean; onChange: (perItem: boolean) => void; subject: string; wholeLists?: boolean;
+}) {
   return (
     <div>
       <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
@@ -77,7 +80,8 @@ export function RunOncePerItem({ checked, onChange, subject }: { checked: boolea
       </label>
       <p className="text-xs mt-0.5" style={{ color: DIMMER }}>
         {checked
-          ? `A list arrives, and ${subject} runs once for each item in it; what comes out is a list of the results. An input typed “List” is handed its list whole all the same.`
+          ? `A list arrives, and ${subject} runs once for each item in it; what comes out is a list of the results.`
+            + (wholeLists ? ' An input ticked “whole list” above is handed its list whole instead.' : '')
           : `A list arrives, and ${subject} gets it whole, once -- for totals, summaries, merges.`}
       </p>
     </div>
