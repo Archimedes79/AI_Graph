@@ -40,20 +40,42 @@ export interface NodeExample {
 const BLOCK = /```([^\n`]*)\n([\s\S]*?)```/g;
 
 /**
+ * Where an example begins: a `## ` heading. Exported with `exampleBlocks`
+ * because the editor edits the file's first example in place, and it must cut
+ * the file where a run splits it.
+ */
+export const EXAMPLE_SECTION = /^## +/m;
+
+/** A fenced block of one example, by what its info words say it is, and where it stands in the section. */
+export interface ExampleBlock {
+  role: 'input' | 'expect' | 'judge' | '';
+  start: number;
+  end: number;
+  body: string;
+}
+
+/** The fenced blocks of one example's section, in order. A block that is none of the three has no role and is prose. */
+export function exampleBlocks(section: string): ExampleBlock[] {
+  return [...section.matchAll(BLOCK)].map((match) => {
+    const words = match[1].trim().toLowerCase().split(/\s+/);
+    const role = words.includes('input') ? 'input' : words.includes('expect') ? 'expect' : words.includes('judge') ? 'judge' : '';
+    return { role, start: match.index!, end: match.index! + match[0].length, body: match[2] };
+  });
+}
+
+/**
  * The examples in *text*, and what is wrong with the ones that cannot be read.
  * Lenient about everything else: prose between the blocks is for people.
  */
 export function parseExamples(text: string): { examples: NodeExample[]; problems: string[] } {
   const examples: NodeExample[] = [];
   const problems: string[] = [];
-  const sections = text.replace(/\r\n/g, '\n').split(/^## +/m).slice(1);
+  const sections = text.replace(/\r\n/g, '\n').split(EXAMPLE_SECTION).slice(1);
   for (const section of sections) {
     const title = section.split('\n', 1)[0].trim() || `Example ${examples.length + 1}`;
     const example: NodeExample = { title, inputs: {} };
     let hasInput = false;
-    for (const [, info, body] of section.matchAll(BLOCK)) {
-      const words = info.trim().toLowerCase().split(/\s+/);
-      const role = words.includes('input') ? 'input' : words.includes('expect') ? 'expect' : words.includes('judge') ? 'judge' : '';
+    for (const { role, body } of exampleBlocks(section)) {
       if (role === 'judge') {
         example.judge = body.trim();
         continue;

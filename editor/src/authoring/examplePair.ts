@@ -10,10 +10,12 @@
 // A file may hold more than one section, written by hand or by an older
 // version of the dialog. Only the first is edited here; the rest are kept as
 // they are, and `test` still runs them.
+//
+// Where a section begins and what its blocks are is the engine's grammar,
+// imported rather than copied: what the dialog shows as the example is what
+// `test` runs only while the two read the file alike.
 
-/** How the engine tells the blocks of a section apart: see `execution/examples.ts`. */
-const BLOCK = /```([^\n`]*)\n([\s\S]*?)```/g;
-const SECTION = /^## +/m;
+import { EXAMPLE_SECTION, exampleBlocks, type ExampleBlock } from '@engine/execution/examples.ts';
 
 /** What a new pair is called, when the file has none yet. */
 export const PAIR_TITLE = 'The example';
@@ -36,28 +38,21 @@ export interface ExamplePair {
   complete: boolean;
 }
 
-type Role = 'input' | 'expect' | 'judge';
-
-interface Block { role: Role | ''; start: number; end: number; body: string }
+type Role = Exclude<ExampleBlock['role'], ''>;
 
 /** The file cut into what comes before the first section, the first section, and the rest. */
 function cut(text: string): { before: string; first: string; after: string; others: number } {
   const normal = text.replace(/\r\n/g, '\n');
-  const start = normal.search(SECTION);
-  if (start < 0) return { before: normal, first: '', after: '', others: 0 };
-  const rest = normal.slice(start + 3);
-  const next = rest.search(SECTION);
-  const first = next < 0 ? normal.slice(start) : normal.slice(start, start + 3 + next);
+  const marker = normal.match(EXAMPLE_SECTION);
+  if (!marker) return { before: normal, first: '', after: '', others: 0 };
+  // The marker's own length, not the three characters of "## ": a heading
+  // written with more spaces is cut where the engine splits it.
+  const start = marker.index!;
+  const rest = normal.slice(start + marker[0].length);
+  const next = rest.search(EXAMPLE_SECTION);
+  const first = next < 0 ? normal.slice(start) : normal.slice(start, start + marker[0].length + next);
   const after = next < 0 ? '' : rest.slice(next);
-  return { before: normal.slice(0, start), first, after, others: after ? after.split(SECTION).length - 1 : 0 };
-}
-
-function blocksOf(section: string): Block[] {
-  return [...section.matchAll(BLOCK)].map((match) => {
-    const words = match[1].trim().toLowerCase().split(/\s+/);
-    const role = words.includes('input') ? 'input' : words.includes('expect') ? 'expect' : words.includes('judge') ? 'judge' : '';
-    return { role, start: match.index!, end: match.index! + match[0].length, body: match[2] };
-  });
+  return { before: normal.slice(0, start), first, after, others: after ? after.split(EXAMPLE_SECTION).length - 1 : 0 };
 }
 
 /** An object keyed by port, or undefined: what `parseExamples` accepts as a block. */
@@ -73,7 +68,7 @@ function asObject(text: string): Record<string, unknown> | undefined {
 /** The first pair of *text*, as the dialog shows it. */
 export function readPair(text: string | undefined): ExamplePair {
   const { first, others } = cut(text ?? '');
-  const blocks = blocksOf(first);
+  const blocks = exampleBlocks(first);
   const input = blocks.find((block) => block.role === 'input');
   const expect = blocks.find((block) => block.role === 'expect');
   const judge = blocks.find((block) => block.role === 'judge');
@@ -83,7 +78,7 @@ export function readPair(text: string | undefined): ExamplePair {
     expectText: expect?.body.trimEnd() ?? '',
     expect: expect ? asObject(expect.body) : undefined,
     judge: judge?.body.trim() || undefined,
-    title: first ? first.slice(3).split('\n', 1)[0].trim() : '',
+    title: first ? first.replace(EXAMPLE_SECTION, '').split('\n', 1)[0].trim() : '',
     others,
     complete: false,
   };
@@ -104,13 +99,13 @@ function assemble(before: string, section: string, after: string): string {
 
 /** *first* without its *role* block, the blank lines around it closed up. */
 function without(first: string, role: Role): string {
-  const own = blocksOf(first).find((candidate) => candidate.role === role);
+  const own = exampleBlocks(first).find((candidate) => candidate.role === role);
   if (!own) return first;
   return `${first.slice(0, own.start).trimEnd()}\n${first.slice(own.end).replace(/^\n+/, '\n')}`;
 }
 
 /** An expect block that names nothing: "only that it runs". */
-const checksNothing = (candidate: Block): boolean => candidate.role === 'expect' && candidate.body.replace(/\s/g, '') === '{}';
+const checksNothing = (candidate: ExampleBlock): boolean => candidate.role === 'expect' && candidate.body.replace(/\s/g, '') === '{}';
 
 /**
  * *text* with its first pair's *role* block set to *body*: replaced where it
@@ -129,7 +124,7 @@ function withBlock(text: string | undefined, role: Role, body: string): string {
     const checked = role === 'input' ? block('expect', '{}') : block(role, body);
     return `${lead}## ${PAIR_TITLE}\n\n${block('input', input)}\n\n${checked}\n`;
   }
-  const blocks = blocksOf(first);
+  const blocks = exampleBlocks(first);
   const own = blocks.find((candidate) => candidate.role === role);
   let section: string;
   if (own) {
@@ -146,9 +141,9 @@ function withBlock(text: string | undefined, role: Role, body: string): string {
     const at = first.indexOf('\n') < 0 ? first.length : first.indexOf('\n');
     section = `${first.slice(0, at)}\n\n${block('input', body)}${first.slice(at)}`;
   }
-  const checked = blocksOf(section).some((candidate) => candidate.role === 'expect' || candidate.role === 'judge');
+  const checked = exampleBlocks(section).some((candidate) => candidate.role === 'expect' || candidate.role === 'judge');
   if (role === 'input' && !checked) {
-    const input = blocksOf(section).find((candidate) => candidate.role === 'input')!;
+    const input = exampleBlocks(section).find((candidate) => candidate.role === 'input')!;
     section = `${section.slice(0, input.end)}\n\n${block('expect', '{}')}${section.slice(input.end)}`;
   }
   return assemble(before, section, after);
@@ -176,13 +171,13 @@ export function withExpect(text: string | undefined, body: string): string {
 export function withJudge(text: string | undefined, sentence: string): string {
   if (sentence.trim()) {
     const { before, first, after } = cut(withBlock(text, 'judge', sentence));
-    const empty = blocksOf(first).some(checksNothing);
+    const empty = exampleBlocks(first).some(checksNothing);
     return assemble(before, empty ? without(first, 'expect') : first, after);
   }
   const { before, first, after } = cut(text ?? '');
-  if (!blocksOf(first).some((candidate) => candidate.role === 'judge')) return text ?? '';
+  if (!exampleBlocks(first).some((candidate) => candidate.role === 'judge')) return text ?? '';
   const section = without(first, 'judge');
-  const unchecked = !blocksOf(section).some((candidate) => candidate.role === 'expect');
+  const unchecked = !exampleBlocks(section).some((candidate) => candidate.role === 'expect');
   const judged = assemble(before, section, after);
   return unchecked ? withExpect(judged, '{}') : judged;
 }
