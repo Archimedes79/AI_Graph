@@ -568,6 +568,24 @@ describe('saving a project that holds a project', () => {
   });
 });
 
+describe('looking for what changed, when a graph inside cannot be read at all', () => {
+  it('says so, rather than swallowing it as if it were half-written', async () => {
+    const graph = parseGraph({
+      metadata: { name: 'Outer' },
+      nodes: [{
+        id: 'part', node_type: 'subgraph', label: 'Part', position: { x: 0, y: 0 }, inputs: [], outputs: [],
+        config: { subgraph: { metadata: { name: 'Inner' }, nodes: [{ id: 'inner', node_type: 'code', config: { code: 'x' } }], edges: [] } },
+      }],
+      edges: [],
+    });
+    await writeProject(dir, graph);
+    // Where its code should be there is a folder: no editor ever half-writes that.
+    await rm(join(dir, 'nodes/part/nodes/inner/code.js'));
+    await mkdir(join(dir, 'nodes/part/nodes/inner/code.js'));
+    await expect(changesOnDisk(dir)).rejects.toThrow(/EISDIR|illegal operation/);
+  });
+});
+
 describe('looking for what changed, while someone else is writing', () => {
   it('still hands over what it found when a graph inside is caught half-written', async () => {
     const graph = parseGraph({

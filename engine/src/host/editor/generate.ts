@@ -108,8 +108,13 @@ const FRAMED_CODE_SYSTEM =
   `${FENCED_CODE} Complete exactly the function you are given, keeping its name and its parameters, `
   + 'and use only what the description of where it runs says it has.';
 
-function firstCodeBlock(text: string): string {
-  return /```(?:\w+)?\n([\s\S]*?)```/.exec(text)?.[1].trim() ?? '';
+export function firstCodeBlock(text: string): string {
+  // Any info string (`javascript `, `js title="x"`, `c++`), Windows line ends,
+  // and a close at the start of a line: code that writes "```" into a string
+  // does not end its own block there. A close mid-line only when there is none.
+  const plain = text.replace(/\r\n/g, '\n');
+  const block = /```[^\n`]*\n([\s\S]*?)\n[ \t]*```/.exec(plain) ?? /```[^\n`]*\n([\s\S]*?)```/.exec(plain);
+  return block?.[1].trim() ?? '';
 }
 
 /**

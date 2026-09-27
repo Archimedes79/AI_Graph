@@ -622,10 +622,12 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
       changes.push({
         node_id: nested.node.id, widget_id: '', field: NESTED_GRAPH_FIELD, value: await readProject(inside),
       });
-    } catch {
-      // Half-written by whoever is editing it, most likely. What was collected
-      // above is still good and is handed over; this folder is not marked as
-      // seen, so the next look asks again.
+    } catch (error) {
+      // Half-written by whoever is editing it: JSON cut off, a file between
+      // being deleted and written again. What was collected above is still
+      // good and is handed over; this folder is not marked as seen, so the
+      // next look asks again. Anything else is a real failure, and is said.
+      if (!(error instanceof NotAGraph || error instanceof NotFound)) throw error;
     }
   }
   return changes;

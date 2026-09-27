@@ -218,6 +218,13 @@ describe('validate_graph', () => {
     expect((await toolsWith().call('validate_graph', { graph: hello(), path: 'x.json' })).isError).toBe(true);
   });
 
+  it('refuses a path it may not open, whatever the refusal says, rather than calling it a finding', async () => {
+    for (const path of ['   ', 'graphs/x.txt', '../outside.json']) {
+      const checked = await toolsWith().call('validate_graph', { path });
+      expect(checked.isError, path).toBe(true);
+    }
+  });
+
   it('reports a document that is not a graph as a finding, not a failure', async () => {
     const checked = await answer(toolsWith(), 'validate_graph', { graph: { name: 'not-a-graph' } });
     expect(checked.isError).toBeUndefined();

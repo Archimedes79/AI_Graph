@@ -377,7 +377,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       throw new BadDocument(`"${argument}" must be a graph document: an object with a "nodes" array and an "edges" array. authoring_guide shows the shape.`);
     }
     if (JSON.stringify(raw).length > MAX_GRAPH_BYTES) {
-      throw new Refused(`"${argument}" is larger than ${MAX_GRAPH_BYTES / 1024 / 1024} MB. A graph holds wiring and code, not data: keep the data in a file and read it with an input node.`);
+      throw new BadDocument(`"${argument}" is larger than ${MAX_GRAPH_BYTES / 1024 / 1024} MB. A graph holds wiring and code, not data: keep the data in a file and read it with an input node.`);
     }
     let graph: Graph;
     try {
@@ -406,7 +406,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
   const readGraphFile = async (full: string, given: string): Promise<Graph> => {
     let text: string;
     try {
-      if ((await stat(full)).size > MAX_GRAPH_BYTES) throw new Refused(`"${given}" is larger than ${MAX_GRAPH_BYTES / 1024 / 1024} MB, which no graph is.`);
+      if ((await stat(full)).size > MAX_GRAPH_BYTES) throw new BadDocument(`"${given}" is larger than ${MAX_GRAPH_BYTES / 1024 / 1024} MB, which no graph is.`);
       text = await readFile(full, 'utf8');
     } catch (error) {
       if (error instanceof Refused) throw error;
@@ -545,8 +545,9 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
         graph = args.path !== undefined ? (await loadGraph(args.path)).graph : graphFrom(args.graph, 'graph');
       } catch (error) {
         // A path that may not be opened is a refusal. A document that is not a
-        // graph is an answer to the question that was asked.
-        if (!(error instanceof Refused) || /confined to|dot-folder|\.json file|settings file|cannot be trusted|There is no graph/.test(error.message)) throw error;
+        // graph is an answer to the question that was asked -- told apart by
+        // the class it was thrown as, not by what its message says.
+        if (!(error instanceof BadDocument)) throw error;
         return json({ valid: false, problems: [{ where: 'graph', problem: error.message, fix: 'A graph is { "metadata": {...}, "nodes": [...], "edges": [...] }; authoring_guide shows a complete one.' }] });
       }
       const problems = problemsIn(graph);

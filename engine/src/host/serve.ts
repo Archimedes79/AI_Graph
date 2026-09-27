@@ -130,11 +130,11 @@ export async function serve(options: ServeOptions): Promise<Served> {
     if (foreign) return sendJson(response, 403, { detail: foreign });
 
     if (path.startsWith('/api/')) {
+      const found = matchRoute(request.method ?? 'GET', path);
       // Watching and stopping still answer while the runs wind down; nothing new starts.
-      if (lifecycle.stopping && request.method !== 'GET') {
+      if (lifecycle.stopping && request.method !== 'GET' && found?.name !== 'stopRun') {
         return sendJson(response, 503, { detail: 'This server is stopping.' });
       }
-      const found = matchRoute(request.method ?? 'GET', path);
       const handler = found ? handlers[found.name] as ((request: unknown, exchange: Exchange) => unknown) | undefined : undefined;
       if (!found || !handler) return sendJson(response, 404, { detail: 'Not part of this server.' });
       const route = API[found.name];

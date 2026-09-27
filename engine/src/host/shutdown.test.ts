@@ -56,6 +56,9 @@ describe('shutting a server down', () => {
     expect(refused.status).toBe(503);
     const seen = await (await fetch(`${url}/api/execute/runs/${run_id}`)).json() as { cancelled: boolean };
     expect(seen.cancelled).toBe(true);
+    // A page pressing Stop meanwhile is answered, not told the server is stopping.
+    const stopped = await post(`${url}/api/execute/runs/${run_id}/cancel`, {});
+    expect(stopped.status).toBe(200);
 
     expect(await stopping).toEqual([]);
     expect(Date.now() - began).toBeLessThan(10_000);

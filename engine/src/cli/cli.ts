@@ -79,7 +79,11 @@ export function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--every') {
       options.every = parseInterval(argv[++i] ?? '');
     } else if (arg === '--limit') {
-      options.limit = Number(argv[++i]);
+      // Not a number ran nothing and said nothing: `round < NaN` is never true.
+      const given = argv[++i] ?? '';
+      const limit = Number(given);
+      if (!given.trim() || !Number.isInteger(limit) || limit < 1) throw new Error(`--limit wants a whole number of runs, not "${given}".`);
+      options.limit = limit;
     } else if (arg === '--bundle') {
       options.bundle = argv[++i] ?? 'bundle';
     } else if (arg === '--serve') {

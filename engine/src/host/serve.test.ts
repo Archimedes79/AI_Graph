@@ -96,6 +96,12 @@ describe('what a deployed tool serves', () => {
     expect((await asJson(refused)).detail).toMatch(/not JSON/);
   });
 
+  it('answers a path with a broken escape as one that names nothing, not as a failure', async () => {
+    const { url } = await serveGraph();
+    const response = await fetch(`${url}/api/execute/runs/%E0%A4%A`);
+    expect(response.status).toBe(404);
+  });
+
   it('offers nothing a deployed tool has no business offering', async () => {
     // Not "not implemented": these are the boundary. Code generation and graph
     // editing belong to building one, not to running one.

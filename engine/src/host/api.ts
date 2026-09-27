@@ -378,8 +378,14 @@ function matchPath(pattern: string, path: string): Record<string, string> | null
   if (want.length !== got.length) return null;
   const params: Record<string, string> = {};
   for (let i = 0; i < want.length; i++) {
-    if (want[i].startsWith(':')) params[want[i].slice(1)] = decodeURIComponent(got[i]);
-    else if (want[i] !== got[i]) return null;
+    if (want[i].startsWith(':')) {
+      // A broken escape (`%E0%A4%A`) is a path that names nothing, not a server that broke.
+      try {
+        params[want[i].slice(1)] = decodeURIComponent(got[i]);
+      } catch {
+        return null;
+      }
+    } else if (want[i] !== got[i]) return null;
   }
   return params;
 }

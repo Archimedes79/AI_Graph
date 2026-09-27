@@ -6,7 +6,7 @@ import { port } from '../../elements/port.ts';
 import { executeNode } from '../../execution/executor.ts';
 import { inferInterface } from '../../execution/interface.ts';
 import { parseGraph } from '../../graph.ts';
-import { GenerationFailed, GenerationRefused, generate, generateGraph } from './generate.ts';
+import { GenerationFailed, GenerationRefused, firstCodeBlock, generate, generateGraph } from './generate.ts';
 import { nodeCode } from '../node.ts';
 import type { GenerateRequest } from '../api.ts';
 
@@ -141,6 +141,19 @@ describe('code', () => {
     await generate({ element: 'table', description: 'one row per file' }, { ai, code: runner(() => ({})), generationFor, target });
     expect(ai.asked[0].prompt).toContain('function run(inputs) {');
     expect(ai.asked[0].prompt).toContain('Node has built in');
+  });
+});
+
+describe('the code in a model\'s answer', () => {
+  const fence = '```';
+  it('is found behind any info string, with Windows line ends too', () => {
+    expect(firstCodeBlock(`Here:\n${fence}javascript \nfunction run() {}\n${fence}\nDone.`)).toBe('function run() {}');
+    expect(firstCodeBlock(`${fence}js title="run.js"\r\nfunction run() {}\r\n${fence}`)).toBe('function run() {}');
+  });
+
+  it('does not end at a fence the code writes into a string', () => {
+    const code = 'function run() {\n  return { md: "' + fence + 'json\\n{}\\n' + fence + '" };\n}';
+    expect(firstCodeBlock(`${fence}js\n${code}\n${fence}`)).toBe(code);
   });
 });
 
