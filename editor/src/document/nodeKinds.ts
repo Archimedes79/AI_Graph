@@ -201,9 +201,9 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       config: { ...baseNodeConfig(), output_label: 'Result', write_mode: 'window' },
     }),
     // Its own label, "Result 2" beside a "Result": two results that share one
-    // keep only the first under it in the run's result, `check` reports it,
-    // and the MCP server's save_graph refuses the graph. The labels taken are
-    // asked the way `check` asks them, of every element that is a result.
+    // keep only the last under it in the run's result, and `check` says so.
+    // The labels taken are asked the way `check` asks them, of every element
+    // that is a result.
     placedAmong(node, others) {
       const taken = new Set(others.flatMap((other) => {
         const element = engineRegistry.node(other.node_type);

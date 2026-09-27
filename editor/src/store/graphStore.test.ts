@@ -257,7 +257,7 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
   });
 
   it('labels each new output node its own way, as check asks', () => {
-    // `check` reports two outputs sharing a label, and save_graph refuses them.
+    // Two outputs sharing a label keep only the last under it, and `check` says so.
     loadTestGraph([graphNode({ id: 'kept', node_type: 'output', config: { output_label: 'Result 2' } as GraphNode['config'] })]);
     const labels = [0, 1, 2].map(() => useGraphStore.getState().addNode('output', { x: 0, y: 0 }))
       .map((id) => useGraphStore.getState().exportGraph().nodes.find((node) => node.id === id)!.config.output_label);

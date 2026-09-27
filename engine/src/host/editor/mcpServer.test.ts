@@ -338,6 +338,22 @@ describe('save_graph', () => {
     expect(JSON.parse(await readFile(join(root, 'hello.json'), 'utf8')).nodes[0].config.value).toBe('two');
   });
 
+  it('writes a graph whose output nodes share a label, as an older editor made them, and says so', async () => {
+    // Every output node an older editor made was "Result". Such a graph runs,
+    // and an agent that only edited one a little could not write it back.
+    const twice = graphOf(
+      [textInput('a', 'first'), textInput('b', 'second'), output('out1'), output('out2')],
+      [edge('e1', 'a.output', 'out1.value'), edge('e2', 'b.output', 'out2.value')],
+    );
+    const saved = await answer(toolsWith(), 'save_graph', { path: 'twice.json', graph: twice });
+    expect(saved.isError).toBeUndefined();
+    expect(saved.json.saved).toBe('twice.json');
+    expect(saved.json.notes[0].problem).toMatch(/share the label "Result".*only "out2" under "Result"/);
+    const checked = (await answer(toolsWith(), 'validate_graph', { path: 'twice.json' })).json;
+    expect(checked.valid).toBe(true);
+    expect(checked.notes).toHaveLength(1);
+  });
+
   it('refuses a graph with problems, returns them, and writes nothing', async () => {
     const saved = await answer(toolsWith(), 'save_graph', { path: 'bad.json', graph: graphOf([code('alone')]) });
     expect(saved.isError).toBe(true);

@@ -905,14 +905,15 @@ async function showDisplays(
  *
  * Two output nodes may well be given one label -- every new one starts as
  * "Result" -- and a run's result is not a place where one of them may quietly
- * replace the other. The first keeps its label; one that comes later under a
- * label already taken is told apart by its id, so a graph whose labels differ
- * gets exactly the keys it always got (`resultKeys`).
+ * replace the other. The last keeps its label, as it did when it replaced the
+ * others; one that comes earlier under a label already taken is told apart by
+ * its id, so a graph gets every key it always got, holding what it always
+ * held (`resultKeys`).
  *
- * "First" in the graph, whether or not it produced anything this run: a round
- * started by a page event, or one where the first stood still, would
- * otherwise hand the second's value on under the first's key -- and whoever
- * lays rounds over each other (a schedule) would lose the first's once more.
+ * "Last" in the graph, whether or not it produced anything this run: a round
+ * started by a page event, or one where the last stood still, would
+ * otherwise hand another's value on under its key -- and whoever lays rounds
+ * over each other (a schedule) would lose one of them once more.
  */
 function finalOutputs(
   nodes: GraphNode[],

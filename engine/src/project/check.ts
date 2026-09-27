@@ -162,14 +162,24 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
     });
   }
 
-  // Two output nodes under one label both reach the run's result, but only
-  // the first under that label: whoever reads the result by it gets one of
-  // them and never hears of the other. Every new output node starts out as
-  // "Result", so this is easy to do and hard to see. Only at the top: a graph
-  // inside a node hands its outputs up by node id, not by label.
-  if (!inside) problems.push(...sharedResultLabels(graph));
-
   return problems;
+}
+
+/**
+ * What is worth saying about a graph that runs as it is: advice, which fails
+ * neither `check` nor a save over MCP.
+ *
+ * Two output nodes under one label both reach the run's result, but only the
+ * last under that label: whoever reads the result by it gets one of them, and
+ * may not know of the other. Every output node an older editor made started
+ * as "Result", so this is easy to do and hard to see. It is not a problem,
+ * because such a graph runs and always meant this: counted as one, graphs
+ * that passed `check` failed it, and save_graph refused to write them back.
+ * Only at the top: a graph inside a node hands its outputs up by node id,
+ * not by label.
+ */
+export function notesIn(graph: Graph): Problem[] {
+  return sharedResultLabels(graph);
 }
 
 /**
@@ -341,18 +351,18 @@ export async function folderProblems(folder: string): Promise<Problem[]> {
   return found;
 }
 
-/** Everything wrong with the graph or project at *path*: the `check` command's answer. */
-export async function checkPath(path: string): Promise<{ problems: Problem[]; graph: Graph | null }> {
+/** Everything wrong with the graph or project at *path*, and the advice beside it: the `check` command's answer. */
+export async function checkPath(path: string): Promise<{ problems: Problem[]; notes: Problem[]; graph: Graph | null }> {
   let graph: Graph;
   try {
     graph = await loadGraph(path);
   } catch (error) {
-    return { problems: [{ where: path, problem: (error as Error).message, fix: 'Fix the file so it can be read.' }], graph: null };
+    return { problems: [{ where: path, problem: (error as Error).message, fix: 'Fix the file so it can be read.' }], notes: [], graph: null };
   }
   const problems = problemsIn(graph);
   const folder = projectFolderOf(path);
   if (folder) problems.push(...await folderProblems(folder));
-  return { problems, graph };
+  return { problems, notes: notesIn(graph), graph };
 }
 
 /**

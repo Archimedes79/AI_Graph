@@ -203,49 +203,51 @@ describe('executeGraph', () => {
       ]),
       { runtime: nowhere, registry },
     );
-    // The first keeps its label, and labels nobody shares are left as they were.
+    // The last keeps its label: a run used to write each over the one before,
+    // so "Result" held the last one's value, and a graph saved then still
+    // finds it there. Labels nobody shares are left as they were.
     expect(result.outputs).toEqual({
-      Result: { value: 'alpha' },
-      'Result (second)': { value: 'beta' },
+      'Result (first)': { value: 'alpha' },
+      Result: { value: 'beta' },
       Named: { value: 'alpha' },
     });
   });
 
-  it('keys an output the same whether or not the one before it ran', async () => {
+  it('keys an output the same whether or not the one after it ran', async () => {
     // A round that runs only part of the graph -- a page event, a trigger --
-    // must not hand the second's value on under the first's key: rounds laid
-    // over each other would lose the first's value once more.
+    // must not hand the first's value on under the last's key: rounds laid
+    // over each other would lose the last's value once more.
     const result = await executeGraph(
       graphOf([
         node('a', 'input', { input_mode: 'text', value: 'alpha' }),
         node('b', 'input', { input_mode: 'text', value: 'beta' }),
         node('first', 'output', { output_label: 'Result' }),
+        node('clash', 'output', { output_label: 'Result (first)' }),
         node('second', 'output', { output_label: 'Result' }),
-        node('clash', 'output', { output_label: 'Result (second)' }),
       ], [
         edge('e1', 'a', 'output', 'first', 'value'),
         edge('e2', 'b', 'output', 'second', 'value'),
-        edge('e3', 'b', 'output', 'clash', 'value'),
+        edge('e3', 'a', 'output', 'clash', 'value'),
       ]),
-      { runtime: nowhere, registry, only: new Set(['b', 'second', 'clash']) },
+      { runtime: nowhere, registry, only: new Set(['a', 'first', 'clash']) },
     );
     // And a label that happens to be another's key is told apart the same way.
     expect(result.outputs).toEqual({
-      'Result (second)': { value: 'beta' },
-      'Result (second) (clash)': { value: 'beta' },
+      'Result (first) 2': { value: 'alpha' },
+      'Result (first)': { value: 'alpha' },
     });
   });
 
-  it('keeps every output when a label is the key a later repeat would be given', async () => {
-    // With "Result (second)" before the second "Result", the second was keyed
-    // "Result (second)" too, and the clash's value was gone without a word.
+  it('keeps every output when a label is the key an earlier repeat would be given', async () => {
+    // With "Result (first)" in the graph, the first "Result" would be keyed
+    // "Result (first)" too, and one of the two values gone without a word.
     const result = await executeGraph(
       graphOf([
         node('a', 'input', { input_mode: 'text', value: 'alpha' }),
         node('b', 'input', { input_mode: 'text', value: 'beta' }),
         node('c', 'input', { input_mode: 'text', value: 'gamma' }),
         node('first', 'output', { output_label: 'Result' }),
-        node('clash', 'output', { output_label: 'Result (second)' }),
+        node('clash', 'output', { output_label: 'Result (first)' }),
         node('second', 'output', { output_label: 'Result' }),
       ], [
         edge('e1', 'a', 'output', 'first', 'value'),
@@ -255,9 +257,9 @@ describe('executeGraph', () => {
       { runtime: nowhere, registry },
     );
     expect(result.outputs).toEqual({
-      Result: { value: 'alpha' },
-      'Result (second)': { value: 'gamma' },
-      'Result (second) 2': { value: 'beta' },
+      'Result (first) 2': { value: 'alpha' },
+      'Result (first)': { value: 'gamma' },
+      Result: { value: 'beta' },
     });
   });
 });

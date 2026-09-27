@@ -328,19 +328,21 @@ async function runMcp(options: CliOptions): Promise<number> {
 /**
  * Say what is wrong with each graph or project, without running anything.
  * The result on stdout, one problem per paragraph; exit code 1 when there is
- * any, so a CI job fails on a broken graph before anyone opens it.
+ * any, so a CI job fails on a broken graph before anyone opens it. Advice
+ * (`notesIn`) is said after it, and fails nothing.
  */
 async function runCheck(paths: string[]): Promise<number> {
   let failed = 0;
   for (const path of paths.length ? paths : ['.']) {
-    const { problems, graph } = await checkPath(path);
+    const { problems, notes, graph } = await checkPath(path);
     if (!problems.length) {
       process.stdout.write(`✓ ${path}: ${graph!.nodes.length} nodes, ${graph!.edges.length} edges\n`);
-      continue;
+    } else {
+      failed += 1;
+      process.stdout.write(`✗ ${path}: ${problems.length} problem${problems.length === 1 ? '' : 's'}\n`);
+      for (const { where, problem, fix } of problems) process.stdout.write(`  ${where}: ${problem}\n    → ${fix}\n`);
     }
-    failed += 1;
-    process.stdout.write(`✗ ${path}: ${problems.length} problem${problems.length === 1 ? '' : 's'}\n`);
-    for (const { where, problem, fix } of problems) process.stdout.write(`  ${where}: ${problem}\n    → ${fix}\n`);
+    for (const { where, problem, fix } of notes) process.stdout.write(`  note: ${where}: ${problem}\n    → ${fix}\n`);
   }
   return failed ? 1 : 0;
 }

@@ -352,21 +352,27 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
 /**
  * The key each result node's outputs are handed on under in a run's result,
- * by node id: its label (`resultLabel`), or -- where an earlier node in graph
- * order already has that key -- the label with the node's id after it, and a
- * number after that while even that is taken.
+ * by node id, in graph order: its label (`resultLabel`), or -- where a later
+ * node in graph order already has that key -- the label with the node's id
+ * after it, and a number after that while even that is taken.
+ *
+ * The last node under a label keeps it because the last one always had it: a
+ * run used to write each result under its label in graph order, so the later
+ * replaced the earlier, and a graph saved then -- every output node started as
+ * "Result" -- still finds the same value under the same key. The keys told
+ * apart by an id are only additions.
  *
  * Decided over the whole graph, not over the nodes a round ran, so a node's
- * key does not change with which ran before it; and asked by the run and by
+ * key does not change with which ran beside it; and asked by the run and by
  * `check` alike, so what `check` says the keys are is what they are. Every key
  * is checked against every key handed out before it: a label of the form
- * "Result (second)" used to be given to a later "Result" too, and one of the
- * two values was dropped from the result without a word.
+ * "Result (second)" used to be given to a repeated "Result" too, and one of
+ * the two values was dropped from the result without a word.
  */
 export function resultKeys(nodes: GraphNode[], elements: Runners): Map<string, string> {
   const keys = new Map<string, string>();
   const taken = new Set<string>();
-  for (const node of nodes) {
+  for (const node of [...nodes].reverse()) {
     const element = elements.node(node.node_type);
     if (!element?.isResult || keys.has(node.id)) continue;
     const label = element.resultLabel(node);
@@ -376,5 +382,5 @@ export function resultKeys(nodes: GraphNode[], elements: Runners): Map<string, s
     taken.add(key);
     keys.set(node.id, key);
   }
-  return keys;
+  return new Map([...keys].reverse());
 }
