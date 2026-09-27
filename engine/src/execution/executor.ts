@@ -450,7 +450,9 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   // added to the conversation a second time, nor a window popped up again.
   for (const nodeId of held) outputs.delete(nodeId);
   const memory = settleMemory(graph, feedback, outputs, results, registry);
-  await showDisplays(graph, results, registry, runtime);
+  // What finished before a Stop is drawn as it is: showing it is not the work
+  // Stop was pressed for, and a stopped transform would show "Stopped" instead.
+  await showDisplays(graph, results, registry, signal?.aborted ? options.runtime : runtime);
 
   const status: ExecutionResult['status'] = signal?.aborted
     ? 'cancelled'
@@ -540,10 +542,10 @@ function withSubgraph(runtime: Runtime, options: RunOptions, node: GraphNode, de
   };
 }
 
-/** Whether a value is nothing: not delivered, empty text, an empty list. */
+/** Whether a value is nothing: not delivered, empty text, a list of nothing -- two empty boxes wired into one port. */
 function isNothing(value: unknown): boolean {
   return value === null || value === undefined || value === ''
-    || (Array.isArray(value) && value.length === 0);
+    || (Array.isArray(value) && value.every(isNothing));
 }
 
 /**
@@ -813,7 +815,7 @@ async function runNode(
 
   const items = batchItems(node, inputs);
   const produced: Record<string, unknown>[] = new Array(items.length);
-  const failures = Object.assign([] as string[], { total: items.length });
+  const failed: { index: number; message: string }[] = [];
   const catches = element.catchesErrors(node);
   let next = 0;
   let done = 0;
@@ -831,7 +833,7 @@ async function runNode(
           .filter((p) => !(catches && p.id === ERROR_PORT))
           .map((p) => [p.id, null]));
         const message = error instanceof Error ? error.message : String(error);
-        failures.push(`item ${index + 1}: ${message}`);
+        failed.push({ index, message });
         runtime.report?.({ type: 'activity', node_id: node.id, message: `item ${index + 1}: ${message}` });
       }
       runtime.report?.({ type: 'batch', node_id: node.id, done: ++done, total: items.length });
@@ -840,9 +842,13 @@ async function runNode(
 
   const workers = Math.max(1, Math.min(element.batchConcurrency(node), items.length));
   await Promise.all(Array.from({ length: workers }, worker));
+  // In item order, not the order they happened to fail in: the same run says
+  // the same thing every time.
+  failed.sort((a, b) => a.index - b.index);
+  const failures = Object.assign(failed.map(({ index, message }) => `item ${index + 1}: ${message}`), { total: items.length });
   // Every item failed: that is the node failing, with its own message, not a
   // success made of nulls.
-  if (items.length && failures.length === items.length) throw new Error(failures[0].replace(/^item 1: /, ''));
+  if (items.length && failed.length === items.length) throw new Error(failed[0].message);
   const merged = mergeBatchOutputs(node, produced);
   if (catches && failures.length) merged[ERROR_PORT] = itemFailures(failures);
   return { produced: merged, failures };

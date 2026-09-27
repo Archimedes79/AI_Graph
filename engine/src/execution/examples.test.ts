@@ -39,6 +39,16 @@ describe('parseExamples', () => {
       '"A list": no ```json input block.',
     ]);
   });
+
+  it('does not start an example at a "## " inside a fenced block', () => {
+    const { examples, problems } = parseExamples([
+      section('Headline', [block('json input', '{ "input": "x" }'), block('judge', 'Starts with a markdown heading such as\n## Title')]),
+      section('Second', [block('json input', '{ "input": "y" }'), block('json expect', '{ "output": "y" }')]),
+    ].join('\n'));
+    expect(problems).toEqual([]);
+    expect(examples.map((example) => example.title)).toEqual(['Headline', 'Second']);
+    expect(examples[0].judge).toBe('Starts with a markdown heading such as\n## Title');
+  });
 });
 
 describe('unmet', () => {

@@ -52,9 +52,15 @@ export function inferSchema(value: unknown, depth = 0): Schema {
   return { type };
 }
 
-/** One schema both *a* and *b* satisfy: what several items of one list have in common. */
+/**
+ * One schema both *a* and *b* satisfy: what several items of one list have in
+ * common. A side that says nothing -- a null, one row's missing value -- leaves
+ * the other side's word standing: one empty cell in a column of numbers does
+ * not make the column "anything".
+ */
 export function merge(a: Schema, b: Schema): Schema {
-  if (!a.type || !b.type) return {};
+  if (!a.type) return b;
+  if (!b.type) return a;
   if (JSON.stringify(a) === JSON.stringify(b)) return a;
   const types = new Set([...[a.type].flat(), ...[b.type].flat()]);
   if (types.has('integer') && types.has('number')) types.delete('integer');

@@ -373,6 +373,63 @@ describe('a batch with failing items', () => {
   it('is a plain success when nothing fails', async () => {
     expect((await workResult(['ok', 'ok'])).status).toBe('success');
   });
+
+  it('says the first item\'s failure, not whichever failed first in time', async () => {
+    const slowFirst: Runtime = {
+      ...nowhere,
+      code: { run: async (_body, inputs) => {
+        if (inputs.items === 'bad slow') await new Promise((wait) => setTimeout(wait, 30));
+        throw new Error(`boom on ${String(inputs.items)}`);
+      } },
+    };
+    const run = await executeGraph(batchOf(['bad slow', 'bad fast']), { runtime: slowFirst, registry });
+    expect(run.node_results.find((r) => r.node_id === 'work')!.error).toBe('boom on bad slow');
+  });
+});
+
+describe('what a run leaves on the page', () => {
+  it('shows what finished before Stop as it is, not as a transform that was stopped', async () => {
+    const stop = new AbortController();
+    const runtime = quietRuntime({
+      code: { run: async (body, inputs, signal) => {
+        if (signal?.aborted) throw new Error('Stopped.');
+        if (body.includes('SLOW')) {
+          setTimeout(() => stop.abort(), 5);
+          await new Promise((_, reject) => signal!.addEventListener('abort', () => reject(new Error('Stopped.'))));
+        }
+        return new Function('inputs', `${body}; return run(inputs);`)(inputs) as Record<string, unknown>;
+      } },
+    });
+    const graph = graphOf(
+      [
+        node('src', 'code', { code: 'function run() { return { rows: [1, 2] }; }' }),
+        node('page', 'gui', { gui_widgets: [{ id: 't', kind: 'table', code: 'function run(i) { return { value: i.value }; }' }] }),
+        node('slow', 'code', { code: '/* SLOW */ function run() { return { x: 1 }; }' }),
+      ],
+      [edge('a', 'src', 'rows', 'page', 't_in'), edge('b', 'src', 'rows', 'slow', 'rows')],
+    );
+    const run = await executeGraph(graph, { runtime, registry, signal: stop.signal });
+    expect(run.status).toBe('cancelled');
+    expect(JSON.stringify(run.node_results.find((r) => r.node_id === 'page')!.display)).not.toContain('Stopped');
+  });
+
+  it('does not ask a model when every wire into its one port brought nothing', async () => {
+    let asked = 0;
+    const runtime = quietRuntime({ ai: { complete: async () => { asked += 1; return 'answer'; } } });
+    const graph = graphOf(
+      [
+        node('page', 'gui', { gui_widgets: [
+          { id: 'a', kind: 'text_io', mode: 'input', value: '' },
+          { id: 'b', kind: 'text_io', mode: 'input', value: '' },
+        ] }),
+        node('ask', 'ai', { system_prompt: 'Answer.' }),
+      ],
+      [edge('ea', 'page', 'a_out', 'ask', 'message'), edge('eb', 'page', 'b_out', 'ask', 'message')],
+    );
+    const run = await executeGraph(graph, { runtime, registry });
+    expect(run.node_results.find((r) => r.node_id === 'ask')!.status).toBe('skipped');
+    expect(asked).toBe(0);
+  });
 });
 
 describe('a node that catches its own failure', () => {
