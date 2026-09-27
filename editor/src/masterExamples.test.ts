@@ -5,8 +5,7 @@ import { trackPorts } from '@/store/portRenames';
 import { saveDraft, withPorts, withSetting } from '@/canvas/nodeDraft';
 import { newBlock } from '@/page/DesignerPalette';
 import { pageOf } from '@/page/GuiPage';
-import { patchBlock, routePage, type PageWrite } from '@/page/pageWrite';
-import { syncGuiNodePorts } from '@/document/guiWidgets';
+import { insertBlock, patchBlock } from '@/page/pageWrite';
 import { listPorts, withPerItem } from '@/authoring/nodeStepRules';
 import { readPair } from '@/authoring/examplePair';
 import { executeGraph } from '@engine/execution/executor.ts';
@@ -25,11 +24,10 @@ import type { Runtime } from '@engine/elements/Runtime.ts';
  * on the canvas, blocks added to the page, a setting changed in a dialog, a wire
  * dragged from one port to another. No mouse, no browser, and no copy of what
  * the editor's handlers do: a block comes from the palette's `newBlock` and
- * reaches the page through `routePage` and `patchBlock`, a dialog's draft is
+ * reaches the page through `insertBlock` and `patchBlock`, a dialog's draft is
  * edited by `withPorts` and `withSetting` and saved by `saveDraft`, a wire is
  * the store's `connect` -- the functions the designer and the node dialog call.
- * What stays in the components -- which row was clicked, which gui node is
- * made when there is none -- is left out.
+ * What stays in the components -- which row was clicked -- is left out.
  *
  * Then three questions, of each:
  *   - is what was built sound (`check` finds nothing)?
@@ -64,22 +62,16 @@ const nodeOf = (id: string): GraphNode => store().rfNodes.find((node) => node.id
 /** Drop a node on the canvas. */
 const drop = (type: NodeType, x: number): string => store().addNode(type, { x, y: 160 });
 
-/** The page's blocks written back to their nodes, as the designer writes them (`DesignerTab.write`). */
-const write = (writes: PageWrite[]): void => {
-  for (const { node, widgets } of writes) store().updateNode(node.id, syncGuiNodePorts({ ...node, config: { ...node.config, gui_widgets: widgets } }));
-};
 const pageNow = () => pageOf(store().rfNodes.map((node) => node.data.graphNode as GraphNode));
 
 /**
  * Add a block to the page from the palette, then set what its panel sets: the
- * designer's own steps (`newBlock`, `routePage`, then `patchBlock`).
+ * designer's own steps (`newBlock`, `insertBlock`, then `patchBlock`).
  */
 function addBlock(kind: WidgetKind, mode: string | undefined, settings: Partial<GuiWidget>): string {
-  const before = pageNow();
-  const block = newBlock(kind, mode, before.blocks.map((b) => b.widget.id));
-  write(routePage(before.guiNodes, before.blocks, [...before.blocks.map((b) => b.widget), block]));
-  const after = pageNow();
-  write(patchBlock(after.guiNodes, after.blocks, block.id, settings));
+  const block = newBlock(kind, mode, pageNow().blocks.map((b) => b.widget.id));
+  insertBlock(block);
+  patchBlock(block.id, settings);
   return block.id;
 }
 
@@ -257,7 +249,7 @@ describe('chat: a page with a chat block, and a model', () => {
     const asked: string[] = [];
     const say = async (text: string) => {
       const block = nodeOf(page).config.gui_widgets!.find((widget: GuiWidget) => widget.id === chat)!;
-      store().updateNode(page, { config: { ...nodeOf(page).config, gui_widgets: nodeOf(page).config.gui_widgets!.map((widget: GuiWidget) => (widget.id === chat ? { ...block, value: { ...(block.value as object), pending: text } } : widget)) } });
+      patchBlock(chat, { value: { ...(block.value as object), pending: text } });
       const { result } = await run(store().rootGraph(), { node_id: page, port_id: `${chat}_out` }, asked);
       expect(result.status).toBe('success');
       // What the run remembered is replayed into the editor's copy, as after any run.

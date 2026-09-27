@@ -1,8 +1,8 @@
 import React from 'react';
-import type { GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { blockValue, GuiBlock, PageGrid, shownOn, type SurfaceBlock } from './GuiPage';
+import { moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { cellsFromDrag, resolveWidgetLayout, GUI_GRID_COLUMNS, GUI_MAX_CELL } from '@/document/layout';
 import QuickInsert from './QuickInsert';
 import type { PaletteEntry } from './DesignerPalette';
@@ -33,12 +33,10 @@ import { ACCENT, DIMMER, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
  * same page.
  */
 export default function DesignerSurface({
-  blocks, onChange, onWidgetValue, onWidgetTrigger, selectedId, onSelect, overrides, dropIndex,
+  blocks, onWidgetValue, onWidgetTrigger, selectedId, onSelect, overrides, dropIndex,
   insertAt, onInsertAt, onInsert,
 }: {
   blocks: SurfaceBlock[];
-  /** The whole page, rewritten. The caller routes each block back to its node. */
-  onChange: (widgets: GuiWidget[]) => void;
   onWidgetValue: (block: SurfaceBlock, value: unknown) => void;
   /** A block was used: the same event the delivered page gets, because the blocks here are live. */
   onWidgetTrigger: (block: SurfaceBlock, value?: unknown) => void;
@@ -58,25 +56,10 @@ export default function DesignerSurface({
   const [cell, setCell] = React.useState(GUI_MAX_CELL);
   const placements = resolveWidgetLayout(blocks.map((b) => b.widget));
 
-  const widgets = blocks.map((b) => b.widget);
-  const widgetsRef = React.useRef(widgets);
-  widgetsRef.current = widgets;
-
-  const patch = (widgetId: string, change: Partial<GuiWidget>) =>
-    onChange(widgetsRef.current.map((w) => (w.id === widgetId ? { ...w, ...change } : w)));
-
-  const move = (widgetId: string, delta: -1 | 1) => {
-    const from = widgetsRef.current.findIndex((w) => w.id === widgetId);
-    const to = from + delta;
-    if (from === -1 || to < 0 || to >= widgetsRef.current.length) return;
-    const next = [...widgetsRef.current];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    onChange(next);
-  };
-
+  // Every change goes through `pageWrite`, which reads the page from the store
+  // when the change lands: what this render drew may be a keystroke old.
   const remove = (widgetId: string) => {
-    onChange(widgetsRef.current.filter((w) => w.id !== widgetId));
+    removeBlock(widgetId);
     onSelect(null);
   };
 
@@ -92,15 +75,6 @@ export default function DesignerSurface({
   const dragging = React.useRef<string | null>(null);
   const [draggingId, setDraggingId] = React.useState<string | null>(null);
 
-  const reorder = (fromId: string, toId: string) => {
-    const from = widgetsRef.current.findIndex((w) => w.id === fromId);
-    const to = widgetsRef.current.findIndex((w) => w.id === toId);
-    if (from === -1 || to === -1 || from === to) return;
-    const next = [...widgetsRef.current];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    onChange(next);
-  };
 
   // ---- resize: the one thing the grid is still dragged for --------------------
   const resize = React.useRef<{ id: string; x: number; y: number; w: number; h: number } | null>(null);
@@ -114,7 +88,7 @@ export default function DesignerSurface({
           const box = element.getBoundingClientRect();
           if (event.clientX >= box.left && event.clientX <= box.right
               && event.clientY >= box.top && event.clientY <= box.bottom) {
-            reorder(held, id);
+            moveBlock(held, id);
             return;
           }
         }
@@ -122,7 +96,7 @@ export default function DesignerSurface({
       }
       const state = resize.current;
       if (!state) return;
-      patch(state.id, {
+      patchBlock(state.id, {
         w: Math.max(1, Math.min(GUI_GRID_COLUMNS, state.w + cellsFromDrag(event.clientX - state.x, cell))),
         h: Math.max(1, state.h + cellsFromDrag(event.clientY - state.y, cell)),
       });
@@ -185,19 +159,19 @@ export default function DesignerSurface({
                     widget={widget}
                     cell={cell}
                     rows={placement.h}
-                    onText={(value) => patch(widget.id, { value })}
-                    onRows={(h) => patch(widget.id, { h })}
+                    onText={(value) => patchBlock(widget.id, { value })}
+                    onRows={(h) => patchBlock(widget.id, { h })}
                   />
                 ) : undefined}
               >
                 {selected && (
                   <BlockToolbar
                     width={placement.w}
-                    onWidth={(w) => patch(widget.id, { w })}
-                    onTaller={() => patch(widget.id, { h: placement.h + 1 })}
-                    onShorter={() => patch(widget.id, { h: Math.max(1, placement.h - 1) })}
-                    onUp={index > 0 ? () => move(widget.id, -1) : undefined}
-                    onDown={index < placements.length - 1 ? () => move(widget.id, 1) : undefined}
+                    onWidth={(w) => patchBlock(widget.id, { w })}
+                    onTaller={() => patchBlock(widget.id, { h: placement.h + 1 })}
+                    onShorter={() => patchBlock(widget.id, { h: Math.max(1, placement.h - 1) })}
+                    onUp={index > 0 ? () => moveBlock(widget.id, index - 1) : undefined}
+                    onDown={index < placements.length - 1 ? () => moveBlock(widget.id, index + 1) : undefined}
                     onInsertBelow={() => onInsertAt(index + 1)}
                     onRemove={() => remove(widget.id)}
                   />

@@ -1,18 +1,22 @@
-// Turning one page back into the nodes it is stored in.
+// Changing the page: the one way a block is added, changed, moved or removed.
 //
 // The page is flat -- a single ordered list of blocks -- while the graph keeps
-// those blocks on one or more gui nodes. Every edit on the page (add, reorder,
-// delete, retone) therefore ends here, and this is the only place that knows
-// which node a block belongs to.
+// those blocks on one or more gui nodes. Every edit on the page therefore ends
+// here, and this is the only place that knows which node a block belongs to.
 //
-// It is a plain function rather than a few lines inside the designer because
-// the one bug it ever had was invisible from the outside: with a gui node in
-// the graph but nothing on the page yet, new blocks were routed to an owner
-// derived from the *existing* blocks, found none, and were dropped without a
-// word. The palette was dead for exactly as long as the page was empty -- which
-// is the whole time anyone is starting one. A component you cannot call from a
-// test hides that; a function does not.
+// Each edit reads the page from the store when it lands, never from what a
+// component drew. A box that grows as it is typed into changes its block twice
+// in one keystroke -- the text, then the height -- and the second change,
+// made on the page as it was drawn, put back the text from before the first:
+// the character that made the box grow was lost. A ✨ result accepted a minute
+// after it was asked for did the same to every edit made meanwhile.
+//
+// The designer's surface, its side panel and `masterExamples.test.ts`, which
+// builds the examples the way a person does, all call these functions.
 import type { GraphNode, GuiWidget } from '@/graph';
+import { useGraphStore } from '@/store/graphStore';
+import { syncGuiNodePorts } from '@/document/guiWidgets';
+import { pageOf } from './GuiPage';
 
 /** A block on the page, and the node that stores it. */
 export interface OwnedBlock {
@@ -62,17 +66,57 @@ export function routePage(
     .filter(({ node, widgets }) => JSON.stringify(widgets) !== JSON.stringify(node.config.gui_widgets));
 }
 
+/** The page as the store holds it now. */
+function pageNow() {
+  return pageOf(useGraphStore.getState().rfNodes.map((n) => n.data.graphNode as GraphNode));
+}
+
+/** The page as the store holds it now, rewritten by *edit* and stored back on its nodes. */
+function rewrite(edit: (widgets: GuiWidget[]) => GuiWidget[]): void {
+  const { guiNodes, blocks } = pageNow();
+  for (const { node, widgets } of routePage(guiNodes, blocks, edit(blocks.map((b) => b.widget)))) {
+    useGraphStore.getState().updateNode(node.id, syncGuiNodePorts({ ...node, config: { ...node.config, gui_widgets: widgets } }));
+  }
+}
+
+/** Give block *widgetId* *patch*. Nothing, when the block is no longer there. */
+export function patchBlock(widgetId: string, patch: Partial<GuiWidget>): void {
+  rewrite((widgets) => widgets.map((w) => (w.id === widgetId ? { ...w, ...patch } : w)));
+}
+
 /**
- * The writes that give block *widgetId* *patch* on the page as *guiNodes* and
- * *blocks* hold it -- nothing, when the block is no longer there.
- *
- * A block's editor hands its edits here by the block's id, against the page
- * as it is when the edit lands. It used to hand the whole page as it was
- * rendered, and a ✨ result accepted a minute after it was asked for wrote
- * that page back: every edit made meanwhile was undone, a block added since
- * vanished with its wires, and one deleted since came back.
+ * Put block *widgetId* at place *to* on the page -- or, *to* being a block's
+ * id, where that block stands now, which is what a drag onto it means.
+ * Nothing, for a place that is not there.
  */
-export function patchBlock(guiNodes: GraphNode[], blocks: OwnedBlock[], widgetId: string, patch: Partial<GuiWidget>): PageWrite[] {
-  if (!blocks.some((b) => b.widget.id === widgetId)) return [];
-  return routePage(guiNodes, blocks, blocks.map((b) => (b.widget.id === widgetId ? { ...b.widget, ...patch } : b.widget)));
+export function moveBlock(widgetId: string, to: number | string): void {
+  rewrite((widgets) => {
+    const from = widgets.findIndex((w) => w.id === widgetId);
+    const at = typeof to === 'string' ? widgets.findIndex((w) => w.id === to) : to;
+    if (from === -1 || at < 0 || at >= widgets.length || from === at) return widgets;
+    const next = [...widgets];
+    const [moved] = next.splice(from, 1);
+    next.splice(at, 0, moved);
+    return next;
+  });
+}
+
+/** Take block *widgetId* off the page. */
+export function removeBlock(widgetId: string): void {
+  rewrite((widgets) => widgets.filter((w) => w.id !== widgetId));
+}
+
+/**
+ * Put *widget* on the page at place *at*, at the end without one -- the order
+ * is the position. With no gui node in the graph yet, one is made to hold it:
+ * the page is the thing being built, and that it needs a node behind it is
+ * bookkeeping.
+ */
+export function insertBlock(widget: GuiWidget, at?: number): void {
+  if (!pageNow().guiNodes.length) useGraphStore.getState().addNode('gui', { x: 240, y: 160 });
+  rewrite((widgets) => {
+    const next = [...widgets];
+    next.splice(at ?? next.length, 0, widget);
+    return next;
+  });
 }
