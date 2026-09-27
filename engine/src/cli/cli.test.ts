@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { parseArgs, parseInterval } from './cli.ts';
+import { describe, it, expect, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { parseGraph } from '../graph.ts';
+import { writeProject } from '../project/folder.ts';
+import { main, parseArgs, parseInterval } from './cli.ts';
 
 describe('parseInterval', () => {
   it('reads a bare number as seconds', () => {
@@ -57,5 +62,62 @@ describe('parseArgs', () => {
   it('refuses a flag it does not know, rather than reading it as the graph or dropping it', () => {
     expect(() => parseArgs(['--ai-provider', 'openai', 'g.json'])).toThrow(/Unknown option "--ai-provider"/);
     expect(() => parseArgs(['g.json', '--ai-force'])).toThrow(/Unknown option "--ai-force"/);
+  });
+});
+
+/**
+ * One node by itself, from a command line: what its dialog tries, with no
+ * editor anywhere -- the node's example, and the files its example reads.
+ */
+describe('run-node', () => {
+  const port = (id: string, kind: 'input' | 'output', dataType = 'any') =>
+    ({ id, name: id, kind, data_type: dataType, multi: false, required: false, description: '' });
+
+  async function project(config: Record<string, unknown>): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-run-node-'));
+    await writeProject(dir, parseGraph({
+      metadata: { name: 'Rows' },
+      nodes: [{
+        id: 'count', node_type: 'code', label: 'Count', inputs: [port('csv', 'input', 'file_path')], outputs: [port('rows', 'output')],
+        config: { code: 'function run(i) { return { rows: i.csv.trim().split("\\n").length - 1 }; }', ...config },
+      }],
+      edges: [],
+    }));
+    return dir;
+  }
+
+  async function printed(argv: string[]): Promise<{ code: number; out: string }> {
+    const writes: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { writes.push(String(chunk)); return true; });
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      return { code: await main(argv), out: writes.join('') };
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  }
+
+  it('runs a node on its example, the file it names read from its example folder, and prints what came out', async () => {
+    const dir = await project({
+      examples: '## Two rows\n\n```json input\n{"csv": "example/rows.csv"}\n```\n\n```json expect\n{"rows": 2}\n```\n',
+      example_files: { 'example/rows.csv': 'name\nAda\nBo\n' },
+    });
+    try {
+      const { code, out } = await printed(['run-node', dir, 'count']);
+      expect(code).toBe(0);
+      expect(JSON.parse(out)).toMatchObject({ status: 'success', outputs: { rows: 2 } });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('says what to do for a node with no example', async () => {
+    const dir = await project({});
+    try {
+      await expect(main(['run-node', dir, 'count'])).rejects.toThrow('It has no example: give its inputs as JSON, or write one in examples.md.');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

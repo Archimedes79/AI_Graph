@@ -112,6 +112,15 @@ export function parseExamples(text: string): { examples: NodeExample[]; problems
 }
 
 /**
+ * The example a node runs on when it is given nothing else -- `run-node`
+ * without inputs: the first in its examples.md that has an input, which is
+ * the one its dialog shows. Its files are the node's own example files.
+ */
+export function firstExample(text: string): NodeExample | undefined {
+  return parseExamples(text).examples[0];
+}
+
+/**
  * Where *actual* falls short of *expected*, as sentences naming the place.
  * An object expects its listed keys and ignores the rest; a list expects the
  * same length and each item in turn; anything else, the same value.

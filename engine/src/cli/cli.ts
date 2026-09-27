@@ -4,7 +4,7 @@
 //     node src/main.ts my_project/                    the same, for a project folder
 //     node src/main.ts check my_project/ other.json   what is wrong, without running
 //     node src/main.ts test my_project/ --offline     run the nodes' examples.md
-//     node src/main.ts run-node my_project/ count     one node, on what feeds it (or '{"input": …}')
+//     node src/main.ts run-node my_project/ count     one node, on its example (or '{"input": …}')
 //     node src/main.ts graph.json --inputs key=value  answering what it asks
 //     node src/main.ts graph.json --every 5m           again, after each run
 //     node src/main.ts graph.json --bundle ./out       hand it to someone else
@@ -25,7 +25,7 @@ import { createInterface } from 'node:readline/promises';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/folderCheck.ts';
 import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
-import { testGraph } from '../execution/examples.ts';
+import { firstExample, testGraph } from '../execution/examples.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
@@ -375,13 +375,24 @@ async function runTests(argv: string[]): Promise<number> {
 
 /**
  * Run one node by itself and print what it returned: on the inputs given as
- * JSON, or -- without them -- on what the nodes feeding it produce, which are
- * run for that and nothing else.
+ * JSON, or -- without them -- on its example, the first in its examples.md,
+ * reading the files the example names from its own example files. What the
+ * node's dialog tries is what this runs, with no editor anywhere.
  */
 async function runNodeCommand([path, nodeId, given]: string[]): Promise<number> {
   if (!path || !nodeId) throw new Error('Usage: run-node <graph or project> <node id> [\'{"port": value}\']');
   const graph = await loadGraph(path);
-  const inputs = given ? JSON.parse(given) as Record<string, unknown> : undefined;
+  const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) throw new Error(`There is no node "${nodeId}" in ${path}. Its nodes are: ${graph.nodes.map((one) => one.id).join(', ')}.`);
+  let inputs: Record<string, unknown>;
+  if (given) {
+    inputs = JSON.parse(given) as Record<string, unknown>;
+  } else {
+    const example = firstExample(String(node.config.examples ?? ''));
+    if (!example) throw new Error('It has no example: give its inputs as JSON, or write one in examples.md.');
+    process.stderr.write(`${nodeName(node)}, on its example "${example.title}"\n`);
+    inputs = example.inputs;
+  }
   const { result } = await runNodeAlone(graph, nodeId, inputs, { runtime: nodeRuntime(), registry });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   return result.status === 'error' ? 1 : 0;
