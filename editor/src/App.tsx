@@ -16,6 +16,7 @@ import ResultsPanel from '@/app/ResultsPanel';
 import SettingsDialog from '@/app/SettingsDialog';
 import GraphProblems from '@/app/GraphProblems';
 import { DiskChanges } from '@/app/diskChanges';
+import { droppedProject } from '@/app/windowDrops';
 import Modal from '@/ui/Modal';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 
@@ -161,21 +162,13 @@ export default function App() {
   }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath]);
 
   /**
-   * A dropped folder: a project, most likely. A browser gives its name and not
-   * where it is, so the editor's server looks for a project of that name under
-   * the folder it runs in, and opens it when there is exactly one.
+   * A dropped folder: a project, most likely, opened when the editor's server
+   * finds exactly one of that name (`droppedProject`).
    */
   const handleProjectFolderDrop = useCallback(async (name: string) => {
     if (!confirmDiscard(`Open the project ${name}?`)) return;
     try {
-      const { paths } = await call('findProjects', { name });
-      if (paths.length !== 1) {
-        setSaveStatus(paths.length
-          ? `❌ ${paths.length} projects are called "${name}". Open the one you mean with 📂 Open.`
-          : `❌ No project called "${name}" under the folder the editor was started in. Open it with 📂 Open.`);
-        return;
-      }
-      const result = await call('openGraph', { path: paths[0] });
+      const result = await call('openGraph', { path: await droppedProject(name) });
       loadGraph(result.graph);
       setCurrentFilePath(result.path, result.project);
       setSaveStatus(`✅ Opened ${result.path}`);

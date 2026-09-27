@@ -324,8 +324,12 @@ export const API = {
   openGraph: route<{ path: string }, GraphFile>('POST', '/api/graphs/file/load', 'editor'),
   /** A `.json` path is written as one file; any other path as a project folder. */
   saveGraph: route<{ path: string; graph: Graph }, GraphFile>('POST', '/api/graphs/file/save', 'editor'),
-  /** Project folders with this name under where the editor runs: for a folder dropped onto the page. */
-  findProjects: route<{ name: string }, { paths: string[] }>('GET', '/api/graphs/find', 'editor'),
+  /**
+   * Project folders with this name under where the editor runs: for a folder
+   * dropped onto the page -- and where that search looked, in words, for a drop
+   * that finds none to say.
+   */
+  findProjects: route<{ name: string }, { paths: string[]; searched: string }>('GET', '/api/graphs/find', 'editor'),
   /**
    * Files of this name and size under where the editor runs: for a file
    * dropped onto a node, whose path a browser never says -- and where that

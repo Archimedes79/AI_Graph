@@ -59,6 +59,16 @@ describe('findProjects', () => {
     expect(await findProjects('data', root)).toEqual([]);
     expect(await findProjects('chat', join(root, 'examples', 'chat'))).toEqual([join(root, 'examples', 'chat')]);
   });
+
+  it('looks where a dropped file is looked for, as fileSearch says: three levels of folders down', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ai-graph-find-deep-'));
+    for (const project of ['a/b/c/three', 'a/b/c/d/four']) {
+      await mkdir(join(root, project), { recursive: true });
+      await writeFile(join(root, project, 'flow.json'), '{"nodes": {}, "wires": []}');
+    }
+    expect(await findProjects('three', root)).toEqual([join(root, 'a', 'b', 'c', 'three')]);
+    expect(await findProjects('four', root)).toEqual([]);
+  });
 });
 
 describe('findFiles', () => {

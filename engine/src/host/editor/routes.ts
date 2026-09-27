@@ -131,7 +131,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     findProjects: async (asked, { loopback }) => {
       if (!loopback) throw new Refusal(403, 'Looking for projects is only offered on this machine.');
-      return { paths: asked.name ? await files.findProjects(String(asked.name)) : [] };
+      return { paths: asked.name ? await files.findProjects(String(asked.name)) : [], searched: files.fileSearch() };
     },
 
     findFile: async (asked, { loopback }) => {

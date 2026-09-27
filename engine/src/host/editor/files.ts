@@ -7,7 +7,7 @@
 // a file picker that can be navigated, so it moved to `host/browse.ts`, which
 // a bundle carries.
 
-import { existsSync } from 'node:fs';
+import { existsSync, type Dirent } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { basename, extname, join, resolve, sep } from 'node:path';
 import { platform } from 'node:os';
@@ -17,50 +17,22 @@ import { isProjectFolder } from '../../project/folder.ts';
 // route that turns it into a 404 needs one check rather than a list.
 import { NotFound } from '../../errors.ts';
 
-/**
- * Project folders named *name* under *root*, a few levels down.
- *
- * For a folder dropped onto the editor: a browser hands over its name and not
- * where it is, and the projects someone drops are almost always in the folder
- * the editor was started in. Dependencies, build output and dot-folders are
- * not looked into.
- */
-export async function findProjects(name: string, root = process.cwd(), depth = 4): Promise<string[]> {
-  const found: string[] = [];
-  const walk = async (directory: string, level: number): Promise<void> => {
-    let entries;
-    try {
-      entries = await readdir(directory, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.') || SKIPPED.has(entry.name)) continue;
-      const path = join(directory, entry.name);
-      if (entry.name === name && isProjectFolder(path)) found.push(path);
-      else if (level < depth) await walk(path, level + 1);
-    }
-  };
-  if (basename(root) === name && isProjectFolder(root)) return [root];
-  await walk(root, 1);
-  return found;
-}
-
+/** Folders a search passes over: dependencies and build output -- and every name that begins with a dot. */
 const SKIPPED = new Set(['node_modules', 'dist', 'build']);
 
-/** How many levels of folders below the one it starts in `findFiles` looks into. */
+/** How many levels of folders below the one it starts in a search looks into. */
 const FOLDERS_BELOW = 3;
 
 /**
- * Files named *name*, of *size* bytes, in *root* and the folders below it, as
- * far down as `fileSearch` says.
+ * What is in *root* and the folders below it, as far down as `fileSearch`
+ * says: each entry is handed to *take*, and the paths it takes are the answer.
+ * A folder it takes is not looked into.
  *
- * For a file dropped onto a node, or onto its example: a browser hands a page
- * a file's name, size and content, never where it is -- and a node that reads
- * the file at a path needs the path. The file dropped is almost always one in
- * the folder the editor was started in; the size tells two of one name apart.
+ * For what is dropped onto the editor: a browser hands a page the name of a
+ * file or folder, never where it is, and what someone drops is almost always
+ * in the folder the editor was started in.
  */
-export async function findFiles(name: string, size: number, root = process.cwd()): Promise<string[]> {
+async function walkUnder(root: string, take: (path: string, entry: Dirent) => boolean | Promise<boolean>): Promise<string[]> {
   const found: string[] = [];
   const walk = async (directory: string, below: number): Promise<void> => {
     let entries;
@@ -70,23 +42,36 @@ export async function findFiles(name: string, size: number, root = process.cwd()
       return;
     }
     for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue;
+      if (entry.name.startsWith('.') || (entry.isDirectory() && SKIPPED.has(entry.name))) continue;
       const path = join(directory, entry.name);
-      if (entry.isDirectory()) {
-        if (!SKIPPED.has(entry.name) && below < FOLDERS_BELOW) await walk(path, below + 1);
-      } else if (entry.name === name && (await stat(path).catch(() => null))?.size === size) {
-        found.push(path);
-      }
+      if (await take(path, entry)) found.push(path);
+      else if (entry.isDirectory() && below < FOLDERS_BELOW) await walk(path, below + 1);
     }
   };
   await walk(root, 0);
   return found;
 }
 
+/** Project folders named *name* under *root* (`walkUnder`): for a folder dropped onto the editor. */
+export async function findProjects(name: string, root = process.cwd()): Promise<string[]> {
+  if (basename(root) === name && isProjectFolder(root)) return [root];
+  return walkUnder(root, (path, entry) => entry.isDirectory() && entry.name === name && isProjectFolder(path));
+}
+
 /**
- * Where `findFiles` looks, in words: what a drop that found nothing says. It
- * said "under the folder the editor was started in" of a search that goes
- * three folders down and passes some over.
+ * Files named *name*, of *size* bytes, under *root* (`walkUnder`): for a file
+ * dropped onto a node, or onto its example -- a node that reads the file at a
+ * path needs the path. The size tells two of one name apart.
+ */
+export async function findFiles(name: string, size: number, root = process.cwd()): Promise<string[]> {
+  return walkUnder(root, async (path, entry) => !entry.isDirectory() && entry.name === name
+    && (await stat(path).catch(() => null))?.size === size);
+}
+
+/**
+ * Where a search for what was dropped looks (`walkUnder`), in words: what a
+ * drop that found nothing says. It said "under the folder the editor was
+ * started in" of a search that goes three folders down and passes some over.
  */
 export function fileSearch(root = process.cwd()): string {
   return `${root} and ${FOLDERS_BELOW} levels of folders below it, leaving out ${[...SKIPPED].join(', ')} and every name that begins with a dot`;
