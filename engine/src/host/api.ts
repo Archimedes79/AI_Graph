@@ -151,6 +151,18 @@ export interface GenerateRequest {
   /** How a list on an input arrives: one item per run (`per_item`) or whole (`whole_list`). */
   batch_mode?: 'per_item' | 'whole_list';
   /**
+   * The input ports declared as lists (`Port.multi`): what a run fans out over
+   * when the node runs once per item, so what the sample is cut by for one
+   * call. Absent, it is guessed from `input_types`.
+   */
+  multi_inputs?: string[];
+  /**
+   * The output ports declared as lists: what a run per item collects into a
+   * list, where one declared single hands a lone answer on as it came. Absent,
+   * every output counts as a list, as a new node's does.
+   */
+  multi_outputs?: string[];
+  /**
    * Build the request and hand it back without sending it: what ✨ *would*
    * send, through the same code that sends it, so the preview cannot differ.
    */
@@ -180,7 +192,12 @@ export interface ProbeReport {
   /** What the element itself found wrong with a result that ran: a chart off its frame, NaN in the markup. */
   problems?: string[];
   output_preview: string;
-  /** What the code actually returned, whole -- the next node's sample, not a peek at it. */
+  /**
+   * What the node hands on from the sample, whole -- the next node's sample,
+   * not a peek at it. For a node run once per item that is not one call's
+   * return: the probe runs one item, and its answer is collected the way a
+   * run collects it, a list even for one item on an output declared a list.
+   */
   outputs?: Record<string, unknown>;
 }
 

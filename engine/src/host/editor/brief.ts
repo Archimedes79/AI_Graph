@@ -152,9 +152,9 @@ function inputsSection(request: GenerateRequest, kind: 'code' | 'prompt', sample
 }
 
 function outputsSection(request: GenerateRequest, kind: 'code' | 'prompt'): string {
-  const outputs = (request.outputs ?? []).filter((port) => port !== 'error');
   const lines = [kind === 'code' ? '## What goes out' : '## What the answer is for'];
-  for (const port of outputs) {
+  // Without the executor's error port: `generate` drops it where a request comes in.
+  for (const port of request.outputs ?? []) {
     const said = oneLine(request.output_notes?.[port]);
     lines.push(`- \`${port}\`${said ? `: ${said}` : ''}`);
     const target = request.output_targets?.[port];

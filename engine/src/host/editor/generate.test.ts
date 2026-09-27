@@ -57,6 +57,20 @@ describe('code', () => {
     expect(reply.calls[0]).toMatchObject({ provider: 'test', model: 'm', reply_chars: expect.any(Number) });
   });
 
+  it('leaves the error port to the executor: a body is neither asked for it nor held to it', async () => {
+    // A node that catches its failures has an `error` output, which the run
+    // fills. Asked for it, a correct body was reported missing a key and
+    // "repaired" -- while the brief, filtering it, said something else.
+    const ai = scripted(['```js\nfunction run(i) { return { output: 5 }; }\n```']);
+    const reply = await generate(
+      { element: 'code', description: 'five', inputs: ['input'], outputs: ['output', 'error'], sample_inputs: { input: 1 } },
+      { ai, code: runner(() => ({ output: 5 })), generationFor, target },
+    );
+    expect(ai.asked[0].prompt).toContain('The returned object\'s keys must be exactly: ["output"]');
+    expect(ai.asked[0].prompt).not.toMatch(/"error"/);
+    expect(reply.probe).toMatchObject({ status: 'ok', attempts: 1, missing_outputs: [] });
+  });
+
   it('verifies against the sample and reports what the code returned, whole', async () => {
     const ai = scripted(['```js\nfunction run(i) { return { out: i.a * 2 }; }\n```']);
     const reply = await generate(
@@ -371,6 +385,32 @@ describe('a node run once per item', () => {
     }, { ai, code: inProcess, generationFor, target });
     expect(ai.asked[1].prompt).toContain('for the example "Two words", output.out has 0 items; expected 2');
     expect(whole.probe.status).toBe('repaired');
+  });
+
+  it('cuts only the inputs the node declares lists, when the request says which', async () => {
+    // Guessed from the types, a list arriving on a port that is not typed
+    // "list of" was cut as if it fanned out; a run hands it on whole.
+    let tried: Record<string, unknown> = {};
+    const code: CodeService = { run: async (body, inputs) => { tried = inputs; return inProcess.run(body, inputs); } };
+    await generate({
+      ...request, inputs: ['text', 'stop'], input_types: { text: 'text', stop: 'any' }, multi_inputs: ['text'],
+      sample_inputs: { text: ['alpha', 'beta'], stop: ['a', 'the'] },
+    }, { ai: scripted([shout]), code, generationFor, target });
+    expect(tried).toEqual({ text: 'alpha', stop: ['a', 'the'] });
+  });
+
+  it('hands a lone answer on as it came from an output declared single, as a run of one item does', async () => {
+    const graph = parseGraph({
+      nodes: [{
+        id: 'shout', node_type: 'code', config: { code: shout.split('\n')[1], batch_mode: 'per_item' },
+        inputs: [port('text', 'Text', 'input', 'any', true)], outputs: [port('out', 'Out', 'output', 'any', false)],
+      }],
+    });
+    const ran = await executeNode(graph, 'shout', { text: ['alpha'] }, { runtime: { code: inProcess, ai: scripted([]), files: {} as never }, registry });
+    const reply = await generate({ ...request, sample_inputs: { text: ['alpha'] }, multi_inputs: ['text'], multi_outputs: [] },
+      { ai: scripted([shout]), code: inProcess, generationFor, target });
+    expect(ran.outputs).toEqual({ out: 'ALPHA' });
+    expect(reply.probe.outputs).toEqual(ran.outputs);
   });
 
   it('tells a prompt that the model is sent one item, and shows it that item', async () => {

@@ -29,6 +29,7 @@ import type { GraphNode } from '../../graph.ts';
 import { renderSkeleton } from './skeleton.ts';
 import { BUDGET, clip, exampleSample, renderBrief, type Sample } from './brief.ts';
 import { unmet } from '../../execution/examples.ts';
+import { ERROR_PORT } from '../../execution/wiring.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { detectFormat } from './files.ts';
 import type { AICall, GenerateRequest, GenerateResponse, ProbeReport, Target } from '../api.ts';
@@ -289,14 +290,18 @@ function runsPerItem(request: GenerateRequest, spec: Generation | undefined): bo
  * The node's inputs as the executor fans them out, for its own rule
  * (`batchItems`): only the ports, which is all it reads.
  *
- * A run fans out over the inputs declared multi. The request does not carry
- * that flag; it carries what the body is handed on each port (`input_types`).
- * A port it is handed a list on takes lists -- whole, or one list per item --
- * so a list arriving on any other port is one the body is handed an item of.
+ * A run fans out over the inputs declared multi, and the request says which
+ * those are (`multi_inputs`). A request that does not say -- from a caller
+ * older than the field -- is read by what the body is handed on each port
+ * (`input_types`): a port it is handed a list on takes lists, so a list
+ * arriving on any other port is one the body is handed an item of. That
+ * guess cut a list arriving on a single-valued port as if it fanned out.
  */
 function fannedOut(request: GenerateRequest, sample: Record<string, unknown>): GraphNode {
+  const declared = request.multi_inputs;
   const takesLists = (id: string) => String(request.input_types?.[id] ?? '').startsWith('list of');
-  return { inputs: Object.keys(sample).map((id) => port(id, id, 'input', 'any', !takesLists(id))) } as GraphNode;
+  const fans = (id: string) => (declared ? declared.includes(id) : !takesLists(id));
+  return { inputs: Object.keys(sample).map((id) => port(id, id, 'input', 'any', fans(id))) } as GraphNode;
 }
 
 /**
@@ -330,14 +335,16 @@ function oneItem(request: GenerateRequest): { values: Record<string, unknown> | 
  * told on each run that it "does not match its output interface". The items
  * the probe did not run are answers that add nothing.
  *
- * Every output counts as multi, as the one a code or ai node is created with:
- * a list one call returns adds its entries, and even a single item is handed
- * on as a list of one -- a run of one item is still a run per item, and its
- * multi outputs are collected all the same. Only a port declared single keeps
- * a lone answer as it came, and the request does not say which ports are.
+ * An output declared multi (`multi_outputs`) is collected as a run collects
+ * it: a list one call returns adds its entries, and even a single item is
+ * handed on as a list of one -- a run of one item is still a run per item.
+ * One declared single keeps a lone answer as it came. A request that does not
+ * say counts every output as multi, as the one a code or ai node is created
+ * with.
  */
-function handedOn(result: Record<string, unknown>): Record<string, unknown> {
-  const node = { outputs: Object.keys(result).map((id) => port(id, id, 'output', 'any', true)) } as GraphNode;
+function handedOn(request: GenerateRequest, result: Record<string, unknown>): Record<string, unknown> {
+  const multi = (id: string) => request.multi_outputs?.includes(id) ?? true;
+  const node = { outputs: Object.keys(result).map((id) => port(id, id, 'output', 'any', multi(id))) } as GraphNode;
   return mergeBatchOutputs(node, [result]);
 }
 
@@ -454,14 +461,15 @@ async function generateVerifiedCode(
    * What an example's expectation is short of. It says what the node hands
    * on, which is what `test` holds it to -- for a node run once per item, the
    * one call's answer collected into a list. Held to the bare answer instead,
-   * a correct body failed an example kept from a run of one item. A port
-   * declared single hands the bare answer on, and the request cannot say
-   * which ports are, so meeting it either way is meeting it.
+   * a correct body failed an example kept from a run of one item. Where the
+   * request does not say which outputs are declared single, which hand the
+   * bare answer on, meeting it either way is meeting it.
    */
   const gaps = (result: Record<string, unknown>): string[] => {
     if (!expect) return [];
-    const found = unmet(expect, perItem ? handedOn(result) : result);
-    return found.length && perItem && !unmet(expect, result).length ? [] : found;
+    const found = unmet(expect, perItem ? handedOn(request, result) : result);
+    const unsaid = !request.multi_outputs;
+    return found.length && perItem && unsaid && !unmet(expect, result).length ? [] : found;
   };
 
   /**
@@ -486,7 +494,7 @@ async function generateVerifiedCode(
   const reportOf = (verdict: Awaited<ReturnType<typeof judge>>, status: ProbeReport['status']): ProbeReport => {
     // Handed on as the node hands it on: the shape kept from a probe is what
     // the next node is generated against, and a run checks itself against it.
-    const outputs = verdict.result && perItem ? handedOn(verdict.result) : verdict.result ?? undefined;
+    const outputs = verdict.result && perItem ? handedOn(request, verdict.result) : verdict.result ?? undefined;
     return {
       ...report, status, error: verdict.error, missing_outputs: verdict.missing, problems: verdict.problems,
       ...(outputs ? { output_preview: preview(outputs), outputs } : {}),
@@ -575,7 +583,14 @@ async function asReceived(request: GenerateRequest, files?: FileService): Promis
  * the block editor sends one shaped as the snippet sees it (`{value: …}`),
  * and that one is used.
  */
-export async function generate(asked: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
+export async function generate(given: GenerateRequest, deps: GenerateDeps): Promise<GenerateResponse> {
+  // The error port is the executor's (`catch_errors`): filled when the body
+  // fails, never returned by it. Left in, the skeleton returned it and the
+  // rule said the keys must include it, so correct code was reported as
+  // missing a key and "repaired". Dropped once, here, where every caller's
+  // request comes in, so the skeleton, the rule, the probe and the brief all
+  // see the same outputs.
+  const asked = given.outputs ? { ...given, outputs: given.outputs.filter((id) => id !== ERROR_PORT) } : given;
   // Real data when the graph has run; the first example's inputs when it has
   // not -- an example is the person saying what arrives. Either is read as a
   // run would read it (`asReceived`), shown in the brief and tried the code on.
