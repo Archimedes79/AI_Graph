@@ -39,10 +39,18 @@ node is the run's result — what the command line prints, what a tool without a
 shows — under the node's label ("Result" here), and with `write_mode` `file` or
 `directory` it is also written to a file, or one file per value into a folder. A
 **data** node is a value that survives the run: its kind (`data_format`, text or
-structure) and what it holds (`data_value`). Its dialog is that value: what is typed is
+structure) and what it holds (`data_value`). Its panel is that value: what is typed is
 in the graph as it is typed, a structure that does not parse stays in the box with the
 reason and is not stored, and a file dropped on the box — or on the node on the canvas —
 is what it holds from then on (what the file says, parsed when it is JSON).
+
+**In the editor** each node is a card on the canvas: its kind, its id, its heading and the
+first line of what it should do, and after a run how it went; its ports are dots on its
+edges, named while the pointer is on the card. One click opens the node's panel on the
+right, with everything the node is; ✕, Esc or a click on the empty canvas close it, and a
+click on another node shows that one. The page's card opens the Page tab on a double click,
+or from its panel. The bar under the canvas says what to change, on the node selected or
+on the whole graph ([below](#generating-whole-graphs-with-ai)).
 
 ---
 
@@ -69,15 +77,15 @@ overrides it. In the editor nothing fires by itself — there you press ▶ Run,
 every event as having happened. A clock inside a [subgraph](#subgraph-nodes) never ticks,
 and `check` says so: only the outermost graph is held by something that keeps time.
 
-**▶ Run runs the graph** — one button, in the toolbar, the same on every tab: every node,
+**▶ Run runs the graph** — one button, in the header, the same on every tab: every node,
 now, on what is set. Anything it still needs — a file nobody chose, a place to write — is
 asked for first. What a block on the page starts is the block's (below), and a delivered
-tool, which has no toolbar, keeps a ▶ Run in its own header.
+tool, which has no editor around it, keeps a ▶ Run in its own header.
 
-After a run every node shows what it made, under the port it came out of: a line of text
-or a number, *214 rows* and the first row for a list of records, a small line or bars for
-numbers or a chart's figure, a thumbnail for a picture — and a failed node the first line
-of its error. A page shows, under each block's port, what that block shows.
+After a run every node's card shows what it made, named by its port where it has several:
+a line of text or a number, *214 rows* and the first row for a list of records, a small line
+or bars for numbers or a chart's figure, a thumbnail for a picture — and a failed node the
+first line of its error. A page shows, under each block's port, what that block shows.
 
 The **Preview** tab is the page exactly as delivered, under the tool's own header: the
 graph's name and description. Its **⧉ Open as a tool** is the same tool *detached*: the
@@ -119,9 +127,9 @@ Which blocks fire:
 *value* on its port — the text typed, the option chosen, the number, the path — and a run
 reads whatever it holds at that moment. Using the block is an *event* only when it starts
 the graph as above. Without the tick a dropdown is a setting: changing it starts nothing,
-and the next run (by a button, the toolbar, or the clock) picks the new value up. When it
-does fire, the moment is the one a person means: a dropdown on choosing, a slider on
-letting go (or an arrow key) rather than on every value it passes, a file picker on
+and the next run (by a button, the header's ▶ Run, or the clock) picks the new value up.
+When it does fire, the moment is the one a person means: a dropdown on choosing, a slider
+on letting go (or an arrow key) rather than on every value it passes, a file picker on
 picking, a text box on Enter. A button's value *is* its event: whether it was pressed just
 now.
 
@@ -133,10 +141,11 @@ nothing wired in (an input, the page itself) always runs, so a folder is listed 
 a file read at a node's input counts by what it says, so an edited file is read anew; a
 whole-graph ▶ Run reuses nothing.
 
-**The ◆ is a gate.** Every node has one input nobody declares: the amber ◆ on its header
-(`__run` in the file). What arrives on it is never handed to the node; it decides whether
-the node runs this round. That is how a Send button beside a message box is wired to a
-model it has nothing to say to, only when. Wires into it are drawn dashed and amber.
+**The ◆ is a gate.** Every node has one input nobody declares: the amber ◆ on the top edge
+of its card (`__run` in the file). What arrives on it is never handed to the node; it
+decides whether the node runs this round. That is how a Send button beside a message box
+is wired to a model it has nothing to say to, only when. Wires into it are drawn dashed
+and amber.
 
 - **Unwired**, a node runs whenever a round reaches it, as it always did.
 - **Wired**, it runs only in a round that opens it: the event the round began with is wired
@@ -188,9 +197,9 @@ starts at the summarizer.
 
 ## AI Nodes
 
-A request to a model has three parts, and the node editor shows all three — under
+A request to a model has three parts, and the node's panel shows all three — under
 **What the model receives**, built by the same function the run uses, from the node as it
-stands in the dialog:
+stands in the panel:
 
 ```
 Instructions (system)   what you wrote, or had ✨ Generate write from "What this node should do"
@@ -217,7 +226,7 @@ User: {{message}}
   says that too.
 - A list becomes paragraphs, not `["…","…"]`.
 
-**▶ Try it** runs this one node on its example — as the dialog shows it, without running
+**▶ Try it** runs this one node on its example — as its panel shows it, without running
 the graph — and shows first what the model receives, described
 [below](#trying-an-element-out-the-same-way-everywhere).
 
@@ -275,7 +284,7 @@ function run(inputs) {
 
 The AI can generate this function for you: just describe what the node should do.
 
-**The node's dialog is the order the work is done in**, with the same sections and the
+**The node's panel is the order the work is done in**, with the same sections and the
 same buttons for an AI node -- only the body differs:
 
 ```
@@ -298,7 +307,7 @@ same buttons for an AI node -- only the body differs:
 ```
 
 There is no Save and no Cancel: a change is in the graph a moment after it is made, one
-undo step per field typed into, and ✕ or Esc close the dialog with nothing lost. What
+undo step per field typed into, and ✕ or Esc close the panel with nothing lost. What
 cannot be stored yet -- an example that is not JSON, a port name that is empty or taken --
 stays in its field with the reason. A port has no type or "list" box of its own here: an
 input's file is read where it says so, and a list follows "Run once per item" -- beside
@@ -420,9 +429,9 @@ tool reads it, the MCP server reads and writes it; `git diff` shows code as code
 
 **Editing outside.** Open any of these files in your own editor (or let git change
 them): the editor watches the folder and takes what changed in as one undo step, with
-*↻ From disk: …* on the status line. A node open in its dialog shows the new version at
-once, with what was typed there in the last moment and not written yet kept on top.
-Saving refuses to overwrite a file changed outside since it was read. The toolbar's ↻
+*↻ From disk: …* in the header. A node open in its panel shows the new version at once,
+with what was typed there in the last moment and not written yet kept on top. Saving
+refuses to overwrite a file changed outside since it was read. **File ▸ Reload from disk**
 reopens the whole project, for when `flow.json` or a node's settings or ports changed
 (a pull, a merge).
 
@@ -462,7 +471,7 @@ Generate is shown the first few, so what it writes is written to pass them:
 An `expect` block names only the fields it cares about; anything else the node returns is
 its own business. A model's answer is never the same twice, so an AI node's example can
 have a ````judge` block instead — a sentence (*"about two sentences, in prose"*) that a
-model holds the answer to. In the node's dialog the first example is step 1's, and the
+model holds the answer to. In the node's panel the first example is step 1's, and the
 rest of it lives under ▶ Try it: ⟳ From the graph fills its input with what really
 arrives, Try it says whether a result is the expected output (✓/✗), **Keep as expected
 output** makes what it gave that (an AI node keeps the answer's shape in its words
@@ -555,7 +564,7 @@ behind it, one example input, and one ✨ **Generate** button that writes the bo
 your words plus what the graph around it says (what the neighbours hand on and want, and
 the example).
 
-What the node emits is said in the same dialog, in step 2: what the next nodes want and
+What the node emits is said in the same panel, in step 2: what the next nodes want and
 the shape a run kept, and your words for what they leave out. There is no separate Output
 tab.
 
@@ -571,7 +580,7 @@ numbers, folding, bracket matching, search with Ctrl+F, Tab that indents. **⤢*
 same document across the whole window; Esc comes back.
 
 For longer work there is your own editor. In a project, **↗ Open in my editor** in a
-node's dialog saves the project and opens the node's file — in VS Code when
+node's panel saves the project and opens the node's file — in VS Code when
 its `code` command is installed, otherwise in whatever the system opens that file type
 with — and what you save there appears in the graph by itself. Only a project's own
 files under `nodes/` can be opened this way, and only from the machine the editor runs on.
@@ -644,7 +653,7 @@ called from inside is a model the recipient is told to configure.
 
 ### In the editor
 
-**Open this graph ▸** in the node's dialog goes in; the breadcrumb in the toolbar comes
+**Open this graph ▸** in the node's panel goes in; the breadcrumb in the header comes
 back out, one click per level. Each level has its own undo. Save and Deploy are about the
 whole document from any depth, while ▶ Run stays on the level in front of you — running a
 part on its own is what you want while you are in it.
@@ -762,7 +771,7 @@ switched off rather than exposing the host's filesystem listing to the network.
 **A folder is a listing**, the same for an input node in directory mode and a picker in
 directory mode: the folder, its file types (`extensions`, e.g. `.csv, .txt` — compared
 without regard to case) and whether it looks into subfolders (`recursive`). It hands on
-every file it lists, sorted; its dialog shows that list when asked, made the way a run
+every file it lists, sorted; its panel shows that list when asked, made the way a run
 makes it. To use only some of the files, wire a code node after it that returns the ones
 to keep.
 
@@ -858,5 +867,18 @@ the one showing the page.
 
 `POST /api/ai/generate-graph` asks the AI to author a complete Graph DSL document
 (nodes, ports, edges) from a natural-language description, returned already validated
-against the Graph schema. Use it from the "✨ AI Graph" toolbar action, or standalone
-(e.g. from a script or CI) without touching the editor at all.
+against the Graph schema. Sent the graph there is as well (`graph`), it hands that graph
+back changed as described instead: every node's id is kept, and so is whatever the change
+does not touch -- what the answer leaves out of the graph's name and scheme, where a node
+stands and how big the page was drawn is taken from the graph that was sent. Use it
+standalone (e.g. from a script or CI) without touching the editor at all, or:
+
+- **File ▸ ✨ AI Graph…** designs a new graph from a description, which replaces the one
+  that is open once you load it.
+- **The bar under the canvas** changes the graph that is open. With no node selected it
+  says *on: the whole graph*: say what to change and press Enter, and the changed graph
+  comes back with what it adds, removes and changes and anything `check` finds in it --
+  **Apply** takes it as one undo step, **Discard** leaves the graph as it was. With a node
+  selected it says *on: <its heading>*: a code or AI node's panel changes its body as said;
+  for a node that is its settings -- an input's text, an output's file, the page's blocks --
+  the graph is changed, about that node. Its **on:** button goes back to the whole graph.

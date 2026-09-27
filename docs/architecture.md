@@ -136,8 +136,8 @@ The browser half is the same tree with `GuiBuilder` for `Runner`, and
 [`symmetry.test.ts`](../editor/src/elements/symmetry.test.ts) compares the two lineages
 class by class. What each kind knows about its own appearance — its name, icon and colour,
 a new widget's size, tone and first values, how its last result reads on the canvas — is a
-member of its `GuiBuilder`, not a table in a shell. After a run the canvas shows each value a
-node made under the port it stands at, read by its shape (`elements/resultPreview.ts`: a
+member of its `GuiBuilder`, not a table in a shell. After a run a node's card shows each value
+it made, by the port it stands at, read by its shape (`elements/resultPreview.ts`: a
 line, a count and the first row, a sketch, a thumbnail); `NodeGuiBuilder.resultPreviews` says
 which port, and where the element reads a value its own way it says so — a page shows what
 each block shows, and a chart block reads a list of points as a chart
@@ -280,11 +280,11 @@ engine/src                               editor/src
     check.ts         what is wrong: no disk, the page asks it too
     folderCheck.ts   what a folder gets wrong
   host/              Node and HTTP         api/client.ts       the contract's client
-    api.ts           the contract          app/                toolbar, sidebar, dialogs, results
+    api.ts           the contract          app/                header, palette, the bar, dialogs, results
     serve.ts  http.ts  runs.ts             store/              the open graph, runs, undo
     schedule.ts  node.ts                   runtime/            the deployed tool's page
     lifecycle.ts     what is stopped, in order
-    editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal
+    editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal, SidePanel
                                            dialogs/            FileBrowserDialog, PathField, RequirementsDialog
   ai/                providers · MCP · settings
   cli/               cli.ts  bundle.ts
@@ -300,6 +300,47 @@ crosses areas goes through `@/`, and one into the engine through `@engine/`.
 up, or sideways between two areas of one rank. The single sideways pair is
 `elements` ↔ `authoring`, on purpose: a panel is made of authoring editors, and an authoring
 editor asks the registry what a node is. Panels are lazy chunks, so there is no static cycle.
+
+## The surface
+
+One window, three parts on the Graph tab, and nothing over them but a dialog asked for:
+
+```
+ header   AI-Graph · the graph's name · Graph | Page | Preview      File ▾ ↶ ↷ ▶ Run  Generate  Settings  Deploy
+ ┌──────┬─────────────────────────────────────────┬──────────────────────────────┐
+ │ pal- │ the canvas: a card per node              │ the panel of the node that   │
+ │ ette │                                          │ is selected -- or, with none,│
+ │      ├─────────────────────────────────────────┤ what the last run gave       │
+ │      │ on: <node | the whole graph>  Say what to change…  Change            │
+ └──────┴─────────────────────────────────────────┴──────────────────────────────┘
+```
+
+- **A node is a card** (`canvas/GraphNodeView.tsx`): its kind as a tag in the kind's own tint
+  (`NodeGuiBuilder.color`, a scheme variable), its id, its heading and the first line of its
+  text -- and after a run its status and a small picture of what it made (`resultPreviews`).
+  Its ports are dots on its edges, named on hover; the page's card lists its ports as rows,
+  each with its dot. The card that is selected wears the accent, and so do its wires
+  (`canvas/wireLook.ts`); the others are soft grey.
+- **Selecting a node opens its panel** docked on the right (`ui/SidePanel.tsx`), in place of
+  the modal dialog it was: `NodeEditor` as it was -- the element's own `Panel`, the ports,
+  Advanced -- with the same write-through and undo steps (`nodeDialog.ts`). One click opens
+  it, another node shows that one, and ✕, Escape or a click on the empty canvas close it,
+  as `graphStore.clearSelection` does; a node's panel opening beside it is kept in view. The
+  page's panel is the way to the Page tab, where the page is built. The node the person is
+  on is `editingNodeId`, which the card, its wires and the bar all read. Delete on the canvas
+  deletes only as pressed there (`deleteKeys`): a key pressed in the panel is the panel's.
+- **The bar under the canvas** (`app/ChangeBar.tsx`) says what to change, on the node that is
+  selected or on the whole graph. On a node whose body ✨ writes, the words wait for its
+  panel in the store (`pendingChange`, `askChange`, `clearChange`); the panel takes them up.
+  On the whole graph -- and on a node whose settings are all it is, as a change of that
+  node -- ✨ AI Graph is sent the graph (`generateGraph` with `graph`) and asked to change
+  it, keeping its ids; what comes back is shown with what it adds, removes and changes
+  (`app/graphChange.ts`) and what `check` finds in it, and applied as one undo step of the
+  same document (`graphStore.changeGraph`).
+- **The header** (`app/Toolbar.tsx`) holds the views and what is done to the graph as a
+  whole; the file actions and ✨ AI Graph, which designs a new graph, are its File menu
+  (`app/FileMenu.tsx`). At 1024 pixels its buttons and the palette are their icons, and
+  nothing scrolls the page sideways.
 
 ## Five rules
 
@@ -399,7 +440,7 @@ The block's dialog is its settings, and for a display block one sentence of what
 (`DisplayWidgetRunner.draws`, the same words the node wired into it is told). Nor do the
 nodes that are values: an input is a text or a folder's listing, a data node its kind and
 what it holds, an output the run's result under its label (and a file or folder of it, if
-asked) — their dialogs are those settings, and a file is read nowhere but at the input of
+asked) — their panels are those settings, and a file is read nowhere but at the input of
 the node that wants its text.
 
 ```
@@ -424,20 +465,20 @@ same twice, so its "Keep this answer's shape" writes "Answer in this shape: …"
 code node's "Keep as expected output" writes the example's expect block. Each panel says
 what its words in step 2 are for (`wordsHint`).
 
-**No Save.** What a node's dialog changes is written into the graph a moment later
+**No Save.** What a node's panel changes is written into the graph a moment later
 (`canvas/nodeDialog.ts`), one undo step per field typed into (`graphStore.commit`'s
 coalescing) -- the field on screen, not the setting it writes: the example and the judge's
 sentence are both `examples.md`. What is not typing -- a file dropped in, a result kept, a
 box ticked -- is a step of its own (`UndoStep`), and a run that lands ends the step being
-typed. Undo takes it back, and closing the dialog loses nothing. What cannot be stored
+typed. Undo takes it back, and closing the panel loses nothing. What cannot be stored
 yet -- an example that is not an object, a data node's structure that does not parse, a
 port name that is empty or taken -- stays in its field with the reason (`useTyped`), and is
-never written. The same holds for every kind's dialog, the four steps or not.
+never written. The same holds for every kind's panel, the four steps or not.
 
 **A dropped file.** A file dropped on a node on the canvas fills what the element says
 (`NodeGuiBuilder.dropPort`, `withExampleValue`): the example on the one input of an AI or
 code node -- its path where that input reads its file, else what it says -- and what a data
-node holds. It is one undo step, and opens the node's dialog (`authoring/droppedFile.ts`).
+node holds. It is one undo step, and opens the node's panel (`authoring/droppedFile.ts`).
 
 **Changing what there is.** "Say what to change" and ✨ Fix go through the one generate path
 with `refine`: the body as it is, what came of it (the try on screen, else the last run) and
@@ -527,8 +568,9 @@ or a page that has them can do the same.
 - **`check`** ([`project/check.ts`](../engine/src/project/check.ts)) is the one list of
   problems: the CLI prints it and CI fails on it, the MCP server returns it before saving, and
   the editor says it before Load under a graph pasted as JSON and under one ✨ AI Graph
-  designed (`app/GraphProblems.tsx`). It reads no disk, so the page can ask it; what only a
-  project folder gets wrong -- a folder or a file nothing claims -- is
+  designed, and before Apply under the graph it changed (`app/GraphProblems.tsx`). It reads
+  no disk, so the page can ask it; what only a project folder gets wrong -- a folder or a
+  file nothing claims -- is
   [`folderCheck.ts`](../engine/src/project/folderCheck.ts)'s. It finds
   what any node can get wrong; what is wrong with *one kind* of node — a code node with no code, a
   message template asking for an input that is not there, a page with two blocks of one id — is
@@ -607,10 +649,10 @@ layer order, now held by `layers.test.ts`. What it left, still true:
 
 - **A few functions and files carry too much at once.** `graphStore.ts` (~1000 lines: the
   document, its normalisation, the ReactFlow adapter, run polling and undo), `App.tsx` (~600
-  lines), `Toolbar.tsx` (~470 lines), `mcpServer.ts`'s `createGraphTools`, and `executor.ts`'s
+  lines), `Toolbar.tsx` (~460 lines), `mcpServer.ts`'s `createGraphTools`, and `executor.ts`'s
   `executeGraph`. Nothing in the tests catches a mistake made splitting one of them, which is
   exactly why none has been split yet. Parts of the shell already moved out of `App.tsx` into
-  `app/{Sidebar,Toolbar,ResultsPanel,SettingsDialog,ViewTabs,AICredentialsSection,SubgraphTrail}.tsx`,
+  `app/{Sidebar,Toolbar,FileMenu,ChangeBar,ResultsPanel,SettingsDialog,ViewTabs,AICredentialsSection,SubgraphTrail}.tsx`,
   so this can be done piece by piece.
 - **The engine has no typed `NodeConfig`.** `config: Record<string, unknown>` is read through an
   `as` cast at each use (~630 of them); each element's own `config()` is meant to be the one
