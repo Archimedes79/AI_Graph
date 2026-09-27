@@ -61,7 +61,8 @@ export function useSurfaceBlocks(): SurfaceBlock[] {
  * `incoming` is what the last run delivered to its input port; the widget's own
  * value is what it stores, including an edit still being typed. They are kept
  * apart so that a widget which both shows and accepts text does not overwrite
- * the reply the user is reading.
+ * the reply the user is reading -- and so that what it shows as its value is
+ * what a run sends from it: its own (`BlockKind.ownsValue`).
  */
 export function blockValue(
   block: SurfaceBlock,
@@ -69,7 +70,7 @@ export function blockValue(
   overrides?: Record<string, string>,
 ): unknown {
   const own = overrides?.[block.widget.id] ?? block.widget.value ?? '';
-  if (BLOCKS[block.widget.kind]?.ownsValue) return own;
+  if (BLOCKS[block.widget.kind]?.ownsValue?.(block.widget)) return own;
   return incoming !== undefined && overrides?.[block.widget.id] === undefined ? incoming : own;
 }
 

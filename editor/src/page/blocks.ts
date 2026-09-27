@@ -23,8 +23,9 @@
 // now asserts that the roster next door is out of reach.
 
 import type { ComponentType } from 'react';
-import type { WidgetKind } from '@/graph';
+import type { GuiWidget, WidgetKind } from '@/graph';
 import type { WidgetViewProps } from '@/elements/widgets/WidgetView';
+import { effectiveTextIoMode } from '@/elements/widgets/text_io/mode';
 
 import ButtonWidgetView from '@/elements/widgets/button/ButtonWidgetView';
 import ChatWidgetView from '@/elements/widgets/chat/ChatWidgetView';
@@ -44,10 +45,11 @@ export interface BlockKind {
   /** The one component. The designer and the delivered tool draw this same one. */
   View: ComponentType<WidgetViewProps>;
   /**
-   * What the block shows is its *own* stored value rather than whatever last
-   * arrived: a conversation, where the reply that arrived is one line of it.
+   * What the block shows as its value is its *own* stored value rather than
+   * whatever last arrived: a conversation, where the reply that arrived is one
+   * line of it; a box someone types into under the reply it shows.
    */
-  ownsValue?: boolean;
+  ownsValue?: (widget: GuiWidget) => boolean;
 }
 
 export const BLOCKS: Record<WidgetKind, BlockKind> = {
@@ -55,12 +57,16 @@ export const BLOCKS: Record<WidgetKind, BlockKind> = {
   divider: { View: DividerWidgetView },
   spacer: { View: SpacerWidgetView },
   input_picker: { View: InputPickerWidgetView },
-  text_io: { View: TextIoWidgetView },
+  // The box a person types into holds what they typed, which is what a run
+  // sends; the reply is shown above it from what arrived. Handed the reply as
+  // its value, the box showed one text and ▶ Run sent another. A box that
+  // only shows is what arrived.
+  text_io: { View: TextIoWidgetView, ownsValue: (widget) => effectiveTextIoMode(widget) !== 'output' },
   plot_window: { View: PlotWindowWidgetView },
   image_view: { View: ImageViewWidgetView },
   table: { View: TableWidgetView },
   select: { View: SelectWidgetView },
   slider: { View: SliderWidgetView },
   button: { View: ButtonWidgetView },
-  chat: { View: ChatWidgetView, ownsValue: true },
+  chat: { View: ChatWidgetView, ownsValue: () => true },
 };

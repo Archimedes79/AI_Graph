@@ -25,11 +25,26 @@ describe('what the designer shows in a block somebody typed into', () => {
   it('is what the block holds once a run has sent the message and emptied it', () => {
     // The bug: the box kept showing "hello" after the run cleared it, and ▶ Run
     // then sent the empty box it did not show.
+    // The reply is not typed into the box either: it is shown above it, from
+    // what arrived.
     const blocks = owned([{ ...box, value: '' }]);
     const live = liveTypedValues({ ask: 'hello' }, blocks);
     expect(live).toEqual({});
-    expect(blockValue(blocks[0], 'the reply', live)).toBe('the reply');
+    expect(blockValue(blocks[0], 'the reply', live)).toBe('');
     expect(blockValue(blocks[0], undefined, live)).toBe('');
+  });
+
+  it('is what the person typed, not the reply that came back, in a box that also shows', () => {
+    // The bug: a reply that came back around a loop was handed to the typing
+    // box as its value, so the box showed the reply while ▶ Run sent what had
+    // been typed, which the box keeps (`TextIoWidgetRunner.settle`).
+    const blocks = owned([{ ...box, value: 'my question' }]);
+    expect(blockValue(blocks[0], 'the reply', {})).toBe('my question');
+  });
+
+  it('is what arrived, in a box that only shows', () => {
+    const shows = { ...WIDGET_BUILDERS.text_io.create('Answer', 'output'), id: 'answer', value: 'an older answer' };
+    expect(blockValue(owned([shows])[0], 'the reply', {})).toBe('the reply');
   });
 
   it('is the new path once the panel has replaced the one browsed on the block', () => {
