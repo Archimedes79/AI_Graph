@@ -23,7 +23,7 @@
 
 import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeResult, NodeStatus } from '../graph.ts';
 import type { NodeRunner, Runners } from '../elements/NodeRunner.ts';
-import type { Runtime } from '../elements/Runtime.ts';
+import { lent, type Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
 import { readFileInputs, type FileGraph } from './fileInputs.ts';
 import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
@@ -94,25 +94,15 @@ export function memoryFeedbackEdges(
  * A model belongs to its provider. A node that names its own provider and no
  * model is lent the graph's model only when the graph names that same
  * provider: the graph's Gemini model sent to OpenAI is a request that can only
- * fail. Otherwise the model stays empty, and the provider layer decides.
+ * fail. Otherwise the model stays empty, and the provider layer decides
+ * (`lent`, which the provider layer applies again with the machine's default).
  */
 export function withGraphDefaults(runtime: Runtime, graph: Graph): Runtime {
   const wanted = graph.metadata?.ai_defaults;
-  const provider = wanted?.provider && wanted.provider !== 'default' ? wanted.provider : '';
-  const model = wanted?.model ?? '';
-  if (!provider && !model) return runtime;
+  if (!wanted || ((!wanted.provider || wanted.provider === 'default') && !wanted.model)) return runtime;
   return {
     ...runtime,
-    ai: {
-      complete: (request) => {
-        const pinned = request.provider && request.provider !== 'default' ? request.provider : '';
-        return runtime.ai.complete({
-          ...request,
-          provider: pinned || provider || request.provider,
-          model: request.model || (!pinned || pinned === provider ? model : ''),
-        });
-      },
-    },
+    ai: { complete: (request) => runtime.ai.complete({ ...request, ...lent(request, wanted) }) },
   };
 }
 

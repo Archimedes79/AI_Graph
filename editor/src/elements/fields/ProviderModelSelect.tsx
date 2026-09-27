@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import type { AIProvider } from '@/graph';
 import { call, type ProviderStatus } from '@/api/client';
 import { LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
+import { lent, type ModelChoice } from '@engine/elements/Runtime.ts';
 
 // Single source of truth for the provider dropdown -- previously duplicated
 // verbatim in AiNodePanel.tsx, CodeNodePanel.tsx, and WidgetEditor.tsx.
@@ -58,23 +59,18 @@ function useProviderStatus(): ProviderStatus | null {
   return status;
 }
 
-/** A provider and a model, as the graph's default and the machine's runtime target say them. */
-type Home = { provider: string; model: string };
-
 /**
  * The model a run calls when a picker a run reads leaves the model empty, or
  * '' when there is none and the run will refuse.
  *
- * An empty model is filled from the first place that names *the same
- * provider* -- the graph's own default, then this machine's -- and from
- * nowhere else: the engine no longer sends one provider another's model, which
- * it can only answer with a 404 that reads like a broken endpoint. `default`
- * follows the first place that names a provider at all.
+ * A run fills an empty model from the graph's own default, then from this
+ * machine's, each lending its model only where it names the same provider
+ * (`lent`, the engine's own rule, applied in the order a run applies it): the
+ * engine no longer sends one provider another's model, which it can only
+ * answer with a 404 that reads like a broken endpoint.
  */
-export function modelWhenEmpty(provider: string, homes: Array<Home | undefined>): string {
-  const named = homes.filter((home): home is Home => !!home?.provider && home.provider !== 'default');
-  const calls = provider === 'default' ? named[0]?.provider : provider;
-  return named.find((home) => home.provider === calls && home.model)?.model ?? '';
+export function modelWhenEmpty(provider: string, homes: Array<ModelChoice | undefined>): string {
+  return homes.reduce<ModelChoice>((asked, home) => (home ? lent(asked, home) : asked), { provider, model: '' }).model;
 }
 
 interface ProviderModelSelectProps {
@@ -99,7 +95,7 @@ interface ProviderModelSelectProps {
    */
   readByRuns?: boolean;
   /** With `readByRuns`: the graph's own default, which an empty model is filled from first. */
-  graphDefault?: Home;
+  graphDefault?: ModelChoice;
 }
 
 export default function ProviderModelSelect({

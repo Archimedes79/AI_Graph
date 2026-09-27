@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { modelWhenEmpty } from './ProviderModelSelect';
+import { lent } from '@engine/elements/Runtime.ts';
+import { withGraphDefaults } from '@engine/execution/executor.ts';
 
 /**
  * What the model box says when it is left empty, on a picker a run reads.
@@ -32,5 +34,28 @@ describe('modelWhenEmpty', () => {
   it('follows a graph default that names a provider and no model to the machine, only when it is the machine\'s', () => {
     expect(modelWhenEmpty('default', [{ provider: 'lmstudio', model: '' }, machine])).toBe('qwen');
     expect(modelWhenEmpty('default', [{ provider: 'anthropic', model: '' }, machine])).toBe('');
+  });
+
+  it('takes the model of a graph default that names no provider, as a run does', () => {
+    // The bug: a graph default of "Default" with a model typed beside it was
+    // skipped, and the box showed the machine's model while a run sent the
+    // graph's to the machine's provider.
+    expect(modelWhenEmpty('default', [{ provider: 'default', model: 'llama3.2' }, machine])).toBe('llama3.2');
+    expect(modelWhenEmpty('openai', [{ provider: 'default', model: 'llama3.2' }, machine])).toBe('');
+  });
+
+  it('says the model a run sends, for every node provider and graph default', async () => {
+    const graphs = [undefined, { provider: 'default', model: '' }, { provider: 'default', model: 'g' }, { provider: 'lmstudio', model: '' },
+      { provider: 'openai', model: 'gpt' }, { provider: 'openai', model: '' }];
+    for (const graph of graphs) {
+      for (const provider of ['default', 'lmstudio', 'openai', 'anthropic']) {
+        // A run: the graph's default first (`withGraphDefaults`), then the machine's, as `aiService` fills it.
+        const sent: string[] = [];
+        const machineLayer = { complete: async (request: { provider?: string; model?: string }) => { sent.push(lent(request, machine).model); return ''; } };
+        const runtime = withGraphDefaults({ ai: machineLayer } as never, { metadata: { ai_defaults: graph } } as never);
+        await runtime.ai.complete({ prompt: '', provider, model: '' });
+        expect(modelWhenEmpty(provider, [graph, machine]), `${provider} under ${JSON.stringify(graph)}`).toBe(sent[0]);
+      }
+    }
   });
 });

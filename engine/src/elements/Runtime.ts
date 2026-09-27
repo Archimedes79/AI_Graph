@@ -82,6 +82,36 @@ export interface AiService {
   complete(request: AiRequest): Promise<string>;
 }
 
+/** A provider and a model, as a request names them or a default supplies them. */
+export interface ModelChoice {
+  provider: string;
+  model: string;
+}
+
+/**
+ * *asked* with its blanks filled from *home*: a graph's AI default, or the
+ * machine's.
+ *
+ * A model belongs to its provider. A request that names no provider goes to
+ * *home*'s, and a request with no model is lent *home*'s model only when it
+ * goes to *home*'s provider -- the graph's Gemini model sent to OpenAI is a
+ * request that can only fail. A *home* that names no provider still lends its
+ * model to a request that names none either.
+ *
+ * One rule, applied twice by a run: with the graph's default
+ * (`withGraphDefaults`), then with the machine's (`aiService`). The editor's
+ * model box folds the two the same way to say what an empty model will mean,
+ * so it lives here, where both halves and the page can read it.
+ */
+export function lent(asked: Partial<ModelChoice>, home: Partial<ModelChoice>): ModelChoice {
+  const pinned = asked.provider && asked.provider !== 'default' ? asked.provider : '';
+  const own = home.provider && home.provider !== 'default' ? home.provider : '';
+  return {
+    provider: pinned || own || (asked.provider ?? ''),
+    model: asked.model || (!pinned || pinned === own ? home.model ?? '' : ''),
+  };
+}
+
 /** Tool servers opened for the length of one node's run, then closed. */
 export interface ToolSession extends ToolAccess {
   close(): Promise<void>;

@@ -17,7 +17,7 @@
 // is written once, below, and what differs per dialect is only what differs on
 // the wire.
 
-import type { AiRequest, AiService, ToolAccess, ToolSpec } from '../elements/Runtime.ts';
+import { lent, type AiRequest, type AiService, type ToolAccess, type ToolSpec } from '../elements/Runtime.ts';
 
 export interface ProviderSettings {
   /** Which provider a node's `default` resolves to. */
@@ -659,14 +659,12 @@ export function aiService(settings: Partial<ProviderSettings> = {}): AiService {
 
   return {
     async complete(request: AiRequest): Promise<string> {
-      const provider = request.provider && request.provider !== 'default'
-        ? request.provider
-        : config.provider;
-      // The machine's default model belongs to the machine's default provider.
-      // A node that names another provider and no model would otherwise send
-      // that provider a model it has never heard of, and the 404 it answers
-      // with reads like a broken endpoint. Asked for nothing, it is told so.
-      const model = request.model || (provider === config.provider ? config.model : '');
+      // The machine's default model belongs to the machine's default provider
+      // (`lent`). A node that names another provider and no model would
+      // otherwise send that provider a model it has never heard of, and the 404
+      // it answers with reads like a broken endpoint. Asked for nothing, it is
+      // told so.
+      const { provider, model } = lent(request, config);
       if (!model) {
         throw new Error(
           `No model configured for provider '${provider}'. Name one on the AI node, `
