@@ -62,6 +62,13 @@ export interface Generation {
    * execute it once before anyone sees it, so the element says here how to
    * make it runnable: a wrapper, and a window standing in for the real one.
    *
+   * It says one thing more, because it is the same fact: an element that calls
+   * the body itself also frames it. Its `contract` is then placed where the
+   * function to complete goes, in place of a node's skeleton, output keys and
+   * Node rules, which would each contradict it (`framedByElement` in
+   * `host/editor/generate.ts`). So a `probeWith` without a contract that opens
+   * with the function to complete leaves the model with no frame at all.
+   *
    * Absent for every other element, which means "as it is".
    */
   probeWith?: (body: string) => string;
