@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import type { WidgetKind } from '@/graph';
+import type { GuiWidget, WidgetKind } from '@/graph';
 import { WIDGET_BUILDERS } from '@/elements/registry';
+import { freeId } from '@/document/ids';
 import type { PaletteEntry as KindEntry } from '@/elements/WidgetGuiBuilder';
 import { DIMMER, LINE, SURFACE, TEXT } from '@/ui/theme';
 
@@ -62,6 +63,20 @@ export const GROUPS: { label: string; folded?: boolean; items: { kind: WidgetKin
 export function entryOf(kind: WidgetKind, mode?: string): PaletteEntry | undefined {
   const entry = WIDGET_BUILDERS[kind]?.paletteEntries().find((candidate) => (candidate.mode ?? '') === (mode ?? ''));
   return entry && { ...entry, kind };
+}
+
+/**
+ * The block an entry adds to a page whose blocks are called *taken*.
+ *
+ * A block with ports starts out named after what it is: its ports are named
+ * after it, and "widget-1-1789753941087: message" is what an unnamed chat's
+ * port was called. Whether a kind is named at all is its builder's answer.
+ */
+export function newBlock(kind: WidgetKind, mode: string | undefined, taken: string[]): GuiWidget {
+  const builder = WIDGET_BUILDERS[kind];
+  const entry = entryOf(kind, mode) ?? builder.paletteEntries()[0];
+  // Named for what it is, so its ports read as that: `plot_window_in`.
+  return { ...builder.create(builder.initialLabel(entry?.label ?? ''), mode), id: freeId(kind, taken) };
 }
 
 const PALETTE = GROUPS.map((group) => ({

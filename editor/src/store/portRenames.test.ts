@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { GraphEdge, GraphNode, Port } from '@/graph';
 import { useGraphStore } from './graphStore';
 import { portRenames, trackPorts, untracked } from './portRenames';
+import { saveDraft } from '@/canvas/nodeDraft';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 
 /**
@@ -10,7 +11,7 @@ import { baseNodeConfig } from '@/document/baseNodeConfig';
  * The three edits below are the ones the ports editor makes (`PortsEditor`):
  * a row is edited by spreading it with the change, removed by filtering it
  * out, and a new one is appended. Each test edits a draft that way, saves it
- * the way `NodeEditor` does, and looks at the wires.
+ * the way `NodeEditor` does (`saveDraft`), and looks at the wires.
  */
 const edit = (ports: Port[], at: number, patch: Partial<Port>) => ports.map((port, i) => (i === at ? { ...port, ...patch } : port));
 const remove = (ports: Port[], at: number) => ports.filter((_, i) => i !== at);
@@ -34,7 +35,7 @@ const into = (target: string) => store().rfEdges
 /** Open *id* in the dialog, change its ports with *change*, and press Save. */
 function saveDialog(id: string, change: (draft: GraphNode) => GraphNode) {
   const draft = change(trackPorts(JSON.parse(JSON.stringify(stored(id)))));
-  store().updateNode(id, untracked(draft), portRenames(stored(id), draft));
+  saveDraft(id, stored(id), draft);
 }
 
 const wire = (source: string, target: string, port: string): GraphEdge =>

@@ -3,7 +3,7 @@ import type { GraphNode, GuiWidget, WidgetKind } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { syncGuiNodePorts } from '@/document/guiWidgets';
 import DesignerSurface from './DesignerSurface';
-import DesignerPalette, { entryOf, type PaletteEntry } from './DesignerPalette';
+import DesignerPalette, { newBlock, type PaletteEntry } from './DesignerPalette';
 import { pageOf, useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { patchBlock, routePage, type PageWrite } from './pageWrite';
 import { liveTypedValues } from './typedValues';
@@ -12,8 +12,6 @@ import WidgetEditor from './WidgetEditor';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import { SCHEMES, type SchemeId } from '@/ui/scheme';
 import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
-import { WIDGET_BUILDERS } from '@/elements/registry';
-import { freeId } from '@/document/ids';
 
 /**
  * The graph's interface, on one page, built on the page itself.
@@ -66,14 +64,7 @@ export default function DesignerTab() {
    * kind of step a tool should take on itself.
    */
   const addWidget = (kind: WidgetKind, mode?: string, at?: number) => {
-    // A widget with ports starts out named after what it is: its ports are
-    // named after it, and "widget-1-1789753941087: message" is what an unnamed
-    // chat's port was called. Whether a kind is named at all is its builder's answer.
-    const builder = WIDGET_BUILDERS[kind];
-    const entry = entryOf(kind, mode) ?? builder.paletteEntries()[0];
-    const widget = { ...builder.create(builder.initialLabel(entry?.label ?? ''), mode) };
-    // Named for what it is, so its ports read as that: `plot_window_in`.
-    widget.id = freeId(kind, blocks.map((b) => b.widget.id));
+    const widget = newBlock(kind, mode, blocks.map((b) => b.widget.id));
     if (guiNodes.length > 0) {
       const next = blocks.map((b) => b.widget);
       next.splice(at ?? next.length, 0, widget);

@@ -1,7 +1,8 @@
 import type { GraphNode, Port } from '@/graph';
 import { derivedNodePorts } from '@/document/guiWidgets';
 import { NODE_BUILDERS } from '@/elements/registry';
-import { renamedPorts } from '@/store/portRenames';
+import { useGraphStore } from '@/store/graphStore';
+import { portRenames, renamedPorts, untracked } from '@/store/portRenames';
 import { examplesFollowPorts } from '@/authoring/examplePair';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { ERROR_PORT, errorOutput } from '@engine/execution/wiring.ts';
@@ -66,4 +67,24 @@ export function withPorts(draft: GraphNode, ports: { inputs: Port[]; outputs: Po
   if (typeof examples !== 'string') return node;
   const followed = examplesFollowPorts(examples, names);
   return followed === examples ? node : { ...node, config: { ...node.config, examples: followed } };
+}
+
+/**
+ * The node dialog's Save: *draft* into the store as node *nodeId*, its wires
+ * following its ports. *before* is the node as the store holds it.
+ *
+ * A port's id is the name a body reads it by, so it is edited in the dialog --
+ * and an edge points at the old one. Each port of the draft remembers the id it
+ * had when the dialog opened (`trackPorts`), so a renamed port takes its wires
+ * along and a removed one takes them away. It used to be worked out by
+ * position, which read removing a port as renaming it to the one that slid
+ * into its row, and handed that port the removed one's wire.
+ *
+ * A function rather than a few lines inside `NodeEditor`, so a test saves a
+ * dialog the way the dialog does and not a copy of it that forgot a step.
+ */
+export function saveDraft(nodeId: string, before: GraphNode | undefined, draft: GraphNode): void {
+  // What it is published as follows what it is asked to do (`publishedDescription`).
+  const kept = { ...untracked(draft), description: NODE_BUILDERS[draft.node_type].publishedDescription(draft) };
+  useGraphStore.getState().updateNode(nodeId, kept, portRenames(before, draft));
 }

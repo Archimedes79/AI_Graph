@@ -1,10 +1,10 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { GraphNode, Port } from '@/graph';
 import { shapeToKeep, useGraphStore } from '@/store/graphStore';
-import { portRenames, trackPorts, untracked } from '@/store/portRenames';
+import { trackPorts } from '@/store/portRenames';
 import { derivedNodePorts } from '@/document/guiWidgets';
 import PortsEditor from './PortsEditor';
-import { withPorts, withSetting } from './nodeDraft';
+import { saveDraft, withPorts, withSetting } from './nodeDraft';
 import { portIdProblems } from './portIds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import type { NodePanelProps } from '@/elements/NodeGuiBuilder';
@@ -28,7 +28,6 @@ interface NodeEditorProps {
 
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const rfNode = useGraphStore((s) => s.rfNodes.find((n) => n.id === nodeId));
-  const updateNode = useGraphStore((s) => s.updateNode);
   const graphNodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
   const graphEdges = useGraphStore((s) => s.rfEdges);
   // The last run's per-node values: the best generation context available, and
@@ -111,27 +110,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // is said in step 2 of the four steps now, in words (`OutputWordsField`).
   const element = NODE_BUILDERS[node.node_type];
 
-  /**
-   * The draft into the store, its wires following its ports.
-   *
-   * A port's id is the name a body reads it by, so it is edited here — and an
-   * edge points at the old one. Each port of the draft remembers the id it had
-   * when the dialog opened (`trackPorts`), so a renamed port takes its wires
-   * along and a removed one takes them away. It used to be worked out by
-   * position, which read removing a port as renaming it to the one that slid
-   * into its row, and handed that port the removed one's wire.
-   */
-  const storeDraft = () => {
-    // What it is published as follows what it is asked to do (`publishedDescription`).
-    const kept = { ...untracked(node!), description: element.publishedDescription(node!) };
-    updateNode(nodeId, kept, portRenames(rfNode?.data.graphNode, node!));
-  };
-
   const save = () => {
     // A panel said something cannot be saved as it stands; saving the rest
     // would keep the last good value and lose the edit without a word.
     if (blocked) return;
-    storeDraft();
+    saveDraft(nodeId, rfNode?.data.graphNode, node);
     onClose();
   };
 
@@ -224,7 +207,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     <OpenInMyEditor
       nodeId={nodeId}
       before={() => {
-        storeDraft();
+        saveDraft(nodeId, rfNode?.data.graphNode, node);
         setNode(trackPorts(node));
         baseline.current = JSON.stringify(node);
       }}
