@@ -90,6 +90,27 @@ export function parseInterval(text: string): number {
   return seconds;
 }
 
+/** The longest a Node timer waits: past it, a timer fires at once. */
+const LONGEST_TIMER_MS = 2 ** 31 - 1;
+
+/**
+ * Call *then* once *ms* have passed, however long that is -- in steps of at
+ * most 24.8 days, because a longer timer fires at once, and "every 30d" was a
+ * round every millisecond. *keepsAlive* false lets the process end meanwhile.
+ * Hands back the way to call it off.
+ */
+export function after(ms: number, then: () => void, keepsAlive = true): () => void {
+  const due = Date.now() + ms;
+  let timer: ReturnType<typeof setTimeout>;
+  const arm = (): void => {
+    const left = Math.max(0, due - Date.now());
+    timer = setTimeout(left > LONGEST_TIMER_MS ? arm : then, Math.min(left, LONGEST_TIMER_MS));
+    if (!keepsAlive) timer.unref?.();
+  };
+  arm();
+  return () => clearTimeout(timer);
+}
+
 /**
  * The nodes one page event runs, or null for "all of them".
  *

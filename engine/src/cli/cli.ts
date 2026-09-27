@@ -36,7 +36,7 @@ import { dirname, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { graphTriggers, parseInterval } from '../execution/triggers.ts';
+import { after, graphTriggers, parseInterval } from '../execution/triggers.ts';
 
 export interface CliOptions {
   graphPath: string;
@@ -182,7 +182,7 @@ async function runEvery(options: CliOptions): Promise<number> {
   for (let round = 0; options.limit === undefined || round < options.limit; round += 1) {
     if (round > 0) {
       process.stderr.write(`\nWaiting ${seconds}s…\n`);
-      await new Promise((wake) => setTimeout(wake, seconds * 1000));
+      await new Promise<void>((wake) => { after(seconds * 1000, wake); });
     }
     code = await runOnce(options);
   }

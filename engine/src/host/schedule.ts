@@ -21,7 +21,7 @@
 
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { ExecutionResult, Graph } from '../graph.ts';
-import { graphTriggers, parseInterval, type Trigger } from '../execution/triggers.ts';
+import { after, graphTriggers, parseInterval, type Trigger } from '../execution/triggers.ts';
 
 export interface ScheduleState {
   /** Whether this graph runs by itself at all. A page that hears `false` has nothing to wait for. */
@@ -105,7 +105,7 @@ export function schedule(
     } catch (error) {
       problem = error instanceof Error ? error.message : String(error);
     }
-    return { ...trigger, seconds, next_at: null as number | null, timer: undefined as ReturnType<typeof setTimeout> | undefined };
+    return { ...trigger, seconds, next_at: null as number | null, cancel: undefined as (() => void) | undefined };
   }).filter((clock) => clock.on_start || clock.seconds > 0);
 
   const current: ScheduleState = {
@@ -127,9 +127,8 @@ export function schedule(
   const wind = (clock: Clock): void => {
     if (clock.seconds <= 0 || abort.signal.aborted) return;
     clock.next_at = Date.now() + clock.seconds * 1000;
-    clock.timer = setTimeout(() => begin(clock), clock.seconds * 1000);
     // The server is what keeps the process alive, not a pending round.
-    clock.timer.unref?.();
+    clock.cancel = after(clock.seconds * 1000, () => begin(clock), false);
     current.next_at = soonest();
   };
 
@@ -173,7 +172,7 @@ export function schedule(
     state: () => ({ ...current }),
     stop: () => {
       abort.abort();
-      for (const clock of clocks) if (clock.timer) clearTimeout(clock.timer);
+      for (const clock of clocks) clock.cancel?.();
       return inFlight;
     },
   };

@@ -47,6 +47,16 @@ describe('schedule', () => {
     for (let i = 1; i < starts.length; i += 1) expect(starts[i] - starts[i - 1]).toBeGreaterThanOrEqual(120);
   });
 
+  it('waits an interval longer than a Node timer holds, rather than firing at once', async () => {
+    // Past 2^31 ms (24.8 days) a timer fires at once: "every 30d" was a round every millisecond.
+    let runs = 0;
+    const clock = schedule(() => graphWith({ every: '30d' }), async () => { runs += 1; return done(); });
+    await wait(100);
+    expect(runs).toBe(0);
+    expect(clock.state().next_at! - Date.now()).toBeGreaterThan(29 * 86_400_000);
+    await clock.stop();
+  });
+
   it('waits one interval before the first run when nothing says "at start"', async () => {
     let runs = 0;
     // Wide margins: the second round is due at 0.6 s, so a busy machine that
