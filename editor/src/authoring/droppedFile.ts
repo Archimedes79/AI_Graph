@@ -40,9 +40,16 @@ export function droppedFile(transfer: DataTransfer | null): Dropped | undefined 
 /** A drag that carries files: one to take on. */
 export const carriesFiles = (transfer: DataTransfer | null): boolean => !!transfer?.types.includes('Files');
 
-/** The path a `file:` URI names: `file:///D:/data/a.csv` is `D:/data/a.csv`, `file:///home/a.csv` is `/home/a.csv`. */
+/**
+ * The path a `file:` URI names: `file:///D:/data/a.csv` is `D:/data/a.csv`,
+ * `file:///home/a.csv` is `/home/a.csv` -- and a share on another machine,
+ * `file://server/share/a.csv`, is `//server/share/a.csv`, which Windows opens
+ * as `\\server\share\a.csv`. Without its server it named a folder on this one.
+ */
 export function uriPath(uri: string): string {
-  const path = decodeURIComponent(new URL(uri).pathname);
+  const url = new URL(uri);
+  const path = decodeURIComponent(url.pathname);
+  if (url.host) return `//${url.host}${path}`;
   return /^\/[A-Za-z]:\//.test(path) ? path.slice(1) : path;
 }
 

@@ -22,6 +22,13 @@ describe('where a dropped file is', () => {
     expect(await droppedPath(dropped('a.csv', 'x', 'file:///home/me/a.csv'), async () => [])).toBe('/home/me/a.csv');
   });
 
+  it('keeps the server of a file on a share: without it, the path named a folder on this machine', () => {
+    expect(uriPath('file://fileserver/share/people.csv')).toBe('//fileserver/share/people.csv');
+    expect(uriPath('file://fileserver/team%20data/a.csv')).toBe('//fileserver/team data/a.csv');
+    // "localhost" is this machine, as a URI says it.
+    expect(uriPath('file://localhost/D:/work/a.csv')).toBe('D:/work/a.csv');
+  });
+
   it('is otherwise the one file of its name and size under the editor\'s folder -- and none, or several, is said', async () => {
     expect(await droppedPath(dropped('a.csv', 'x'), one('D:/work/a.csv'))).toBe('D:/work/a.csv');
     await expect(droppedPath(dropped('a.csv', 'x'), async () => [])).rejects.toThrow(/choose it with 📂/);
