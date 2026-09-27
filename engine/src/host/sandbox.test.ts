@@ -57,6 +57,16 @@ describe('how a body may be written', () => {
     expect(await nodeCode.run(body, {})).toEqual({ value: 'string' });
   });
 
+  it('may export its run the CommonJS way, as code.js run on its own does', async () => {
+    // A model that has just read input.js and output.js ends code.js the same way.
+    const body = `
+      function run(inputs) { return { words: inputs.text.split(' ').length }; }
+      module.exports = { run };
+      exports.also = run;
+    `;
+    expect(await nodeCode.run(body, { text: 'a b c' })).toEqual({ words: 3 });
+  });
+
   it('may use import', async () => {
     const body = `
       import { tmpdir } from 'node:os';
