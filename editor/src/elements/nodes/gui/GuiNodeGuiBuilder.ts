@@ -1,9 +1,10 @@
-import type { GraphNode, GuiWidget } from '@/graph';
+import type { GraphNode, GuiWidget, NodeResult } from '@/graph';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 import { WIDGET_BUILDERS } from '../../widgets/roster';
+import type { PortPreviews } from '../../resultPreview';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
-import { widgetOfPort } from '@/document/guiWidgets';
+import { blockShows, widgetOfPort } from '@/document/guiWidgets';
 
 /** What *widget* wants handed to it, asked of the engine's element with the block as the engine holds one. */
 function receives(widget: GuiWidget): string | undefined {
@@ -61,4 +62,18 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
     return 'values from its widgets';
   }
 
+  /**
+   * What the page shows, under the port each block is fed on, read by the
+   * block: a chart's points are a chart, a picture is a picture. What its
+   * blocks hand on -- a typed text, a chosen file -- is on the page itself.
+   */
+  override resultPreviews(node: GraphNode, result: NodeResult): PortPreviews {
+    const inputs: PortPreviews['inputs'] = {};
+    for (const port of node.inputs) {
+      const block = widgetOfPort(node, port.id);
+      const preview = block && WIDGET_BUILDERS[block.kind]?.preview(blockShows(result, block.id));
+      if (preview) inputs[port.id] = preview;
+    }
+    return { inputs, outputs: {} };
+  }
 }

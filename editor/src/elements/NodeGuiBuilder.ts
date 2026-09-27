@@ -1,11 +1,12 @@
 // A node's build-time half, in the browser: the mirror of `engine/src/elements/NodeRunner.ts`.
 
 import type { ComponentType, ReactNode } from 'react';
-import type { Graph, GraphNode, NodeType } from '@/graph';
+import type { Graph, GraphNode, NodeResult, NodeType } from '@/graph';
 import type { FieldAccess } from '@/authoring/generation';
 import { describeDeclaredOutput } from '@/authoring/outputFormat';
 import { readPair } from '@/authoring/examplePair';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
+import { previewOf, type PortPreviews } from './resultPreview';
 
 /** What the node editor hands every node panel. A panel takes the part it needs. */
 export interface NodePanelProps {
@@ -178,6 +179,23 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
 
   /** A line of what the node holds, shown on the canvas under its ports. Nothing, for most. */
   canvasSummary?(node: GraphNode): string | undefined;
+
+  /**
+   * What the canvas shows of this node's last result, beside the port each
+   * value stands at, read by its shape (`resultPreview.ts`): what came out of
+   * an output port stands under that port, and a value handed on under the
+   * name of an input -- an output node's -- under the input it arrived on.
+   */
+  resultPreviews(node: GraphNode, result: NodeResult): PortPreviews {
+    const previews: PortPreviews = { inputs: {}, outputs: {} };
+    for (const [port, value] of Object.entries(result.outputs ?? {})) {
+      const side = node.outputs.some((p) => p.id === port) ? 'outputs'
+        : node.inputs.some((p) => p.id === port) ? 'inputs' : undefined;
+      const preview = side && previewOf(value);
+      if (side && preview) previews[side][port] = preview;
+    }
+    return previews;
+  }
 
   /**
    * The node is a source whose data nothing describes yet -- no sample, no

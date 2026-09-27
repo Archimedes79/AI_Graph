@@ -7,7 +7,7 @@ import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
 import { DANGER, MUTED } from '@/ui/theme';
-import { showsPage, widgetFiresRun } from '@/document/guiWidgets';
+import { blockShows, showsPage, widgetFiresRun } from '@/document/guiWidgets';
 import type { RunTrigger } from '@/api/client';
 
 /**
@@ -78,16 +78,9 @@ export function blockValue(
   return incoming !== undefined && overrides?.[block.widget.id] === undefined ? incoming : own;
 }
 
-/**
- * What a run put on one block: the engine's `display`, which is what arrived
- * as the block draws it -- an image's path read into the picture. A block that also hands something on --
- * a chat, a box that is typed into and shows -- is no display, and shows what
- * arrived on its port.
- */
+/** What a run put on one block of the page node *nodeId* (`blockShows`). */
 export function shownOn(result: ExecutionResult | null, nodeId: string, widgetId: string): unknown {
-  const ran = result?.node_results.find((r) => r.node_id === nodeId);
-  const shown = ran?.display?.[widgetId];
-  return shown !== undefined ? shown : ran?.inputs?.[`${widgetId}_in`];
+  return blockShows(result?.node_results.find((r) => r.node_id === nodeId), widgetId);
 }
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */

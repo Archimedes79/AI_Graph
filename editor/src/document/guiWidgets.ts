@@ -5,7 +5,7 @@
 // does this block have" is the one disagreement that silently deletes wires:
 // the editor drawing a port the engine will not produce, or the engine
 // producing one the editor never drew.
-import type { GraphNode, GuiWidget, Port } from '@/graph';
+import type { GraphNode, GuiWidget, NodeResult, Port } from '@/graph';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 
@@ -43,6 +43,18 @@ export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Po
  */
 export function widgetOfPort(node: GraphNode, portId: string): GuiWidget | undefined {
   return node.config.gui_widgets.find((w) => `${w.id}_in` === portId || `${w.id}_out` === portId);
+}
+
+/**
+ * What a run put on one block of the page that is *result*: the engine's
+ * `display`, which is what arrived as the block draws it -- an image's path
+ * read into the picture. A block that also hands something on -- a chat, a
+ * box that is typed into and shows -- is no display, and shows what arrived
+ * on its port. The page and the page's node on the canvas both ask here.
+ */
+export function blockShows(result: NodeResult | undefined, widgetId: string): unknown {
+  const shown = result?.display?.[widgetId];
+  return shown !== undefined ? shown : result?.inputs?.[`${widgetId}_in`];
 }
 
 /**
