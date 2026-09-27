@@ -14,9 +14,8 @@ import { useWhatSends } from '@/authoring/WhatSends';
 import { connectedFormatContext, inputSources, lastRunContext, outputTargets, readFilePorts } from '@/authoring/generationContext';
 import { nodeFacts } from '@/authoring/nodeFacts';
 import { inferInterface } from '@engine/execution/interface.ts';
-import OutputInterface from '@/authoring/OutputInterface';
 import { nodeLogic } from '@/authoring/logic';
-import GenerationTranscript, { GenerationReport } from '@/authoring/GenerationTranscript';
+import { GenerationReport } from '@/authoring/GenerationTranscript';
 import WhatRuns from '@/elements/fields/WhatRuns';
 import OpenInMyEditor from '@/authoring/OpenInMyEditor';
 import { ACCENT_FILL, ACCENT_TEXT, FIELD, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, TEXT } from '@/ui/theme';
@@ -305,7 +304,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           {/* Only for elements whose own editor does not already ask what the
               node is for. An ai node's description IS its generation prompt, so
               drawing this above it showed the same box twice. */}
-          {!NODE_BUILDERS[node.node_type]?.ownsDescription && (
+          {!element.ownsDescription && (
             <div className="mb-4">
               <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
                 Description (optional)
@@ -314,7 +313,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 className="w-full rounded-lg px-3 py-2 text-sm resize-none"
                 style={{ ...FIELD, minHeight: 64 }}
                 value={node.description}
-                onChange={(e) => setNode((prev) => prev ? { ...prev, description: e.target.value } : prev)}
+                onChange={(e) => setDescription(e.target.value)}
                 placeholder={element.hint}
               />
             </div>
@@ -332,7 +331,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 node={node}
                 setConfig={setConfig}
                 updateNode={(change) => setNode((prev) => (prev ? change(prev) : prev))}
-                setDescription={(value: string) => setNode((prev) => (prev ? { ...prev, description: value } : prev))}
+                setDescription={setDescription}
                 generation={generation}
                 fields={fields}
                 generating={generating}
@@ -357,8 +356,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 </details>
               )}
 
-              {!stepped && keepsOutputInterface(node) && <OutputInterface node={node} setConfig={setConfig} />}
-
               {/* Knobs with good defaults, folded away: a node should open on
                   what it does, not on a form to fill in first. */}
               {element.AdvancedPanel && (
@@ -379,15 +376,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
 
               {/* Beside the body, for a node that authors one. */}
               {!steps && openInEditor}
-
-              {/* An element with no ✨ button of its own can still have something
-                  to report -- the message is drawn next to the button otherwise. */}
-              {genMessage && !generation && (
-                <div className="text-sm px-3 py-2 rounded" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>
-                  {genMessage}
-                </div>
-              )}
-              {!generation && <GenerationTranscript />}
           </div>
           </GenerationReport>
       </div>

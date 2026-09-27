@@ -142,7 +142,6 @@ export function useGenerate() {
       setLive((prev) => ({ ...prev, [key]: [] }));
       setMessage('Discarded. Nothing changed.', key);
     },
-    setMessage,
     run,
   };
 }
