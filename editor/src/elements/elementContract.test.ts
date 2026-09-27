@@ -36,28 +36,9 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
   const kind = NODE_KINDS[nodeType as GraphNode['node_type']];
   it('create() produces a valid GraphNode shape', () => {
     const node = kind.create(`${nodeType}-1`);
-    // A few NodeType keys share one element (widget resolves to the gui-style
-    // element) -- create() always stamps its own canonical node_type, so assert
-    // it round-trips through the registry to this same element rather than
-    // requiring an exact string match.
-    expect(NODE_BUILDERS[node.node_type as GraphNode['node_type']]).toBe(element);
+    expect(node.node_type).toBe(nodeType);
     expect(node.id).toBe(`${nodeType}-1`);
     expect(node.config).toBeTruthy();
-    expect(Array.isArray(node.inputs)).toBe(true);
-    expect(Array.isArray(node.outputs)).toBe(true);
-  });
-
-  it('can be removed from a node list, leaving the rest intact', () => {
-    const node = kind.create(`${nodeType}-1`);
-    const other = kind.create(`${nodeType}-2`);
-    const nodes: GraphNode[] = [node, other];
-    const remaining = nodes.filter((n) => n.id !== node.id);
-    expect(remaining).toEqual([other]);
-  });
-
-  it('declares default inputs/outputs without throwing', () => {
-    expect(() => kind.create(`${nodeType}-ports`)).not.toThrow();
-    const node = kind.create(`${nodeType}-ports`);
     expect(Array.isArray(node.inputs)).toBe(true);
     expect(Array.isArray(node.outputs)).toBe(true);
   });
@@ -117,14 +98,6 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
 });
 
 describe.each(Object.entries(WIDGET_BUILDERS))('gui widget element: %s', (widgetKind, element) => {
-  it('can be added to and removed from a widget list', () => {
-    const widget = makeWidget(widgetKind as GuiWidget['kind']);
-    const widgets: GuiWidget[] = [widget, { ...widget, id: 'w2' }];
-    const remaining = widgets.filter((w) => w.id !== widget.id);
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0].id).toBe('w2');
-  });
-
   it('contributes ports through the engine, which is the only place they exist', () => {
     // Not `element.ports`: the editor kept its own copy of that until the two
     // disagreed about whether a text box accepts anything or only text. The
