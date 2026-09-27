@@ -33,7 +33,7 @@ function variants(): GraphNode[] {
     ({ ...NODE_KINDS.input.create('n'), config: { ...NODE_KINDS.input.create('n').config, input_mode: mode } });
   const output = (mode: NodeConfig['write_mode']) =>
     ({ ...NODE_KINDS.output.create('n'), config: { ...NODE_KINDS.output.create('n').config, write_mode: mode } });
-  nodes.push(input('file'), input('directory'), output('none'), output('file'), output('directory'));
+  nodes.push(input('directory'), output('none'), output('file'), output('directory'));
   return nodes;
 }
 

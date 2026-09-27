@@ -293,7 +293,7 @@ describe('a graph inside a node', () => {
   it('says a page in there would never be shown, and a question in there never asked', () => {
     const problems = problemsIn(holder(inner([
       { id: 'page', node_type: 'gui', label: 'Page', inputs: [], outputs: [], config: { gui_widgets: [] } },
-      { id: 'asks', node_type: 'input', label: 'Asks', inputs: [], outputs: [], config: { input_mode: 'file', prompt_at_runtime: true } },
+      { id: 'asks', node_type: 'input', label: 'Asks', inputs: [], outputs: [], config: { input_mode: 'directory', prompt_at_runtime: true } },
       { id: 'out', node_type: 'output', label: 'Out', inputs: [port('value', 'input')], outputs: [], config: {} },
     ])));
     expect(said(problems)).toContainEqual(expect.stringContaining('a page in here would never be shown'));

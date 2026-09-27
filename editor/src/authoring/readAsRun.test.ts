@@ -14,7 +14,20 @@ vi.mock('@/api/client', async (original) => ({
   }),
 }));
 
-const { listAsRun, listBlockAsRun } = await import('./readAsRun');
+const { listAsRun, listBlockAsRun, readFileAsRun } = await import('./readAsRun');
+
+describe('a file read as a run reads it', () => {
+  it('is read by a node that reads the file on its input: an input node reads none', async () => {
+    answer = { status: 'success', outputs: { text: 'name,age\nAda,36' }, error: null };
+    expect(await readFileAsRun('data/people.csv')).toBe('name,age\nAda,36');
+    const sent = posted[posted.length - 1];
+    expect(sent.route).toBe('runNode');
+    const [reader] = sent.body.nodes as GraphNode[];
+    expect(reader.node_type).toBe('code');
+    expect(reader.inputs.map((port) => [port.id, port.data_type])).toEqual([['file', 'file_path']]);
+    expect(sent.body.inputs).toEqual({ file: 'data/people.csv' });
+  });
+});
 
 describe('a folder listed as a run lists it', () => {
   it('hands back what a folder picker hands on, run on a page of its own', async () => {

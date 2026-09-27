@@ -175,7 +175,7 @@ describe('what runs', () => {
   it('names a file only when the node keeps one of that name', () => {
     const element = registry.node('input')!;
     // A folder is listed by the engine, whatever an old node still carries: no body chooses its files.
-    for (const input_mode of ['text', 'file', 'directory']) {
+    for (const input_mode of ['text', 'directory']) {
       const subject = node('input', { input_mode, selector_code: 'function run({ files }) { return { files }; }' });
       const kept = element.texts(subject).map((text) => text.file);
       for (const named of element.whatRuns(subject).does.match(/\b[\w.-]+\.(?:js|md|json)\b/g) ?? []) expect(kept).toContain(named);

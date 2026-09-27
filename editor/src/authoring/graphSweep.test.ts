@@ -112,15 +112,6 @@ describe('sweeping a graph', () => {
 });
 
 describe('what a sweep would have to guess at', () => {
-  it('names a file input with nothing to read, and not one with a file set', () => {
-    const source = node('src', 'input');
-    source.config.input_mode = 'file';
-    expect(missingExamples([source], []).map((n) => n.id)).toEqual(['src']);
-
-    source.config.value = 'data/sample.csv';
-    expect(missingExamples([source], [])).toEqual([]);
-  });
-
   it('names a folder input with no folder, and not one with a folder set', () => {
     const source = node('src', 'input');
     source.config.input_mode = 'directory';
@@ -138,7 +129,7 @@ describe('what a sweep would have to guess at', () => {
 
   it('leaves alone a node that is fed by another, which will describe itself', () => {
     const source = node('src', 'input');
-    source.config.input_mode = 'file';
+    source.config.input_mode = 'directory';
     const fed = node('b');
     expect(missingExamples([source, fed], [edge('src', 'b')]).map((n) => n.id)).toEqual(['src']);
     expect(missingExamples([fed], [edge('src', 'b')])).toEqual([]);

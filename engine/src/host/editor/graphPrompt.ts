@@ -91,8 +91,8 @@ const EXAMPLE = `A complete, working example:
     {"id": "source", "node_type": "input", "label": "CSV", "description": "",
      "position": {"x": 80, "y": 120},
      "inputs": [],
-     "outputs": [{"id": "content", "name": "Content", "kind": "output", "data_type": "text", "multi": false, "required": false}],
-     "config": {"input_mode": "file", "value": ""}},
+     "outputs": [{"id": "output", "name": "Output", "kind": "output", "data_type": "text", "multi": false, "required": false}],
+     "config": {"input_mode": "text", "value": "name,age\\nAda,36\\nBo,41"}},
     {"id": "rows", "node_type": "code", "label": "Count rows", "description": "",
      "position": {"x": 420, "y": 120},
      "inputs": [{"id": "text", "name": "Text", "kind": "input", "data_type": "text", "multi": false, "required": false}],
@@ -105,7 +105,7 @@ const EXAMPLE = `A complete, working example:
      "config": {"write_mode": "window", "output_label": "Rows"}}
   ],
   "edges": [
-    {"id": "e1", "source_node_id": "source", "source_port_id": "content", "target_node_id": "rows", "target_port_id": "text"},
+    {"id": "e1", "source_node_id": "source", "source_port_id": "output", "target_node_id": "rows", "target_port_id": "text"},
     {"id": "e2", "source_node_id": "rows", "source_port_id": "rows", "target_node_id": "shown", "target_port_id": "value"}
   ]
 }

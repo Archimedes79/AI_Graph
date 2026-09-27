@@ -49,7 +49,7 @@ describe('the graph prompt', () => {
       id: 'i', node_type: 'input', label: '', description: '', position: { x: 0, y: 0 },
       inputs: [], outputs: [], config: { input_mode: mode },
     });
-    for (const mode of ['text', 'file', 'directory']) {
+    for (const mode of ['text', 'directory']) {
       for (const port of element.derivedPorts(node(mode))!.outputs) {
         expect(GRAPH_SYSTEM, `${mode} mode emits ${port.id}`).toContain(`"${port.id}"`);
       }
@@ -65,7 +65,7 @@ describe('the graph prompt', () => {
       id: 'i', node_type: 'input', label: '', description: '', position: { x: 0, y: 0 },
       inputs: [], outputs: [], config: { input_mode: mode },
     });
-    const numbers = ['text', 'file', 'directory']
+    const numbers = ['text', 'directory']
       .flatMap((mode) => element.derivedPorts(node(mode))!.outputs)
       .filter((port) => port.data_type === 'number');
     expect(numbers.map((port) => port.id)).toContain('count');
@@ -77,13 +77,18 @@ describe('the graph prompt', () => {
   it('names each derived input port with what it holds', () => {
     // Said from `derivedPorts`, so a type or a port changed there is changed here.
     const element = new InputNodeRunner();
-    for (const mode of ['text', 'file', 'directory']) {
+    for (const mode of ['text', 'directory']) {
       const derived = element.derivedPorts({ id: 'i', config: { input_mode: mode } } as unknown as GraphNode)!;
       for (const port of [...derived.inputs, ...derived.outputs]) {
         const holds = { text: 'text', number: 'a number', file_path: port.multi ? 'a list of file paths' : 'a file path' }[port.data_type as string];
         expect(GRAPH_SYSTEM, `${mode}: ${port.id}`).toContain(`"${port.id}" (${holds}`);
       }
     }
+  });
+
+  it('offers no input that reads a file: the node that wants the text reads it, from a path held as text', () => {
+    expect(GRAPH_SYSTEM).not.toMatch(/input_mode "file"|"input_mode": "file"/);
+    expect(registry.node('input')!.graphAuthorNote()).toContain('hold the path as text and wire it into that node\'s input typed "file_path"');
   });
 
   it('lists every block kind the registry knows, each with what it says of itself', () => {

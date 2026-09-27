@@ -65,7 +65,7 @@ export type NodeConfig = {
   data_value?: unknown;
   extensions: string;
   gui_widgets: GuiWidget[];
-  input_mode: 'text' | 'file' | 'directory';
+  input_mode: 'text' | 'directory';
   /** The output format in words: `output.md` in a project. */
   output_format_prompt: string;
   /** An answer to imitate, recorded from a test run. */

@@ -12,7 +12,7 @@ import { applyRuntimeValues, runtimeRequirements } from './runtimeValues.ts';
 describe('what a graph asks before it runs', () => {
   const graph = () => parseGraph({
     nodes: [
-      { id: 'ask', node_type: 'input', config: { input_mode: 'file', prompt_at_runtime: true, value: '' } },
+      { id: 'ask', node_type: 'input', config: { input_mode: 'text', prompt_at_runtime: true, value: '' } },
       { id: 'page', node_type: 'gui', config: { gui_widgets: [{ id: 'pick', kind: 'input_picker', mode: 'directory', value: '' }] } },
       { id: 'quiet', node_type: 'input', config: { value: 'kept' } },
     ],
