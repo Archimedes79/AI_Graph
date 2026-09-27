@@ -68,17 +68,19 @@ function addBlock(pageId: string, kind: WidgetKind, mode: string | undefined, se
  * Save a node's dialog: its name, what its ports are called, its settings --
  * and step 1's "Run once per item", ticked or not, which sets how the node
  * runs and which inputs fan out, together (`withPerItem`), for the lists step
- * 1 sees arriving. Port *types* no dialog sets.
+ * 1 sees arriving. Port *types* no dialog sets. *needed* ticks step 1's
+ * "needed" on those inputs (`PortsEditor`), which sets `required` on the port.
  */
 function edit(nodeId: string, changes: {
-  label: string; input?: string[]; output?: string; config?: Record<string, unknown>; perItem?: boolean;
+  label: string; input?: string[]; output?: string; config?: Record<string, unknown>; perItem?: boolean; needed?: string[];
 }): void {
   const node = nodeOf(nodeId);
   const renamed = (ports: GraphNode['inputs'], names: string[]) => names.map((name, index) => ({ ...(ports[index] ?? ports[0]), id: name, name }));
   const saved: GraphNode = {
     ...node,
     label: changes.label,
-    inputs: changes.input ? renamed(node.inputs, changes.input) : node.inputs,
+    inputs: (changes.input ? renamed(node.inputs, changes.input) : node.inputs)
+      .map((port) => (changes.needed?.includes(port.id) ? { ...port, required: true } : port)),
     outputs: changes.output ? renamed(node.outputs, [changes.output]) : node.outputs,
     config: { ...node.config, ...changes.config },
   };
@@ -99,7 +101,7 @@ const wire = (source: string, sourceHandle: string, target: string, targetHandle
 // ── What is compared, and what runs ───────────────────────────────────────
 
 /** A graph as its shape: ids are made up on the spot, so blocks and wires are named by what they are. */
-function shapeOf(graph: Graph): { nodes: string[]; blocks: string[]; wires: string[]; lists: string[] } {
+function shapeOf(graph: Graph): { nodes: string[]; blocks: string[]; wires: string[]; lists: string[]; needed: string[] } {
   const name = new Map<string, string>();
   for (const node of graph.nodes) name.set(node.id, node.node_type);
   const portName = (nodeId: string, portId: string): string => {
@@ -111,6 +113,8 @@ function shapeOf(graph: Graph): { nodes: string[]; blocks: string[]; wires: stri
     nodes: graph.nodes.map((node) => node.node_type).sort(),
     blocks: graph.nodes.flatMap((node) => (node.config.gui_widgets ?? []).map((widget: GuiWidget) => `${widget.kind}${widget.mode ? `/${widget.mode}` : ''}${widget.run_on_change ? ' ⚡' : ''}`)),
     wires: graph.edges.map((edge) => `${name.get(edge.source_node_id)}.${portName(edge.source_node_id, edge.source_port_id)} -> ${name.get(edge.target_node_id)}.${portName(edge.target_node_id, edge.target_port_id)}`).sort(),
+    // Which inputs a node will not run without, once they are wired: step 1's "needed".
+    needed: graph.nodes.flatMap((node) => node.inputs.filter((port) => port.required).map((port) => `${node.node_type}.${port.id}`)).sort(),
     // How each node that authors a body takes a list: what "Run once per item" sets.
     lists: graph.nodes.filter((node) => node.node_type === 'code' || node.node_type === 'ai')
       .map((node) => `${node.node_type} ${node.config.batch_mode}: ${node.inputs.filter((port) => port.multi).map((port) => port.id).join(', ') || 'none fan out'}`).sort(),
@@ -211,7 +215,7 @@ describe('chat: a page with a chat block, and a model', () => {
     addBlock(page, 'text', 'heading', { value: 'Chat' });
     const chat = addBlock(page, 'chat', undefined, {});
     const assistant = drop('ai', 560);
-    edit(assistant, { label: 'Assistant', input: ['history', 'message'], config: { system_prompt: 'You are a friendly assistant.', prompt_template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}' }, perItem: false });
+    edit(assistant, { label: 'Assistant', input: ['history', 'message'], config: { system_prompt: 'You are a friendly assistant.', prompt_template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}' }, perItem: false, needed: ['message'] });
     wire(page, `${chat}_out`, assistant, 'message');
     wire(page, `${chat}_history`, assistant, 'history');
     wire(assistant, 'output', page, `${chat}_in`);

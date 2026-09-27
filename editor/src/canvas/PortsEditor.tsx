@@ -135,6 +135,18 @@ function Side({ title, hint, kind, ports, fixed, editing, wiring, reads, lists, 
                       list
                     </label>
                   )}
+                  {/* The run reads it on inputs only (`nothingToDo`): a chat's
+                      model must not be asked with the history alone because
+                      nobody typed a message. Offered whatever `lists` says:
+                      the ai and code nodes that need it have a step 1. */}
+                  {kind === 'input' && (
+                    <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
+                      title="Needed: when it is wired and nothing arrives on it, this node does not run that round">
+                      <input type="checkbox" checked={port.required} aria-label="input needed"
+                        onChange={(e) => set(at, { required: e.target.checked })} />
+                      needed
+                    </label>
+                  )}
                   <button
                     className="text-xs px-1.5 py-1 rounded"
                     style={NEUTRAL_BUTTON}
