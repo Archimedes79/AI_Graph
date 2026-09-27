@@ -114,12 +114,7 @@ export default function NodeSteps({
   if (!generation || !steps) return null;
 
   const words = outputFormatText(node.config);
-  const setWords = (text: string) => {
-    // An older picked format is in front of the words shown; once they are
-    // edited, the words are the whole of it, and the choice is gone.
-    if (node.config.output_format !== undefined) setConfig('output_format', undefined);
-    setConfig('output_format_prompt', text);
-  };
+  const setWords = (text: string) => setConfig('output_format_prompt', text);
 
   // A node that takes nothing in has no example to fill, unless one was written before.
   const exampled = node.inputs.length > 0 || !!pair.inputText.trim();

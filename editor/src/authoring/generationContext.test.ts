@@ -39,11 +39,11 @@ describe('what ✨ is told of a node\'s neighbours', () => {
   it('carries an upstream ai node\'s declared output format', () => {
     const ai = NODE_KINDS.ai.create('classifier');
     ai.label = 'Classifier';
-    ai.config.output_format = 'json';
+    ai.config.output_format_prompt = 'JSON: {"label": text}';
     const code = NODE_KINDS.code.create('worker');
 
     expect(inputSources('worker', [ai, code], [edge('classifier', 'worker')], true).input)
-      .toContain('Respond with JSON and nothing else.');
+      .toContain('JSON: {"label": text}');
   });
 
   it('is empty for an unconnected node rather than noise', () => {
@@ -70,9 +70,8 @@ describe('describeNodeOutput', () => {
     );
   });
 
-  it('spells out a custom output format', () => {
+  it('spells out the output format in words', () => {
     const node = NODE_KINDS.code.create('c');
-    node.config.output_format = 'custom';
     node.config.output_format_prompt = 'one line per finding';
     expect(describeNodeOutput(node)).toBe('one line per finding');
   });
@@ -243,16 +242,13 @@ describe('what ✨ is told about a node, as facts', () => {
     expect(facts.batchMode).toBe('per_item');
   });
 
-  it('sends the format in words, as a run reads them: under a kept example an older picked format says nothing', () => {
-    const code = NODE_KINDS.code.create('worker');
-    code.config.output_format = 'json';
-    code.config.output_format_prompt = 'a list of {title, score}';
-    code.config.output_example = '[{"title": "a", "score": 1}]';
-    const facts = nodeFacts(code, [code], [], null);
+  it('sends the format in words, and an answer kept to imitate', () => {
+    const ai = NODE_KINDS.ai.create('worker');
+    ai.config.output_format_prompt = 'a list of {title, score}';
+    ai.config.output_example = '[{"title": "a", "score": 1}]';
+    const facts = nodeFacts(ai, [ai], [], null);
     expect(facts.outputFormat).toBe('a list of {title, score}');
     expect(facts.outputExample).toBe('[{"title": "a", "score": 1}]');
-    code.config.output_example = '';
-    expect(nodeFacts(code, [code], [], null).outputFormat).toBe('Respond with JSON and nothing else.\n\na list of {title, score}');
   });
 
   it('takes step 1\'s example as the sample, over what the last run delivered', () => {
