@@ -18,13 +18,13 @@ function valuesOf(text: string): Record<string, unknown> {
 }
 
 /**
- * What a picked file puts on *port*: its path where the node is handed the
- * text of a path -- the example then holds the path, and it is read exactly as
- * a run reads it, every time -- and otherwise the file's content, parsed when
- * it is JSON.
+ * What a picked file puts on *port*: its path where a path is what arrives
+ * there -- the example then holds what a run hands the node, and a node that
+ * reads its files reads it exactly as a run does, every time -- and otherwise
+ * the file's content, parsed when it is JSON.
  */
-export async function pickedValue(path: string, port: string, readPorts: string[]): Promise<unknown> {
-  if (readPorts.includes(port)) return storedPath(path);
+export async function pickedValue(path: string, port: string, pathPorts: string[]): Promise<unknown> {
+  if (pathPorts.includes(port)) return storedPath(path);
   return contentValue(await readFileAsRun(path));
 }
 
@@ -42,8 +42,8 @@ interface Props {
   error?: string;
   /** The ports a file can be picked for. */
   ports: { id: string; name?: string }[];
-  /** The ports whose value a run reads from disk: a file picked for one is kept as its path. */
-  readPorts: string[];
+  /** The ports a path arrives on (`pathPorts`): a file picked for one is kept as its path. */
+  pathPorts: string[];
   /** ⟳ From the graph: what really arrives here, and a word on where it came from. */
   fromGraph?: () => Promise<{ values: Record<string, unknown>; said: string }>;
   /** An example file an older version of the dialog attached, not yet taken in. */
@@ -73,7 +73,7 @@ interface Props {
  * uploaded copy that was only ever pasted into ✨'s prompt, never run.
  */
 export default function ExampleInputField({
-  text, onText, error, ports, readPorts, fromGraph, earlierFile, note, placeholder, showField = true, label = 'Example input',
+  text, onText, error, ports, pathPorts, fromGraph, earlierFile, note, placeholder, showField = true, label = 'Example input',
 }: Props) {
   const [typed, type] = useTyped(text, onText);
   const [busy, setBusy] = useState<'' | 'graph' | 'file'>('');
@@ -101,9 +101,9 @@ export default function ExampleInputField({
     if (!into) return;
     setBusy('file'); setFailure(''); setSaid('');
     try {
-      type(withPortValue(typed, into, await pickedValue(path, into, readPorts)));
-      setSaid(readPorts.includes(into)
-        ? `“${into}” holds the file's path; it is read the way a run reads it.`
+      type(withPortValue(typed, into, await pickedValue(path, into, pathPorts)));
+      setSaid(pathPorts.includes(into)
+        ? `“${into}” holds the file's path, as a run hands it on.`
         : `“${into}” holds what the file says.`);
     } catch (reason) {
       setFailure(errorText(reason, 'The file could not be read.'));
@@ -133,8 +133,8 @@ export default function ExampleInputField({
             )}
             <button className="text-xs px-2 py-1 rounded" style={{ ...NEUTRAL_BUTTON, opacity: busy ? 0.5 : 1 }}
               disabled={busy !== ''} onClick={() => setBrowsing(true)}
-              title={readPorts.includes(into)
-                ? 'Pick a file: its path goes into the example, and it is read the way a run reads it'
+              title={pathPorts.includes(into)
+                ? 'Pick a file: its path goes into the example, as a run hands it on -- and is read the way a run reads it'
                 : 'Pick a file: what it says goes into the example -- parsed, when it is JSON'}>
               {busy === 'file' ? 'Reading…' : '📂 From a file…'}
             </button>

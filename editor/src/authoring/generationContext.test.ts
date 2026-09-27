@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { connectedFormatContext, lastRunContext, describeNodeOutput, outputTargets, readFilePorts } from './generationContext';
+import { connectedFormatContext, lastRunContext, describeNodeOutput, outputTargets, pathPorts, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
 import { nodeFacts } from './nodeFacts';
 
@@ -136,6 +136,13 @@ describe('a node that is handed the text of a file', () => {
     expect(node.inputs[0].data_type).toBe('any');
     expect(readFilePorts(node, [source, node], wired)).toEqual(['input']);
     expect(readFilePorts(node)).toEqual([]);
+  });
+
+  it('knows a path arrives on a port whether or not the node reads it: a file picked as its example is kept as a path', () => {
+    const node = reader();
+    node.config.read_file_inputs = false;
+    expect(readFilePorts(node)).toEqual([]);
+    expect(pathPorts(node)).toEqual(['csv']);
   });
 
   it('does not quote the recorded path as the value the code will receive', () => {

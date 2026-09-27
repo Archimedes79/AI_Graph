@@ -13,7 +13,7 @@ import CodeField from './CodeField';
 import { readPair, withExpect, withInput } from './examplePair';
 import { useTyped } from './useTyped';
 import { derivedOutputWords } from './derivedOutput';
-import { readFilePorts } from './generationContext';
+import { pathPorts } from './generationContext';
 import { fromTheGraph } from './fromTheGraph';
 import { outputFormatText } from './outputFormat';
 import { keptAnswer, keptExpect, listPorts, runsPerItem, withPerItem } from './nodeStepRules';
@@ -90,7 +90,6 @@ export default function NodeSteps({
 
   const fromGraph = () => fromTheGraph(node, executionResult, graphWithDraft);
 
-  const reads = readFilePorts(node, nodes, edges);
   const words = outputFormatText(node.config);
   const setWords = (text: string) => {
     // An older picked format is in front of the words shown; once they are
@@ -111,7 +110,7 @@ export default function NodeSteps({
         }}
         error={inputError}
         ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
-        readPorts={reads}
+        pathPorts={pathPorts(node, nodes, edges)}
         fromGraph={node.inputs.length ? fromGraph : undefined}
         earlierFile={!pair.input && node.config.example_file ? node.config.example_file : undefined}
         note={pair.others > 0 && (

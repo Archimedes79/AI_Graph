@@ -104,7 +104,7 @@ export default function DataNodePanel({
               onText={takeExample}
               showField={false}
               ports={node.inputs.map((port) => ({ id: port.id, name: port.name }))}
-              readPorts={[]}
+              pathPorts={[]}
               fromGraph={node.inputs.length ? () => fromTheGraph(node, executionResult, graphWithDraft) : undefined}
               earlierFile={!example && node.config.example_file ? node.config.example_file : undefined}
               note={<p className="text-xs" style={{ color: DIMMER }}>These fill what it holds now, below: the example ✨ is shown.</p>}

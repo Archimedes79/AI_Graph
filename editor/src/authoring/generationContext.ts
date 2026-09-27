@@ -93,25 +93,16 @@ function preview(value: unknown): string {
  * engine/src/host/editor/generate.ts). Undefined when the node has never run, which turns the
  * verification pass off rather than inventing a sample.
  */
+type Wire = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
+
 /**
- * The input ports a running node is handed a file's text on.
- *
- * A sample holds what came off the wire -- the path. The server reads these
- * before it shows the sample to the model or tries the code on it, as a run
- * does; asked of the engine's element, so the two cannot disagree on which.
- *
- * With the wiring, because the run asks with it: a port typed `any` is read
- * when what is wired into it declares a path (`fileInputs.ts`). Asked without
- * it, such a port -- in a graph written by hand, by the MCP server or by a
- * model, which the editor's wiring never retyped -- was told to ✨ as a path,
- * and the code was tried on a filename while the run handed it the text.
+ * The input ports a path arrives on: typed `file_path`, or `any` and wired
+ * from an output that hands on paths -- the engine's own rule
+ * (`fileInputs.ts#filePorts`), asked with the wiring, as a run asks it. A
+ * file picked as step 1's example for one of these is kept as its path, which
+ * is what a run hands the node there, read or not.
  */
-export function readFilePorts(
-  node: GraphNode,
-  nodes: GraphNode[] = [],
-  edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }> = [],
-): string[] {
-  if (!engineRegistry.node(node.node_type)?.readsFileInputs(node)) return [];
+export function pathPorts(node: GraphNode, nodes: GraphNode[] = [], edges: Wire[] = []): string[] {
   const graph: FileGraph = {
     nodes: nodes as FileGraph['nodes'],
     edges: edges.map((edge, at) => ({
@@ -123,6 +114,24 @@ export function readFilePorts(
     })),
   };
   return filePorts(node, graph, engineRegistry);
+}
+
+/**
+ * The input ports a running node is handed a file's text on: the path ports
+ * of a node that reads its file inputs.
+ *
+ * A sample holds what came off the wire -- the path. The server reads these
+ * before it shows the sample to the model or tries the code on it, as a run
+ * does; asked of the engine's element, so the two cannot disagree on which.
+ *
+ * With the wiring, because the run asks with it: a port typed `any` is read
+ * when what is wired into it declares a path. Asked without it, such a port --
+ * in a graph written by hand, by the MCP server or by a model, which the
+ * editor's wiring never retyped -- was told to ✨ as a path, and the code was
+ * tried on a filename while the run handed it the text.
+ */
+export function readFilePorts(node: GraphNode, nodes: GraphNode[] = [], edges: Wire[] = []): string[] {
+  return engineRegistry.node(node.node_type)?.readsFileInputs(node) ? pathPorts(node, nodes, edges) : [];
 }
 
 export function lastRunInputs(

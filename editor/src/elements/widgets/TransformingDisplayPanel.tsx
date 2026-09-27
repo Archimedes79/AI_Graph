@@ -38,7 +38,7 @@ export default function TransformingDisplayPanel({
         onText={(next) => { onUpdate({ example: next }); return next; }}
         error={problem}
         ports={[{ id: 'value', name: 'what arrives' }]}
-        readPorts={builder.takesPaths ? ['value'] : []}
+        pathPorts={builder.takesPaths ? ['value'] : []}
         fromGraph={steps.fromGraph}
         earlierFile={!example && widget.example_file ? widget.example_file : undefined}
         placeholder={'{ "value": … }'}
