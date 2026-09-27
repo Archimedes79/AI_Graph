@@ -1,22 +1,18 @@
 import type { WidgetViewProps } from '../WidgetView';
 import { MUTED } from '@/ui/theme';
+import { sliderRange } from '@engine/elements/widgets/slider/range.ts';
 
 /** The keys that move a range input. Tabbing onto one is not using it. */
 const MOVES = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
 
 /** Runtime slider widget: a range input with its current number shown beside it. */
 export default function SliderWidgetView({ widget, value, onChange, onTrigger }: WidgetViewProps) {
-  const min = typeof widget.min === 'number' ? widget.min : 0;
-  const max = typeof widget.max === 'number' && widget.max > min ? widget.max : min + 1;
-  const step = typeof widget.step === 'number' && widget.step > 0 ? widget.step : 1;
-  // The page stores what the input reports, which is a string; read it as the
-  // number it is rather than falling back to the minimum and snapping the
-  // handle home after every drag.
-  const parsed = typeof value === 'string' && value.trim() ? Number(value) : value;
-  // Inside the range, as the run clamps it (`SliderWidgetRunner.config`): a
-  // value left from before the range was narrowed would otherwise stand
-  // beside the handle while the graph is handed the edge of the range.
-  const current = Math.min(max, Math.max(min, typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : min));
+  // The range and the number are read by the engine's rule, the one a run
+  // emits by: a value left from before the range was narrowed would otherwise
+  // stand beside the handle while the graph is handed the edge of the range.
+  // The page stores what the input reports, a string, which the rule reads as
+  // the number it is rather than snapping the handle home after every drag.
+  const { min, max, step, value: current } = sliderRange({ min: widget.min, max: widget.max, step: widget.step, value });
 
   return (
     <div className="flex items-center gap-3">

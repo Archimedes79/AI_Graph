@@ -18,4 +18,38 @@ describe('a slider on the page', () => {
     expect(html).toMatch(/>50<\/span>/);
     expect(html).not.toContain('80');
   });
+
+  /** What the page draws and what a run emits, for a block as it was stored. */
+  async function both(stored: Record<string, unknown>) {
+    const widget = { ...WIDGET_BUILDERS.slider.create('Amount'), min: undefined, max: undefined, step: undefined, ...stored };
+    const runner = new SliderWidgetRunner();
+    const emitted = (await runner.execute(parseWidget(widget)))[`${widget.id}_out`];
+    const html = renderToStaticMarkup(createElement(SliderWidgetView, { widget: widget as never, value: widget.value, onChange: () => {} }));
+    return { emitted, html, range: runner.config(parseWidget(widget)) };
+  }
+
+  it('draws the range a run uses when the block names no max', async () => {
+    // The bug: the page drew 0..1 and clamped 40 to 1; the run used 0..100.
+    const { emitted, html, range } = await both({ value: '40' });
+    expect(range).toEqual({ value: 40, min: 0, max: 100, step: 1 });
+    expect(emitted).toBe(40);
+    expect(html).toContain('max="100"');
+    expect(html).toContain('value="40"');
+  });
+
+  it('reads bounds written as numbers in text alike on the page and in a run', async () => {
+    const { emitted, html } = await both({ value: '2', min: '5', max: '9' });
+    expect(emitted).toBe(5);
+    expect(html).toContain('min="5"');
+    expect(html).toContain('max="9"');
+    expect(html).toContain('value="5"');
+  });
+
+  it('never draws or emits NaN for bounds that are not numbers', async () => {
+    const { emitted, html, range } = await both({ value: '3', min: 'abc', max: 'x', step: -2 });
+    expect(range).toEqual({ value: 3, min: 0, max: 100, step: 1 });
+    expect(emitted).toBe(3);
+    expect(html).not.toContain('NaN');
+    expect(html).toContain('step="1"');
+  });
 });
