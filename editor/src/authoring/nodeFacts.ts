@@ -64,15 +64,14 @@ export function nodeFacts(
   edges: Edge[],
   executionResult: ExecutionResult | null,
 ): Omit<GenerationRequest, 'element' | 'generation' | 'fields'> {
-  const element = NODE_BUILDERS[node.node_type];
   const inputs = node.inputs.map((port) => port.id);
   const whole = node.config.batch_mode === 'whole_list';
-  const given = element?.exampleInput(node);
-  const example = given && Object.keys(given).length ? given : undefined;
-  // The engine reads a complete first pair from `examples.md` by itself, and
-  // then also checks what it expects; any other example is sent as it is.
   const pair = readPair(node.config.examples);
-  const read = !!example && pair.complete && JSON.stringify(pair.input) === JSON.stringify(example);
+  const example = pair.input && Object.keys(pair.input).length ? pair.input : undefined;
+  // The engine reads a complete first pair from `examples.md` by itself, and
+  // then also checks what it expects; an example with nothing to hold it to
+  // is sent as it is.
+  const read = !!example && pair.complete;
   const observed = lastRunInputs(node.id, executionResult);
   const sample: Sample | undefined = read ? undefined
     : example ? { values: example, origin: 'the example in step 1' }

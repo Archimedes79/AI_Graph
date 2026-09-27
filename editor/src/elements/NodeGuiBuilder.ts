@@ -163,21 +163,12 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
   }
 
   /**
-   * Step 1's example, as the values the node is handed on each input port, or
-   * undefined when it has none. The first pair of `examples.md` by default:
-   * what a node's example has always been, and what `test` runs.
-   */
-  exampleInput(node: GraphNode): Record<string, unknown> | undefined {
-    return readPair(node.config.examples).input;
-  }
-
-  /**
    * *node* with step 1's example holding *value* on *port*, beside what else
    * it holds there: what a file dropped on the node on the canvas does. The
-   * first pair of `examples.md` by default, where `exampleInput` reads it.
+   * first pair of `examples.md` by default, which is the example.
    */
   withExampleValue(node: GraphNode, port: string, value: unknown): GraphNode {
-    const examples = withInput(node.config.examples, asExampleText({ ...this.exampleInput(node), [port]: value }));
+    const examples = withInput(node.config.examples, asExampleText({ ...readPair(node.config.examples).input, [port]: value }));
     return { ...node, config: { ...node.config, examples } };
   }
 

@@ -33,7 +33,6 @@ describe('a data node\'s dialog', () => {
     const builder = NODE_BUILDERS.data;
     expect(builder.stepped).toBe(false);
     expect(builder.generation).toBeUndefined();
-    expect(builder.exampleInput(NODE_KINDS.data.create('memory'))).toBeUndefined();
   });
 
   it('holds what a file dropped on it says -- on its box, or on the node on the canvas', () => {

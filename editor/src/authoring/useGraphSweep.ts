@@ -11,6 +11,7 @@ import type { GenerateResponse } from '@/api/client';
 import { shapeToKeep, useGraphStore } from '@/store/graphStore';
 import { graphEdge } from '@/document/wires';
 import { nodeFacts } from './nodeFacts';
+import { readPair } from './examplePair';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { buildGeneration, nodeFields } from './generation';
 import { missingExamples, sampleFromPredecessors, sweep, writtenBody, type SweepUnit } from './graphSweep';
@@ -94,7 +95,7 @@ export async function sweepGraph({ say, stopped }: { say: (message: string) => v
     const facts = nodeFacts(current, nodesOf(), rfEdges(), live().executionResult);
     // Its own example wins, as in its dialog; what the nodes before it just
     // returned stands in only where the node has nothing else to go on.
-    const ownSample = facts.sampleInputs || element.exampleInput(current);
+    const ownSample = facts.sampleInputs || readPair(current.config.examples).input;
     const predecessors = ownSample ? undefined : sampleFromPredecessors(node.id, rfEdges(), produced);
     return inThisGraph(buildGeneration({
       element: node.node_type,

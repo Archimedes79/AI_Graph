@@ -117,7 +117,7 @@ ElementRunner<Subject, Config>          config() · catchesErrors()
 
 ElementGuiBuilder<PanelProps>                    Panel
 ├── NodeGuiBuilder                        label · icon · color · hint · generation · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
-│                                         + the four steps' declarations: stepped · exampleInput · ownsDescription
+│                                         + the four steps' declarations: stepped · ownsDescription
 │                                           portEditing/portHint · wantsOn · restingValue · publishedDescription
 │                                           dropPort/withExampleValue (what a file dropped on the node fills)
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
