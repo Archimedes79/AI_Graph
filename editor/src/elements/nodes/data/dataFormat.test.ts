@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
+import { NODE_BUILDERS } from '@/elements/registry';
+import { DataNodeRunner } from '@engine/elements/nodes/data/DataNodeRunner.ts';
 import { asEditableText, convertedValue, dataKind, storedValue } from './dataFormat';
 
 const holding = (value: unknown, kind: 'text' | 'structure' = 'text') => {
@@ -42,5 +44,16 @@ describe('what a data node holds, as its box edits it', () => {
     expect(convertedValue('not json', 'structure')).toBe('not json');
     expect(convertedValue({ a: 1 }, 'text')).toBe('{\n  "a": 1\n}');
     expect(convertedValue(null, 'text')).toBe('');
+  });
+
+  it('is shown to the nodes after it as what a run hands on: null from an empty structure', () => {
+    const builder = NODE_BUILDERS.data;
+    const run = new DataNodeRunner();
+    const empty = holding(null, 'structure');
+    expect(run.config(empty as never).value).toBeNull();
+    expect(builder.restingValue(empty, 'output')).toBeNull();
+    // An empty text is nothing to write code against, as before.
+    expect(builder.restingValue(holding('', 'text'), 'output')).toBeUndefined();
+    expect(builder.restingValue(holding([1, 2], 'structure'), 'output')).toEqual([1, 2]);
   });
 });

@@ -89,9 +89,15 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
     return `Source data format from "${node.label}": ${emits}`;
   }
 
-  /** What it stores is what it hands on, until something new arrives. */
+  /**
+   * What it stores is what it hands on, until something new arrives: asked of
+   * the engine's element, which a run asks. A structure node that holds
+   * nothing hands on null, and ✨ was shown nothing where the next node is
+   * handed null; an empty text is still nothing to write code against.
+   */
   override restingValue(node: GraphNode): unknown {
-    return held(node);
+    const handed = DATA.config(node as never).value;
+    return handed === '' ? undefined : handed;
   }
 
   override wantsOn(node: GraphNode): string {
