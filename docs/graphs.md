@@ -324,41 +324,65 @@ decide what to ask, or ask in a loop; for one question, an AI node is the plaine
 
 ### A project is a folder
 
-Save a graph under a name — `my_tool` — and it becomes a folder. The wiring is one file,
-and everything a person writes is a file of its own, named for what it is:
+Save a graph under a name — `my_tool` — and it becomes a folder. The flow is one file,
+and each node is a folder that says everything about that node:
 
 ```
 my_tool/
-  graph.json              nodes, their settings and ports, the edges
+  flow.json               which nodes there are, and every wire
   layout.json             where each node sits on the canvas
   nodes/
     count/                one folder per node, named by its id
+      node.json           its name and its settings
+      interface.json      what goes in, what comes out, and the shape a run kept
       code.js             the code
       task.md             what ✨ Generate was asked for
-      output.schema.json  the output interface, set by a run
     summarize/
+      node.json
+      interface.json
       system.md           the instructions sent to the model
       message.md          the message template, with {{port}} placeholders
       output.md           what the answer must look like, sent to the model
     page/
+      node.json           its settings are its blocks
+      interface.json
       chart/code.js       a block of a page, one folder down
 ```
 
+**Each fact is in one place.** `flow.json` says which node feeds which, and nothing about
+any node:
+
+```json
+{
+  "name": "Population plotter",
+  "nodes": { "page": "gui", "chart": "code" },
+  "wires": [
+    "page.file_out -> chart.csv",
+    "chart.figure -> page.plot_in"
+  ]
+}
+```
+
+A node's folder says everything about that node, and nothing about its neighbours. A node
+that needs to know what arrives follows the wire and reads the other node's
+`interface.json` — which is what `check` does when it holds a wire to the interface it
+starts from, and what ✨ Generate is told.
+
 | Node | Files |
 |---|---|
-| The graph | `flow.js` — the wiring said as code: one call per node, in run order, each handed its wires by name. Written on every save, **never read back, never run** |
-| Every node | `interface.json` — **what runs** when the node runs, what goes in, from where, what may open its ◆, what comes out and where it goes. Written on every save and **never read back**: ports are changed in the editor |
-| Code | `code.js`, `task.md`, `output.schema.json`, `examples.md` |
-| AI | `run.js`, `system.md`, `message.md`, `output.md`, `output.example.md`, `output.schema.json`, `examples.md` |
+| Every node | `node.json` — its name, description and settings. `interface.json` — its ports: id, type, whether a list, whether required; and `output_schema`, the shape a run kept, for a node that keeps one |
+| Code | `code.js`, `task.md`, `examples.md` |
+| AI | `run.js`, `system.md`, `message.md`, `output.md`, `output.example.md`, `examples.md` |
 | Data | `format.md` (the contract neighbours are generated against), `task.md` |
 | Input (directory) | `select.js` (the file selector), `task.md` |
 | A chart, table or image block | `code.js`, `task.md`, `example.json` (the one example input it is written and tried against; never read by a run) |
 | A file-picker block | `select.js`, `task.md` |
 
-An empty text has no file — except `run.js`, below. Settings — the model, the temperature, a node's mode — stay in
-`graph.json`, and positions in `layout.json`, so moving a node on the canvas is not a
+An empty text has no file — except `run.js`, below. Settings — the model, the temperature, a node's mode — are in
+its `node.json`, and positions in `layout.json`, so moving a node on the canvas is not a
 change to what the graph does, and an unchanged save changes no file. Renaming a node
-renames nothing on disk: folders are named by id.
+renames nothing on disk: folders are named by id. A new node's id is its type — `code`,
+then `code_2` — and a new block's its kind, so `flow.json` reads as what it joins.
 
 The files are what runs. `node engine/src/main.ts my_tool` runs the folder, a served
 tool reads it, the MCP server reads and writes it; `git diff` shows code as code.
@@ -368,13 +392,16 @@ them): the editor watches the folder and takes what changed in as one undo step,
 *↻ From disk: …* on the status line. A node open in its dialog with edits of its own
 is not overwritten — the dialog asks whether to take the new version or keep yours.
 Saving refuses to overwrite a file changed outside since it was read. The toolbar's ↻
-reopens the whole project, for when `graph.json` itself changed (a pull, a merge).
+reopens the whole project, for when `flow.json` or a node's settings or ports changed
+(a pull, a merge).
 
 **A single `.json` file** still opens, saves (name it `….json`) and runs: everything
-inline, which is what a download, an import and a deploy bundle carry.
+inline, which is what a download, an import and a deploy bundle carry. A folder saved
+before `flow.json` — a `graph.json` holding the structure — opens too, and is saved in
+this shape.
 
 **Output interfaces.** A code node's outputs are described by a JSON Schema,
-`output.schema.json`. You do not write it first: wire the nodes, run the graph, and the
+`output_schema` in its `interface.json`. You do not write it first: wire the nodes, run the graph, and the
 first successful run sets it from what the node produced. From then on every run is
 checked against it — a node that breaks its interface says so on its result, *Does not
 match its output interface: output.rows[3].Population is string; the interface says
@@ -390,48 +417,9 @@ what must come out. Optional; they check what was written, whoever wrote it, and
 Generate is shown the first few, so what it writes is written to pass them:
 
 ````markdown
-### The whole graph as code: `flow.js`
-
-Beside `graph.json` a project folder holds `flow.js`: the same wiring, said as code. One
-call per node, in the order a whole run takes, each handed what its wires carry — by name:
-
-```js
-async function flow(node) {
-  // Summarizer · gui · engine/src/elements/nodes/gui/GuiNodeRunner.ts › execute
-  // starts a round: file_out, length_out, go_out
-  const page = await node.page();
-
-  // Read file · code · nodes/reader/code.js
-  const reader = await node.reader(
-    { file: page.file_out, path: page.file_out },
-    { gate: page.go_out, readFiles: true },
-  );
-
-  // Summarize · ai · nodes/summarizer/run.js
-  const summarizer = await node.summarizer({ text: reader.text, length: page.length_out });
-
-  // Once the round is done.
-  node.page.next({ summary_in: summarizer.output, about_in: reader.info, content_in: reader.text });
-}
-```
-
-Read it top to bottom and you have the run: the page hands on what its blocks hold; the
-reader runs only in a round its ◆ is opened (`gate`), with the file read for it
-(`readFiles`); the model is asked; and what closes the loop reaches the page once the round
-is done (`next`). `each: true` marks a node that runs once per item. The comment over
-each call names what that node runs — a file in this folder, or the engine class.
-
-**It is written on every save and never read or run.** There is one implementation of a
-run, the engine's, and it reads `graph.json`; a second one that happened to be readable
-would be right on the day it was written. So `flow.js` imports nothing and nothing calls
-it — but it is valid JavaScript, so an editor colours it, and a diff of it is the most
-readable account of what a change to the graph did. A graph inside a node has its own, in
-its own folder.
-
 ### What runs, and where
 
-Every node's panel ends with *What this node runs*, and its `interface.json` begins with
-the same words under `runs`. There are two answers:
+Every node's panel ends with *What this node runs*. There are two answers:
 
 - **A body in the node's folder** — JavaScript somebody wrote, or a model did. Always the
   same shape, `async function run(inputs, node)`, returning an object keyed by output port;
@@ -593,20 +581,22 @@ The graph a node holds is a project folder of its own, under that node's folder:
 
 ```
 nested_statistics/
-  graph.json
+  flow.json
   layout.json
   nodes/
     statistics/
+      node.json            the node's own settings
+      interface.json       its ports: the graph's input and output nodes
       task.md              what this part is for
       run.js               how the graph is run: once, unless you change it
-      graph.json           the graph it holds
+      flow.json            the graph it holds
       layout.json
       nodes/
         counts/code.js     a node of that graph, with its body in a file as usual
         counts/examples.md
 ```
 
-`check` descends into it and says where it was (`node "statistics" ▸ edge "e3"`), `test`
+`check` descends into it and says where it was (`node "statistics" ▸ edge "text.output -> counts.text"`), `test`
 runs the examples of the nodes in there, and a bundle carries the whole depth: a model
 called from inside is a model the recipient is told to configure.
 

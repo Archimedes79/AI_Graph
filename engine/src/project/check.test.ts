@@ -174,7 +174,7 @@ describe('what check finds in a project folder', () => {
 
     const { problems } = await checkPath(dir);
     expect(problems.map((p) => [p.where, p.problem])).toEqual([
-      ['nodes/old_step', 'This folder belongs to no node in graph.json.'],
+      ['nodes/old_step', 'This folder belongs to no node in flow.json.'],
       ['nodes/say/prompt.md', 'Nothing reads this file.'],
     ]);
     expect(problems[1].fix).toMatch(/"system.md"/);

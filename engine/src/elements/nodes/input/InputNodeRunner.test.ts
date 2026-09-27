@@ -145,8 +145,8 @@ describe('the selector', () => {
       await writeProject(dir, graphWith('text'));
       expect(existsSync(join(dir, 'nodes', 'source', 'select.js'))).toBe(false);
       // Not lost: a node switched back to directory mode still has its selector.
-      const saved = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8'));
-      expect(saved.nodes[0].config.selector_code).toBe(starter);
+      const saved = JSON.parse(await readFile(join(dir, 'nodes', 'source', 'node.json'), 'utf8'));
+      expect(saved.config.selector_code).toBe(starter);
     });
 
     it('reads the selector a save from before kept in its files, and keeps it in the graph from then on', async () => {
@@ -171,8 +171,8 @@ describe('the selector', () => {
 
       await writeProject(dir, graph);
       expect(existsSync(join(folder, 'select.js'))).toBe(false);
-      const saved = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8'));
-      expect(saved.nodes[0].config).toMatchObject({ selector_code: own, selector_prompt: 'Only the notes.' });
+      const saved = JSON.parse(await readFile(join(folder, 'node.json'), 'utf8'));
+      expect(saved.config).toMatchObject({ selector_code: own, selector_prompt: 'Only the notes.' });
     });
 
     it('reads the starter every input used to be given as no selector, and writes no select.js for it', async () => {

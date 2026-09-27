@@ -205,17 +205,11 @@ through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `runs.ts`, `schedu
 `GuiBuilder` for anything at all. What is *not* carried at all stays as it was:
 `host/editor/` never enters a bundle, and a panel is a lazy chunk a tool never fetches.
 
-**The flow, as code.** `project/flowFile.ts` renders `flow.js` beside `graph.json` on every
-save: one call per node in run order, each handed its wires by name, with its gate, its
-fan-out and its file reading said. Rendered, never read and never run — the executor stays
-the one implementation of a run; this is the notation in which a graph is quickest to read,
-and to diff.
-
 **What runs.** `NodeRunner.whatRuns(node)` answers the question a node's folder could not:
 which code runs when this node runs. Either a body in the folder (`code.js`, a changed
 `run.js`), run sandboxed — or this kind's `execute`, named by file, with one sentence
-saying what it does. The same answer is written into the node's `interface.json`, shown at
-the foot of its panel, and listed in [graphs.md](graphs.md#what-runs-and-where); a test
+saying what it does. The same answer is shown at the foot of its panel and listed in
+[graphs.md](graphs.md#what-runs-and-where); a test
 checks that the file and the method it names exist.
 
 ## Two processes, one contract
@@ -274,6 +268,8 @@ engine/src                               editor/src
     reuse.ts  interface.ts  examples.ts
   project/           a graph on disk
     folder.ts        read · write · watch
+    flow.ts          flow.json: nodes and wires
+    interfaceFile.ts a node's ports
     check.ts         what is wrong
   host/              Node and HTTP         api/client.ts       the contract's client
     api.ts           the contract          app/                toolbar, sidebar, dialogs, results
@@ -433,23 +429,37 @@ and can be watched while it runs; the result waits for the person to accept it.
 
 ## A graph on disk
 
-A graph is a folder: `graph.json` holds the structure (nodes, settings, ports, edges),
-`layout.json` the positions, and every piece of writing is a file of its own under
-`nodes/<node id>/` — `code.js`, `system.md`, `output.schema.json`, and a block's files one
-folder further down. Which fields become which files is element knowledge, so each element
-declares it (`ElementRunner.texts`); [`project/folder.ts`](../engine/src/project/folder.ts) reads
-and writes a folder for everyone — editor, CLI, a served tool, the MCP server — and never
-learns what a code node is.
+A graph is a folder, and **each fact is in one place**:
 
-- **The file wins, `graph.json` is the fallback.** A text is read from its file when there
-  is one. That single rule is why a deploy bundle (a folder whose `graph.json` carries
-  everything inline) and a plain `.json` file open the same way.
-- **Structure and writing never share a file**, and writing sorts its keys, so an unchanged
+- `flow.json` — which nodes there are (`id → type`) and every wire, one line each:
+  `"page.file_out -> chart.csv"` ([`project/flow.ts`](../engine/src/project/flow.ts)). Nothing
+  about any node.
+- `nodes/<id>/node.json` — the node's name and settings. `nodes/<id>/interface.json` — its
+  ports, and the output shape a run kept ([`project/interfaceFile.ts`](../engine/src/project/interfaceFile.ts)).
+  Nothing about its neighbours: a node that needs to know what arrives follows the wire and
+  reads the other node's interface. Whether a node keeps an output shape is
+  `NodeRunner.keepsOutputInterface`.
+- Every piece of writing is a file of its own beside them — `code.js`, `system.md`, and a
+  block's files one folder further down. Which fields become which files is element
+  knowledge, so each element declares it (`ElementRunner.texts`).
+- `layout.json` — positions only.
+
+[`project/folder.ts`](../engine/src/project/folder.ts) reads and writes a folder for everyone —
+editor, CLI, a served tool, the MCP server — and never learns what a code node is. The graph
+in memory is the same document it always was; only the folder is laid out this way.
+`graphFrom` puts it together from the files' contents without touching a disk, so a test
+or a page that has them can do the same.
+
+- **The file wins over the inline value.** A text is read from its file when there is one.
+  That is why a deploy bundle (one `graph.json` carrying everything inline) and a plain
+  `.json` file open the same way; a folder saved before `flow.json` is read from its
+  `graph.json` and saved in this shape.
+- **Structure and writing never share a file**, and keys are sorted, so an unchanged
   save changes nothing and a moved node changes only `layout.json`.
 - **Two editors, one folder.** Every file read or written is remembered by signature; a
   save that would overwrite a file changed since refuses (`FileChanged`), and the editor
   asks every 1.5 s what changed (`changesOnDisk`) and takes it in as one undo step.
-- **Interfaces come from runs.** A code node's `output.schema.json` is inferred from what
+- **Interfaces come from runs.** A code node's output shape (in its `interface.json`) is inferred from what
   its first successful run produced ([`execution/interface.ts`](../engine/src/execution/interface.ts)),
   checked against on every later run (a message, not a failure), and handed to the next
   node's generation. An AI node's `output.md` is sent to the model instead.
@@ -468,7 +478,7 @@ learns what a code node is.
 
 | State | Lives in | Travels as |
 |---|---|---|
-| the graph | a project folder: `graph.json`, `layout.json`, `nodes/<id>/<file>` — or one `.json` with everything inline | the document ([`project/folder.ts`](../engine/src/project/folder.ts)) |
+| the graph | a project folder: `flow.json`, `layout.json`, `nodes/<id>/` (`node.json`, `interface.json`, writing) — or one `.json` with everything inline | the document ([`project/folder.ts`](../engine/src/project/folder.ts)) |
 | a widget's value, a conversation, a data node's value | inside the graph, in the element's own config | `result.memory` → `applyMemory` |
 | a run in flight | `RunBoard` on the server | `RunSnapshot`, polled |
 | what every node made last, for rounds its ◆ stays shut | `Latch`, in the process holding the graph; gone at restart | `NodeResult.held` |

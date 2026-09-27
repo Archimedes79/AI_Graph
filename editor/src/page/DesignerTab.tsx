@@ -13,6 +13,7 @@ import WhatRuns from '@/elements/fields/WhatRuns';
 import { SCHEMES, type SchemeId } from '@/ui/scheme';
 import { ACCENT, DIMMER, FIELD_ON_SURFACE, LINE, MUTED, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 import { WIDGET_BUILDERS } from '@/elements/registry';
+import { freeId } from '@/document/ids';
 
 /**
  * The graph's interface, on one page, built on the page itself.
@@ -62,7 +63,9 @@ export default function DesignerTab() {
     const entry = ALL_ENTRIES.find((candidate) => candidate.kind === kind && (candidate.mode ?? '') === (mode ?? ''))
       ?? ALL_ENTRIES.find((candidate) => candidate.kind === kind);
     const builder = WIDGET_BUILDERS[kind];
-    const widget = builder.create(builder.initialLabel(entry?.label ?? ''), mode);
+    const widget = { ...builder.create(builder.initialLabel(entry?.label ?? ''), mode) };
+    // Named for what it is, so its ports read as that: `plot_window_in`.
+    widget.id = freeId(kind, blocks.map((b) => b.widget.id));
     if (guiNodes.length > 0) {
       const next = blocks.map((b) => b.widget);
       next.splice(at ?? next.length, 0, widget);

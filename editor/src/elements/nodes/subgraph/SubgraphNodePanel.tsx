@@ -50,7 +50,7 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
         // A button that closes the dialog and opens nothing is worse than no
         // button: this is the one case it cannot do its job, and it says so.
         <p className="mb-4 text-sm" style={{ color: DANGER_TEXT }}>
-          The graph this node holds cannot be read. Open its <code>graph.json</code> under the project&apos;s{' '}
+          The graph this node holds cannot be read. Open its <code>flow.json</code> under the project&apos;s{' '}
           <code>nodes/</code> folder and fix it, or delete the node and build it again.
         </p>
       )}

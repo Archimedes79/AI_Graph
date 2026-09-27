@@ -1,0 +1,110 @@
+{
+  "label": "Review panel",
+  "description": "The page this tool shows",
+  "config": {
+    "gui_widgets": [
+      {
+        "h": 1,
+        "id": "title",
+        "kind": "text",
+        "label": "",
+        "mode": "heading",
+        "tone": "plain",
+        "value": "Paper review panel",
+        "w": 16
+      },
+      {
+        "h": 1,
+        "id": "intro",
+        "kind": "text",
+        "label": "",
+        "mode": "caption",
+        "tone": "plain",
+        "value": "Five AI reviewers read the manuscript in parallel, each with its own remit; a judge merges what they found. The AI advises — you decide.",
+        "w": 16
+      },
+      {
+        "extensions": ".md,.txt",
+        "h": 2,
+        "id": "paper",
+        "kind": "input_picker",
+        "label": "Manuscript",
+        "mode": "file",
+        "tone": "sunken",
+        "value": "examples/data/paper/sample_paper.md",
+        "w": 12
+      },
+      {
+        "h": 2,
+        "id": "go",
+        "kind": "button",
+        "label": "Review",
+        "tone": "plain",
+        "w": 4
+      },
+      {
+        "h": 1,
+        "id": "rule",
+        "kind": "divider",
+        "label": "",
+        "mode": "horizontal",
+        "tone": "plain",
+        "w": 16
+      },
+      {
+        "h": 8,
+        "id": "verdict",
+        "kind": "text_io",
+        "label": "Judge — consolidated advice",
+        "mode": "output",
+        "tone": "raised",
+        "w": 16
+      },
+      {
+        "h": 6,
+        "id": "scientific",
+        "kind": "text_io",
+        "label": "Scientific reviewer",
+        "mode": "output",
+        "tone": "raised",
+        "w": 8
+      },
+      {
+        "h": 6,
+        "id": "adversarial",
+        "kind": "text_io",
+        "label": "Adversarial reviewer",
+        "mode": "output",
+        "tone": "raised",
+        "w": 8
+      },
+      {
+        "h": 6,
+        "id": "claims",
+        "kind": "text_io",
+        "label": "Evidence & claims reviewer",
+        "mode": "output",
+        "tone": "raised",
+        "w": 8
+      },
+      {
+        "h": 6,
+        "id": "references",
+        "kind": "text_io",
+        "label": "References reviewer",
+        "mode": "output",
+        "tone": "raised",
+        "w": 8
+      },
+      {
+        "h": 6,
+        "id": "figures",
+        "kind": "text_io",
+        "label": "Figures & tables reviewer",
+        "mode": "output",
+        "tone": "raised",
+        "w": 16
+      }
+    ]
+  }
+}

@@ -1,59 +1,34 @@
 {
-  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
-  "node": "judge",
-  "type": "ai",
-  "label": "Judge",
-  "about": "Merges the five reviews into one ranked list and a recommendation",
-  "runs": {
-    "by": "engine",
-    "where": "run.js",
-    "does": "Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as \"output\". Unchanged, run.js is made by the engine itself; a test holds the two to the same request."
-  },
   "inputs": [
     {
       "port": "scientific",
       "name": "Scientific",
       "type": "text",
-      "description": "The scientific reviewer's findings",
-      "from": [
-        "scientific.output"
-      ]
+      "description": "The scientific reviewer's findings"
     },
     {
       "port": "adversarial",
       "name": "Adversarial",
       "type": "text",
-      "description": "The adversarial reviewer's findings",
-      "from": [
-        "adversarial.output"
-      ]
+      "description": "The adversarial reviewer's findings"
     },
     {
       "port": "claims",
       "name": "Evidence & claims",
       "type": "text",
-      "description": "The evidence & claims reviewer's findings",
-      "from": [
-        "claims.output"
-      ]
+      "description": "The evidence & claims reviewer's findings"
     },
     {
       "port": "references",
       "name": "References",
       "type": "text",
-      "description": "The references reviewer's findings",
-      "from": [
-        "references.output"
-      ]
+      "description": "The references reviewer's findings"
     },
     {
       "port": "figures",
       "name": "Figures & tables",
       "type": "text",
-      "description": "The figures & tables reviewer's findings",
-      "from": [
-        "figures.output"
-      ]
+      "description": "The figures & tables reviewer's findings"
     }
   ],
   "outputs": [
@@ -61,10 +36,7 @@
       "port": "output",
       "name": "Advice",
       "type": "text",
-      "description": "The consolidated review",
-      "to": [
-        "page.verdict_in"
-      ]
+      "description": "The consolidated review"
     }
   ]
 }

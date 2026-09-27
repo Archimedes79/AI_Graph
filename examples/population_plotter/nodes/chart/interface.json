@@ -1,32 +1,16 @@
 {
-  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
-  "node": "chart",
-  "type": "code",
-  "label": "What to plot",
-  "about": "Reads the CSV and says what the chart should show",
-  "runs": {
-    "by": "body",
-    "where": "code.js",
-    "does": "Calls run(inputs, node) in code.js, sandboxed, and hands on the object it returns, keyed by output port."
-  },
   "inputs": [
     {
       "port": "csv",
       "name": "CSV",
-      "type": "file_path",
-      "from": [
-        "page.file_out"
-      ]
+      "type": "file_path"
     }
   ],
   "outputs": [
     {
       "port": "figure",
       "name": "Figure",
-      "type": "json",
-      "to": [
-        "page.plot_in"
-      ]
+      "type": "json"
     }
   ]
 }

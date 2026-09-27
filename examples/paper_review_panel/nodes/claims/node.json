@@ -1,0 +1,12 @@
+{
+  "label": "Evidence & claims",
+  "description": "Evidence & claims reviewer: whether each claim is backed by the evidence in the paper.",
+  "config": {
+    "ai_model": "gemini-flash-lite-latest",
+    "ai_provider": "google",
+    "batch_mode": "whole_list",
+    "output_format": "text",
+    "read_file_inputs": false,
+    "temperature": 0.2
+  }
+}

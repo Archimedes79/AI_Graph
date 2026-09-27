@@ -1,0 +1,6 @@
+{
+  "label": "Counts",
+  "config": {
+    "batch_mode": "whole_list"
+  }
+}

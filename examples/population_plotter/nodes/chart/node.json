@@ -1,0 +1,8 @@
+{
+  "label": "What to plot",
+  "description": "Reads the CSV and says what the chart should show",
+  "config": {
+    "batch_mode": "whole_list",
+    "read_file_inputs": true
+  }
+}

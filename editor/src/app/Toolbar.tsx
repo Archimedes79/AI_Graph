@@ -342,11 +342,11 @@ export default function Toolbar({
         <ToolbarButton icon={Save} label="Save" title="Save (Ctrl+S)" onClick={onSave} />
         <ToolbarButton icon={SaveAll} title="Save as…" onClick={onSaveAs} />
         {/* Code and prompts that change on disk come in by themselves; this
-            is for graph.json itself -- after a git pull, say. */}
+            is for the flow and the nodes' settings -- after a git pull, say. */}
         {isProject && (
           <ToolbarButton
             icon={RefreshCw}
-            title="Reload the whole project from disk (graph.json changed outside the editor)"
+            title="Reload the whole project from disk (flow.json or a node's settings changed outside the editor)"
             onClick={onReloadProject}
           />
         )}

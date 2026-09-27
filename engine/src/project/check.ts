@@ -18,8 +18,7 @@ import { mismatches, portMisfit, readInterface } from '../execution/interface.ts
 import { filePorts } from '../execution/fileInputs.ts';
 import { parseExamples } from '../execution/examples.ts';
 import { INTERFACE_FILE } from './interfaceFile.ts';
-import { FLOW_FILE } from './flowFile.ts';
-import { GRAPH_FILE, LAYOUT_FILE, NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
+import { FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, loadGraph, nodeFolder, projectFolderOf, projectTexts } from './folder.ts';
 
 export { names, type Problem } from '../execution/wiring.ts';
 
@@ -230,7 +229,7 @@ function interfaceProblems(node: GraphNode, where: string): Problem[] {
   if (!schema) {
     return [{
       where,
-      problem: 'Its output interface (output.schema.json) is not a JSON Schema object.',
+      problem: 'Its output interface ("output_schema" in interface.json) is not a JSON Schema object.',
       fix: 'Set it again from a run, or write an object such as {"type": "object", "properties": {...}}.',
     }];
   }
@@ -249,7 +248,7 @@ function interfaceProblems(node: GraphNode, where: string): Problem[] {
 
 /**
  * What only a project folder can get wrong: a folder under `nodes/` that
- * belongs to no node (the node was deleted, or renamed in \`graph.json\` by
+ * belongs to no node (the node was deleted, or renamed in \`flow.json\` by
  * hand), and a file in a node's folder that nothing reads -- `prompt.md` where
  * an AI node reads `system.md` is a text somebody wrote and nobody will ever send.
  */
@@ -266,11 +265,11 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
   for (const node of graph.nodes) {
     const nodeDir = nodeFolder(node.id);
     if (!expected.has(nodeDir)) expected.set(nodeDir, new Set());
-    // What goes in and what comes out, written there on every save.
-    expected.get(nodeDir)!.add(INTERFACE_FILE);
+    // Its name and settings, and what goes in and what comes out.
+    expected.get(nodeDir)!.add(NODE_FILE).add(INTERFACE_FILE);
   }
 
-  // A node that holds a graph holds a project folder: its own graph.json and
+  // A node that holds a graph holds a project folder: its own flow.json and
   // layout.json belong there, and what is under them is that project's, looked
   // at below by the same function.
   const nested = new Map<string, Graph>();
@@ -280,7 +279,7 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
     const dir = nodeFolder(node.id);
     nested.set(dir, held);
     // Every node's folder is in `expected` already, from the loop above.
-    for (const name of [GRAPH_FILE, LAYOUT_FILE, FLOW_FILE]) expected.get(dir)!.add(name);
+    for (const name of [FLOW_FILE, LAYOUT_FILE]) expected.get(dir)!.add(name);
   }
 
   const walk = async (relative: string): Promise<void> => {
@@ -304,7 +303,7 @@ export async function folderProblems(folder: string, graph: Graph): Promise<Prob
         if (!owned) {
           found.push({
             where: path,
-            problem: 'This folder belongs to no node in graph.json.',
+            problem: 'This folder belongs to no node in flow.json.',
             fix: 'Delete it, or give the node it was for this id again.',
           });
           continue;

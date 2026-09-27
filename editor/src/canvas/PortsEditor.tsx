@@ -10,7 +10,7 @@ import { DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
  * change either, so every example in this repo had ports the editor could not
  * have produced -- `csv(file_path)`, `kind(text)`, `top(any)` into `figure` and
  * `rows` -- and building one by clicking stopped dead. The ports were only ever
- * written by hand in `graph.json` or by the AI graph generator.
+ * written by hand in a node's `interface.json` or by the AI graph generator.
  *
  * Shown only where the ports are the person's to name. An input node's follow
  * from its mode and a gui node's from its blocks, and the element says which it

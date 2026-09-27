@@ -1,41 +1,22 @@
 {
-  "_": "Written by AI-Graph on every save, from graph.json: read it, do not edit it. Ports are changed in the editor; the shape of the outputs is output.schema.json, where this node keeps one.",
-  "node": "assistant",
-  "type": "ai",
-  "label": "Assistant",
-  "about": "Answers the last message, knowing the conversation so far",
-  "runs": {
-    "by": "engine",
-    "where": "run.js",
-    "does": "Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as \"output\". Unchanged, run.js is made by the engine itself; a test holds the two to the same request."
-  },
   "inputs": [
     {
       "port": "history",
       "name": "History",
-      "type": "text",
-      "from": [
-        "page.chat_history"
-      ]
+      "type": "text"
     },
     {
       "port": "message",
       "name": "Message",
       "type": "text",
-      "required": true,
-      "from": [
-        "page.chat_out"
-      ]
+      "required": true
     }
   ],
   "outputs": [
     {
       "port": "output",
       "name": "Reply",
-      "type": "text",
-      "to": [
-        "page.chat_in"
-      ]
+      "type": "text"
     }
   ]
 }
