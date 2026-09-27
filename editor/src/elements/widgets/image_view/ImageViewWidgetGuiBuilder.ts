@@ -10,6 +10,10 @@ export class ImageViewWidgetGuiBuilder extends TransformingDisplayGuiBuilder {
 
   readonly label = 'Image';
 
+  paletteEntries() {
+    return [{ label: this.label, icon: '🖼️', also: 'picture photo' }];
+  }
+
   readonly runner = new ImageViewWidgetRunner();
 
   readonly shows = this.drawsAnd('Its code hands the path on as {"value": path}.');

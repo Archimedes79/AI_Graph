@@ -16,7 +16,7 @@ import { textRole } from '@engine/elements/widgets/text/role.ts';
  * properly.
  *
  * There is no text box here either, any more. The words are typed on the page,
- * where they stand (`inlineText`); a second box holding the same sentence, in a
+ * where they stand (`TextInPlace`); a second box holding the same sentence, in a
  * panel beside it, was two places to edit one thing.
  */
 export default function TextWidgetPanel({ widget }: WidgetPanelProps) {

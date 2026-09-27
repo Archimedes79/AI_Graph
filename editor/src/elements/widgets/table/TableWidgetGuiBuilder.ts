@@ -10,6 +10,10 @@ export class TableWidgetGuiBuilder extends TransformingDisplayGuiBuilder {
 
   readonly label = 'Table';
 
+  paletteEntries() {
+    return [{ label: this.label, icon: '▦', also: 'rows grid data' }];
+  }
+
   readonly runner = new TableWidgetRunner();
 
   readonly shows = this.drawsAnd('Its code hands them on as {"value": rows}.');

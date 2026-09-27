@@ -16,6 +16,10 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
 
   readonly label = 'File or folder';
 
+  paletteEntries() {
+    return [{ label: this.label, icon: '📂', also: 'picker open browse upload' }];
+  }
+
   override readonly Panel = lazy(() => import('./InputPickerWidgetPanel'));
 
   override readonly defaultMode = 'file';

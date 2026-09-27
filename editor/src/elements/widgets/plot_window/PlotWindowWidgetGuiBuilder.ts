@@ -11,12 +11,16 @@ export class PlotWindowWidgetGuiBuilder extends TransformingDisplayGuiBuilder {
 
   readonly label = 'Chart';
 
+  paletteEntries() {
+    return [{ label: this.label, icon: '📊', also: 'plot graph diagram svg' }];
+  }
+
   readonly runner = new PlotWindowWidgetRunner();
 
   // Its own sentence, not what `runner.draws()` says: that is for the node
   // upstream, which must hand data and never SVG, while draw() here may
   // return SVG, drawn at the block's real size.
-  readonly shows ='What draw(data, window) returns is what the chart shows: a list of numbers or of {"label", "value"} points, a figure {"kind": "bars", "columns", "line" or "donut", "title", "points"}, or a string of SVG. It runs in the page, so it is handed the block’s real size in pixels and the page’s colour scheme, and is called again whenever either changes; `data` is null until something has arrived.';
+  readonly shows = 'What draw(data, window) returns is what the chart shows: a list of numbers or of {"label", "value"} points, a figure {"kind": "bars", "columns", "line" or "donut", "title", "points"}, or a string of SVG. It runs in the page, so it is handed the block’s real size in pixels and the page’s colour scheme, and is called again whenever either changes; `data` is null until something has arrived.';
 
   override readonly generation: ElementGeneration<GuiWidget> = {
     ...fromEngine(this.runner.generation()),

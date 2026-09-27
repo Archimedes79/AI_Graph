@@ -43,6 +43,27 @@ export interface WidgetPanelProps {
   steps?: WidgetSteps;
 }
 
+/** One entry of the page designer's palette: a kind in one of its modes, as a person looks for it. */
+export interface PaletteEntry {
+  /** Omitted: the kind's `defaultMode`. */
+  mode?: string;
+  label: string;
+  icon: string;
+  /** Other words someone might type for this when searching. */
+  also?: string;
+}
+
+/** What a block typed in where it stands is handed by the page designer (`WidgetGuiBuilder.InlineEditor`). */
+export interface InlineEditorProps {
+  widget: GuiWidget;
+  /** One grid cell's size in pixels, so the box can say how many rows its text needs. */
+  cell: number;
+  /** The rows the block has now. */
+  rows: number;
+  onText: (value: string) => void;
+  onRows: (rows: number) => void;
+}
+
 let created = 0;
 
 export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, WidgetPanelProps> {
@@ -67,10 +88,19 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<GuiWidget, Widg
   readonly defaultMode: string = '';
 
   /**
-   * The widget *is* its text: a heading, a paragraph. Selected on the page
-   * being built, it becomes a box to type in, where the words stand.
+   * What the page designer's palette offers of this kind: one entry, or one
+   * per mode that a person reaches for as a thing of its own -- a heading and
+   * a paragraph are both `text`. Where each stands in the palette is the
+   * palette's layout (`page/DesignerPalette.tsx`); what it is called, its icon
+   * and the words it is found by are the kind's.
    */
-  readonly inlineText?: boolean;
+  abstract paletteEntries(): readonly PaletteEntry[];
+
+  /**
+   * The widget *is* its text: a heading, a paragraph. Selected on the page
+   * being built, this takes its place, a box to type in where the words stand.
+   */
+  readonly InlineEditor?: ComponentType<InlineEditorProps>;
 
   /**
    * Drawn on the canvas under the widget's input port: what last arrived

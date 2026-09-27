@@ -8,6 +8,14 @@ export class TextIoWidgetGuiBuilder extends WidgetGuiBuilder {
 
   readonly label = 'Text box';
 
+  paletteEntries() {
+    return [
+      { mode: 'input', label: 'Text input', icon: '⌨️', also: 'field box type prompt' },
+      { mode: 'output', label: 'Text output', icon: '📄', also: 'result answer display' },
+      { mode: 'both', label: 'Text in & out', icon: '↔️', also: 'both editable' },
+    ];
+  }
+
   override readonly Panel = lazy(() => import('./TextIoWidgetPanel'));
 
   override readonly defaultMode = 'both';

@@ -3,7 +3,7 @@ import type { GraphNode, GuiWidget, WidgetKind } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { syncGuiNodePorts } from '@/document/guiWidgets';
 import DesignerSurface from './DesignerSurface';
-import DesignerPalette, { ALL_ENTRIES, type PaletteEntry } from './DesignerPalette';
+import DesignerPalette, { entryOf, type PaletteEntry } from './DesignerPalette';
 import { pageOf, useGuiNodes, usePageEvents, useSurfaceBlocks, type SurfaceBlock } from './GuiPage';
 import { patchBlock, routePage, type PageWrite } from './pageWrite';
 import { liveTypedValues } from './typedValues';
@@ -69,9 +69,8 @@ export default function DesignerTab() {
     // A widget with ports starts out named after what it is: its ports are
     // named after it, and "widget-1-1789753941087: message" is what an unnamed
     // chat's port was called. Whether a kind is named at all is its builder's answer.
-    const entry = ALL_ENTRIES.find((candidate) => candidate.kind === kind && (candidate.mode ?? '') === (mode ?? ''))
-      ?? ALL_ENTRIES.find((candidate) => candidate.kind === kind);
     const builder = WIDGET_BUILDERS[kind];
+    const entry = entryOf(kind, mode) ?? builder.paletteEntries()[0];
     const widget = { ...builder.create(builder.initialLabel(entry?.label ?? ''), mode) };
     // Named for what it is, so its ports read as that: `plot_window_in`.
     widget.id = freeId(kind, blocks.map((b) => b.widget.id));

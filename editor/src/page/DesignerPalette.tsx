@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import type { WidgetKind } from '@/graph';
+import { WIDGET_BUILDERS } from '@/elements/registry';
+import type { PaletteEntry as KindEntry } from '@/elements/WidgetGuiBuilder';
 import { DIMMER, LINE, SURFACE, TEXT } from '@/ui/theme';
 
 /**
@@ -19,58 +21,53 @@ import { DIMMER, LINE, SURFACE, TEXT } from '@/ui/theme';
  * folded. Seventeen entries in a column was a list to read before starting,
  * and seven of them were ways to draw a line or leave a gap.
  */
-export interface PaletteEntry {
+export interface PaletteEntry extends KindEntry {
   kind: WidgetKind;
-  mode?: string;
-  label: string;
-  icon: string;
-  /** Other words someone might type for this when searching. */
-  also?: string;
 }
 
-interface PaletteGroup { label: string; entries: PaletteEntry[]; folded?: boolean }
-
-const PALETTE: PaletteGroup[] = [
+/**
+ * Where each entry stands: the palette's layout, and only that. What an entry
+ * is called, its icon and the words it is found by are its kind's
+ * (`WidgetGuiBuilder.paletteEntries`), the way the node palette takes its
+ * words from the node builders; the order here cuts across kinds -- a heading
+ * under Words, a caption under More -- so it is kept in one place.
+ */
+export const GROUPS: { label: string; folded?: boolean; items: { kind: WidgetKind; mode?: string }[] }[] = [
   {
     label: 'Words',
-    entries: [
-      { kind: 'text', mode: 'heading', label: 'Heading', icon: '🔠', also: 'title h1' },
-      { kind: 'text', mode: 'body', label: 'Text', icon: '📝', also: 'paragraph markdown body' },
-      { kind: 'divider', mode: 'horizontal', label: 'Divider', icon: '➖', also: 'line rule hr' },
-    ],
+    items: [{ kind: 'text', mode: 'heading' }, { kind: 'text', mode: 'body' }, { kind: 'divider', mode: 'horizontal' }],
   },
   {
     label: 'The person does',
-    entries: [
-      { kind: 'chat', label: 'Chat', icon: '💬', also: 'conversation messages bot' },
-      { kind: 'input_picker', label: 'File or folder', icon: '📂', also: 'picker open browse upload' },
-      { kind: 'text_io', mode: 'input', label: 'Text input', icon: '⌨️', also: 'field box type prompt' },
-      { kind: 'select', label: 'Dropdown', icon: '▾', also: 'select choice options' },
-      { kind: 'slider', label: 'Slider', icon: '🎚️', also: 'number range' },
-      { kind: 'button', label: 'Button', icon: '🔘', also: 'run start go trigger' },
+    items: [
+      { kind: 'chat' }, { kind: 'input_picker' }, { kind: 'text_io', mode: 'input' },
+      { kind: 'select' }, { kind: 'slider' }, { kind: 'button' },
     ],
   },
   {
     label: 'The graph shows',
-    entries: [
-      { kind: 'text_io', mode: 'output', label: 'Text output', icon: '📄', also: 'result answer display' },
-      { kind: 'table', label: 'Table', icon: '▦', also: 'rows grid data' },
-      { kind: 'plot_window', label: 'Chart', icon: '📊', also: 'plot graph diagram svg' },
-      { kind: 'image_view', label: 'Image', icon: '🖼️', also: 'picture photo' },
-    ],
+    items: [{ kind: 'text_io', mode: 'output' }, { kind: 'table' }, { kind: 'plot_window' }, { kind: 'image_view' }],
   },
   {
     label: 'More',
     folded: true,
-    entries: [
-      { kind: 'text', mode: 'caption', label: 'Caption', icon: '🏷️', also: 'small note' },
-      { kind: 'text_io', mode: 'both', label: 'Text in & out', icon: '↔️', also: 'both editable' },
-      { kind: 'divider', mode: 'vertical', label: 'Vertical divider', icon: '│' },
-      { kind: 'spacer', mode: 'horizontal', label: 'Gap', icon: '␣', also: 'space spacer' },
-      { kind: 'spacer', mode: 'vertical', label: 'Vertical gap', icon: '┆' },
+    items: [
+      { kind: 'text', mode: 'caption' }, { kind: 'text_io', mode: 'both' }, { kind: 'divider', mode: 'vertical' },
+      { kind: 'spacer', mode: 'horizontal' }, { kind: 'spacer', mode: 'vertical' },
     ],
   },
 ];
+
+/** The kind's own entry for *mode*: the one without a mode stands for the kind's default. */
+export function entryOf(kind: WidgetKind, mode?: string): PaletteEntry | undefined {
+  const entry = WIDGET_BUILDERS[kind]?.paletteEntries().find((candidate) => (candidate.mode ?? '') === (mode ?? ''));
+  return entry && { ...entry, kind };
+}
+
+const PALETTE = GROUPS.map((group) => ({
+  ...group,
+  entries: group.items.flatMap((item) => entryOf(item.kind, item.mode) ?? []),
+}));
 
 /** Every entry, for the quick-insert menu: one list, searched by what people call things. */
 export const ALL_ENTRIES: PaletteEntry[] = PALETTE.flatMap((group) => group.entries);

@@ -3,11 +3,9 @@ import type { GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { blockValue, GuiBlock, PageGrid, shownOn, type SurfaceBlock } from './GuiPage';
-import { cellsFromDrag, resolveWidgetLayout, GUI_GAP, GUI_GRID_COLUMNS, GUI_MAX_CELL } from '@/document/layout';
+import { cellsFromDrag, resolveWidgetLayout, GUI_GRID_COLUMNS, GUI_MAX_CELL } from '@/document/layout';
 import QuickInsert from './QuickInsert';
 import type { PaletteEntry } from './DesignerPalette';
-import { TEXT_ROLES } from '@/elements/widgets/text/TextWidgetView';
-import { textRole } from '@engine/elements/widgets/text/role.ts';
 import { widgetFiresRun } from '@/document/guiWidgets';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
 
@@ -152,7 +150,8 @@ export default function DesignerSurface({
           const { widget } = placement;
           const incoming = shownOn(executionResult, block.node.id, widget.id);
           const selected = widget.id === selectedId;
-          const typedInPlace = selected && WIDGET_BUILDERS[widget.kind]?.inlineText === true;
+          // A block that is its own words is typed where it stands: the kind says how.
+          const InPlace = selected ? WIDGET_BUILDERS[widget.kind]?.InlineEditor : undefined;
 
           return (
             <React.Fragment key={widget.id}>
@@ -181,8 +180,8 @@ export default function DesignerSurface({
                   zIndex: selected ? 5 : undefined,
                 }}
                 onMouseDown={(e) => { e.stopPropagation(); onSelect(widget.id); }}
-                content={typedInPlace ? (
-                  <InPlaceText
+                content={InPlace ? (
+                  <InPlace
                     widget={widget}
                     cell={cell}
                     rows={placement.h}
@@ -351,48 +350,5 @@ function BlockToolbar({
       {gap}
       <button type="button" style={{ ...button(), color: '#f87171' }} title="Remove (Del)" onClick={onRemove} aria-label="Remove block">🗑</button>
     </div>
-  );
-}
-
-/**
- * A heading or a paragraph, typed where it stands.
- *
- * The box grows with what is written — rows are added as the text needs them,
- * never taken away, so a size someone chose on purpose stays chosen.
- */
-function InPlaceText({ widget, cell, rows, onText, onRows }: {
-  widget: GuiWidget;
-  cell: number;
-  rows: number;
-  onText: (value: string) => void;
-  onRows: (rows: number) => void;
-}) {
-  const box = React.useRef<HTMLTextAreaElement | null>(null);
-  const role = TEXT_ROLES[textRole(widget.mode)];
-
-  React.useEffect(() => {
-    const element = box.current;
-    if (!element) return;
-    element.focus();
-    element.setSelectionRange(element.value.length, element.value.length);
-    // Once, on entering the block: focus follows selection, not every keystroke.
-  }, [widget.id]);
-
-  const fit = (element: HTMLTextAreaElement) => {
-    const needed = Math.ceil((element.scrollHeight + 6 + GUI_GAP) / (cell + GUI_GAP));
-    if (needed > rows) onRows(needed);
-  };
-
-  return (
-    <textarea
-      ref={box}
-      className="w-full h-full resize-none bg-transparent outline-none"
-      style={{ ...role, border: 'none', padding: 0, fontFamily: 'inherit', lineHeight: 1.45 }}
-      value={typeof widget.value === 'string' ? widget.value : ''}
-      onChange={(event) => { onText(event.target.value); fit(event.target); }}
-      onMouseDown={(event) => event.stopPropagation()}
-      placeholder={textRole(widget.mode) === 'heading' ? 'Heading' : 'Write something… Markdown works: **bold**, lists, links'}
-      spellCheck
-    />
   );
 }
