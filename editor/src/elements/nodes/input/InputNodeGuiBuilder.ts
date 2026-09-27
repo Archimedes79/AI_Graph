@@ -41,4 +41,10 @@ export class InputNodeGuiBuilder extends NodeGuiBuilder {
     return listsFolder(node) ? 'port "Files" carries a list of file paths, port "Count" how many there are' : 'text';
   }
 
+  /** Its text, or the folder it lists, under its ports. */
+  override canvasSummary(node: GraphNode): string | undefined {
+    const value = String(node.config.value ?? '');
+    return value.trim() ? value : undefined;
+  }
+
 }

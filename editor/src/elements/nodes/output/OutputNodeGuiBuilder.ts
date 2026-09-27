@@ -54,4 +54,11 @@ export class OutputNodeGuiBuilder extends NodeGuiBuilder {
     return [super.wantsOn(node, port), node.description?.trim(), destination(node)].filter(Boolean).join('; ');
   }
 
+  /** The file or folder it writes the result to besides, under its ports -- only while it writes one. */
+  override canvasSummary(node: GraphNode): string | undefined {
+    const path = String(node.config.value ?? '').trim();
+    const writes = node.config.write_mode === 'file' || node.config.write_mode === 'directory';
+    return writes && path ? path : undefined;
+  }
+
 }

@@ -5,6 +5,7 @@ import { ReactFlowProvider } from 'reactflow';
 import ResultPreview from './ResultPreview';
 import GraphNodeView from './GraphNodeView';
 import { NODE_KINDS } from '@/document/nodeKinds';
+import type { GraphNode } from '@/graph';
 
 // Rendered to a string, a component reads the store's first state, not the
 // one a test has since moved it to -- so the last run is answered here. (Vitest
@@ -34,14 +35,31 @@ describe('a value under a port on the canvas', () => {
   });
 });
 
+/** *graphNode* on the canvas, as it is drawn there. */
+const onCanvas = (graphNode: GraphNode) => renderToStaticMarkup(createElement(ReactFlowProvider, null, createElement(GraphNodeView, {
+  id: graphNode.id, data: { graphNode }, selected: false, type: 'graphNode', zIndex: 0, isConnectable: true,
+  xPos: 0, yPos: 0, dragging: false,
+})));
+
+describe('what a node holds, under its ports', () => {
+  it('is what its element says it holds -- an output that writes nowhere shows no path it once wrote to', () => {
+    open.executionResult = null;
+    const text = NODE_KINDS.input.create('source');
+    text.config.value = 'data/people.csv';
+    expect(onCanvas(text)).toContain('data/people.csv');
+    // Every node's `value` was shown, whatever the node made of it.
+    const result = NODE_KINDS.output.create('result');
+    result.config.value = 'out/old.csv';
+    expect(onCanvas(result)).not.toContain('out/old.csv');
+    result.config.write_mode = 'file';
+    expect(onCanvas(result)).toContain('out/old.csv');
+  });
+});
+
 describe('a node on the canvas, after a run', () => {
   const node = (result: unknown) => {
     open.executionResult = { status: 'success', outputs: {}, node_results: [result] };
-    const graphNode = { ...NODE_KINDS.code.create('count'), label: 'Count' };
-    return renderToStaticMarkup(createElement(ReactFlowProvider, null, createElement(GraphNodeView, {
-      id: 'count', data: { graphNode }, selected: false, type: 'graphNode', zIndex: 0, isConnectable: true,
-      xPos: 0, yPos: 0, dragging: false,
-    })));
+    return onCanvas({ ...NODE_KINDS.code.create('count'), label: 'Count' });
   };
 
   it('shows what it made under the port it came out of, not the run\'s JSON', () => {

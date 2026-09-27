@@ -311,27 +311,15 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
           );
         })}
 
-        {/* Config preview */}
-        {graphNode.config.value && (
-          <div
-            className="text-xs truncate mt-1 px-1 py-0.5 rounded"
-            style={{ background: HOVER, color: MUTED }}
-            title={graphNode.config.value}
-          >
-            {graphNode.config.value.length > 30
-              ? graphNode.config.value.slice(0, 30) + '…'
-              : graphNode.config.value}
-          </div>
-        )}
-
-        {/* What the node holds, when it says: a data node's remembered value. */}
+        {/* What the node holds, when its element says: a data node's value, an
+            input's text, where an output writes, when a trigger fires. */}
         {summary !== undefined && (
           <div
             className="text-xs truncate mt-1 px-1 py-0.5 rounded font-mono"
             style={{ background: HOVER, color: MUTED }}
             title={summary}
           >
-            {summary.slice(0, 30)}
+            {summary.length > 30 ? `${summary.slice(0, 30)}…` : summary}
           </div>
         )}
 
