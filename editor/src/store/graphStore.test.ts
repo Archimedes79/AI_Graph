@@ -708,4 +708,23 @@ describe('graphStore.connect', () => {
     useGraphStore.getState().connect({ source: 'a', sourceHandle: 'out', target: 'b', targetHandle: 'in' });
     expect(useGraphStore.getState().rfEdges).toHaveLength(1);
   });
+
+  it('ticks "Read the file at this path" where a path arrives -- on a node that reads its files, and nowhere else', () => {
+    // A data node's input and an output node's value became file_path too, on
+    // kinds that take a path as a path.
+    const paths = { ...port('files', 'output'), data_type: 'file_path' as const, multi: true };
+    loadTestGraph([
+      graphNode({ id: 'folder', node_type: 'code', outputs: [paths] }),
+      graphNode({ id: 'reader', node_type: 'code', inputs: [port('in', 'input')] }),
+      graphNode({ id: 'memory', node_type: 'data', inputs: [port('input', 'input')] }),
+      graphNode({ id: 'result', node_type: 'output', inputs: [port('value', 'input')] }),
+    ]);
+    const typed = (id: string) => (useGraphStore.getState().rfNodes.find((n) => n.id === id)!.data.graphNode as GraphNode).inputs[0];
+    for (const [target, handle] of [['reader', 'in'], ['memory', 'input'], ['result', 'value']]) {
+      useGraphStore.getState().connect({ source: 'folder', sourceHandle: 'files', target, targetHandle: handle });
+    }
+    expect(typed('reader')).toMatchObject({ data_type: 'file_path', multi: true });
+    expect(typed('memory')).toMatchObject({ data_type: 'any', multi: false });
+    expect(typed('result')).toMatchObject({ data_type: 'any', multi: false });
+  });
 });

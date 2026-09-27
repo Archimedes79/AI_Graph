@@ -528,14 +528,17 @@ export const useGraphStore = create<GraphStore>()(
           .find((node: RFNode) => node.id === nodeId)?.data.graphNode[side].find((port) => port.id === portId);
         const from = portOf(wire.source, 'outputs', wire.sourceHandle);
         const to = portOf(wire.target, 'inputs', wire.targetHandle);
-        // Not on a node whose ports follow from its settings (a page, an input): those are recomputed.
-        const target = state.rfNodes.find((node: RFNode) => node.id === wire.target)?.data.graphNode;
-        const own = !!target && derivedNodePorts(target as GraphNode) === null;
+        // Only on a node that reads its files (`readsFileInputs`): a data node
+        // or an output node takes a path as a path, and was retyped all the
+        // same. And not on one whose ports follow from its settings: those are
+        // recomputed.
+        const target = state.rfNodes.find((node: RFNode) => node.id === wire.target)?.data.graphNode as GraphNode | undefined;
+        const reads = !!target && engineRegistry.node(target.node_type)?.readsFileInputs === true && derivedNodePorts(target) === null;
         // Only a port with nobody's word on it. A port typed `text` said what it
         // wants -- a file reader takes the same picker twice, one to read and one
         // to keep the name -- and the engine reads it the same way
         // (`execution/fileInputs.ts`: the target's own type wins).
-        if (own && from?.data_type === 'file_path' && to && to.data_type === 'any') {
+        if (reads && from?.data_type === 'file_path' && to && to.data_type === 'any') {
           to.data_type = 'file_path';
           if (from.multi) to.multi = true;
         }
