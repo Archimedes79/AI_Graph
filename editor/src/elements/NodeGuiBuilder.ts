@@ -238,16 +238,6 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<GraphNode, NodePa
   }
 
   /**
-   * The file whose text this node hands on from one output port without
-   * running anything, or undefined. No kind does any more: an input holds a
-   * file's path as text, and the node it is wired into reads the file at its
-   * own input -- which is what names the port to read (`readFilePorts`).
-   */
-  restingFile(_node: GraphNode, _port: string): string | undefined {
-    return undefined;
-  }
-
-  /**
    * What this node wants on one of its input ports, in words, for a node
    * wired into it: its ✨ is told, beside the output that feeds it. The
    * port's own description by default; a node whose port wants something

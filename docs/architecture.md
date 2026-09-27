@@ -118,7 +118,7 @@ ElementRunner<Subject, Config>          config() · texts() · logic() · catche
 ElementGuiBuilder<Subject, PanelProps>           Panel · generation
 ├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
 │                                         + the four steps' declarations: stepped · exampleInput · ownsDescription
-│                                           portEditing/portHint · wantsOn · restingValue/restingFile · publishedDescription
+│                                           portEditing/portHint · wantsOn · restingValue · publishedDescription
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
 │   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
 │   └── GuiNodeGuiBuilder
