@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import type { WidgetViewProps } from '../WidgetView';
-import { valueToText } from '../WidgetView';
+import { asText } from '@engine/elements/widgets/text_io/text.ts';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 import { DANGER_SOFT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
 /** Runtime input_picker widget: unified file or directory picker. */
 export default function InputPickerWidgetView({ widget, value, onChange, onTrigger }: WidgetViewProps) {
   const isDir = widget.mode === 'directory';
-  const displayVal = Array.isArray(value) ? `${value.length} file(s) selected` : valueToText(value);
+  const displayVal = Array.isArray(value) ? `${value.length} file(s) selected` : asText(value);
 
   // Browses the machine the graph runs on. A native `<input type="file">` used
   // to be wired up here, but a browser only ever exposes a chosen file's name,
@@ -22,7 +22,7 @@ export default function InputPickerWidgetView({ widget, value, onChange, onTrigg
         <input
           className="flex-1 min-w-0 rounded-lg px-2 py-1.5 text-sm font-mono"
           style={FIELD}
-          value={Array.isArray(value) ? '' : valueToText(value)}
+          value={Array.isArray(value) ? '' : asText(value)}
           onChange={(e) => onChange(e.target.value)}
           // Typing a path is not choosing one until it is finished: Enter says so.
           onKeyDown={(e) => { if (e.key === 'Enter') onTrigger?.((e.target as HTMLInputElement).value); }}
@@ -57,7 +57,7 @@ export default function InputPickerWidgetView({ widget, value, onChange, onTrigg
       {browsing && (
         <FileBrowserDialog
           mode={isDir ? 'directory' : 'file'}
-          initialPath={Array.isArray(value) ? '' : valueToText(value)}
+          initialPath={Array.isArray(value) ? '' : asText(value)}
           extensions={widget.extensions || ''}
           onPick={(picked) => { onChange(picked); setBrowsing(false); onTrigger?.(picked); }}
           onClose={() => setBrowsing(false)}

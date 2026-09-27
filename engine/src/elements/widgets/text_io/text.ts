@@ -3,7 +3,8 @@
 // A text box's out port is text, and what arrives on its in port may be
 // anything: a chart's rows wired in to be read, a model's answer as an
 // object, a summary per file. What the box hands on should be what the page
-// shows in it, so this is the rule the page's `valueToText` follows too.
+// shows in it, so the page's blocks show a value with this same function. It
+// had one of its own, alike by hand.
 
 /**
  * Text as it is; a list as its items, one per line -- a blank line between
