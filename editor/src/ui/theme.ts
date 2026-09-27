@@ -55,6 +55,18 @@ export const ACCENT_TEXT = 'var(--ui-accent-text, #a5b4fc)';
 export const ACCENT_FILL = 'var(--ui-accent-fill, rgba(99,102,241,0.10))';
 /** Text on top of the accent itself — a button's label. */
 const ON_ACCENT = 'var(--ui-on-accent, #ffffff)';
+/**
+ * The accent as a soft glow around what is selected: mixed from the scheme's
+ * own accent, so it is that accent's glow in every scheme.
+ */
+export const ACCENT_GLOW = `color-mix(in srgb, ${ACCENT} 30%, transparent)`;
+
+/**
+ * An event: the ◆ a run begins at, and a wire into one. Amber whatever the
+ * scheme -- it is the one colour that says "a run starts here", on the canvas
+ * and on the page alike.
+ */
+export const EVENT = 'var(--ui-event, #f59e0b)';
 
 export const SUCCESS = 'var(--ui-success, #22c55e)';
 export const DANGER = 'var(--ui-danger, #ef4444)';

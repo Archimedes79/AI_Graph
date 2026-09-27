@@ -7,7 +7,8 @@ import { withPorts } from './nodeDraft';
 import { useNodeDialog } from './nodeDialog';
 import { NODE_BUILDERS } from '@/elements/registry';
 import type { NodePanelProps, UndoStep } from '@/elements/NodeGuiBuilder';
-import Modal from '@/ui/Modal';
+import SidePanel from '@/ui/SidePanel';
+import NodeKind from './NodeKind';
 import { useGenerate } from '@/authoring/useGenerate';
 import { buildGeneration, nodeFields, withChange, type ChangeAsked, type GenerationRequest } from '@/authoring/generation';
 import { useWhatSends } from '@/authoring/WhatSends';
@@ -28,9 +29,10 @@ interface NodeEditorProps {
 }
 
 /**
- * A node's dialog. There is no Save and no Cancel: what is changed here is in
- * the graph a moment later, Undo takes it back, and ✕ or Esc close it with
- * nothing lost (`nodeDialog.ts`).
+ * A node's panel, docked beside the canvas while the node is selected. There
+ * is no Save and no Cancel: what is changed here is in the graph a moment
+ * later, Undo takes it back, and ✕ or Esc close it with nothing lost
+ * (`nodeDialog.ts`) -- as does choosing another node, whose panel it becomes.
  */
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const dialog = useNodeDialog(nodeId);
@@ -150,7 +152,8 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   } : undefined;
 
   return (
-    <Modal
+    <SidePanel
+      kicker={<NodeKind node={node} />}
       title={
         <input
           className="text-lg font-bold bg-transparent border-none outline-none w-full"
@@ -164,10 +167,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
         />
       }
       onClose={onClose}
-      maxWidth="max-w-2xl"
-      scrollBody
-      // A stray click beside it is not a reason to close it.
-      dismissOnBackdrop={false}
     >
       <div className="px-6 py-5">
           {/* Only for elements whose own editor does not already ask what the
@@ -241,6 +240,6 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           </div>
           </GenerationReport>
       </div>
-    </Modal>
+    </SidePanel>
   );
 }

@@ -7,12 +7,10 @@ import type { PortRenames } from './portRenames';
 import { derivedNodePorts, showsPage } from '@/document/guiWidgets';
 import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
-import { ACCENT } from '@/ui/theme';
 import { delivered } from './executionStatus';
 import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
-import type React from 'react';
 import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
@@ -283,19 +281,6 @@ export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult):
 }
 
 /**
- * A wire that carries a value, and one that only says "start here".
- *
- * Drawn differently because they *are* different: a run edge delivers nothing,
- * and a canvas where it looks like data invites the question of what the AI
- * node does with a button's `true`. Dashed and amber reads as a signal.
- */
-export function edgeStyle(targetPort: string | null | undefined): React.CSSProperties {
-  return targetPort === RUN_PORT
-    ? { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 4' }
-    : { stroke: ACCENT, strokeWidth: 2 };
-}
-
-/**
  * Where a node goes that nobody put anywhere -- a palette click, the page a
  * first block makes: to the right of what is already there, not on top of it.
  * A random spot put the second node on the first more often than not, and a
@@ -447,15 +432,14 @@ function buildReactFlowGraph(graph: Graph) {
     data: { graphNode: gn },
   }));
 
+  // How a wire looks is the canvas's to say (`canvas/wires.ts`): it depends
+  // on what is selected there, which the document knows nothing of.
   const rfEdges: Edge[] = graph.edges.map((ge) => ({
     id: ge.id,
     source: ge.source_node_id,
     sourceHandle: ge.source_port_id,
     target: ge.target_node_id,
     targetHandle: ge.target_port_id,
-    type: 'smoothstep',
-    animated: false,
-    style: edgeStyle(ge.target_port_id),
   }));
 
   return { rfNodes, rfEdges };
@@ -540,7 +524,7 @@ export const useGraphStore = create<GraphStore>()(
       if (get().rfEdges.some(joins)) return;
       get().commit();
       set((state) => {
-        state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as never);
+        state.rfEdges.push({ ...wire, id } as never);
 
         // A wire from a port that carries file paths -- a picker, a folder --
         // ticks "Read the file at this path" on the input it ends on: the port
@@ -621,12 +605,16 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges = state.rfEdges.filter(
           (e: Edge) => e.source !== nodeId && e.target !== nodeId
         );
+        if (state.editingNodeId === nodeId) state.editingNodeId = null;
       });
     },
 
     setRFNodes: (nodes) =>
       set((state) => {
         state.rfNodes = nodes as never;
+        // A panel open on a node the canvas just removed closes with it:
+        // left pointing at the id, it opened again on the next node of that id.
+        if (state.editingNodeId && !nodes.some((node) => node.id === state.editingNodeId)) state.editingNodeId = null;
       }),
 
     setRFEdges: (edges) =>

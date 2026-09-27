@@ -76,6 +76,33 @@ describe('clearing the selection', () => {
   });
 });
 
+describe('the panel beside the canvas', () => {
+  it('shows another node when another is chosen, and what the first still held is written first', () => {
+    store().setEditingNode('count');
+    const panel = nodeDialog('count');
+    const stop = panel.watch(() => {});
+    panel.setConfig('code_prompt', 'Count the words.');
+    store().setEditingNode('shown');
+    expect(stored('count')!.config.code_prompt).toBe('Count the words.');
+    expect(store().editingNodeId).toBe('shown');
+    stop();
+  });
+
+  it('closes with its node, however the node goes -- left pointing at the id, it opened again on the next node of that id', () => {
+    store().setEditingNode('count');
+    store().deleteNode('count');
+    expect(store().editingNodeId).toBeNull();
+    store().setEditingNode('shown');
+    // As the canvas removes a node: Delete pressed on it.
+    store().setRFNodes(store().rfNodes.filter((node) => node.id !== 'shown'));
+    expect(store().editingNodeId).toBeNull();
+    // Moving what is left keeps a panel that is open.
+    store().setEditingNode('part');
+    store().setRFNodes(store().rfNodes.map((node) => ({ ...node, position: { x: 10, y: 10 } })));
+    expect(store().editingNodeId).toBe('part');
+  });
+});
+
 describe('a graph changed as said', () => {
   const changed = () => {
     const graph = store().exportGraph();

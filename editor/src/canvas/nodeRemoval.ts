@@ -4,14 +4,15 @@ import { registry as engineRegistry } from '@engine/elements/registry.ts';
 
 /**
  * The keys that delete what is selected on the canvas: Delete and Backspace --
- * while the canvas is the view on screen (*active*), and no node's dialog is
- * open over it (*editing*). A key pressed inside any dialog is the dialog's,
- * and says so to ReactFlow (`Modal`'s `nokey`); but a button that goes away
- * under the focus -- ✨ Fix, once it has fixed -- hands the key to the page,
- * and Backspace deleted the node the dialog was open on, behind it.
+ * while the canvas is the view on screen (*active*), and only as pressed on
+ * the canvas itself (*focused*): a node or the empty canvas clicked last. A
+ * node's panel is open beside the canvas whenever a node is selected, and a
+ * key pressed in it is the panel's; so is one pressed after a button in it
+ * went away under the focus -- ✨ Fix, once it has fixed -- which hands the
+ * key to the page, where Backspace deleted the node the panel was open on.
  */
-export function deleteKeys(active: boolean, editing: boolean): string[] | null {
-  return active && !editing ? ['Delete', 'Backspace'] : null;
+export function deleteKeys(active: boolean, focused: boolean): string[] | null {
+  return active && focused ? ['Delete', 'Backspace'] : null;
 }
 
 /**
