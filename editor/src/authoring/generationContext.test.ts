@@ -3,6 +3,7 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import { connectedFormatContext, lastRunContext, describeNodeOutput, outputTargets, pathPorts, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
 import { nodeFacts } from './nodeFacts';
+import { NODE_BUILDERS } from '@/elements/registry';
 
 const edge = (source: string, target: string) => ({ source, target });
 
@@ -284,5 +285,17 @@ describe('what ✨ is told about a node, as facts', () => {
     const facts = nodeFacts(code, [input, code], [{ id: 'a', source: 'src', target: 'worker', sourceHandle: 'content', targetHandle: 'input' }] as never, null);
     expect(facts.sampleInputs).toEqual({ input: 'data/people.csv' });
     expect(facts.readFilePorts).toEqual(['input']);
+  });
+});
+
+describe('a folder input\'s selector, as ✨ is told it', () => {
+  it('is told what the files hold as what they hold, not as the format of what it returns (B20)', () => {
+    // An older dialog let a person say what the files contain. The selector
+    // returns a list of paths, which its contract says; the words went out as
+    // its "Format", so it was told it returns CSV.
+    const folder = NODE_KINDS.input.create('folder');
+    folder.config = { ...folder.config, input_mode: 'directory', select_all_files: false, output_format_prompt: 'UTF-8 CSV, columns: date, amount' };
+    expect(nodeFacts(folder, [folder], [], null).outputFormat).toBe('');
+    expect(NODE_BUILDERS.input.generation?.context?.(folder)).toBe('The files in this folder contain: UTF-8 CSV, columns: date, amount');
   });
 });
