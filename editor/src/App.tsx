@@ -8,7 +8,7 @@ import GraphCanvas from '@/canvas/GraphCanvas';
 import DesignerTab from '@/page/DesignerTab';
 import PreviewTab from '@/page/PreviewTab';
 import TopGraphOnly from '@/page/TopGraphOnly';
-import ViewTabs, { type EditorView } from '@/app/ViewTabs';
+import type { EditorView } from '@/app/ViewTabs';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import NodeEditor from '@/canvas/NodeEditor';
 import PageCardPanel from '@/canvas/PageCardPanel';
@@ -421,9 +421,9 @@ export default function App() {
           confirmDiscard={confirmDiscard}
           currentFilePath={currentFilePath}
           saveStatus={saveStatus}
+          view={view}
+          onViewChange={setView}
         />
-
-        <ViewTabs view={view} onChange={setView} />
 
         {/* Both views stay mounted: the graph keeps its ReactFlow viewport, and
             switching back does not reset the canvas, lose a selection or close

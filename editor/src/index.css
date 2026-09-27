@@ -68,9 +68,11 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* A row or button under the pointer. Tailwind's `hover:bg-white/5` was doing
-   this job and is invisible on a light scheme -- white over cream is cream. */
-.hover-raise:hover {
+/* A row or button under the pointer -- or reached with the keyboard, as a
+   menu's entries are. Tailwind's `hover:bg-white/5` was doing this job and is
+   invisible on a light scheme -- white over cream is cream. */
+.hover-raise:hover,
+.hover-raise:focus-visible {
   background: var(--ui-hover, rgba(255,255,255,0.06));
 }
 
