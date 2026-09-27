@@ -161,7 +161,26 @@ describe('duplicate neighbours', () => {
       edge('worker', 'sink'), edge('worker', 'sink'),
     ]);
 
-    expect(context).toBe('Output goes to "Result" (output node).');
+    expect(context).toBe('Output goes to "Result" (output node): shown as text in a window.');
+  });
+});
+
+describe('what an output node wants', () => {
+  it('tells the node feeding it what the result is and where it goes, not only its port\'s own words', () => {
+    // A new output node's value port says nothing, so the node wired into it
+    // was written for nothing in particular.
+    const out = NODE_KINDS.output.create('sink');
+    out.label = 'Table';
+    out.description = 'One row per country';
+    out.config.write_mode = 'file';
+    out.config.value = 'out/table.csv';
+    const code = NODE_KINDS.code.create('worker');
+
+    const targets = outputTargets('worker', [code, out], [
+      { source: 'worker', sourceHandle: 'output', target: 'sink', targetHandle: 'value' },
+    ], true);
+    expect(targets.output).toContain('One row per country');
+    expect(targets.output).toContain('written to the file "out/table.csv"');
   });
 });
 
