@@ -273,6 +273,9 @@ describe('graphStore: what a run remembered', () => {
 
   it('puts a value that came back around a loop into the block it arrived at', () => {
     const { widget, node } = gui('text_io');
+    // A box that only shows: what arrives is all it holds. One a person also
+    // types into keeps what they typed -- the case below.
+    widget.mode = 'output';
     loadTestGraph([node]);
     useGraphStore.getState().setExecutionResult({
       status: 'success', node_results: [],
@@ -280,6 +283,19 @@ describe('graphStore: what a run remembered', () => {
     } as never);
     // Structured values stay structured: a chart's points are not text.
     expect(stored(widget.id).value).toEqual([{ x: 1, y: 2 }]);
+  });
+
+  it('leaves what a person typed in a box they type into, whatever came back around the loop', () => {
+    // The reply is shown from what the run delivered. Kept as the box's value,
+    // it was the next message: the model's answer sent back as the person's.
+    const { widget, node } = gui('text_io');
+    widget.value = 'my question';
+    loadTestGraph([node]);
+    useGraphStore.getState().setExecutionResult({
+      status: 'success', node_results: [],
+      memory: [{ node_id: 'gui1', port_id: `${widget.id}_in`, value: 'the model reply' }],
+    } as never);
+    expect(stored(widget.id).value).toBe('my question');
   });
 
   it('lets the block say what arriving means: a reply becomes a turn of the conversation', () => {

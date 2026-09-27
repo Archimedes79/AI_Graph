@@ -203,6 +203,56 @@ describe('executeGraph', () => {
 
     expect(store.config.data_value).toBe('fresh');
   });
+
+  it('keeps every output in the result when two share a label', async () => {
+    // Every new output node is called "Result". Two of them used to leave the
+    // run's result with one value, the other gone without a word.
+    const result = await executeGraph(
+      graph([
+        node('a', 'input', { input_mode: 'text', value: 'alpha' }),
+        node('b', 'input', { input_mode: 'text', value: 'beta' }),
+        node('first', 'output', { output_label: 'Result' }),
+        node('second', 'output', { output_label: 'Result' }),
+        node('named', 'output', { output_label: 'Named' }),
+      ], [
+        edge('e1', 'a', 'output', 'first', 'value'),
+        edge('e2', 'b', 'output', 'second', 'value'),
+        edge('e3', 'a', 'output', 'named', 'value'),
+      ]),
+      { runtime: nowhere, registry },
+    );
+    // The first keeps its label, and labels nobody shares are left as they were.
+    expect(result.outputs).toEqual({
+      Result: { value: 'alpha' },
+      'Result (second)': { value: 'beta' },
+      Named: { value: 'alpha' },
+    });
+  });
+
+  it('keys an output the same whether or not the one before it ran', async () => {
+    // A round that runs only part of the graph -- a page event, a trigger --
+    // must not hand the second's value on under the first's key: rounds laid
+    // over each other would lose the first's value once more.
+    const result = await executeGraph(
+      graph([
+        node('a', 'input', { input_mode: 'text', value: 'alpha' }),
+        node('b', 'input', { input_mode: 'text', value: 'beta' }),
+        node('first', 'output', { output_label: 'Result' }),
+        node('second', 'output', { output_label: 'Result' }),
+        node('clash', 'output', { output_label: 'Result (second)' }),
+      ], [
+        edge('e1', 'a', 'output', 'first', 'value'),
+        edge('e2', 'b', 'output', 'second', 'value'),
+        edge('e3', 'b', 'output', 'clash', 'value'),
+      ]),
+      { runtime: nowhere, registry, only: new Set(['b', 'second', 'clash']) },
+    );
+    // And a label that happens to be another's key is told apart the same way.
+    expect(result.outputs).toEqual({
+      'Result (second)': { value: 'beta' },
+      'Result (second) (clash)': { value: 'beta' },
+    });
+  });
 });
 
 describe('the AI default a graph carries', () => {
@@ -236,6 +286,25 @@ describe('the AI default a graph carries', () => {
     expect(calls).toEqual([{ provider: 'openai', model: 'gpt-4o-mini' }]);
   });
 
+  it('lends its model only to a node that calls the provider the model belongs to', async () => {
+    // A node pinned to OpenAI with its model left empty used to be sent the
+    // graph's qwen -- to OpenAI, which can only refuse it. Empty, the provider
+    // layer decides; the same provider named twice still gets the model.
+    const other = listening();
+    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'openai', ai_model: '' }), { runtime: other.runtime, registry });
+    expect(other.calls).toEqual([{ provider: 'openai', model: '' }]);
+
+    const same = listening();
+    await executeGraph(graphWith({ provider: 'lmstudio', model: 'qwen' }, { ai_provider: 'lmstudio', ai_model: '' }), { runtime: same.runtime, registry });
+    expect(same.calls).toEqual([{ provider: 'lmstudio', model: 'qwen' }]);
+
+    // A graph that names only a model means the machine's provider, which
+    // is not necessarily the one this node named.
+    const unnamed = listening();
+    await executeGraph(graphWith({ provider: 'default', model: 'qwen' }, { ai_provider: 'openai', ai_model: '' }), { runtime: unnamed.runtime, registry });
+    expect(unnamed.calls).toEqual([{ provider: 'openai', model: '' }]);
+  });
+
   it('changes nothing when the graph names nothing', async () => {
     const { runtime, calls } = listening();
     await executeGraph(graphWith({ provider: 'default', model: '' }, { ai_provider: 'default' }), { runtime, registry });
@@ -245,15 +314,18 @@ describe('the AI default a graph carries', () => {
 
 describe('a batch with failing items', () => {
   /** A per_item code node fed a list of three, whose runner fails on the word "bad". */
-  function graphOf(items: string[]): Graph {
+  function graphOf(items: string[], catches = false): Graph {
     return {
       metadata: { name: 'g', version: '1', ai_defaults: { provider: 'default', model: '' } } as Graph['metadata'],
       nodes: [
         { ...node('a', 'data', { data_value: items, data_format: 'structure' }), outputs: [{ id: 'output', name: 'O', kind: 'output', data_type: 'json', multi: true, required: false, description: '' }] },
         {
-          ...node('work', 'code', { code: 'function run(i) { return i; }', batch_mode: 'per_item' }),
+          ...node('work', 'code', { code: 'function run(i) { return i; }', batch_mode: 'per_item', ...(catches ? { catch_errors: true } : {}) }),
           inputs: [{ id: 'items', name: 'Items', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-          outputs: [{ id: 'out', name: 'Out', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
+          outputs: [
+            { id: 'out', name: 'Out', kind: 'output', data_type: 'any', multi: true, required: false, description: '' },
+            ...(catches ? [{ id: 'error', name: 'Error', kind: 'output' as const, data_type: 'text' as const, multi: false, required: false, description: '' }] : []),
+          ],
         },
       ],
       edges: [edge('e', 'a', 'output', 'work', 'items')],
@@ -263,8 +335,26 @@ describe('a batch with failing items', () => {
     ...nowhere,
     code: { run: async (_body, inputs) => { if (String(inputs.items).includes('bad')) throw new Error('boom'); return { out: inputs.items }; } },
   };
-  const workResult = async (items: string[]) =>
-    (await executeGraph(graphOf(items), { runtime: picky, registry })).node_results.find((r) => r.node_id === 'work')!;
+  const workResult = async (items: string[], catches = false) =>
+    (await executeGraph(graphOf(items, catches), { runtime: picky, registry })).node_results.find((r) => r.node_id === 'work')!;
+
+  it('puts the reason on the error port of a node that catches its failures, once for the node', async () => {
+    // It used to carry [null]: a list with a null for the failed item, which
+    // says nothing, and is not empty -- so what was wired to it ran on nothing.
+    const work = await workResult(['ok', 'bad'], true);
+    expect(work.status).toBe('partial');
+    expect(work.outputs.out).toEqual(['ok', null]);
+    expect(typeof work.outputs.error).toBe('string');
+    expect(work.outputs.error).toBe(work.error);
+    expect(work.outputs.error).toContain('1 of 2 items failed');
+    expect(work.outputs.error).toContain('boom');
+  });
+
+  it('leaves the error port of a node that catches its failures empty when nothing failed', async () => {
+    const work = await workResult(['ok', 'ok'], true);
+    expect(work.status).toBe('success');
+    expect(work.outputs.error).toBeUndefined();
+  });
 
   it('is partial, counted, with the first failure quoted, and the rest intact', async () => {
     const work = await workResult(['ok', 'bad', 'ok']);

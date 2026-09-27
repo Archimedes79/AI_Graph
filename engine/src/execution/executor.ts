@@ -94,6 +94,11 @@ export function memoryFeedbackEdges(
  * or an environment variable still wins, which is how one graph is moved to a
  * different provider without editing it -- and above the provider layer's own
  * fallback. A graph that names nothing changes nothing.
+ *
+ * A model belongs to its provider. A node that names its own provider and no
+ * model is lent the graph's model only when the graph names that same
+ * provider: the graph's Gemini model sent to OpenAI is a request that can only
+ * fail. Otherwise the model stays empty, and the provider layer decides.
  */
 export function withGraphDefaults(runtime: Runtime, graph: Graph): Runtime {
   const wanted = graph.metadata?.ai_defaults;
@@ -103,11 +108,14 @@ export function withGraphDefaults(runtime: Runtime, graph: Graph): Runtime {
   return {
     ...runtime,
     ai: {
-      complete: (request) => runtime.ai.complete({
-        ...request,
-        provider: request.provider && request.provider !== 'default' ? request.provider : (provider || request.provider),
-        model: request.model || model,
-      }),
+      complete: (request) => {
+        const pinned = request.provider && request.provider !== 'default' ? request.provider : '';
+        return runtime.ai.complete({
+          ...request,
+          provider: pinned || provider || request.provider,
+          model: request.model || (!pinned || pinned === provider ? model : ''),
+        });
+      },
     },
   };
 }
@@ -436,7 +444,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         const broken = iface ? mismatches(produced, iface) : [];
         results.push({
           node_id: nodeId, status, inputs, outputs: produced,
-          error: failures.length ? `${failures.length} of ${failures.total} items failed: ${failures[0]}` : null,
+          error: failures.length ? itemFailures(failures) : null,
           ...(broken.length ? { messages: broken.map((line) => `Does not match its output interface: ${line}`) } : {}),
         });
         runtime.report?.({ type: 'node_done', node_id: nodeId, status });
@@ -669,7 +677,7 @@ export async function executeNode(
     );
     return {
       node_id: nodeId, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
-      error: failures.length ? `${failures.length} of ${failures.total} items failed: ${failures[0]}` : null,
+      error: failures.length ? itemFailures(failures) : null,
     };
   } catch (error) {
     return {
@@ -745,12 +753,23 @@ function failureOutputs(node: GraphNode, message: string): Record<string, unknow
   return produced;
 }
 
+/** A fan-out that lost some items, in one sentence: how many, and the first reason. */
+function itemFailures(failures: string[] & { total: number }): string {
+  return `${failures.length} of ${failures.total} items failed: ${failures[0]}`;
+}
+
 /**
  * Run one node, fanning out if it asked to.
  *
  * A failing item contributes null on every declared port, keeping the results
  * index-aligned with their inputs, and its message is reported rather than
  * ending the batch: one bad row out of two thousand should cost one row.
+ *
+ * Except on the `error` port of a node that catches its failures. That port
+ * promises the reason, and a list with a null per failed item is no reason --
+ * it is a list nobody can read, and a non-empty one, so whatever is wired to
+ * the port runs on it. It carries the same sentence the node's result does,
+ * once for the node, the way a whole-node failure puts one message there.
  */
 async function runNode(
   element: NodeRunner<unknown>,
@@ -767,6 +786,7 @@ async function runNode(
   const items = batchItems(node, inputs);
   const produced: Record<string, unknown>[] = new Array(items.length);
   const failures = Object.assign([] as string[], { total: items.length });
+  const catches = element.catchesErrors(node);
   let next = 0;
   let done = 0;
 
@@ -779,7 +799,9 @@ async function runNode(
       } catch (error) {
         // One bad item must not take the other 499 down with it -- but it is
         // not nothing either: it is counted, and the first is quoted.
-        produced[index] = Object.fromEntries(node.outputs.map((p) => [p.id, null]));
+        produced[index] = Object.fromEntries(node.outputs
+          .filter((p) => !(catches && p.id === ERROR_PORT))
+          .map((p) => [p.id, null]));
         const message = error instanceof Error ? error.message : String(error);
         failures.push(`item ${index + 1}: ${message}`);
         runtime.report?.({ type: 'activity', node_id: node.id, message: `item ${index + 1}: ${message}` });
@@ -793,7 +815,9 @@ async function runNode(
   // Every item failed: that is the node failing, with its own message, not a
   // success made of nulls.
   if (items.length && failures.length === items.length) throw new Error(failures[0].replace(/^item 1: /, ''));
-  return { produced: mergeBatchOutputs(node, produced), failures };
+  const merged = mergeBatchOutputs(node, produced);
+  if (catches && failures.length) merged[ERROR_PORT] = itemFailures(failures);
+  return { produced: merged, failures };
 }
 
 /**
@@ -871,19 +895,34 @@ async function showDisplays(
   }
 }
 
-/** What the run produced, keyed the way the graph's output nodes asked. */
+/**
+ * What the run produced, keyed the way the graph's output nodes asked.
+ *
+ * Two output nodes may well be given one label -- every new one starts as
+ * "Result" -- and a run's result is not a place where one of them may quietly
+ * replace the other. The first keeps its label; one that comes later under a
+ * label already taken is told apart by its id, so a graph whose labels differ
+ * gets exactly the keys it always got.
+ *
+ * "First" in the graph, whether or not it produced anything this run: a round
+ * started by a page event, or one where the first stood still, would
+ * otherwise hand the second's value on under the first's key -- and whoever
+ * lays rounds over each other (a schedule) would lose the first's once more.
+ */
 function finalOutputs(
   nodes: GraphNode[],
   outputs: Map<string, Record<string, unknown>>,
   registry: Registry,
 ): Record<string, unknown> {
   const final: Record<string, unknown> = {};
+  const taken = new Set<string>();
   for (const node of nodes) {
     if (!registry.node(node.node_type)?.isResult) continue;
-    const produced = outputs.get(node.id);
-    if (!produced) continue;
     const label = String(node.config.output_label ?? '') || node.id;
-    final[label] = produced;
+    const key = taken.has(label) ? `${label} (${node.id})` : label;
+    taken.add(key);
+    const produced = outputs.get(node.id);
+    if (produced) final[key] = produced;
   }
   return final;
 }

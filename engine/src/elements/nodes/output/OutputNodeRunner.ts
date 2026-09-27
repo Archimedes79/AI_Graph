@@ -84,6 +84,8 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
         : present.map((v) => (typeof v === 'string' ? v : JSON.stringify(v))).join('\n');
       await runtime.files.write(target, content);
       result.written_path = target;
+    } else if (settings.mode === 'directory' && target) {
+      result.written_paths = await writeEach(target, values, runtime);
     }
     return result;
   }
@@ -91,12 +93,54 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `config.write_mode is none, file, directory or window; config.output_label names the window.`;
+    return `config.write_mode is none, window, file or directory: window shows the result in a window in the editor, `
+      + `file writes it to the file config.value names, directory writes each value to a file of its own in the folder config.value names. `
+      + `config.output_label names the result in the run's result and titles the window; give every output node its own.`;
   }
 
   override whatRuns(node: GraphNode): WhatRuns {
-    return this.engineRuns(this.config(node).mode === 'file'
-      ? 'Writes what arrives to its file and hands it on, with "written_path".'
-      : 'Hands on what arrives: the run\'s result, shown in a window or returned to whoever ran the graph.');
+    const { mode } = this.config(node);
+    if (mode === 'file') return this.engineRuns('Writes what arrives to its file and hands it on, with "written_path".');
+    if (mode === 'directory') {
+      return this.engineRuns('Writes each value that arrives -- each item of a list -- to a file of its own in its folder, and hands it on, with "written_paths".');
+    }
+    return this.engineRuns('Hands on what arrives: the run\'s result, shown in a window or returned to whoever ran the graph.');
   }
+}
+
+/**
+ * Write every value to a file of its own in *folder*, and say which files.
+ *
+ * A list is what a node run once per item hands on -- a summary per file of a
+ * folder -- so each item is a value of its own and gets a file of its own,
+ * numbered by its place in the list: the third file is the third item's even
+ * when the second failed and left a null, which writes nothing. Numbers are
+ * padded to the length of the list so the files sort in its order. Text is
+ * written as it is, as `.txt`; anything else as the JSON it is, as `.json`.
+ */
+async function writeEach(folder: string, values: Record<string, unknown>, runtime: Runtime): Promise<string[]> {
+  const written: string[] = [];
+  for (const [portId, value] of Object.entries(values)) {
+    const items = Array.isArray(value) ? value : [value];
+    const width = String(items.length).length;
+    for (const [index, item] of items.entries()) {
+      if (item === null || item === undefined) continue;
+      const name = Array.isArray(value) ? `${portId}_${String(index + 1).padStart(width, '0')}` : portId;
+      const text = typeof item === 'string';
+      const path = inFolder(folder, `${name}.${text ? 'txt' : 'json'}`);
+      await runtime.files.write(path, text ? item : JSON.stringify(item, null, 2));
+      written.push(path);
+    }
+  }
+  return written;
+}
+
+/**
+ * *name* inside *folder*, in the separator the folder is already written in.
+ * Spelled out rather than taken from `node:path`: an element also runs in the
+ * editor's browser tab, where there is no such module.
+ */
+function inFolder(folder: string, name: string): string {
+  const separator = folder.includes('\\') && !folder.includes('/') ? '\\' : '/';
+  return `${folder.replace(/[\\/]+$/, '')}${separator}${name}`;
 }

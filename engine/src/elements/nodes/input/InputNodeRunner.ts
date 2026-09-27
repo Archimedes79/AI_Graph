@@ -39,8 +39,23 @@ const SELECTOR_TEXTS: readonly TextFile[] = [
 export class InputNodeRunner extends NodeRunner<InputConfig> {
   readonly nodeType = 'input' as const;
 
-  override texts(): readonly TextFile[] {
-    return SELECTOR_TEXTS;
+  /**
+   * Only a folder listing keeps a selector in its folder, as `logic` says.
+   * A text or single-file input selects nothing, and a `select.js` beside it
+   * said that it did: its selector stays in the graph with its other settings.
+   *
+   * Except while the graph holds none of it. A save from before this kept the
+   * selector in its files whatever the mode, and took it out of the graph, so
+   * a node switched away from listing a folder may hold the selector somebody
+   * wrote for it only there. It is read in from those files, and the next save
+   * keeps it in the graph and tidies the files away. Asked of a node holding
+   * nothing -- which is how a save learns what it may tidy -- the names are
+   * the same as ever.
+   */
+  override texts(node: GraphNode): readonly TextFile[] {
+    if (this.config(node).mode === 'directory') return SELECTOR_TEXTS;
+    const holdsSome = SELECTOR_TEXTS.some((text) => node.config[text.field] !== undefined);
+    return holdsSome ? [] : SELECTOR_TEXTS;
   }
 
   config(node: GraphNode): InputConfig {
@@ -85,7 +100,7 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
         inputs: [path],
         outputs: [
           port('files', 'Files', 'output', 'file_path', true, 'Rooted file paths'),
-          port('count', 'Count', 'output', 'text'),
+          port('count', 'Count', 'output', 'number', false, 'How many files were listed'),
           ...error,
         ],
       };
@@ -125,9 +140,10 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const settings = this.config(node);
 
-    if (settings.mode === 'text') {
-      return { output: settings.value || inputs.value || inputs.path || '' };
-    }
+    // Text mode has no inputs to read: what it hands on is what it holds. A
+    // graph above answers it without running it (`given`), and a value asked
+    // for when the run starts is put where it holds its text.
+    if (settings.mode === 'text') return { output: settings.value };
 
     // The wired path wins over the configured one -- what the port promises
     // ("Override the configured path") and what the output node has always
