@@ -22,7 +22,7 @@
 // Everything else — what a node *does* — belongs to its element.
 
 import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeResult, NodeStatus } from '../graph.ts';
-import type { NodeRunner, Runners } from '../elements/NodeRunner.ts';
+import { resultKeys, type NodeRunner, type Runners } from '../elements/NodeRunner.ts';
 import { lent, type Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
 import { readFileInputs, type FileGraph } from './fileInputs.ts';
@@ -888,7 +888,7 @@ async function showDisplays(
  * "Result" -- and a run's result is not a place where one of them may quietly
  * replace the other. The first keeps its label; one that comes later under a
  * label already taken is told apart by its id, so a graph whose labels differ
- * gets exactly the keys it always got.
+ * gets exactly the keys it always got (`resultKeys`).
  *
  * "First" in the graph, whether or not it produced anything this run: a round
  * started by a page event, or one where the first stood still, would
@@ -901,14 +901,8 @@ function finalOutputs(
   registry: Runners,
 ): Record<string, unknown> {
   const final: Record<string, unknown> = {};
-  const taken = new Set<string>();
-  for (const node of nodes) {
-    const element = registry.node(node.node_type);
-    if (!element?.isResult) continue;
-    const label = element.resultLabel(node);
-    const key = taken.has(label) ? `${label} (${node.id})` : label;
-    taken.add(key);
-    const produced = outputs.get(node.id);
+  for (const [nodeId, key] of resultKeys(nodes, registry)) {
+    const produced = outputs.get(nodeId);
     if (produced) final[key] = produced;
   }
   return final;

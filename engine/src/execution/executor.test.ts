@@ -253,6 +253,31 @@ describe('executeGraph', () => {
       'Result (second) (clash)': { value: 'beta' },
     });
   });
+
+  it('keeps every output when a label is the key a later repeat would be given', async () => {
+    // With "Result (second)" before the second "Result", the second was keyed
+    // "Result (second)" too, and the clash's value was gone without a word.
+    const result = await executeGraph(
+      graph([
+        node('a', 'input', { input_mode: 'text', value: 'alpha' }),
+        node('b', 'input', { input_mode: 'text', value: 'beta' }),
+        node('c', 'input', { input_mode: 'text', value: 'gamma' }),
+        node('first', 'output', { output_label: 'Result' }),
+        node('clash', 'output', { output_label: 'Result (second)' }),
+        node('second', 'output', { output_label: 'Result' }),
+      ], [
+        edge('e1', 'a', 'output', 'first', 'value'),
+        edge('e2', 'b', 'output', 'second', 'value'),
+        edge('e3', 'c', 'output', 'clash', 'value'),
+      ]),
+      { runtime: nowhere, registry },
+    );
+    expect(result.outputs).toEqual({
+      Result: { value: 'alpha' },
+      'Result (second)': { value: 'gamma' },
+      'Result (second) 2': { value: 'beta' },
+    });
+  });
 });
 
 describe('the AI default a graph carries', () => {

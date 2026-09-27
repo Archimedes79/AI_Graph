@@ -14,6 +14,7 @@ import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execut
 import { RUN_PORT } from '../execution/triggers.ts';
 import { names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
+import { resultKeys } from '../elements/NodeRunner.ts';
 import { mismatches, portMisfit, readInterface } from '../execution/interface.ts';
 import { filePorts } from '../execution/fileInputs.ts';
 import { parseExamples } from '../execution/examples.ts';
@@ -169,21 +170,35 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
   return problems;
 }
 
-/** Output nodes that share a label, and the keys all but the first are handed on under. */
+/**
+ * Output nodes whose result is not handed on under their label: they share
+ * it, or it is the key another's result already has. Said with the keys the
+ * run really uses (`resultKeys`).
+ */
 function sharedResultLabels(graph: Graph): Problem[] {
+  const keys = resultKeys(graph.nodes, registry);
   const byLabel = new Map<string, string[]>();
   for (const node of graph.nodes) {
-    const element = registry.node(node.node_type);
-    if (!element?.isResult) continue;
-    const label = element.resultLabel(node);
+    if (!keys.has(node.id)) continue;
+    const label = registry.node(node.node_type)!.resultLabel(node);
     byLabel.set(label, [...(byLabel.get(label) ?? []), node.id]);
   }
-  return [...byLabel].filter(([, ids]) => ids.length > 1).map(([label, ids]) => ({
-    where: `nodes ${names(ids)}`,
-    problem: `These output nodes share the label "${label}". The run's result keeps each, but only "${ids[0]}" under "${label}": `
-      + `${ids.slice(1).map((id) => `"${label} (${id})"`).join(', ')} for the rest.`,
-    fix: 'Give every output node its own output_label.',
-  }));
+  const problems: Problem[] = [];
+  for (const [label, ids] of byLabel) {
+    const moved = ids.filter((id) => keys.get(id) !== label);
+    if (!moved.length) continue;
+    const holder = ids.find((id) => keys.get(id) === label);
+    const elsewhere = moved.map((id) => `"${keys.get(id)}"`).join(', ');
+    problems.push({
+      where: `${ids.length > 1 ? 'nodes' : 'node'} ${names(ids)}`,
+      problem: ids.length > 1
+        ? `These output nodes share the label "${label}". The run's result keeps each, but `
+          + `${holder ? `only "${holder}" under "${label}": ${elsewhere} for the rest.` : `under ${elsewhere}.`}`
+        : `Its label "${label}" is the key another output's result is handed on under, so the run's result keeps it under ${elsewhere}.`,
+      fix: 'Give every output node its own output_label.',
+    });
+  }
+  return problems;
 }
 
 /** The same problem, said about a graph that is inside a node. */

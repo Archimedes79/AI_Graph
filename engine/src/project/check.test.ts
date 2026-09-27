@@ -77,6 +77,25 @@ describe('what check finds in a graph', () => {
       fix: 'Give every output node its own output_label.',
     })]);
   });
+
+  it('names the keys the run really uses, where a label is the key a repeat would be given', () => {
+    // It said the repeat was under "Answer (also)" -- the key of the node
+    // labelled so, whose own value the run then dropped.
+    const made = graph();
+    made.nodes[2].config.output_label = 'Answer';
+    made.nodes.push(
+      { ...made.nodes[2], id: 'clash', config: { write_mode: 'window', output_label: 'Answer (also)' } },
+      { ...made.nodes[2], id: 'also', config: { write_mode: 'window', output_label: 'Answer' } },
+    );
+    made.edges.push(
+      { id: 'e3', source_node_id: 'say', source_port_id: 'output', target_node_id: 'also', target_port_id: 'value' },
+      { id: 'e4', source_node_id: 'say', source_port_id: 'output', target_node_id: 'clash', target_port_id: 'value' },
+    );
+    expect(problemsIn(made)).toEqual([expect.objectContaining({
+      where: 'nodes "show", "also"',
+      problem: expect.stringMatching(/only "show" under "Answer": "Answer \(also\) 2" for the rest/),
+    })]);
+  });
 });
 
 describe('what check finds in a setting that would silently do nothing', () => {

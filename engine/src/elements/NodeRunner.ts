@@ -349,3 +349,32 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   }
 
 }
+
+/**
+ * The key each result node's outputs are handed on under in a run's result,
+ * by node id: its label (`resultLabel`), or -- where an earlier node in graph
+ * order already has that key -- the label with the node's id after it, and a
+ * number after that while even that is taken.
+ *
+ * Decided over the whole graph, not over the nodes a round ran, so a node's
+ * key does not change with which ran before it; and asked by the run and by
+ * `check` alike, so what `check` says the keys are is what they are. Every key
+ * is checked against every key handed out before it: a label of the form
+ * "Result (second)" used to be given to a later "Result" too, and one of the
+ * two values was dropped from the result without a word.
+ */
+export function resultKeys(nodes: GraphNode[], elements: Runners): Map<string, string> {
+  const keys = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const node of nodes) {
+    const element = elements.node(node.node_type);
+    if (!element?.isResult || keys.has(node.id)) continue;
+    const label = element.resultLabel(node);
+    const told = `${label} (${node.id})`;
+    let key = taken.has(label) ? told : label;
+    for (let n = 2; taken.has(key); n += 1) key = `${told} ${n}`;
+    taken.add(key);
+    keys.set(node.id, key);
+  }
+  return keys;
+}
