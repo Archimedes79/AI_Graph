@@ -77,8 +77,8 @@ export default function Toolbar({
   const isProject = useGraphStore((s) => s.isProject);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
-  // Subscribe to the stack lengths, not to canUndo/canRedo: selecting a function
-  // never changes identity, so the buttons would never re-enable.
+  // Subscribe to the stack lengths, not to a function that reads them: selecting
+  // a function never changes identity, so the buttons would never re-enable.
   const undoAvailable = useGraphStore((s) => s.past.length > 0);
   const redoAvailable = useGraphStore((s) => s.future.length > 0);
   const executionResult = useGraphStore((s) => s.executionResult);

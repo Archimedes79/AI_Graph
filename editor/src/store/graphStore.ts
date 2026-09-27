@@ -75,7 +75,6 @@ export interface GraphStore {
   currentRunId: string | null;
 
   // UI state
-  selectedNodeId: string | null;
   editingNodeId: string | null;
 
   // Actions
@@ -103,7 +102,6 @@ export interface GraphStore {
   deleteNode: (nodeId: string) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
   setRFEdges: (edges: Edge[]) => void;
-  setSelectedNode: (nodeId: string | null) => void;
   setEditingNode: (nodeId: string | null) => void;
   /**
    * `ran` is the part of *result* that is new, when a page event re-ran only
@@ -112,8 +110,6 @@ export interface GraphStore {
    * conversation a second time.
    */
   setExecutionResult: (result: ExecutionResult | null, ran?: ExecutionResult) => void;
-  setIsExecuting: (v: boolean) => void;
-  setTextOutputWindows: (windows: { nodeId: string; label: string; content: string }[]) => void;
   closeTextOutputWindow: (nodeId: string) => void;
   loadGraph: (graph: Graph) => void;
   /**
@@ -158,8 +154,6 @@ export interface GraphStore {
   commit: () => void;
   undo: () => void;
   redo: () => void;
-  canUndo: () => boolean;
-  canRedo: () => boolean;
   /** Internal: replace the graph with a serialised snapshot (used by undo/redo). */
   applyGraphSnapshot: (json: string) => void;
   isDirty: () => boolean;
@@ -427,7 +421,6 @@ export const useGraphStore = create<GraphStore>()(
     executionResult: null,
     isExecuting: false,
     textOutputWindows: [],
-    selectedNodeId: null,
     editingNodeId: null,
     subgraphStack: [],
     savedSnapshot: null,
@@ -571,11 +564,6 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges = edges;
       }),
 
-    setSelectedNode: (nodeId) =>
-      set((state) => {
-        state.selectedNodeId = nodeId;
-      }),
-
     setEditingNode: (nodeId) =>
       set((state) => {
         state.editingNodeId = nodeId;
@@ -609,16 +597,6 @@ export const useGraphStore = create<GraphStore>()(
           const ran = result.node_results.find((r) => r.node_id === node.id && r.status === 'success');
           if (ran && Object.keys(ran.outputs ?? {}).length) node.config.output_schema = inferInterface(ran.outputs);
         }
-      }),
-
-    setIsExecuting: (v) =>
-      set((state) => {
-        state.isExecuting = v;
-      }),
-
-    setTextOutputWindows: (windows) =>
-      set((state) => {
-        state.textOutputWindows = windows;
       }),
 
     closeTextOutputWindow: (nodeId) =>
@@ -791,9 +769,6 @@ export const useGraphStore = create<GraphStore>()(
       get().applyGraphSnapshot(next);
     },
 
-    canUndo: () => get().past.length > 0,
-    canRedo: () => get().future.length > 0,
-
     /**
      * Restore a serialised graph without touching the history stacks or the
      * saved-snapshot marker -- undoing back to the last saved state must read as
@@ -813,10 +788,9 @@ export const useGraphStore = create<GraphStore>()(
         // Everything that names a node of the graph that was here. Left
         // standing, each points at something that may not exist any more: a
         // result against ids that now mean other nodes, a window from another
-        // graph's run floating over this one, a selection nobody can see.
+        // graph's run floating over this one.
         state.executionResult = null;
         state.editingNodeId = null;
-        state.selectedNodeId = null;
         state.textOutputWindows = [];
       });
     },
@@ -871,16 +845,16 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     runGraph: async (graph, trigger = null) => {
-      const { setIsExecuting, setExecutionResult, setTextOutputWindows } = get();
+      const { setExecutionResult } = get();
       // A page event runs part of the graph, so what the rest of the page
       // shows is still true and stays: pressing "Plot" must not blank the
       // summary beside it. A full run starts from a clean slate, as before.
       const previous = trigger ? get().executionResult : null;
-      setIsExecuting(true);
-      if (!trigger) {
-        setExecutionResult(null);
-        setTextOutputWindows([]);
-      }
+      set((state) => {
+        state.isExecuting = true;
+        if (!trigger) state.textOutputWindows = [];
+      });
+      if (!trigger) setExecutionResult(null);
       try {
         // Started as a background run and polled, rather than awaited as one
         // blocking request: that is what lets the toolbar name the node in
@@ -930,9 +904,11 @@ export const useGraphStore = create<GraphStore>()(
         // person closed it.
         const opened = collectTextOutputWindows(graph, fresh);
         const again = new Set(opened.map((w) => w.nodeId));
-        setTextOutputWindows(previous
-          ? [...get().textOutputWindows.filter((w) => !again.has(w.nodeId)), ...opened]
-          : opened);
+        set((state) => {
+          state.textOutputWindows = previous
+            ? [...state.textOutputWindows.filter((w) => !again.has(w.nodeId)), ...opened]
+            : opened;
+        });
       } catch (error) {
         setExecutionResult({
           status: 'error',

@@ -560,16 +560,16 @@ describe('a graph inside a node', () => {
   it('gives each level its own undo, and lets neither reach the other', () => {
     loadTestGraph([holder()]);
     store().openSubgraph('part');
-    expect(store().canUndo()).toBe(false);
+    expect(store().past).toHaveLength(0);
 
     store().addNode('output', { x: 0, y: 0 });
-    expect(store().canUndo()).toBe(true);
+    expect(store().past.length).toBeGreaterThan(0);
     store().undo();
     expect(store().rfNodes).toHaveLength(0);
 
     store().closeSubgraph();
     // Outside, the history is the one that was left here.
-    expect(store().canUndo()).toBe(false);
+    expect(store().past).toHaveLength(0);
     expect(store().rfNodes.map((n) => n.id)).toEqual(['part']);
   });
 
@@ -619,7 +619,7 @@ describe('a graph inside a node', () => {
 
     // One Ctrl+Z used to throw away everything built inside, because nothing
     // in there had ever been a step out here.
-    expect(store().canUndo()).toBe(true);
+    expect(store().past.length).toBeGreaterThan(0);
     const built = (store().rfNodes[0].data.graphNode.config.subgraph as Graph).nodes.length;
     expect(built).toBe(2);
     store().undo();
@@ -632,7 +632,7 @@ describe('a graph inside a node', () => {
     loadTestGraph([holder()]);
     store().openSubgraph('part');
     store().closeSubgraph();
-    expect(store().canUndo()).toBe(false);
+    expect(store().past).toHaveLength(0);
   });
 
   it('comes back out to the top, one level at a time', () => {
@@ -666,11 +666,9 @@ describe('a graph inside a node', () => {
   it('leaves nothing of the level behind when it swaps', () => {
     loadTestGraph([holder()]);
     useGraphStore.setState({
-      selectedNodeId: 'part',
       textOutputWindows: [{ nodeId: 'part', label: 'Result', content: 'from the level above' }],
     });
     store().openSubgraph('part');
-    expect(store().selectedNodeId).toBeNull();
     expect(store().textOutputWindows).toEqual([]);
   });
 
