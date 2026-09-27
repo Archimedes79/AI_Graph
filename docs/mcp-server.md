@@ -123,7 +123,7 @@ The server moves into its root when it starts, so a relative path inside a graph
 The assistant calls **`generate_graph`**:
 
 ```json
-{ "description": "Read data/sales.csv, count its rows, and show the count in a window.",
+{ "description": "Read data/sales.csv, count its rows, and show the count.",
   "save_as": "graphs/count_rows.json" }
 ```
 
@@ -131,17 +131,17 @@ The assistant calls **`generate_graph`**:
 { "model": "google / gemini-flash-latest",
   "saved": "graphs/count_rows.json",
   "problems": [],
-  "explanation": "An input node reads the file, a code node counts lines, an output node shows the result.",
+  "explanation": "An input node names the file, a code node reads it at its input and counts the lines, an output node is the result.",
   "graph": { "metadata": { "name": "Count rows" }, "nodes": ["…"], "edges": ["…"] } }
 ```
 
-Had the model wired the file's text from a port called `text`, nothing would have
-been written, and `problems` would say so:
+Had the model wired the path from a port called `text`, nothing would have been
+written, and `problems` would say so:
 
 ```json
 { "where": "edge \"e1\"",
   "problem": "Its source port \"text\" is not an output of node \"source\".",
-  "fix": "The ports of an input node are derived from its settings, not from what the document declares. Its outputs are: \"content\", \"path\". Wire to one of those, or change the settings that produce them." }
+  "fix": "The ports of an input node are derived from its settings, not from what the document declares. Its outputs are: \"output\". Wire to one of those, or change the settings that produce them." }
 ```
 
 The assistant fixes the edge, checks with **`validate_graph`** `{ "graph": { … } }` →
@@ -151,7 +151,7 @@ with **`run_graph`** `{ "path": "graphs/count_rows.json" }`:
 ```json
 { "status": "success",
   "nodes": [
-    { "id": "source", "status": "success", "outputs": { "content": "date,region,amount\n2024-01-02,north,120… (+48211 characters)", "path": "…" } },
+    { "id": "source", "status": "success", "outputs": { "output": "data/sales.csv" } },
     { "id": "rows",   "status": "success", "outputs": { "rows": 1204 } },
     { "id": "shown",  "status": "success", "outputs": { "value": 1204 } } ],
   "outputs": { "Rows": { "value": 1204 } } }

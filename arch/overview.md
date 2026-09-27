@@ -501,7 +501,7 @@ flowchart TD
 | Diagram node | Path | Notes |
 |---|---|---|
 | `Editor shell` | [`editor/src/App.tsx`](../editor/src/App.tsx), [`main.tsx`](../editor/src/main.tsx) | views (Graph · Page · Preview), open/save, drop a file |
-| `Tool page` | [`editor/src/runtime/`](../editor/src/runtime/) | `RuntimeApp.tsx`, `RuntimeAISettings.tsx` (read-only); [`boundary.test.ts`](../editor/src/runtime/boundary.test.ts) keeps panels and editing modules out |
+| `Tool page` | [`editor/src/runtime/`](../editor/src/runtime/) | `RuntimeApp.tsx`, `RuntimeAISettings.tsx` (read-only), `RunResult.tsx` (a tool without a page shows the run's result: each output node's values under its label); [`boundary.test.ts`](../editor/src/runtime/boundary.test.ts) keeps panels and editing modules out |
 | `Toolbar + dialogs` | [`editor/src/app/`](../editor/src/app/) | `Toolbar.tsx` (the one ▶ Run, on every tab; AI Graph, Generate, Deploy: the zip), `Sidebar.tsx` (the palette: every node but the page), `SettingsDialog.tsx`, `ResultsPanel.tsx`, `ViewTabs.tsx`; [`SubgraphTrail.tsx`](../editor/src/app/SubgraphTrail.tsx) (the breadcrumb into a node's graph and back out, which waits for a run in flight) |
 | `Graph canvas` | [`editor/src/canvas/GraphCanvas.tsx`](../editor/src/canvas/GraphCanvas.tsx), [`GraphNodeView.tsx`](../editor/src/canvas/GraphNodeView.tsx) | ReactFlow; [`ResultPreview.tsx`](../editor/src/canvas/ResultPreview.tsx) (what a node made last, drawn small under its port: a line, a count and its first row, a sketch, a thumbnail, or its error's first line), `nodeRemoval.ts`, `PortsEditor.tsx`, [`portIds.ts`](../editor/src/canvas/portIds.ts) (the port names the node dialog will not save: none, twice, the error port's) |
 | `Node editor` | [`editor/src/canvas/NodeEditor.tsx`](../editor/src/canvas/NodeEditor.tsx) | the node dialog: draws the element's own `Panel` — for a body-writing node the four steps (`authoring/NodeSteps`), into which it hands the port lists when the node is `stepped` — and `AdvancedPanel` folded under it; [`nodeDraft.ts`](../editor/src/canvas/nodeDraft.ts) (`withSetting`: a setting's change to the draft, its ports following, asked against the stored node so a wire keeps its port -- or a function of the setting, for a write that lands after a wait; `withPorts`: a ports edit, the examples' keys following the ports; `saveDraft`: Save, the wires following the ports and the description what the element publishes) |
@@ -514,7 +514,7 @@ flowchart TD
 | `Graph types` | [`editor/src/graph.ts`](../editor/src/graph.ts) | the engine's types plus the typed `NodeConfig` view |
 
 Not drawn: [`ui/`](../editor/src/ui/) (theme, `tone.ts`, `scheme.ts`, `Modal` with `hearsEscape`, `Markdown`) and
-[`dialogs/`](../editor/src/dialogs/) (`FileBrowserDialog`; `PathField`, a path box with 📂 Browse… wherever a path is asked for, and `FileTypesField`; `RequirementsDialog`, `OutputWindows`), used from several
+[`dialogs/`](../editor/src/dialogs/) (`FileBrowserDialog`; `PathField`, a path box with 📂 Browse… wherever a path is asked for, and `FileTypesField`; `RequirementsDialog`), used from several
 layers; and the store's and `guiWidgets.ts`'s direct imports
 of engine code (`@engine/graph.ts`, `@engine/elements/registry.ts`,
 `@engine/execution/triggers.ts`) — ports and triggers are the engine's answer, computed in

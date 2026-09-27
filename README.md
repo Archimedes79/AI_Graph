@@ -41,8 +41,8 @@ as a tool that runs on their machine: offline, on a local model, with no account
   summarises each one, an Output node that writes the results back to disk.
 - **Charts from your own data** — choose a CSV, see the chart: a page with a file picker
   and a chart, and one Code node that says what to plot; see [examples/population_plotter/](examples/population_plotter/).
-- **Local-LLM chat or report tool** — an AI node on Ollama/LM Studio fed by a file input,
-  paired with a text block on the page: a runnable front-end with zero UI code.
+- **Local-LLM chat or report tool** — an AI node on Ollama/LM Studio that reads a file
+  at its input, paired with a text block on the page: a runnable front-end with zero UI code.
 - **A graph as a standalone tool** — once it works in the editor, 🚀 Deploy hands a
   non-technical user or a CI job something that runs without the AI-Graph editor at all.
 
@@ -70,8 +70,9 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **Visual graph editor** — a ReactFlow canvas with undo/redo; drop a graph `.json` file
   or a project folder on the window to open it, or use **Open**; every example in
   `examples/` is a project folder.
-- **Eight node types** — Input (text/file/directory), AI, Code (JavaScript), Data,
-  Output, Trigger (the tool starting, a clock), Subgraph: a node that holds a graph of
+- **Eight node types** — Input (a text, or a folder's listing), AI, Code (JavaScript),
+  Data (a value kept between runs), Output (the run's result, under its name; a file or a
+  folder of it if asked), Trigger (the tool starting, a clock), Subgraph: a node that holds a graph of
   its own, so a graph grows in depth as well as in width — and the Page, one per graph,
   which its first block makes.
 - **One ▶ Run, and results in place** — the toolbar's ▶ Run runs the graph from any tab,
@@ -100,9 +101,9 @@ Nothing leaves the machine unless the graph itself sends it there.
   The toolbar counts items *within* the running node and says when a model has gone quiet,
   so a long batch is never mistaken for a hang — and a model that answers with nothing at
   all fails the node instead of quietly passing an empty string on.
-- **A project is a folder** — `flow.json` plus one folder per node under `nodes/`: code,
-  prompts and format contracts live there in `.js`/`.md` files, so a language server and
-  `git diff` both work on them.
+- **A project is a folder** — `flow.json` plus one folder per node under `nodes/`: code
+  and prompts live there in `.js`/`.md` files, so a language server and `git diff` both
+  work on them.
 - **A page** — built like a document, on the Page tab under the tool's name and
   description: type headings in place, press `/` to
   insert a chat, a file picker, a dropdown, a chart or a table, and deploy it together
@@ -117,9 +118,9 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
 - **A real editor** — code and prompts are written in CodeMirror, full-window on ⤢, or
   in your own editor with one click.
-- **Four steps, the same way everywhere** — an AI node, a code node and a data node are
-  each built in the same four steps: one example of what comes in, what comes out, what
-  it should do, and the body. Get the example from the graph (⟳) or a file (📂), press
+- **Four steps, the same way everywhere** — an AI node and a code node are each built in
+  the same four steps: one example of what comes in, what comes out, what it should do,
+  and the body. Get the example from the graph (⟳) or a file (📂), press
   ▶ Try it, see what comes out. The same values are
   what ✨ Generate is written and verified against, and ▶ Test runs every example the
   node keeps, a judge's included.

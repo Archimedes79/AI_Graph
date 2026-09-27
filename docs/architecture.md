@@ -182,7 +182,8 @@ role that had nowhere to live:
 | Was | Is now | Because |
 |---|---|---|
 | `WidgetGuiBuilder.View`, `ownsValue` | [`page/blocks.ts`](../editor/src/page/blocks.ts) | what the **page draws** — the one part of a widget a recipient operates |
-| `NodeGuiBuilder.create`, `settings`, `saved`, `showsResultWindow` | [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| `NodeGuiBuilder.create`, `settings`, `saved` | [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| `NodeGuiBuilder.showsResultWindow` | — | gone with the output node's window: a run's result is what its output nodes hand back, under their labels |
 | `WidgetGuiBuilder.clearValueAfterRun` | `WidgetRunner.clearsValueAfterRun` | what a **run** means for a block, the same family as `settle` |
 
 A node's middle role is empty by nature: the canvas is never delivered. A widget's is not,
@@ -282,7 +283,7 @@ engine/src                               editor/src
     schedule.ts  node.ts                   runtime/            the deployed tool's page
     lifecycle.ts     what is stopped, in order
     editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal
-                                           dialogs/            FileBrowserDialog, PathField, RequirementsDialog, OutputWindows
+                                           dialogs/            FileBrowserDialog, PathField, RequirementsDialog
   ai/                providers · MCP · settings
   cli/               cli.ts  bundle.ts
 ```
@@ -388,13 +389,16 @@ graph** use.
 
 ## Authoring: one loop for every node that writes
 
-Every node that has a body — an AI node's prompt, a code node, a data node's format — is
-written the same way, in four steps (`authoring/FourSteps`, drawn by `NodeSteps`). A block
-on a page has none: a chart, a table or an image shows what arrives, a folder picker lists
-its folder, and what reshapes a value or chooses some of the files is a code node wired in
-before or after it. The block's dialog is its settings, and for a display block one
-sentence of what it shows (`DisplayWidgetRunner.draws`, the same words the node wired into
-it is told).
+Every node that has a body — an AI node's prompt, a code node — is written the same way,
+in four steps (`authoring/FourSteps`, drawn by `NodeSteps`). A block on a page has none: a
+chart, a table or an image shows what arrives, a folder picker lists its folder, and what
+reshapes a value or chooses some of the files is a code node wired in before or after it.
+The block's dialog is its settings, and for a display block one sentence of what it shows
+(`DisplayWidgetRunner.draws`, the same words the node wired into it is told). Nor do the
+nodes that are values: an input is a text or a folder's listing, a data node its kind and
+what it holds, an output the run's result under its label (and a file or folder of it, if
+asked) — their dialogs are those settings, and a file is read nowhere but at the input of
+the node that wants its text.
 
 ```
 1 what comes in:  ports + ONE example   ⟳ from the graph · 📂 from a file · "run once per item"

@@ -109,10 +109,12 @@ elsewhere in the browser that found the port.
 ### What a bundle carries
 
 The graph, a verbatim copy of the engine, the page when the graph has one — and **the
-files the graph starts on**: what its file pickers and input nodes name as defaults, copied
+files the graph starts on**: what its file pickers and folder inputs name as defaults, copied
 to the same relative place, so a tool handed to someone opens on its example data rather
 than on "no such file". Only relative paths inside the project are carried; an absolute
 path, or anything over 50 MB, is listed in the bundle's README as the recipient's to bring.
+A text input is a text to a bundle, even one holding a file's path for the node that reads
+it: pick such a file on the tool's page, or have its recipient bring it.
 The launchers `cd` into the bundle first, so those relative paths mean the same there.
 They are the same pair the downloadable editor ships (`engine/src/cli/launchers.ts`): they
 check for Node 24 before starting and say so when it is missing or too old, `run.sh` comes
