@@ -130,15 +130,20 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
 
   // A graph inside a node hands its answer to the node above it, which is
   // somewhere for the answer to go: what this asks for is an output node, and
-  // in there an output node *is* a port.
-  if (!graph.nodes.some((node) => registry.node(node.node_type)?.isResult || registry.node(node.node_type)?.hasInterface)) {
+  // in there an output node *is* a port. A page is its blocks: a page node
+  // with none shows nobody anything, as a delivered tool draws nothing on it.
+  const shows = (node: GraphNode): boolean => {
+    const element = registry.node(node.node_type);
+    return !!element && (element.isResult || (element.hasInterface && element.blocks(node).length > 0));
+  };
+  if (!graph.nodes.some(shows)) {
     problems.push(inside ? {
       where: `${inside}graph`,
       problem: 'Nothing comes out: a graph inside a node hands its answer up through its output nodes, and there are none.',
       fix: 'Add an "output" node inside and wire the result into it. Each one is an output port on the node that holds this graph.',
     } : {
       where: 'graph',
-      problem: 'Nothing a person can see: there is no gui node and no output node, so a run computes its answer and shows nobody.',
+      problem: 'Nothing a person can see: there is no output node, and no page with a block on it, so a run computes its answer and shows nobody.',
       fix: 'End every branch in an "output" node -- the run\'s result, under its label; config.write_mode "file" or "directory" writes it too -- or in a "gui" node with a block that displays the value.',
     });
   }

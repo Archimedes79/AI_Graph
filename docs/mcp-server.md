@@ -78,8 +78,8 @@ inline.
 is not there, or to a port the node does not have — checked against the ports the
 engine *derives* for `input` and `gui` nodes, not the ones the document claims, with
 `__run` accepted everywhere; a cycle that does not pass through a node that
-remembers; a code node with no `config.code`; and a graph with no `gui` and no
-`output` node, which computes its answer and shows nobody.
+remembers; a code node with no `config.code`; and a graph with no `output` node
+and no `gui` node with a block on it, which computes its answer and shows nobody.
 
 `run_graph`'s `inputs` are keyed by node id, or `nodeId::blockId` for a block on a
 page — the same keys as `--inputs` on the command line. `trigger` is

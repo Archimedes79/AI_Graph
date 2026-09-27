@@ -79,6 +79,21 @@ describe('what check finds in a graph', () => {
     })]);
   });
 
+  it('finds nothing a person can see where the page has no blocks: a page is its blocks', () => {
+    // A page node whose last block was removed counted as something to see,
+    // and a delivered tool drew nothing on it.
+    const made = graph();
+    made.nodes = made.nodes.filter((node) => node.id !== 'show');
+    made.edges = made.edges.filter((edge) => edge.target_node_id !== 'show');
+    made.nodes.push(...parseGraph({ metadata: { name: 'x' }, nodes: [{ id: 'page', node_type: 'gui', label: 'Page', config: { gui_widgets: [] } }], edges: [] }).nodes);
+    expect(problemsIn(made)).toEqual([expect.objectContaining({
+      where: 'graph',
+      problem: 'Nothing a person can see: there is no output node, and no page with a block on it, so a run computes its answer and shows nobody.',
+    })]);
+    made.nodes[made.nodes.length - 1].config.gui_widgets = [{ id: 'answer', kind: 'text_io', mode: 'output', label: 'Answer' }];
+    expect(problemsIn(made)).toEqual([]);
+  });
+
   it('finds a second page: a graph is one tool, with one page', () => {
     const page = (id: string, block: string) => ({ id, node_type: 'gui', label: 'Page', inputs: [], outputs: [],
       config: { gui_widgets: [{ id: block, kind: 'text_io', mode: 'output', label: block }] } });
