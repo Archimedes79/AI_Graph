@@ -506,7 +506,9 @@ the same four steps:
   wired from something that hands on paths — read as a run reads it when *read file
   contents* is on) — kept relative to the folder the editor runs in — and otherwise what
   the file says, parsed when it is JSON. Typing is editing what they filled. A node with
-  no inputs has no example: Try it runs it on nothing.
+  no inputs has no example: Try it runs it on nothing. A file selector's example is its
+  folder's listing, which is what its code is handed: **⟳ List them** lists the folder the
+  way a run does, and it is what ✨ writes the selector against.
 - **▶ Try it**, under the body in step 4, runs just this element on that example, through
   the same steps a run takes (the graph's default model, wired files read into text, one
   call per item). Nothing is saved and nothing downstream runs. An AI node shows the
