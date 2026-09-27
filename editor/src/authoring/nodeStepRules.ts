@@ -116,6 +116,18 @@ function asOutcome(outputs: Record<string, unknown> | undefined): string {
 }
 
 /**
+ * What one result says of the body: how it failed, or what it gave -- or both,
+ * where it ended `partial`: a failure the node caught onto its error port, or
+ * a run per item that lost some of its items. Read as a success, neither was
+ * offered ✨ Fix, and a change was never told the error.
+ */
+function saidOf(result: { status: string; outputs?: Record<string, unknown>; error?: string | null }): { outcome?: string; error?: string } {
+  if (result.status === 'error') return { error: result.error || 'It failed, and gave no reason.' };
+  const outcome = asOutcome(result.outputs);
+  return result.status === 'partial' && result.error ? { outcome, error: result.error } : { outcome };
+}
+
+/**
  * What came of the body, as a change to it is asked with ("Say what to
  * change", ✨ Fix): from the try on screen -- what came out, or how it failed,
  * and what it falls short of (*gaps*, the judge's word) -- or, with none, from
@@ -128,16 +140,13 @@ export function whatCameOf(
   const result = tried?.result;
   if (result && result.status !== 'skipped') {
     const problems = [...(gaps ?? []), ...(tried?.judged ? [`judged by a model: ${tried.judged}`] : [])];
-    const error = result.status === 'error' ? result.error || 'It failed, and gave no reason.' : '';
-    return {
-      said: { ...(error ? { error } : { outcome: asOutcome(result.outputs) }), ...(problems.length ? { problems } : {}) },
-      failed: !!error || problems.length > 0,
-    };
+    const said = saidOf(result);
+    return { said: { ...said, ...(problems.length ? { problems } : {}) }, failed: !!said.error || problems.length > 0 };
   }
-  if (!tried && (lastRun?.status === 'error' || lastRun?.status === 'success')) {
-    const error = lastRun.status === 'error' ? lastRun.error || 'It failed, and gave no reason.' : '';
+  if (!tried && lastRun && lastRun.status !== 'skipped') {
+    const said = saidOf(lastRun);
     const ran = Object.keys(lastRun.inputs ?? {}).length ? { values: lastRun.inputs, origin: 'the last run' } : undefined;
-    return { said: error ? { error } : { outcome: asOutcome(lastRun.outputs) }, failed: !!error, ...(ran ? { sample: ran } : {}) };
+    return { said, failed: !!said.error, ...(ran ? { sample: ran } : {}) };
   }
   return undefined;
 }

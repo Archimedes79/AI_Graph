@@ -96,6 +96,21 @@ describe('▶ Try it', () => {
     expect(whatCameOf(null, undefined, undefined)).toBeUndefined();
   });
 
+  it('offers ✨ Fix for a failure the node caught and for a run per item that lost items, and sends the error', () => {
+    // catch_errors: the executor answers `partial`, null outputs and the message on `error`.
+    const message = 'TypeError: inputs.input.split is not a function';
+    const caught = { result: { status: 'partial', outputs: { output: null, error: message }, error: message } };
+    expect(whatCameOf(caught, undefined, undefined)).toEqual({ said: { outcome: 'null', error: message }, failed: true });
+    // Per item: 2 of 5 items failed, and what the rest gave.
+    const partly = { result: { status: 'partial', outputs: { output: ['A', null, 'C', null, 'E'] }, error: '2 of 5 items failed: boom' } };
+    expect(whatCameOf(partly, undefined, undefined)).toMatchObject({ failed: true, said: { error: '2 of 5 items failed: boom' } });
+    // A last run that ended partial is what came of the body too, on the inputs it came of.
+    const run = { node_id: 'n', status: 'partial' as const, inputs: { input: 'x' }, outputs: { output: null }, error: 'boom' };
+    expect(whatCameOf(null, undefined, run)).toEqual({
+      said: { outcome: 'null', error: 'boom' }, failed: true, sample: { values: { input: 'x' }, origin: 'the last run' },
+    });
+  });
+
   it('says how the other examples did in one line, which replaced a ▶ Test of its own', () => {
     const passed = { title: 'Two', status: 'pass' as const, details: [] };
     expect(othersLine([])).toBe('');
