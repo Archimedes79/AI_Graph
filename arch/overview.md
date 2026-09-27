@@ -139,7 +139,7 @@ flowchart LR
 Also related, not drawn:
 
 - `body.ts`: [`engine/src/elements/body.ts`](../engine/src/elements/body.ts), `runBody`: the one way an authored body runs *on Node* — `run(inputs, node)`, sandboxed, with `node.llm`. The one exception is a chart's `draw(data, window)`, which runs in a browser Web Worker: see [`plot_window/draw.ts`](../editor/src/elements/widgets/plot_window/draw.ts)
-- `times.test.ts`: [`engine/src/elements/times.test.ts`](../engine/src/elements/times.test.ts) · [`editor/…`](../editor/src/elements/times.test.ts), build time and run time inside one class: the bars, the order, and that no run reaches a build-time member
+- `times.test.ts`: [`engine/src/elements/times.test.ts`](../engine/src/elements/times.test.ts) · [`editor/…`](../editor/src/elements/times.test.ts), build time and run time inside one class: the bars, the order, and (in the engine) that no run reaches a build-time member; in the editor, that a `GuiBuilder`'s run-time bar is empty, with `runtime/boundary.test.ts` holding that a tool never loads one
 
 Shared by elements, not drawn: [`authoring/generation.ts`](../engine/src/authoring/generation.ts)
 and [`authoring/logic.ts`](../engine/src/authoring/logic.ts) on the engine side;

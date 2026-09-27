@@ -188,10 +188,10 @@ because the page is. `nodeKinds.ts` belongs in the engine beside `NodeRunner.con
 keeps it in the editor for now is `NodeConfig`, the one spelled-out settings shape, and
 moving that is a step of its own.
 
-This is why `times.test.ts` can now hold that a tool asks a `GuiBuilder` for **nothing at all**,
-with no exception for the shared store — and why
-[`runtime/boundary.test.ts`](../editor/src/runtime/boundary.test.ts) can hold the stronger
-thing on top: neither element registry is *reachable* from the tool's entry point. Before
+This is why the editor's `times.test.ts` can hold that a `GuiBuilder`'s run-time bar is
+**empty**, and why [`runtime/boundary.test.ts`](../editor/src/runtime/boundary.test.ts) can
+hold, with no exception for the shared store, that no `GuiBuilder` class and neither element
+registry is even *reachable* from the tool's entry point. Before
 that, the store was the one module both hosts share and the one allowed to reach into the
 builder, so the builder was in every bundle. Measured on the import graph: what
 `runtime/main.tsx` reaches fell from 80 modules to 45.
