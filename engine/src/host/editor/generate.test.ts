@@ -216,11 +216,19 @@ describe('an input definition', () => {
     expect(ai.asked[0].prompt).toContain('Example files:\nNone.');
   });
 
+  it('is shown the shape it is written in, the keys in double quotes -- not only told "plain JSON"', async () => {
+    const ai = scripted([js('module.exports = { "text": "a", "top": 3 };')]);
+    await generate({ node: node('code', {}, { inputs: ['text', 'top'] }), write: 'input' }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain('shaped like this:\n\n/** @typedef {Object} Input @property {…} text … @property {…} top … */\nmodule.exports = { "text": …, "top": … };\n\n');
+    expect(sent).toContain('as plain JSON: double-quoted keys and strings, no comments, no trailing commas.');
+  });
+
   it('is told what the graph hands it -- a data node\'s value -- and to follow it, so the keys are not made up', async () => {
     // Tool 3 of the review: capitals held by a data node, sorted by a code node into a table. Told only
     // "Example files: None.", ✨ Input wrote Capital/Country/Population, and the table got one empty row.
-    const held = '"Capitals" (port "output"), which hands on: structure: Ten European capitals with their population. '
-      + 'It holds: [{"capital":"Paris","country":"France","population":2102650},{"capital":"Rome","country":"Italy","population":2749031}]';
+    const held = '"Capitals" (port "output"), which hands on: structure: Ten European capitals with their population -- '
+      + 'it holds: [{"capital":"Paris","country":"France","population":2102650},{"capital":"Rome","country":"Italy","population":2749031}]';
     const ai = scripted([js('module.exports = { "input": [{ "capital": "Paris", "country": "France", "population": 2102650 }] };')]);
     await generate({ node: node('code', {}, { inputs: ['input'], outputs: ['output'] }), write: 'input', input_sources: { input: held } }, deps(ai));
     const sent = ai.asked[0].prompt;
@@ -256,9 +264,21 @@ describe('an output definition', () => {
   it('is written keeping the outputs other nodes are wired to, and asked again where it drops one', async () => {
     const ai = scripted([js('module.exports = { "count": 2 };'), js('module.exports = { "lines": 2 };')]);
     const reply = await generate({ node: node('code', { input_definition: INPUT }), write: 'output', output_targets: { lines: '"Page"' } }, deps(ai));
-    expect(ai.asked[0].prompt).toContain('Keep those ids -- "lines" is wired to other nodes');
+    expect(ai.asked[0].prompt).toContain('Now it has "lines". Keep "lines": it is wired to other nodes, which read it by that id.');
     expect(ai.asked[1].prompt).toContain('It leaves out "lines", which other nodes are wired to');
     expect(reply.result).toBe('module.exports = { "lines": 2 };');
+  });
+
+  it('names one output for each thing the description asks the node to hand on, and is shown the shape in double quotes', async () => {
+    // Tool 2 of the review: "say its mood in one word, and the reason" kept the one output "output".
+    const ai = scripted([js('module.exports = { "mood": "calm", "reason": "It says so." };')]);
+    const mood = { ...node('ai', {}, { inputs: ['prompt'], outputs: ['output'] }), description: 'Read the text and say its mood in one word, and the reason in one line.' };
+    await generate({ node: mood, write: 'output' }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain('/** @typedef {Object} Output @property {…} output … */\nmodule.exports = { "output": … };');
+    expect(sent).toContain('one for each thing the description asks it to hand on -- "its mood, and the reason" are two outputs, "mood" and "reason".');
+    expect(sent).toContain('Now it has "output", and nothing is wired to it yet: name each by what it holds.');
+    expect(sent).toContain('as plain JSON: double-quoted keys and strings, no comments, no trailing commas.');
   });
 });
 

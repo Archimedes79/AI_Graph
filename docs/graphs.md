@@ -270,7 +270,10 @@ names -- anything else in braces is sent as written:
 | `{Output Files}` | for ✨ Output: the files it is given, the same way |
 
 After the prompt the engine adds a frame of its own, which is not yours to edit: the
-file's format, how to answer, the keys the code must return -- and that a missing or empty
+file's format -- for a definition, its two lines with the keys in double quotes,
+`module.exports = { "input": … };`, and plain JSON after them -- how to answer, the keys
+the code must return, that output.js names one output for each thing the text asks the
+node to hand on ("its mood, and the reason" are two) -- and that a missing or empty
 input is answered with what to do rather than a failure (a chart gets a figure with no
 points and a title saying what to choose).
 

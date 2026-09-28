@@ -164,6 +164,21 @@ interface Shape {
 
 const quoted = (ids: string[]): string => ids.map((id) => `"${id}"`).join(', ');
 
+/** Said of every definition's example: what the engine reads without running it. */
+const PLAIN_JSON = 'plain JSON: double-quoted keys and strings, no comments, no trailing commas';
+
+/**
+ * The two lines a definition is shaped as, keyed by *ids*: its JSDoc, then its
+ * example with the keys in double quotes. Shown, not only said -- told "plain
+ * JSON", a model still wrote `{ input: … }` in three presses of four, and each
+ * cost a second call to correct.
+ */
+function definitionSkeleton(type: 'Input' | 'Output', ids: string[]): string {
+  const keys = ids.length ? ids : [type.toLowerCase()];
+  return `/** @typedef {Object} ${type} ${keys.map((id) => `@property {…} ${id} …`).join(' ')} */\n`
+    + `module.exports = { ${keys.map((id) => `"${id}": …`).join(', ')} };`;
+}
+
 /**
  * What a body is told about the empty window as well as the full one: a page
  * is drawn before anything was chosen, and a node that fails on nothing shows
@@ -184,13 +199,13 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode, restating: boole
   const nothingElse = restating ? ', then the node\'s text restated as asked above, and nothing else' : ' and nothing else';
   switch (kind) {
     case 'input': {
-      lines.push('Answer with the whole file input.js, in one ```js block and nothing else:');
       if (!inputs.length) {
-        lines.push('- it has no inputs: `/** @typedef {Object} Input */` and `module.exports = {};`.');
+        lines.push('Answer with the whole file input.js, in one ```js block and nothing else. It has no inputs: `/** @typedef {Object} Input */` and `module.exports = {};`.');
         break;
       }
-      lines.push(`- first a JSDoc comment: \`@typedef {Object} Input\`, then one \`@property {type} <id> <what it is>\` for each input -- ${quoted(inputs)} -- saying its general format, as any value it may be handed has it;`,
-        '- then `module.exports = <example>;`: one small, realistic example of what one call is handed, keyed by exactly those input ids, as plain JSON -- double-quoted keys and strings, no comments, no trailing commas.',
+      lines.push('Answer with the whole file input.js, in one ```js block and nothing else, shaped like this:', '', definitionSkeleton('Input', inputs), '',
+        `- the JSDoc: \`@typedef {Object} Input\`, then one \`@property {type} <id> <what it is>\` for each input -- ${quoted(inputs)} -- saying its general format, as any value it may be handed has it;`,
+        `- after \`module.exports =\`: one small, realistic example of what one call is handed, keyed by exactly those input ids, as ${PLAIN_JSON}.`,
         // A model names an input by what it holds -- "text" -- where the node's is "input", and the example then names nothing that arrives.
         `Those ids are the node's inputs as they are named, and what is wired in arrives under them: keep each as it is -- ${quoted(inputs)} -- even where another name would say more.`);
       if (reads.length) lines.push(`An input that reads a file (${quoted(reads)}) is handed the file's text: its example is text in that file's format -- a few lines of it -- never a path.`);
@@ -198,12 +213,16 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode, restating: boole
       break;
     }
     case 'output': {
-      lines.push('Answer with the whole file output.js, in one ```js block and nothing else:',
-        '- first a JSDoc comment: `@typedef {Object} Output`, then one `@property {type} <id> <what it holds>` for each output;',
-        '- then `module.exports = <example>;`: what one call returns for the example input, keyed by the outputs, as plain JSON -- double-quoted keys and strings, no comments, no trailing commas.');
-      lines.push(outputs.length
-        ? `Its keys are the node's outputs, which are ${quoted(outputs)} now. Keep those ids${wired.length ? ` -- ${quoted(wired)} ${wired.length > 1 ? 'are' : 'is'} wired to other nodes, which read ${wired.length > 1 ? 'them' : 'it'} by that id` : ''}, and add or drop one only where the description asks for it.`
-        : 'Its keys become the node\'s outputs: name each by what it holds.');
+      lines.push('Answer with the whole file output.js, in one ```js block and nothing else, shaped like this:', '', definitionSkeleton('Output', outputs), '',
+        '- the JSDoc: `@typedef {Object} Output`, then one `@property {type} <id> <what it holds>` for each output;',
+        `- after \`module.exports =\`: what one call returns for the example input, keyed by the outputs, as ${PLAIN_JSON}.`,
+        // Kept to the ids there were, a model answered "its mood, and the reason" on one output "output" (the review's tool 2).
+        'Its keys are the node\'s outputs: one for each thing the description asks it to hand on -- "its mood, and the reason" are two outputs, "mood" and "reason".');
+      if (outputs.length) {
+        lines.push(wired.length
+          ? `Now it has ${quoted(outputs)}. Keep ${quoted(wired)}: ${wired.length > 1 ? 'they are' : 'it is'} wired to other nodes, which read ${wired.length > 1 ? 'them' : 'it'} by that id.`
+          : `Now it has ${quoted(outputs)}, and nothing is wired to ${outputs.length > 1 ? 'them' : 'it'} yet: name each by what it holds.`);
+      }
       if (perItem) lines.push('It is what one call returns: the calls\' answers are collected into lists by themselves.');
       break;
     }
