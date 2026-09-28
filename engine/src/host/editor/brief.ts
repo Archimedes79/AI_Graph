@@ -2,17 +2,21 @@
 // graph hold (`authoring/prompts.ts` names them):
 //
 //     {Node Description}   the heading, the id and kind, then the text
-//     {Input Definition}   input.js as it is -- or, while there is none, each
-//                          input: its port, its type, where it is wired from
-//                          and what that node hands on
-//     {Output Definition}  output.js as it is -- or, while there is none, each
-//                          output: where it goes and what the node there wants
+//     {Input Definition}   input.js as it is, where it is written -- and after
+//                          it, always, each input as wired: its port, its
+//                          type, where it comes from and what arrives there
+//     {Output Definition}  output.js as it is, where it is written -- and after
+//                          it, always, each output as wired: where it goes and
+//                          what the node there wants
 //     {Context}            the graph around the node, as the editor says it
 //     {Example Files}      the files ✨ Input is given: each path, and the start of it
 //     {Output Files}       the files ✨ Output is given, the same way
 //
 // A definition is sent as the file says it: it is what the node was written
 // against, and a second wording of it would be a second thing to disagree.
+// The wiring follows it whether or not there is one: a chart wants a figure
+// after output.js was written too, and ✨ Output shown only the file it was
+// replacing wrote a chart config the chart could not draw.
 // What can be long is cut to a budget: the prompt has to leave a small local
 // model room to answer.
 
@@ -63,46 +67,61 @@ function perItem(node: GraphNode): boolean {
 }
 
 /**
- * What {Input Definition} says: the node's input.js, or -- while it has
- * none -- each input from its wiring: what arrives, in words, for a
- * definition to be written from.
+ * A definition as {Input Definition} and {Output Definition} say it: the file
+ * *written*, as it is, then *wiring* -- the ports as they are wired. While a
+ * node that keeps definitions has none, "None yet." says so; one that keeps
+ * none -- a data node -- is its wiring, without a heading of its own.
+ */
+function withWiring(node: GraphNode, written: string, wiring: string[]): string {
+  if (written) return `${written}\n\n${wiring.join('\n')}`;
+  const defines = registry.node(node.node_type)?.definitions(node) !== undefined;
+  return defines ? `None yet. ${wiring.join('\n')}` : wiring.slice(1).join('\n');
+}
+
+/** A port's own description, on one line. */
+const saidOf = (port: Port): string => port.description?.replace(/\s+/g, ' ').trim() ?? '';
+
+/**
+ * What {Input Definition} says: the node's input.js as it is, where it is
+ * written, and after it each input as wired -- its port, its type, where it
+ * comes from and what arrives there: what an input definition is written
+ * from, and what code is written to read.
  */
 export function inputDefinition(request: GenerateRequest, reads: string[]): string {
   const { node } = request;
-  const written = definitionsIn(node).input;
-  if (written.trim()) return written.trim();
-  if (!node.inputs.length) return 'It has no inputs: nothing is handed to it.';
-  const lines = ['None yet. Its inputs:'];
+  const written = definitionsIn(node).input.trim();
+  if (!node.inputs.length) return written || 'It has no inputs: nothing is handed to it.';
+  const lines = ['Its inputs, as wired:'];
   for (const port of node.inputs) {
     const type = typeWords(port, reads.includes(port.id));
-    const said = port.description?.replace(/\s+/g, ' ').trim();
+    const said = saidOf(port);
     lines.push(`- \`${port.id}\`${type ? ` (${type})` : ''}${said ? `: ${said}` : ''}`);
     const source = request.input_sources?.[port.id];
     lines.push(source ? `  from ${source}` : '  not wired yet');
   }
   if (perItem(node)) lines.push('A list arrives one item at a time: each call is handed one item.');
-  return lines.join('\n');
+  return withWiring(node, written, lines);
 }
 
 /**
- * What {Output Definition} says: the node's output.js, or -- while it has
- * none -- each output: where it goes and what the node there wants of it.
+ * What {Output Definition} says: the node's output.js as it is, where it is
+ * written, and after it each output as wired -- where it goes and what the
+ * node there wants of it: a chart's figure, a table's rows.
  */
 export function outputDefinition(request: GenerateRequest): string {
   const { node } = request;
-  const written = definitionsIn(node).output;
-  if (written.trim()) return written.trim();
+  const written = definitionsIn(node).output.trim();
   const outputs = node.outputs.filter((port) => port.id !== ERROR_PORT);
-  if (!outputs.length) return 'None yet, and it has no outputs yet.';
-  const lines = ['None yet. Its outputs:'];
+  if (!outputs.length) return written || 'None yet, and it has no outputs yet.';
+  const lines = ['Its outputs, as wired:'];
   for (const port of outputs) {
-    const said = port.description?.replace(/\s+/g, ' ').trim();
+    const said = saidOf(port);
     lines.push(`- \`${port.id}\`${said ? `: ${said}` : ''}`);
     const target = request.output_targets?.[port.id];
     lines.push(target ? `  to ${target}` : '  not wired yet');
   }
   if (perItem(node)) lines.push('What each call returns is collected into a list on every output.');
-  return lines.join('\n');
+  return withWiring(node, written, lines);
 }
 
 /**

@@ -23,8 +23,8 @@ import { textOutput } from './definition.ts';
 /** What a prompt may name, and what each is filled with: what the node and the graph hold. */
 export const VARIABLES = {
   'Node Description': 'Its heading, id and kind as "# <heading> (ID <id>, <kind> node)", then its text',
-  'Input Definition': 'input.js as it is -- or, while there is none, each input: its type, what it is, where it comes from',
-  'Output Definition': 'output.js as it is -- or, while there is none, each output and where it goes',
+  'Input Definition': 'input.js as it is, where it is written -- then each input as wired: its type, where it comes from, what arrives there',
+  'Output Definition': 'output.js as it is, where it is written -- then each output as wired: where it goes, what the node there wants',
   Context: 'The graph around the node, in words: what it is for, its pages, what is wired to what',
   'Example Files': 'For ✨ Input: the files it is given -- examples, a spec -- each path and the start of it',
   'Output Files': 'For ✨ Output: the files it is given, the same way',
@@ -44,18 +44,24 @@ const DESCRIBED = 'This is the user\'s node description:\n{Node Description}';
 export const STANDARD_PROMPTS: Record<PromptKind, string> = {
   input: `${DESCRIBED}
 
+Its input definition, and what the graph hands it:
+{Input Definition}
+
 Context:
 {Context}
 
 Example files:
 {Example Files}
 
-Task: write this node's input definition -- what arrives on each of its inputs, in general: the format any such input has, not only these examples -- and one small, realistic example of it, drawn from the example files where there are some.`,
+Task: write this node's input definition -- what arrives on each of its inputs, in general: the format any such input has, not only these examples -- and one small, realistic example of it, drawn from the example files where there are some. Follow what is wired where it says what arrives: an input fed by a node that holds a list of records is handed those records, keyed exactly as they are.`,
 
   output: `${DESCRIBED}
 
 Input definition:
 {Input Definition}
+
+Its output definition, and what the nodes it feeds want:
+{Output Definition}
 
 Context:
 {Context}
@@ -63,7 +69,7 @@ Context:
 Output files:
 {Output Files}
 
-Task: write this node's output definition -- what goes out on each of its outputs, fitting what the nodes it feeds want, the context and the output files where there are some -- and one example of it: what this node gives for the example input.`,
+Task: write this node's output definition -- what goes out on each of its outputs -- and one example of it: what this node gives for the example input. Follow what is wired where it says what the node there wants: a chart that wants a figure {kind, title, points} gets exactly that. Fit the context too, and the output files where there are some.`,
 
   code: `${DESCRIBED}
 

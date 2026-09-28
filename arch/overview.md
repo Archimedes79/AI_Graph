@@ -446,7 +446,7 @@ flowchart TD
 
 Not drawn: every handler also calls into `executor.ts`, `registry.ts` and `graph.ts`
 (see the [overview](#the-whole)); `zip.ts` is a small helper of `routes.ts`, `skeleton.ts` and
-`brief.ts` (the three variables of a node's `prompt.md`, filled and cut to a budget) of `generate.ts`, and
+`brief.ts` (the variables of a ✨'s prompt, filled -- a definition with its ports as wired after it -- and cut to a budget) of `generate.ts`, and
 [`host/browse.ts`](../engine/src/host/browse.ts) is what `serve.ts`'s browse route lists a folder with.
 
 ## Browser

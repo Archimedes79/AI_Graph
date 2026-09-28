@@ -167,16 +167,16 @@ describe('the prompt ✨ is sent', () => {
       output_targets: { lines: '"Page" (port "chart"), which wants what to plot' },
     }, deps(ai));
     const sent = ai.asked[0].prompt;
-    expect(sent).toContain('Input definition:\nNone yet. Its inputs:\n- `text` (a path: the node reads the file there, and is handed its text)\n  from "Page" (port "CSV file")');
-    expect(sent).toContain('Output definition:\nNone yet. Its outputs:\n- `lines`\n  to "Page" (port "chart"), which wants what to plot');
+    expect(sent).toContain('Input definition:\nNone yet. Its inputs, as wired:\n- `text` (a path: the node reads the file there, and is handed its text)\n  from "Page" (port "CSV file")');
+    expect(sent).toContain('Output definition:\nNone yet. Its outputs, as wired:\n- `lines`\n  to "Page" (port "chart"), which wants what to plot');
     expect(sent).toContain('"text" is handed the file\'s text, already read');
   });
 
-  it('sends the definitions as the files say them', async () => {
+  it('sends the definitions as the files say them, and what is wired after each', async () => {
     const ai = scripted([js('function run() { return { lines: 1 }; }')]);
     await generate({ node: node('code', { input_definition: INPUT, output_definition: OUTPUT }) }, deps(ai));
-    expect(ai.asked[0].prompt).toContain(`Input definition:\n${INPUT}`);
-    expect(ai.asked[0].prompt).toContain(`Output definition:\n${OUTPUT}`);
+    expect(ai.asked[0].prompt).toContain(`Input definition:\n${INPUT}\n\nIts inputs, as wired:\n- \`text\`\n  not wired yet`);
+    expect(ai.asked[0].prompt).toContain(`Output definition:\n${OUTPUT}\n\nIts outputs, as wired:\n- \`lines\`\n  not wired yet`);
   });
 
   it('no longer tells every code node what a chart takes -- only a chart downstream says so', async () => {
@@ -215,6 +215,18 @@ describe('an input definition', () => {
     await generate({ node: node('code'), write: 'input' }, deps(ai));
     expect(ai.asked[0].prompt).toContain('Example files:\nNone.');
   });
+
+  it('is told what the graph hands it -- a data node\'s value -- and to follow it, so the keys are not made up', async () => {
+    // Tool 3 of the review: capitals held by a data node, sorted by a code node into a table. Told only
+    // "Example files: None.", ✨ Input wrote Capital/Country/Population, and the table got one empty row.
+    const held = '"Capitals" (port "output"), which hands on: structure: Ten European capitals with their population. '
+      + 'It holds: [{"capital":"Paris","country":"France","population":2102650},{"capital":"Rome","country":"Italy","population":2749031}]';
+    const ai = scripted([js('module.exports = { "input": [{ "capital": "Paris", "country": "France", "population": 2102650 }] };')]);
+    await generate({ node: node('code', {}, { inputs: ['input'], outputs: ['output'] }), write: 'input', input_sources: { input: held } }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain(`Its input definition, and what the graph hands it:\nNone yet. Its inputs, as wired:\n- \`input\`\n  from ${held}`);
+    expect(sent).toContain('Follow what is wired where it says what arrives');
+  });
 });
 
 describe('an output definition', () => {
@@ -222,6 +234,23 @@ describe('an output definition', () => {
     const ai = scripted([js('module.exports = { "lines": 2 };')]);
     await generate({ node: node('code'), write: 'output', output_files: [{ path: 'spec.md', text: 'Lines: a count.' }] }, deps(ai));
     expect(ai.asked[0].prompt).toContain('Output files:\nspec.md:\nLines: a count.');
+  });
+
+  it('is told what the nodes it feeds want -- a chart\'s figure -- and to give exactly that, also where output.js is written already', async () => {
+    // Tool 1 of the review: a CSV charted. ✨ Output was told the chart's size only, wrote a chart
+    // library's config ({data, labels, type}), and pressed again rewrote that file without a word of the figure.
+    const wants = registry.widget('plot_window')!.receives(parseWidget({ id: 'plot_window', kind: 'plot_window' }))!;
+    const configured = 'module.exports = { "output": { "data": [1450], "labels": ["India"], "type": "bar" } };';
+    const ai = scripted([js('module.exports = { "output": { "kind": "bars", "title": "Population", "points": [{ "label": "India", "value": 1450 }] } };')]);
+    await generate({
+      node: node('code', { input_definition: 'module.exports = { "input": "Country,Population\\nIndia,1450" };', output_definition: configured }, { inputs: ['input'], outputs: ['output'] }),
+      write: 'output',
+      output_targets: { output: `"Page" (port "Chart"), which wants ${wants}` },
+    }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(wants).toContain('a figure {"kind": "bars"|"columns"|"line"|"donut", "title": string, "points": [...]}');
+    expect(sent).toContain(`Its output definition, and what the nodes it feeds want:\n${configured}\n\nIts outputs, as wired:\n- \`output\`\n  to "Page" (port "Chart"), which wants ${wants}`);
+    expect(sent).toContain('a chart that wants a figure {kind, title, points} gets exactly that');
   });
 
   it('is written keeping the outputs other nodes are wired to, and asked again where it drops one', async () => {
@@ -258,16 +287,23 @@ describe('an ai node\'s instructions', () => {
 describe('a data node\'s data', () => {
   it('is written as JSON where it holds structure, and refused where the model wrote none', async () => {
     const held = node('data', { data_format: 'structure' }, { inputs: ['input'], outputs: ['output'] });
-    const reply = await generate({ node: held }, deps(scripted(['```json\n{"count": 0}\n```'])));
+    const ai = scripted(['```json\n{"count": 0}\n```']);
+    const reply = await generate({ node: held }, deps(ai));
     expect(reply.result).toBe('{"count": 0}');
+    expect(ai.asked[0].prompt).toContain('Answer with what the node holds, in one ```json block, as plain JSON, and nothing else.');
     await expect(generate({ node: held }, deps(scripted(['```json\n{count: 0}\n```'])))).rejects.toThrow(/not JSON/);
   });
 
-  it('is the text itself where it holds text', async () => {
+  it('is the text itself where it holds text -- asked for as text, and told what it feeds without a word of definitions it has none of', async () => {
     const ai = scripted(['```text\nDear reader,\n```']);
-    const reply = await generate({ node: node('data', { data_format: 'text' }, { inputs: ['input'], outputs: ['output'] }) }, deps(ai));
+    const reply = await generate({
+      node: node('data', { data_format: 'text' }, { inputs: ['input'], outputs: ['output'] }),
+      output_targets: { output: '"Letter" (port "greeting")' },
+    }, deps(ai));
     expect(reply.result).toBe('Dear reader,');
-    expect(ai.asked[0].prompt).toContain('What it feeds:\nNone yet. Its outputs:');
+    expect(ai.asked[0].prompt).toContain('What it feeds:\n- `output`\n  to "Letter" (port "greeting")\n\nContext:');
+    expect(ai.asked[0].prompt).not.toContain('None yet');
+    expect(ai.asked[0].prompt).toContain('Answer with what the node holds, in one ```text block, the text itself, and nothing else.');
   });
 });
 

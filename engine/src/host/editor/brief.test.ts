@@ -17,14 +17,10 @@ const node = (config: Record<string, unknown> = {}): GraphNode => parseGraph({
 }).nodes[0];
 
 describe('{Input Definition}', () => {
-  it('is input.js as it is, while there is one', () => {
-    expect(inputDefinition({ node: node({ input_definition: '  module.exports = { "top": 3 };\n' }) }, [])).toBe('module.exports = { "top": 3 };');
-  });
-
-  it('is each input from its wiring while there is none: its type, what it is, where from', () => {
+  it('is each input as wired while there is no input.js: its type, what it is, where from', () => {
     const said = inputDefinition({ node: node({ batch_mode: 'per_item' }), input_sources: { files: '"Page" (port "Folder")' } }, ['files']);
     expect(said).toBe([
-      'None yet. Its inputs:',
+      'None yet. Its inputs, as wired:',
       '- `files` (a path: the node reads the file there, and is handed its text): Every file in the folder',
       '  from "Page" (port "Folder")',
       '- `top` (number)',
@@ -32,19 +28,45 @@ describe('{Input Definition}', () => {
       'A list arrives one item at a time: each call is handed one item.',
     ].join('\n'));
   });
+
+  it('is input.js as it is, and after it still each input as wired: what arrives there is not in the file', () => {
+    const said = inputDefinition({
+      node: node({ input_definition: '  module.exports = { "top": 3 };\n' }),
+      input_sources: { top: '"Capitals" (port "output"), which hands on: structure; it holds: [{"capital":"Paris"}]' },
+    }, []);
+    expect(said).toBe([
+      'module.exports = { "top": 3 };',
+      '',
+      'Its inputs, as wired:',
+      '- `files` (file_path): Every file in the folder',
+      '  not wired yet',
+      '- `top` (number)',
+      '  from "Capitals" (port "output"), which hands on: structure; it holds: [{"capital":"Paris"}]',
+    ].join('\n'));
+  });
 });
 
 describe('{Output Definition}', () => {
-  it('is each output while there is no output.js: where it goes and what is wanted there -- the error port is the executor\'s', () => {
+  it('is each output as wired while there is no output.js: where it goes and what is wanted there -- the error port is the executor\'s', () => {
     expect(outputDefinition({ node: node(), output_targets: { rows: '"Page" (port "table"), which wants rows' } })).toBe([
-      'None yet. Its outputs:',
+      'None yet. Its outputs, as wired:',
       '- `rows`',
       '  to "Page" (port "table"), which wants rows',
     ].join('\n'));
   });
 
-  it('is output.js as it is, while there is one', () => {
-    expect(outputDefinition({ node: node({ output_definition: 'module.exports = { "rows": [] };' }) })).toBe('module.exports = { "rows": [] };');
+  it('is output.js as it is, and after it still each output as wired: what the node there wants is not in the file', () => {
+    expect(outputDefinition({ node: node({ output_definition: 'module.exports = { "rows": [] };' }), output_targets: { rows: '"Page" (port "table"), which wants rows' } }))
+      .toBe('module.exports = { "rows": [] };\n\nIts outputs, as wired:\n- `rows`\n  to "Page" (port "table"), which wants rows');
+  });
+
+  it('is only the wiring for a node that keeps no definitions -- a data node: what it feeds', () => {
+    const data = parseGraph({
+      metadata: { name: 't' },
+      nodes: [{ id: 'held', node_type: 'data', label: 'Held', description: 'Capitals.', inputs: [port('input', 'input')], outputs: [port('output', 'output')], config: { data_format: 'structure' } }],
+      edges: [],
+    }).nodes[0];
+    expect(outputDefinition({ node: data, output_targets: { output: '"Sort" (port "input")' } })).toBe('- `output`\n  to "Sort" (port "input")');
   });
 });
 

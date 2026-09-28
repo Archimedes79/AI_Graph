@@ -23,6 +23,23 @@ describe('what ✨ is told of a node\'s neighbours', () => {
     expect(outputTargets('processor', nodes, wires, true).output).toContain('"Result map" (port "Update"), which wants what it stores: structure');
   });
 
+  it('tells what a data node holds, the start of it as JSON: its keys are what the node after it reads', () => {
+    const capitals = NODE_KINDS.data.create('capitals');
+    capitals.label = 'Capitals';
+    capitals.description = 'Ten European capitals with their population';
+    capitals.config.data_format = 'structure';
+    capitals.config.data_value = [{ capital: 'Paris', country: 'France', population: 2102650 }, { capital: 'Rome', country: 'Italy', population: 2749031 }];
+    const sorter = NODE_KINDS.code.create('sorter');
+    const said = () => inputSources('sorter', [capitals, sorter], [edge('capitals', 'sorter')], true).input;
+    expect(said()).toContain('structure: Ten European capitals with their population -- it holds: '
+      + '[{"capital":"Paris","country":"France","population":2102650},{"capital":"Rome","country":"Italy","population":2749031}]');
+    // A long one is cut, saying how much was left out; one that holds nothing says only what it is.
+    capitals.config.data_value = Array.from({ length: 100 }, (_, n) => ({ capital: `City ${n}`, population: n }));
+    expect(said()).toMatch(/it holds: \[\{"capital":"City 0","population":0\},[^]{500,}… \(\d+ more characters\)$/);
+    capitals.config.data_value = null;
+    expect(said()).toMatch(/structure: Ten European capitals with their population$/);
+  });
+
   it('describes a non-data upstream node too', () => {
     // The old version considered `data` nodes only, so this -- the commonest
     // wiring there is -- produced no context at all.

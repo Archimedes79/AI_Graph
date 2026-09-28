@@ -263,8 +263,8 @@ names -- anything else in braces is sent as written:
 | Variable | Filled with |
 |---|---|
 | `{Node Description}` | `# <heading> (ID <id>, <kind> node)`, then its text |
-| `{Input Definition}` | input.js as it is -- or, while there is none, each input: its type, what it is, where it is wired from |
-| `{Output Definition}` | output.js as it is -- or, while there is none, each output and where it goes |
+| `{Input Definition}` | input.js as it is, where it is written -- and after it, always, each input as wired: its type, where it comes from and what arrives there (a data node: the start of what it holds) |
+| `{Output Definition}` | output.js as it is, where it is written -- and after it, always, each output as wired: where it goes and what the node there wants (a chart: its points or a figure `{kind, title, points}`) |
 | `{Context}` | the graph around the node: its nodes in the order they run, the wires, the page with each block's size -- about 3 000 characters at most |
 | `{Example Files}` | for ✨ Input: the files it is given, each path and the start of it -- about 4 000 characters between them |
 | `{Output Files}` | for ✨ Output: the files it is given, the same way |

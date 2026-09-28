@@ -5,9 +5,13 @@ import { STANDARD_PROMPTS, VARIABLES, fillPrompt, nodeDescription, standardRunPr
 const named = (text: string): string[] => Object.keys(VARIABLES).filter((name) => text.includes(`{${name}}`));
 
 describe('the standard prompts', () => {
-  it('put the description together with what each ✨ is written from', () => {
-    expect(named(STANDARD_PROMPTS.input)).toEqual(['Node Description', 'Context', 'Example Files']);
-    expect(named(STANDARD_PROMPTS.output)).toEqual(['Node Description', 'Input Definition', 'Context', 'Output Files']);
+  it('put the description together with what each ✨ is written from -- ✨ Input and ✨ Output with what is wired too', () => {
+    expect(named(STANDARD_PROMPTS.input)).toEqual(['Node Description', 'Input Definition', 'Context', 'Example Files']);
+    expect(named(STANDARD_PROMPTS.output)).toEqual(['Node Description', 'Input Definition', 'Output Definition', 'Context', 'Output Files']);
+    expect(STANDARD_PROMPTS.input).toContain('what the graph hands it:\n{Input Definition}');
+    expect(STANDARD_PROMPTS.output).toContain('what the nodes it feeds want:\n{Output Definition}');
+    // What is wired is followed where it says what is wanted.
+    expect(STANDARD_PROMPTS.output).toContain('a chart that wants a figure {kind, title, points} gets exactly that');
     expect(named(STANDARD_PROMPTS.code)).toEqual(['Node Description', 'Input Definition', 'Output Definition', 'Context']);
     expect(named(STANDARD_PROMPTS.prompt)).toEqual(['Node Description', 'Input Definition', 'Output Definition', 'Context']);
     expect(named(STANDARD_PROMPTS.data)).toEqual(['Node Description', 'Output Definition', 'Context']);

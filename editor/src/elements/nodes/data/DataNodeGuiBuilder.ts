@@ -6,6 +6,9 @@ import { describeDataFormat } from './dataFormat';
 
 const DATA = new DataNodeRunner();
 
+/** How much of what a data node holds the nodes wired to it are told, in characters: enough for its keys and a few records. */
+const HELD_SHOWN = 600;
+
 export class DataNodeGuiBuilder extends NodeGuiBuilder {
   readonly nodeType = 'data';
 
@@ -45,9 +48,19 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
     return { ...node, config: { ...node.config, data_value: value } };
   }
 
-  /** Its kind, and what its text says it holds: what the nodes wired to it are told it hands on. */
+  /**
+   * Its kind, what its text says it holds, and the start of what it holds, as
+   * JSON: what the nodes wired to it are told it hands on. The value itself,
+   * since its keys are in it: told only "structure: ten capitals", ✨ Input
+   * wrote "Capital" where the records say "capital", and the table stayed empty.
+   */
   override describeOutput(node: GraphNode): string {
-    return describeDataFormat(node);
+    const said = describeDataFormat(node);
+    const value = this.restingValue(node);
+    if (value === null || value === undefined) return said;
+    const json = JSON.stringify(value) ?? '';
+    const start = json.length > HELD_SHOWN ? `${json.slice(0, HELD_SHOWN)}… (${json.length - HELD_SHOWN} more characters)` : json;
+    return `${said} -- it holds: ${start}`;
   }
 
   /** What it remembers, the start of it, under its ports. */

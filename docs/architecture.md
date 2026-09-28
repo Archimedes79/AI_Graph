@@ -470,8 +470,13 @@ naming variables -- `{Node Description}`, `{Input Definition}`, `{Output Definit
 `{Context}`, `{Example Files}`, `{Output Files}` (`VARIABLES` says what each is filled with)
 -- and a node keeps its own where someone changed it (`config.prompts`). The engine fills
 them from the request ([`host/editor/brief.ts`](../engine/src/host/editor/brief.ts)): a
-definition as the file says it, or while there is none each port from its wiring; the files
-✨ is given, read here, sharing about 4 000 characters; `{Context}`, the graph around the
+definition as the file says it, where it is written, and after it -- always -- each port as
+wired: where an input comes from and what arrives there (`input_sources`: the node before
+it says what it hands on, `NodeGuiBuilder.describeOutput` -- a data node the start of what
+it holds), where an output goes and what the node there wants (`output_targets`,
+`wantsOn` -- a chart its points or a figure). ✨ Input's standard prompt names the one,
+✨ Output's the other, and both say to follow what is wired. The files ✨ is given are
+read here, sharing about 4 000 characters; `{Context}`, the graph around the
 node, is the editor's to say ([`authoring/graphContext.ts`](../editor/src/authoring/graphContext.ts):
 the nodes in run order, the wires, the page with each block's size). After the prompt comes
 the engine's frame ([`host/editor/generate.ts`](../engine/src/host/editor/generate.ts)): the
