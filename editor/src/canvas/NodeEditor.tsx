@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { Graph, Port } from '@/graph';
 import { call } from '@/api/client';
 import { useGraphStore } from '@/store/graphStore';
@@ -38,7 +39,10 @@ interface NodeEditorProps {
  */
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const panel = useNodePanel(nodeId);
-  const graphNodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
+  // The nodes as their contents, compared one by one: a fresh list every time
+  // the store changed drew the panel anew on every tick of a run and every
+  // frame of a drag, when no node had changed.
+  const graphNodes = useGraphStore(useShallow((s) => s.rfNodes.map((item) => item.data.graphNode)));
   const graphEdges = useGraphStore((s) => s.rfEdges);
   const metadata = useGraphStore((s) => s.metadata);
   // The last run's per-node values: where the file an input definition is
