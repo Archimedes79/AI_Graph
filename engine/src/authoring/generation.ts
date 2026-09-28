@@ -21,8 +21,4 @@ export interface Generation {
   kind: GenerationKind;
   /** Where the body is kept: the same constant the element's `logic()` is built from, where it has one. */
   fields: LogicFields;
-  /** Shown when the node's text says nothing yet: it is what the body is written from. */
-  guard: string;
-  /** Shown when the generated body arrives. */
-  success: string;
 }

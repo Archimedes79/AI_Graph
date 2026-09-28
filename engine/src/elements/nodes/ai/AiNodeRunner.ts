@@ -152,11 +152,7 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
 
   /** Its instructions, written from its description and definitions. */
   override generation(): Generation {
-    return {
-      kind: 'prompt', fields: PROMPT_FIELDS,
-      guard: 'Say what this node should do first: its text is what its instructions are written from.',
-      success: '✅ Prompt written.',
-    };
+    return { kind: 'prompt', fields: PROMPT_FIELDS };
   }
 
   /** Always, whatever its body says: asking the model is what this node is. */
