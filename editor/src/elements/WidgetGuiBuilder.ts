@@ -2,7 +2,7 @@
 
 import type { ComponentType } from 'react';
 import type { GuiWidget, WidgetKind } from '@/graph';
-import { DEFAULT_WIDGET_SPAN } from '@/document/layout';
+import { BOX_TEXT, DEFAULT_WIDGET_SPAN } from '@/document/layout';
 import type { Tone } from '@/ui/tone';
 import { ElementGuiBuilder } from './ElementGuiBuilder';
 import { previewOf, type Preview } from './resultPreview';
@@ -69,6 +69,18 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<WidgetPanelProp
   abstract paletteEntries(): readonly PaletteEntry[];
 
   /**
+   * What a block of this kind is called in a sentence -- "a chart block", "a
+   * text input block" -- as ✨ is told the page ({Context}): the palette's
+   * name for the mode it is in, not the file format's kind.
+   */
+  called(widget: GuiWidget): string {
+    const mode = widget.mode || this.defaultMode;
+    const entries = this.paletteEntries();
+    const entry = entries.find((one) => (one.mode ?? this.defaultMode) === mode) ?? entries[0];
+    return (entry?.label ?? this.label).toLowerCase();
+  }
+
+  /**
    * The widget *is* its text: a heading, a paragraph. Selected on the page
    * being built, this takes its place, a box to type in where the words stand.
    */
@@ -81,6 +93,17 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<WidgetPanelProp
    */
   preview(value: unknown): Preview | undefined {
     return previewOf(value);
+  }
+
+  /**
+   * How the block draws the text of what arrives, in words for the node wired
+   * into it (`GuiNodeGuiBuilder.wantsOn`), so that node can write a title that
+   * fits or a summary that is read in the room there is. The text of a box on
+   * the page by default; a kind that draws its own says so from the constant
+   * its view draws with, and one that draws none says nothing.
+   */
+  textShown(): string | undefined {
+    return `${BOX_TEXT.fontSize} px text`;
   }
 
   /** Said under "⚡ Using this starts the graph", for a widget that can be told to. */

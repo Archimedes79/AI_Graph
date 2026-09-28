@@ -1,6 +1,6 @@
 {
   "label": "What to plot",
-  "description": "Reads the CSV and says what the chart should show",
+  "description": "Reads the CSV and says what the chart should show: bars of its first numeric column by the names in the first column, largest first.\nIt draws nothing itself -- the chart block on the page draws the figure.",
   "config": {
     "batch_mode": "whole_list"
   }

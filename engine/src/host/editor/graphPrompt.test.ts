@@ -117,6 +117,17 @@ describe('the graph prompt', () => {
     expect(registry.node('input')!.graphAuthorNote()).toContain('to keep only some of the files, wire a code node after it');
   });
 
+  it('says a node is its label and its description, and where each kind keeps what it runs', () => {
+    expect(GRAPH_SYSTEM).toContain('Every node is its label and its description');
+    for (const type of ['code', 'ai']) expect(registry.node(type)!.graphAuthorNote(), type).toMatch(/^its description says in words what it does/);
+    expect(registry.node('code')!.graphAuthorNote()).toContain('config.code holds it as JavaScript');
+    expect(registry.node('ai')!.graphAuthorNote()).toContain('config.output_definition');
+    // And the worked example does it: its code node says what it does in its description.
+    const code = parseGraph(example()).nodes.find((node) => node.node_type === 'code')!;
+    expect(code.description).toBe('Count the lines of the text.');
+    expect(code.config.prompt).toBeUndefined();
+  });
+
   it('says a graph has one page, which holds every block: a second one is a problem check names', () => {
     expect(GRAPH_SYSTEM).toContain('- gui: A graph has at most one gui node: its page, which holds every block.');
   });

@@ -13,14 +13,13 @@ export function useLiveGeneration(): AICall[] {
 }
 
 /**
- * Hand the transcript of a node dialog's ✨ to whatever draws its result.
+ * Hand the transcript of a node panel's ✨ to whatever draws its result.
  *
- * A context rather than a prop because the path from the dialog, which owns
- * `useGenerate`, down to the body that draws the message runs through the
- * node's own panel and the four steps (`NodeSteps`), which do nothing with it
- * but pass it on. A row of forwarding props like that is what let the ✨
- * button drift apart in the first place -- see `GeneratedBody`, the one
- * drawing of it now.
+ * A context rather than a prop because the path from the panel, which owns
+ * `useGenerate`, down to where the exchange is drawn runs through the node's
+ * own panel (`NodeDefinition`), which does nothing with it but pass it on. A
+ * row of forwarding props like that is what let the ✨ buttons drift apart in
+ * the first place.
  */
 export function GenerationReport(
   { calls, live = NOTHING, children }:

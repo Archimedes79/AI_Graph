@@ -37,7 +37,11 @@ const REPO = resolve(__dirname, '..', '..');
 const EXAMPLES = readdirSync(resolve(REPO, 'examples'), { withFileTypes: true })
   .filter((entry) => entry.isDirectory() && entry.name !== 'data').map((entry) => entry.name).sort();
 
-/** An endpoint that answers with a summary of what it was sent. */
+/**
+ * An endpoint that answers with a summary of what it was sent, in plain text:
+ * every example's ai node has one output that holds text, and its answer is
+ * that text.
+ */
 function startModel(): Promise<{ url: string; server: Server; asked: string[] }> {
   const asked: string[] = [];
   const server = createServer((request, response) => {
@@ -184,11 +188,11 @@ describe('what each example is there to show', () => {
     expect((await runGraph(graph, trigger)).status).toBe('success');
 
     // The second request carries the first turn: the block is the memory, and
-    // the message template is what lays history and message out.
+    // each input goes to the model under its port id, the history first.
     const [first, second] = model.asked.slice(before);
-    expect(first).toBe('Conversation so far:\n\n\nUser: Hello there');
-    expect(second).toContain('User: Hello there\n\nAssistant: summary(');
-    expect(second.endsWith('User: And again')).toBe(true);
+    expect(first).toBe('history:\n\n\nmessage:\nHello there');
+    expect(second).toContain('history:\nUser: Hello there\n\nAssistant: summary(');
+    expect(second.endsWith('message:\nAnd again')).toBe(true);
     expect(chat.value.messages).toHaveLength(4);
     expect(chat.value.pending).toBe('');
   }, 60_000);
@@ -223,7 +227,8 @@ describe('what each example is there to show', () => {
 
     const asked = model.asked.slice(before);
     expect(asked).toHaveLength(1);
-    expect(asked[0].startsWith('Length of the summary: Three sentences\n\nThe text:\nThe Lighthouse')).toBe(true);
+    expect(asked[0].startsWith('text:\nThe Lighthouse')).toBe(true);
+    expect(asked[0].endsWith('length:\nThree sentences')).toBe(true);
     expect(String(shownOn(result, 'page').summary)).toMatch(/^summary\(/);
   }, 60_000);
 

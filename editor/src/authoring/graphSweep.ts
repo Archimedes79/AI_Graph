@@ -10,20 +10,17 @@
 // in the order it will run, including the memory-feedback rule that keeps
 // `gui → ai → gui` from looking like a cycle.
 //
-// What travels forward is what the run produced: each node is generated, then
-// actually run against its predecessor's data by the verify pass the backend
-// already does, and what it returned becomes the contract the next node is
-// generated against. A small local model guesses badly from a description and
-// well from three lines of real data, and from the second node on there is real
-// data to be had.
+// What travels forward is each node's output definition: a node is written
+// whole -- its input.js, its output.js, its body -- before the next one is
+// started, and the next one's input definition is written from what the node
+// wired into it defines (`generationContext.inputSources`).
 //
 // Only nodes are written. A block on a page has no body: it shows or hands on
 // what it holds.
 
 import { memoryFeedbackEdges, topologicalLevels } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
-import type { GraphEdge, GraphNode, Wire } from '@/graph';
-import { NODE_KINDS } from '@/document/nodeKinds';
+import type { GraphEdge, GraphNode } from '@/graph';
 import { NODE_BUILDERS } from '@/elements/registry';
 
 /** What happened to one node. */
@@ -45,22 +42,17 @@ export interface SweepStep {
 }
 
 /**
- * One node's generation, already assembled by the caller.
- *
- * The same three parts `useGenerate` runs for a single button — so a sweep and
- * a button generate through one code path, and a change to how a request is
- * built cannot apply to only one of them.
+ * One node's writing, already assembled by the caller: what ✨ writes of it,
+ * through the same request a button sends, each file written in as it comes.
  */
-export interface SweepUnit<T = unknown> {
+export interface SweepUnit {
   guard?: () => string | undefined;
-  /** Takes the id a watcher would poll; a sweep passes none and nobody watches. */
-  run: (progressId?: string) => Promise<T>;
-  apply: (result: T) => void;
+  write: () => Promise<void>;
 }
 
-export interface SweepDeps<T = unknown> {
-  /** The unit for this node, or undefined when it generates nothing. */
-  unitFor: (node: GraphNode) => SweepUnit<T> | undefined;
+export interface SweepDeps {
+  /** The unit for this node, or undefined when it has nothing to write. */
+  unitFor: (node: GraphNode) => SweepUnit | undefined;
   /** Asked before each node, so a long sweep can be stopped from the toolbar. */
   stopped?: () => boolean;
 }
@@ -96,10 +88,10 @@ export function generationOrder(nodes: GraphNode[], edges: GraphEdge[]): GraphNo
  * contract that was never produced, which is a worse outcome than stopping with
  * half a graph written.
  */
-export async function* sweep<T>(
+export async function* sweep(
   nodes: GraphNode[],
   edges: GraphEdge[],
-  deps: SweepDeps<T>,
+  deps: SweepDeps,
 ): AsyncGenerator<SweepStep> {
   for (const node of generationOrder(nodes, edges)) {
     if (deps.stopped?.()) return;
@@ -118,8 +110,7 @@ export async function* sweep<T>(
     }
 
     try {
-      const result = await unit.run();
-      unit.apply(result);
+      await unit.write();
       yield { nodeId: node.id, label, status: 'generated', message: 'written' };
     } catch (error) {
       yield {
@@ -131,18 +122,6 @@ export async function* sweep<T>(
       return;
     }
   }
-}
-
-/**
- * Whether *node* holds a body of its own in *field*: something, and not what a
- * new node of its kind starts with -- the starter code of a code node. A sweep
- * writes what nobody wrote, and leaves alone what somebody did.
- */
-export function writtenBody(node: GraphNode, field: string): boolean {
-  const text = (value: unknown): string => String(value ?? '').trim();
-  const written = text((node.config as unknown as Record<string, unknown>)[field]);
-  const starter = text((NODE_KINDS[node.node_type]?.create(node.id).config as unknown as Record<string, unknown> | undefined)?.[field]);
-  return !!written && written !== starter;
 }
 
 /**
@@ -159,33 +138,4 @@ export function missingExamples(nodes: GraphNode[], edges: GraphEdge[]): GraphNo
   // Which nodes are sources, and what describes them, is each element's answer
   // (`NodeGuiBuilder.missingExample`): an input listing a folder, a page's file picker.
   return nodes.filter((node) => NODE_BUILDERS[node.node_type]?.missingExample(node, fed.has(node.id)) ?? false);
-}
-
-/**
- * What *nodeId* would receive, assembled from what its predecessors returned
- * when they were generated.
- *
- * This is the sweep's whole advantage over pressing the buttons one by one:
- * the verify pass runs generated code against real values, and from the second
- * node on there are real values to be had -- the ones the node before it just
- * produced in its own verify pass -- without a run having happened. A port fed
- * by several edges gets a list, as it would in a run; a port whose source
- * produced nothing yet is left out, so a partial sample is still a sample.
- */
-export function sampleFromPredecessors(
-  nodeId: string,
-  edges: Wire[],
-  produced: Map<string, Record<string, unknown>>,
-): Record<string, unknown> | undefined {
-  const sample: Record<string, unknown[]> = {};
-  for (const edge of edges) {
-    if (edge.target !== nodeId) continue;
-    const outputs = produced.get(edge.source);
-    const port = edge.sourceHandle ?? 'output';
-    if (!outputs || !(port in outputs)) continue;
-    (sample[edge.targetHandle ?? 'input'] ??= []).push(outputs[port]);
-  }
-  const entries = Object.entries(sample);
-  if (!entries.length) return undefined;
-  return Object.fromEntries(entries.map(([port, values]) => [port, values.length === 1 ? values[0] : values]));
 }

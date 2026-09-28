@@ -83,28 +83,42 @@ export function fileSearch(root = process.cwd()): string {
 
 export class NotOpenable extends Error {}
 
-/** What a project keeps writing in. Nothing else is ever handed to another program. */
-const OPENABLE = new Set(['.js', '.md', '.json']);
+/** What a node keeps its writing in: input.js, code.js, prompt.md, data.json, data.txt, history.md. Nothing else is ever handed to another program. */
+const OPENABLE = new Set(['.js', '.md', '.json', '.txt']);
+
+/**
+ * What opens *path* when VS Code is not there: a text editor, never the
+ * system's "open" -- which on Windows runs a .js with Windows Script Host,
+ * outside every sandbox. Notepad is on every Windows; a Mac opens its default
+ * text editor with `open -t`; elsewhere the desktop's opener decides.
+ */
+export function textEditorFor(path: string, system: string = platform()): { command: string; args: string[] } {
+  if (system === 'win32') return { command: 'notepad.exe', args: [path] };
+  if (system === 'darwin') return { command: 'open', args: ['-t', path] };
+  return { command: 'xdg-open', args: [path] };
+}
 
 /**
  * Open one of a graph's node files in the editor the person actually works in.
  *
- * The box in the node dialog is fine for an edit; an afternoon's work wants a
+ * The box in the node's panel is fine for an edit; an afternoon's work wants a
  * language server, a debugger's view, a second monitor. The file is already
  * there -- "keep this in a file beside the graph" -- so the missing piece was
  * only the way to it.
  *
  * Narrow on purpose, because this starts a program on the machine: the path
- * must be an existing `.js`/`.md`/`.json` inside the project's `nodes/` folder, so a
- * page cannot use it to launch an arbitrary file. VS Code is tried first, by
+ * must be an existing text file (`OPENABLE`) inside the project's `nodes/` folder,
+ * so a page cannot use it to launch an arbitrary file. VS Code is tried first, by
  * its `code` command, since that is where a `.js` with a JSDoc header is most
- * useful; anything else falls to whatever the system opens that file type with.
+ * useful; without it, a text editor (`textEditorFor`).
  */
 export async function openExternal(nodesDir: string, relative: string): Promise<{ path: string; with: string }> {
   const root = resolve(nodesDir);
   const path = resolve(root, relative);
   if (!path.startsWith(root + sep)) throw new NotOpenable('That file is not one of this project\'s node files.');
-  if (!OPENABLE.has(extname(path).toLowerCase())) throw new NotOpenable('Only a node\'s .js, .md or .json file can be opened.');
+  if (!OPENABLE.has(extname(path).toLowerCase())) {
+    throw new NotOpenable(`Only a node's text can be opened this way: a ${[...OPENABLE].join(', ')} file.`);
+  }
   if (!existsSync(path)) throw new NotFound(`${path} does not exist yet. Save the graph first: saving is what writes it.`);
 
   const { spawn } = await import('node:child_process');
@@ -131,8 +145,7 @@ export async function openExternal(nodesDir: string, relative: string): Promise<
   if (await start(windows ? `code -g "${path}"` : 'code', windows ? [] : ['-g', path], windows)) {
     return { path, with: 'VS Code' };
   }
-  const opener = windows ? ['cmd', ['/c', 'start', '', path]] as const
-    : platform() === 'darwin' ? ['open', [path]] as const : ['xdg-open', [path]] as const;
-  if (await start(opener[0], [...opener[1]], false)) return { path, with: 'the system default' };
+  const editor = textEditorFor(path);
+  if (await start(editor.command, editor.args, false)) return { path, with: windows ? 'Notepad' : 'a text editor' };
   throw new NotOpenable(`Nothing on this machine could open ${path}.`);
 }

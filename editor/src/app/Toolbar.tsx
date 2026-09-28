@@ -1,8 +1,6 @@
 import { useRef, useState } from 'react';
-import {
-  ClipboardCopy, FilePlus2, FolderOpen, Play, Redo2, RefreshCw, Rocket, Save, SaveAll, Settings, Sparkles, Square, Undo2, Wand2,
-} from 'lucide-react';
-import ToolbarButton, { ToolbarSeparator } from '@/ui/ToolbarButton';
+import { Play, Redo2, Rocket, Settings, Square, Undo2, Wand2 } from 'lucide-react';
+import ToolbarButton from '@/ui/ToolbarButton';
 import { useGraphStore } from '@/store/graphStore';
 import { ApiError, call, downloadBundle, watchGeneration, type AICall } from '@/api/client';
 import { errorText } from '@/api/errorText';
@@ -14,7 +12,9 @@ import Modal from '@/ui/Modal';
 import LiveGeneration from '@/authoring/LiveGeneration';
 import SubgraphTrail from './SubgraphTrail';
 import GraphProblems from './GraphProblems';
-import { ACCENT, ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, TEXT } from '@/ui/theme';
+import ViewTabs, { type EditorView } from './ViewTabs';
+import FileMenu, { fileActions } from './FileMenu';
+import { ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
 /**
  * How long a node may go without producing anything before the toolbar says so.
@@ -70,11 +70,20 @@ interface ToolbarProps {
   confirmDiscard: (action: string) => boolean;
   currentFilePath: string | null;
   saveStatus: string;
+  view: EditorView;
+  onViewChange: (view: EditorView) => void;
 }
 
+/**
+ * The header: the app's name, the graph's, its three views -- and on the
+ * right what is done to the graph as a whole: ▶ Run first, then Generate,
+ * Settings and Deploy. What is done now and then is in the File menu (New,
+ * ✨ AI Graph, Open, Save, Save as…, Reload, JSON); Undo and Redo are icons.
+ * Changing the graph as said is the bar under the canvas.
+ */
 export default function Toolbar({
   onNewGraph, onSave, onSaveAs, onReloadProject, onLoad, onInjectJson, onOpenSettings, confirmDiscard,
-  currentFilePath, saveStatus,
+  currentFilePath, saveStatus, view, onViewChange,
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
   const sweep = useGraphSweep();
@@ -114,6 +123,7 @@ export default function Toolbar({
 
   /** Why another graph cannot be opened now, or null when it can. */
   const busyWith = graphBusy(isExecuting, sweep.busy);
+  const dirty = isDirty() && (rfNodes.length > 0 || rfEdges.length > 0);
 
   /**
    * ▶ Run: the whole graph, now, on what is set -- the same on every tab.
@@ -207,67 +217,121 @@ export default function Toolbar({
     : DIMMER;
   const statusLabel = executionResult ? executionResult.status : '';
 
-  // The bar fits the window: below 1536 pixels its buttons are their icons
-  // (`ToolbarButton`), and what it says -- the file, a status, a sweep's
-  // progress -- is cut to the room there is, whole in its tooltip. What still
-  // does not fit scrolls inside the bar. It used to overflow into the page,
-  // which then slid sideways and took the palette and the tabs out of view.
+  // The bar fits the window: below 1280 pixels its buttons are their icons
+  // (`ToolbarButton`), and what it says -- a status, a sweep's progress -- is
+  // cut to the room there is, whole in its tooltip. What still does not fit
+  // scrolls inside the bar. It used to overflow into the page, which then slid
+  // sideways and took the palette and the tabs out of view.
   return (
     <>
       <header
-        className="flex items-center gap-2 2xl:gap-3 px-3 2xl:px-4 h-14 flex-shrink-0 min-w-0 overflow-x-auto overflow-y-hidden"
-        style={{ background: SUNKEN, borderBottom: `1px solid ${LINE}`, scrollbarWidth: 'thin' }}
+        className="flex items-center gap-2 xl:gap-3 px-3 xl:px-5 h-14 flex-shrink-0 min-w-0 overflow-x-auto overflow-y-hidden"
+        style={{ background: SURFACE, borderBottom: `1px solid ${LINE}`, scrollbarWidth: 'thin' }}
       >
-        {/* Logo */}
-        <div className="flex items-center gap-2 mr-1 2xl:mr-2 flex-shrink-0">
-          <span className="text-xl">🕸️</span>
-          <span className="hidden 2xl:inline text-base font-bold whitespace-nowrap" style={{ color: ACCENT }}>
-            AI-Graph
-          </span>
-        </div>
+        <span className="shrink-0 whitespace-nowrap text-base font-bold" style={{ color: ACCENT_TEXT }}>AI-Graph</span>
 
-        {/* Graph name */}
+        {/* The graph's name; where it is saved is its tooltip and the File menu's first line. */}
         <input
-          className="bg-transparent border-none outline-none text-sm font-medium w-40 min-w-[6rem] flex-shrink"
-          style={{ color: TEXT, borderBottom: `1px dashed ${LINE}`, paddingBottom: 2 }}
+          className="bg-transparent border-none outline-none text-sm w-44 min-w-[5rem] flex-shrink"
+          // Dashed underneath: it is a name to type over, not a label.
+          style={{ color: MUTED, borderBottom: `1px dashed ${LINE}`, paddingBottom: 2 }}
           value={metadata.name}
           onChange={(e) => setMetadata({ name: e.target.value })}
+          aria-label="The graph's name"
+          title={currentFilePath ?? 'Not saved to a file yet'}
         />
-        <span className="text-xs truncate min-w-[4rem] max-w-xs" style={{ color: DIMMER }} title={currentFilePath ?? 'Not saved to a file yet'}>
-          {currentFilePath ?? 'Untitled — not saved'}
-        </span>
+        {dirty && (
+          <span className="shrink-0 text-xs" style={{ color: DIM }} title="Unsaved changes" role="img" aria-label="Unsaved changes">●</span>
+        )}
 
         <SubgraphTrail />
 
-        <div className="flex-1" />
+        <ViewTabs view={view} onChange={onViewChange} />
 
-        {/* Actions, grouped: file · history · authoring · run · project */}
-        {/* Not while a run or a sweep is going: what they bring back is for
-            the graph they started on, and is dropped once another is open. */}
-        <ToolbarButton icon={FilePlus2} label="New" title={busyWith ?? 'New graph'} onClick={onNewGraph} disabled={!!busyWith} />
-        <ToolbarButton icon={FolderOpen} label="Open" title={busyWith ?? 'Open a graph file'} onClick={onLoad} disabled={!!busyWith} />
-        <ToolbarButton icon={Save} label="Save" title="Save (Ctrl+S)" onClick={onSave} />
-        <ToolbarButton icon={SaveAll} title="Save as…" onClick={onSaveAs} />
-        {/* Code and prompts that change on disk come in by themselves; this
-            is for the flow and the nodes' settings -- after a git pull, say. */}
-        {isProject && (
-          <ToolbarButton
-            icon={RefreshCw}
-            title={busyWith ?? 'Reload the whole project from disk (flow.json or a node\'s settings changed outside the editor)'}
-            onClick={onReloadProject}
-            disabled={!!busyWith}
-          />
+        {/* What is going on, cut to the room between the tabs and the actions. */}
+        <div className="flex flex-1 min-w-0 items-center justify-end gap-2 overflow-hidden">
+          {isExecuting && runProgress && (
+            <span
+              className="text-xs tabular-nums truncate"
+              style={{ color: MUTED }}
+              title={
+                'Nodes finished, of the total in this graph'
+                + (runProgress.itemTotal > 1 ? '; then items finished within the running node' : '')
+              }
+            >
+              {runProgress.completed}/{runProgress.total}
+              {runProgress.label ? ` · ${runProgress.label}` : ''}
+              {/* Only worth showing for a real batch: "1/1" on every single-item
+                  node is noise that makes the useful case harder to spot. */}
+              {runProgress.itemTotal > 1 ? ` · ${runProgress.itemDone}/${runProgress.itemTotal}` : ''}
+            </span>
+          )}
+          {/* Said only once it is worth saying. Below the threshold a run is
+              visibly working, and a ticking "1s… 2s…" would be pure anxiety;
+              above it, silence is the thing the user cannot otherwise tell from
+              a hang. */}
+          {isExecuting && runProgress && runProgress.idleSeconds !== null
+            && runProgress.idleSeconds > STALLED_AFTER_SECONDS && (
+            <span
+              className="text-xs tabular-nums whitespace-nowrap"
+              style={{ color: DIM }}
+              title="No output from the model since this long. The run is still waiting, not stopped."
+            >
+              ⏳ {Math.round(runProgress.idleSeconds)}s
+            </span>
+          )}
+          {/* A "✅ Saved to …" that survives the next ten edits is a lie about
+              what is on disk; it only shows while the graph is actually clean.
+              (rfNodes/rfEdges are read above purely to drive this re-render.) */}
+          {saveStatus && !isDirty() && (
+            <span className="text-xs truncate" style={{ color: MUTED }} title={saveStatus}>
+              {saveStatus}
+            </span>
+          )}
+          {deployError && (
+            <span className="text-xs font-medium truncate" style={{ color: DANGER_TEXT }} title={deployError}>❌ {deployError}</span>
+          )}
+          {statusLabel && (
+            <span className="text-xs font-medium whitespace-nowrap" style={{ color: statusColor }}>
+              {statusLabel}
+            </span>
+          )}
+        </div>
+
+        <FileMenu
+          where={currentFilePath ?? 'Not saved to a file yet'}
+          actions={fileActions({
+            busyWith, isProject,
+            onNew: onNewGraph, onDesign: handleOpenAiGraph, onOpen: onLoad, onSave, onSaveAs, onReload: onReloadProject, onJson: onInjectJson,
+          })}
+        />
+        <div className="flex shrink-0 items-center">
+          <ToolbarButton icon={Undo2} title="Undo (Ctrl+Z)" onClick={undo} disabled={!undoAvailable} />
+          <ToolbarButton icon={Redo2} title="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={!redoAvailable} />
+        </div>
+
+        {isExecuting ? (
+          <button
+            onClick={stopRun}
+            title="Stop this run"
+            className="h-9 px-4 flex-shrink-0 rounded-lg text-sm font-semibold flex items-center gap-2"
+            style={{ background: DANGER, color: 'white' }}
+          >
+            <Square size={13} strokeWidth={2.5} aria-hidden="true" />
+            Stop
+          </button>
+        ) : (
+          <button
+            onClick={handleRun}
+            title="Run the whole graph on what is set now. Anything it still needs is asked for first."
+            className="h-9 px-4 flex-shrink-0 rounded-lg text-sm font-semibold flex items-center gap-2"
+            style={PRIMARY_BUTTON}
+          >
+            <Play size={13} strokeWidth={2.5} aria-hidden="true" />
+            Run
+          </button>
         )}
 
-        <ToolbarSeparator />
-
-        <ToolbarButton icon={Undo2} title="Undo (Ctrl+Z)" onClick={undo} disabled={!undoAvailable} />
-        <ToolbarButton icon={Redo2} title="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={!redoAvailable} />
-
-        <ToolbarSeparator />
-
-        <ToolbarButton icon={ClipboardCopy} title="Copy or paste the graph as JSON" onClick={onInjectJson} />
-        <ToolbarButton icon={Sparkles} label="AI Graph" title="Describe a graph and let the AI build it" onClick={handleOpenAiGraph} />
         {/* Front to back through the graph: each node is generated against what
             the node before it turned out to return, so only the first one is
             written against a description rather than against data. */}
@@ -278,83 +342,8 @@ export default function Toolbar({
             ? 'Stop after the node in flight'
             : 'Write every empty node, in the order the graph runs'}
           onClick={sweep.busy ? sweep.stop : sweep.run}
+          framed
         />
-        {sweep.message && (
-          <span className="text-xs truncate max-w-xs" style={{ color: MUTED }} title={sweep.message}>
-            {sweep.message}
-          </span>
-        )}
-
-        <ToolbarSeparator />
-
-        {/* A "✅ Saved to …" that survives the next ten edits is a lie about
-            what is on disk; it only shows while the graph is actually clean.
-            (rfNodes/rfEdges are read above purely to drive this re-render.) */}
-        {saveStatus && !isDirty() && (
-          <span className="text-xs truncate max-w-[14rem]" style={{ color: MUTED }} title={saveStatus}>
-            {saveStatus}
-          </span>
-        )}
-        {isDirty() && (rfNodes.length > 0 || rfEdges.length > 0) && (
-          <span className="text-xs whitespace-nowrap" style={{ color: DIM }} title="Unsaved changes">
-            ● unsaved
-          </span>
-        )}
-
-        {/* Run, and while running, what it is doing and how to stop it */}
-        {isExecuting && runProgress && (
-          <span
-            className="text-xs tabular-nums truncate max-w-[14rem]"
-            style={{ color: MUTED }}
-            title={
-              'Nodes finished, of the total in this graph'
-              + (runProgress.itemTotal > 1 ? '; then items finished within the running node' : '')
-            }
-          >
-            {runProgress.completed}/{runProgress.total}
-            {runProgress.label ? ` · ${runProgress.label}` : ''}
-            {/* Only worth showing for a real batch: "1/1" on every single-item
-                node is noise that makes the useful case harder to spot. */}
-            {runProgress.itemTotal > 1 ? ` · ${runProgress.itemDone}/${runProgress.itemTotal}` : ''}
-          </span>
-        )}
-        {/* Said only once it is worth saying. Below the threshold a run is
-            visibly working, and a ticking "1s… 2s…" would be pure anxiety;
-            above it, silence is the thing the user cannot otherwise tell from
-            a hang. */}
-        {isExecuting && runProgress && runProgress.idleSeconds !== null
-          && runProgress.idleSeconds > STALLED_AFTER_SECONDS && (
-          <span
-            className="text-xs tabular-nums whitespace-nowrap"
-            style={{ color: DIM }}
-            title="No output from the model since this long. The run is still waiting, not stopped."
-          >
-            ⏳ {Math.round(runProgress.idleSeconds)}s
-          </span>
-        )}
-        {isExecuting ? (
-          <button
-            onClick={stopRun}
-            title="Stop this run"
-            className="h-8 px-3.5 flex-shrink-0 rounded-md text-xs font-semibold flex items-center gap-1.5"
-            style={{ background: DANGER, color: 'white' }}
-          >
-            <Square size={14} strokeWidth={2.5} aria-hidden="true" />
-            Stop
-          </button>
-        ) : (
-          <button
-            onClick={handleRun}
-            title="Run the whole graph on what is set now. Anything it still needs is asked for first."
-            className="h-8 px-3.5 flex-shrink-0 rounded-md text-xs font-semibold flex items-center gap-1.5"
-            style={{ background: ACCENT, color: 'white' }}
-          >
-            <Play size={14} strokeWidth={2.5} aria-hidden="true" />
-            Run
-          </button>
-        )}
-
-        <ToolbarSeparator />
 
         {/* Labelled, and the title names what is inside. An API key lives in
             here, under "Keys and addresses", and a tooltip that spoke only of
@@ -365,6 +354,7 @@ export default function Toolbar({
           label="Settings"
           title="The AI that generates, tests and runs, API keys and server addresses, and what starts the graph"
           onClick={onOpenSettings}
+          framed
         />
 
         {/* One thing to do, so no menu: the look at the tool detached is the
@@ -375,19 +365,25 @@ export default function Toolbar({
           title="Download this graph as a tool of its own: a zip with the engine, the graph and its page"
           onClick={handleDownloadBundle}
           disabled={!!deployBusy}
+          framed
         />
-
-        {deployError && (
-          <span className="text-xs font-medium truncate max-w-[14rem]" style={{ color: DANGER_TEXT }} title={deployError}>❌ {deployError}</span>
-        )}
-
-        {/* Status */}
-        {statusLabel && (
-          <span className="text-xs font-medium whitespace-nowrap" style={{ color: statusColor }}>
-            {statusLabel}
-          </span>
-        )}
       </header>
+
+      {/* What ✨ Generate says, whole, under the header: in it, at 1024
+          pixels, "Nothing to generate. 3 left alone: …" was 77 pixels wide
+          and the rest only a tooltip. */}
+      {sweep.message && (
+        <div className="flex items-start gap-3 px-3 xl:px-5 py-1.5 text-xs flex-shrink-0" role="status"
+          style={{ background: SURFACE, borderBottom: `1px solid ${LINE}`, color: MUTED }}>
+          <span className="flex-1 min-w-0 break-words">{sweep.message}</span>
+          {!sweep.busy && (
+            <button type="button" onClick={sweep.dismiss} className="shrink-0" style={{ color: MUTED }}
+              title="Dismiss what ✨ Generate said" aria-label="Dismiss">
+              ✕
+            </button>
+          )}
+        </div>
+      )}
 
       <RequirementsDialog
         requirements={delivered.requirements}
@@ -446,6 +442,9 @@ export default function Toolbar({
               placeholder="e.g. Read a text file, summarize it with AI, and show the result on a page."
               disabled={aiGenerating}
             />
+            <p className="text-xs" style={{ color: DIM }}>
+              To change the graph that is open instead, say it in the bar under the canvas.
+            </p>
 
             {(aiGenerating || (aiError && aiCalls.length > 0)) && (
               <div className="mt-3">

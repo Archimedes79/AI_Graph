@@ -1,13 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import PlotChart from './PlotChart';
+import PlotChart, { drawsSomething } from './PlotChart';
 import type { WidgetViewProps } from '../WidgetView';
+import SaveButton from '../SaveButton';
+import { drawnSvg, fileName, saveFile } from '../download';
 
 /**
  * Runtime `plot_window` widget: charts what flowed into `{id}_in` -- points, a
  * figure or a string of SVG -- at the size the block really is on screen, so
- * a resize redraws it with no run.
+ * a resize redraws it with no run. What is drawn can be saved as it is drawn,
+ * an SVG file of that size in the page's colours.
  */
-export default function PlotWindowWidgetView({ value, incoming }: WidgetViewProps) {
+export default function PlotWindowWidgetView({ widget, value, incoming }: WidgetViewProps) {
   const data = incoming !== undefined ? incoming : value;
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 320, height: 180 });
@@ -52,9 +55,15 @@ export default function PlotWindowWidgetView({ value, incoming }: WidgetViewProp
     }
   }, [data]);
 
+  const save = () => {
+    const svg = containerRef.current?.querySelector('svg');
+    if (svg) saveFile(fileName(widget.label, 'chart', 'svg'), drawnSvg(svg), 'image/svg+xml');
+  };
+
   return (
-    <div ref={containerRef} className="w-full h-full flex items-center justify-center" style={{ minHeight: 60 }}>
+    <div ref={containerRef} className="relative group w-full h-full flex items-center justify-center" style={{ minHeight: 60 }}>
       <PlotChart data={data} width={size.width} height={size.height} />
+      {drawsSomething(data) && <SaveButton title="Save this chart as an SVG file" onSave={save} />}
     </div>
   );
 }

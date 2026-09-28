@@ -41,7 +41,7 @@ export function addressRows(status: SettingsStatus): { id: string; label: string
  * dropdowns, but until this section existed it had no field for the credential
  * any of them need -- the key could only come from an environment variable or a
  * hand-written ai-settings.json the dialog never mentioned, so picking a hosted
- * provider silently produced a failure at the next ✨ Generate.
+ * provider silently produced a failure at the next ✨.
  *
  * Keys are write-only by design: the server reports whether one is set and where
  * it came from, never its value, so a key never travels back into the browser.

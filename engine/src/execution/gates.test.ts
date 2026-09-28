@@ -316,7 +316,7 @@ describe('a node that keeps something of its own', () => {
     const graph = graphOf(
       [
         node('page1', 'gui', { gui_widgets: [{ id: 'msg', kind: 'text_io', mode: 'input', value: '' }] }),
-        node('ask', 'ai', { system_prompt: 'x' }, { in: ['message'], out: ['output'] }),
+        node('ask', 'ai', { prompt: 'x' }, { in: ['message'], out: ['output'] }),
         node('page2', 'gui', { gui_widgets: [
           { id: 'shown', kind: 'text_io', mode: 'output' }, { id: 'export', kind: 'button' },
           { id: 'file', kind: 'text_io', mode: 'input', value: 'out.txt' },

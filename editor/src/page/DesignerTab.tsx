@@ -37,7 +37,7 @@ export default function DesignerTab() {
 
   /** Add a block to the page, where it was asked for -- at the end by default. */
   const addWidget = (kind: WidgetKind, mode?: string, at?: number) => {
-    const widget = newBlock(kind, mode, widgets.map((taken) => taken.id));
+    const widget = newBlock(kind, mode, widgets);
     insertBlock(widget, at);
     setSelectedId(widget.id);
   };
@@ -192,19 +192,21 @@ export default function DesignerTab() {
         {/* One choice for the whole page, from a closed set -- `tone` says what a
             block is, this says what the tool looks like. Every accent is picked
             to sit on the same surfaces, so no combination can come out wrong. */}
-        <label className="block text-xs font-medium uppercase tracking-wider mb-2" style={{ color: MUTED }}>
-          Colour scheme of the page
+        <label className="block mb-5">
+          <span className="block text-xs font-medium uppercase tracking-wider mb-2" style={{ color: MUTED }}>
+            Colour scheme of the page
+          </span>
+          <select
+            className="w-full rounded-lg px-2 py-1.5 text-sm"
+            style={FIELD_ON_SURFACE}
+            value={metadata.gui_scheme}
+            onChange={(e) => setMetadata({ gui_scheme: e.target.value as SchemeId })}
+          >
+            {SCHEMES.map((entry) => (
+              <option key={entry.id} value={entry.id}>{entry.label}</option>
+            ))}
+          </select>
         </label>
-        <select
-          className="w-full rounded-lg px-2 py-1.5 text-sm mb-5"
-          style={FIELD_ON_SURFACE}
-          value={metadata.gui_scheme}
-          onChange={(e) => setMetadata({ gui_scheme: e.target.value as SchemeId })}
-        >
-          {SCHEMES.map((entry) => (
-            <option key={entry.id} value={entry.id}>{entry.label}</option>
-          ))}
-        </select>
 
         <h3 className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: MUTED }}>
           The selected block

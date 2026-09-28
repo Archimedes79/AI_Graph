@@ -17,6 +17,16 @@
 
 import type { GraphNode } from '../graph.ts';
 
+/**
+ * Whether a list reaching *node*, run in *mode*, is handed over an item at a
+ * time: it runs per item, and an input is declared a list to run over. Per
+ * item with none is one call on everything (a batch of one). What ✨ is told
+ * of a node is this, so it says what the executor does.
+ */
+export function runsPerItem(node: GraphNode, mode: 'whole' | 'per_item'): boolean {
+  return mode === 'per_item' && node.inputs.some((port) => port.multi);
+}
+
 /** One set of inputs per item, broadcasting whatever is not being fanned out. */
 export function batchItems(
   node: GraphNode,

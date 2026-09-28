@@ -13,6 +13,6 @@ describe('the dialog of a block that shows what arrives', () => {
     expect(html).toContain('Shows what arrives, which should be ');
     expect(html).toContain('code node wired in before it');
     expect(html).not.toContain('✨');
-    expect(html).not.toContain('Try it');
+    expect(html).not.toContain('▶ Try');
   });
 });

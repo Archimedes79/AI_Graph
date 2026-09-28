@@ -3,8 +3,8 @@
 //     node src/main.ts graph.json                     once
 //     node src/main.ts my_project/                    the same, for a project folder
 //     node src/main.ts check my_project/ other.json   what is wrong, without running
-//     node src/main.ts test my_project/ --offline     run the nodes' examples.md
-//     node src/main.ts run-node my_project/ count     one node, on what feeds it (or '{"input": …}')
+//     node src/main.ts test my_project/ --offline     each node on its input.js, held to its output.js
+//     node src/main.ts run-node my_project/ count     one node, on its input.js (or '{"input": …}')
 //     node src/main.ts graph.json --inputs key=value  answering what it asks
 //     node src/main.ts graph.json --every 5m           again, after each run
 //     node src/main.ts graph.json --bundle ./out       hand it to someone else
@@ -25,7 +25,7 @@ import { createInterface } from 'node:readline/promises';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/folderCheck.ts';
 import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
-import { testGraph } from '../execution/examples.ts';
+import { runExample, testGraph } from '../execution/examples.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
@@ -350,9 +350,10 @@ async function runCheck(paths: string[]): Promise<number> {
 }
 
 /**
- * Run the examples every node keeps in its examples.md, or one node's with
- * `--node`. `--offline` asks no model: an AI node's examples and every judged
- * expectation are skipped, which is how CI runs them. Exit code 1 when one fails.
+ * Run every code and ai node once on the example in its input.js and hold
+ * what comes out to its output.js -- or one node, with `--node`. `--offline`
+ * asks no model: an ai node is skipped, which is how CI runs it. Exit code 1
+ * when one fails.
  */
 async function runTests(argv: string[]): Promise<number> {
   const offline = argv.includes('--offline');
@@ -364,25 +365,46 @@ async function runTests(argv: string[]): Promise<number> {
     const { tested, results } = await testGraph(await loadGraph(path), { runtime: () => nodeRuntime(), registry, offline, only });
     for (const { inside, nodeId, result } of results) {
       const mark = { pass: '✓', fail: '✗', error: '✗', skipped: '·' }[result.status];
-      process.stdout.write(`${mark} ${path} ${inside}${nodeId}: ${result.title}${result.status === 'skipped' ? ' (skipped)' : ''}\n`);
-      for (const line of result.status === 'skipped' ? [] : result.details) process.stdout.write(`    ${line}\n`);
+      // A failure not held to its output.js is one whose output.js cannot be read: the line under it says why.
+      const said = {
+        skipped: ' (skipped)', pass: result.held ? ': fits its output.js' : ': runs',
+        fail: result.held ? ': does not fit its output.js' : ': is held to no output.js', error: ': fails',
+      }[result.status];
+      process.stdout.write(`${mark} ${path} ${inside}${nodeId}${said}\n`);
+      for (const line of result.details) process.stdout.write(`    ${line}\n`);
       if (result.status === 'fail' || result.status === 'error') failed += 1;
     }
-    if (!tested) process.stdout.write(`· ${path}: ${only ? `no node "${only}"` : 'no node has examples'}\n`);
+    if (!tested) process.stdout.write(`· ${path}: ${only ? `no node "${only}"` : 'no node has an example in an input.js'}\n`);
   }
   return failed ? 1 : 0;
 }
 
 /**
  * Run one node by itself and print what it returned: on the inputs given as
- * JSON, or -- without them -- on what the nodes feeding it produce, which are
- * run for that and nothing else.
+ * JSON, as a run hands them to it -- files read, a list fanned out -- or,
+ * without them, a code or an ai node once on the example in its input.js,
+ * held to its output.js: what its ▶ Try runs, with no editor anywhere. A node
+ * of another kind has no example, and runs on what the nodes feeding it
+ * produce, as the MCP server's `run_node` runs it.
  */
 async function runNodeCommand([path, nodeId, given]: string[]): Promise<number> {
   if (!path || !nodeId) throw new Error('Usage: run-node <graph or project> <node id> [\'{"port": value}\']');
   const graph = await loadGraph(path);
-  const inputs = given ? JSON.parse(given) as Record<string, unknown> : undefined;
-  const { result } = await runNodeAlone(graph, nodeId, inputs, { runtime: nodeRuntime(), registry });
+  const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) throw new Error(`There is no node "${nodeId}" in ${path}. Its nodes are: ${graph.nodes.map((one) => one.id).join(', ')}.`);
+  if (!given && registry.node(node.node_type)?.definitions(node) === undefined) {
+    process.stderr.write(`${nodeName(node)}, on what the nodes feeding it produce\n`);
+    const { result } = await runNodeAlone(graph, nodeId, undefined, { runtime: nodeRuntime(), registry });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return result.status === 'error' ? 1 : 0;
+  }
+  if (!given) {
+    process.stderr.write(`${nodeName(node)}, on the example in its input.js\n`);
+    const tried = await runExample(graph, nodeId, { runtime: nodeRuntime(), registry });
+    process.stdout.write(`${JSON.stringify(tried, null, 2)}\n`);
+    return tried.status === 'pass' ? 0 : 1;
+  }
+  const { result } = await runNodeAlone(graph, nodeId, JSON.parse(given) as Record<string, unknown>, { runtime: nodeRuntime(), registry });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   return result.status === 'error' ? 1 : 0;
 }

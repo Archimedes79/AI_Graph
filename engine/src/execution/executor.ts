@@ -623,7 +623,7 @@ export async function inputsFor(
  * not an exception: the person asked what this node does with these inputs,
  * and "it fails, like this" is an answer -- the answer a run would give: a
  * node with nothing to do stands still, one that catches its failures puts
- * them on its error port, and a broken interface is said.
+ * them on its error port, and what does not fit its output.js is said.
  */
 export async function executeNode(
   graph: Graph,
@@ -638,11 +638,10 @@ export async function executeNode(
   }
   const why = nothingToDo(element, node, inputs, graph.edges, memoryFeedbackEdges(graph.nodes, graph.edges, options.registry));
   if (why) return { node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [why] };
-  const { runtime } = options;
   try {
-    const arrived = await readInputs(node, inputs, runtime, options.registry);
+    const arrived = await readInputs(node, inputs, options.runtime, options.registry);
     const { produced, failures } = await runNode(
-      element, node, arrived, withSubgraph(runtime, options, node, options.depth ?? 0),
+      element, node, arrived, withSubgraph(options.runtime, options, node, options.depth ?? 0),
     );
     return ranTo(element, node, inputs, produced, failures);
   } catch (error) {
@@ -651,11 +650,38 @@ export async function executeNode(
 }
 
 /**
+ * One call of a node's body on *inputs* as the body is handed them -- the
+ * example in its input.js: no file is read, because the example already holds
+ * what a read file gives, and nothing fans out, because the example is one
+ * item. What one call returns is what its output.js describes, so it comes
+ * back as the call returned it, to be held to that (`examples.ts`).
+ */
+export async function callNode(
+  graph: Graph,
+  nodeId: string,
+  inputs: Record<string, unknown>,
+  options: RunOptions,
+): Promise<NodeResult> {
+  const node = graph.nodes.find((n) => n.id === nodeId);
+  const element = node && options.registry.node(node.node_type);
+  if (!node || !element) {
+    return { node_id: nodeId, status: 'error', inputs, outputs: {}, error: `No such node: ${nodeId}` };
+  }
+  try {
+    const runtime = withSubgraph(options.runtime, options, node, options.depth ?? 0);
+    const outputs = reconcileOutputs(node, await element.execute(node, inputs, runtime));
+    return { node_id: nodeId, status: 'success', inputs, outputs, error: null };
+  } catch (error) {
+    return failedWith(element, node, inputs, error);
+  }
+}
+
+/**
  * What a node that ran comes to. Some items failed and the rest went through:
  * partial, and said, rather than a success whose gaps are nulls nobody
- * explains. A broken interface is said, not enforced: the values are what they
- * are, but a node that broke it is named here rather than blamed three nodes
- * later by whatever read the wrong shape.
+ * explains. What does not fit its output definition is said, not enforced:
+ * the values are what they are, but a node that broke it is named here rather
+ * than blamed three nodes later by whatever read the wrong shape.
  */
 function ranTo(
   element: NodeRunner,
@@ -669,7 +695,7 @@ function ranTo(
   return {
     node_id: node.id, status: failures.length ? 'partial' : 'success', inputs, outputs: produced,
     error: failures.length ? itemFailures(failures) : null,
-    ...(broken.length ? { messages: broken.map((line) => `Does not match its output interface: ${line}`) } : {}),
+    ...(broken.length ? { messages: broken.map((line) => `Does not fit its output.js: ${line}`) } : {}),
   };
 }
 

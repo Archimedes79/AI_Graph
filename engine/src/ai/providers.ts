@@ -31,13 +31,13 @@ export interface ProviderSettings {
   retryDelay: number;
   maxTokens: number;
   /**
-   * How long to wait for an answer. 0 means no clock at all.
+   * How long one model call may take before it is given up. 0 means no clock.
    *
-   * Five minutes used to be the default, and a local model asked to design a
-   * whole graph is simply slower than that -- the request was aborted while it
-   * was still writing, which reads as "nothing happens". Waiting is the right
-   * default for a machine you are running yourself; set AI_GRAPH_TIMEOUT_MS to
-   * put a clock back on it.
+   * Ten minutes by default: a hosted model answers in seconds, and one that
+   * hangs held every ✨ and ▶ Try of a node with it, for as long as the
+   * socket lived. Generous, because a local model asked to design a whole
+   * graph takes minutes -- and when that is still not enough, the sentence it
+   * ends with names AI_GRAPH_TIMEOUT_MS, which sets another (0: none).
    */
   timeoutMs: number;
 }
@@ -58,7 +58,7 @@ export const DEFAULT_SETTINGS: ProviderSettings = {
   attempts: 3,
   retryDelay: 1,
   maxTokens: 4096,
-  timeoutMs: 0,
+  timeoutMs: 10 * 60_000,
 };
 
 /**
@@ -160,6 +160,21 @@ export class StoppedError extends Error {
   }
 }
 
+/**
+ * The model did not answer within `timeoutMs`. Never retried: the clock is
+ * generous, so the same question would take as long again -- and it said
+ * "This operation was aborted" before, which reads as a dropped line.
+ */
+export class TimedOutError extends Error {
+  constructor(timeoutMs: number) {
+    const minutes = timeoutMs / 60_000;
+    const span = Number.isInteger(minutes) ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${Math.round(timeoutMs / 1000)} seconds`;
+    super(`The model did not answer within ${span}, so the call was given up. `
+      + 'AI_GRAPH_TIMEOUT_MS sets how long a call may take, in milliseconds (0: as long as it takes).');
+    this.name = 'TimedOutError';
+  }
+}
+
 /** Worth another attempt: rate limits, and the 5xx family that means "not you". */
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
@@ -179,12 +194,12 @@ export class HttpError extends Error {
 }
 
 function isRetryable(error: unknown): boolean {
-  if (error instanceof StoppedError || error instanceof OutOfBudgetError) return false;
+  if (error instanceof StoppedError || error instanceof OutOfBudgetError || error instanceof TimedOutError) return false;
   if (error instanceof EmptyCompletionError) return true;
   if (error instanceof HttpError) return RETRYABLE_STATUS.has(error.status);
-  // A dropped connection or a timeout: the request never got an answer, so
-  // asking again is the reasonable thing rather than a guess.
-  return error instanceof TypeError || (error as { name?: string })?.name === 'AbortError';
+  // A dropped connection: the request never got an answer, so asking again is
+  // the reasonable thing rather than a guess.
+  return error instanceof TypeError;
 }
 
 async function post(
@@ -202,7 +217,8 @@ async function post(
   stop?.addEventListener('abort', onStop, { once: true });
   // No timer at all when there is no timeout: an AbortController that is never
   // fired lets a slow model finish, and a socket that dies still ends the call.
-  const timer = timeoutMs > 0 ? setTimeout(() => abort.abort(), timeoutMs) : undefined;
+  let late = false;
+  const timer = timeoutMs > 0 ? setTimeout(() => { late = true; abort.abort(); }, timeoutMs) : undefined;
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -221,6 +237,7 @@ async function post(
     // Said as what it was. Left as an AbortError it reads as a dropped
     // connection, and a dropped connection is retried.
     if (stop?.aborted) throw new StoppedError();
+    if (late) throw new TimedOutError(timeoutMs);
     throw error;
   } finally {
     stop?.removeEventListener('abort', onStop);

@@ -300,8 +300,24 @@ function BlockToolbar({
   });
   const gap = <span style={{ width: 1, alignSelf: 'stretch', background: LINE, margin: '2px 3px' }} />;
 
+  // Kept inside the page: over a block narrower than the toolbar at the
+  // page's left edge it reached past it, under the palette, and at 1024
+  // pixels its width buttons could not be pressed. Moved right by as much as
+  // it would stand out, measured anew whenever the page is drawn -- the block
+  // may have moved -- before anything is painted.
+  const bar = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    const element = bar.current;
+    const page = element?.closest('[data-gui-surface]');
+    if (!element || !page) return;
+    element.style.right = '0px';
+    const standsOut = page.getBoundingClientRect().left - element.getBoundingClientRect().left;
+    if (standsOut > 0) element.style.right = `${-Math.ceil(standsOut)}px`;
+  });
+
   return (
     <div
+      ref={bar}
       className="absolute flex items-center rounded-lg shadow-lg select-none"
       // Right-aligned: what is above a block is usually words, and words start
       // on the left -- a toolbar over the left edge sat exactly on the heading

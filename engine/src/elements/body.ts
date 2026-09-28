@@ -1,40 +1,31 @@
 // One way to run a body.
 //
-// A body is JavaScript somebody wrote, or a model did: a code node's `code.js`,
-// an ai node's or a subgraph node's changed `run.js`. They are one kind of
-// thing and run one way, whichever element they belong to:
+// A body is JavaScript somebody wrote, or a model did: a code node's `code.js`.
+// It runs one way, and the probe that tries generated code runs it the same way:
 //
 //   async function run(inputs, node) { …; return { <output port>: value }; }
 //
 // - `inputs` is what arrived, keyed by port.
-// - `node` is what the element hands its body: plain data (an ai node's
-//   `node.texts`), and `node.llm(...)`, a question put to the process that
-//   holds the graph. Every body may ask; none ever holds a key. A subgraph
-//   node's body may also ask `node.graph(...)`: run the graph it holds.
+// - `node` holds `node.llm(...)`, a question put to the process that holds
+//   the graph. Every body may ask; none ever holds a key.
 // - It runs in a process of its own (`host/node.ts`: no child processes, no
 //   addons, no workers), and what it returns is the element's output.
 //
 // The element decides *when* its body runs and what happens to a failure; this
 // is the only place that decides *how*.
 
-import type { BodyContext, Runtime } from './Runtime.ts';
+import type { Runtime } from './Runtime.ts';
 import { PLAIN_ASK, llmCall, type AskSettings } from './nodes/ai/ask.ts';
 
 export interface BodyGiven {
-  /** Plain data the body sees as `node.<key>`. */
-  data?: Record<string, unknown>;
   /** What `node.llm` falls back on for whatever a call does not say. The one AI setting, if nothing is given. */
   ask?: AskSettings;
-  /** The element's input ports, in order: how `node.llm` lists inputs a message does not place. */
-  order?: string[];
   /**
    * Ends the body. Inside a run the executor sees to that for every body at
    * once; whoever runs one outside a run -- the probe of generated code -- has
    * only this.
    */
   signal?: AbortSignal;
-  /** Questions besides `node.llm` that this element's body may ask: a subgraph's `node.graph`. */
-  calls?: BodyContext['calls'];
 }
 
 export function runBody(
@@ -43,8 +34,5 @@ export function runBody(
   runtime: Runtime,
   given: BodyGiven = {},
 ): Promise<Record<string, unknown>> {
-  return runtime.code.run(body, inputs, given.signal, {
-    data: given.data ?? {},
-    calls: { llm: llmCall(given.ask ?? PLAIN_ASK, runtime, given.order), ...given.calls },
-  });
+  return runtime.code.run(body, inputs, given.signal, { calls: { llm: llmCall(given.ask ?? PLAIN_ASK, runtime) } });
 }

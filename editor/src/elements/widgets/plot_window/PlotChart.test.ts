@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import PlotChart, { asDrawing, axisLabel, chartMargins, computeAxisRange, toFigure } from './PlotChart';
+import PlotChart, { asDrawing, axisLabel, chartMargins, computeAxisRange, labelEvery, toFigure } from './PlotChart';
 
 describe('computeAxisRange', () => {
   it('includes 0 in the range for all-positive data', () => {
@@ -174,9 +174,29 @@ describe('a chart on the page, handed what it cannot draw', () => {
   });
 
   it('shows the title of a figure with no points: population_plotter before a file is chosen', () => {
-    // Its examples.md promises "the chart says what to do"; it said "Waiting for data".
+    // Its code promises "the chart says what to do" (its output.js title); it said "Waiting for data".
     const html = chart({ kind: 'bars', title: 'Choose a CSV file to plot.', points: [] });
     expect(html).toContain('Choose a CSV file to plot.');
     expect(html).not.toContain('Waiting for data');
+  });
+});
+
+describe('a chart with more bars than their names have room for', () => {
+  // Twenty categories, a letter each: short enough that no name is cut.
+  const points = [...'ABCDEFGHIJKLMNOPQRST'].map((label, i) => ({ label, value: i + 1 }));
+  const named = (kind: string, width: number, height: number) => [...renderToStaticMarkup(createElement(PlotChart, {
+    data: { kind, title: 'Population', points }, width, height,
+  })).matchAll(/>([A-T])<\/text>/g)].map((match) => match[1]);
+
+  it('names every n-th bar instead of none', () => {
+    // Tool 1's chart: twenty bars in the default Chart block, and the only words in it were its title.
+    expect(named('bars', 546, 266)).toEqual([...'ACEGIKMOQS']);
+    expect(named('columns', 400, 200)).toEqual([...'ACEGIKMOQS']);
+  });
+
+  it('names each one where there is room', () => {
+    expect(named('columns', 1200, 300)).toHaveLength(20);
+    expect(labelEvery(30, 22)).toBe(1);
+    expect(labelEvery(10, 22)).toBe(3);
   });
 });

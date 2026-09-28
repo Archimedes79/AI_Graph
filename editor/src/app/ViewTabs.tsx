@@ -1,5 +1,5 @@
 import { usePage } from '@/page/GuiPage';
-import { ACCENT, DIMMER, LINE, MUTED, SURFACE } from '@/ui/theme';
+import { DIM, LINE, MUTED, TEXT } from '@/ui/theme';
 
 export type EditorView = 'graph' | 'design' | 'preview';
 
@@ -11,7 +11,8 @@ const VIEW_TABS: { id: EditorView; label: string; hint: string }[] = [
 ];
 
 /**
- * Graph and page, side by side as two views of one document.
+ * Graph and page, side by side as two views of one document -- in the
+ * header, beside the graph's name, since they are views of it.
  *
  * They are not separate documents: the page is the graph's one page node, so
  * a block added there is a port added here. The Page tab exists because
@@ -30,7 +31,7 @@ export default function ViewTabs({
   const blockCount = usePage().widgets.length;
 
   return (
-    <div className="flex items-center gap-1 px-3 flex-shrink-0" style={{ background: SURFACE, borderBottom: `1px solid ${LINE}` }}>
+    <nav className="flex items-center gap-1 shrink-0" aria-label="Views">
       {VIEW_TABS.map((tab) => {
         const active = view === tab.id;
         return (
@@ -38,20 +39,17 @@ export default function ViewTabs({
             key={tab.id}
             onClick={() => onChange(tab.id)}
             title={tab.hint}
-            className="px-4 py-2 text-sm transition-colors"
-            style={{
-              color: active ? ACCENT : MUTED,
-              borderBottom: active ? `2px solid ${ACCENT}` : '2px solid transparent',
-              background: 'transparent',
-            }}
+            aria-current={active ? 'page' : undefined}
+            className={`h-9 whitespace-nowrap rounded-lg px-3 text-sm transition-colors ${active ? 'font-medium' : 'hover-raise'}`}
+            style={{ color: active ? TEXT : MUTED, background: active ? LINE : 'transparent' }}
           >
             {tab.label}
             {tab.id === 'design' && blockCount > 0 && (
-              <span className="ml-2 text-xs" style={{ color: DIMMER }}>{blockCount}</span>
+              <span className="ml-1.5 text-xs" style={{ color: DIM }}>{blockCount}</span>
             )}
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 }

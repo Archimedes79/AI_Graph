@@ -10,7 +10,7 @@ const edited = (widget: GuiWidget) => renderToStaticMarkup(createElement(WidgetE
 /**
  * The selected block's editor: its label, its own settings (a lazy panel,
  * not drawn here), and how it looks. A block writes no body, so there is no
- * ✨ and no Try it -- for any kind.
+ * ✨ and no ▶ Try -- for any kind.
  */
 describe('the editor of the selected block', () => {
   it('is, for a chart, its label and its look and size: nothing to start, nothing to fail', () => {
@@ -29,11 +29,11 @@ describe('the editor of the selected block', () => {
     expect(html).toContain('Catch a failure instead of ending the run');
   });
 
-  it('has no ✨ and no Try it for any kind', () => {
+  it('has no ✨ and no ▶ Try for any kind', () => {
     for (const builder of Object.values(WIDGET_BUILDERS)) {
       const html = edited({ ...builder.create('Block'), id: 'b' });
       expect(html, builder.widgetKind).not.toContain('✨');
-      expect(html, builder.widgetKind).not.toContain('Try it');
+      expect(html, builder.widgetKind).not.toContain('▶ Try');
     }
   });
 });

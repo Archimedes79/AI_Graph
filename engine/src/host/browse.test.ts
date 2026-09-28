@@ -49,6 +49,16 @@ describe('browsing', () => {
     await expect(browse(join(tmpdir(), 'no-such-dir-anywhere'))).rejects.toThrow(/not found/i);
   });
 
+  it('says when the folder shown is a project, as it says of a project folder in it', async () => {
+    // Opened inside a project, "Select" had nothing to select and said nothing.
+    const dir = await sandbox();
+    await mkdir(join(dir, 'sub', 'nodes'));
+    await writeFile(join(dir, 'sub', 'flow.json'), '{"nodes":{},"wires":[]}');
+    expect((await browse(dir)).entries.find((entry) => entry.name === 'sub')?.project).toBe(true);
+    expect((await browse(join(dir, 'sub'))).project).toBe(true);
+    expect((await browse(dir)).project).toBeUndefined();
+  });
+
   it('opens where it is told to, not where the process happens to be', async () => {
     // A deployed tool passes the folder its graph sits in. Started by a
     // double-click, `process.cwd()` is whatever the shell felt like, and the

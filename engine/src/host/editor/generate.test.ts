@@ -2,16 +2,15 @@ import { describe, it, expect } from 'vitest';
 import type { AiRequest, AiService, CodeService } from '../../elements/Runtime.ts';
 import { registry } from '../../elements/registry.ts';
 import { parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
-import { port } from '../../elements/port.ts';
-import { executeNode } from '../../execution/executor.ts';
-import { inferInterface } from '../../execution/interface.ts';
-import { parseGraph } from '../../graph.ts';
+import { parseGraph, type GraphNode } from '../../graph.ts';
+import { STANDARD_PROMPTS } from '../../authoring/prompts.ts';
+import { unreadableOutput } from '../../authoring/definition.ts';
 import { GenerationFailed, GenerationRefused, firstCodeBlock, generate, generateGraph } from './generate.ts';
 import { nodeCode } from '../node.ts';
 import type { GenerateRequest } from '../api.ts';
 
 /**
- * Writing a body with a model, without a model.
+ * Writing a node's files with a model, without a model.
  *
  * The model is a script here: it answers each call in turn, so a test can say
  * exactly what the first and the second pass returned. The runner is the real
@@ -35,192 +34,446 @@ const runner = (outcome: (body: string) => Record<string, unknown>): CodeService
   run: async (body) => outcome(body),
 });
 
-const generationFor = (name: string) => registry.generation(name);
 const target = { provider: 'test', model: 'm' };
+const deps = (ai: AiService, code: CodeService = runner(() => ({}))) => ({ ai, code, elements: registry, target });
+
+const port = (id: string, kind: 'input' | 'output', extra: Record<string, unknown> = {}) =>
+  ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '', ...extra });
+
+/** A node as the editor sends it: its kind, heading and text, its ports, its definitions and body in *config*. */
+function node(type: string, config: Record<string, unknown> = {}, ports: { inputs?: string[]; outputs?: string[] } = {}): GraphNode {
+  return parseGraph({
+    metadata: { name: 't' },
+    nodes: [{
+      id: 'n', node_type: type, label: 'Count', description: 'Count the lines of the text.',
+      inputs: (ports.inputs ?? ['text']).map((id) => port(id, 'input')),
+      outputs: (ports.outputs ?? ['lines']).map((id) => port(id, 'output')),
+      config,
+    }],
+    edges: [],
+  }).nodes[0];
+}
+
+const INPUT = 'module.exports = { "text": "a\\nb" };';
+const OUTPUT = 'module.exports = { "lines": 2 };';
+const js = (body: string) => `\`\`\`js\n${body}\n\`\`\``;
 
 describe('code', () => {
-  it('asks for a function against the skeleton, and keeps what came back in the fence', async () => {
-    const ai = scripted(['```javascript\nfunction run(inputs) { return { out: 1 }; }\n```\nIt adds.']);
-    const reply = await generate(
-      { element: 'code', description: 'add', inputs: ['a'], outputs: ['out'] },
-      { ai, code: runner(() => ({})), generationFor, target },
-    );
-    expect(reply.result).toBe('function run(inputs) { return { out: 1 }; }');
-    expect(reply.probe.status).toBe('skipped');                 // no sample, one honest pass
-    expect(ai.asked[0].prompt).toContain('function run(inputs) {');
-    expect(ai.asked[0].prompt).toContain('const a = inputs["a"];');
+  it('is asked for against the skeleton, typed by its definitions, and kept from the fence', async () => {
+    const ai = scripted([`${js('function run(inputs) { return { lines: 1 }; }')}\nIt counts.`]);
+    const reply = await generate({ node: node('code') }, deps(ai));
+    expect(reply.result).toBe('function run(inputs) { return { lines: 1 }; }');
+    // Nothing to try it on: it has an input, and no input.js.
+    expect(reply.probe.status).toBe('skipped');
+    expect(ai.asked[0].prompt).toContain("@param {import('./input.js').Input} inputs");
+    expect(ai.asked[0].prompt).toContain('const text = inputs["text"];');
+    expect(ai.asked[0].prompt).toContain('The returned object\'s keys must be exactly: ["lines"]');
+    // The empty window as well as the full one: the code is not optional about it.
+    expect(ai.asked[0].prompt).toContain('Handle an input that is missing or empty as well as a full one: then the output says what to do instead of failing');
     expect(reply.calls).toHaveLength(1);
     expect(reply.calls[0]).toMatchObject({ provider: 'test', model: 'm', reply_chars: expect.any(Number) });
   });
 
-  it('leaves the error port to the executor: a body is neither asked for it nor held to it', async () => {
-    // A node that catches its failures has an `error` output, which the run
-    // fills. Asked for it, a correct body was reported missing a key and
-    // "repaired" -- while the brief, filtering it, said something else.
-    const ai = scripted(['```js\nfunction run(i) { return { output: 5 }; }\n```']);
-    const reply = await generate(
-      { element: 'code', description: 'five', inputs: ['input'], outputs: ['output', 'error'], sample_inputs: { input: 1 } },
-      { ai, code: runner(() => ({ output: 5 })), generationFor, target },
-    );
-    expect(ai.asked[0].prompt).toContain('The returned object\'s keys must be exactly: ["output"]');
-    expect(ai.asked[0].prompt).not.toMatch(/"error"/);
-    expect(reply.probe).toMatchObject({ status: 'ok', missing_outputs: [] });
-  });
+  it('is tried on the example in input.js, and held to output.js', async () => {
+    const ai = scripted([js('function run(i) { return { lines: i.text.split("\\n").length }; }')]);
+    const reply = await generate({ node: node('code', { input_definition: INPUT, output_definition: OUTPUT }) }, deps(ai, nodeCode));
+    expect(reply.probe).toEqual({ status: 'ok', error: '', problems: [] });
+  }, 30_000);
 
-  it('verifies against the sample and reports what the code returned, whole', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { out: i.a * 2 }; }\n```']);
-    const reply = await generate(
-      { element: 'code', description: 'double', inputs: ['a'], outputs: ['out'], sample_inputs: { a: 21 } },
-      { ai, code: runner(() => ({ out: 42 })), generationFor, target },
-    );
-    expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 42 } });
-  });
-
-  it('repairs once with the evidence when the first attempt misses a key', async () => {
+  it('is repaired once, with the evidence, when what it returns does not fit', async () => {
     const ai = scripted([
-      '```js\nfunction run(i) { return { wrong: 1 }; }\n```',
-      '```js\nfunction run(i) { return { out: 1 }; }\n```',
+      js('function run(i) { return { lines: String(i.text.split("\\n").length) }; }'),
+      js('function run(i) { return { lines: i.text.split("\\n").length }; }'),
     ]);
-    const reply = await generate(
-      { element: 'code', description: 'x', outputs: ['out'], sample_inputs: { a: 1 } },
-      { ai, code: runner((body) => (body.includes('wrong') ? { wrong: 1 } : { out: 1 })), generationFor, target },
-    );
+    const reply = await generate({ node: node('code', { input_definition: INPUT, output_definition: OUTPUT }) }, deps(ai, nodeCode));
     expect(reply.probe.status).toBe('repaired');
-    expect(reply.result).toContain('out: 1');
-    expect(ai.asked[1].prompt).toContain('--- wrong result keys ---');
-    expect(ai.asked[1].prompt).toContain('missing ["out"]');
-  });
+    expect(ai.asked[1].prompt).toContain('--- what is wrong with what it returned ---');
+    expect(ai.asked[1].prompt).toContain('- output "lines" is text; output.js says a number');
+    expect(ai.asked[1].prompt).toContain('inputs["text"]: string = "a\\nb"');
+    expect(reply.result).toContain('i.text.split("\\n").length }');
+  }, 30_000);
 
   it('keeps the attempt that got further when the repair is no better, and says what remains', async () => {
     const ai = scripted([
-      '```js\nfunction run(i) { return { wrong: 1 }; }\n```',
-      '```js\nfunction run(i) { throw new Error("boom"); }\n```',
+      js('function run() { return { lines: "two" }; }'),
+      js('function run() { throw new Error("worse"); }'),
     ]);
-    const reply = await generate(
-      { element: 'code', description: 'x', outputs: ['out'], sample_inputs: { a: 1 } },
-      { ai, code: runner((body) => { if (body.includes('boom')) throw new Error('boom'); return { wrong: 1 }; }), generationFor, target },
-    );
-    expect(reply.probe).toMatchObject({ status: 'failed', missing_outputs: ['out'] });
-    expect(reply.result).toContain('wrong: 1');
+    const reply = await generate({ node: node('code', { input_definition: INPUT, output_definition: OUTPUT }) }, deps(ai, nodeCode));
+    expect(reply.probe).toMatchObject({ status: 'failed', problems: ['output "lines" is text; output.js says a number'] });
+    expect(reply.result).toContain('"two"');
+  }, 30_000);
+
+  it('is not said to fit an output.js that cannot be read -- and is not "repaired" for it: the code cannot mend the file', async () => {
+    const ai = scripted([js('function run(i) { return { lines: i.text.split("\\n").length }; }')]);
+    const reply = await generate({ node: node('code', { input_definition: INPUT, output_definition: 'module.exports = { "lines": 2, };' }) }, deps(ai, nodeCode));
+    expect(reply.probe).toMatchObject({ status: 'failed', error: '', problems: [expect.stringMatching(/^output\.js cannot be read: /)] });
+    expect(ai.asked).toHaveLength(1);
+  }, 30_000);
+
+  it('leaves the error port to the executor: a body is neither asked for it nor held to it', async () => {
+    const ai = scripted([js('function run(i) { return { lines: 2 }; }')]);
+    const reply = await generate({ node: node('code', { input_definition: INPUT, catch_errors: true }, { outputs: ['lines', 'error'] }) }, deps(ai, nodeCode));
+    expect(ai.asked[0].prompt).toContain('must be exactly: ["lines"]');
+    expect(reply.probe.status).toBe('ok');
+  }, 30_000);
+
+  it('is written for one call of a node run once per item, and tried on the one item its example is', async () => {
+    const ai = scripted([js('function run(i) { return { lines: i.text.length }; }')]);
+    const item = node('code', { input_definition: 'module.exports = { "text": "one" };', batch_mode: 'per_item' });
+    item.inputs[0].multi = true;
+    const reply = await generate({ node: item }, deps(ai, nodeCode));
+    expect(ai.asked[0].prompt).toContain('`run` is called once per item');
+    expect(reply.probe.status).toBe('ok');
+  }, 30_000);
+
+  it('that asks a model is tried with a node it can ask', async () => {
+    // First reply: the code. Second: what the code's own question is answered with, in the probe.
+    const ai = scripted([
+      js('async function run(inputs, node) { return { label: (await node.llm({ prompt: "Classify: " + inputs.row })).trim() }; }'),
+      ' fruit ',
+    ]);
+    const reply = await generate({
+      node: node('code', { input_definition: 'module.exports = { "row": "apple" };', output_definition: 'module.exports = { "label": "fruit" };' }, { inputs: ['row'], outputs: ['label'] }),
+    }, deps(ai, nodeCode));
+    expect(reply.probe.status).toBe('ok');
+    expect(ai.asked[1].prompt).toContain('Classify: apple');
+  }, 30_000);
+});
+
+describe('the prompt ✨ is sent', () => {
+  it('is the standard one for what it writes, its variables filled, and the frame after it', async () => {
+    const ai = scripted([js('function run() { return { lines: 1 }; }')]);
+    await generate({ node: node('code'), context: 'Graph: Lines\nNodes: n (code) "Count"' }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent.startsWith('This is the user\'s node description:\n# Count (ID n, code node)\n\nCount the lines of the text.')).toBe(true);
+    expect(sent).toContain('Context:\nGraph: Lines\nNodes: n (code) "Count"');
+    expect(sent).toContain(STANDARD_PROMPTS.code.split('\n').at(-1)!);
+    expect(sent.indexOf('## How to answer')).toBeGreaterThan(sent.indexOf('Task: write the code'));
   });
 
-  it('is not offered for a block, nor for a folder listing: neither has code to write', async () => {
-    for (const kind of ['plot_window', 'table', 'image_view', 'input_picker', 'input']) {
-      await expect(generate({ element: kind, description: 'x' }, { ai: scripted([]), code: runner(() => ({})), generationFor, target }))
-        .rejects.toThrow(GenerationRefused);
-    }
+  it('is the node\'s own where someone changed it: exact names filled, any other brace as written', async () => {
+    const ai = scripted([js('function run() { return { lines: 1 }; }')]);
+    const mine = node('code', { prompts: { body: 'Mine: {Node Description}\nKeep {"a": 1} and {Nope}.' } });
+    await generate({ node: mine }, deps(ai));
+    expect(ai.asked[0].prompt.startsWith('Mine: # Count (ID n, code node)\n\nCount the lines of the text.\nKeep {"a": 1} and {Nope}.\n\n## How to answer')).toBe(true);
+  });
+
+  it('says what arrives from the wiring while there is no input.js, and what is wanted while there is no output.js', async () => {
+    const ai = scripted([js('function run() { return { lines: 1 }; }')]);
+    const reading = node('code');
+    reading.inputs[0].data_type = 'file_path';
+    await generate({
+      node: reading,
+      input_sources: { text: '"Page" (port "CSV file")' },
+      output_targets: { lines: '"Page" (port "chart"), which wants what to plot' },
+    }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain('Input definition:\nNone yet. Its inputs, as wired:\n- `text` (a path: the node reads the file there, and is handed its text)\n  from "Page" (port "CSV file")');
+    expect(sent).toContain('Output definition:\nNone yet. Its outputs, as wired:\n- `lines`\n  to "Page" (port "chart"), which wants what to plot');
+    expect(sent).toContain('"text" is handed the file\'s text, already read');
+  });
+
+  it('sends the definitions as the files say them, and what is wired after each', async () => {
+    const ai = scripted([js('function run() { return { lines: 1 }; }')]);
+    await generate({ node: node('code', { input_definition: INPUT, output_definition: OUTPUT }) }, deps(ai));
+    expect(ai.asked[0].prompt).toContain(`Input definition:\n${INPUT}\n\nIts inputs, as wired:\n- \`text\`\n  not wired yet`);
+    expect(ai.asked[0].prompt).toContain(`Output definition:\n${OUTPUT}\n\nIts outputs, as wired:\n- \`lines\`\n  not wired yet`);
+  });
+
+  it('no longer tells every code node what a chart takes -- only a chart downstream says so', async () => {
+    const ai = scripted([js('function run() { return { lines: 1 }; }')]);
+    await generate({ node: node('code') }, deps(ai));
+    expect(ai.asked[0].prompt).not.toContain('draws at the block');
+    expect(ai.asked[0].prompt).not.toContain('what to plot');
+    expect(registry.widget('plot_window')?.receives(parseWidget({ id: 'b', kind: 'plot_window' }))).toContain('draws at the block\'s real size');
+  });
+});
+
+describe('an input definition', () => {
+  it('is written from the example file, read here when the request brings only its path, and is not run', async () => {
+    const ai = scripted([js('/** @typedef {Object} Input @property {string} text a text */\nmodule.exports = { "text": "a\\nb" };')]);
+    const files = { resolve: (p: string) => p, exists: async () => true, read: async () => 'name,age\nAda,36', write: async () => {}, list: async () => [] };
+    const reply = await generate({ node: node('code'), write: 'input', input_files: [{ path: 'data/people.csv' }] }, { ...deps(ai), files });
+    expect(reply.result).toBe('/** @typedef {Object} Input @property {string} text a text */\nmodule.exports = { "text": "a\\nb" };');
+    expect(reply.probe.status).toBe('skipped');
+    expect(ai.asked[0].prompt).toContain('Example files:\ndata/people.csv:\nname,age\nAda,36');
+    expect(ai.asked[0].prompt).toContain('Answer with the whole file input.js');
+    expect(ai.asked[0].prompt).toContain('for each input -- "text" --');
+  });
+
+  it('is asked again, once, where its example cannot be read or names another input', async () => {
+    const ai = scripted([js('module.exports = { text: "a" };'), js('module.exports = { "text": "a" };')]);
+    const reply = await generate({ node: node('code'), write: 'input' }, deps(ai));
+    expect(reply.result).toBe('module.exports = { "text": "a" };');
+    expect(ai.asked[1].prompt).toContain('It cannot be used as it is: Its example cannot be read');
+    const stray = scripted([js('module.exports = { "txt": "a" };'), js('module.exports = { "txt": "b" };')]);
+    expect((await generate({ node: node('code'), write: 'input' }, deps(stray))).probe)
+      .toMatchObject({ status: 'failed', problems: ['It names "txt", which is not among the inputs: "text".'] });
+  });
+
+  it('says there are no example files where there are none', async () => {
+    const ai = scripted([js('module.exports = { "text": "a" };')]);
+    await generate({ node: node('code'), write: 'input' }, deps(ai));
+    expect(ai.asked[0].prompt).toContain('Example files:\nNone.');
+  });
+
+  it('is shown the shape it is written in, the keys in double quotes -- not only told "plain JSON"', async () => {
+    const ai = scripted([js('module.exports = { "text": "a", "top": 3 };')]);
+    await generate({ node: node('code', {}, { inputs: ['text', 'top'] }), write: 'input' }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain('shaped like this:\n\n/** @typedef {Object} Input @property {…} text … @property {…} top … */\nmodule.exports = { "text": …, "top": … };\n\n');
+    expect(sent).toContain('as plain JSON: double-quoted keys and strings, no comments, no trailing commas.');
+  });
+
+  it('is told what the graph hands it -- a data node\'s value -- and to follow it, so the keys are not made up', async () => {
+    // Tool 3 of the review: capitals held by a data node, sorted by a code node into a table. Told only
+    // "Example files: None.", ✨ Input wrote Capital/Country/Population, and the table got one empty row.
+    const held = '"Capitals" (port "output"), which hands on: structure: Ten European capitals with their population -- '
+      + 'it holds: [{"capital":"Paris","country":"France","population":2102650},{"capital":"Rome","country":"Italy","population":2749031}]';
+    const ai = scripted([js('module.exports = { "input": [{ "capital": "Paris", "country": "France", "population": 2102650 }] };')]);
+    await generate({ node: node('code', {}, { inputs: ['input'], outputs: ['output'] }), write: 'input', input_sources: { input: held } }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain(`Its input definition, and what the graph hands it:\nNone yet. Its inputs, as wired:\n- \`input\`\n  from ${held}`);
+    expect(sent).toContain('Follow what is wired where it says what arrives');
+  });
+});
+
+describe('an output definition', () => {
+  it('is written from the files it is given, a spec among them', async () => {
+    const ai = scripted([js('module.exports = { "lines": 2 };')]);
+    await generate({ node: node('code'), write: 'output', output_files: [{ path: 'spec.md', text: 'Lines: a count.' }] }, deps(ai));
+    expect(ai.asked[0].prompt).toContain('Output files:\nspec.md:\nLines: a count.');
+  });
+
+  it('is told what the nodes it feeds want -- a chart\'s figure -- and to give exactly that, also where output.js is written already', async () => {
+    // Tool 1 of the review: a CSV charted. ✨ Output was told the chart's size only, wrote a chart
+    // library's config ({data, labels, type}), and pressed again rewrote that file without a word of the figure.
+    const wants = registry.widget('plot_window')!.receives(parseWidget({ id: 'plot_window', kind: 'plot_window' }))!;
+    const configured = 'module.exports = { "output": { "data": [1450], "labels": ["India"], "type": "bar" } };';
+    const ai = scripted([js('module.exports = { "output": { "kind": "bars", "title": "Population", "points": [{ "label": "India", "value": 1450 }] } };')]);
+    await generate({
+      node: node('code', { input_definition: 'module.exports = { "input": "Country,Population\\nIndia,1450" };', output_definition: configured }, { inputs: ['input'], outputs: ['output'] }),
+      write: 'output',
+      output_targets: { output: `"Page" (port "Chart"), which wants ${wants}` },
+    }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(wants).toContain('a figure {"kind": "bars"|"columns"|"line"|"donut", "title": string, "points": [...]}');
+    expect(sent).toContain(`Its output definition, and what the nodes it feeds want:\n${configured}\n\nIts outputs, as wired:\n- \`output\`\n  to "Page" (port "Chart"), which wants ${wants}`);
+    expect(sent).toContain('a chart that wants a figure {kind, title, points} gets exactly that');
+  });
+
+  it('is written keeping the outputs other nodes are wired to, and asked again where it drops one', async () => {
+    const ai = scripted([js('module.exports = { "count": 2 };'), js('module.exports = { "lines": 2 };')]);
+    const reply = await generate({ node: node('code', { input_definition: INPUT }), write: 'output', output_targets: { lines: '"Page"' } }, deps(ai));
+    expect(ai.asked[0].prompt).toContain('Now it has "lines". Keep "lines": it is wired to other nodes, which read it by that id.');
+    expect(ai.asked[1].prompt).toContain('It leaves out "lines", which other nodes are wired to');
+    expect(reply.result).toBe('module.exports = { "lines": 2 };');
+  });
+
+  it('names one output for each thing the description asks the node to hand on, and is shown the shape in double quotes', async () => {
+    // Tool 2 of the review: "say its mood in one word, and the reason" kept the one output "output".
+    const ai = scripted([js('module.exports = { "mood": "calm", "reason": "It says so." };')]);
+    const mood = { ...node('ai', {}, { inputs: ['prompt'], outputs: ['output'] }), description: 'Read the text and say its mood in one word, and the reason in one line.' };
+    await generate({ node: mood, write: 'output' }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain('/** @typedef {Object} Output @property {…} output … */\nmodule.exports = { "output": … };');
+    expect(sent).toContain('one for each thing the description asks it to hand on -- "its mood, and the reason" are two outputs, "mood" and "reason".');
+    expect(sent).toContain('Now it has "output", and nothing is wired to it yet: name each by what it holds.');
+    expect(sent).toContain('as plain JSON: double-quoted keys and strings, no comments, no trailing commas.');
+  });
+});
+
+describe('an ai node\'s instructions', () => {
+  it('are prompt.md, with the placeholders filled when it runs, and the answer JSON where its output.js names a value that is not text', async () => {
+    const ai = scripted(['```md\n{Node Description}\n\nAnswer with {Output Definition}\n```']);
+    const reply = await generate({ node: node('ai', { output_definition: OUTPUT }, { inputs: ['text', 'topic'] }) }, deps(ai));
+    expect(reply.result).toBe('{Node Description}\n\nAnswer with {Output Definition}');
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain('each input under its port id: "text", "topic"');
+    expect(sent).toContain('Put {Node Description} and {Output Definition} where they belong');
+    expect(sent).toContain('The answer is parsed as a JSON object keyed as the output definition\'s example is');
+    expect(ai.asked[0].system).toMatch(/prompt engineer/);
+  });
+
+  it('are plain text without an output.js, and where it names one output that holds text', async () => {
+    const ai = scripted(['```md\nSay it.\n```', '```md\nSum it up.\n```']);
+    await generate({ node: node('ai') }, deps(ai));
+    expect(ai.asked[0].prompt).toContain('The answer is plain text, handed on as it is on "output": ask for the text itself.');
+    await generate({ node: node('ai', { output_definition: 'module.exports = { "summary": "Two sentences." };' }, { outputs: ['summary'] }) }, deps(ai));
+    expect(ai.asked[1].prompt).toContain('The answer is plain text, handed on as it is on "summary": ask for the text itself, as the output definition describes it -- not JSON');
+    expect(ai.asked[1].prompt).not.toContain('parsed as a JSON object');
+  });
+});
+
+describe('a data node\'s data', () => {
+  it('is written as JSON where it holds structure, and refused where the model wrote none', async () => {
+    const held = node('data', { data_format: 'structure' }, { inputs: ['input'], outputs: ['output'] });
+    const ai = scripted(['```json\n{"count": 0}\n```']);
+    const reply = await generate({ node: held }, deps(ai));
+    expect(reply.result).toBe('{"count": 0}');
+    expect(ai.asked[0].prompt).toContain('Answer with what the node holds, in one ```json block, as plain JSON, and nothing else.');
+    await expect(generate({ node: held }, deps(scripted(['```json\n{count: 0}\n```'])))).rejects.toThrow(/not JSON/);
+  });
+
+  it('is the text itself where it holds text -- asked for as text, and told what it feeds without a word of definitions it has none of', async () => {
+    const ai = scripted(['```text\nDear reader,\n```']);
+    const reply = await generate({
+      node: node('data', { data_format: 'text' }, { inputs: ['input'], outputs: ['output'] }),
+      output_targets: { output: '"Letter" (port "greeting")' },
+    }, deps(ai));
+    expect(reply.result).toBe('Dear reader,');
+    expect(ai.asked[0].prompt).toContain('What it feeds:\n- `output`\n  to "Letter" (port "greeting")\n\nContext:');
+    expect(ai.asked[0].prompt).not.toContain('None yet');
+    expect(ai.asked[0].prompt).toContain('Answer with what the node holds, in one ```text block, the text itself, and nothing else.');
   });
 });
 
 describe('changing a body there is (refine)', () => {
-  it('writes code from the function as it is, what it returned and what to change -- and restates the task with it', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { out: i.a * 3 }; }\n```\nNow triples.\n<task>Triple the number.</task>']);
-    const reply = await generate(
-      {
-        element: 'code', description: 'Double the number.', inputs: ['a'], outputs: ['out'], sample_inputs: { a: 2 },
-        refine: { body: 'function run(i) { return { out: i.a * 2 }; }', outcome: '{"out": 4}', change: 'Triple it instead.' },
-      },
-      { ai, code: runner(() => ({ out: 6 })), generationFor, target },
-    );
-    const asked = ai.asked[0].prompt;
-    expect(asked).toContain('--- the function as it is now ---\nfunction run(i) { return { out: i.a * 2 }; }');
-    expect(asked).toContain('--- what it returned on the last run ---\n{"out": 4}');
-    expect(asked).toContain('--- what to change ---\nTriple it instead.');
-    expect(asked).toContain('<task></task>');
-    expect(reply).toMatchObject({ result: 'function run(i) { return { out: i.a * 3 }; }', task: 'Triple the number.' });
-    // Tried on the sample like any body written, with the one repair behind it.
-    expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 6 } });
+  it('writes code from the function as it is, what it returned and what to change -- and restates the text with it', async () => {
+    const ai = scripted([`${js('function run(i) { return { lines: i.text.split("\\n").length + 1 }; }')}\n<description>Count the lines, plus one.</description>`]);
+    const reply = await generate({
+      node: node('code', { input_definition: INPUT, code: 'function run(i) { return { lines: 2 }; }' }),
+      refine: { change: 'Add one.', outcome: '{"lines": 2}' },
+    }, deps(ai, nodeCode));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain('--- the function as it is now ---\nfunction run(i) { return { lines: 2 }; }');
+    expect(sent).toContain('--- what it returned on its example ---\n{"lines": 2}');
+    expect(sent).toContain('--- what to change ---\nAdd one.');
+    expect(reply.description).toBe('Count the lines, plus one.');
+    expect(reply.result).not.toContain('<description>');
+  }, 30_000);
+
+  it('brings no text back where no change was asked, whatever the model offered: ✨ Fix repairs from how it failed', async () => {
+    const ai = scripted([`${js('function run(i) { return { lines: 2 }; }')}\n<description>Something else.</description>`]);
+    const reply = await generate({
+      node: node('code', { input_definition: INPUT, code: 'function run() { throw new Error("boom"); }' }),
+      refine: { error: 'boom' },
+    }, deps(ai, nodeCode));
+    expect(ai.asked[0].prompt).toContain('--- the error it raised ---\nboom');
+    expect(reply.description).toBeUndefined();
+  }, 30_000);
+
+  it('writes instructions again whole from the ones there are, with the text restated', async () => {
+    const ai = scripted(['```md\nBe brief, and kind.\n```\n<description>Answers briefly and kindly.</description>']);
+    const reply = await generate({ node: node('ai', { prompt: 'Be brief.' }), refine: { change: 'Be kind too.', outcome: 'ok.' } }, deps(ai));
+    expect(ai.asked[0].prompt).toContain('## The instructions (prompt.md) as it is now\n\nBe brief.');
+    expect(ai.asked[0].prompt).toContain('## What to change\n\nBe kind too.');
+    // Asked for the restated text after the block -- and output.js where the change outgrows it -- not for the block "and nothing else".
+    expect(ai.asked[0].prompt).toContain('in one ```md block, then -- where the change needs other outputs -- the new output.js in a ```js block, '
+      + 'then the node\'s text restated as asked above, and nothing else');
+    expect(`${ai.asked[0].system} ${ai.asked[0].prompt}`).not.toMatch(/block and nothing else|Output only/);
+    expect(reply).toMatchObject({ result: 'Be brief, and kind.', description: 'Answers briefly and kindly.' });
+    expect(reply.output_definition).toBeUndefined();
   });
 
-  it('brings no task back where no change was asked, whatever the model offered: the person\'s task is not written over', async () => {
-    const ai = scripted(['<system_prompt>You name capitals.</system_prompt>\n<task>Something else entirely.</task>']);
-    const reply = await generate(
-      { element: 'ai', description: 'Name the capital.', inputs: ['prompt'], outputs: ['output'] },
-      { ai, code: runner(() => ({})), generationFor, target },
-    );
-    expect(reply.result).toBe('You name capitals.');
-    expect(reply.task).toBeUndefined();
-  });
-
-  it('fixes code from how it failed, the inputs it failed on and the body: the repair step, and the task stays', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { out: String(i.a).length }; }\n```']);
-    const reply = await generate(
-      {
-        element: 'code', description: 'Count the characters.', inputs: ['a'], outputs: ['out'], sample_inputs: { a: 12345 },
-        refine: { body: 'function run(i) { return { out: i.a.length }; }', error: 'Cannot read properties of undefined' },
-      },
-      { ai, code: runner(() => ({ out: 5 })), generationFor, target },
-    );
-    const asked = ai.asked[0].prompt;
-    expect(asked).toContain('--- your previous attempt ---\nfunction run(i) { return { out: i.a.length }; }');
-    expect(asked).toContain('inputs["a"]: number = 12345');
-    expect(asked).toContain('--- the error it raised ---\nCannot read properties of undefined');
-    expect(asked).not.toContain('<task>');
-    expect(reply.task).toBeUndefined();
-    expect(reply.probe.status).toBe('ok');
-  });
-
-  describe('held to an example written before it', () => {
-    /** A body run in this process, as the sandbox would run it. */
-    const evaluated: CodeService = {
-      run: async (body, inputs) => new Function('inputs', `${body}\nreturn run(inputs);`)(inputs) as Record<string, unknown>,
-    };
-    // The example as the dialog writes it when a result was kept: an input, and what must come out.
-    const examples = '## The example\n\n```json input\n{"name": "anna"}\n```\n\n```json expect\n{"out": "anna"}\n```\n';
-    const asked = {
-      element: 'code', description: 'Return the name.', inputs: ['name'], outputs: ['out'], examples,
-      refine: { body: 'function run(i) { return { out: i.name }; }', outcome: 'anna', change: 'Return it in upper case.' },
-    };
-
-    it('is not: the repair turned the change back to the example, and the task said it was made', async () => {
-      const ai = scripted([
-        '```js\nfunction run(i) { return { out: String(i.name).toUpperCase() }; }\n```\n<task>Return the name in upper case.</task>',
-        // What a repair held to the old example writes: the body from before the change.
-        '```js\nfunction run(i) { return { out: i.name }; }\n```',
-      ]);
-      const reply = await generate(asked, { ai, code: evaluated, generationFor, target });
-      expect(ai.asked).toHaveLength(1);
-      expect(reply).toMatchObject({ result: 'function run(i) { return { out: String(i.name).toUpperCase() }; }', task: 'Return the name in upper case.' });
-      expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: 'ANNA' }, problems: [] });
-      // Told what the examples are: written before the change, which wins.
-      expect(ai.asked[0].prompt).toContain('## Examples -- written before this change: where one disagrees with the change, the change wins');
-    });
-
-    it('and a change that does not run is repaired as the change, from the task it restated', async () => {
-      const ai = scripted([
-        '```js\nfunction run(i) { return { out: i.name.toUpperCase() }; }\n```\n<task>Return the name in upper case.</task>',
-        '```js\nfunction run(i) { return { out: String(i.name).toUpperCase() }; }\n```',
-      ]);
-      const reply = await generate({ ...asked, examples: examples.replace('"anna"}', '5}') }, { ai, code: evaluated, generationFor, target });
-      const repair = ai.asked[1].prompt;
-      expect(repair).toContain('The node should:\nReturn the name in upper case.');
-      expect(repair).toContain('--- the change it was written to make, which the fix keeps ---\nReturn it in upper case.');
-      expect(repair).toContain('i.name.toUpperCase is not a function');
-      expect(reply).toMatchObject({ result: 'function run(i) { return { out: String(i.name).toUpperCase() }; }', task: 'Return the name in upper case.' });
-      expect(reply.probe.status).toBe('repaired');
+  it('brings an ai node\'s new output.js back with its instructions, where the change outgrows the one there is', async () => {
+    const ai = scripted(['```md\n{Node Description}\nSay the mood and the reason.\n{Output Definition}\n```\n'
+      + '```js\n/** @typedef {Object} Output @property {string} mood … @property {string} reason … */\nmodule.exports = { "mood": "calm", "reason": "It says so." };\n```\n'
+      + '<description>Says the mood of the text, and the reason.</description>']);
+    const reply = await generate({
+      node: node('ai', { prompt: 'Say the mood.', output_definition: 'module.exports = { "mood": "calm" };' }, { inputs: ['text'], outputs: ['mood'] }),
+      refine: { change: 'Say the reason too, on an output of its own.' },
+      output_targets: { mood: '"Page" (port "Mood")' },
+    }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain('## output.js, what it answers with now\n\nmodule.exports = { "mood": "calm" };');
+    expect(sent).toContain('return the new output.js, the whole file, in a second ```js block after the instructions.');
+    expect(reply).toMatchObject({
+      result: '{Node Description}\nSay the mood and the reason.\n{Output Definition}',
+      output_definition: '/** @typedef {Object} Output @property {string} mood … @property {string} reason … */\nmodule.exports = { "mood": "calm", "reason": "It says so." };',
+      description: 'Says the mood of the text, and the reason.',
     });
   });
 
-  it('writes a system prompt from the one there is, what the model answered and what to change, with the task restated', async () => {
-    const ai = scripted(['<system_prompt>Answer in one word.</system_prompt>\nShorter now.\n<task>Name the capital, in one word.</task>']);
-    const reply = await generate(
-      {
-        element: 'ai', description: 'Name the capital.', inputs: ['prompt'], outputs: ['output'],
-        refine: { body: 'Name the capital of the country.', outcome: 'The capital of France is Paris.', change: 'One word only.' },
-      },
-      { ai, code: runner(() => ({})), generationFor, target },
-    );
-    expect(ai.asked[0].prompt).toContain('## The system prompt as it is now\n\nName the capital of the country.');
-    expect(ai.asked[0].prompt).toContain('## What to change\n\nOne word only.');
-    expect(reply).toMatchObject({ result: 'Answer in one word.', task: 'Name the capital, in one word.' });
+  it('writes what a data node holds again whole, changed as said, with the text restated -- the bar\'s change of a data node', async () => {
+    const ai = scripted(['Here:\n```json\n{"cities": ["Berlin", "Paris"]}\n```\n<description>Keeps two capitals: Berlin and Paris.</description>']);
+    const held = node('data', { data_format: 'structure', data_value: { cities: ['Berlin'] } }, { inputs: ['input'], outputs: ['output'] });
+    const reply = await generate({ node: held, write: 'body', refine: { change: 'Add Paris.' } }, deps(ai));
+    const { prompt, system } = ai.asked[0];
+    expect(prompt).toContain('## What the node holds as it is now\n\n{\n  "cities": [\n    "Berlin"\n  ]\n}');
+    expect(prompt).toContain('## What to change\n\nAdd Paris.');
+    expect(prompt).toMatch(/restate what this node does in one or two sentences, inside <description><\/description> tags/);
+    expect(prompt).toContain('in one ```json block, as plain JSON -- then, after the block, the node\'s text restated as asked above, and nothing else.');
+    expect(`${system} ${prompt}`).not.toMatch(/JSON, and nothing else|Output only/);
+    expect(reply).toMatchObject({ result: '{"cities": ["Berlin", "Paris"]}', description: 'Keeps two capitals: Berlin and Paris.' });
+    // Written anew, with nothing to change, it is the data and nothing else.
+    const fresh = scripted(['```json\n{"cities": []}\n```']);
+    await generate({ node: held }, deps(fresh));
+    expect(fresh.asked[0].prompt).toContain('in one ```json block, as plain JSON, and nothing else.');
   });
+});
+
+describe('a change that needs another output -- the review\'s tool 1: a chart\'s figure', () => {
+  const CSV = 'module.exports = { "input": "Country,Population\\nIndia,1450\\nChina,1419" };';
+  const CONFIG = 'module.exports = { "output": { "data": [1450, 1419], "labels": ["India", "China"], "type": "bar" } };';
+  const FIGURE = '/** @typedef {Object} Output @property {Object} output the figure */\n'
+    + 'module.exports = { "output": { "kind": "bars", "title": "Population", "points": [{ "label": "India", "value": 1450 }] } };';
+  const rows = 'const rows = i.input.split("\\n").slice(1).map((r) => r.split(","));';
+  const configCode = `function run(i) { ${rows} return { output: { data: rows.map((r) => Number(r[1])), labels: rows.map((r) => r[0]), type: "bar" } }; }`;
+  const figureCode = `function run(i) { ${rows} return { output: { kind: "bars", title: "Population", points: rows.map((r) => ({ label: r[0], value: Number(r[1]) })) } }; }`;
+  const chart = (config: Record<string, unknown> = {}) => node('code', { input_definition: CSV, output_definition: CONFIG, code: configCode, ...config }, { inputs: ['input'], outputs: ['output'] });
+  const CHANGE = 'Hand the chart block a figure it can draw: {"kind": "bars", "title": "Population", "points": [{"label": country, "value": population}]}';
+  const RESTATED = '<description>Reads the CSV and hands the chart a bar figure of the population by country.</description>';
+
+  it('shows output.js, and takes the new one the answer brings: written with the body, which is held to it', async () => {
+    const ai = scripted([`${js(figureCode)}\n${js(FIGURE)}\n${RESTATED}`]);
+    const reply = await generate({ node: chart(), refine: { change: CHANGE }, output_targets: { output: '"Page" (port "Chart")' } }, deps(ai, nodeCode));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain(`--- output.js, the output definition it returns now ---\n${CONFIG}`);
+    expect(sent).toContain('If the change needs other outputs than output.js describes -- other keys, or another shape -- return the new output.js, the whole file, in a second ```js block after the function.');
+    expect(sent).toContain('Where the change needs other outputs than output.js describes, the new output.js follows the function, whole, in a second ```js block.');
+    expect(reply).toMatchObject({ result: figureCode, output_definition: FIGURE, description: expect.stringContaining('bar figure'), probe: { status: 'ok' } });
+    expect(ai.asked).toHaveLength(1);
+  }, 30_000);
+
+  it('keeps the attempt that holds the change where it brings no output.js, and says what does not fit -- not the old body under the new text', async () => {
+    // Asked to repair against the old output.js, the model the review used turned the figure back into the config.
+    const ai = scripted([`${js(figureCode)}\n${RESTATED}`, js(configCode)]);
+    const reply = await generate({ node: chart(), refine: { change: CHANGE } }, deps(ai, nodeCode));
+    expect(ai.asked).toHaveLength(1);
+    expect(reply).toMatchObject({ result: figureCode, description: expect.stringContaining('bar figure'), probe: { status: 'failed' } });
+    expect(reply.output_definition).toBeUndefined();
+    expect(reply.probe.problems).toEqual(expect.arrayContaining(['output "output" at data is missing', 'output "output" at labels is missing']));
+    expect(reply.probe.problems.at(-1)).toBe('if the change needs other outputs, ✨ Output writes output.js for it from the node\'s text');
+  }, 30_000);
+
+  it('repairs a change that does not run, keeping the change -- not held to the output.js from before it', async () => {
+    const broken = 'function run(i) { return { output: { kind: "bars", title: "Population", points: i.nothing.map((r) => r) } }; }';
+    const ai = scripted([`${js(broken)}\n${RESTATED}`, js(figureCode)]);
+    const reply = await generate({ node: chart(), refine: { change: CHANGE } }, deps(ai, nodeCode));
+    expect(ai.asked).toHaveLength(2);
+    expect(ai.asked[1].prompt).toContain('--- the change it was written to make, which the fix keeps ---');
+    expect(ai.asked[1].prompt).not.toContain('--- what is wrong with what it returned ---');
+    expect(reply).toMatchObject({ result: figureCode, description: expect.stringContaining('bar figure'), probe: { status: 'failed' } });
+  }, 30_000);
+
+  it('does not take an output.js that leaves out an output other nodes are wired to', async () => {
+    const dropping = 'module.exports = { "figure": { "kind": "bars", "title": "t", "points": [] } };';
+    const ai = scripted([`${js(figureCode)}\n${js(dropping)}\n${RESTATED}`]);
+    const reply = await generate({ node: chart(), refine: { change: CHANGE }, output_targets: { output: '"Page" (port "Chart")' } }, deps(ai, nodeCode));
+    expect(reply.output_definition).toBeUndefined();
+    expect(reply.result).toBe(figureCode);
+  }, 30_000);
+
+  it('mends an output.js that cannot be read where ✨ Fix is asked: it comes back corrected after the code, which is held to it', async () => {
+    const unreadable = 'module.exports = { "output": { "kind": "bars", "title": "Population", "points": [] }, };';
+    const why = unreadableOutput(unreadable)!;
+    const ai = scripted([`${js(figureCode)}\n${js(FIGURE)}`]);
+    const reply = await generate({ node: chart({ output_definition: unreadable, code: figureCode }), refine: { outcome: '{}', problems: [why] } }, deps(ai, nodeCode));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain(`The output definition this function is held to cannot be read -- ${why}.`);
+    expect(sent).toContain(`--- output.js as it is ---\n${unreadable}`);
+    expect(sent).toContain('then output.js corrected: the whole file, its example as plain JSON: double-quoted keys and strings, no comments, no trailing commas, in a second ```js block.');
+    expect(sent).toContain('Then output.js, corrected, in a second ```js block.');
+    expect(reply).toMatchObject({ result: figureCode, output_definition: FIGURE, probe: { status: 'ok' } });
+  }, 30_000);
 });
 
 describe('the code in a model\'s answer', () => {
   const fence = '```';
   it('is found behind any info string, with Windows line ends too', () => {
     expect(firstCodeBlock(`Here:\n${fence}javascript \nfunction run() {}\n${fence}\nDone.`)).toBe('function run() {}');
-    expect(firstCodeBlock(`${fence}js title="run.js"\r\nfunction run() {}\r\n${fence}`)).toBe('function run() {}');
+    expect(firstCodeBlock(`${fence}js title="code.js"\r\nfunction run() {}\r\n${fence}`)).toBe('function run() {}');
   });
 
   it('does not end at a fence the code writes into a string', () => {
@@ -229,369 +482,32 @@ describe('the code in a model\'s answer', () => {
   });
 });
 
-describe('generated code that asks a model', () => {
-  it('is tried the way a graph runs it: with a node it can ask -- it used to fail on `node.llm is not a function`', async () => {
-    // First reply: the code. Second: what the code's own question is answered with, in the probe.
-    const ai = scripted([
-      '```js\nasync function run(inputs, node) { return { label: (await node.llm({ prompt: "Classify: " + inputs.row })).trim() }; }\n```',
-      ' fruit ',
-    ]);
-    const reply = await generate(
-      { element: 'code', description: 'classify the row with the model', inputs: ['row'], outputs: ['label'], sample_inputs: { row: 'apple' } },
-      { ai, code: nodeCode, generationFor, target },
-    );
-    expect(reply.probe).toMatchObject({ status: 'ok', outputs: { label: 'fruit' } });
-    expect(ai.asked[1].prompt).toContain('Classify: apple');
-  }, 30_000);
-});
-
-describe('what the node says about itself reaches the model', () => {
-  // The port descriptions, the kept output shape and the examples were used to
-  // check a body and never to write one; pressing ✨ again could rename a
-  // table's columns with every check still passing.
-  const rows = {
-    element: 'code', description: 'One table row per file.',
-    inputs: ['files', 'summaries'], outputs: ['rows'],
-    input_notes: { files: 'Every path in the folder', summaries: 'One per file, same order' },
-    output_notes: { rows: 'A list of {File, Summary}' },
-    output_schema: { type: 'object', properties: { rows: { type: 'array' } }, required: ['rows'] },
-    examples: '## Two files\n\n```json input\n{"files": ["a.txt"], "summaries": ["One."]}\n```\n\n```json expect\n{"rows": [{"File": "a.txt", "Summary": "One."}]}\n```\n',
-  };
-
-  it('says each input once -- what it holds, where from, a sample -- and the output, shape and examples after', async () => {
-    const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
-    await generate(rows, { ai, code: runner(() => ({ rows: [{ File: 'a.txt', Summary: 'One.' }] })), generationFor, target });
-    const prompt = ai.asked[0].prompt;
-    expect(prompt).toContain('## What comes in\n- `files`: Every path in the folder');
-    // No run yet: the example's inputs are the sample, and say so.
-    expect(prompt).toContain('sample, from the example "Two files": a list of 1: ["a.txt"]');
-    expect(prompt).toContain('## What goes out\n- `rows`: A list of {File, Summary}');
-    expect(prompt).toContain('keep it: { rows: list of anything }');
-    expect(prompt).toContain('must return, at least: {"rows":[{"File":"a.txt","Summary":"One."}]}');
-    // Said once: the skeleton is the signature, typed from the sample, with no second copy of the notes.
-    expect(prompt).toContain('@property {string[]} files\n');
-    expect(prompt.split('Every path in the folder')).toHaveLength(2);
-  });
-
-  it('sends the output format whatever else is set, cut to a budget', async () => {
-    const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
-    await generate({
-      ...rows, examples: undefined, output_format: 'A list of {File, Summary}, largest first.',
-      sample_inputs: { files: ['x'.repeat(5000)], summaries: ['y'] },
-    }, { ai, code: runner(() => ({ rows: [] })), generationFor, target });
-    const prompt = ai.asked[0].prompt;
-    expect(prompt).toContain('Format: A list of {File, Summary}, largest first.');
-    expect(prompt).toContain('sample, from the last run: a list of 1: ["xxx');
-    expect(prompt).toContain('more characters not shown');
-    expect(prompt.length).toBeLessThan(6000);
-  });
-
-  it('holds the code to the example it was tried on, and repairs it when it falls short', async () => {
-    const ai = scripted([
-      '```js\nfunction run() { return { rows: [] }; }\n```',
-      '```js\nfunction run() { return { rows: [{ File: "a.txt", Summary: "One." }] }; }\n```',
-    ]);
-    const single = { ...rows, examples: '## One file\n\n```json input\n{"files": "a.txt", "summaries": "One."}\n```\n\n```json expect\n{"rows": [{"File": "a.txt"}]}\n```\n' };
-    const code: CodeService = { run: async (body) => (body.includes('a.txt') ? { rows: [{ File: 'a.txt', Summary: 'One.' }] } : { rows: [] }) };
-    const reply = await generate(single, { ai, code, generationFor, target });
-    expect(ai.asked).toHaveLength(2);
-    expect(ai.asked[1].prompt).toContain('for the example "One file", output.rows has 0 items; expected 1');
-    expect(reply.probe.status).toBe('repaired');
-  });
-
-  it('no longer tells every code node about charts -- only a chart downstream says so', async () => {
-    const ai = scripted(['```js\nfunction run() { return { rows: [] }; }\n```']);
-    await generate(rows, { ai, code: runner(() => ({})), generationFor, target });
-    expect(ai.asked[0].prompt).not.toContain('chart');
-    expect(registry.widget('plot_window')?.receives(parseWidget({ id: 'b', kind: 'plot_window' }))).toContain('draws at the block\'s real size');
-    expect(registry.widget('table')?.receives(parseWidget({ id: 'b', kind: 'table' }))).toContain('column header');
-  });
-
-  it('tells the node upstream what a drawing block takes', () => {
-    // A block reshapes nothing itself: the node wired into it hands it what it draws.
-    for (const kind of ['plot_window', 'table', 'image_view'] as const) {
-      expect(registry.widget(kind)!.receives(parseWidget({ id: 'b', kind })), kind).toBeTruthy();
-    }
-  });
-
-  it('tells a prompt what its model will be sent, laid out as the message says, from the same brief', async () => {
-    const ai = scripted(['<system_prompt>Summarize.</system_prompt>']);
-    await generate({
-      element: 'ai', description: 'Summarize one story in two sentences.',
-      inputs: ['story'], outputs: ['output'], input_notes: { story: 'One file per run; arrives as its content' },
-      input_sources: { story: '"Folder summaries" (port "Folder")' },
-      message_template: 'Story:\n{{story}}',
-      output_notes: { output: 'What the model answered' },
-      output_format: 'Two sentences, no heading.',
-      sample_inputs: { story: 'Once upon a time.' },
-    }, { ai, code: runner(() => ({})), generationFor, target });
-    const prompt = ai.asked[0].prompt;
-    expect(prompt).toContain('## What the model is sent\n- `story`: One file per run; arrives as its content\n  from "Folder summaries" (port "Folder")');
-    expect(prompt).toContain('sample, from the last run: "Once upon a time."');
-    expect(prompt).toContain('laid out in the message like this');
-    expect(prompt).toContain('Story:\n{{story}}');
-    expect(prompt).toContain('- `output`: What the model answered');
-    expect(prompt).toContain('Format: Two sentences, no heading.');
-    expect(prompt).toContain('need not repeat it');
-  });
-});
-
-describe('a node run once per item', () => {
-  /** A body run in this process: the probe and a run both reach it through `CodeService`, so they can be compared. */
-  const inProcess: CodeService = {
-    run: async (body, inputs) => new Function('inputs', `${body}\nreturn run(inputs);`)(inputs) as Record<string, unknown>,
-  };
-  const request = {
-    element: 'code', description: 'Shout each word.', inputs: ['text'], outputs: ['out'],
-    input_types: { text: 'text' }, batch_mode: 'per_item' as const,
-    // As the editor sends them: which ports are declared lists (`Port.multi`).
-    multi_inputs: ['text'], multi_outputs: ['out'],
-    sample_inputs: { text: ['alpha', 'beta'] },
-  };
-  const shout = '```js\nfunction run(inputs) { return { out: inputs.text.toUpperCase() }; }\n```';
-
-  it('is shown and tried on one item, as `run` is called -- a correct body used to fail on the whole list', async () => {
-    const ai = scripted([shout]);
-    const tried: unknown[] = [];
-    const code: CodeService = { run: async (body, inputs) => { tried.push(inputs.text); return inProcess.run(body, inputs); } };
-    const reply = await generate(request, { ai, code, generationFor, target });
-    const prompt = ai.asked[0].prompt;
-    expect(prompt).toContain('sample, from the last run, the first of its 2 items: "alpha"');
-    expect(prompt).toContain('@property {string} text\n');
-    // What goes out is said as the list a run collects, so an example's list
-    // of two is not read as what one call must return.
-    expect(prompt).toContain('What the calls return is collected into one list per output');
-    expect(tried).toEqual(['alpha']);
-    expect(reply.probe).toMatchObject({ status: 'ok' });
-  });
-
-  it('turns away a body written for the list, which the probe used to pass and every item of a run failed', async () => {
-    const ai = scripted([
-      '```js\nfunction run(inputs) { return { out: inputs.text.map((word) => word.toUpperCase()) }; }\n```',
-      shout,
-    ]);
-    const reply = await generate(request, { ai, code: inProcess, generationFor, target });
-    expect(ai.asked[1].prompt).toContain('inputs["text"]: string = "alpha"');
-    expect(reply.probe.status).toBe('repaired');
-    expect(reply.result).not.toContain('.map(');
-  });
-
-  it('keeps the shape a run of the node hands on, not the shape of one call', async () => {
-    const ai = scripted([shout]);
-    const reply = await generate(request, { ai, code: inProcess, generationFor, target });
-    const graph = parseGraph({
-      nodes: [{
-        id: 'shout', node_type: 'code', config: { code: reply.result, batch_mode: 'per_item' },
-        inputs: [port('text', 'Text', 'input', 'any', true)], outputs: [port('out', 'Out', 'output', 'any', true)],
-      }],
-    });
-    const runtime = { code: inProcess, ai, files: {} as never };
-    const ran = await executeNode(graph, 'shout', { text: ['alpha', 'beta'] }, { runtime, registry });
-    expect(ran.outputs).toEqual({ out: ['ALPHA', 'BETA'] });
-    // One item was tried; what it hands on is a list, as the run's is.
-    expect(reply.probe.outputs).toEqual({ out: ['ALPHA'] });
-    expect(inferInterface(reply.probe.outputs!)).toEqual(inferInterface(ran.outputs));
-  });
-
-  it('does not cut a list the body is handed whole, and a list of one is its one item', async () => {
-    const ai = scripted([shout]);
-    let tried: Record<string, unknown> = {};
-    const code: CodeService = { run: async (body, inputs) => { tried = inputs; return inProcess.run(body, inputs); } };
-    const reply = await generate({
-      ...request, inputs: ['text', 'stop'], input_types: { text: 'text', stop: 'list of text' },
-      sample_inputs: { text: ['alpha'], stop: ['a', 'the'] },
-    }, { ai, code, generationFor, target });
-    expect(tried).toEqual({ text: 'alpha', stop: ['a', 'the'] });
-    expect(ai.asked[0].prompt).toContain('sample, from the last run, its one item: "alpha"');
-    expect(reply.probe).toMatchObject({ status: 'ok', outputs: { out: ['ALPHA'] } });
-  });
-
-  it('hands on a list even for one item, as a run of the node\'s list output does -- it kept the bare answer', async () => {
-    // What a run of the node as it is created hands on: a multi output
-    // collects its answers whatever their number, so a run of one item hands
-    // on a list of one, and a single value arriving is a run of one item.
-    const graph = parseGraph({
-      nodes: [{
-        id: 'shout', node_type: 'code', config: { code: shout.split('\n')[1], batch_mode: 'per_item' },
-        inputs: [port('text', 'Text', 'input', 'any', true)], outputs: [port('out', 'Out', 'output', 'any', true)],
-      }],
-    });
-    for (const text of [['alpha'], 'alpha']) {
-      const reply = await generate({ ...request, sample_inputs: { text } }, { ai: scripted([shout]), code: inProcess, generationFor, target });
-      const ran = await executeNode(graph, 'shout', { text }, { runtime: { code: inProcess, ai: scripted([]), files: {} as never }, registry });
-      expect(ran.outputs).toEqual({ out: ['ALPHA'] });
-      expect(reply.probe.outputs).toEqual(ran.outputs);
-    }
-  });
-
-  it('holds a correct body to an example kept from a run of one item, list and all', async () => {
-    // `test` holds the example to what the node hands on, a list of one; held
-    // to the bare answer, the probe failed a correct body and asked for a repair.
-    const kept = '## One word\n\n```json input\n{"text": ["alpha"]}\n```\n\n```json expect\n{"out": ["ALPHA"]}\n```\n';
-    const reply = await generate({ ...request, sample_inputs: undefined, examples: kept }, { ai: scripted([shout]), code: inProcess, generationFor, target });
-    expect(reply.probe).toMatchObject({ status: 'ok', problems: [] });
-    // An output declared single hands on the bare answer, and an example that expects it is met by it.
-    const typed = '## One word\n\n```json input\n{"text": "alpha"}\n```\n\n```json expect\n{"out": "ALPHA"}\n```\n';
-    const single = await generate({ ...request, multi_outputs: [], sample_inputs: undefined, examples: typed }, { ai: scripted([shout]), code: inProcess, generationFor, target });
-    expect(single.probe).toMatchObject({ status: 'ok' });
-    // And a wrong answer meets neither.
-    const lower = '```js\nfunction run(inputs) { return { out: inputs.text }; }\n```';
-    const wrong = await generate({ ...request, sample_inputs: undefined, examples: kept }, { ai: scripted([lower, lower]), code: inProcess, generationFor, target });
-    expect(wrong.probe.status).toBe('failed');
-    expect(wrong.probe.problems?.[0]).toContain('for the example "One word", output.out[0] is "alpha"; expected "ALPHA"');
-  });
-
-  it('tries nothing on an empty list, which a run never calls the body for', async () => {
-    const ai = scripted([shout]);
-    const reply = await generate({ ...request, sample_inputs: { text: [] } },
-      { ai, code: runner(() => { throw new Error('must not run'); }), generationFor, target });
-    expect(reply.probe.status).toBe('skipped');
-    expect(ai.asked[0].prompt).not.toContain('sample, from');
-  });
-
-  it('holds one item to no example of the whole node, and a body taking the list whole to its example', async () => {
-    const examples = '## Two words\n\n```json input\n{"text": ["alpha", "beta"]}\n```\n\n```json expect\n{"out": ["ALPHA", "BETA"]}\n```\n';
-    const perItem = await generate({ ...request, sample_inputs: undefined, examples }, { ai: scripted([shout]), code: inProcess, generationFor, target });
-    expect(perItem.probe.status).toBe('ok');
-
-    const ai = scripted([
-      '```js\nfunction run(inputs) { return { out: [] }; }\n```',
-      '```js\nfunction run(inputs) { return { out: inputs.text.map((word) => word.toUpperCase()) }; }\n```',
-    ]);
-    const whole = await generate({
-      ...request, batch_mode: 'whole_list', input_types: { text: 'list of text' }, sample_inputs: undefined, examples,
-    }, { ai, code: inProcess, generationFor, target });
-    expect(ai.asked[1].prompt).toContain('for the example "Two words", output.out has 0 items; expected 2');
-    expect(whole.probe.status).toBe('repaired');
-  });
-
-  it('cuts only the inputs the node declares lists', async () => {
-    // Guessed from the types, as it once was, a list arriving on a port that
-    // is not typed "list of" was cut as if it fanned out; a run hands it on whole.
-    let tried: Record<string, unknown> = {};
-    const code: CodeService = { run: async (body, inputs) => { tried = inputs; return inProcess.run(body, inputs); } };
-    await generate({
-      ...request, inputs: ['text', 'stop'], input_types: { text: 'text', stop: 'any' }, multi_inputs: ['text'],
-      sample_inputs: { text: ['alpha', 'beta'], stop: ['a', 'the'] },
-    }, { ai: scripted([shout]), code, generationFor, target });
-    expect(tried).toEqual({ text: 'alpha', stop: ['a', 'the'] });
-  });
-
-  it('hands a lone answer on as it came from an output declared single, as a run of one item does', async () => {
-    const graph = parseGraph({
-      nodes: [{
-        id: 'shout', node_type: 'code', config: { code: shout.split('\n')[1], batch_mode: 'per_item' },
-        inputs: [port('text', 'Text', 'input', 'any', true)], outputs: [port('out', 'Out', 'output', 'any', false)],
-      }],
-    });
-    const ran = await executeNode(graph, 'shout', { text: ['alpha'] }, { runtime: { code: inProcess, ai: scripted([]), files: {} as never }, registry });
-    const reply = await generate({ ...request, sample_inputs: { text: ['alpha'] }, multi_inputs: ['text'], multi_outputs: [] },
-      { ai: scripted([shout]), code: inProcess, generationFor, target });
-    expect(ran.outputs).toEqual({ out: 'ALPHA' });
-    expect(reply.probe.outputs).toEqual(ran.outputs);
-  });
-
-  it('tells a prompt that the model is sent one item, and shows it that item', async () => {
-    const ai = scripted(['<system_prompt>Summarise the story.</system_prompt>']);
-    await generate({
-      element: 'ai', description: 'Summarise each story.', inputs: ['story'], outputs: ['output'],
-      input_types: { story: 'text' }, batch_mode: 'per_item', multi_inputs: ['story'], multi_outputs: ['output'],
-      sample_inputs: { story: ['Once.', 'Twice.', 'Thrice.'] },
-    }, { ai, code: runner(() => ({})), generationFor, target });
-    const prompt = ai.asked[0].prompt;
-    expect(prompt).toContain('sample, from the last run, the first of its 3 items: "Once."');
-    expect(prompt).toContain('the model is called once per item and is sent that one item');
-  });
-});
-
 describe('a preview', () => {
-  it('builds the request exactly as ✨ would, and does not send it', async () => {
-    const ai = scripted([]);  // asked anything, it fails the test
-    const reply = await generate(
-      { element: 'code', description: 'add', inputs: ['a'], outputs: ['out'], preview: true },
-      { ai, code: runner(() => { throw new Error('nothing may run'); }), generationFor, target },
-    );
-    expect(ai.asked).toHaveLength(0);
-    expect(reply.result).toBe('');
-    expect(reply.calls).toHaveLength(1);
-    expect(reply.calls[0].error).toBeNull();
-    expect(reply.calls[0].prompt).toContain('const a = inputs["a"];');
-    expect(reply.calls[0].system).toContain('expert software engineer');
-  });
-
-  it('is the same request the real call sends', async () => {
-    const asked = { element: 'ai', description: 'Be brief.', inputs: ['prompt'] };
-    const preview = await generate({ ...asked, preview: true }, { ai: scripted([]), code: runner(() => ({})), generationFor, target });
-    const ai = scripted(['<system_prompt>x</system_prompt>']);
-    await generate(asked, { ai, code: runner(() => ({})), generationFor, target });
-    expect(preview.calls[0].prompt).toBe(ai.asked[0].prompt);
-    expect(preview.calls[0].system).toBe(ai.asked[0].system);
-  });
-});
-
-describe('a node that is handed a file\'s text, not its path', () => {
-  const files = (known: Record<string, string>) => ({
-    read: async (path: string) => {
-      if (!(path in known)) throw new Error(`no such file: ${path}`);
-      return known[path];
-    },
-  }) as never;
-  const request = {
-    element: 'code', description: 'count rows', inputs: ['csv', 'top'], outputs: ['rows'],
-    sample_inputs: { csv: 'data/people.csv', top: '5' },
-    input_sources: { csv: '"Page" (port "CSV file")' },
-    read_file_ports: ['csv'],
-  };
-
-  it('shows the model the text and tries the code on it -- it used to try it on the filename and pass', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { rows: 2 }; }\n```']);
-    let received: Record<string, unknown> = {};
-    const code: CodeService = { run: async (_body, inputs) => { received = inputs; return { rows: 2 }; } };
-    const reply = await generate(request, { ai, code, generationFor, target, files: files({ 'data/people.csv': 'name,age\nAda,36' }) });
-    expect(received).toEqual({ csv: 'name,age\nAda,36', top: '5' });
-    expect(ai.asked[0].prompt).toContain('sample, from the last run: "name,age\\nAda,36"');
-    expect(ai.asked[0].prompt).toContain('from "Page" (port "CSV file"): the text of the file, already read');
-    expect(ai.asked[0].prompt).not.toContain('data/people.csv');
-    expect(reply.probe.status).toBe('ok');
-  });
-
-  it('does not vouch for code when the sample\'s file cannot be read', async () => {
-    const ai = scripted(['```js\nfunction run(i) { return { rows: 0 }; }\n```']);
-    let probed = false;
-    const reply = await generate(request, { ai, code: runner(() => { probed = true; return { rows: 0 }; }), generationFor, target, files: files({}) });
-    expect(probed).toBe(false);
-    expect(reply.probe.status).toBe('skipped');
-  });
-});
-
-describe('prose', () => {
-  it('takes the text between the tags, and not what the model says after them', async () => {
-    const ai = scripted(['<system_prompt>Be terse.</system_prompt>\nBecause.']);
-    const reply = await generate({ element: 'ai', description: 'a terse bot' }, { ai, code: runner(() => ({})), generationFor, target });
-    expect(reply.result).toBe('Be terse.');
-  });
-
-  it('falls back to the whole reply when the model ignored the tags', async () => {
-    const ai = scripted(['Just text.']);
-    const reply = await generate({ element: 'ai', description: 'x' }, { ai, code: runner(() => ({})), generationFor, target });
-    expect(reply.result).toBe('Just text.');
+  it('builds the request exactly as ✨ would, whichever it writes, and does not send it', async () => {
+    for (const write of ['input', 'output', 'body'] as const) {
+      const ai = scripted([]);
+      const reply = await generate({ node: node('code'), write, preview: true }, deps(ai));
+      expect(ai.asked, write).toHaveLength(0);
+      expect(reply.calls, write).toHaveLength(1);
+      expect(reply.calls[0], write).toMatchObject({ reply: null, error: null });
+      expect(reply.calls[0].prompt, write).toContain('## How to answer');
+    }
   });
 });
 
 describe('refusals and failures', () => {
-  it('refuses an element that generates nothing, and a request that names no element', async () => {
-    const deps = { ai: scripted([]), code: runner(() => ({})), generationFor, target };
-    await expect(generate({ element: 'output', description: 'x' }, deps)).rejects.toBeInstanceOf(GenerationRefused);
-    // A data node is its value: there is no format of it to write.
-    await expect(generate({ element: 'data', description: 'x' }, deps)).rejects.toBeInstanceOf(GenerationRefused);
-    // What arrives over the wire is not held to the type: a body without one.
-    await expect(generate({ description: 'x' } as GenerateRequest, deps)).rejects.toBeInstanceOf(GenerationRefused);
+  it('refuses a node that has nothing ✨ writes, a definition of a node that has none, and what it does not write', async () => {
+    const quiet = deps(scripted([]));
+    await expect(generate({ node: node('output') }, quiet)).rejects.toBeInstanceOf(GenerationRefused);
+    await expect(generate({ node: node('data'), write: 'input' }, quiet)).rejects.toBeInstanceOf(GenerationRefused);
+    await expect(generate({ node: node('code'), write: 'example' as never }, quiet)).rejects.toBeInstanceOf(GenerationRefused);
+    // What arrives over the wire is not held to the type: a request without a node.
+    await expect(generate({} as GenerateRequest, quiet)).rejects.toBeInstanceOf(GenerationRefused);
   });
 
   it('hands the transcript back with a failure, since that is when it is worth reading', async () => {
     const ai: AiService = { complete: async () => { throw new Error('no content'); } };
-    const failure = await generate({ element: 'code', description: 'x' }, { ai, code: runner(() => ({})), generationFor, target })
-      .catch((error: unknown) => error);
+    const failure = await generate({ node: node('code') }, deps(ai)).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(GenerationFailed);
     expect((failure as GenerationFailed).calls[0]).toMatchObject({ error: 'no content', reply: null });
   });
@@ -605,7 +521,115 @@ describe('a whole graph', () => {
     expect(reply.explanation).toBe('Done.');
   });
 
-  it('fails, with the transcript, when there is no document to parse', async () => {
-    await expect(generateGraph('x', { ai: scripted(['no json here']), target })).rejects.toBeInstanceOf(GenerationFailed);
+  it('fails, with the transcript and a sentence for a person, when there is no whole document to parse -- an answer cut off', async () => {
+    const failure = await generateGraph('x', { ai: scripted(['```json\n{"nodes": [{"id": "a", "config": {"history": "## 2026']), target })
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(GenerationFailed);
+    expect((failure as GenerationFailed).message).toBe('The model\'s answer was not a whole graph -- it may have been cut off. Try again, or ask for less at once.');
+    expect((failure as GenerationFailed).calls).toHaveLength(1);
+  });
+});
+
+describe('a whole graph, changed as said', () => {
+  const current = parseGraph({
+    metadata: { name: 'Word tool', description: 'Counts words.', gui_scheme: 'paper' },
+    nodes: [
+      { id: 'count', node_type: 'code', label: 'Count', position: { x: 420, y: 120 }, config: { code: 'function run() { return {}; }' } },
+      { id: 'page', node_type: 'gui', label: 'Page', position: { x: 40, y: 80 }, width: 340, height: 300 },
+    ],
+    edges: [],
+  });
+
+  it('is sent the graph there is, as the document the model writes, with the change -- and asked to keep the ids', async () => {
+    const ai = scripted(['```json\n{"nodes":[],"edges":[]}\n```']);
+    await generateGraph('Call the counter "Count words".', { ai, target }, current);
+    const { prompt, system } = ai.asked[0];
+    // The document itself, so a model shown it can hand it back whole.
+    expect(prompt).toContain(JSON.stringify(current, null, 2));
+    expect(prompt).toContain('Change it as follows:\nCall the counter "Count words".');
+    expect(prompt).toMatch(/Keep every node's id, and keep everything the change does not touch/);
+    // The rules a designed graph is held to hold for a changed one: the kinds, their settings, the derived ports.
+    expect(system).toContain('Graph DSL');
+  });
+
+  it('keeps what the answer leaves out: the graph\'s name and scheme, where each node stands, a page\'s size', async () => {
+    // An answer that says nothing of the metadata, of positions or of a size.
+    const answer = {
+      nodes: [
+        { id: 'count', node_type: 'code', label: 'Count words' },
+        { id: 'page', node_type: 'gui', label: 'Page' },
+        { id: 'shown', node_type: 'output', label: 'Words', position: { x: 800, y: 120 } },
+      ],
+      edges: [],
+    };
+    const reply = await generateGraph('Show the count.', { ai: scripted([`\`\`\`json\n${JSON.stringify(answer)}\n\`\`\``]), target }, current);
+    const graph = parseGraph(reply.graph);
+    expect(graph.metadata).toMatchObject({ name: 'Word tool', description: 'Counts words.', gui_scheme: 'paper' });
+    expect(graph.nodes.map((node) => [node.id, node.label, node.position])).toEqual([
+      ['count', 'Count words', { x: 420, y: 120 }], ['page', 'Page', { x: 40, y: 80 }], ['shown', 'Words', { x: 800, y: 120 }],
+    ]);
+    expect(graph.nodes[1]).toMatchObject({ width: 340, height: 300 });
+    // What the answer does say is what it says: a new name is a change.
+    const renamed = await generateGraph('Rename it.', {
+      ai: scripted(['```json\n{"metadata":{"name":"Counter"},"nodes":[],"edges":[]}\n```']), target,
+    }, current);
+    expect(parseGraph(renamed.graph).metadata).toMatchObject({ name: 'Counter', gui_scheme: 'paper' });
+  });
+
+  it('designs one when the graph there is has no nodes yet, under the name it has when the design gives none', async () => {
+    const ai = scripted(['```json\n{"nodes":[],"edges":[]}\n```']);
+    const empty = parseGraph({ metadata: { name: 'My tool', gui_scheme: 'office' }, nodes: [], edges: [] });
+    const reply = await generateGraph('Count the words of a text.', { ai, target }, empty);
+    expect(ai.asked[0].prompt).toBe('Design a graph that does the following:\nCount the words of a text.');
+    expect(parseGraph(reply.graph).metadata).toMatchObject({ name: 'My tool', gui_scheme: 'office' });
+  });
+
+  it('is not sent how each node was written, and loses none of it: a kept node\'s history comes back from the graph that was sent', async () => {
+    const written = parseGraph({
+      metadata: { name: 'Words' },
+      nodes: [
+        { id: 'count', node_type: 'code', label: 'Count', description: 'Counts the words.', config: {
+          code: 'function run() { return {}; }', prompts: { body: 'Mine.' },
+          history: '## 2026-09-27 10:00 · ✨ Code\n\nPrompt:\n\n```\nIBAN DE00 1234\n```',
+        } },
+        { id: 'say', node_type: 'ai', label: 'Say', description: 'Says the count.', config: {
+          prompt: 'Say it.', history: '## 2026-09-27 11:00 · ✨ Prompt\n\nNothing was sent.',
+        } },
+      ],
+      edges: [],
+    });
+    // "say" changed, "note" new -- and a history the model made up for "count", which is not the node's.
+    const answer = {
+      nodes: [
+        { id: 'count', node_type: 'code', label: 'Count', description: 'Counts the words.', config: { code: 'function run() { return {}; }', history: 'made up' } },
+        { id: 'say', node_type: 'ai', label: 'Say', description: 'Says the count kindly.', config: { prompt: 'Say it kindly.' } },
+        { id: 'note', node_type: 'data', label: 'Note', description: 'Keeps a note.', config: { data_format: 'text', data_value: 'hi' } },
+      ],
+      edges: [],
+    };
+    const ai = scripted([`\`\`\`json\n${JSON.stringify(answer)}\n\`\`\``]);
+    const reply = await generateGraph('Say it kindly, and keep a note.', { ai, target }, written);
+    expect(ai.asked[0].prompt).not.toMatch(/IBAN|Mine\.|✨ Prompt/);
+    const [count, say, note] = parseGraph(reply.graph).nodes;
+    // Kept and untouched: its history and its ✨ prompts, as they were sent.
+    expect(count.config).toMatchObject({ history: written.nodes[0].config.history, prompts: { body: 'Mine.' } });
+    // Touched: the exchange at the end of its history, as after every ✨; new: its history begins with it.
+    const exchange = /## \d{4}-\d\d-\d\d \d\d:\d\d · Change of the graph: Say it kindly, and keep a note\.\n\n### Sent to test m\n\nSystem:/;
+    expect(String(say.config.history)).toMatch(new RegExp(`^## 2026-09-27 11:00 · ✨ Prompt\\n\\nNothing was sent\\.\\n\\n${exchange.source}`));
+    expect(String(note.config.history)).toMatch(new RegExp(`^${exchange.source}`));
+  });
+
+  it('keeps the history of the nodes inside a node that holds a graph', async () => {
+    const inner = (config: Record<string, unknown>) => ({
+      metadata: { name: 'inside' }, edges: [],
+      nodes: [{ id: 'count', node_type: 'code', label: 'Count', description: 'Counts the words.', config: { code: 'x', ...config } }],
+    });
+    const sent = parseGraph({ metadata: { name: 'Outer' }, nodes: [{ id: 'part', node_type: 'subgraph', label: 'Part', config: { subgraph: inner({ history: 'the history inside' }) } }], edges: [] });
+    const answer = { nodes: [{ id: 'part', node_type: 'subgraph', label: 'Part, renamed', config: { subgraph: inner({}) } }], edges: [] };
+    const ai = scripted([`\`\`\`json\n${JSON.stringify(answer)}\n\`\`\``]);
+    const reply = await generateGraph('Rename the part.', { ai, target }, sent);
+    expect(ai.asked[0].prompt).not.toContain('the history inside');
+    const [part] = parseGraph(reply.graph).nodes;
+    expect(registry.node('subgraph')!.nestedGraph(part)!.nodes[0].config.history).toBe('the history inside');
   });
 });

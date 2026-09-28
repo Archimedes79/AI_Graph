@@ -16,6 +16,7 @@ import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'no
 import { fileURLToPath } from 'node:url';
 import type { Graph } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
+import { withoutAuthoring } from '../authoring/handedOn.ts';
 import { NODE_MAJOR, runCmd, runSh, zipMode } from './launchers.ts';
 
 /** `engine/src`: the tree a bundle copies. This file sits in its `cli/`. */
@@ -171,7 +172,8 @@ export async function writeBundle(
     written.push(relativePath);
   };
 
-  await put('graph.json', `${JSON.stringify(graph, null, 2)}\n`);
+  // What only writing the graph needs stays with the project (`withoutAuthoring`).
+  await put('graph.json', `${JSON.stringify(withoutAuthoring(graph), null, 2)}\n`);
 
   for (const file of await engineFiles()) {
     const relativePath = join('engine', relative(ENGINE_ROOT, file)).replace(/\\/g, '/');

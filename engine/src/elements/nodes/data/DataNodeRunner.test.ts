@@ -42,14 +42,40 @@ describe('a data node holding nothing', () => {
 });
 
 describe('a data node is its value', () => {
-  it('keeps no writing of its own and has no body to write: no task.md, no format.md, no ✨', () => {
-    // It had a task and a format beside the value, each a file of its own and
-    // a ✨ of its own, and the neighbours were written against the format
-    // while they were handed the value.
+  it('keeps it in a file of its own, as JSON where it holds structure, and its history beside it', () => {
+    expect(element.texts(dataNode({ data_format: 'structure', data_value: { count: 2 } }))).toEqual([
+      { field: 'data_value', file: 'data.json', json: true, standard: 'null' },
+      { field: 'history', file: 'history.md' },
+    ]);
+    expect(element.texts(dataNode({ data_format: 'text', data_value: 'hello' }))[0]).toEqual({ field: 'data_value', file: 'data.txt', standard: '' });
+  });
+
+  it('holds structure from the moment a run hands it something that is not text: a count stays a count', () => {
+    const counter = dataNode({ data_format: 'text', data_value: '' });
+    element.settleMemory(counter, 'input', 'one');
+    expect(counter.config).toMatchObject({ data_format: 'text', data_value: 'one' });
+    element.settleMemory(counter, 'input', 1);
+    expect(counter.config).toMatchObject({ data_format: 'structure', data_value: 1 });
+    expect(element.texts(counter)[0]).toMatchObject({ file: 'data.json', json: true });
+  });
+
+  it('is named by check when it is kept as text and holds structure, set so by hand or by a model: it would come back as text', () => {
+    expect(element.problems(dataNode({ data_format: 'text', data_value: [1, 2] }), undefined, 'Node "store"')).toEqual([{
+      where: 'Node "store"',
+      problem: expect.stringContaining('comes back from data.txt as text'),
+      // Said as a person changes it, in its panel; the field only for a graph file.
+      fix: 'Set its Kind to Structure (JSON) in its panel (data_format "structure" in a graph file): it is kept in data.json then.',
+    }]);
+    for (const fine of [{ data_format: 'text', data_value: 'hello' }, { data_format: 'text' }, { data_format: 'structure', data_value: [1] }]) {
+      expect(element.problems(dataNode(fine), undefined, 'Node "store"')).toEqual([]);
+    }
+  });
+
+  it('has its value written by ✨ Data, and nothing that runs', () => {
     const node = dataNode({ data_format: 'structure', data_value: { count: 2 } });
-    expect(element.texts(node)).toEqual([]);
     expect(element.logic(node)).toBeUndefined();
-    expect(element.generation()).toBeUndefined();
+    expect(element.generation()).toMatchObject({ kind: 'data', fields: { body: 'data_value' } });
+    expect(element.definitions(node)).toBeUndefined();
     expect(element.graphAuthorNote()).not.toMatch(/data_prompt|data_format_prompt|format\.md|schema/);
   });
 });

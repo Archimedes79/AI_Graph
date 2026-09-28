@@ -3,13 +3,14 @@ import { useGraphStore } from '@/store/graphStore';
 import { SubgraphNodeRunner } from '@engine/elements/nodes/subgraph/SubgraphNodeRunner.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import type { NodePanelProps } from '../../NodeGuiBuilder';
+import RunOncePerItem from '../../fields/RunOncePerItem';
 
 const ELEMENT = new SubgraphNodeRunner();
 
 /**
- * In. The dialog goes first, because what is behind it is about to be a
- * different graph -- and a dialog closed writes what it still holds into the
- * graph it was opened in (`nodeDialog.watch`), before the canvas goes in.
+ * In. The panel goes first, because what is behind it is about to be a
+ * different graph -- and a panel closed writes what it still holds into the
+ * graph it was opened in (`nodePanel.watch`), before the canvas goes in.
  */
 export function enterGraphOf(nodeId: string): void {
   const store = useGraphStore.getState();
@@ -26,9 +27,9 @@ export function enterGraphOf(nodeId: string): void {
  * palette and the same undo as any other node. A second way to edit them here
  * would be a second place for them to live.
  */
-export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
+export default function SubgraphNodePanel({ node, setConfig, updateNode, setDescription }: NodePanelProps) {
   // No level opens while a run is going: its result is for the graph on the
-  // canvas (`openSubgraph`). Pressed then, the button closed the dialog and
+  // canvas (`openSubgraph`). Pressed then, the button closed the panel and
   // opened nothing, and said nothing.
   const running = useGraphStore((s) => s.isExecuting);
   const ports = ELEMENT.derivedPorts(node as never, engineRegistry) ?? { inputs: [], outputs: [] };
@@ -49,7 +50,7 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
           Open this graph ▸
         </button>
       ) : (
-        // A button that closes the dialog and opens nothing is worse than no
+        // A button that closes the panel and opens nothing is worse than no
         // button: this is the one case it cannot do its job, and it says so.
         <p className="mb-4 text-sm" style={{ color: DANGER_TEXT }}>
           The graph this node holds cannot be read. Open its <code>flow.json</code> under the project&apos;s{' '}
@@ -64,32 +65,37 @@ export default function SubgraphNodePanel({ node, setConfig }: NodePanelProps) {
           className="w-full rounded-lg px-3 py-2 text-sm"
           style={FIELD}
           rows={3}
-          value={node.config.task ?? ''}
-          onChange={(e) => setConfig('task', e.target.value)}
+          value={node.description}
+          onChange={(e) => setDescription(e.target.value)}
           placeholder="e.g. Take a paper, and give back a one-paragraph summary and a verdict"
+          aria-label="What this part is meant to do"
         />
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
-          A subgraph may be nothing but this sentence to begin with; the graph comes later.
+          Its text. A subgraph may be nothing but this sentence to begin with; the graph comes later.
         </p>
       </div>
 
-      {/* The one setting this node has of its own. It matters more here than
-          elsewhere: anything short of a clean run inside fails this node, so
-          this is how the graph above is allowed to carry on regardless. */}
-      <div className="mb-4">
-        <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-          <input
-            type="checkbox"
-            checked={node.config.catch_errors === true}
-            onChange={(e) => setConfig('catch_errors', e.target.checked)}
-          />
-          Catch a failed run instead of ending this one
-        </label>
-        <p className="text-xs mt-1" style={{ color: DIMMER }}>
-          Off, a failure anywhere in the graph inside stops the run out here. On, this node
-          grows an <strong style={{ color: '#a78bfa' }}>Error</strong> output carrying the
-          reason, its other outputs carry nothing, and the run goes on.
-        </p>
+      {/* Its settings of its own. Catching matters more here than elsewhere:
+          anything short of a clean run inside fails this node, so this is how
+          the graph above is allowed to carry on regardless. And once per item
+          is asked, as of a code node, when a list arrives. */}
+      <div className="mb-4 space-y-4">
+        <div>
+          <label className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
+            <input
+              type="checkbox"
+              checked={node.config.catch_errors === true}
+              onChange={(e) => setConfig('catch_errors', e.target.checked)}
+            />
+            Catch a failed run instead of ending this one
+          </label>
+          <p className="text-xs mt-1" style={{ color: DIMMER }}>
+            Off, a failure anywhere in the graph inside stops the run out here. On, this node
+            grows an <strong style={{ color: '#a78bfa' }}>Error</strong> output carrying the
+            reason, its other outputs carry nothing, and the run goes on.
+          </p>
+        </div>
+        <RunOncePerItem node={node} updateNode={updateNode} subject="the graph inside" />
       </div>
 
       <div className="pt-4" style={{ borderTop: `1px solid ${LINE}` }}>

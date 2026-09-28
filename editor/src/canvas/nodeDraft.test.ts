@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { GraphNode, Port } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { parseExamples } from '@engine/execution/examples.ts';
-import { readPair, withExpect, withInput } from '@/authoring/examplePair';
+import { definitionExample } from '@engine/authoring/definition.ts';
 import { trackPorts } from '@/store/portRenames';
 import { withPorts, withSetting } from './nodeDraft';
 
 /**
- * The node dialog's draft, edited the way its ports editor edits it: a row
+ * The node panel's draft, edited the way its ports editor edits it: a row
  * renamed by spreading it with its new id, removed by filtering it out, a new
  * one appended (`PortsEditor`).
  */
@@ -15,69 +14,67 @@ const rename = (ports: Port[], at: number, id: string) => ports.map((port, i) =>
 const remove = (ports: Port[], at: number) => ports.filter((_, i) => i !== at);
 const fresh = (id: string): Port => ({ id, name: id, kind: 'input', data_type: 'any', multi: false, required: false, description: '' });
 
-/** A code node with inputs *ids*, its example *example*, opened in the dialog. */
-function opened(ids: string[], example: string): GraphNode {
+/** An input definition of *example*, each key a documented property, as ✨ Input writes one. */
+const defined = (example: Record<string, unknown>) => `/**
+ * @typedef {Object} Input
+${Object.keys(example).map((key) => ` * @property {string} ${key} What arrives on ${key}`).join('\n')}
+ */
+module.exports = ${JSON.stringify(example, null, 2)};
+`;
+
+/** A code node with inputs *ids* and an input definition of *example*, opened in the panel. */
+function opened(ids: string[], example: Record<string, unknown>): GraphNode {
   const node = NODE_KINDS.code.create('worker');
   node.inputs = ids.map(fresh);
-  node.config.examples = withInput('', example);
+  node.config.input_definition = defined(example);
   return trackPorts(node);
 }
 
-const inputs = (draft: GraphNode) => readPair(String(draft.config.examples)).input;
+const inputs = (draft: GraphNode) => {
+  const read = definitionExample(String(draft.config.input_definition));
+  return 'example' in read ? read.example : undefined;
+};
 
-describe('the example follows the ports it is keyed by', () => {
-  it('renames the value with its port, keystroke by keystroke, so Try it hands the body what it reads', () => {
-    // Renamed `input` to `csv` in step 1, the wire followed and the value did
-    // not: Try it ran the body with `inputs.csv` undefined.
-    let draft = opened(['input'], '{"input": "a,b"}');
-    for (const typed of ['inpu', '', 'c', 'cs', 'csv']) draft = withPorts(draft, { inputs: rename(draft.inputs, 0, typed), outputs: draft.outputs });
+describe('the definitions follow the ports they are keyed by', () => {
+  it('renames the key with its port, keystroke by keystroke, so ▶ Try hands the body what it reads', () => {
+    let draft = opened(['input'], { input: 'a,b' });
+    // An empty name, or one another port has, is never handed on: the ports editor keeps it as typed (`portIdProblems`).
+    for (const typed of ['inpu', 'c', 'cs', 'csv']) draft = withPorts(draft, { inputs: rename(draft.inputs, 0, typed), outputs: draft.outputs });
     expect(inputs(draft)).toEqual({ csv: 'a,b' });
+    // The documented property follows the key.
+    expect(String(draft.config.input_definition)).toContain('@property {string} csv What arrives on input');
   });
 
-  it('takes the value away with a removed port, and leaves the port that slid into its row alone', () => {
-    let draft = opened(['prompt', 'context'], '{"prompt": "p", "context": "c"}');
+  it('takes the key and its property away with a removed port, and leaves the port that slid into its row alone', () => {
+    let draft = opened(['prompt', 'context'], { prompt: 'p', context: 'c' });
     draft = withPorts(draft, { inputs: remove(draft.inputs, 0), outputs: draft.outputs });
     expect(inputs(draft)).toEqual({ context: 'c' });
+    expect(String(draft.config.input_definition)).not.toContain('prompt');
   });
 
-  it('follows a port added in the dialog, which had no name before it', () => {
-    let draft = opened(['input'], '{"input": 1}');
-    draft = withPorts(draft, { inputs: [...draft.inputs, fresh('input2')], outputs: draft.outputs });
-    draft = { ...draft, config: { ...draft.config, examples: withInput(String(draft.config.examples), '{"input": 1, "input2": 2}') } };
-    draft = withPorts(draft, { inputs: rename(draft.inputs, 1, 'top'), outputs: draft.outputs });
-    expect(inputs(draft)).toEqual({ input: 1, top: 2 });
+  it('renames an output\'s key in output.js with the output', () => {
+    let draft = opened(['input'], { input: 1 });
+    draft = { ...draft, config: { ...draft.config, output_definition: 'module.exports = { "output": 2 };' } };
+    draft = withPorts(draft, { inputs: draft.inputs, outputs: rename(draft.outputs, 0, 'doubled') });
+    const read = definitionExample(String(draft.config.output_definition));
+    expect('example' in read && read.example).toEqual({ doubled: 2 });
   });
 
-  it('does not take another port\'s value when a rename is typed through its name', () => {
-    // "text2" to "text3" passes "text", which the first port is called.
-    let draft = opened(['text', 'text2'], '{"text": "A", "text2": "B"}');
-    for (const typed of ['text', 'text3']) draft = withPorts(draft, { inputs: rename(draft.inputs, 1, typed), outputs: draft.outputs });
-    expect(inputs(draft)?.text).toBe('A');
-  });
-
-  it('renames what an expectation names with its output, in every example `test` runs', () => {
-    let draft = opened(['input'], '{"input": 1}');
-    draft = { ...draft, config: { ...draft.config, examples: `${withExpect(String(draft.config.examples), '{"output": 2}')}\n## More\n\n\`\`\`json input\n{"input": 3}\n\`\`\`\n\n\`\`\`json expect\n{"output": 4}\n\`\`\`\n` } };
-    draft = withPorts(draft, { inputs: rename(draft.inputs, 0, 'n'), outputs: rename(draft.outputs, 0, 'doubled') });
-    expect(parseExamples(String(draft.config.examples)).examples).toEqual([
-      { title: 'The example', inputs: { n: 1 }, expect: { doubled: 2 } },
-      { title: 'More', inputs: { n: 3 }, expect: { doubled: 4 } },
-    ]);
+  it('leaves a stub alone: there is no key in it to follow', () => {
+    let draft = opened(['input'], { input: 1 });
+    draft = { ...draft, config: { ...draft.config, input_definition: 'module.exports = null;' } };
+    draft = withPorts(draft, { inputs: rename(draft.inputs, 0, 'csv'), outputs: draft.outputs });
+    expect(draft.config.input_definition).toBe('module.exports = null;');
   });
 });
 
 describe('a setting changed after a wait', () => {
   it('is changed from what the draft holds when it lands, not from a copy taken before', () => {
-    // ⟳ From the graph waits on a run upstream. What was typed into step 2
-    // meanwhile was put back by the copy of the examples the click had.
+    // A file taken for ✨ Input lands after the path is looked for; one added meanwhile stays.
     const node = NODE_KINDS.code.create('worker');
-    const clicked = withInput('', '{"input": "old"}');
-    const draft = { ...node, config: { ...node.config, examples: withExpect(clicked, '{"output": "typed meanwhile"}') } };
-    const landed = withSetting(draft, 'examples', (current: unknown) => withInput(String(current), '{"input": "from the graph"}'));
-    expect(readPair(String(landed.config.examples))).toMatchObject({
-      input: { input: 'from the graph' },
-      expect: { output: 'typed meanwhile' },
-    });
+    const draft = { ...node, config: { ...node.config, input_files: ['added meanwhile.csv'] } };
+    const landed = withSetting(draft, 'input_files', (current: unknown) => [...(current as string[]), 'dropped.csv']);
+    expect(landed.config.input_files).toEqual(['added meanwhile.csv', 'dropped.csv']);
   });
 });
 

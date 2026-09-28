@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { parseArgs, parseInterval } from './cli.ts';
+import { describe, it, expect, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { parseGraph } from '../graph.ts';
+import { writeProject } from '../project/folder.ts';
+import { main, parseArgs, parseInterval } from './cli.ts';
 
 describe('parseInterval', () => {
   it('reads a bare number as seconds', () => {
@@ -57,5 +62,100 @@ describe('parseArgs', () => {
   it('refuses a flag it does not know, rather than reading it as the graph or dropping it', () => {
     expect(() => parseArgs(['--ai-provider', 'openai', 'g.json'])).toThrow(/Unknown option "--ai-provider"/);
     expect(() => parseArgs(['g.json', '--ai-force'])).toThrow(/Unknown option "--ai-force"/);
+  });
+});
+
+/**
+ * One node by itself, from a command line: what its panel tries, with no
+ * editor anywhere -- the node's example, and the files its example reads.
+ */
+describe('run-node', () => {
+  const port = (id: string, kind: 'input' | 'output', dataType = 'any') =>
+    ({ id, name: id, kind, data_type: dataType, multi: false, required: false, description: '' });
+
+  async function project(config: Record<string, unknown>): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-run-node-'));
+    await writeProject(dir, parseGraph({
+      metadata: { name: 'Rows' },
+      nodes: [{
+        id: 'count', node_type: 'code', label: 'Count', inputs: [port('csv', 'input', 'file_path')], outputs: [port('rows', 'output')],
+        config: { code: 'function run(i) { return { rows: i.csv.trim().split("\\n").length - 1 }; }', ...config },
+      }],
+      edges: [],
+    }));
+    return dir;
+  }
+
+  async function printed(argv: string[]): Promise<{ code: number; out: string }> {
+    const writes: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { writes.push(String(chunk)); return true; });
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      return { code: await main(argv), out: writes.join('') };
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  }
+
+  it('runs a node once on the example in its input.js -- a file\'s text, already read -- and holds it to its output.js', async () => {
+    const dir = await project({
+      input_definition: '/** @typedef {Object} Input @property {string} csv a CSV\'s text */\nmodule.exports = { "csv": "name\\nAda\\nBo" };\n',
+      output_definition: '/** @typedef {Object} Output @property {number} rows how many rows */\nmodule.exports = { "rows": 2 };\n',
+    });
+    try {
+      const { code, out } = await printed(['run-node', dir, 'count']);
+      expect(code).toBe(0);
+      expect(JSON.parse(out)).toMatchObject({ status: 'pass', outputs: { rows: 2 }, held: true });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('holds a node to no output.js that cannot be read: run-node and test fail, and say why, rather than "fits"', async () => {
+    const dir = await project({
+      input_definition: 'module.exports = { "csv": "name\\nAda\\nBo" };\n',
+      output_definition: 'module.exports = { "rows": 2, };\n',
+    });
+    try {
+      const alone = await printed(['run-node', dir, 'count']);
+      expect(alone.code).toBe(1);
+      expect(JSON.parse(alone.out)).toMatchObject({ status: 'fail', outputs: { rows: 2 }, held: false, details: [expect.stringMatching(/^output\.js cannot be read: /)] });
+      const tested = await printed(['test', dir]);
+      expect(tested.code).toBe(1);
+      expect(tested.out).toMatch(/^✗ .* count: is held to no output\.js\n {4}output\.js cannot be read: its example after module\.exports is not plain JSON/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('runs a node of another kind -- one with no input.js -- on what the nodes feeding it produce', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-run-node-'));
+    await writeProject(dir, parseGraph({
+      metadata: { name: 'Say' },
+      nodes: [
+        { id: 'said', node_type: 'input', label: 'Said', outputs: [port('output', 'output', 'text')], config: { value: 'hello' } },
+        { id: 'result', node_type: 'output', label: 'Result', inputs: [port('value', 'input')], config: {} },
+      ],
+      edges: [{ id: 'e', source_node_id: 'said', source_port_id: 'output', target_node_id: 'result', target_port_id: 'value' }],
+    }));
+    try {
+      const { code, out } = await printed(['run-node', dir, 'result']);
+      expect(code).toBe(0);
+      expect(JSON.parse(out)).toMatchObject({ status: 'success', inputs: { value: 'hello' } });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('says what to do for a node with no example', async () => {
+    const dir = await project({});
+    try {
+      const { code, out } = await printed(['run-node', dir, 'count']);
+      expect(code).toBe(1);
+      expect(JSON.parse(out).details).toEqual(['It has no input.js, so there is nothing to try it on: write one with ✨ Input.']);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -3,20 +3,25 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Modal, { hearsEscape } from './Modal';
 
-/** A dialog's panel, holding another dialog open inside it or not. */
-const panel = (holdsDialog: boolean) => ({
-  querySelector: (selector: string) => (holdsDialog && selector === '[role="dialog"]' ? ({} as Element) : null),
+/** A page with *dialogs* open on it, in the order they were drawn. */
+const page = (...dialogs: Element[]) => ({
+  querySelectorAll: (selector: string) => (selector === '[role="dialog"]' ? dialogs : []) as unknown as NodeListOf<Element>,
 });
 
-describe('Escape in a dialog inside a dialog', () => {
-  it('closes the inner one only', () => {
-    // A file browser opened from a node's dialog: Escape closed both.
-    expect(hearsEscape(panel(true))).toBe(false);
-    expect(hearsEscape(panel(false))).toBe(true);
+describe('Escape with one dialog over another', () => {
+  const under = {} as Element;
+  const over = {} as Element;
+
+  it('closes the one on top only -- drawn inside the other or beside it', () => {
+    // A file browser opened from a node's dialog, or over the Save dialog
+    // whose path box it fills: one Escape closed both.
+    expect(hearsEscape(over, page(under, over))).toBe(true);
+    expect(hearsEscape(under, page(under, over))).toBe(false);
+    expect(hearsEscape(under, page(under))).toBe(true);
   });
 
   it('closes nothing before the dialog is drawn', () => {
-    expect(hearsEscape(null)).toBe(false);
+    expect(hearsEscape(null, page(under))).toBe(false);
   });
 });
 

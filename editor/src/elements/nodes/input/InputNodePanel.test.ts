@@ -4,15 +4,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
-import { nodeFields } from '@/authoring/generation';
 import InputNodePanel from './InputNodePanel';
 
 function panel(node: GraphNode): string {
   const builder = NODE_BUILDERS.input;
   return renderToStaticMarkup(createElement(InputNodePanel, {
     builder, node, setConfig: () => {}, updateNode: () => {},
-    fields: nodeFields(node, () => {}, () => {}), generating: false,
-    onGenerate: async () => false, steps: { graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }) },
+    setDescription: () => {}, generating: false, onGenerate: async () => false,
   }));
 }
 

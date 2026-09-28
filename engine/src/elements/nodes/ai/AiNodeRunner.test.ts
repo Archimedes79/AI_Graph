@@ -25,7 +25,7 @@ function aiNode(config: Record<string, unknown> = {}): GraphNode {
   return {
     id: 'ai', node_type: 'ai', label: 'Ask', description: '',
     position: { x: 0, y: 0 }, inputs: [], outputs: [],
-    config: { system_prompt: 'be brief', ...config },
+    config: { prompt: 'be brief', ...config },
   };
 }
 
@@ -56,28 +56,39 @@ async function withImage(run: (path: string) => Promise<void>): Promise<void> {
 describe('what an AI node sends', () => {
   const element = new AiNodeRunner();
 
-  it('joins everything wired in, in port order', async () => {
+  it('sends everything wired in, in port order, each under its port id where there are several', async () => {
     // Not a port called `prompt`: a node with two inputs from two upstream
     // nodes should send both, and naming one would drop the other in silence.
     const { runtime, asked } = recording();
     await element.execute(aiNode(), { first: 'one', second: 'two' }, runtime);
-    expect(asked[0].prompt).toBe('one\n\ntwo');
+    expect(asked[0].prompt).toBe('first:\none\n\nsecond:\ntwo');
     expect(asked[0].system).toBe('be brief');
+    await element.execute(aiNode(), { only: 'one' }, runtime);
+    expect(asked[1].prompt).toBe('one');
   });
 
   it('sends its instructions as the message when nothing is wired in', async () => {
     // It used to send them as the system prompt beside an empty message, which
     // some providers refuse and the rest answer with a guess.
     const { runtime, asked } = recording();
-    await element.execute(aiNode({ system_prompt: 'Write a haiku about autumn.' }), {}, runtime);
+    await element.execute(aiNode({ prompt: 'Write a haiku about autumn.' }), {}, runtime);
     expect(asked[0].prompt).toBe('Write a haiku about autumn.');
     expect(asked[0].system).toBe('');
   });
 
-  it('asks nothing when it has neither instructions nor anything wired in', async () => {
+  it('runs on its description, in the standard instructions, while it has none of its own', async () => {
     const { runtime, asked } = recording();
-    await expect(element.execute(aiNode({ system_prompt: '' }), {}, runtime)).rejects.toThrow(/Nothing to ask/);
-    expect(asked).toEqual([]);
+    const node = { ...aiNode({ prompt: '' }), label: 'Shout', description: 'Say it in capitals.' };
+    await element.execute(node, { text: 'hello' }, runtime);
+    expect(asked[0].system).toBe('# Shout (ID ai, ai node)\n\nSay it in capitals.\n\nDo this with the input below. Answer in plain text.');
+    expect(asked[0].prompt).toBe('hello');
+  });
+
+  it('fills in its description and its output definition where its own instructions name them', async () => {
+    const { runtime, asked } = recording();
+    const node = { ...aiNode({ prompt: 'Task:\n{Node Description}\nAnswer as:\n{Output Definition}\nNot {Context}.', output_definition: 'module.exports = { "n": 1 };' }), description: 'Count.' };
+    await element.execute(node, { text: 'a b' }, runtime).catch(() => undefined);
+    expect(asked[0].system).toBe('Task:\n# Ask (ID ai, ai node)\n\nCount.\nAnswer as:\nmodule.exports = { "n": 1 };\nNot {Context}.');
   });
 
   it('sends a list as paragraphs, not as a serialised list', async () => {
@@ -158,5 +169,65 @@ describe('a call that fails', () => {
     const element = new AiNodeRunner();
     await expect(element.execute(aiNode(), {}, failing)).rejects.toThrow('no content');
     await expect(element.execute(aiNode({ catch_errors: true }), {}, failing)).rejects.toThrow('no content');
+  });
+});
+
+/**
+ * A node that maps whatever arrives onto a fixed format: with an output
+ * definition that names several outputs, or a value that is not text, the
+ * answer is the JSON it defines, and each key goes out on its own port -- not
+ * a text of it. One output that holds text is the answer itself.
+ */
+describe('an answer mapped onto an output definition', () => {
+  const element = new AiNodeRunner();
+  const answering = (reply: string): Runtime => ({
+    files: nodeFiles,
+    code: { run: async (_body, inputs) => inputs },
+    ai: { complete: async () => reply },
+  });
+  const defined = (): GraphNode => aiNode({ output_definition: 'module.exports = { "rows": [1], "count": 1 };' });
+
+  it('is handed on key by key, a ```json fence around it taken off', async () => {
+    expect(await element.execute(defined(), {}, answering('{"rows": [1, 2], "count": 2}'))).toEqual({ rows: [1, 2], count: 2 });
+    expect(await element.execute(defined(), {}, answering('```json\n{"rows": [], "count": 0}\n```'))).toEqual({ rows: [], count: 0 });
+  });
+
+  it('is read the way output.js is read, where the model answered in its format', async () => {
+    // A small model shown the definition file answers with a file like it.
+    const echoed = '```js\n/** @typedef {Object} Output */\nmodule.exports = {\n  "rows": [3],\n  "count": 1\n};\n```';
+    expect(await element.execute(defined(), {}, answering(echoed))).toEqual({ rows: [3], count: 1 });
+  });
+
+  it('is found where the answer holds it, with a sentence around it', async () => {
+    // A model asked for the JSON object and nothing else still says so first.
+    expect(await element.execute(defined(), {}, answering('Here is the result:\n```json\n{"rows": [4], "count": 1}\n```\nI kept it short.')))
+      .toEqual({ rows: [4], count: 1 });
+    expect(await element.execute(defined(), {}, answering('Sure! Here are the rows: {"rows": [], "count": 0} -- hope it helps.')))
+      .toEqual({ rows: [], count: 0 });
+  });
+
+  it('fails the node when it holds no JSON object, saying how it began', async () => {
+    await expect(element.execute(defined(), {}, answering('Sure! There are no rows.')))
+      .rejects.toThrow(/not the JSON object this node's output\.js asks for\. It began: "Sure! There are no rows/);
+    await expect(element.execute(defined(), {}, answering('[1, 2]'))).rejects.toThrow(/not the JSON object/);
+  });
+
+  it('is the answer as it came, on "output", without one', async () => {
+    expect(await element.execute(aiNode(), {}, answering('{"rows": []}'))).toEqual({ output: '{"rows": []}' });
+  });
+
+  it('is the answer as it came, in plain text, where the definition names one output that holds text -- on that output', async () => {
+    const summary = { ...aiNode({ prompt: '', output_definition: '/** @typedef {Object} Output */\nmodule.exports = { "summary": "Two sentences." };' }), description: 'Sum it up.' };
+    const asked: AiRequest[] = [];
+    const runtime: Runtime = { ...answering(''), ai: { complete: async (request) => { asked.push(request); return 'It rains. Then it stops.'; } } };
+    expect(await element.execute(summary, { text: 'a' }, runtime)).toEqual({ summary: 'It rains. Then it stops.' });
+    expect(asked[0].system).toMatch(/Answer in plain text: the text itself, as this output definition describes it -- not JSON/);
+    // Nothing is parsed: an answer that looks like JSON is the text it is.
+    expect(await element.execute(summary, {}, answering('{"summary": "x"}'))).toEqual({ summary: '{"summary": "x"}' });
+  });
+
+  it('is JSON where the definition names one output that is not text', async () => {
+    const counted = aiNode({ output_definition: 'module.exports = { "count": 1 };' });
+    expect(await element.execute(counted, {}, answering('```json\n{"count": 3}\n```'))).toEqual({ count: 3 });
   });
 });

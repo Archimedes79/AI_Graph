@@ -55,13 +55,13 @@ describe('the sandbox', () => {
 });
 
 describe('a body that asks the process holding the graph', () => {
-  it('is handed its node: plain data, and questions it may ask', async () => {
+  it('is handed its node: the questions it may ask', async () => {
     const asked: unknown[] = [];
     const out = await nodeCode.run(
-      'async function run(inputs, node) { return { sum: await node.add({ a: inputs.a, b: node.offset }), twice: await node.add({ a: 1, b: 1 }) }; }',
+      'async function run(inputs, node) { return { sum: await node.add({ a: inputs.a, b: 40 }), twice: await node.add({ a: 1, b: 1 }) }; }',
       { a: 2 },
       undefined,
-      { data: { offset: 40 }, calls: { add: async (args) => { asked.push(args); const { a, b } = args as { a: number; b: number }; return a + b; } } },
+      { calls: { add: async (args) => { asked.push(args); const { a, b } = args as { a: number; b: number }; return a + b; } } },
     );
     expect(out).toEqual({ sum: 42, twice: 2 });
     expect(asked).toEqual([{ a: 2, b: 40 }, { a: 1, b: 1 }]);

@@ -148,7 +148,7 @@ export async function setupLines(cwd = process.cwd(), env: Env = process.env): P
       : '';
   };
 
-  return [`AI (✨ Generate, Try it, runs): ${target.provider}/${target.model || '(no model)'}${trouble(target)}`];
+  return [`AI (✨, ▶ Try, runs): ${target.provider}/${target.model || '(no model)'}${trouble(target)}`];
 }
 
 /** Which providers are usable right now, and what the one AI setting resolves to. */

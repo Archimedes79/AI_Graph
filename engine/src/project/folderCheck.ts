@@ -19,9 +19,10 @@ import { problemsIn } from './check.ts';
 
 /**
  * What only a project folder can get wrong: a folder under `nodes/` that
- * belongs to no node (the node was deleted, or renamed in \`flow.json\` by
- * hand), and a file in a node's folder that nothing reads -- `prompt.md` where
- * an AI node reads `system.md` is a text somebody wrote and nobody will ever send.
+ * belongs to no node (the node was deleted, or renamed in `flow.json` by
+ * hand), and a file in a node's folder that nothing reads -- `instructions.md`
+ * where an AI node reads `prompt.md` is a text somebody wrote and nobody will
+ * ever send.
  */
 export async function folderProblems(folder: string): Promise<Problem[]> {
   const { graph } = await readStructure(folder);
@@ -33,7 +34,7 @@ export async function folderProblems(folder: string): Promise<Problem[]> {
     if (!expected.has(dir)) expected.set(dir, new Set());
     expected.get(dir)!.add(text.path.slice(slash + 1));
   }
-  // Every node and block has a folder it may use, even one that keeps no writing yet.
+  // Every node has a folder it may use, even one that keeps no writing yet.
   for (const node of graph.nodes) {
     const nodeDir = nodeFolder(node.id);
     if (!expected.has(nodeDir)) expected.set(nodeDir, new Set());

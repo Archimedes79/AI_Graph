@@ -65,6 +65,22 @@ describe('a bundle', () => {
     }
   }, 180_000);
 
+  it('carries what runs, and not how each node was written: its history stays with the project', async () => {
+    const graph = await loadGraph(resolve(REPO, 'examples', 'population_plotter'));
+    const chart = graph.nodes.find((node) => node.id === 'chart')!;
+    chart.config.history = '## 2026-09-28 10:00 · ✨ Input\n\nPrompt:\n\n```\nC:/Users/someone/private/customers.csv\n```';
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-history-bundle-'));
+    try {
+      await writeBundle(graph, dir, {});
+      const shipped = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8')) as { nodes: { id: string; config: Record<string, unknown> }[] };
+      const config = shipped.nodes.find((node) => node.id === 'chart')!.config;
+      expect(config).not.toHaveProperty('history');
+      expect(config.code).toBe(chart.config.code);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
   it('carries no tests, because a recipient has nothing to compare against', async () => {
     const dir = await bundleOf(MINIMAL);
     try {

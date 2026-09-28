@@ -1,41 +1,39 @@
-// What ✨ Generate is told about a node: one brief, the same for code and for
-// a system prompt.
+// What the variables of a node's prompts say, filled from what the node and the
+// graph hold (`authoring/prompts.ts` names them):
 //
-// A body is written against four things, and a node already holds all four:
+//     {Node Description}   the heading, the id and kind, then the text
+//     {Input Definition}   input.js as it is, where it is written -- and after
+//                          it, always, each input as wired: its port, its
+//                          type, where it comes from and what arrives there
+//     {Output Definition}  output.js as it is, where it is written -- and after
+//                          it, always, each output as wired: where it goes and
+//                          what the node there wants
+//     {Context}            the graph around the node, as the editor says it
+//     {Example Files}      the files ✨ Input is given: each path, and the start of it
+//     {Output Files}       the files ✨ Output is given, the same way
 //
-//     the task        what it should do, in the person's words
-//     what comes in   each input -- its type, what it holds, where it is wired
-//                     from and what that node hands on -- and one real sample
-//     what goes out   each output, where it goes and what the node there
-//                     wants; the format in words; the kept shape
-//     examples        inputs, and what must come out
-//
-// They used to reach the model from five places in five wordings, some of
-// them twice (a neighbour line *and* a skeleton comment for the same wire),
-// some not at all (the format description unless "custom" was picked, the
-// examples, the example inputs), and a sample file in full, however large.
-// Here each is said once, in a fixed order, and everything that can be long is
-// cut to a budget: the brief has to leave a small local model room to answer.
+// A definition is sent as the file says it: it is what the node was written
+// against, and a second wording of it would be a second thing to disagree.
+// The wiring follows it whether or not there is one: a chart wants a figure
+// after output.js was written too, and ✨ Output shown only the file it was
+// replacing wrote a chart config the chart could not draw.
+// What can be long is cut to a budget: the prompt has to leave a small local
+// model room to answer.
 
-import { parseExamples } from '../../execution/examples.ts';
-import { schemaOutline as outline } from '../../execution/interface.ts';
+import { nodeDescription, type Variable } from '../../authoring/prompts.ts';
+import { definitionsIn } from '../../authoring/definition.ts';
+import type { GraphNode, Port } from '../../graph.ts';
+import { ERROR_PORT } from '../../execution/wiring.ts';
+import { runsPerItem } from '../../execution/batching.ts';
+import { registry } from '../../elements/registry.ts';
 import type { GenerateRequest } from '../api.ts';
 
-/** How much of each part is shown, in characters. Together about 8 000 at most. */
+/** How much of each part is shown, in characters. */
 export const BUDGET = {
-  /** One input's sample: enough for its shape and a few rows. */
-  sample: 700,
-  /** Every sample together. */
-  samples: 2400,
-  /** How many examples: enough to show the pattern, not a test suite. */
-  examples: 3,
-  /** One example's inputs, or what it expects. */
-  example: 400,
-  format: 1200,
-  /** A value a probe was given, in a repair prompt. */
+  /** The files ✨ Input or ✨ Output is given, together: several small ones whole, a large one cut. */
+  files: 4000,
+  /** A value a repair is shown -- what a try returned, what it was handed. */
   preview: 900,
-  schema: 700,
-  template: 800,
 } as const;
 
 /** *text*, cut to *limit* characters, saying how much was left out. */
@@ -45,167 +43,121 @@ export function clip(text: string, limit: number): string {
   return `${trimmed.slice(0, limit)}… (${trimmed.length - limit} more characters not shown)`;
 }
 
-/** A value as JSON, cut to *limit* characters: a string's line breaks stay visible. Anything JSON cannot say, as text. */
-function jsonClip(value: unknown, limit: number): string {
+/** A value as the model should read it: JSON, so a string's line breaks and a list's length are visible. */
+export function shown(value: unknown, limit: number): string {
   let text: string;
   try {
     text = JSON.stringify(value) ?? String(value);
   } catch {
     text = String(value);
   }
-  return clip(text, limit);
+  return (Array.isArray(value) ? `a list of ${value.length}: ` : '') + clip(text, limit);
 }
 
-/** A value as the model should read it: JSON, so a string's line breaks and a list's length are visible. */
-export function shown(value: unknown, limit: number): string {
-  const count = Array.isArray(value) ? `a list of ${value.length}: ` : '';
-  return count + jsonClip(value, limit);
+/** A port's type in words, as the body is handed it. */
+function typeWords(port: Port, reads: boolean): string {
+  if (reads) return 'a path: the node reads the file there, and is handed its text';
+  const base = port.data_type === 'any' ? '' : port.data_type;
+  return base === 'list' ? 'a list' : base;
 }
 
-/** One line of a person's description: newlines would break the list it sits in. */
-function oneLine(text: string | undefined): string {
-  return (text ?? '').replace(/\s+/g, ' ').trim();
-}
-
-/** A declared port type in words: `list of text` → `a list of text`. */
-function typeWords(declared: string | undefined): string {
-  if (!declared || declared === 'any') return '';
-  return declared.startsWith('list of ') ? `a ${declared}` : declared;
-}
-
-/** Where a sample came from, for the model: real data and an example are not the same kind of evidence. */
-export interface Sample {
-  values: Record<string, unknown>;
-  /** `the last run`, `the example "Two rows"`. */
-  origin: string;
-  /** What must come out for these inputs, when the sample is an example that says. */
-  expect?: Record<string, unknown>;
-  /**
-   * For a node run once per item: how many items the sample had, of which
-   * `values` is the first -- what one call is handed. A run makes this many.
-   */
-  items?: number;
+/** Whether a list reaching *node* is handed over an item at a time, one call each: the executor's rule. */
+function perItem(node: GraphNode): boolean {
+  return runsPerItem(node, registry.node(node.node_type)?.batchMode(node) ?? 'whole');
 }
 
 /**
- * The inputs to fall back on when the graph has not run: the first example's.
- * An example is written by the person to show what arrives, which is exactly
- * what a sample is for -- and it was used only to check a body afterwards.
+ * A definition as {Input Definition} and {Output Definition} say it: the file
+ * *written*, as it is, then *wiring* -- the ports as they are wired. While a
+ * node that keeps definitions has none, "None yet." says so; one that keeps
+ * none -- a data node -- is its wiring, without a heading of its own.
  */
-export function exampleSample(examples: string | undefined): Sample | undefined {
-  if (!examples?.trim()) return undefined;
-  const first = parseExamples(examples).examples.find((example) => Object.keys(example.inputs ?? {}).length);
-  return first ? { values: first.inputs, origin: `the example "${first.title}"`, expect: first.expect } : undefined;
+function withWiring(node: GraphNode, written: string, wiring: string[]): string {
+  if (written) return `${written}\n\n${wiring.join('\n')}`;
+  const defines = registry.node(node.node_type)?.definitions(node) !== undefined;
+  return defines ? `None yet. ${wiring.join('\n')}` : wiring.slice(1).join('\n');
 }
 
-/** What the brief is for: a body that runs (`code`), or a system prompt a model is sent (`prompt`). */
-export type BriefKind = 'code' | 'prompt';
+/** A port's own description, on one line. */
+const saidOf = (port: Port): string => port.description?.replace(/\s+/g, ' ').trim() ?? '';
 
-function inputsSection(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
-  const inputs = request.inputs ?? [];
-  const lines = [kind === 'prompt' ? '## What the model is sent' : '## What comes in'];
-  if (!inputs.length) {
-    lines.push('Nothing is wired in.');
-    return lines.join('\n');
+/**
+ * What {Input Definition} says: the node's input.js as it is, where it is
+ * written, and after it each input as wired -- its port, its type, where it
+ * comes from and what arrives there: what an input definition is written
+ * from, and what code is written to read.
+ */
+export function inputDefinition(request: GenerateRequest, reads: string[]): string {
+  const { node } = request;
+  const written = definitionsIn(node).input.trim();
+  if (!node.inputs.length) return written || 'It has no inputs: nothing is handed to it.';
+  const lines = ['Its inputs, as wired:'];
+  for (const port of node.inputs) {
+    const type = typeWords(port, reads.includes(port.id));
+    const said = saidOf(port);
+    lines.push(`- \`${port.id}\`${type ? ` (${type})` : ''}${said ? `: ${said}` : ''}`);
+    const source = request.input_sources?.[port.id];
+    lines.push(source ? `  from ${source}` : '  not wired yet');
   }
-  let room: number = BUDGET.samples;
-  const origin = !sample?.items ? sample?.origin
-    : sample.items === 1 ? `${sample.origin}, its one item` : `${sample.origin}, the first of its ${sample.items} items`;
-  for (const port of inputs) {
-    const type = typeWords(request.input_types?.[port]);
-    const said = oneLine(request.input_notes?.[port]);
-    lines.push(`- \`${port}\`${type ? ` (${type})` : ''}${said ? `: ${said}` : ''}`);
-    const source = request.input_sources?.[port];
-    // A request that says nothing of the wiring -- one the editor did not
-    // make -- is told none, rather than that every input is unwired.
-    if (source) lines.push(`  from ${source}`);
-    else if (request.input_sources) lines.push('  not wired yet');
-    if (sample && port in sample.values) {
-      if (room <= 0) {
-        lines.push('  sample: left out, the ones above fill the space');
-      } else {
-        const peek = shown(sample.values[port], Math.min(BUDGET.sample, room));
-        room -= peek.length;
-        lines.push(`  sample, from ${origin}: ${peek}`);
-      }
-    }
-  }
-  // Said for a model's prompt as much as for code: a system prompt that says
-  // "summarise each of the stories" to a model sent one story is wrong the
-  // same way a `run` written for the list is. And said of what goes out: the
-  // shape a run kept and an example's expectation are of the list the calls'
-  // answers are collected into, and a body told it "must return" a list of
-  // two was written for the list.
-  if (request.batch_mode) {
-    const perItem = request.batch_mode !== 'whole_list';
-    lines.push(kind !== 'prompt'
-      ? (perItem
-        ? 'A list arrives one item at a time: `run` is called once per item, with one value from each list input. '
-          + 'What the calls return is collected into one list per output: a shape or an example below describes '
-          + 'that list, not what one call returns.'
-        : 'A list arrives whole: `run` is called once with the full lists and must handle or reduce them.')
-      : (perItem
-        ? 'A list arrives one item at a time: the model is called once per item and is sent that one item, '
-          + 'never the whole list; its answers are collected into a list.'
-        : 'A list arrives whole: the model is sent the full list in one call.'));
-  }
-  if (kind === 'prompt') {
-    const template = request.message_template?.trim();
-    lines.push(template
-      ? `They are laid out in the message like this, {{name}} standing for that input's value:\n${clip(template, BUDGET.template)}`
-      : 'They are sent one after another as they arrive, with nothing around them.');
-  }
-  return lines.join('\n');
-}
-
-function outputsSection(request: GenerateRequest, kind: BriefKind): string {
-  const lines = [kind === 'prompt' ? '## What the answer is for' : '## What goes out'];
-  // Without the executor's error port: `generate` drops it where a request comes in.
-  for (const port of request.outputs ?? []) {
-    const said = oneLine(request.output_notes?.[port]);
-    lines.push(`- \`${port}\`${said ? `: ${said}` : ''}`);
-    const target = request.output_targets?.[port];
-    if (target) lines.push(`  to ${target}`);
-  }
-  const format = request.output_format?.trim();
-  if (format) lines.push(`Format: ${clip(format, BUDGET.format)}`);
-  const schema = request.output_schema;
-  if (schema && typeof schema === 'object') {
-    lines.push(`The shape it returned so far, which the nodes after it were built against -- keep it: ${clip(outline(schema), BUDGET.schema)}`);
-  }
-  if (kind === 'prompt' && format) {
-    lines.push('The format is added after the system prompt by itself, at run time: the system prompt need not repeat it, and must not contradict it.');
-  }
-  return lines.length > 1 ? lines.join('\n') : '';
+  if (perItem(node)) lines.push('A list arrives one item at a time: each call is handed one item.');
+  return withWiring(node, written, lines);
 }
 
 /**
- * The node's examples. For a change (*changing*) they were written before it,
- * and a change is not held to them (`generate.ts`): said as the check, they
- * asked for the body the change replaces.
+ * What {Output Definition} says: the node's output.js as it is, where it is
+ * written, and after it each output as wired -- where it goes and what the
+ * node there wants of it: a chart's figure, a table's rows.
  */
-function examplesSection(text: string | undefined, changing: boolean): string {
-  if (!text?.trim()) return '';
-  const { examples } = parseExamples(text);
-  if (!examples.length) return '';
-  const lines = [changing
-    ? '## Examples -- written before this change: where one disagrees with the change, the change wins'
-    : '## Examples -- the result is checked against these'];
-  for (const example of examples.slice(0, BUDGET.examples)) {
-    lines.push(`- ${example.title}`, `  in: ${shown(example.inputs, BUDGET.example)}`);
-    if (example.expect) lines.push(`  must return, at least: ${shown(example.expect, BUDGET.example)}`);
-    if (example.judge) lines.push(`  the answer must: ${clip(example.judge, BUDGET.example)}`);
+export function outputDefinition(request: GenerateRequest): string {
+  const { node } = request;
+  const written = definitionsIn(node).output.trim();
+  const outputs = node.outputs.filter((port) => port.id !== ERROR_PORT);
+  if (!outputs.length) return written || 'None yet, and it has no outputs yet.';
+  const lines = ['Its outputs, as wired:'];
+  for (const port of outputs) {
+    const said = saidOf(port);
+    lines.push(`- \`${port.id}\`${said ? `: ${said}` : ''}`);
+    const target = request.output_targets?.[port.id];
+    lines.push(target ? `  to ${target}` : '  not wired yet');
   }
-  if (examples.length > BUDGET.examples) lines.push(`(and ${examples.length - BUDGET.examples} more, not shown)`);
-  return lines.join('\n');
+  if (perItem(node)) lines.push('What each call returns is collected into a list on every output.');
+  return withWiring(node, written, lines);
 }
 
 /**
- * Everything the node says about itself, in the order a body is written from
- * it. The task goes first and the element's fixed text last, by the caller.
+ * What {Example Files} and {Output Files} say: each file's path and the start
+ * of it -- or that there are none. They share one budget: the smallest are
+ * given in full first, and what is left is shared by the larger, so several
+ * small files all fit and one big one is cut.
  */
-export function renderBrief(request: GenerateRequest, kind: BriefKind, sample?: Sample): string {
-  const changing = !!request.refine?.change?.trim();
-  return [inputsSection(request, kind, sample), outputsSection(request, kind), examplesSection(request.examples, changing)]
-    .filter(Boolean).join('\n\n');
+export function filesPart(files: { path: string; text?: string }[] | undefined): string {
+  const given = (files ?? []).filter((file) => file.path.trim());
+  if (!given.length) return 'None.';
+  const room = new Map<number, number>();
+  let left = BUDGET.files;
+  const bySize = given.map((file, at) => ({ at, size: file.text?.trim().length ?? 0 })).sort((a, b) => a.size - b.size);
+  bySize.forEach(({ at, size }, index) => {
+    const share = Math.max(0, Math.floor(left / (bySize.length - index)));
+    room.set(at, Math.min(size, share));
+    left -= Math.min(size, share);
+  });
+  return given.map((file, at) => (file.text === undefined
+    ? `${file.path} (it could not be read)`
+    : `${file.path}:\n${clip(file.text, Math.max(room.get(at) ?? 0, 1))}`)).join('\n\n');
+}
+
+/**
+ * Every variable, filled from *request*: the node, its definitions or its
+ * wiring, the graph, and the files it is given (read by then). *reads* are
+ * the inputs that are handed a file's text.
+ */
+export function variables(request: GenerateRequest, reads: string[]): Record<Variable, string> {
+  return {
+    'Node Description': nodeDescription(request.node),
+    'Input Definition': inputDefinition(request, reads),
+    'Output Definition': outputDefinition(request),
+    Context: request.context?.trim() || 'Not given.',
+    'Example Files': filesPart(request.input_files),
+    'Output Files': filesPart(request.output_files),
+  };
 }

@@ -82,24 +82,32 @@ export async function call<K extends RouteName>(name: K, request?: RequestOf<K>)
  * second what has gone out turns that wait into something a person can read
  * and judge -- the prompt, the context, each step. *run* is handed the id to
  * send as `progress_id`, which is what the engine files the calls under. A
- * poll that fails changes nothing: the generation is what matters. The node
- * dialogs and ✨ Generate Graph each wrote this out.
+ * poll that fails changes nothing: the generation is what matters. A node's
+ * panel and ✨ AI Graph each wrote this out.
+ *
+ * *stop* ends the watch at once, rejecting with its reason: the request goes
+ * on at the server, and what it brings back is dropped -- a call that hung
+ * held a node's every ✨ until it ended.
  */
 export async function watchGeneration<T>(
   run: (progressId: string) => Promise<T>,
   onCalls: (calls: AICall[]) => void,
+  stop?: AbortSignal,
 ): Promise<T> {
   const progressId = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const polling = setInterval(async () => {
     try {
       const { calls } = await call('generationProgress', { id: progressId });
-      if (calls.length) onCalls(calls);
+      if (calls.length && !stop?.aborted) onCalls(calls);
     } catch {
       // Nothing to do: the next poll, or the generation's own answer, says more.
     }
   }, 500);
+  const stopped = new Promise<never>((_, reject) => {
+    stop?.addEventListener('abort', () => reject(stop.reason), { once: true });
+  });
   try {
-    return await run(progressId);
+    return await Promise.race([run(progressId), stopped]);
   } finally {
     clearInterval(polling);
   }

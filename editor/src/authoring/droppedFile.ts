@@ -1,21 +1,20 @@
-// A file dropped onto a node on the canvas, or onto step 1's example field:
-// it becomes the example, with no browse dialog on the way (📂 stays for who
-// would rather look).
+// A file dropped onto a node on the canvas, or onto the files line under a
+// code or ai node's ✨ Input or ✨ Output: it is taken with no browse dialog on
+// the way (📂 stays for who would rather look).
 //
-// What it puts there is what 📂 From a file puts there, by the one rule
-// (`fileValue`): the file's path on an input that reads the file -- kept
-// relative to the folder the editor runs in, as a graph keeps paths -- and
-// otherwise what the file says, parsed when it is JSON. A browser hands a page
-// a dropped file's name, size and content, never
-// where it is: the path comes from the drop where it names one (a `file:` URI),
-// and otherwise the engine is asked for the one file of that name and size under
+// What it gives the node is the element's to say (`NodeGuiBuilder.dropPort`):
+// a code or an ai node takes its path, as one more file its input definition
+// is written from -- kept relative to the folder the editor runs in, as a graph
+// keeps paths -- and a data node what the file says, parsed when it is JSON. A
+// browser hands a page a dropped file's name, size and content, never where it
+// is: the path comes from the drop where it names one (a `file:` URI), and
+// otherwise the engine is asked for the one file of that name and size under
 // the folder it runs in (`findFile`).
 
 import { call } from '@/api/client';
 import { useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { fileValue } from './readAsRun';
-import { readFilePorts } from './generationContext';
 
 /** A dropped file, as far as a browser says what it is. */
 export interface Dropped {
@@ -71,32 +70,33 @@ export async function droppedPath(file: Dropped, find: FindFile = findFile): Pro
   const { paths, searched } = await find(file.name, file.size);
   if (paths.length === 1) return paths[0];
   throw new Error(paths.length
-    ? `${paths.length} files called “${file.name}” are that size: choose the one you mean with 📂 From a file….`
+    ? `${paths.length} files called “${file.name}” are that size: choose the one you mean with 📂 Add a file….`
     : `A browser does not say where a dropped file is, and no “${file.name}” of that size is in ${searched}: `
-      + 'choose it with 📂 From a file….');
+      + 'choose it with 📂 Add a file….');
 }
 
 /**
- * *file*, dropped on node *nodeId* on the canvas, as the example on its
- * *port* (`NodeGuiBuilder.withExampleValue`): one undo step, written into the
- * graph that was open when it was dropped -- and the node's dialog opened on
- * it, where ▶ Try it is one click away.
+ * *file*, dropped on node *nodeId* on the canvas, taken as *how* says
+ * (`NodeGuiBuilder.dropPort`) -- its path, or what it says -- and given to the
+ * node (`withDropped`): one undo step, written into the graph that was open
+ * when it was dropped, and the node's panel opened on it.
  */
 export async function dropExample(
   nodeId: string,
-  port: string,
+  how: 'path' | 'text',
   file: Dropped,
   find?: FindFile,
   kept?: (path: string) => Promise<string>,
 ): Promise<void> {
   const started = useGraphStore.getState().document;
   const node = () => useGraphStore.getState().rfNodes.find((item) => item.id === nodeId)?.data.graphNode;
-  const dropped = node();
-  if (!dropped) return;
-  const value = await fileValue(readFilePorts(dropped).includes(port), () => droppedPath(file, find), file.text, kept);
+  if (!node()) return;
+  const value = await fileValue(how === 'path', () => droppedPath(file, find), file.text, kept);
   const store = useGraphStore.getState();
   const now = node();
   if (store.document !== started || !now) return;
-  store.updateNode(nodeId, NODE_BUILDERS[now.node_type].withExampleValue(now, port, value));
+  // A file it has already is no change, and no undo step.
+  const next = NODE_BUILDERS[now.node_type].withDropped(now, value);
+  if (next !== now) store.updateNode(nodeId, next);
   store.setEditingNode(nodeId);
 }

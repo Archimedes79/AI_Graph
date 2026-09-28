@@ -27,12 +27,10 @@ export function baseNodeConfig(): NodeConfig {
     // `aiSetting`), until someone pins this node to a provider of its own.
     ai_provider: 'default',
     ai_model: '',
-    system_prompt: '',
     code: '',
-    code_prompt: '',
+    prompt: '',
     data_value: null,
     data_format: 'text',
-    output_format_prompt: '',
     write_mode: 'none',
     // Once on the whole list (`NodeRunner.batchMode`), as many at once as the run allows.
     batch_mode: 'whole_list',
@@ -40,7 +38,6 @@ export function baseNodeConfig(): NodeConfig {
     send_images: false,
     catch_errors: false,
     gui_widgets: [],
-    task: '',
     trigger_on_start: true,
     trigger_every: '',
   };

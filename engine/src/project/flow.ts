@@ -16,7 +16,6 @@
 // or a page that already has their contents.
 
 import { defaultMetadata, parseGraph, type Graph, type GraphEdge, type GraphMetadata } from '../graph.ts';
-import { registry } from '../elements/registry.ts';
 import { NotAGraph } from '../errors.ts';
 import type { Problem } from '../execution/wiring.ts';
 import { interfaceFrom } from './interfaceFile.ts';
@@ -139,7 +138,6 @@ export function graphFrom(flow: unknown, filesOf: (id: string) => NodeFiles, pat
   const { nodes: _nodes, wires = [], ...metadata } = given;
   if (!Array.isArray(wires)) throw new NotAGraph(`${path}: "wires" must be a list, one "node.port -> node.port" each.`);
 
-  const kept = new Map<string, unknown>();
   const isObject = (value: unknown): boolean => !!value && typeof value === 'object' && !Array.isArray(value);
   const nodes = Object.entries(listed as Record<string, unknown>).map(([id, type]) => {
     const { about, ports } = filesOf(id);
@@ -149,22 +147,16 @@ export function graphFrom(flow: unknown, filesOf: (id: string) => NodeFiles, pat
       throw new NotAGraph(`${path}: node "${id}", node.json: "config" must be an object.`);
     }
     const faces = interfaceFrom(ports, `${path}: node "${id}", interface.json`);
-    if (faces.outputSchema !== undefined) kept.set(id, faces.outputSchema);
     return {
       id, node_type: String(type), label: node.label, description: node.description,
       config: node.config, inputs: faces.inputs, outputs: faces.outputs,
     };
   });
 
-  let graph: Graph;
   try {
-    graph = parseGraph({ metadata, nodes, edges: wires.map((wire) => edgeOf(wire, path)) });
+    return parseGraph({ metadata, nodes, edges: wires.map((wire) => edgeOf(wire, path)) });
   } catch (error) {
     if (error instanceof NotAGraph) throw error;
     throw new NotAGraph(`${path} is not a graph: ${(error as Error).message}`);
   }
-  for (const node of graph.nodes) {
-    if (kept.has(node.id)) registry.node(node.node_type)?.setOutputInterface(node, kept.get(node.id));
-  }
-  return graph;
 }

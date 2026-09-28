@@ -6,10 +6,11 @@
 
 import type { Graph, GraphNode, NodeType, Port } from '../graph.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
-import { readInterface, type Schema } from '../execution/interface.ts';
+import { collectedInterface, type Schema } from '../execution/interface.ts';
 import type { Problem } from '../execution/wiring.ts';
 import type { Logic } from '../authoring/logic.ts';
 import type { Generation } from '../authoring/generation.ts';
+import { definitionShape, type Definitions } from '../authoring/definition.ts';
 import { ElementRunner } from './ElementRunner.ts';
 import type { Runtime } from './Runtime.ts';
 
@@ -36,27 +37,21 @@ export interface TextFile {
   field: string;
   /** Its name in the node's folder. */
   file: string;
+  /** A value kept as JSON rather than as text: what a data node holds as structure. */
+  json?: boolean;
   /**
-   * What the file says while nobody has written anything of their own. Written
-   * out all the same, so the folder shows what the node does.
+   * What the file says while the node holds nothing of its own there: written
+   * all the same, so a node's folder shows every file it has from the start,
+   * and read back as nothing -- a stub that says what the file is and which ✨
+   * writes it.
    */
   standard?: string;
-}
-
-const plain = (text: string): string => text.replace(/\r\n/g, '\n').trim();
-
-/**
- * Whether *value* is the text the element itself ships for *text* -- its
- * standard -- and so nobody's own writing. Asked when a project is read and
- * saved, and by the editor's sweep, which writes only what nobody wrote.
- */
-export function shippedText(value: unknown, text: Pick<TextFile, 'standard'>): boolean {
-  return typeof value === 'string' && plain(text.standard ?? '') === plain(value);
-}
-
-/** Whether *text* is nobody's own: empty, or the *standard* the element ships. What a `run.js` is asked. */
-export function isStandardText(text: string, standard: string): boolean {
-  return !plain(text) || shippedText(text, { standard });
+  /**
+   * Written after what the node holds, and taken off again when the file is
+   * read, so the node never holds it: what makes a file work on its own --
+   * `node code.js` runs the node on its example.
+   */
+  footer?: string;
 }
 
 /**
@@ -95,7 +90,7 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
    * folder. Everything else it stores stays in its `node.json`.
    *
    * Fixed names rather than ones made from a label: a folder holding
-   * `code.js`, `task.md` and `examples.md` says what each file is
+   * `input.js`, `output.js` and `code.js` says what each file is
    * before it is opened, and renaming a node renames nothing on disk.
    */
   texts(_node: GraphNode): readonly TextFile[] {
@@ -103,9 +98,9 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   }
 
   /**
-   * What this node does, if a person writes it: the request, the body, and
-   * how to run it. `undefined` for a node that authors nothing -- an output
-   * node has no text anyone writes at length.
+   * What this node does, if it has a body: the body, where it is kept, and
+   * how to run it. `undefined` for a node that has none -- an output node
+   * holds settings, not something written at length.
    *
    * This replaced a declaration of *field names* that every caller then used to
    * reach into an untyped config. See `logic.ts` for what that cost.
@@ -209,26 +204,27 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   }
 
   /**
-   * This node keeps the shape of what it produced: set from a run, then every
-   * later run is checked against it, and the node after it is told it. It lives
-   * with the node's ports, in its `interface.json`.
+   * The node's input and output definitions -- `input.js` and `output.js`
+   * (`authoring/definition.ts`) -- or undefined for a kind that has none. A
+   * code node and an ai node have them: what one call is handed, and what it
+   * returns.
    */
-  readonly keepsOutputInterface: boolean = false;
-
-  /**
-   * What this node's outputs are held to, once someone has kept one: see
-   * `execution/interface.ts`. None by default -- a model's answer is described
-   * to the model instead (an AI node's `output.md`), not checked afterwards.
-   */
-  outputInterface(node: GraphNode): Schema | undefined {
-    return this.keepsOutputInterface ? readInterface(node.config.output_schema) : undefined;
+  definitions(_node: GraphNode): Definitions | undefined {
+    return undefined;
   }
 
-  /** Put a kept output interface back, as its folder had it; `null` forgets it. */
-  setOutputInterface(node: GraphNode, schema: unknown): void {
-    if (!this.keepsOutputInterface) return;
-    if (schema === null || schema === undefined) delete node.config.output_schema;
-    else node.config.output_schema = schema;
+  /**
+   * What this node's outputs are held to: the shape of its output
+   * definition's example, as the node hands it on -- for a node run once per
+   * item, the list the calls' answers are collected into. Every run is checked
+   * against it, and a wire from it into a port that takes something else is a
+   * problem `check` names. None while it has no output definition.
+   */
+  outputInterface(node: GraphNode): Schema | undefined {
+    const output = this.definitions(node)?.output;
+    const shape = output?.trim() ? definitionShape(output) : undefined;
+    if (!shape || this.batchMode(node) !== 'per_item') return shape;
+    return collectedInterface(shape, new Set(node.outputs.filter((port) => port.multi).map((port) => port.id)));
   }
 
   // ── Run time ──────────────────────────────────────────────────────────────
@@ -367,8 +363,9 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   // smaller tool -- but nothing a run calls may reach it (`elements/times.test.ts`).
 
   /**
-   * How an AI writes this node's body, or undefined if none does: a code node
-   * and an ai node are written; a data node never is.
+   * How an AI writes this node's body, or undefined if none does: a code
+   * node's code, an ai node's instructions, a data node's data. An input or an
+   * output node holds settings, and a page its blocks.
    */
   generation(): Generation | undefined {
     return undefined;

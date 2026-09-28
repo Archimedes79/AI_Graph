@@ -2,7 +2,7 @@
 //
 // A port's id is the name a body reads it by -- `inputs.csv`, `{ figure }` --
 // so it is the field the ports editor edits, and it is also what a wire points
-// at. When the node dialog writes a change, `updateNode` has to be told which
+// at. When the node panel writes a change, `updateNode` has to be told which
 // id each port had before, or a renamed port loses its wires to the pruning.
 //
 // That used to be worked out by position: row 2 before is row 2 now. It is
@@ -13,7 +13,7 @@
 // wire to its neighbour instead.
 //
 // So each port carries the id it has in the graph (`trackPorts`, which the
-// dialog puts on the node as stored), and a port is followed by that, not by
+// panel puts on the node as stored), and a port is followed by that, not by
 // where it stands. It is kept under a symbol: an edit
 // that spreads a port (`{ ...port, id }`, which is how the ports editor renames
 // one) carries it along, and JSON never sees it, so the draft still compares
@@ -92,11 +92,11 @@ export function portRenames(before: GraphNode | undefined, after: GraphNode): Po
  * *after* -- *before* with its ports edited once, in the ports editor -- with
  * every port new to it known from here on, and what became of the name of
  * each port of *before*: for what is keyed by a port's name rather than wired
- * to it, the values of its examples (`examplePair.examplesFollowPorts`).
+ * to it, the keys of its input.js and output.js (`definitionPorts.ts`).
  *
  * `portRenames` answers the same question from the node as it is stored, for
- * the wires, when the dialog writes; this answers it edit by edit, so the example the dialog
- * tries and ✨ is written against says the name the port has now. A name
+ * the wires, when the panel writes; this answers it edit by edit, so the
+ * definitions ▶ Try and ✨ read say the name the port has now. A name
  * another port still has belongs to that port, and has no fate here.
  */
 export function renamedPorts(before: GraphNode, after: GraphNode): { node: GraphNode; names: PortRenames } {

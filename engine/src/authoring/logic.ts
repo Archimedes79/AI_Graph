@@ -1,10 +1,10 @@
 // What an element does, as an object rather than as three field names.
 //
-// Every node that does anything authored does it the same way: someone writes a
-// request, an AI turns it into a body, and the body is what runs. A code node
-// and an AI node are instances of that one sentence, and they differ only in
-// which config keys hold the two halves — `code`/`code_prompt` here,
-// `system_prompt`/the node's own description there.
+// Every node that does anything authored does it the same way: its text says
+// what should happen, an AI turns that into a body, and the body is what runs.
+// A code node and an AI node are instances of that one sentence, and they
+// differ in which config key holds the body -- `code` here, `prompt` there --
+// and in who runs it.
 //
 // That difference was expressed as strings: an element returned the *names* of
 // its fields and the caller reached into an untyped bag to find them, and the
@@ -25,19 +25,14 @@ import { runBody, type BodyGiven } from '../elements/body.ts';
  */
 export type LogicKind = 'code' | 'prompt';
 
-/** Where a logic keeps its two halves inside an element's stored config. */
+/** Where a logic keeps its body inside an element's stored config. */
 export interface LogicFields {
   /** The config key holding the body. */
   body: string;
-  /** The config key holding the request that produced it. */
-  prompt: string;
-  /** The request lives on the node itself (its description), not in config. */
-  promptOnSubject?: boolean;
 }
 
 /**
- * One element's authored half: the body, where it and the request that
- * produced it are kept, and how to run it.
+ * One element's authored half: the body, where it is kept, and how to run it.
  *
  * Constructed by the element from its own config, so the field names above
  * appear once — in the element that owns them — instead of travelling to every
@@ -48,7 +43,7 @@ export class Logic {
   readonly kind: LogicKind;
   /** What runs, or what is sent. Empty means "not written yet". */
   readonly body: string;
-  /** Which config keys the body and its request are kept in, for the editor and the file layer. */
+  /** Which config key the body is kept in, for the editor and the file layer. */
   readonly fields: LogicFields;
 
   // Fields declared and assigned rather than written as constructor parameter

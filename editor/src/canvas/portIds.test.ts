@@ -6,7 +6,7 @@ const port = (id: string, kind: 'input' | 'output' = 'input'): Port =>
   ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
 const outputs = (...ids: string[]) => ids.map((id) => port(id, 'output'));
 
-describe('the names a node dialog saves its ports under', () => {
+describe('the names a node panel saves its ports under', () => {
   it('will not save two ports of one name, which merged their wires into one value', () => {
     expect(portIdProblems([port('a'), port('a')], [], false).inputs).toBe('Two inputs are both called "a".');
     expect(portIdProblems([], outputs('out', 'out'), false).outputs).toBe('Two outputs are both called "out".');

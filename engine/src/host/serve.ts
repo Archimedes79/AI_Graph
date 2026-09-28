@@ -36,6 +36,7 @@ import { nodeRuntime } from './node.ts';
 import { schedule } from './schedule.ts';
 import { Lifecycle } from './lifecycle.ts';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
+import { withoutAuthoring } from '../authoring/handedOn.ts';
 
 /** Where a served tool keeps its last scheduled round: inside a project, beside a file. */
 function lastRunFile(graphPath: string): string {
@@ -207,7 +208,8 @@ function toolRoutes(
   return {
     graph() {
       if (!held.graph) throw new Refusal(404, 'This server ships no graph; post the one to run.');
-      return held.graph;
+      // A tool's page is handed what runs, not how each node was written.
+      return withoutAuthoring(held.graph);
     },
 
     schedule: () => clock?.state() ?? {

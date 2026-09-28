@@ -20,7 +20,7 @@ export default function InputNodePanel({ node, setConfig }: NodePanelProps) {
   const modeField = (
     <div>
       <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Mode</label>
-      {/* Its ports follow the mode, and the dialog re-derives them from it. */}
+      {/* Its ports follow the mode, and the panel re-derives them from it. */}
       <select
         className="w-full rounded-lg px-3 py-2 text-sm"
         style={FIELD}

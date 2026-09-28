@@ -4,20 +4,27 @@ import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
-import { names, type Problem } from '../../../execution/wiring.ts';
-import { runBody } from '../../body.ts';
+import { DEFINITION_TEXTS, definitionExample, definitionsIn, textOutput, type Definitions } from '../../../authoring/definition.ts';
+import { fillPrompt, nodeDescription, standardRunPrompt } from '../../../authoring/prompts.ts';
 import { askModel, type AskSettings } from './ask.ts';
-import { ALL_INPUTS, outputWords, placeholders } from './prompt.ts';
-import { AI_RUN, isStandardRun } from './runTemplate.ts';
 
-/** Where an ai node keeps its two halves; used by both declarations below. */
-const PROMPT_FIELDS: LogicFields = {
-  body: 'system_prompt', prompt: 'description', promptOnSubject: true,
-};
+/** Where an ai node keeps its body: the instructions it runs with, `prompt.md`. */
+const PROMPT_FIELDS: LogicFields = { body: 'prompt' };
+
+/** The one port a plain answer goes out on: a node with no output definition has no other. */
+const ANSWER = 'output';
+
+/** What {Output Definition} says to a node that has none, where its own prompt names it. */
+const NO_DEFINITION = 'None: answer in plain text.';
 
 export interface AiConfig extends AskSettings {
-  /** `run.js` when somebody changed it; empty for the standard one. */
-  runCode: string;
+  /**
+   * The output the answer goes out on as it came, as text: "output" without
+   * an output definition, its one output where it names one that holds text.
+   * Null where it names several outputs, or a value that is not text: the
+   * answer is JSON then, keyed as its example is, and handed on key by key.
+   */
+  textOn: string | null;
 }
 
 /** One per line, or a list: both are what a person would write. */
@@ -26,27 +33,41 @@ function serverList(raw: unknown): string[] {
   return entries.map((entry) => String(entry).trim()).filter(Boolean);
 }
 
-/** What this keeps in files of its own in a project folder: see `NodeRunner.texts`. */
+/**
+ * What this keeps in files of its own in a project folder (see
+ * `NodeRunner.texts`), in the order a node is built -- the same as a code
+ * node's, with the instructions where its code is.
+ */
 const AI_TEXTS: readonly TextFile[] = [
-  // What the node does with the rest of this folder: see `runTemplate.ts`.
-  { field: 'run_code', file: 'run.js', standard: AI_RUN },
-  { field: 'system_prompt', file: 'system.md' },
-  { field: 'prompt_template', file: 'message.md' },
-  // What the model is told its answer must look like.
-  { field: 'output_format_prompt', file: 'output.md' },
-  // Optional: inputs, and what the answer must meet. See `execution/examples.ts`.
-  { field: 'examples', file: 'examples.md' },
+  ...DEFINITION_TEXTS,
+  {
+    field: 'prompt', file: 'prompt.md', standard: `<!--
+prompt.md: the instructions this ai node's model is given each time it runs,
+with the node's description and its output definition filled in where they
+are named. ✨ Prompt writes it from the node's text and its output.js. While it
+says nothing but this, the node runs with the standard instructions.
+-->`,
+  },
+  { field: 'history', file: 'history.md' },
 ];
 
 /**
  * A node that asks a model.
  *
- * The prompt is **everything wired into it**, in port order -- laid out by the
- * node's message template when it has one, joined by blank lines when it does
- * not (see `prompt.ts`). Not a port named `prompt`: a node with two inputs
- * wired to two different upstream nodes should send both, and naming one of
- * them would make the second silently disappear. What the node itself adds is
- * the system prompt — the part someone wrote.
+ * It is told its instructions -- its prompt.md, or while it has none the
+ * standard (`authoring/prompts.ts`), with its description and its output
+ * definition filled in -- and then **everything wired into it**, in port order,
+ * each input under its port id where there are several (see `prompt.ts`). Not
+ * a port named `prompt`: a node with two inputs wired to two different upstream
+ * nodes should send both, and naming one of them would make the second
+ * silently disappear.
+ *
+ * Its answer is text -- on "output" without an output definition, on the one
+ * output a definition names where that holds text -- or, where the definition
+ * names several outputs or a value that is not text, it maps whatever arrives
+ * onto that format: the answer is JSON keyed as the definition's example is,
+ * and each key goes out on the output port of that name. A model is asked for
+ * JSON only where nothing less says what goes out.
  *
  * Running once per item is not here. A node that fans out does so the same way
  * a code node does, in the executor, because "run this once per element" is a
@@ -55,36 +76,34 @@ const AI_TEXTS: readonly TextFile[] = [
 export class AiNodeRunner extends NodeRunner<AiConfig> {
   readonly nodeType = 'ai' as const;
 
-  override readonly keepsOutputInterface = true;
-
   override texts(): readonly TextFile[] {
     return AI_TEXTS;
   }
 
+  override definitions(node: GraphNode): Definitions {
+    return definitionsIn(node);
+  }
+
   config(node: GraphNode): AiConfig {
     const c = node.config;
+    const output = definitionsIn(node).output.trim();
+    const own = String(c.prompt ?? '');
     return {
-      systemPrompt: String(c.system_prompt ?? ''),
+      instructions: fillPrompt(own.trim() ? own : standardRunPrompt(output), {
+        'Node Description': nodeDescription(node),
+        'Output Definition': output || NO_DEFINITION,
+      }),
+      textOn: output ? textOutput(output) ?? null : ANSWER,
       provider: String(c.ai_provider ?? ''),
       model: String(c.ai_model ?? ''),
       ...(typeof c.temperature === 'number' ? { temperature: c.temperature } : {}),
       sendImages: c.send_images === true,
-      template: String(c.prompt_template ?? ''),
-      outputFormatPrompt: outputWords(c),
       toolServers: serverList(c.mcp_servers),
-      runCode: isStandardRun(String(c.run_code ?? '')) ? '' : String(c.run_code),
     };
   }
 
-  /**
-   * The system prompt is what someone writes for an ai node -- markdown. The
-   * script that makes the call is `run.js`, and it is not a second copy of the
-   * provider layer: it asks for the call (`node.llm`) and the provider layer
-   * makes it.
-   */
+  /** Its body is its instructions, prompt.md -- markdown a model is sent, not code that runs. */
   override logic(node: GraphNode): Logic {
-    // The request is the node's own description, not a config field: an ai
-    // node's description IS what you asked the model to be.
     return logicFrom(node, 'prompt', PROMPT_FIELDS);
   }
 
@@ -100,58 +119,43 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
   }
 
   /**
-   * The standard `run.js` is one call, and is made here rather than by starting
-   * a process to make it: same function, same request (a test holds them to
-   * that), without a process per item of a thousand-row batch. A `run.js`
-   * somebody changed is a body like any other: it runs where bodies run, and
-   * asks for its calls.
+   * One call, made here: the process that holds the keys makes it. The answer
+   * is text on its one output -- or, to a node whose output definition names
+   * several outputs or a value that is not text, the JSON it writes out, each
+   * key on its own port (`jsonAnswer`): a node that maps whatever arrives onto
+   * a fixed format hands on that format, not a text of it.
    */
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const settings = this.config(node);
-    const order = node.inputs.map((port) => port.id);
-    if (!settings.runCode) return { output: await askModel(settings, inputs, runtime, order) };
-
-    return runBody(settings.runCode, inputs, runtime, {
-      data: {
-        texts: { system: settings.systemPrompt, message: settings.template, output: settings.outputFormatPrompt },
-      },
-      ask: settings,
-      order,
-    });
+    const answer = await askModel(settings, inputs, runtime, node.inputs.map((port) => port.id));
+    return settings.textOn ? { [settings.textOn]: answer } : jsonAnswer(answer);
   }
 
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {
-    return `the node's own "description" field says what it is for, and config.system_prompt is the standing instruction. Everything wired into it is sent as the message; with more than one input, lay them out in config.prompt_template using {{port_id}} placeholders, for example "Conversation so far: {{history}} User: {{message}}" with line breaks between the parts. The reply arrives on the node's single output port, "output".`;
+    return 'its description says in words what it does; everything wired into it is sent after its instructions, each input '
+      + 'under its port id where there are several. config.prompt may hold instructions of its own, with {Node Description} and '
+      + '{Output Definition} where the description and the output definition are to go; without it, the node is told its '
+      + 'description and to answer. config.output_definition -- a JSDoc typedef, then "module.exports = <one example as plain '
+      + 'JSON>;" -- says what goes out, one output port per key: one key holding text is answered in plain text on that port; '
+      + 'several keys, or a value that is not text, make the answer JSON keyed as that example is, each key handed on the '
+      + 'output port of the same id. Without one, the answer is plain text on its one output port, "output".';
   }
 
-  override whatRuns(node: GraphNode): WhatRuns {
-    return isStandardRun(this.config(node).runCode)
-      ? { by: 'engine', where: 'run.js', does: 'Makes the one model call run.js describes -- system.md, message.md filled from the inputs -- and hands on the answer as "output". Unchanged, run.js is made by the engine itself; a test holds the two to the same request.' }
-      : { by: 'body', where: 'run.js', does: 'Calls run(inputs, node) in run.js, sandboxed; each node.llm(...) in it is a model call made for it by the process that holds the keys.' };
+  override whatRuns(): WhatRuns {
+    return this.engineRuns('Sends prompt.md -- or the standard instructions, while it says nothing of its own -- with its description '
+      + 'and output.js filled in, then what arrived, each input under its port id where there are several. The answer is text on '
+      + 'its one output; where output.js names several outputs or a value that is not text, it is parsed as JSON and each key '
+      + 'handed on its output port.');
   }
 
-  /** A placeholder nobody fills is sent to the model as the literal "{{name}}". */
-  override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
-    const template = String(node.config.prompt_template ?? '');
-    if (!template.trim()) return [];
-    const inputs = new Set(node.inputs.map((port) => port.id));
-    return placeholders(template)
-      .filter((name) => name !== ALL_INPUTS && !inputs.has(name))
-      .map((name) => ({
-        where,
-        problem: `Its message template asks for {{${name}}}, and it has no input "${name}".`,
-        fix: `Use one of its inputs: ${names(inputs)} -- or add an input with that id.`,
-      }));
-  }
-
-  /** The one element whose request lives on the node rather than in its config. */
+  /** Its instructions, written from its description and definitions. */
   override generation(): Generation {
     return {
       kind: 'prompt', fields: PROMPT_FIELDS,
-      guard: 'Please add a description first.',
-      success: '✅ Prompt generated!',
+      guard: 'Say what this node should do first: its text is what its instructions are written from.',
+      success: '✅ Prompt written.',
     };
   }
 
@@ -159,4 +163,37 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
   override deployNeeds() {
     return { needsInterface: false, asksAi: true };
   }
+}
+
+/**
+ * A model's answer as the JSON object it is: what the node writes out, key by
+ * key. The object is taken where the answer holds it -- its first fenced
+ * block, else from its first `{` to its last `}`, since a model asked for JSON
+ * and nothing else still says "Here is the result:" around it -- and, where
+ * the model answered in the output definition's own format,
+ * `module.exports = …;` and all, read the way that file is read. An answer
+ * that holds no JSON object fails the node, saying how it began -- handed on
+ * as text, it reaches the node after it as a string where a record was
+ * promised, and fails there, further from why.
+ */
+function jsonAnswer(answer: string): Record<string, unknown> {
+  const said = answer.trim();
+  const fenced = /```[^\n`]*\n([\s\S]*?)\n?[ \t]*```/.exec(said)?.[1];
+  const braced = said.slice(said.indexOf('{'), said.lastIndexOf('}') + 1);
+  const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+  for (const candidate of [fenced, braced]) {
+    if (!candidate?.trim()) continue;
+    try {
+      const value: unknown = JSON.parse(candidate);
+      if (isObject(value)) return value;
+    } catch {
+      // Not this one: the next place the object may be.
+    }
+  }
+  const asFile = definitionExample(fenced ?? said);
+  const value = 'example' in asFile ? asFile.example : undefined;
+  if (isObject(value)) return value;
+  const start = said.length > 160 ? `${said.slice(0, 160)}…` : said;
+  throw new Error(`The model's answer is not the JSON object this node's output.js asks for. It began: "${start}". `
+    + 'Say in its prompt that the answer is that JSON and nothing else -- or, for a plain text answer, give its output.js one output that holds text.');
 }

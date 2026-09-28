@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import FileBrowserDialog from './FileBrowserDialog';
 import { FIELD, FIELD_ON_SURFACE, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
 
@@ -14,6 +14,8 @@ interface PathFieldProps {
   extensions?: string;
   placeholder?: string;
   ariaLabel?: string;
+  /** The box's id, for the label over it (`htmlFor`): a click on the label is a click in the box. */
+  id?: string;
   /** Sits on a raised surface, as a block's settings do: the surface's colour and the smaller size. */
   onSurface?: boolean;
   /** The smaller size, on the page's own background. */
@@ -48,7 +50,7 @@ export function nameToSave(path: string): string | undefined {
  * own open/closed state and its own spelling of the button.
  */
 export default function PathField({
-  value, onChange, mode, extensions, placeholder, ariaLabel,
+  value, onChange, mode, extensions, placeholder, ariaLabel, id,
   onSurface, compact, mono, autoFocus, readOnly, onPicked, onKeyDown, children,
 }: PathFieldProps) {
   const [browsing, setBrowsing] = useState(false);
@@ -58,6 +60,7 @@ export default function PathField({
     <>
       <div className="flex items-center gap-2">
         <input
+          id={id}
           className={`flex-1 min-w-0 rounded-lg ${size} text-sm${mono ? ' font-mono' : ''}`}
           style={onSurface ? FIELD_ON_SURFACE : FIELD}
           value={value}
@@ -73,6 +76,7 @@ export default function PathField({
           className={`text-xs ${size} rounded-lg flex-shrink-0`}
           style={NEUTRAL_BUTTON}
           onClick={() => setBrowsing(true)}
+          title={mode === 'directory' ? 'Choose a folder' : mode === 'save' ? 'Choose where to save it' : 'Choose a file'}
         >
           📂 Browse…
         </button>
@@ -102,12 +106,14 @@ export function FileTypesField({ value, onChange, onSurface }: {
   onChange: (extensions: string) => void;
   onSurface?: boolean;
 }) {
+  const id = useId();
   return (
     <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
+      <label htmlFor={id} className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
         File types (comma-separated, e.g. .md, .txt)
       </label>
       <input
+        id={id}
         className={`w-full rounded-lg ${onSurface ? 'px-2 py-1.5' : 'px-3 py-2'} text-sm font-mono`}
         style={onSurface ? FIELD_ON_SURFACE : FIELD}
         value={value}

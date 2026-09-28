@@ -5,7 +5,7 @@
 // `ai/mcp.ts` is the other direction -- a graph's model calling out to somebody's
 // tools. This is somebody's model calling in.
 //
-// **One file, one door.** Everything the outside can reach is the six tools
+// **One file, one door.** Everything the outside can reach is the eight tools
 // below, and everything they can reach is one folder. Three layers, so each can
 // be read and tested without the others:
 //
@@ -67,6 +67,7 @@ import { message } from '../http.ts';
 import { nodeRuntime } from '../node.ts';
 import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
+import { withoutAuthoring } from '../../authoring/handedOn.ts';
 import {
   FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
 } from '../../project/folder.ts';
@@ -211,13 +212,15 @@ const SPECS: ToolSpec[] = [
   },
   {
     name: 'generate_graph',
-    description: 'Have the model configured on this machine design a whole graph from a description. Returns the '
-      + 'graph, the model\'s explanation and any problems validation found. With save_as, a graph without problems is also '
-      + 'written there. If no model is configured, use authoring_guide and save_graph instead.',
+    description: 'Have the model configured on this machine design a whole graph from a description -- or, given the path '
+      + 'of a saved graph, change that graph as the description says, its ids and whatever the change does not touch kept. '
+      + 'Returns the graph, the model\'s explanation and any problems validation found. With save_as, a graph without '
+      + 'problems is also written there. If no model is configured, use authoring_guide and save_graph instead.',
     parameters: {
       type: 'object',
       properties: {
-        description: { type: 'string', description: `What the graph should do, in plain words. At most ${MAX_DESCRIPTION_CHARS} characters.` },
+        description: { type: 'string', description: `What the graph should do, or what to change, in plain words. At most ${MAX_DESCRIPTION_CHARS} characters.` },
+        path: { type: 'string', description: 'Optional: the saved graph to change rather than design a new one, as a .json path relative to the server\'s folder (a project: its flow.json).' },
         save_as: { type: 'string', description: 'Optional .json path, relative to the server\'s folder, to save the graph to.' },
       },
       required: ['description'],
@@ -294,15 +297,16 @@ const SPECS: ToolSpec[] = [
   },
   {
     name: 'test_graph',
-    description: 'Run the examples nodes keep in their examples.md -- inputs, and what must come out -- and report each '
-      + 'as pass, fail (with what differed), error or skipped. All nodes that have examples, or one with node_id -- '
+    description: 'Run each code and ai node once on the example in its input definition (config.input_definition, '
+      + 'input.js) and hold what comes out to its output definition (config.output_definition, output.js); report each '
+      + 'as pass, fail (with what does not fit), error or skipped. Every node that has an example, or one with node_id -- '
       + 'also inside the graphs nodes hold, where a result names the way down ("part ▸ work"). '
-      + 'offline: ask no model; an AI node\'s examples and judged expectations are skipped.',
+      + 'offline: ask no model; an ai node is skipped.',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder (a project: its flow.json).' },
-        node_id: { type: 'string', description: 'Only this node\'s examples.' },
+        node_id: { type: 'string', description: 'Only this node.' },
         offline: { type: 'boolean', description: 'Ask no model.' },
       },
       required: ['path'],
@@ -337,7 +341,7 @@ const KEY_SHAPED = /\b(sk-[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,}|gh[pousr]_[A
 const json = (value: unknown): string => JSON.stringify(value, null, 2);
 
 /**
- * The six tools, over one folder.
+ * The eight tools, over one folder.
  *
  * Everything a tool needs from the machine arrives in *options*; nothing here
  * reads the environment, the settings file or the process. That is what makes
@@ -500,6 +504,9 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       // Before the model is asked, not after: a minute of generation that ends
       // in "you cannot save there" is a minute nobody gets back.
       if (args.save_as !== undefined) await confine(args.save_as, 'save_as');
+      // The graph to change, as the editor's bar sends the one it holds: its
+      // ids and what the change does not touch are kept, each node's history too.
+      const current = args.path !== undefined ? (await loadGraph(args.path)).graph : undefined;
 
       const otherwise = 'The other way needs no model here: call authoring_guide, write the graph yourself, then validate_graph and save_graph.';
       const target = await options.target();
@@ -509,7 +516,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
 
       let generated: { graph: unknown; explanation: string };
       try {
-        generated = await generateGraph(description, { ai: options.ai, target });
+        generated = await generateGraph(description, { ai: options.ai, target }, current);
       } catch (error) {
         throw new Refused(`Generation with ${target.provider} / ${target.model} failed: ${message(error).slice(0, ERROR_LIMIT)}\n`
           + `If that model is not set up or not running, configure one in the AI-Graph editor's Settings. ${otherwise}`);
@@ -525,7 +532,8 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       } else {
         Object.assign(report, { problems: problemsIn(graph) });
       }
-      return json({ ...report, explanation: generated.explanation, graph });
+      // How each node was written stays in the project it is saved to: the caller is handed what runs.
+      return json({ ...report, explanation: generated.explanation, graph: withoutAuthoring(graph) });
     },
 
     async validate_graph(args) {
@@ -584,11 +592,11 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       }
       // A node inside another is named with the way down to it: ids are unique only within one graph.
       const results = ran.map(({ inside, nodeId, result }) => ({
-        node: `${inside}${nodeId}`, example: result.title, status: result.status,
+        node: `${inside}${nodeId}`, status: result.status,
         ...(result.details.length ? { details: result.details.map((line) => brief(line, ERROR_LIMIT)) } : {}),
       }));
       const failed = results.filter((result) => result.status === 'fail' || result.status === 'error').length;
-      return json({ passed: failed === 0, results, ...(tested ? {} : { note: 'No node of this graph has examples.' }) });
+      return json({ passed: failed === 0, results, ...(tested ? {} : { note: 'No node of this graph has an example in an input definition.' }) });
     },
 
     async save_graph(args) {

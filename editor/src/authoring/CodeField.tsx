@@ -19,35 +19,34 @@ interface CodeFieldProps {
   language: CodeLanguage;
   placeholder?: string;
   minHeight?: number;
-  /** What the enlarged editor is called: "Draw chart — code". */
+  /** What the enlarged editor is called: "Draw chart -- code.js". */
   title?: string;
-  /** A file dropped on it is taken by what holds the field, not typed in: step 1's example. */
-  keepFileDropsOut?: boolean;
 }
 
 /**
- * Where a body is written: a real editor in place of a textarea.
+ * Where a node's files are written in its panel: a real editor in place of a
+ * textarea.
  *
  * The boxes that hold a node's code and its prompts were `<textarea>`s --
- * no highlighting, no bracket matching, Tab jumped to the next field, and a
- * sixty-line function was read through a slot six lines high. This is
- * CodeMirror: syntax colours, line numbers, bracket matching, search
- * (Ctrl+F), multiple cursors, undo that belongs to the box rather than to the
- * browser -- and ⤢ opens the same document across the whole window, because
- * the honest fix for a small window is a big one.
+ * no highlighting, no bracket matching, and a sixty-line function was read
+ * through a slot six lines high. This is CodeMirror: syntax colours, line
+ * numbers, bracket matching, search (Ctrl+F), multiple cursors, undo that
+ * belongs to the box rather than to the browser -- and ⤢ opens the same
+ * document across the whole window, because the honest fix for a small
+ * window is a big one. Tab indents there; in the box it moves on to the next
+ * field, as everywhere in the panel, and Escape in it leaves the panel open.
  *
- * For anything longer-lived there is still the other way out: keep the body
- * in a file beside the graph and open that file in your own editor. The two
- * compose -- this is for the edit you make here, that is for the afternoon
- * you spend in VS Code.
+ * For anything longer-lived there is still the other way out: the file's
+ * chip beside the box opens it in your own editor. The two compose -- this is
+ * for the edit you make here, that is for the afternoon you spend in VS Code.
  */
 export default function CodeField({
-  value, onChange, language, placeholder, minHeight = 160, title, keepFileDropsOut,
+  value, onChange, language, placeholder, minHeight = 160, title,
 }: CodeFieldProps) {
   const [large, setLarge] = useState(false);
 
   // What is there for the moment the editor takes to arrive: the same text in
-  // a plain box, editable, so nothing about the dialog waits on a download.
+  // a plain box, editable, so nothing about the panel waits on a download.
   const plain = (
     <textarea
       className="w-full rounded-lg px-3 py-2 text-sm font-mono resize-none"
@@ -62,7 +61,7 @@ export default function CodeField({
   useEffect(() => {
     if (!large) return undefined;
     // Escape closes the large editor and nothing else: left to bubble, it
-    // would reach the node dialog underneath and ask to discard the node.
+    // would reach the node's panel underneath and close it.
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
@@ -77,7 +76,7 @@ export default function CodeField({
       <Suspense fallback={plain}>
         <Surface
           value={value} onChange={onChange} language={language} placeholder={placeholder}
-          height={{ min: minHeight, max: '46vh' }} keepFileDropsOut={keepFileDropsOut}
+          height={{ min: minHeight, max: '46vh' }}
         />
       </Suspense>
       <button
@@ -95,7 +94,7 @@ export default function CodeField({
         <div
           className="fixed inset-0 flex flex-col"
           style={{ zIndex: 200, background: SCRIM, padding: '3vh 3vw' }}
-          role="dialog"
+          role="panel"
           aria-label={title ?? 'Editor'}
         >
           <div
@@ -115,7 +114,7 @@ export default function CodeField({
             <Suspense fallback={plain}>
               <Surface
                 value={value} onChange={onChange} language={language} placeholder={placeholder}
-                height={{ min: 200, fill: true }} autoFocus keepFileDropsOut={keepFileDropsOut}
+                height={{ min: 200, fill: true }} autoFocus tabIndents
               />
             </Suspense>
           </div>

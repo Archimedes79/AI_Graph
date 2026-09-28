@@ -1,18 +1,21 @@
 // Asking a model, as a node does it -- and as a body may ask for it to be done.
 //
-// One function, because there is one way: what arrived is laid out by the
-// message template, images are sent as images, tool servers live for the length
-// of the question. An ai node left as it is calls it directly; a `run.js` of
-// someone's own, and a code node, reach the same function through `node.llm`
-// (see `runTemplate.ts` and `Runtime.BodyContext`), so a call made from a body
-// is not a second, thinner way to ask.
+// One function, because there is one way: what arrived is sent after the
+// instructions (`prompt.ts`), images are sent as images, tool servers live for
+// the length of the question. An ai node calls it directly; a code node reaches
+// the same function through `node.llm` (see `Runtime.BodyContext`), so a call
+// made from a body is not a second, thinner way to ask.
 
 import type { Runtime } from '../../Runtime.ts';
 import { imageDataUrl, imageMediaType } from '../../../execution/images.ts';
-import { assemblePrompt, type PromptSettings } from './prompt.ts';
-import { LLM_CALLS_PER_RUN } from './runTemplate.ts';
+import { assemblePrompt } from './prompt.ts';
 
-export interface AskSettings extends PromptSettings {
+/** How often one run of a body may ask for the model. A loop that forgot to end must not spend a budget. */
+const LLM_CALLS_PER_RUN = 25;
+
+export interface AskSettings {
+  /** What the model is told before what arrived: an ai node's prompt.md, filled in. Empty: nothing but what arrived. */
+  instructions: string;
   provider: string;
   model: string;
   /** Only when the node sets one: current models refuse a sampling parameter nobody asked for. */
@@ -24,8 +27,7 @@ export interface AskSettings extends PromptSettings {
 
 /** Nothing said: the one AI setting's model, plain text, no tools. What a code node's `node.llm` starts from. */
 export const PLAIN_ASK: AskSettings = {
-  systemPrompt: '', template: '', outputFormatPrompt: '',
-  provider: 'default', model: '', sendImages: false, toolServers: [],
+  instructions: '', provider: 'default', model: '', sendImages: false, toolServers: [],
 };
 
 /**
@@ -69,7 +71,7 @@ export async function askModel(
     text[name] = value;
   }
 
-  const { system, user } = assemblePrompt(settings, text);
+  const { system, user } = assemblePrompt(settings.instructions, text);
   if (!user && !images.length) {
     throw new Error('Nothing to ask: this node has no instructions, and nothing wired into it brought anything.');
   }
@@ -100,10 +102,11 @@ export async function askModel(
 
 /** What a body may say when it asks: everything optional, the node's settings for the rest. */
 interface LlmArgs {
+  /** The instructions, before what is asked about. */
   system?: unknown;
-  message?: unknown;
+  /** Values to send, each under its name where there are several. */
   inputs?: unknown;
-  /** Instead of `message` + `inputs`, for a call that is just a question. */
+  /** Instead of `inputs`, for a call that is just a question. */
   prompt?: unknown;
   temperature?: unknown;
   provider?: unknown;
@@ -116,11 +119,7 @@ interface LlmArgs {
  * Counted, because the body asking is code nobody may have read: a loop that
  * forgot to end asks a finite number of times and then is told why it stopped.
  */
-export function llmCall(
-  settings: AskSettings,
-  runtime: Runtime,
-  order: string[] = [],
-): (args: unknown) => Promise<unknown> {
+export function llmCall(settings: AskSettings, runtime: Runtime): (args: unknown) => Promise<unknown> {
   const most = runtime.llmCallsPerBody ?? LLM_CALLS_PER_RUN;
   let asked = 0;
   return async (raw) => {
@@ -135,13 +134,11 @@ export function llmCall(
     const question = typeof args.prompt === 'string';
     return askModel({
       ...settings,
-      ...(typeof args.system === 'string' ? { systemPrompt: args.system } : {}),
-      ...(typeof args.message === 'string' ? { template: args.message } : {}),
-      ...(question ? { template: '' } : {}),
+      ...(typeof args.system === 'string' ? { instructions: args.system } : {}),
       ...(typeof args.temperature === 'number' ? { temperature: args.temperature } : {}),
       ...(typeof args.provider === 'string' && args.provider ? { provider: args.provider } : {}),
       ...(typeof args.model === 'string' && args.model ? { model: args.model } : {}),
-    }, question ? { prompt: args.prompt } : given, runtime, order);
+    }, question ? { prompt: args.prompt } : given, runtime);
   };
 }
 

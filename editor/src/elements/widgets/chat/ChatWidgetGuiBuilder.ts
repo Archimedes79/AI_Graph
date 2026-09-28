@@ -17,6 +17,15 @@ export class ChatWidgetGuiBuilder extends WidgetGuiBuilder {
     return [{ label: this.label, icon: '💬', also: 'conversation messages bot' }];
   }
 
+  /**
+   * A reply is drawn as Markdown (`ChatWidgetView`), headings, lists and
+   * tables included -- which the node writing it is better told than left to
+   * find out. Not the box text of the default: the reply is Markdown's.
+   */
+  override textShown(): string {
+    return 'replies drawn as Markdown';
+  }
+
   /** A conversation needs room to be one: the full width, and most of a screen. */
   protected override defaultSpan() {
     return { w: 16, h: 9 };

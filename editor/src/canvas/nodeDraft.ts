@@ -1,9 +1,8 @@
 import type { GraphNode, Port } from '@/graph';
 import { derivedNodePorts } from '@/document/guiWidgets';
-import { NODE_BUILDERS } from '@/elements/registry';
 import { useGraphStore } from '@/store/graphStore';
 import { portRenames, renamedPorts, untracked } from '@/store/portRenames';
-import { examplesFollowPorts } from '@/authoring/examplePair';
+import { definitionFollowingPorts } from '@/authoring/definitionPorts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { ERROR_PORT, errorOutput } from '@engine/execution/wiring.ts';
 
@@ -11,7 +10,7 @@ import { ERROR_PORT, errorOutput } from '@engine/execution/wiring.ts';
 const CAUGHT = 'Why this node failed. Optional to wire: unwired, the run simply carries on.';
 
 /**
- * The node dialog's *draft* with its setting *key* set to *value*, and its
+ * The node panel's *draft* with its setting *key* set to *value*, and its
  * ports following the setting where they are derived from it.
  *
  * *value* may be a function of the setting as *draft* holds it: a change that
@@ -44,42 +43,40 @@ export function withSetting(draft: GraphNode, key: string, value: unknown): Grap
 }
 
 /**
- * The node dialog's *draft* with the ports edited in the ports editor, and its
- * examples keyed by the names the ports have now.
+ * The node panel's *draft* with the ports edited in the ports editor, and its
+ * definitions keyed by the names the ports have now.
  *
- * An example is an object keyed by input port. A port renamed or removed in
- * step 1 carried its wire along (`portRenames`), but its value stayed under
- * the old name: Try it and ✨ ran the body with the value where it no longer
- * looks, and once written `check` said the example gives an input the node does
- * not have. Each edit carries the keys along with the port it renames, or takes
- * them away with the port it removes.
+ * A definition is keyed by port. A port renamed or removed carried its wire
+ * along (`portRenames`), but its key stayed under the old name: ▶ Try ran the
+ * body with the value where it no longer looks, and `check` said the
+ * definition names an input the node does not have. Each edit carries the keys
+ * along with the port it renames, or takes them away with the port it removes
+ * (`definitionFollowingPorts`).
  */
 export function withPorts(draft: GraphNode, ports: { inputs: Port[]; outputs: Port[] }): GraphNode {
   const { node, names } = renamedPorts(draft, { ...draft, ...ports });
-  const examples = draft.config.examples;
-  if (typeof examples !== 'string') return node;
-  const followed = examplesFollowPorts(examples, names);
-  return followed === examples ? node : { ...node, config: { ...node.config, examples: followed } };
+  const input = definitionFollowingPorts(String(draft.config.input_definition ?? ''), names.inputs);
+  const output = definitionFollowingPorts(String(draft.config.output_definition ?? ''), names.outputs);
+  if (input === String(draft.config.input_definition ?? '') && output === String(draft.config.output_definition ?? '')) return node;
+  return { ...node, config: { ...node.config, input_definition: input, output_definition: output } };
 }
 
 /**
- * What the node dialog writes: *draft* into the store as node *nodeId*, its
+ * What the node panel writes: *draft* into the store as node *nodeId*, its
  * wires following its ports. *before* is the node as the store holds it;
  * *coalesce* names the change, so the change of the same fields just before
  * it takes the same undo step (`graphStore.commit`).
  *
- * A port's id is the name a body reads it by, so it is edited in the dialog --
+ * A port's id is the name a body reads it by, so it is edited in the panel --
  * and an edge points at the old one. Each port of the draft remembers the id it
  * had in *before* (`trackPorts`), so a renamed port takes its wires along and a
  * removed one takes them away. It used to be worked out by position, which read
  * removing a port as renaming it to the one that slid into its row, and handed
  * that port the removed one's wire.
  *
- * A function rather than a few lines inside the dialog, so a test writes a
- * dialog's change the way the dialog does (`nodeDialog.write`).
+ * A function rather than a few lines inside the panel, so a test writes a
+ * panel's change the way the panel does (`nodePanel.write`).
  */
 export function saveDraft(nodeId: string, before: GraphNode | undefined, draft: GraphNode, coalesce?: string): void {
-  // What it is published as follows what it is asked to do (`publishedDescription`).
-  const kept = { ...untracked(draft), description: NODE_BUILDERS[draft.node_type].publishedDescription(draft) };
-  useGraphStore.getState().updateNode(nodeId, kept, portRenames(before, draft), coalesce);
+  useGraphStore.getState().updateNode(nodeId, untracked(draft), portRenames(before, draft), coalesce);
 }

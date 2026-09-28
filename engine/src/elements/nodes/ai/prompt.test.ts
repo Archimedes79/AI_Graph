@@ -1,75 +1,32 @@
 import { describe, it, expect } from 'vitest';
-import { assemblePrompt, placeholders, promptText, type PromptSettings } from './prompt.ts';
-
-const settings = (over: Partial<PromptSettings> = {}): PromptSettings =>
-  ({ systemPrompt: '', template: '', outputFormatPrompt: '', ...over });
+import { assemblePrompt, promptText } from './prompt.ts';
 
 describe('assemblePrompt', () => {
-  it('sends what arrived when nobody wrote anything', () => {
-    // The node someone dropped on the canvas and wired up, and nothing else.
-    const { system, user } = assemblePrompt(settings(), { prompt: 'Why is the sky blue?' });
+  it('sends what arrived when there are no instructions', () => {
+    // A body asking a plain question, and nothing else.
+    const { system, user } = assemblePrompt('', { prompt: 'Why is the sky blue?' });
     expect(user).toBe('Why is the sky blue?');
     expect(system).toBe('');
   });
 
-  it('joins several inputs by blank lines, in the order given', () => {
-    const { user } = assemblePrompt(settings(), { a: 'first', b: 'second' });
-    expect(user).toBe('first\n\nsecond');
+  it('sends one input as it is, and several each under its port id, in the order given', () => {
+    expect(assemblePrompt('Be brief.', { text: 'a story' })).toEqual({ system: 'Be brief.', user: 'a story' });
+    expect(assemblePrompt('Be brief.', { history: 'User: hi', message: 'And in winter?' }).user)
+      .toBe('history:\nUser: hi\n\nmessage:\nAnd in winter?');
   });
 
-  it('places a port where the template names it', () => {
-    const { user, appended } = assemblePrompt(
-      settings({ template: 'Conversation so far:\n{{history}}\n\nNow answer:\n{{message}}' }),
-      { message: 'And in winter?', history: 'User: hi\nAssistant: hello' },
-    );
-    expect(user).toBe('Conversation so far:\nUser: hi\nAssistant: hello\n\nNow answer:\nAnd in winter?');
-    expect(appended).toEqual([]);
-  });
-
-  it('never drops a wired input the template forgot', () => {
-    const { user, appended } = assemblePrompt(
-      settings({ template: 'Summarize: {{text}}' }),
-      { text: 'a story', extra: 'a second wire' },
-    );
-    expect(user).toBe('Summarize: a story\n\na second wire');
-    expect(appended).toEqual(['extra']);
-  });
-
-  it('appends everything to a template with no placeholder at all', () => {
-    const { user } = assemblePrompt(settings({ template: 'Summarize this.' }), { text: 'a story' });
-    expect(user).toBe('Summarize this.\n\na story');
-  });
-
-  it('lets {{input}} stand for every port not named elsewhere', () => {
-    const { user, appended } = assemblePrompt(
-      settings({ template: 'Question: {{question}}\n\nMaterial:\n{{input}}' }),
-      { question: 'who?', a: 'one', b: 'two' },
-    );
-    expect(user).toBe('Question: who?\n\nMaterial:\none\n\ntwo');
-    expect(appended).toEqual([]);
-  });
-
-  it('reports a name nothing is wired to, and leaves no braces in the prompt', () => {
-    const { user, unknown } = assemblePrompt(settings({ template: 'Hello {{nobody}}!' }), {});
-    expect(user).toBe('Hello !');
-    expect(unknown).toEqual(['nobody']);
+  it('leaves out an input that brought nothing, and keeps one that brought an empty text', () => {
+    expect(assemblePrompt('', { a: null, b: undefined, c: 'three' }).user).toBe('three');
+    expect(assemblePrompt('', { history: '', message: 'hi' }).user).toBe('history:\n\n\nmessage:\nhi');
   });
 
   it('turns a list into paragraphs, not brackets', () => {
     expect(promptText(['one', 'two'])).toBe('one\n\ntwo');
     expect(promptText([{ a: 1 }])).toBe('{"a":1}');
+    expect(assemblePrompt('', { summaries: ['first', 'second'] }).user).toBe('first\n\nsecond');
   });
 
-  it('adds the words about the answer to the instructions -- an answer kept in them too', () => {
-    expect(assemblePrompt(settings({ systemPrompt: 'Be brief.', outputFormatPrompt: 'Respond with JSON.' }), { text: 'hi' }).system)
-      .toBe('Be brief.\n\nRespond with JSON.');
-    expect(assemblePrompt(settings({ outputFormatPrompt: 'Answer in this shape: {"a": 1}' }), { text: 'hi' }).system)
-      .toBe('Answer in this shape: {"a": 1}');
-    expect(assemblePrompt(settings({ systemPrompt: 'Be brief.', outputFormatPrompt: '   ' }), { text: 'hi' }).system).toBe('Be brief.');
-  });
-
-  it('lists placeholders once each, in order', () => {
-    expect(placeholders('{{b}} {{ a }} {{b}}')).toEqual(['b', 'a']);
+  it('sends the instructions as the message when nothing arrived', () => {
+    expect(assemblePrompt('Write a haiku about autumn.', {})).toEqual({ system: '', user: 'Write a haiku about autumn.' });
   });
 });
-

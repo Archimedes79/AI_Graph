@@ -1,19 +1,22 @@
-import { beforeEach, describe, it, expect } from 'vitest';
+import { beforeAll, beforeEach, describe, it, expect } from 'vitest';
+import { fileURLToPath } from 'node:url';
 import { useGraphStore } from '@/store/graphStore';
 import type { Graph, GraphNode, GuiWidget, NodeType, Port, WidgetKind } from '@/graph';
 import { withPorts } from '@/canvas/nodeDraft';
-import { nodeDialog } from '@/canvas/nodeDialog';
+import { nodePanel } from '@/canvas/nodePanel';
 import { newBlock } from '@/page/DesignerPalette';
 import { pageOf } from '@/document/guiWidgets';
 import { insertBlock, patchBlock } from '@/page/pageWrite';
-import { listPorts, withPerItem } from '@/authoring/nodeStepRules';
-import { readPair } from '@/authoring/examplePair';
+import { ONCE } from '@/elements/NodeGuiBuilder';
+import { listPorts, withPerItem } from '@/authoring/perItem';
+import { heldBy, writeName, writtenInto, type Write } from '@/authoring/generation';
+import { definitionExample } from '@engine/authoring/definition.ts';
 import { executeGraph } from '@engine/execution/executor.ts';
 import { registry } from '@engine/elements/registry.ts';
 import { problemsIn } from '@engine/project/check.ts';
+import { readProject } from '@engine/project/folder.ts';
 import { readFilePorts } from '@/authoring/generationContext';
 import { parseGraph } from '@engine/graph.ts';
-import { graphFrom } from '@engine/project/flow.ts';
 import type { Runtime } from '@engine/elements/Runtime.ts';
 
 /**
@@ -21,13 +24,15 @@ import type { Runtime } from '@engine/elements/Runtime.ts';
  *
  * A plotter, a folder of summaries, a chat: each is a page and one node, and
  * each is put together here the way a person puts it together -- blocks added
- * to the page (the first one makes it), a node dropped on the canvas, a setting
- * changed in a dialog, a wire dragged from one port to another. No mouse, no browser, and no copy of what
- * the editor's handlers do: a block comes from the palette's `newBlock` and
- * reaches the page through `insertBlock` and `patchBlock`, a node's dialog is
- * its own `nodeDialog` -- changed as its ports editor and its fields change it,
- * and written into the graph as it writes -- and a wire is the store's
- * `connect`: the functions the designer and the node dialog call. What stays
+ * to the page (the first one makes it), a node dropped on the canvas, its text
+ * typed and its ✨ pressed in its panel, a wire dragged from one port to
+ * another. No mouse, no browser, and no copy of what the editor's handlers do:
+ * a block comes from the palette's `newBlock` and reaches the page through
+ * `insertBlock` and `patchBlock`, a node's panel is its own `nodePanel` --
+ * changed as its ports editor and its fields change it, and what ✨ brings back
+ * written in by `writtenInto`, as the panel writes it -- and a wire is the
+ * store's `connect`: the functions the designer and the node panel call. What
+ * ✨ brings back is the example's own files, so no model is asked; what stays
  * in the components -- which row was clicked -- is left out.
  *
  * Then three questions, of each:
@@ -37,23 +42,25 @@ import type { Runtime } from '@engine/elements/Runtime.ts';
  *   - does it work: run on a file, a folder, a message, does the page show it?
  *
  * The second is what keeps the examples honest. An example somebody can open
- * but could not have built -- a port type no dialog sets, a wire no handle
+ * but could not have built -- a port type no panel sets, a wire no handle
  * offers -- is a trick, and this is where it is caught.
  */
 
-const FLOWS = import.meta.glob('../../examples/*/flow.json', { eager: true, import: 'default' }) as Record<string, unknown>;
-const NODE_FILES = import.meta.glob('../../examples/*/nodes/*/{node,interface}.json', { eager: true, import: 'default' }) as Record<string, unknown>;
-const BODIES = import.meta.glob('../../examples/*/nodes/*/code.js', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>;
-/** An example as the engine puts it together from its folder: the flow, and each node's own files. */
-const example = (name: string): Graph => graphFrom(
-  FLOWS[`../../examples/${name}/flow.json`],
-  (id) => ({
-    about: NODE_FILES[`../../examples/${name}/nodes/${id}/node.json`],
-    ports: NODE_FILES[`../../examples/${name}/nodes/${id}/interface.json`],
-  }),
-  name,
-) as unknown as Graph;
-const bodyOf = (name: string, node: string): string => BODIES[`../../examples/${name}/nodes/${node}/code.js`];
+/** The examples as the engine reads their folders: the flow, each node's settings and ports, and its files. */
+const EXAMPLES: Record<string, Graph> = {};
+beforeAll(async () => {
+  for (const name of ['population_plotter', 'folder_summaries', 'chat']) {
+    EXAMPLES[name] = await readProject(fileURLToPath(new URL(`../../examples/${name}`, import.meta.url))) as unknown as Graph;
+  }
+});
+const example = (name: string): Graph => EXAMPLES[name];
+/** One of an example's nodes, as its folder holds it. */
+const exampleNode = (name: string, id: string): GraphNode => EXAMPLES[name].nodes.find((node) => node.id === id)!;
+/** What ✨ wrote for *id* in an example: its input.js, its output.js and its body, as the node's files hold them. */
+const writtenFor = (name: string, id: string): Partial<Record<Write, string>> => {
+  const node = exampleNode(name, id);
+  return { input: heldBy(node, 'input'), output: heldBy(node, 'output'), body: heldBy(node, 'body') };
+};
 
 // ── What a person does ────────────────────────────────────────────────────
 
@@ -72,47 +79,61 @@ const pageId = (): string => pageNow().page!.id;
  * designer's own steps (`newBlock`, `insertBlock`, then `patchBlock`).
  */
 function addBlock(kind: WidgetKind, mode: string | undefined, settings: Partial<GuiWidget>): string {
-  const block = newBlock(kind, mode, pageNow().widgets.map((taken) => taken.id));
+  const block = newBlock(kind, mode, pageNow().widgets);
   insertBlock(block);
   patchBlock(block.id, settings);
   return block.id;
 }
 
 /**
- * Open a node's dialog and set what it asks: its name, what its ports are
- * called, its settings -- and step 1's "Run once per item", ticked or not,
- * which sets how the node runs and which inputs fan out and which outputs hand
- * on a list, together (`withPerItem`), for the lists step 1 sees arriving.
- * Port *types* no dialog sets, but a wire from a picker ticks "Read the file
- * at this path". *needed* ticks step 1's "needed" on those inputs
- * (`PortsEditor`), which sets `required` on the port.
+ * Open a node's panel and do what it asks: its heading and its text, what
+ * its inputs are called (its ports, under Advanced), a ✨ pressed for each of
+ * its files -- *written*, what came back, written in as the panel writes it:
+ * output.js names its outputs. Port *types* no panel sets, but a wire from a
+ * picker ticks "Read the file at this path". *needed* ticks "needed" on those
+ * inputs (`PortsEditor`), which sets `required` on the port.
  *
- * Done through the dialog's own `nodeDialog`: each change as its ports editor
+ * Done through the panel's own `nodePanel`: each change as its ports editor
  * and its fields make it, and written into the graph as it writes -- closed.
  */
 function edit(nodeId: string, changes: {
-  label: string; input?: string[]; output?: string; config?: Record<string, unknown>; perItem?: boolean; needed?: string[];
+  label: string; text: string; input?: string[]; written: Partial<Record<Write, string>>; needed?: string[];
 }): void {
-  const dialog = nodeDialog(nodeId);
+  const panel = nodePanel(nodeId);
   // A row renamed in the ports editor; past the last row, one added with + and then named.
   const renamed = (ports: Port[], names: string[], kind: Port['kind']) => names.map((name, index) => ({
     ...(ports[index] ?? { kind, data_type: 'any', multi: false, required: false, description: '' }), id: name, name,
   }));
-  dialog.change((draft) => withPorts(draft, {
+  panel.change((draft) => withPorts(draft, {
     inputs: (changes.input ? renamed(draft.inputs, changes.input, 'input') : draft.inputs)
       .map((port) => (changes.needed?.includes(port.id) ? { ...port, required: true } : port)),
-    outputs: changes.output ? renamed(draft.outputs, [changes.output], 'output') : draft.outputs,
+    outputs: draft.outputs,
   }));
-  dialog.change((draft) => ({ ...draft, label: changes.label }));
-  for (const [key, value] of Object.entries(changes.config ?? {})) dialog.setConfig(key, value);
-  if (changes.perItem !== undefined) {
-    const shown = dialog.node()!;
-    const lists = listPorts(shown, readPair(shown.config.examples).input, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
-    // The box is there only when a list arrives; a new code or ai node's input is declared one.
-    expect(lists.length).toBeGreaterThan(0);
-    dialog.change((draft) => withPerItem(draft, changes.perItem!, lists));
+  panel.change((draft) => ({ ...draft, label: changes.label }));
+  panel.change((draft) => ({ ...draft, description: changes.text }), { field: 'description' });
+  for (const write of ['input', 'output', 'body'] as const) {
+    const result = changes.written[write];
+    if (!result) continue;
+    panel.change((now) => writtenInto(now, write, { result, calls: [] }, writeName(now, write)), ONCE);
   }
-  dialog.write();
+  panel.write();
+}
+
+/**
+ * Tick "Run once per item" in a node's panel, which sets how the node runs and
+ * which inputs fan out and which outputs hand on a list, together
+ * (`withPerItem`), for the lists that arrive. A new code or ai node runs once,
+ * on what arrives whole, and the box is there only once a list arrives: here
+ * down the wire from a folder, so it is ticked after that is drawn.
+ */
+function tickPerItem(nodeId: string): void {
+  const panel = nodePanel(nodeId);
+  const shown = panel.node()!;
+  const read = definitionExample(String(shown.config.input_definition ?? ''));
+  const lists = listPorts(shown, 'example' in read ? read.example : undefined, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
+  expect(lists.length).toBeGreaterThan(0);
+  panel.change((draft) => withPerItem(draft, true, lists));
+  panel.write();
 }
 
 /** Drag a wire from one handle to another. */
@@ -134,7 +155,7 @@ function shapeOf(graph: Graph): { nodes: string[]; blocks: string[]; wires: stri
     nodes: graph.nodes.map((node) => node.node_type).sort(),
     blocks: graph.nodes.flatMap((node) => (node.config.gui_widgets ?? []).map((widget: GuiWidget) => `${widget.kind}${widget.mode ? `/${widget.mode}` : ''}${widget.run_on_change ? ' ⚡' : ''}`)),
     wires: graph.edges.map((edge) => `${name.get(edge.source_node_id)}.${portName(edge.source_node_id, edge.source_port_id)} -> ${name.get(edge.target_node_id)}.${portName(edge.target_node_id, edge.target_port_id)}`).sort(),
-    // Which inputs a node will not run without, once they are wired: step 1's "needed".
+    // Which inputs a node will not run without, once they are wired: its ports' "needed".
     needed: graph.nodes.flatMap((node) => node.inputs.filter((port) => port.required).map((port) => `${node.node_type}.${port.id}`)).sort(),
     // How each node that authors a body takes a list: what "Run once per item" sets, as a run reads it.
     lists: graph.nodes.filter((node) => node.node_type === 'code' || node.node_type === 'ai')
@@ -157,6 +178,7 @@ function runtime(asked: string[]): Runtime {
       write: async () => {}, list: async (path) => Object.keys(FILES).filter((file) => file.startsWith(`${path}/`)).sort(),
     },
     code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) as Record<string, unknown> },
+    // Its answer as the ai node's output.js asks for it: one output that holds text, answered in plain text.
     ai: { complete: async (request) => { asked.push(request.prompt); return `answer ${asked.length}`; } },
   };
 }
@@ -182,7 +204,10 @@ describe('population plotter: choose a CSV, see the chart', () => {
     const file = addBlock('input_picker', 'file', { label: 'CSV file', extensions: '.csv', value: 'data/population.csv', run_on_change: true });
     const plot = addBlock('plot_window', undefined, { label: '' });
     const chart = drop('code', 560);
-    edit(chart, { label: 'What to plot', input: ['csv'], output: 'figure', config: { code: bodyOf('population_plotter', 'chart') }, perItem: false });
+    edit(chart, {
+      label: 'What to plot', text: exampleNode('population_plotter', 'chart').description, input: ['csv'],
+      written: writtenFor('population_plotter', 'chart'),
+    });
     wire(page, `${file}_out`, chart, 'csv');
     wire(chart, 'figure', page, `${plot}_in`);
     return { graph: store().rootGraph(), page, file, plot };
@@ -209,8 +234,12 @@ describe('summarize a folder: choose a folder, read the summaries', () => {
     const folder = addBlock('input_picker', 'directory', { label: 'Folder', extensions: '.txt', value: 'stories', run_on_change: true });
     const summaries = addBlock('text_io', 'output', { label: 'Summaries' });
     const summarize = drop('ai', 560);
-    edit(summarize, { label: 'Each file', input: ['story'], config: { system_prompt: 'Summarize the story in two sentences.', prompt_template: '{{story}}' }, perItem: true });
+    edit(summarize, {
+      label: 'Each file', text: exampleNode('folder_summaries', 'summarize').description, input: ['story'],
+      written: writtenFor('folder_summaries', 'summarize'),
+    });
     wire(page, `${folder}_out`, summarize, 'story');
+    tickPerItem(summarize);
     wire(summarize, 'output', page, `${summaries}_in`);
     return { graph: store().rootGraph(), page, folder, summaries };
   };
@@ -236,7 +265,10 @@ describe('chat: a page with a chat block, and a model', () => {
     const page = pageId();
     const chat = addBlock('chat', undefined, {});
     const assistant = drop('ai', 560);
-    edit(assistant, { label: 'Assistant', input: ['history', 'message'], config: { system_prompt: 'You are a friendly assistant.', prompt_template: 'Conversation so far:\n{{history}}\n\nUser: {{message}}' }, perItem: false, needed: ['message'] });
+    edit(assistant, {
+      label: 'Assistant', text: exampleNode('chat', 'assistant').description, input: ['history', 'message'],
+      written: writtenFor('chat', 'assistant'), needed: ['message'],
+    });
     wire(page, `${chat}_out`, assistant, 'message');
     wire(page, `${chat}_history`, assistant, 'history');
     wire(assistant, 'output', page, `${chat}_in`);
@@ -262,10 +294,11 @@ describe('chat: a page with a chat block, and a model', () => {
     };
     await say('Hello there');
     await say('And again');
-    expect(asked[0]).toBe('Conversation so far:\n\n\nUser: Hello there');
+    // Each input under its port id, after the instructions: the history empty the first time.
+    expect(asked[0]).toBe('history:\n\n\nmessage:\nHello there');
     expect(asked[1]).toContain('User: Hello there');
     expect(asked[1]).toContain('Assistant: answer 1');
-    expect(asked[1].endsWith('User: And again')).toBe(true);
+    expect(asked[1].endsWith('message:\nAnd again')).toBe(true);
   });
 });
 

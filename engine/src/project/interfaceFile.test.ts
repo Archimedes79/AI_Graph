@@ -16,7 +16,7 @@ const graph = () => parseGraph({
     { id: 'page', node_type: 'gui', config: { gui_widgets: [{ id: 'go', kind: 'button' }, { id: 'len', kind: 'select', options: 'a\nb' }] },
       inputs: [], outputs: [port('go_out', 'output', 'boolean'), port('len_out', 'output')] },
     { id: 'count', node_type: 'code', label: 'Count', description: 'Counts the words',
-      config: { code: 'function run(i) { return { words: 1 }; }', output_schema: { type: 'object', properties: { words: { type: 'integer' } } } },
+      config: { code: 'function run(i) { return { words: 1 }; }' },
       inputs: [port('length', 'input', 'text', { required: true, description: 'short or long', name: 'Length', multi: true })],
       outputs: [port('words', 'output', 'number')] },
     { id: 'show', node_type: 'output', config: {}, inputs: [port('value', 'input', 'any')], outputs: [] },
@@ -36,18 +36,15 @@ async function saved(): Promise<string> {
 }
 
 describe('interface.json', () => {
-  it('says what goes in and what comes out, and the shape the node keeps -- nothing about its neighbours', async () => {
+  it('says what goes in and what comes out -- nothing about its neighbours', async () => {
     const dir = await saved();
     const written = JSON.parse(await readFile(join(dir, 'nodes/count/interface.json'), 'utf8'));
     expect(written).toEqual({
       inputs: [{ port: 'length', name: 'Length', type: 'text', list: true, required: true, description: 'short or long' }],
       outputs: [{ port: 'words', type: 'number' }],
-      output_schema: { type: 'object', properties: { words: { type: 'integer' } } },
     });
     // Where a port is wired from or to is the flow's to say, once.
     expect(JSON.stringify(written)).not.toMatch(/page|show/);
-    // The kept shape lives here and nowhere else.
-    expect(JSON.parse(await readFile(join(dir, 'nodes/count/node.json'), 'utf8')).config).not.toHaveProperty('output_schema');
   });
 
   it('is where the ports are kept: edited in the file, they are what opens', async () => {
@@ -55,12 +52,10 @@ describe('interface.json', () => {
     const path = join(dir, 'nodes/count/interface.json');
     const edited = JSON.parse(await readFile(path, 'utf8'));
     edited.outputs[0] = { port: 'words', type: 'number', description: 'how many' };
-    edited.output_schema = { type: 'object', properties: { words: { type: 'number' } } };
     await writeFile(path, JSON.stringify(edited));
     forgetSeen();
     const count = (await loadGraph(dir)).nodes.find((node) => node.id === 'count')!;
     expect(count.outputs[0]).toMatchObject({ id: 'words', kind: 'output', data_type: 'number', description: 'how many' });
-    expect(count.config.output_schema).toEqual({ type: 'object', properties: { words: { type: 'number' } } });
     expect(count.inputs[0]).toMatchObject({ id: 'length', name: 'Length', kind: 'input', multi: true, required: true });
   });
 

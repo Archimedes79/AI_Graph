@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { useGraphStore } from '@/store/graphStore';
-import { nodeDialog } from '@/canvas/nodeDialog';
+import { nodePanel } from '@/canvas/nodePanel';
 
 /**
- * Switching an input node's mode in its dialog: which wire stays.
+ * Switching an input node's mode in its panel: which wire stays.
  *
- * Done as the dialog does it (`nodeDialog`): each choice goes through
+ * Done as the panel does it (`nodePanel`): each choice goes through
  * `withSetting`, which re-derives the node's ports, and the write moves the
  * wires by what `portRenames` makes of that -- a port of the same name keeps
  * its wire, and a port that is gone takes its wire with it.
@@ -17,11 +17,11 @@ const outOf = (source: string) => store().rfEdges
   .filter((edge) => edge.source === source)
   .map((edge) => `${edge.sourceHandle} -> ${edge.target}`);
 
-/** The dialog opened on *id*, its mode chosen once for each of *modes* in turn -- quicker than a write -- and written. */
+/** The panel opened on *id*, its mode chosen once for each of *modes* in turn -- quicker than a write -- and written. */
 function switchMode(id: string, ...modes: ('text' | 'directory')[]) {
-  const dialog = nodeDialog(id);
-  for (const mode of modes) dialog.setConfig('input_mode', mode);
-  dialog.write();
+  const panel = nodePanel(id);
+  for (const mode of modes) panel.setConfig('input_mode', mode);
+  panel.write();
 }
 
 beforeEach(() => {

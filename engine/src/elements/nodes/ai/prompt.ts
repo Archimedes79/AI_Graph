@@ -1,48 +1,21 @@
 // What an ai node actually sends, put together in one place.
 //
-// A request has three parts and a person should be able to see all three:
+// A request has two parts, and a person should be able to see both:
 //
-//   the instructions   -- the system prompt someone wrote, or had written
-//   the message        -- what arrived on the wires, laid out by a template
-//   the answer's shape -- what the node says of its output, in words
+//   the instructions -- its prompt.md, or the standard while it has none, with
+//                       {Node Description} and {Output Definition} filled in
+//   the message      -- what arrived on the wires, after them
 //
-// This used to be a loop inside `execute`, which is fine for running and
-// useless for showing: the editor could display the system prompt and nothing
-// else, so "what does the model get when I wire two things in" was answered by
-// running the graph and guessing from the reply. Pulled out, the editor calls
-// the same function with the last run's values and shows the request itself --
-// a preview that cannot flatter, because it is not a second implementation.
-//
-// **Nothing wired in is ever dropped.** A template that names one port out of
-// two still sends the second, after the template's own text. The alternative
-// -- a port that silently stops reaching the model because someone wrote a
-// sentence -- is the failure this whole file exists to make impossible. It is
-// also why an ai node nobody has written anything for still works: no
-// template means "send what arrived".
-
-/** Everything wired in that the template did not place by name. */
-export const ALL_INPUTS = 'input';
-
-const PLACEHOLDER = /\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g;
-
-export interface PromptSettings {
-  systemPrompt: string;
-  /** The message, with `{{port}}` where a port's value goes. Empty: send what arrived. */
-  template: string;
-  /**
-   * What the node says about its answer, in words (`outputWords`) -- where an
-   * answer a person liked is kept, too: "Answer in this shape: …".
-   */
-  outputFormatPrompt: string;
-}
+// **Nothing wired in is ever dropped, and nothing is placed by guesswork.** One
+// input is sent as it is; several are each sent under their port id, the name
+// the node's input definition gives them, so instructions can say "the history"
+// and "the message" and the model can tell which is which. It is also why an ai
+// node nobody has written anything for still works: its description is the
+// question, and what arrived is what it is asked about.
 
 export interface AssembledPrompt {
   system: string;
   user: string;
-  /** Names the template asks for that nothing is wired to. For the editor to say so. */
-  unknown: string[];
-  /** Ports sent after the template because it did not place them. */
-  appended: string[];
 }
 
 /**
@@ -62,53 +35,21 @@ export function promptText(value: unknown): string {
     .join('\n\n');
 }
 
-/** Which names a template asks for, in the order it asks. */
-export function placeholders(template: string): string[] {
-  return [...new Set([...template.matchAll(PLACEHOLDER)].map((match) => match[1]))];
-}
-
-/** What a node says about its output, in words: what a person wrote, the node's `output.md`. */
-export function outputWords(config: { output_format_prompt?: unknown }): string {
-  return String(config.output_format_prompt ?? '').trim();
-}
-
 /**
- * The request, from the node's settings and what the wires delivered.
- *
- * `inputs` is in port order and holds text-bound values only: an image that is
- * sent as an image has already been taken out by the caller.
+ * The request, from the node's filled-in *instructions* and what the wires
+ * delivered. *inputs* is in port order and holds text-bound values only: an
+ * image that is sent as an image has already been taken out by the caller.
  */
-export function assemblePrompt(settings: PromptSettings, inputs: Record<string, unknown>): AssembledPrompt {
+export function assemblePrompt(instructions: string, inputs: Record<string, unknown>): AssembledPrompt {
   const present = Object.entries(inputs).filter(([, value]) => value !== null && value !== undefined);
-  const byName = new Map(present);
-  const template = settings.template.trim() || `{{${ALL_INPUTS}}}`;
-
-  const asked = placeholders(template);
-  const named = new Set(asked.filter((name) => byName.has(name)));
-  // `{{input}}` is "the rest" unless a port really is called `input`.
-  const wantsRest = asked.includes(ALL_INPUTS) && !byName.has(ALL_INPUTS);
-  const rest = present.filter(([name]) => !named.has(name));
-  const restText = rest.map(([, value]) => promptText(value)).filter(Boolean).join('\n\n');
-
-  const unknown: string[] = [];
-  let user = template.replace(PLACEHOLDER, (_whole, name: string) => {
-    if (byName.has(name)) return promptText(byName.get(name));
-    if (name === ALL_INPUTS) return restText;
-    unknown.push(name);
-    return '';
-  }).trim();
-
-  const appended = wantsRest ? [] : rest.map(([name]) => name);
-  if (!wantsRest && restText) user = user ? `${user}\n\n${restText}` : restText;
-
-  // The words about the answer -- `output.md` in a project -- are sent whenever
-  // they say anything: a file somebody wrote for the model that the model never
-  // sees is a trap.
-  const system = [settings.systemPrompt.trim(), settings.outputFormatPrompt.trim()].filter(Boolean).join('\n\n');
+  const user = present.length === 1
+    ? promptText(present[0][1])
+    : present.map(([port, value]) => `${port}:\n${promptText(value)}`).join('\n\n');
+  const system = instructions.trim();
   // A node with nothing wired in is its instructions and nothing else -- "write
   // a haiku about autumn". Those are the question, then, and go as the message:
   // a request with an empty message is refused by some providers and answered
   // with a guess by others.
-  if (!user && system) return { system: '', user: system, unknown: [...new Set(unknown)], appended };
-  return { system, user, unknown: [...new Set(unknown)], appended };
+  if (!user.trim() && system) return { system: '', user: system };
+  return { system, user };
 }

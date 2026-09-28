@@ -254,6 +254,18 @@ export function usePageEvents(onRun?: (trigger: RunTrigger) => void) {
 function WithoutPage() {
   const metadata = useGraphStore((s) => s.metadata);
   const executionResult = useGraphStore((s) => s.executionResult);
+  // A graph of nothing is not ready to run: it said it was, run or not.
+  const empty = useGraphStore((s) => s.rfNodes.length === 0);
+  if (empty) {
+    return (
+      <div className="m-6 max-w-2xl">
+        <p className="text-sm mb-2" style={{ color: TEXT }}>This graph has no nodes yet.</p>
+        <p className="text-xs" style={{ color: DIM }}>
+          Add one from the palette on the Graph tab, or a block on the Page tab.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="m-6 max-w-2xl">
       <p className="text-sm mb-2" style={{ color: TEXT }}>

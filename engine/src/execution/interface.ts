@@ -1,10 +1,9 @@
 // What a node's outputs look like, written down: its output interface.
 //
-// Interfaces are not designed up front here. Nodes are wired, the graph runs,
-// and what actually came out of a node is the first honest statement of its
-// interface -- so a run proposes one (`inferInterface`), the person keeps it,
-// and from then on it is a contract: every later run is held to it
-// (`mismatches`), and the nodes after it are generated against it.
+// A node that has an output definition (its `output.js`) is held to the
+// shape of that definition's example: `inferInterface` reads the shape off
+// the example, every run is checked against it (`mismatches`), and a wire
+// from it into a port that takes something else is found before anything runs.
 //
 // JSON Schema, and only the part of it that plain JSON values need: types,
 // properties, required keys and list items. Enough to say "rows is a list of
@@ -86,57 +85,85 @@ export function merge(a: Schema, b: Schema): Schema {
   return { type };
 }
 
-/** A node's output interface, from what one run produced on its ports. */
+/** A node's output interface, from what one call produced on its ports. */
 export function inferInterface(outputs: Record<string, unknown>): Schema {
   return inferSchema(outputs);
 }
 
 /**
- * Where *value* breaks *schema*, as sentences naming the place: `output.rows[3].Population
- * is text, the interface says number`. Empty when it fits. Stops after a few:
- * one broken list of a thousand rows is one problem, not a thousand.
+ * What a node run once per item hands on, from what one call returns
+ * (*schema*): on each output port in *collected* -- the ones declared lists --
+ * the list the executor collects the calls' answers into, a list one call
+ * returns flattened into it (`mergeBatchOutputs`). The other ports as they are.
  */
-export function mismatches(value: unknown, schema: Schema, at = 'output', found: string[] = []): string[] {
+export function collectedInterface(schema: Schema, collected: Set<string>): Schema {
+  if (!schema.properties) return schema;
+  return {
+    ...schema,
+    properties: Object.fromEntries(Object.entries(schema.properties).map(([port, one]) => [
+      port,
+      !collected.has(port) || [one.type].flat().includes('array') ? one : { type: 'array', ...(one.type ? { items: one } : {}) },
+    ])),
+  };
+}
+
+/** A JSON type as a sentence says it. */
+const TYPE_WORDS: Record<string, string> = {
+  string: 'text', integer: 'a number', number: 'a number', boolean: 'true or false', array: 'a list', object: 'an object', null: 'empty',
+};
+
+/** Types in words, each once -- an integer is "a number" too, unless *whole* asks to tell the two apart. */
+function typeWords(types: string[], whole = false): string {
+  return [...new Set(types.map((type) => (whole && type === 'integer' ? 'a whole number' : TYPE_WORDS[type] ?? type)))].join(' or ');
+}
+
+/**
+ * Where in what one call returned, as a person reads it: the output, named
+ * once, and the place inside it -- `output "rows" at [3].Population`. *path*
+ * is the keys and list positions down to it; none, for the whole of it.
+ */
+function placeOf(path: string[]): string {
+  if (!path.length) return 'what it returned';
+  const [port, ...inside] = path;
+  const rest = inside.map((part, at) => (part.startsWith('[') || at === 0 ? part : `.${part}`)).join('');
+  return `output "${port}"${rest ? ` at ${rest}` : ''}`;
+}
+
+/**
+ * Where *value* breaks *schema*, as sentences naming the place: `output "rows"
+ * at [3].Population is text; output.js says a number`. Empty when it fits.
+ * Stops after a few: one broken list of a thousand rows is one problem, not a
+ * thousand.
+ */
+export function mismatches(value: unknown, schema: Schema, path: string[] = [], found: string[] = []): string[] {
   if (found.length >= 5 || !schema.type) return found;
   const actual = typeOf(value);
   const allowed = [schema.type].flat();
   const fits = allowed.includes(actual) || (actual === 'integer' && allowed.includes('number'));
   if (!fits) {
-    // Null where something was expected is a missing value, and said as such.
-    found.push(actual === 'null'
-      ? `${at} is empty; the interface says ${allowed.join(' or ')}`
-      : `${at} is ${actual}; the interface says ${allowed.join(' or ')}`);
+    const place = placeOf(path);
+    // Null where something was expected is a missing value, and said as such;
+    // a fraction where only whole numbers were is the one case "a number" does not tell.
+    found.push(actual === 'null' ? `${place} is empty; output.js says ${typeWords(allowed)}`
+      : actual === 'number' && allowed.includes('integer') ? `${place} is a number with a fraction; output.js says ${typeWords(allowed, true)}`
+        : `${place} is ${typeWords([actual])}; output.js says ${typeWords(allowed)}`);
     return found;
   }
   if (actual === 'object') {
     const record = value as Record<string, unknown>;
     for (const key of schema.required ?? []) {
-      if (record[key] === undefined || record[key] === null) found.push(`${at}.${key} is missing`);
+      if (record[key] === undefined || record[key] === null) found.push(`${placeOf([...path, key])} is missing`);
     }
     for (const [key, property] of Object.entries(schema.properties ?? {})) {
-      if (record[key] !== undefined && record[key] !== null) mismatches(record[key], property, `${at}.${key}`, found);
+      if (record[key] !== undefined && record[key] !== null) mismatches(record[key], property, [...path, key], found);
     }
   }
   if (actual === 'array' && schema.items) {
     (value as unknown[]).slice(0, 200).forEach((item, index) => {
-      if (item !== null && item !== undefined) mismatches(item, schema.items!, `${at}[${index}]`, found);
+      if (item !== null && item !== undefined) mismatches(item, schema.items!, [...path, `[${index}]`], found);
     });
   }
   return found.slice(0, 5);
-}
-
-/** A stored interface: an object, or the JSON text of one. Anything else is no interface. */
-export function readInterface(stored: unknown): Schema | undefined {
-  let value = stored;
-  if (typeof value === 'string') {
-    if (!value.trim()) return undefined;
-    try {
-      value = JSON.parse(value);
-    } catch {
-      return undefined;
-    }
-  }
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Schema : undefined;
 }
 
 /** The JSON types a port of each declared type takes. Absent: it takes anything (text, json, any, binary). */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WidgetKind } from '@/graph';
 import { WIDGET_BUILDERS } from '@/elements/registry';
-import { ALL_ENTRIES, GROUPS, entryOf, matchesEntry } from './DesignerPalette';
+import { ALL_ENTRIES, GROUPS, entryOf, matchesEntry, newBlock } from './DesignerPalette';
 
 const key = (kind: string, mode?: string) => `${kind}:${mode ?? ''}`;
 
@@ -16,6 +16,18 @@ describe('the page designer\'s palette', () => {
     const placed = GROUPS.flatMap((group) => group.items.map((item) => key(item.kind, item.mode))).sort();
     expect(placed).toEqual(offered);
     expect(ALL_ENTRIES).toHaveLength(placed.length);
+  });
+
+  it('numbers a new block beside another of its name, as a node is -- and leaves an unnamed kind unnamed', () => {
+    // Two "Text output" rows on the page's card could not be told apart when wiring.
+    const first = newBlock('text_io', 'output', []);
+    const second = newBlock('text_io', 'output', [first]);
+    const third = newBlock('text_io', 'output', [first, second]);
+    expect([first, second, third].map((block) => [block.id, block.label])).toEqual([
+      ['text_io', 'Text output'], ['text_io_2', 'Text output 2'], ['text_io_3', 'Text output 3'],
+    ]);
+    const heading = newBlock('text', 'heading', []);
+    expect(newBlock('text', 'heading', [heading]).label).toBe(heading.label);
   });
 
   it('calls an entry what its kind calls it, and finds it by the kind\'s words', () => {

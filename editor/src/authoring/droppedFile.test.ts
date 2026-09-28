@@ -3,13 +3,13 @@ import type { GraphNode } from '@/graph';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { useGraphStore } from '@/store/graphStore';
-import { readPair } from './examplePair';
 import { dropExample, droppedPath, uriPath, type Dropped } from './droppedFile';
 import { fileValue } from './readAsRun';
 
 /**
- * A file dropped onto a node, or onto step 1's example field, is the example:
- * its path on an input that reads the file, otherwise what it says.
+ * A file dropped onto a code or an ai node -- or onto the files line under its
+ * ✨ Input -- is one more file its input definition is written from; dropped
+ * onto a data node, it is what the node holds.
  */
 
 const dropped = (name: string, text: string, uri?: string): Dropped => ({ name, size: text.length, text: async () => text, ...(uri ? { uri } : {}) });
@@ -41,7 +41,7 @@ describe('where a dropped file is', () => {
   it('says where it was looked for, when it was found nowhere: "under the folder" was said of a search three folders deep', async () => {
     await expect(droppedPath(dropped('four.csv', 'x'), found())).rejects.toThrow(
       'A browser does not say where a dropped file is, and no “four.csv” of that size is in D:\\work and 3 levels of folders below it, '
-      + 'leaving out node_modules, dist, build and every name that begins with a dot: choose it with 📂 From a file….',
+      + 'leaving out node_modules, dist, build and every name that begins with a dot: choose it with 📂 Add a file….',
     );
   });
 });
@@ -62,38 +62,36 @@ describe('a file dropped onto a node on the canvas', () => {
   const store = () => useGraphStore.getState();
   const stored = (id: string) => store().rfNodes.find((item) => item.id === id)!.data.graphNode as GraphNode;
   beforeEach(() => {
-    const reader = NODE_KINDS.code.create('reader');
-    reader.inputs = [{ ...reader.inputs[0], id: 'csv', name: 'csv', data_type: 'file_path' }];
     store().loadGraph({
       metadata: { name: 'Drop', description: '', gui_scheme: 'night' },
-      nodes: [reader, NODE_KINDS.code.create('shout'), NODE_KINDS.data.create('memory')],
+      nodes: [NODE_KINDS.code.create('reader'), NODE_KINDS.ai.create('asker'), NODE_KINDS.data.create('memory')],
       edges: [],
     });
   });
 
-  it('is the example on its one input, one undo step, and opens the node\'s dialog to try it', async () => {
-    await dropExample('reader', 'csv', dropped('people.csv', 'name\nAnna'), one('D:/work/people.csv'), as);
-    expect(readPair(stored('reader').config.examples).input).toEqual({ csv: 'D:/work/people.csv' });
+  it('is one more file ✨ Input writes from -- a file given twice is still one -- one undo step, and opens the node\'s panel', async () => {
+    await dropExample('reader', 'path', dropped('people.csv', 'name\nAnna'), one('D:/work/people.csv'), as);
+    expect(stored('reader').config.input_files).toEqual(['D:/work/people.csv']);
     expect(store().editingNodeId).toBe('reader');
+    await dropExample('reader', 'path', dropped('spec.md', '# Columns'), one('D:/work/spec.md'), as);
+    await dropExample('reader', 'path', dropped('people.csv', 'name\nAnna'), one('D:/work/people.csv'), as);
+    expect(stored('reader').config.input_files).toEqual(['D:/work/people.csv', 'D:/work/spec.md']);
     store().undo();
-    expect(stored('reader').config.examples ?? '').toBe('');
+    expect(stored('reader').config.input_files).toEqual(['D:/work/people.csv']);
   });
 
-  it('is taken where the element says: the one input of a node built in the four steps, and a data node', () => {
+  it('is taken where the element says: its path by a code or an ai node that takes something in, what it says by a data node', () => {
     const takes = (node: GraphNode) => NODE_BUILDERS[node.node_type].dropPort(node);
-    expect(takes(stored('reader'))).toBe('csv');
-    expect(takes(stored('memory'))).toBe('input');
-    const two = NODE_KINDS.code.create('two');
-    two.inputs = [...two.inputs, { ...two.inputs[0], id: 'more', name: 'more' }];
-    expect(takes(two)).toBeUndefined();
+    expect(takes(stored('reader'))).toBe('path');
+    expect(takes(stored('asker'))).toBe('path');
+    expect(takes(stored('memory'))).toBe('text');
+    expect(takes({ ...stored('reader'), inputs: [] })).toBeUndefined();
     expect(takes(NODE_KINDS.output.create('sink'))).toBeUndefined();
     expect(takes(NODE_KINDS.input.create('source'))).toBeUndefined();
   });
 
-  it('puts what the file says where the node does not read it, and is what a data node holds', async () => {
-    await dropExample('shout', 'input', dropped('note.txt', 'hello'));
-    expect(readPair(stored('shout').config.examples).input).toEqual({ input: 'hello' });
-    await dropExample('memory', 'input', dropped('state.json', '{"count": 3}'));
+  it('is what a data node holds: what the file says, parsed when it is JSON', async () => {
+    await dropExample('memory', 'text', dropped('state.json', '{"count": 3}'));
     expect(stored('memory').config.data_value).toEqual({ count: 3 });
   });
 });

@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { describeNodeOutput, inputSources, lastRunInputs, outputTargets, readFilePorts } from './generationContext';
 import type { ExecutionResult } from '@/graph';
-import { nodeFacts } from './nodeFacts';
 
 const edge = (source: string, target: string) => ({ source, target, sourceHandle: 'output', targetHandle: 'input' });
 
@@ -24,6 +23,23 @@ describe('what ✨ is told of a node\'s neighbours', () => {
     expect(outputTargets('processor', nodes, wires, true).output).toContain('"Result map" (port "Update"), which wants what it stores: structure');
   });
 
+  it('tells what a data node holds, the start of it as JSON: its keys are what the node after it reads', () => {
+    const capitals = NODE_KINDS.data.create('capitals');
+    capitals.label = 'Capitals';
+    capitals.description = 'Ten European capitals with their population';
+    capitals.config.data_format = 'structure';
+    capitals.config.data_value = [{ capital: 'Paris', country: 'France', population: 2102650 }, { capital: 'Rome', country: 'Italy', population: 2749031 }];
+    const sorter = NODE_KINDS.code.create('sorter');
+    const said = () => inputSources('sorter', [capitals, sorter], [edge('capitals', 'sorter')], true).input;
+    expect(said()).toContain('structure: Ten European capitals with their population -- it holds: '
+      + '[{"capital":"Paris","country":"France","population":2102650},{"capital":"Rome","country":"Italy","population":2749031}]');
+    // A long one is cut, saying how much was left out; one that holds nothing says only what it is.
+    capitals.config.data_value = Array.from({ length: 100 }, (_, n) => ({ capital: `City ${n}`, population: n }));
+    expect(said()).toMatch(/it holds: \[\{"capital":"City 0","population":0\},[^]{500,}… \(\d+ more characters\)$/);
+    capitals.config.data_value = null;
+    expect(said()).toMatch(/structure: Ten European capitals with their population$/);
+  });
+
   it('describes a non-data upstream node too', () => {
     // The old version considered `data` nodes only, so this -- the commonest
     // wiring there is -- produced no context at all.
@@ -36,14 +52,14 @@ describe('what ✨ is told of a node\'s neighbours', () => {
       .toContain('port "Files" carries a list of file paths');
   });
 
-  it('carries an upstream ai node\'s declared output format', () => {
+  it('carries an upstream ai node\'s output definition', () => {
     const ai = NODE_KINDS.ai.create('classifier');
     ai.label = 'Classifier';
-    ai.config.output_format_prompt = 'JSON: {"label": text}';
+    ai.config.output_definition = 'module.exports = { "label": "spam" };';
     const code = NODE_KINDS.code.create('worker');
 
     expect(inputSources('worker', [ai, code], [edge('classifier', 'worker')], true).input)
-      .toContain('JSON: {"label": text}');
+      .toContain('what its output.js defines:\nmodule.exports = { "label": "spam" };');
   });
 
   it('is empty for an unconnected node rather than noise', () => {
@@ -62,18 +78,12 @@ describe('describeNodeOutput', () => {
     expect(describeNodeOutput(node)).toBe('text');
   });
 
-  it('describes a code node by its output interface once a run has set one', () => {
-    const node = NODE_KINDS.code.create('c');
-    node.config.output_schema = { type: 'object', properties: { rows: { type: 'array' } } };
-    expect(describeNodeOutput(node)).toBe(
-      'returns { rows: list of anything }',
-    );
-  });
-
-  it('spells out the output format in words', () => {
-    const node = NODE_KINDS.code.create('c');
-    node.config.output_format_prompt = 'one line per finding';
-    expect(describeNodeOutput(node)).toBe('one line per finding');
+  it('describes a code or an ai node by its output.js -- an ai node without one hands on its answer', () => {
+    const code = NODE_KINDS.code.create('c');
+    code.config.output_definition = 'module.exports = { "rows": [] };';
+    expect(describeNodeOutput(code)).toBe('what its output.js defines:\nmodule.exports = { "rows": [] };');
+    expect(describeNodeOutput(NODE_KINDS.code.create('c'))).toBe('');
+    expect(describeNodeOutput(NODE_KINDS.ai.create('a'))).toBe('the model\'s answer, as text');
   });
 });
 
@@ -84,10 +94,8 @@ describe('what a node received on the last run', () => {
     outputs: {},
   } as ExecutionResult);
 
-  it('is the sample ✨ is shown, said to be the last run\'s -- the engine cuts it to size', () => {
-    const facts = nodeFacts(NODE_KINDS.code.create('worker'), [], [], resultWith({ rows: [{ id: 1 }, { id: 2 }] }));
-    expect(facts.sampleInputs).toEqual({ rows: [{ id: 1 }, { id: 2 }] });
-    expect(facts.sampleOrigin).toBe('the last run');
+  it('is what arrived on each input, as it arrived', () => {
+    expect(lastRunInputs('worker', resultWith({ rows: [{ id: 1 }, { id: 2 }] }))).toEqual({ rows: [{ id: 1 }, { id: 2 }] });
   });
 
   it('is nothing before the first run, or for another node', () => {
@@ -123,16 +131,13 @@ describe('a node that is handed the text of a file', () => {
     expect(readFilePorts(node)).toEqual([]);
   });
 
-  it('names the recorded path\'s port to be read, so the engine shows the model the text', () => {
-    // What the run recorded there is the path; the server reads it before it
-    // shows the sample (`generate.ts#asReceived`).
+  it('keeps the path a run recorded on the port it read, which is the file ✨ Input may write from', () => {
     const result = {
       status: 'success', outputs: {},
       node_results: [{ node_id: 'worker', status: 'success', inputs: { csv: 'data/people.csv', top: '5' }, outputs: {} }],
     } as ExecutionResult;
-    const facts = nodeFacts(reader(), [], [], result);
-    expect(facts.sampleInputs).toEqual({ csv: 'data/people.csv', top: '5' });
-    expect(facts.readFilePorts).toEqual(['csv']);
+    expect(lastRunInputs('worker', result)?.csv).toBe('data/people.csv');
+    expect(readFilePorts(reader())).toEqual(['csv']);
   });
 });
 
@@ -168,7 +173,7 @@ describe('what an output node wants', () => {
   });
 });
 
-describe('what a node is wired to, as the dialog and ✨ say it', () => {
+describe('what a node is wired to, as the panel and ✨ say it', () => {
   it('names where each output goes, node and port', () => {
     const code = NODE_KINDS.code.create('worker');
     const out = NODE_KINDS.output.create('shown');
@@ -179,15 +184,15 @@ describe('what a node is wired to, as the dialog and ✨ say it', () => {
     expect(targets).toEqual({ output: '"Report" (port "Value")' });
   });
 
-  it('names what feeds each input -- plainly for the dialog, with what it hands on for ✨', () => {
+  it('names what feeds each input -- plainly for the panel, with what it hands on for ✨', () => {
     const ai = NODE_KINDS.ai.create('writer');
     ai.label = 'Writer';
-    ai.config.output_format_prompt = 'one short paragraph';
+    ai.config.output_definition = 'module.exports = { "output": "one short paragraph" };';
     const code = NODE_KINDS.code.create('worker');
     const wires = [{ source: 'writer', target: 'worker', sourceHandle: 'output', targetHandle: 'input' }];
     expect(inputSources('worker', [ai, code], wires)).toEqual({ input: '"Writer" (port "Output")' });
     expect(inputSources('worker', [ai, code], wires, true).input)
-      .toMatch(/^"Writer" \(port "Output"\), which hands on: .*one short paragraph/);
+      .toMatch(/^"Writer" \(port "Output"\), which hands on: [^]*one short paragraph/);
   });
 
   it('tells a node feeding a chart block what the chart wants -- the block says it', () => {
@@ -210,7 +215,7 @@ describe('a new node', () => {
   });
 });
 
-describe('what ✨ is told about a node, as facts', () => {
+describe('what ✨ is told of a node wired on both sides', () => {
   it('says what each wire carries and what the node at the other end wants', () => {
     const input = NODE_KINDS.input.create('src');
     input.label = 'Notes';
@@ -222,29 +227,7 @@ describe('what ✨ is told about a node, as facts', () => {
       { id: 'a', source: 'src', target: 'worker', sourceHandle: input.outputs[0].id, targetHandle: 'input' },
       { id: 'b', source: 'worker', target: 'page', sourceHandle: 'output', targetHandle: 'w1_in' },
     ];
-    const facts = nodeFacts(code, [input, code, page], edges as never, null);
-    expect(facts.inputSources?.input).toMatch(/^"Notes" \(port "[^"]+"\), which hands on: /);
-    expect(facts.outputTargets?.output).toContain('which wants rows: a list of objects');
-    expect(facts.inputTypes).toEqual({ input: 'any' });
-    expect(facts.batchMode).toBe('per_item');
-  });
-
-  it('sends the format in words', () => {
-    const ai = NODE_KINDS.ai.create('worker');
-    ai.config.output_format_prompt = 'a list of {title, score}';
-    const facts = nodeFacts(ai, [ai], [], null);
-    expect(facts.outputFormat).toBe('a list of {title, score}');
-  });
-
-  it('takes step 1\'s example as the sample, over what the last run delivered', () => {
-    const code = NODE_KINDS.code.create('worker');
-    code.config.examples = '## Mine\n\n```json input\n{"input": "typed"}\n```\n';
-    const ran = { status: 'success', outputs: {}, node_results: [{ node_id: 'worker', status: 'success', inputs: { input: 'last run' }, outputs: {} }] } as ExecutionResult;
-    const facts = nodeFacts(code, [code], [], ran);
-    expect(facts.sampleInputs).toEqual({ input: 'typed' });
-    expect(facts.sampleOrigin).toBe('the example in step 1');
-    // An example the engine reads in full, with what it expects, is left to it.
-    code.config.examples = '## Mine\n\n```json input\n{"input": "typed"}\n```\n\n```json expect\n{}\n```\n';
-    expect(nodeFacts(code, [code], [], ran).sampleInputs).toBeUndefined();
+    expect(inputSources('worker', [input, code, page], edges, true).input).toMatch(/^"Notes" \(port "[^"]+"\), which hands on: /);
+    expect(outputTargets('worker', [input, code, page], edges, true).output).toContain('which wants rows: a list of objects');
   });
 });

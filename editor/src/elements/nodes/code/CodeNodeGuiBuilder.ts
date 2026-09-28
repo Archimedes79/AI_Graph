@@ -1,9 +1,8 @@
 import { lazy } from 'react';
 import type { GraphNode } from '@/graph';
-import { fromEngine, type ElementGeneration } from '@/authoring/generation';
-import { CodeNodeRunner } from '@engine/elements/nodes/code/CodeNodeRunner.ts';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
-import { CODE_STARTER } from '@/document/nodeKinds';
+import { definitionsIn } from '@engine/authoring/definition.ts';
+import { withFile } from '@/document/givenFiles';
 import { NodeGuiBuilder } from '../../NodeGuiBuilder';
 
 export class CodeNodeGuiBuilder extends NodeGuiBuilder {
@@ -11,43 +10,46 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  readonly label = 'Code Node';
+  readonly label = 'Code';
 
-  readonly hint = 'Run JavaScript — write it yourself or have the AI generate it';
+  readonly hint = 'Run JavaScript -- say what it should do, and ✨ writes it';
 
   readonly icon = '⚙️';
 
   readonly color = 'var(--ui-node-code, #1a3a2a)';
 
-  // Step 3 asks what it should do, and that answer is published as its
-  // description (`publishedDescription`): a second box would be a second text.
+  // Its text is what it should do, drawn by its panel above what ✨ writes from it.
   override readonly ownsDescription = true;
+
+  override readonly definesItself = true;
 
   override readonly Panel = lazy(() => import('./CodeNodePanel'));
 
   override readonly AdvancedPanel = lazy(() => import('./CodeNodeAdvancedPanel'));
 
-  override readonly advancedSummary = 'failures, how many at once';
-
-  override readonly generation: ElementGeneration = {
-    ...fromEngine(new CodeNodeRunner().generation()),
-    promptLabel: 'What this node should do',
-    promptPlaceholder: 'In a sentence or two: what should this node do with what comes in? ✨ Generate writes the code from it.',
-    bodyLabel: 'Code',
-    bodyPlaceholder: CODE_STARTER.trimEnd(),
-    bodyHeight: 220,
-    // Batch mode and the declared output reach ✨ as the node's facts
-    // (`nodeFacts`), in the brief the engine writes.
-  };
-
-  override readonly stepped = true;
+  override readonly advancedSummary = 'ports, once per item, failures';
 
   override portHint(side: 'inputs' | 'outputs', node: GraphNode): string {
     if (side === 'inputs') {
       const first = node.inputs[0]?.id ?? 'name';
-      return `The code reads each one as inputs.${first}.`;
+      return `The code reads each one as inputs.${first}; input.js says what each holds.`;
     }
     const keys = node.outputs.filter((port) => port.id !== ERROR_PORT).map((port) => `${port.id}: …`);
-    return `run() returns one key per output: { ${keys.join(', ') || 'output: …'} }.`;
+    return `run() returns one key per output: { ${keys.join(', ') || 'output: …'} } -- output.js names them.`;
+  }
+
+  /** What it hands on is what its output definition says: the nodes it feeds are told that. */
+  override describeOutput(node: GraphNode): string {
+    const output = definitionsIn(node).output.trim();
+    return output ? `what its output.js defines:\n${output}` : '';
+  }
+
+  /** A file dropped on it is one its input definition is written from. */
+  override dropPort(node: GraphNode): 'path' | undefined {
+    return node.inputs.length ? 'path' : undefined;
+  }
+
+  override withDropped(node: GraphNode, value: unknown): GraphNode {
+    return withFile(node, 'input', String(value));
   }
 }

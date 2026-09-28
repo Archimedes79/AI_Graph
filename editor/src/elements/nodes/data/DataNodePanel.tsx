@@ -3,6 +3,7 @@ import { errorText } from '@/api/errorText';
 import { useTyped } from '@/authoring/useTyped';
 import { carriesFiles, droppedFile, type Dropped } from '@/authoring/droppedFile';
 import { contentValue } from '@/authoring/readAsRun';
+import NodeDefinition from '@/authoring/NodeDefinition';
 import { DANGER_SOFT, DIMMER, FIELD, LINE, MUTED, SUNKEN, TEXT } from '@/ui/theme';
 import { ONCE, type NodePanelProps } from '../../NodeGuiBuilder';
 import { asEditableText, convertedValue, dataKind, storedValue, type DataKind } from './dataFormat';
@@ -23,14 +24,20 @@ export async function holdDropped(file: Dropped, setConfig: NodePanelProps['setC
 }
 
 /**
- * A data node: a value, edited in one place -- its kind, and what it holds.
+ * A data node: its text, and ✨ Data, which writes what it holds from the text,
+ * shaped as the nodes it feeds want it -- its kind and the value, edited in
+ * that row as its file is.
+ */
+export default function DataNodePanel(props: NodePanelProps) {
+  return <NodeDefinition {...props} holds={<DataValue node={props.node} setConfig={props.setConfig} />} />;
+}
+
+/**
+ * What a data node holds, edited in one place: its kind, and the value.
  *
- * What it holds is what it hands on, what the nodes wired to it are shown as
- * their sample, and what a run replaces with what arrives on its input. There
- * is nothing to write and nothing to generate: a format described beside the
- * value said less than the value, and went stale beside it. A file dropped on
- * the box -- or on the node on the canvas -- is what it holds from then on:
- * what the file says, parsed when it is JSON.
+ * What it holds is what it hands on, and what a run replaces with what arrives
+ * on its input. A file dropped on the box -- or on the node on the canvas -- is
+ * what it holds from then on: what the file says, parsed when it is JSON.
  *
  * What it holds is edited as what it is. The box used to follow only the Kind
  * setting: an object a run had left in a node set to Text was saved back as a
@@ -39,7 +46,7 @@ export async function holdDropped(file: Dropped, setConfig: NodePanelProps['setC
  * says what it is where it can (`dataKind`), switching the Kind converts it,
  * and what a box holds that does not parse is kept as typed, and not stored.
  */
-export default function DataNodePanel({ node, setConfig }: NodePanelProps) {
+function DataValue({ node, setConfig }: Pick<NodePanelProps, 'node' | 'setConfig'>) {
   const kind = dataKind(node);
   const held = node.config.data_value;
   const shown = asEditableText(held, kind);

@@ -1,8 +1,8 @@
 // Handing an element a file's content instead of its name.
 //
 // A code or AI node (`NodeRunner.readsFileInputs`) is handed the text of a file
-// on each input that says so: the port typed `file_path`, which is step 1's
-// "Read the file at this path" in its dialog. A summary of three stories, not a
+// on each input that says so: the port typed `file_path`, which is "Read the
+// file at this path" among its ports in its panel. A summary of three stories, not a
 // summary of three filenames. The executor does it, for any element that
 // declares it, which is why an AI node and a code node behave the same here
 // without either implementing it.

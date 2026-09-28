@@ -30,11 +30,9 @@ export interface FileService {
  * and nothing else of this machine's. So what needs the keys is not given to
  * it; it is *asked for*. `calls` are those questions: each becomes an async
  * function on `node` that sends its one argument out to the process holding
- * the graph and resolves to the answer. `data` is plain JSON put on `node` as
- * it is. Both must survive `JSON.stringify`.
+ * the graph and resolves to the answer, which must survive `JSON.stringify`.
  */
 export interface BodyContext {
-  data?: Record<string, unknown>;
   calls?: Record<string, (args: unknown) => Promise<unknown>>;
 }
 

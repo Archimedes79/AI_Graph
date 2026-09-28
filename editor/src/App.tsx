@@ -8,10 +8,12 @@ import GraphCanvas from '@/canvas/GraphCanvas';
 import DesignerTab from '@/page/DesignerTab';
 import PreviewTab from '@/page/PreviewTab';
 import TopGraphOnly from '@/page/TopGraphOnly';
-import ViewTabs, { type EditorView } from '@/app/ViewTabs';
+import type { EditorView } from '@/app/ViewTabs';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
 import NodeEditor from '@/canvas/NodeEditor';
+import PageCardPanel from '@/canvas/PageCardPanel';
 import ResultsPanel from '@/app/ResultsPanel';
+import ChangeBar from '@/app/ChangeBar';
 
 import SettingsDialog from '@/app/SettingsDialog';
 import GraphProblems from '@/app/GraphProblems';
@@ -26,10 +28,22 @@ import { errorText } from '@/api/errorText';
 import type { NodeType, Graph } from '@/graph';
 import { DANGER_TEXT, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT, WELL } from '@/ui/theme';
 
+/** The folder *path* is in: all of it before its last part -- '' for a bare name. */
+const folderOf = (path: string): string => {
+  const whole = path.replace(/[\\/]+$/, '');
+  return whole.slice(0, Math.max(0, whole.lastIndexOf('/'), whole.lastIndexOf('\\')));
+};
+
 export default function App() {
   const addNode = useGraphStore((s) => s.addNode);
-  const editingNodeId = useGraphStore((s) => s.editingNodeId);
-  const setEditingNode = useGraphStore((s) => s.setEditingNode);
+  // The node whose panel is open beside the canvas, while it is there...
+  const openNodeId = useGraphStore((s) => (s.rfNodes.some((n) => n.id === s.editingNodeId) ? s.editingNodeId : null));
+  // ...and the page, when that is the one: its panel is the way to the Page tab.
+  const openPageNode = useGraphStore((s) => {
+    const node = s.rfNodes.find((n) => n.id === s.editingNodeId)?.data.graphNode;
+    return node && showsPage(node.node_type) ? node : undefined;
+  });
+  const clearSelection = useGraphStore((s) => s.clearSelection);
   const loadGraph = useGraphStore((s) => s.loadGraph);
   // Saving and exporting are about the whole document, whichever level of it
   // the canvas is showing; running is about the level you are looking at.
@@ -72,19 +86,18 @@ export default function App() {
   const guiScheme = useGraphStore((s) => s.metadata.gui_scheme);
   useSchemeOnRoot(guiScheme);
 
-  // Editing a gui node means editing the page, and the page has its own tab --
-  // at the size it will really be, next to the blocks it will really sit
-  // beside. A dialog with a Config tab that only says 'go to the other tab'
-  // and a Preview tab that shows nothing useful is a dialog worth not opening.
-  const editingGuiNode = useGraphStore((s) => {
-    const node = s.rfNodes.find((n) => n.id === s.editingNodeId)?.data.graphNode;
-    return !!node && showsPage(node.node_type);
-  });
-  useEffect(() => {
-    if (!editingGuiNode) return;
-    setView('design');
-    setEditingNode(null);
-  }, [editingGuiNode, setEditingNode]);
+  // What the header says of saving and opening, kept with the graph it was
+  // said of: another one opened or started (`document` moved on) leaves it
+  // unsaid. "✅ Saved to …\capitals-table" stood over three graphs opened after it.
+  const [said, setSaid] = useState({ text: '', document: 0 });
+  const setSaveStatus = useCallback((text: string) => setSaid({ text, document: useGraphStore.getState().document }), []);
+  const documentOpen = useGraphStore((s) => s.document);
+  const saveStatus = said.document === documentOpen ? said.text : '';
+
+  // Editing the page means the Page tab -- at the size it will really be, next
+  // to the blocks it will really sit beside -- which double-clicking its card
+  // and its panel's one button open.
+  const openPage = useCallback(() => setView('design'), []);
   const [showJsonImport, setShowJsonImport] = useState(false);
   const [jsonImportValue, setJsonImportValue] = useState('');
   const [jsonImportError, setJsonImportError] = useState('');
@@ -159,7 +172,7 @@ export default function App() {
     loadGraph(graph);
     setCurrentFilePath(null);
     setSaveStatus(`✅ Loaded ${file.name}`);
-  }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath]);
+  }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath, setSaveStatus]);
 
   /**
    * A dropped folder: a project, most likely, opened when the editor's server
@@ -175,7 +188,7 @@ export default function App() {
     } catch (error) {
       setSaveStatus(`❌ ${errorText(error, `Could not open ${name}`)}`);
     }
-  }, [confirmDiscard, loadGraph, setCurrentFilePath]);
+  }, [confirmDiscard, loadGraph, setCurrentFilePath, setSaveStatus]);
 
   useEffect(() => {
     const onDragOver = (event: DragEvent) => {
@@ -203,9 +216,14 @@ export default function App() {
     };
   }, [handleGraphFileDrop, handleProjectFolderDrop]);
 
-  // Add a node from a palette click: beside what is already there.
+  // Add a node from a palette click: beside what is already there, with its
+  // panel open -- the next click was always on it. The canvas brings it into
+  // sight (`viewDue`).
   const handleAddNode = useCallback(
-    (nodeType: NodeType) => { addNode(nodeType, besideTheRest(useGraphStore.getState().rfNodes)); },
+    (nodeType: NodeType) => {
+      const { rfNodes, setEditingNode } = useGraphStore.getState();
+      setEditingNode(addNode(nodeType, besideTheRest(rfNodes)));
+    },
     [addNode]
   );
 
@@ -218,13 +236,21 @@ export default function App() {
   // server-side path, so "Save" can later write back to the exact same file
   // a graph was loaded from instead of always downloading to a new location.
   const [filePrompt, setFilePrompt] = useState<{ mode: 'load' | 'save'; path: string; error: string; busy: boolean } | null>(null);
-  const [saveStatus, setSaveStatus] = useState('');
   /** Which file prompt has its browser open ('load' | 'save'), or null. */
   const [browsingFor, setBrowsingFor] = useState<'load' | 'save' | null>(null);
 
   // A project folder by default: a name without .json. Typing .json saves one file instead.
   const suggestedFileName = () =>
     useGraphStore.getState().metadata.name.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'my_graph';
+
+  // The folder the last graph was opened from or saved to -- '' before one
+  // was: the folder the server was started in. Where the file browser starts
+  // when the path box holds a bare name, a new graph's or one typed, with the
+  // name filled in: it read the name as a folder, and opened on "Directory
+  // not found: …\untitled_graph".
+  const [lastFolder, setLastFolder] = useState('');
+  useEffect(() => { if (currentFilePath) setLastFolder(folderOf(currentFilePath)); }, [currentFilePath]);
+  const typedName = filePrompt && !/[\\/]/.test(filePrompt.path) ? filePrompt.path.trim() : null;
 
   // Open and Save As go straight to the file browser: choosing a file is what
   // they are for, and a path box first -- "/path/to/my_graph" -- asked the
@@ -265,7 +291,7 @@ export default function App() {
   // in VS Code, by git, by an assistant. The folder is asked every second and
   // a half what changed, and what did comes in as one undo step -- no reload,
   // no button, and nothing typed here is lost (see takeDiskChanges, and the
-  // node dialog's "changed while open" question). Only while the page is
+  // node's panel, which keeps what it has not written yet on top of a change from outside). Only while the page is
   // looked at: a hidden tab has nobody to show a change to.
   useEffect(() => {
     // Not while a node is open from the inside: a change down there arrives as
@@ -295,7 +321,7 @@ export default function App() {
     };
     const timer = window.setInterval(look, 1500);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [isProject, currentFilePath, insideSubgraph, takeDiskChanges]);
+  }, [isProject, currentFilePath, insideSubgraph, takeDiskChanges, setSaveStatus]);
 
   const handleSave = async () => {
     if (!currentFilePath) {
@@ -422,16 +448,25 @@ export default function App() {
           confirmDiscard={confirmDiscard}
           currentFilePath={currentFilePath}
           saveStatus={saveStatus}
+          view={view}
+          onViewChange={setView}
         />
 
-        <ViewTabs view={view} onChange={setView} />
-
         {/* Both views stay mounted: the graph keeps its ReactFlow viewport, and
-            switching back does not reset the canvas or lose a selection. */}
-        <div className="flex flex-1 overflow-hidden" style={{ display: view === 'graph' ? 'flex' : 'none' }}>
+            switching back does not reset the canvas, lose a selection or close
+            a panel with a ✨ still writing in it. */}
+        <div className="flex flex-1 min-h-0 overflow-hidden" style={{ display: view === 'graph' ? 'flex' : 'none' }}>
           <Sidebar onAddNode={handleAddNode} />
-          <GraphCanvas active={view === 'graph'} />
-          <ResultsPanel />
+          <div className="flex flex-col flex-1 min-w-0">
+            <GraphCanvas active={view === 'graph'} onOpenPage={openPage} />
+            <ChangeBar />
+          </div>
+          {/* Beside the canvas: the panel of the node the person is on -- or,
+              on none, what the last run gave. One at a time, so the canvas
+              keeps its room at 1024 pixels. */}
+          {openNodeId && !openPageNode && <NodeEditor key={openNodeId} nodeId={openNodeId} onClose={clearSelection} />}
+          {openPageNode && <PageCardPanel node={openPageNode} onClose={clearSelection} onOpenPage={openPage} />}
+          {!openNodeId && <ResultsPanel />}
         </div>
         {/* The page is the top graph's: inside a node's graph there is none to
             build or try, and these would act on the graph in there. */}
@@ -439,14 +474,6 @@ export default function App() {
         {view === 'preview' && <TopGraphOnly><PreviewTab /></TopGraphOnly>}
 
         {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
-
-        {editingNodeId && !editingGuiNode && (
-          <NodeEditor
-            key={editingNodeId}
-            nodeId={editingNodeId}
-            onClose={() => setEditingNode(null)}
-          />
-        )}
 
         {filePrompt && (
           <Modal
@@ -512,10 +539,10 @@ export default function App() {
         {filePrompt && browsingFor && (
           <FileBrowserDialog
             mode={browsingFor === 'load' ? 'file' : 'save'}
-            initialPath={filePrompt.path}
+            initialPath={typedName === null ? filePrompt.path : lastFolder}
             extensions=".json"
             projects
-            defaultName={suggestedFileName()}
+            defaultName={typedName || suggestedFileName()}
             onPick={(picked) => {
               // Picking a file is the choice: it is loaded, or saved to, straight away.
               setFilePrompt({ ...filePrompt, path: picked, error: '' });

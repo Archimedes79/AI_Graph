@@ -7,7 +7,7 @@
 //         count/            one folder per node, by id
 //           node.json       its name and its settings
 //           interface.json  what goes in and what comes out
-//           code.js         what the element keeps in files: `NodeRunner.texts`
+//           input.js …      what the element keeps in files: `NodeRunner.texts`
 //         page/
 //           node.json       a page's blocks are settings: they live here
 //           interface.json
@@ -35,7 +35,6 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry } from '../elements/registry.ts';
-import { shippedText } from '../elements/NodeRunner.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
 import { FLOW_FILE, flowOf, graphFrom } from './flow.ts';
 import { folderName } from './names.ts';
@@ -101,8 +100,10 @@ export interface ProjectText {
   path: string;
   /** The node's config, where the field lives. */
   holder: Record<string, unknown>;
-  /** See `TextFile`: what the file says while nobody has written their own. */
+  /** See `TextFile`: a value kept as JSON, the file's stub, and what follows what the node holds. */
+  json: boolean;
   standard?: string;
+  footer?: string;
 }
 
 /**
@@ -131,11 +132,18 @@ export function projectTexts(graph: Graph): ProjectText[] {
     for (const text of registry.node(node.node_type)?.texts(node) ?? []) {
       found.push({
         node_id: node.id, field: text.field, path: `${folder}/${text.file}`,
-        holder: node.config, standard: text.standard,
+        holder: node.config, json: text.json === true,
+        ...(text.standard !== undefined ? { standard: text.standard } : {}),
+        ...(text.footer !== undefined ? { footer: text.footer } : {}),
       });
     }
   }
   return found;
+}
+
+/** The settings any kind of node keeps in a file of its own (`NodeRunner.texts`), asked of every kind for *node*. */
+function textFields(node: GraphNode): Set<string> {
+  return new Set(registry.nodeTypes().flatMap((type) => registry.node(type)?.texts(node).map((text) => text.field) ?? []));
 }
 
 /** One node that holds a graph, and the folder that graph is kept in. */
@@ -175,13 +183,39 @@ function toFile(value: unknown, json: boolean): string {
   return `${json ? JSON.stringify(value, null, 2) : String(value)}\n`;
 }
 
-function fromFile(content: string): string {
-  return content.replace(/\r\n/g, '\n').replace(/\n$/, '');
+/**
+ * What the file of *text* says for *value*: the text -- or the JSON, of a
+ * value kept as JSON or of what a run left in a data node kept as text -- with
+ * the footer after it; the stub while the node holds nothing there; or null,
+ * for no file at all.
+ */
+function fileFor(value: unknown, text: ProjectText): string | null {
+  if (isBlank(value)) return text.standard === undefined ? null : toFile(text.standard, false);
+  const said = text.json || typeof value !== 'string' ? JSON.stringify(value, null, 2) : value;
+  return toFile(text.footer ? `${said.replace(/\n+$/, '')}\n\n${text.footer}` : said, false);
 }
 
-/** Nobody's own: nothing, or the text the element itself ships. */
-function isStandard(value: unknown, text: { standard?: string }): boolean {
-  return isBlank(value) || shippedText(value, text);
+/**
+ * What the node holds, for a file of *text* that says *content*: the file
+ * without its footer -- wherever it stands: code added after it is the node's,
+ * and a footer kept in the body was written twice by the next save -- parsed
+ * where it is JSON, or nothing, for the stub.
+ */
+function heldIn(content: string, text: ProjectText, path: string): { value: unknown } | undefined {
+  let said = content.replace(/\r\n/g, '\n').replace(/\n$/, '');
+  const at = text.footer ? said.indexOf(text.footer) : -1;
+  if (at >= 0) {
+    const before = said.slice(0, at).replace(/\s+$/, '');
+    const after = said.slice(at + text.footer!.length).trim();
+    said = after ? `${before}\n\n${after}` : before;
+  }
+  if (text.standard !== undefined && said.trim() === text.standard.trim()) return undefined;
+  if (!text.json) return { value: said };
+  try {
+    return { value: JSON.parse(said) };
+  } catch (error) {
+    throw new NotAGraph(`${path} is not valid JSON: ${(error as Error).message}`);
+  }
 }
 
 /** Nothing written: no file for it. A JSON value that is an empty object says nothing either. */
@@ -317,10 +351,9 @@ export async function readProject(folder: string, guard?: Guard): Promise<Graph>
     const signed = await signature(path);
     if (signed !== ABSENT) {
       await guard?.(path);
-      const read = fromFile(await readFile(path, 'utf8'));
-      // The element's own text is nobody's setting: the node stays as it was
-      // written, and saving writes today's standard back out.
-      if (text.standard === undefined || !isStandard(read, text)) text.holder[text.field] = read;
+      const held = heldIn(await readFile(path, 'utf8'), text, path);
+      // The stub is nobody's writing: the node holds nothing there.
+      if (held) text.holder[text.field] = held.value;
     }
     seen.set(path, signed);
   }
@@ -404,20 +437,25 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   }
 
   const files = new Map<string, string | null>();
-  // A node's ports and kept output shape: its interface, in its own folder.
+  // A node's ports: its interface, in its own folder.
   const flow = flowOf(copy);
   for (const node of copy.nodes) {
     const element = registry.node(node.node_type);
     // A typo in flow.json must not cost the node its code on the next save.
     if (!element) untouched.add(join(folder, nodeFolder(node.id)));
-    files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(node, element?.outputInterface(node)), true));
-    element?.setOutputInterface(node, null);
+    else {
+      // A node that became another kind -- by ✨ AI Graph, the bar, a model
+      // over MCP -- keeps none of the old kind's writing: in node.json it
+      // would be a setting nothing reads. Its file goes as one no node keeps.
+      const own = new Set(element.texts(node).map((text) => text.field));
+      for (const field of textFields(node)) if (!own.has(field)) delete node.config[field];
+    }
+    files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(node), true));
   }
   for (const text of projectTexts(copy)) {
-    const written = text.holder[text.field];
+    const value = text.holder[text.field];
     delete text.holder[text.field];
-    const value = text.standard !== undefined && isStandard(written, text) ? text.standard : written;
-    files.set(join(folder, text.path), isBlank(value) ? null : toFile(value, false));
+    files.set(join(folder, text.path), fileFor(value, text));
   }
 
   const layout: Record<string, Record<string, number>> = {};
@@ -544,22 +582,32 @@ export async function saveGraph(path: string, graph: Graph, guard?: Guard): Prom
 }
 
 /**
- * The file a node's body lives in, relative to the project's `nodes/` folder
- * -- `count/code.js`, `say/system.md` -- created empty when nothing has been
- * written yet, so there is something to open.
+ * One of a node's files, relative to the project's `nodes/` folder --
+ * `count/code.js`, `count/input.js`, `say/history.md` -- for opening it in the
+ * person's own editor. *file* is named from the node's folder, and must be one
+ * of the texts the node keeps; without it, the body. A text nothing has been
+ * written into yet is created -- its stub, or empty -- so there is something
+ * to open.
  */
-export async function bodyFileOf(folder: string, nodeId: string): Promise<string> {
+export async function nodeFileOf(folder: string, nodeId: string, file?: string): Promise<string> {
   const { graph } = await readStructure(folder);
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node) throw new NotFound(`No node "${nodeId}" in ${folder}. Save the graph first.`);
-  const logic = registry.node(node.node_type)?.logic(node);
   const texts = projectTexts(graph).filter((text) => text.node_id === nodeId);
-  const body = texts.find((text) => text.field === logic?.fields.body) ?? texts[0];
-  if (!body) throw new NotFound(`"${nodeId}" keeps nothing in files.`);
+  const logic = registry.node(node.node_type)?.logic(node);
+  const body = file === undefined
+    ? texts.find((text) => text.field === logic?.fields.body) ?? texts[0]
+    : texts.find((text) => text.path === `${nodeFolder(nodeId)}/${file}`);
+  if (!body) {
+    const kept = texts.map((text) => text.path.slice(text.path.lastIndexOf('/') + 1));
+    throw file === undefined
+      ? new NotFound(`"${nodeId}" keeps nothing in files.`)
+      : new Error(`"${file}" is not one of the files of "${nodeId}": it keeps ${kept.length ? kept.join(', ') : 'none'}.`);
+  }
   const path = join(folder, body.path);
   if (!existsSync(path)) {
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, '', 'utf8');
+    await writeFile(path, fileFor(undefined, body) ?? '', 'utf8');
     await remember(path);
   }
   return body.path.slice(NODES_DIR.length + 1);
@@ -575,8 +623,8 @@ export type { TextChange };
  * The texts of the project in *folder* whose files changed since this process
  * last read or wrote them -- edited in another editor, restored by git,
  * deleted -- with what they say now. Each is then taken as seen: asking twice
- * reports it once. Only texts are watched; the flow, or a node's settings or ports, changing under an
- * open editor is a reload, not a patch.
+ * reports it once. Only texts are watched; the flow, or a node's settings or
+ * ports, changing under an open editor is a reload, not a patch.
  */
 export async function changesOnDisk(folder: string): Promise<TextChange[]> {
   const { graph } = await readStructure(folder);
@@ -586,7 +634,8 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
     const known = seen.get(path);
     const now = await signature(path);
     if (known === undefined || known === now) continue;
-    const value = now === ABSENT ? '' : fromFile(await readFile(path, 'utf8'));
+    const held = now === ABSENT ? undefined : heldIn(await readFile(path, 'utf8'), text, text.path);
+    const value = held ? held.value : text.json ? null : '';
     seen.set(path, now);
     changes.push({ node_id: text.node_id, field: text.field, value });
   }

@@ -118,7 +118,7 @@ describe('a node with nothing to do', () => {
       { id: 'page', node_type: 'gui', config: { gui_widgets: [{ id: 'chat', kind: 'chat', value: { messages: [], pending } }] } },
       {
         id: 'ai', node_type: 'ai', inputs: [port('message', { required: true })], outputs: [port('output')],
-        config: { ai_model: 'm', prompt_template: 'User: {{message}}' },
+        config: { ai_model: 'm' },
       },
     ],
     edges: [
@@ -142,7 +142,7 @@ describe('a node with nothing to do', () => {
 
   it('runs as soon as there is something to say', async () => {
     const result = await executeGraph(chat('hello'), { registry, runtime: runtime() });
-    expect(result.node_results.find((r) => r.node_id === 'ai')?.outputs.output).toBe('answer to: User: hello');
+    expect(result.node_results.find((r) => r.node_id === 'ai')?.outputs.output).toBe('answer to: hello');
   });
 });
 
@@ -168,7 +168,7 @@ describe('stopping', () => {
   it('hands the signal to every model call', async () => {
     const seen: (AbortSignal | undefined)[] = [];
     const stop = new AbortController();
-    const graph = parseGraph({ nodes: [{ id: 'ai', node_type: 'ai', outputs: [port('output')], config: { ai_model: 'm', system_prompt: 'Say hello.' } }], edges: [] });
+    const graph = parseGraph({ nodes: [{ id: 'ai', node_type: 'ai', outputs: [port('output')], config: { ai_model: 'm', prompt: 'Say hello.' } }], edges: [] });
     await executeGraph(graph, {
       registry, signal: stop.signal,
       runtime: runtime({ ai: { complete: async (request) => { seen.push(request.signal); return 'x'; } } }),

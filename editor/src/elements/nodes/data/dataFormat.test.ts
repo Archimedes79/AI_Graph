@@ -30,7 +30,7 @@ describe('what a data node holds, as its box edits it', () => {
   });
 
   it('stores nothing from JSON that does not parse, and says why -- with no Save to wait for', () => {
-    // It said "valid JSON before saving", of a dialog that writes as it is typed into.
+    // It said "valid JSON before saving", of a panel that writes as it is typed into.
     const result = storedValue('{"count": ', 'structure');
     expect(result).toEqual({ error: 'Structured data must be valid JSON.' });
     // Text is text, whatever it looks like.

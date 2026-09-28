@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import PathField, { FileTypesField } from '@/dialogs/PathField';
 import { listBlockAsRun } from '@/authoring/readAsRun';
 import { FIELD_ON_SURFACE, MUTED } from '@/ui/theme';
@@ -13,11 +14,13 @@ export default function InputPickerWidgetPanel({ widget, onUpdate }: WidgetPanel
   const mode = widget.mode || 'file';
   const directory = mode === 'directory';
   const path = typeof widget.value === 'string' ? widget.value : '';
+  const id = useId();
 
   const modeField = (
     <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Mode</label>
+      <label htmlFor={`${id}-mode`} className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Mode</label>
       <select
+        id={`${id}-mode`}
         className="w-full rounded-lg px-2 py-1.5 text-sm"
         style={FIELD_ON_SURFACE}
         value={mode}
@@ -31,10 +34,11 @@ export default function InputPickerWidgetPanel({ widget, onUpdate }: WidgetPanel
 
   const pathField = (
     <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
+      <label htmlFor={`${id}-path`} className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
         {directory ? 'Folder' : 'Default path'}
       </label>
       <PathField
+        id={`${id}-path`}
         value={path}
         onChange={(picked) => onUpdate({ value: picked })}
         mode={directory ? 'directory' : 'file'}

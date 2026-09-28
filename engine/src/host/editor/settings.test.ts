@@ -173,7 +173,7 @@ describe('what the terminal is told at startup', () => {
     });
     const lines = await setupLines('/nowhere', env);
 
-    expect(lines).toEqual(['AI (✨ Generate, Try it, runs): anthropic/claude-opus-5 -- no anthropic API key (⚙ Settings, or ANTHROPIC_API_KEY)']);
+    expect(lines).toEqual(['AI (✨, ▶ Try, runs): anthropic/claude-opus-5 -- no anthropic API key (⚙ Settings, or ANTHROPIC_API_KEY)']);
     expect(lines.join('\n')).not.toContain('sk-secret');
   });
 });

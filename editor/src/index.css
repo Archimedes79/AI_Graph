@@ -39,6 +39,12 @@ html, body, #root {
   fill: currentColor !important;
 }
 
+/* The map's shade over what is out of view, in the scheme's own: it shipped as
+   a light grey, which glared from the corner of every dark canvas. */
+.react-flow__minimap-mask {
+  fill: var(--ui-scrim, rgba(0,0,0,0.70));
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
@@ -68,9 +74,11 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* A row or button under the pointer. Tailwind's `hover:bg-white/5` was doing
-   this job and is invisible on a light scheme -- white over cream is cream. */
-.hover-raise:hover {
+/* A row or button under the pointer -- or reached with the keyboard, as a
+   menu's entries are. Tailwind's `hover:bg-white/5` was doing this job and is
+   invisible on a light scheme -- white over cream is cream. */
+.hover-raise:hover,
+.hover-raise:focus-visible {
   background: var(--ui-hover, rgba(255,255,255,0.06));
 }
 

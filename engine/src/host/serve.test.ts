@@ -273,6 +273,8 @@ describe('the engine as the front door of the editor', () => {
 
     const graph = JSON.parse(await readFile(MINIMAL, 'utf8'));
     graph.metadata.name = 'Handed over';
+    // How a node was written is the project's: the tool's page is handed what runs.
+    graph.nodes[0].config = { ...graph.nodes[0].config, history: '## 2026-09-28 10:00 · ✨ Code\n\nNothing was sent.' };
     const held = await fetch(`${url}/api/runtime/hold`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
     });
@@ -280,6 +282,7 @@ describe('the engine as the front door of the editor', () => {
 
     const served = await asJson(await fetch(`${url}/api/runtime/graph`));
     expect((served.metadata as { name: string }).name).toBe('Handed over');
+    expect((served.nodes as { config: Record<string, unknown> }[])[0].config).not.toHaveProperty('history');
   });
 
   it('will not let a deployed tool be handed a different graph', async () => {

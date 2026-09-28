@@ -40,6 +40,13 @@ The JSON document must have this exact shape:
 
 Valid node_type values: ${NODE_TYPES}. What each one keeps in its config is said below. There is no dedicated merge/split node type: fan-in (multiple edges into one multi input port) and fan-out (one output wired to many inputs) are pure edge wiring, and any merge/split-style aggregation (concat/sum/count/json_list a set of inputs, or splitting text into a list) should be written as a "code" node. Every node must declare its own inputs and outputs port arrays, even if empty, and every port id must be unique within its node. Edges must reference existing node ids and port ids declared on those nodes.`;
 
+/**
+ * What a node is before anything else: a heading and a sentence. The rest of
+ * a code, ai or data node is written from that sentence, so a node without one
+ * is a node nobody can finish.
+ */
+const NODE_WORDS = `Every node is its label and its description: the label a short heading, the description one or two sentences saying in plain words what the node does. A person reads them on the canvas, and a code, ai or data node has what it holds or runs written from its description.`;
+
 /** Where each node type keeps the thing it actually does: one line from every kind, and what only two of them share. */
 const FILE_WORK = `- code and ai, working on FILES: an input port with data_type "file_path" is handed each file's TEXT instead of its path -- the path, or the list of paths from a directory input's "files", is read before the node runs. A port that is to keep a path as a path is typed "text". Set config.batch_mode = "per_item" and mark that port "multi": true, and the node runs ONCE PER FILE, its results collected into a list; with batch_mode = "whole_list" it runs once and gets the whole list. So "do X to every file in a folder" is: directory input --files--> one code or ai node (file_path port, multi, per_item). Never chain a second input node to read the files, and never read files yourself in code.`;
 
@@ -92,7 +99,7 @@ const EXAMPLE = `A complete, working example:
      "inputs": [],
      "outputs": [{"id": "output", "name": "Output", "kind": "output", "data_type": "text", "multi": false, "required": false}],
      "config": {"input_mode": "text", "value": "name,age\\nAda,36\\nBo,41"}},
-    {"id": "rows", "node_type": "code", "label": "Count rows", "description": "",
+    {"id": "rows", "node_type": "code", "label": "Count rows", "description": "Count the lines of the text.",
      "position": {"x": 420, "y": 120},
      "inputs": [{"id": "text", "name": "Text", "kind": "input", "data_type": "text", "multi": false, "required": false}],
      "outputs": [{"id": "rows", "name": "Rows", "kind": "output", "data_type": "number", "multi": false, "required": false}],
@@ -110,4 +117,4 @@ const EXAMPLE = `A complete, working example:
 }
 \`\`\``;
 
-export const GRAPH_SYSTEM = [SHAPE, CONFIG_KEYS, MUST_SHOW, DERIVED_PORTS, TRIGGERS, EXAMPLE].join('\n\n');
+export const GRAPH_SYSTEM = [SHAPE, NODE_WORDS, CONFIG_KEYS, MUST_SHOW, DERIVED_PORTS, TRIGGERS, EXAMPLE].join('\n\n');

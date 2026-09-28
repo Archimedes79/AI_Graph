@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { mkdir, mkdtemp, readFile, rm, writeFile, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,8 +9,11 @@ import { join } from 'node:path';
 import { parseGraph, type Graph } from '../graph.ts';
 import { NotAGraph } from '../errors.ts';
 import { problemsIn } from './check.ts';
+import { RUN_ON_ITS_OWN } from '../elements/nodes/code/CodeNodeRunner.ts';
+import { DEFINITION_TEXTS, definitionExample } from '../authoring/definition.ts';
+import { DataNodeRunner } from '../elements/nodes/data/DataNodeRunner.ts';
 import {
-  FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, projectFolderOf, readProject, saveGraph, writeProject,
+  FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, nodeFileOf, projectFolderOf, readProject, saveGraph, writeProject,
 } from './folder.ts';
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
@@ -28,18 +33,16 @@ function sample(): Graph {
         inputs: [port('files', 'input')], outputs: [port('total', 'output')],
         config: {
           code: 'function run(inputs) {\n  return { total: inputs.files.length };\n}',
-          code_prompt: 'Count the files.',
-          output_schema: { type: 'object', properties: { total: { type: 'integer' } }, required: ['total'] },
+          input_definition: 'module.exports = { "files": ["a.csv"] };',
+          output_definition: 'module.exports = { "total": 1 };',
+          history: '## 2026-09-28 09:05 · ✨ Code\n\nNothing was sent.',
           batch_mode: 'whole_list',
         },
       },
       {
         id: 'say', node_type: 'ai', label: 'Say it', position: { x: 600, y: 20 },
         inputs: [port('total', 'input')], outputs: [port('output', 'output')],
-        config: {
-          system_prompt: 'You report counts.', prompt_template: 'There are {{total}} files.',
-          output_format_prompt: 'One sentence.', temperature: 0.2,
-        },
+        config: { prompt: 'Say how many files there are, in one sentence.', temperature: 0.2 },
       },
       {
         id: 'page', node_type: 'gui', label: 'Page', position: { x: 900, y: 20 },
@@ -75,12 +78,11 @@ const touch = async (path: string, content: string) => {
 describe('a project folder', () => {
   it('keeps each piece of writing in a file named for what it is', async () => {
     await writeProject(dir, sample());
-    expect(await text('nodes/count/code.js')).toBe('function run(inputs) {\n  return { total: inputs.files.length };\n}\n');
-    expect(await text('nodes/count/task.md')).toBe('Count the files.\n');
-    expect(JSON.parse(await text('nodes/count/interface.json')).output_schema).toMatchObject({ properties: { total: { type: 'integer' } } });
-    expect(await text('nodes/say/system.md')).toBe('You report counts.\n');
-    expect(await text('nodes/say/message.md')).toBe('There are {{total}} files.\n');
-    expect(await text('nodes/say/output.md')).toBe('One sentence.\n');
+    expect(await text('nodes/count/code.js')).toBe(`function run(inputs) {\n  return { total: inputs.files.length };\n}\n\n${RUN_ON_ITS_OWN}\n`);
+    expect(await text('nodes/count/input.js')).toBe('module.exports = { "files": ["a.csv"] };\n');
+    expect(await text('nodes/count/output.js')).toBe('module.exports = { "total": 1 };\n');
+    expect(await text('nodes/count/history.md')).toBe('## 2026-09-28 09:05 · ✨ Code\n\nNothing was sent.\n');
+    expect(await text('nodes/say/prompt.md')).toBe('Say how many files there are, in one sentence.\n');
     // A folder listing and a chart have no writing of their own.
     expect(existsSync(join(dir, 'nodes/folder/select.js'))).toBe(false);
     expect(existsSync(join(dir, 'nodes/page/chart'))).toBe(false);
@@ -143,13 +145,150 @@ describe('a project folder', () => {
     expect(await Promise.all(files.map(text))).toEqual(first);
   });
 
-  it('has no file for empty writing, and removes the file of writing that was emptied', async () => {
+  it('writes every file a node has from the start: a stub for what it holds nothing of, which reads back as nothing', async () => {
     const graph = sample();
+    graph.nodes[1].config.output_definition = '';
+    graph.nodes[2].config.prompt = '';
+    // What check holds a node to that has only its text: its heading and its text.
+    graph.nodes[1].description = 'Counts the files.';
+    graph.nodes[2].description = 'Says how many there are.';
     await writeProject(dir, graph);
-    graph.nodes[1].config.code_prompt = '';
+    const [inputStub, outputStub] = DEFINITION_TEXTS.map((text) => `${text.standard}\n`);
+    expect(await text('nodes/count/output.js')).toBe(outputStub);
+    expect(await text('nodes/say/input.js')).toBe(inputStub);
+    expect(await text('nodes/say/output.js')).toBe(outputStub);
+    expect(await text('nodes/say/prompt.md')).toMatch(/^<!--\nprompt\.md: the instructions/);
+    // History comes with the first exchange, not before.
+    expect(existsSync(join(dir, 'nodes/say/history.md'))).toBe(false);
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes[1].config).not.toHaveProperty('output_definition');
+    expect(read.nodes[2].config).not.toHaveProperty('prompt');
+    expect(read.nodes[2].config).not.toHaveProperty('input_definition');
+    // A stub is not a problem check names: it is a node that says nothing there yet.
+    expect(problemsIn(read)).toEqual([]);
+  });
+
+  it('writes a code.js with no code yet that says so when it is run on its own, and fails -- and reads back as no code', async () => {
+    const graph = sample();
+    graph.nodes[1].config.code = '';
     await writeProject(dir, graph);
-    expect(existsSync(join(dir, 'nodes/count/task.md'))).toBe(false);
-    expect(existsSync(join(dir, 'nodes/count/code.js'))).toBe(true);
+    const ran = await promisify(execFile)(process.execPath, [join(dir, 'nodes', 'count', 'code.js')], { cwd: dir })
+      .then(() => ({ code: 0, stderr: '' }), (error: { code?: number; stderr?: string }) => ({ code: error.code, stderr: String(error.stderr) }));
+    expect(ran).toEqual({ code: 1, stderr: 'code.js holds no code yet: write it with ✨ Code.\n' });
+    forgetSeen();
+    expect((await readProject(dir)).nodes[1].config).not.toHaveProperty('code');
+  }, 30_000);
+
+  it('takes the part that runs code.js on its own out wherever it stands: code added after it is the node\'s', async () => {
+    const graph = sample();
+    Object.assign(graph.nodes[1].config, { code: 'function run() { return { total: 1 }; }' });
+    await writeProject(dir, graph);
+    const path = join(dir, 'nodes', 'count', 'code.js');
+    await writeFile(path, `${await readFile(path, 'utf8')}\nfunction helper() { return 2; }\n`);
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes[1].config.code).toBe('function run() { return { total: 1 }; }\n\nfunction helper() { return 2; }');
+    await writeProject(dir, read);
+    expect((await readFile(path, 'utf8')).split(RUN_ON_ITS_OWN)).toHaveLength(2);
+  });
+
+  it('writes code.js so it runs on its own on its example, and reads back the code without that part', async () => {
+    const graph = sample();
+    Object.assign(graph.nodes[1].config, {
+      code: 'function run(inputs) {\n  return { total: inputs.files.length };\n}',
+      input_definition: 'module.exports = { "files": ["a.csv", "b.csv"] };',
+    });
+    await writeProject(dir, graph);
+    const { stdout } = await promisify(execFile)(process.execPath, [join(dir, 'nodes', 'count', 'code.js')], { cwd: dir });
+    expect(JSON.parse(stdout)).toEqual({ total: 2 });
+    forgetSeen();
+    expect((await readProject(dir)).nodes[1].config.code).toBe('function run(inputs) {\n  return { total: inputs.files.length };\n}');
+    // Edited in another editor with its own line ends, it is still taken off.
+    await touch(join(dir, 'nodes/count/code.js'), (await text('nodes/count/code.js')).replace(/\n/g, '\r\n'));
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'code', value: 'function run(inputs) {\n  return { total: inputs.files.length };\n}' }]);
+  }, 30_000);
+
+  it('writes code.js so it runs on its own as an ES module too: a body that imports, a folder whose package.json says "type": "module"', async () => {
+    const graph = sample();
+    Object.assign(graph.nodes[1].config, {
+      code: "import { basename } from 'node:path';\n\nfunction run(inputs) {\n  return { total: inputs.files.map((file) => basename(file)).join(' ') };\n}",
+      input_definition: 'module.exports = { "files": ["data/a.csv", "data/b.csv"] };',
+    });
+    await writeProject(dir, graph);
+    const run = async () => JSON.parse((await promisify(execFile)(process.execPath, [join(dir, 'nodes', 'count', 'code.js')], { cwd: dir })).stdout);
+    expect(await run()).toEqual({ total: 'a.csv b.csv' });
+    // Every .js file under it is an ES module now, input.js among them: it is read as text all the same.
+    await writeFile(join(dir, 'package.json'), '{ "type": "module" }\n');
+    Object.assign(graph.nodes[1].config, { code: 'function run(inputs) {\n  return { total: inputs.files.length };\n}' });
+    await writeProject(dir, graph);
+    expect(await run()).toEqual({ total: 2 });
+  }, 30_000);
+
+  it('runs code.js on its own on the example ▶ Try runs on -- for plain JSON the same example -- or says it has none yet', async () => {
+    const graph = sample();
+    Object.assign(graph.nodes[1].config, { code: 'function run(inputs) {\n  return inputs;\n}' });
+    await writeProject(dir, graph);
+    const inputs = join(dir, 'nodes', 'count', 'input.js');
+    const run = async (definition: string) => {
+      await writeFile(inputs, definition);
+      try {
+        return { example: JSON.parse((await promisify(execFile)(process.execPath, [join(dir, 'nodes', 'count', 'code.js')], { cwd: dir })).stdout) };
+      } catch (error) {
+        return { failed: String((error as { stderr?: string }).stderr) };
+      }
+    };
+    for (const definition of [
+      '/**\n * @typedef {Object} Input\n * @property {string[]} files  the files (module.exports = their names)\n */\nmodule.exports = { "files": ["a;b.csv"] }',
+      'const note = "module.exports = 1";\nmodule.exports = { "files": [{ "name": "}" }] }; // one; or two',
+    ]) {
+      const read = definitionExample(definition);
+      expect(await run(definition)).toEqual({ example: 'example' in read ? read.example : 'unread' });
+    }
+    // Run, not parsed: what Node takes is taken -- check names what is not plain JSON.
+    expect(await run("module.exports = { files: ['a.csv'] };")).toEqual({ example: { files: ['a.csv'] } });
+    for (const none of ['module.exports = null;', 'module.exports = ["a.csv"];', '/** @typedef {Object} Input */']) {
+      expect((await run(none)).failed).toContain('input.js has no example yet');
+    }
+  }, 60_000);
+
+  it('keeps what a data node holds as JSON where it holds structure, as text otherwise', async () => {
+    const data = (id: string, config: Record<string, unknown>) => ({
+      id, node_type: 'data', label: id, inputs: [port('input', 'input')], outputs: [port('output', 'output')], config,
+    });
+    const graph = parseGraph({
+      metadata: { name: 'Held' },
+      nodes: [
+        data('count', { data_format: 'structure', data_value: { count: 2, names: ['Ada'] } }),
+        data('note', { data_format: 'text', data_value: 'Line one.\nLine two.' }),
+        // A record set in a node kept as text, by hand or by a model: written as its JSON, it reads
+        // back as that text -- which is why check names such a node (DataNodeRunner.problems).
+        data('left', { data_format: 'text', data_value: { count: 3 } }),
+      ],
+      edges: [],
+    });
+    await writeProject(dir, graph);
+    expect(JSON.parse(await text('nodes/count/data.json'))).toEqual({ count: 2, names: ['Ada'] });
+    expect(await text('nodes/note/data.txt')).toBe('Line one.\nLine two.\n');
+    expect(JSON.parse(await text('nodes/count/node.json')).config).toEqual({ data_format: 'structure' });
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes.map((node) => node.config.data_value)).toEqual([{ count: 2, names: ['Ada'] }, 'Line one.\nLine two.', '{\n  "count": 3\n}']);
+  });
+
+  it('reads a count a run left in a text node back as a count: the node holds structure from then on', async () => {
+    // A counter: a data node, kept as text as a new one is, and a code node adding one.
+    const graph = parseGraph({
+      metadata: { name: 'Count' },
+      nodes: [{ id: 'counter', node_type: 'data', label: 'Counter', inputs: [port('input', 'input')], outputs: [port('output', 'output')], config: { data_format: 'text', data_value: '' } }],
+      edges: [],
+    });
+    new DataNodeRunner().settleMemory(graph.nodes[0], 'input', 1);
+    await writeProject(dir, graph);
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes[0].config.data_value).toBe(1);
+    expect(read.nodes[0].config.data_format).toBe('structure');
   });
 
   it('removes a deleted node\'s files, and nothing a person put there', async () => {
@@ -160,8 +299,25 @@ describe('a project folder', () => {
     graph.edges = [];
     await writeProject(dir, graph);
     expect(existsSync(join(dir, 'nodes/count'))).toBe(false);
-    expect(existsSync(join(dir, 'nodes/say/system.md'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes/say/prompt.md'))).toBe(false);
     expect(await text('nodes/say/notes.txt')).toBe('mine');
+  });
+
+  it('keeps nothing of a node\'s old kind once it is another: not in its node.json, not in its folder', async () => {
+    await writeProject(dir, sample());
+    const read = await readProject(dir);
+    // The code node is an ai node now, and the ai node a data node -- as ✨ AI Graph or a model over MCP may hand them back.
+    read.nodes[1].node_type = 'ai';
+    read.nodes[2].node_type = 'data';
+    await writeProject(dir, read);
+    expect(JSON.parse(await text('nodes/count/node.json')).config).not.toHaveProperty('code');
+    expect(existsSync(join(dir, 'nodes/count/code.js'))).toBe(false);
+    // What both kinds keep stays: its definitions and its history.
+    expect(await text('nodes/count/input.js')).toBe('module.exports = { "files": ["a.csv"] };\n');
+    expect(await text('nodes/count/history.md')).toMatch(/^## 2026-09-28 09:05 · ✨ Code/);
+    expect(Object.keys(JSON.parse(await text('nodes/say/node.json')).config)).not.toContain('prompt');
+    expect(existsSync(join(dir, 'nodes/say/prompt.md'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes/say/input.js'))).toBe(false);
   });
 
   it('keeps a person\'s file in a node\'s folder, whatever it is called and however deep', async () => {
@@ -187,9 +343,9 @@ describe('a project folder', () => {
 
   it('takes a file edited in another editor, with Windows line endings and a final newline', async () => {
     await writeProject(dir, sample());
-    await writeFile(join(dir, 'nodes/say/system.md'), 'Line one.\r\nLine two.\r\n');
+    await writeFile(join(dir, 'nodes/say/prompt.md'), 'Line one.\r\nLine two.\r\n');
     const read = await readProject(dir);
-    expect(read.nodes.find((node) => node.id === 'say')!.config.system_prompt).toBe('Line one.\nLine two.');
+    expect(read.nodes.find((node) => node.id === 'say')!.config.prompt).toBe('Line one.\nLine two.');
   });
 
   it('opens a deploy bundle by its graph.json, one file with everything inline, and keeps it one', async () => {
@@ -202,6 +358,20 @@ describe('a project folder', () => {
     await saveGraph(join(dir, 'graph.json'), read);
     expect(existsSync(join(dir, 'graph.json'))).toBe(true);
     expect(existsSync(join(dir, 'flow.json'))).toBe(false);
+  });
+});
+
+describe('a node\'s files, opened in the person\'s own editor', () => {
+  it('can be each text the node keeps -- and nothing else of its folder', async () => {
+    await writeProject(dir, sample());
+    expect(await nodeFileOf(dir, 'count')).toBe('count/code.js');
+    expect(await nodeFileOf(dir, 'count', 'output.js')).toBe('count/output.js');
+    // A text nobody has written yet is there as its stub, so there is something to open.
+    expect(await nodeFileOf(dir, 'say', 'input.js')).toBe('say/input.js');
+    expect(await text('nodes/say/input.js')).toMatch(/module\.exports = null;\n$/);
+    for (const file of ['node.json', '../say/prompt.md', 'example/rows.csv']) {
+      await expect(nodeFileOf(dir, 'count', file), file).rejects.toThrow(/is not one of the files of "count": it keeps input\.js, output\.js, code\.js, history\.md\./);
+    }
   });
 });
 
@@ -336,7 +506,7 @@ describe('two editors on one folder', () => {
     const graph = sample();
     await writeProject(dir, graph);
     graph.nodes[1].config.code = 'function run() { return { total: 3 }; }';
-    await touch(join(dir, 'nodes/count/code.js'), 'function run() { return { total: 3 }; }\n');
+    await touch(join(dir, 'nodes/count/code.js'), `function run() { return { total: 3 }; }\n\n${RUN_ON_ITS_OWN}\n`);
     await expect(writeProject(dir, graph)).resolves.toBeUndefined();
   });
 
@@ -344,12 +514,12 @@ describe('two editors on one folder', () => {
     await writeProject(dir, sample());
     expect(await changesOnDisk(dir)).toEqual([]);
 
-    await touch(join(dir, 'nodes/say/system.md'), 'You count carefully.\n');
-    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'say', field: 'system_prompt', value: 'You count carefully.' }]);
+    await touch(join(dir, 'nodes/say/prompt.md'), 'You count carefully.\n');
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'say', field: 'prompt', value: 'You count carefully.' }]);
     expect(await changesOnDisk(dir)).toEqual([]);
 
-    await rm(join(dir, 'nodes/count/task.md'));
-    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'code_prompt', value: '' }]);
+    await rm(join(dir, 'nodes/count/output.js'));
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'output_definition', value: '' }]);
 
     // A change taken in is no conflict for the next save.
     const graph = await readProject(dir);
@@ -400,8 +570,8 @@ describe('a graph inside a node', () => {
       {
         id: 'part', node_type: 'subgraph', label: 'The hard part', position: { x: 10, y: 10 },
         inputs: [], outputs: [],
+        description: 'Summarise a paper.',
         config: {
-          task: 'Summarise a paper.',
           subgraph: {
             metadata: { name: 'Inner' },
             nodes: [
@@ -422,7 +592,6 @@ describe('a graph inside a node', () => {
   it('is a project folder of its own, and is out of the node.json above it', async () => {
     await writeProject(dir, nested());
 
-    expect(await text('nodes/part/task.md')).toBe('Summarise a paper.\n');
     expect(JSON.parse(await text('nodes/part/flow.json')).name).toBe('Inner');
     // The inner node's body is a file down there, the same as anywhere else.
     expect(await text('nodes/part/nodes/shorten/code.js')).toContain('i.text.slice');

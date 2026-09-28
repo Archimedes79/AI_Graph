@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LINE, MUTED, PANEL, SCRIM, SUNKEN, TEXT } from './theme';
 
 interface ModalProps {
@@ -27,13 +27,16 @@ interface ModalProps {
 }
 
 /**
- * Whether Escape is this dialog's to act on: only while no other dialog is
- * open inside it. A file browser opened from a node's dialog is drawn inside
- * it, and both hear Escape on the document -- the node's dialog closed with
- * the browser, in the order the two happened to listen.
+ * Whether Escape is this dialog's to act on: only while it is the one on top
+ * -- the last dialog drawn, whether it was opened inside this one (a file
+ * browser in a node's dialog) or beside it (the file browser over the Save
+ * dialog whose path box it fills). Every dialog hears Escape on the document,
+ * and one Escape closed both, in the order the two happened to listen.
  */
-export function hearsEscape(panel: Pick<Element, 'querySelector'> | null): boolean {
-  return panel !== null && panel.querySelector('[role="dialog"]') === null;
+export function hearsEscape(panel: Element | null, page: Pick<Document, 'querySelectorAll'>): boolean {
+  if (!panel) return false;
+  const open = page.querySelectorAll('[role="dialog"]');
+  return open[open.length - 1] === panel;
 }
 
 /**
@@ -59,23 +62,34 @@ export default function Modal({
   scrollBody = true,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // What had the focus before the dialog, read as it is first drawn: a field
+  // in it may take the focus (autoFocus) before the effect below runs.
+  const [before] = useState(() => (typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null));
 
   useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    // Focus the panel itself rather than a guessed first field: it puts the
-    // screen reader inside the dialog and makes Escape work immediately,
-    // without stealing the caret from a field a caller autofocused.
-    panelRef.current?.focus();
-    return () => previouslyFocused?.focus?.();
-  }, []);
+    const panel = panelRef.current;
+    const focused = document.activeElement as HTMLElement | null;
+    // A field in it that took the focus keeps it: the panel used to take it
+    // back, and a path typed into the Save box went nowhere. Otherwise the
+    // panel itself takes it, rather than a guessed first field: that puts the
+    // screen reader inside the dialog and makes Escape work at once. Closed,
+    // the focus goes back where it came from -- to the Save box, when this
+    // was the file browser opened over it.
+    const inside = !!panel && panel.contains(focused);
+    const cameFrom = inside ? before : focused;
+    if (!inside) panel?.focus();
+    return () => cameFrom?.focus?.();
+  }, [before]);
 
   useEffect(() => {
     if (!dismissOnEscape) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && hearsEscape(panelRef.current)) {
-        event.stopPropagation();
-        onClose();
-      }
+      // One Escape, one dialog: the one on top takes it, and marks it taken
+      // for a dialog under it that hears it after this one has closed.
+      if (event.key !== 'Escape' || event.defaultPrevented || !hearsEscape(panelRef.current, document)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);

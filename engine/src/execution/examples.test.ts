@@ -1,145 +1,120 @@
 import { describe, it, expect } from 'vitest';
-import { parseExamples, runExamples, unmet } from './examples.ts';
+import { runExample, testGraph } from './examples.ts';
 import { registry } from '../elements/registry.ts';
-import { parseGraph } from '../graph.ts';
+import { parseGraph, type Graph } from '../graph.ts';
 import type { AiRequest } from '../elements/Runtime.ts';
 import { quietRuntime } from '../../test/fakes.ts';
 
-const fence = '```';
-const section = (title: string, blocks: string[]) => `## ${title}\n\n${blocks.join('\n\n')}\n`;
-const block = (info: string, body: string) => `${fence}${info}\n${body}\n${fence}`;
+const port = (id: string, kind: 'input' | 'output', extra: Record<string, unknown> = {}) =>
+  ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '', ...extra });
 
-describe('parseExamples', () => {
-  it('reads each titled section: its inputs, and what must come out or what a judge holds it to', () => {
-    const { examples, problems } = parseExamples([
-      '# Notes for people, ignored',
-      section('Counts rows', [block('json input', '{ "input": "a\\nb" }'), 'Some prose.', block('json expect', '{ "output": 2 }')]),
-      section('Sounds friendly', [block('json input', '{ "message": "hi" }'), block('judge', 'A friendly greeting.')]),
-    ].join('\n'));
-    expect(problems).toEqual([]);
-    expect(examples).toEqual([
-      { title: 'Counts rows', inputs: { input: 'a\nb' }, expect: { output: 2 } },
-      { title: 'Sounds friendly', inputs: { message: 'hi' }, judge: 'A friendly greeting.' },
-    ]);
+/** A body run in this process: `run(inputs)`, as the sandbox would run it. */
+const running = quietRuntime({ code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) } });
+
+/** One code node counting lines, with the definitions given. */
+const counter = (config: Record<string, unknown>, inputs = [port('text', 'input', { data_type: 'file_path' })]): Graph => parseGraph({
+  metadata: { name: 't' },
+  nodes: [{
+    id: 'count', node_type: 'code', label: 'Count', inputs, outputs: [port('lines', 'output')],
+    config: { code: 'function run(i) { return { lines: String(i.text ?? "").split("\\n").length }; }', ...config },
+  }],
+  edges: [],
+});
+
+const INPUT = 'module.exports = { "text": "a\\nb\\nc" };';
+
+describe('a node\'s example', () => {
+  it('is one call on its input.js, held to its output.js', async () => {
+    const run = await runExample(counter({ input_definition: INPUT, output_definition: 'module.exports = { "lines": 3 };' }), 'count', { runtime: running, registry });
+    expect(run).toEqual({ status: 'pass', details: [], outputs: { lines: 3 }, held: true });
   });
 
-  it('says what is wrong with an example it cannot use, and uses the others', () => {
-    const { examples, problems } = parseExamples([
-      section('Broken', [block('json input', '{ nope }'), block('json expect', '{}')]),
-      section('Checks nothing', [block('json input', '{ "input": 1 }')]),
-      section('A list', [block('json input', '[1]'), block('json expect', '{ "output": 1 }')]),
-      section('Fine', [block('json input', '{ "input": 1 }'), block('json expect', '{ "output": 1 }')]),
-    ].join('\n'));
-    expect(examples.map((example) => example.title)).toEqual(['Fine']);
-    expect(problems).toEqual([
-      expect.stringMatching(/"Broken": its input block is not valid JSON/),
-      '"Broken": no ```json input block.',
-      '"Checks nothing": no ```json expect or ```judge block, so nothing is checked.',
-      '"A list": its input block must be an object keyed by port, like {"input": "…"}.',
-      '"A list": no ```json input block.',
-    ]);
+  it('is handed the example as it is: a file-reading input already holds the text, and nothing is read', async () => {
+    let read = 0;
+    const runtime = { ...running, files: { ...running.files, read: async () => { read += 1; return 'x'; } } };
+    expect((await runExample(counter({ input_definition: INPUT }), 'count', { runtime, registry })).outputs).toEqual({ lines: 3 });
+    expect(read).toBe(0);
   });
 
-  it('does not start an example at a "## " inside a fenced block', () => {
-    const { examples, problems } = parseExamples([
-      section('Headline', [block('json input', '{ "input": "x" }'), block('judge', 'Starts with a markdown heading such as\n## Title')]),
-      section('Second', [block('json input', '{ "input": "y" }'), block('json expect', '{ "output": "y" }')]),
-    ].join('\n'));
-    expect(problems).toEqual([]);
-    expect(examples.map((example) => example.title)).toEqual(['Headline', 'Second']);
-    expect(examples[0].judge).toBe('Starts with a markdown heading such as\n## Title');
+  it('is one item for a node run once per item: one call, nothing fanned out, nothing collected', async () => {
+    const graph = counter({ input_definition: INPUT, output_definition: 'module.exports = { "lines": 1 };', batch_mode: 'per_item' },
+      [port('text', 'input', { multi: true })]);
+    graph.nodes[0].outputs[0].multi = true;
+    expect(await runExample(graph, 'count', { runtime: running, registry })).toMatchObject({ status: 'pass', outputs: { lines: 3 } });
+  });
+
+  it('fails where what came out does not fit output.js, saying where', async () => {
+    const run = await runExample(counter({ input_definition: INPUT, output_definition: 'module.exports = { "lines": "three", "words": 2 };' }), 'count', { runtime: running, registry });
+    expect(run.status).toBe('fail');
+    expect(run.details).toEqual(['output "words" is missing', 'output "lines" is a number; output.js says text']);
+  });
+
+  it('only has to run without an output.js', async () => {
+    expect(await runExample(counter({ input_definition: INPUT }), 'count', { runtime: running, registry }))
+      .toEqual({ status: 'pass', details: [], outputs: { lines: 3 }, held: false });
+  });
+
+  it('is held to nothing where its output.js cannot be read -- and fails, saying why, rather than "fits"', async () => {
+    const run = await runExample(counter({ input_definition: INPUT, output_definition: 'module.exports = { "lines": 3, };' }), 'count', { runtime: running, registry });
+    expect(run).toMatchObject({ status: 'fail', outputs: { lines: 3 }, held: false });
+    expect(run.details).toEqual([expect.stringMatching(/^output\.js cannot be read: its example after module\.exports is not plain JSON/)]);
+  });
+
+  it('says what to do where there is nothing to try it on, or it cannot be read', async () => {
+    expect((await runExample(counter({}), 'count', { runtime: running, registry })).details)
+      .toEqual(['It has no input.js, so there is nothing to try it on: write one with ✨ Input.']);
+    const broken = await runExample(counter({ input_definition: 'module.exports = { text: "a" };' }), 'count', { runtime: running, registry });
+    expect(broken.status).toBe('error');
+    expect(broken.details[0]).toMatch(/^Its input\.js cannot be read: its example after module.exports is not plain JSON/);
+    // A node that takes nothing in is tried on nothing.
+    expect((await runExample(counter({}, []), 'count', { runtime: running, registry })).status).toBe('pass');
+  });
+
+  it('says how the node failed', async () => {
+    const run = await runExample(counter({ input_definition: INPUT, code: 'function run() { throw new Error("no rows"); }' }), 'count', { runtime: running, registry });
+    expect(run).toMatchObject({ status: 'error', details: ['no rows'] });
+  });
+
+  it('asks the model for an ai node -- and, offline, skips it', async () => {
+    const asked: AiRequest[] = [];
+    const graph = parseGraph({
+      metadata: { name: 't' },
+      nodes: [{
+        id: 'say', node_type: 'ai', label: 'Say', description: 'Count the lines.', inputs: [port('text', 'input')], outputs: [port('count', 'output')],
+        config: { input_definition: INPUT, output_definition: 'module.exports = { "count": 3 };' },
+      }],
+      edges: [],
+    });
+    const runtime = quietRuntime({ ai: { complete: async (request) => { asked.push(request); return '{"count": 3}'; } } });
+    expect(await runExample(graph, 'say', { runtime, registry, offline: true })).toMatchObject({ status: 'skipped' });
+    expect(asked).toEqual([]);
+    expect(await runExample(graph, 'say', { runtime, registry })).toMatchObject({ status: 'pass', outputs: { count: 3 } });
+    expect(asked[0].prompt).toBe('a\nb\nc');
   });
 });
 
-describe('unmet', () => {
-  it('holds only the fields an expectation names', () => {
-    expect(unmet({ rows: [{ Country: 'India' }] }, { rows: [{ Country: 'India', Population: 1 }], extra: true })).toEqual([]);
-  });
-
-  it('names the place that differs', () => {
-    expect(unmet({ output: 2 }, { output: 3 })).toEqual(['output.output is 3; expected 2']);
-    expect(unmet({ rows: [{}, {}] }, { rows: [{}] })).toEqual(['output.rows has 1 items; expected 2']);
-    expect(unmet({ info: 'a' }, {})).toEqual(['output.info is missing']);
-    expect(unmet({ nested: { deep: true } }, { nested: 'flat' })).toEqual(['output.nested is "flat"; expected an object']);
-  });
-});
-
-describe('runExamples', () => {
-  const judged: AiRequest[] = [];
-  const runtime = (verdict = 'PASS\nFine.') => quietRuntime({
-    // The node doubles what it gets: enough to be right on one example and wrong on another.
-    code: { run: async (_body, inputs) => ({ output: Number(inputs.input) * 2 }) },
-    ai: { complete: async (request) => { judged.push(request); return verdict; } },
-  });
-  const graphWith = (type: 'code' | 'ai', examples: string, config: Record<string, unknown> = {}) => parseGraph({
-    metadata: { name: 't' },
-    nodes: [{
-      id: 'n', node_type: type, label: 'N',
-      inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any' }],
-      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any' }],
-      config: { code: 'function run() {}', system_prompt: 'Answer.', examples, ...config },
-    }],
+describe('testing a graph', () => {
+  const inner = counter({ input_definition: INPUT, output_definition: 'module.exports = { "lines": 3 };' });
+  const graph = parseGraph({
+    metadata: { name: 'outer' },
+    nodes: [
+      ...counter({ input_definition: INPUT, output_definition: 'module.exports = { "lines": 3 };' }).nodes,
+      // Not tried, and said: it has inputs, and no input.js to try it on.
+      { ...counter({}).nodes[0], id: 'plain' },
+      { id: 'part', node_type: 'subgraph', label: 'Part', inputs: [], outputs: [], config: { subgraph: inner } },
+    ],
     edges: [],
   });
-  const one = (title: string, input: number, output: number) =>
-    section(title, [block('json input', JSON.stringify({ input })), block('json expect', JSON.stringify({ output }))]);
 
-  it('passes what matches, fails what does not, and says how', async () => {
-    const results = await runExamples(graphWith('code', one('Two', 1, 2) + one('Wrong', 2, 5)), 'n', { runtime: runtime(), registry });
-    expect(results).toEqual([
-      { title: 'Two', status: 'pass', details: [], outputs: { output: 2 } },
-      { title: 'Wrong', status: 'fail', details: ['output.output is 4; expected 5'], outputs: { output: 4 } },
-    ]);
+  it('runs every node that has an example, at every depth, names the way down to it -- and says one that has none yet', async () => {
+    const { tested, results } = await testGraph(graph, { runtime: () => running, registry });
+    expect(tested).toBe(3);
+    expect(results.map(({ inside, nodeId, result }) => `${inside}${nodeId}: ${result.status}`)).toEqual(['count: pass', 'plain: skipped', 'part ▸ count: pass']);
+    expect(results[1].result.details).toEqual(['It has no input.js yet, so there is nothing to try it on: write one with ✨ Input.']);
   });
 
-  it('fails an example whose output breaks the node\'s kept output interface', async () => {
-    const graph = graphWith('code', section('Any', [block('json input', '{ "input": 1 }'), block('judge', 'Anything.')]), {
-      output_schema: { type: 'object', properties: { output: { type: 'string' } } },
-    });
-    const [result] = await runExamples(graph, 'n', { runtime: runtime(), registry });
-    expect(result.status).toBe('fail');
-    expect(result.details).toEqual(['breaks its output interface: output.output is integer; the interface says string']);
-  });
-
-  it('asks a model to judge a sentence, and fails on its FAIL', async () => {
-    judged.length = 0;
-    const examples = section('Friendly', [block('json input', '{ "input": 1 }'), block('judge', 'A number above one.')]);
-    const [passed] = await runExamples(graphWith('code', examples), 'n', { runtime: runtime(), registry });
-    expect(passed.status).toBe('pass');
-    expect(judged[0].prompt).toContain('A number above one.');
-    expect(judged[0].prompt).toContain('"output": 2');
-    const [failed] = await runExamples(graphWith('code', examples), 'n', { runtime: runtime('FAIL\nIt is not above one.'), registry });
-    expect(failed).toMatchObject({ status: 'fail', details: ['judged: It is not above one.'] });
-  });
-
-  it('says a judge that could not be asked apart from the node: it ran, and its answer stands unjudged', async () => {
-    const examples = section('Friendly', [block('json input', '{ "input": 1 }'), block('judge', 'A number above one.')]);
-    const busy = quietRuntime({
-      code: { run: async (_body, inputs) => ({ output: Number(inputs.input) * 2 }) },
-      ai: { complete: async () => { throw new Error('429 Too Many Requests'); } },
-    });
-    const [result] = await runExamples(graphWith('code', examples), 'n', { runtime: busy, registry });
-    expect(result).toEqual({
-      title: 'Friendly', status: 'error', details: ['The judge could not be asked: 429 Too Many Requests'],
-      outputs: { output: 2 }, judgeError: '429 Too Many Requests',
-    });
-  });
-
-  it('offline, skips what needs a model: an AI node, and a judged-only example', async () => {
-    const judgedOnly = section('Judged', [block('json input', '{ "input": 1 }'), block('judge', 'Anything.')]);
-    expect((await runExamples(graphWith('code', judgedOnly), 'n', { runtime: runtime(), registry, offline: true }))[0].status).toBe('skipped');
-    expect((await runExamples(graphWith('ai', one('Asks', 1, 2)), 'n', { runtime: runtime(), registry, offline: true }))[0].status).toBe('skipped');
-  });
-
-  it('reports examples it cannot read as errors, not as passes', async () => {
-    const results = await runExamples(graphWith('code', section('Broken', [block('json input', '{')])), 'n', { runtime: runtime(), registry });
-    expect(results.every((result) => result.status === 'error')).toBe(true);
-  });
-
-  it('says what it cannot read after what it ran, so the first result is the first example -- the one the dialog tries', async () => {
-    const results = await runExamples(graphWith('code', section('Broken', [block('json input', '{')]) + one('Two', 1, 2)), 'n', { runtime: runtime(), registry });
-    expect(results[0]).toMatchObject({ title: 'Two', status: 'pass' });
-    expect(results.slice(1).every((result) => result.title === 'examples.md' && result.status === 'error')).toBe(true);
-    expect(results.length).toBeGreaterThan(1);
+  it('runs only the node asked for, and says so where it has nothing to run it on', async () => {
+    const { results } = await testGraph(graph, { runtime: () => running, registry, only: 'plain' });
+    expect(results).toEqual([{ inside: '', nodeId: 'plain', result: expect.objectContaining({ status: 'error' }) }]);
   });
 });

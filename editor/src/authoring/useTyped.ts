@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
  * into an empty expectation emptied the box, and half-typed JSON was
  * re-indented under the caret. So the box shows what was typed, and takes the
  * stored text only when it changed for another reason -- ⟳ from the graph, a
- * file, Keep under Try it, ✨, a run, an edit in the project's files.
+ * file, ✨, a run, an edit in the project's files.
  *
  * *write* stores what was typed and says what the stored text will read back
  * as: that is how its echo is told apart from a change. Filling the box from

@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { fileSearch, findFiles, findProjects } from './files.ts';
 
 /**
- * What the editor's project search and its "open in my editor" get from the machine.
+ * What the editor's project search and its file chips -- a node's file,
+ * opened in the person's own editor -- get from the machine.
  *
  * Browsing is not here: it is the same picker a deployed tool serves, and it
  * is tested in `host/browse.test.ts` beside the code.
@@ -20,6 +21,14 @@ async function sandbox() {
   return dir;
 }
 
+describe('what opens a node file without VS Code', () => {
+  it('is a text editor, never the system\'s "open": on Windows that runs a .js with Windows Script Host', async () => {
+    const { textEditorFor } = await import('./files.ts');
+    expect(textEditorFor('C:\\p\\nodes\\count\\code.js', 'win32')).toEqual({ command: 'notepad.exe', args: ['C:\\p\\nodes\\count\\code.js'] });
+    expect(textEditorFor('/p/nodes/count/code.js', 'darwin')).toEqual({ command: 'open', args: ['-t', '/p/nodes/count/code.js'] });
+  });
+});
+
 describe('openExternal', () => {
   // Only the refusals are tested: the acceptance starts a program on whatever
   // machine runs the suite, and a test that opens an editor window is one
@@ -30,11 +39,12 @@ describe('openExternal', () => {
     await expect(openExternal(join(dir, 'sub'), '../b.txt')).rejects.toBeInstanceOf(NotOpenable);
   });
 
-  it('refuses anything that is not a node\'s .js or .md', async () => {
+  it('refuses anything that is not text a node keeps: nothing a system would run', async () => {
     const { openExternal, NotOpenable } = await import('./files.ts');
     const dir = await sandbox();
-    await expect(openExternal(dir, 'b.txt')).rejects.toBeInstanceOf(NotOpenable);
+    await writeFile(join(dir, 'run.bat'), 'echo hi');
     await expect(openExternal(dir, 'blob.bin')).rejects.toBeInstanceOf(NotOpenable);
+    await expect(openExternal(dir, 'run.bat')).rejects.toBeInstanceOf(NotOpenable);
   });
 
   it('says the graph must be saved when the file is not there yet', async () => {

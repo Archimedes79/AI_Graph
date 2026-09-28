@@ -10,17 +10,18 @@ import { forgetSeen, writeProject } from './folder.ts';
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
 
-function graph(overrides: { schema?: unknown; template?: string } = {}): Graph {
+/** count hands "total" to say; *output* is count's output.js, *input* say's input.js. */
+function graph(overrides: { output?: string; input?: string } = {}): Graph {
   return parseGraph({
     metadata: { name: 'Checked' },
     nodes: [
       {
-        id: 'count', node_type: 'code', label: 'Count', inputs: [], outputs: [port('total', 'output')],
-        config: { code: 'function run() { return { total: 1 }; }', ...(overrides.schema !== undefined ? { output_schema: overrides.schema } : {}) },
+        id: 'count', node_type: 'code', label: 'Count', description: 'Counts the rows.', inputs: [], outputs: [port('total', 'output')],
+        config: { code: 'function run() { return { total: 1 }; }', ...(overrides.output !== undefined ? { output_definition: overrides.output } : {}) },
       },
       {
-        id: 'say', node_type: 'ai', label: 'Say', inputs: [port('total', 'input')], outputs: [port('output', 'output')],
-        config: { system_prompt: 'Report.', prompt_template: overrides.template ?? 'There are {{total}}.' },
+        id: 'say', node_type: 'ai', label: 'Say', description: 'Says the total in a sentence.', inputs: [port('total', 'input')], outputs: [port('output', 'output')],
+        config: { prompt: 'Report the total.', ...(overrides.input !== undefined ? { input_definition: overrides.input } : {}) },
       },
       { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: {} },
     ],
@@ -42,23 +43,48 @@ afterEach(async () => {
 
 describe('what check finds in a graph', () => {
   it('finds nothing in a sound one', () => {
-    expect(problemsIn(graph({ schema: { type: 'object', properties: { total: { type: 'integer' } } } }))).toEqual([]);
+    expect(problemsIn(graph({ output: 'module.exports = { "total": 1 };', input: 'module.exports = { "total": 1 };' }))).toEqual([]);
   });
 
-  it('finds an output interface that names a port the node does not have', () => {
-    const problems = problemsIn(graph({ schema: { type: 'object', properties: { sum: { type: 'integer' } } } }));
-    expect(problems).toEqual([expect.objectContaining({
-      where: 'node "count"', problem: expect.stringMatching(/describes "sum", which is not one of its outputs/),
+  it('finds a node without a heading, and a node ✨ writes for without a text', () => {
+    const made = graph();
+    made.nodes[0].label = ' ';
+    made.nodes[1].description = '';
+    // An output node needs no text: it says nothing ✨ writes.
+    made.nodes[2].description = '';
+    expect(problemsIn(made).map((p) => [p.where, p.problem])).toEqual([
+      ['node "count"', 'It has no heading.'],
+      ['node "say"', 'Its text is empty: nothing says what it should do, and what ✨ writes for it is written from that text.'],
+    ]);
+  });
+
+  it('finds an output.js whose keys are not the outputs: one it names that is none, one it leaves out', () => {
+    expect(problemsIn(graph({ output: 'module.exports = { "sum": 1 };' })).map((p) => [p.where, p.problem])).toEqual([
+      ['node "count", output.js', 'It names "sum", which is not one of the node\'s outputs.'],
+      ['node "count", output.js', 'It does not name the output "total", so nothing says what goes out there.'],
+    ]);
+  });
+
+  it('finds an input.js naming an input the node does not have', () => {
+    expect(problemsIn(graph({ input: 'module.exports = { "totl": 1 };' }))).toEqual([expect.objectContaining({
+      where: 'node "say", input.js', problem: 'It names "totl", which is not one of the node\'s inputs.',
     })]);
   });
 
-  it('finds an output interface that is not a schema at all', () => {
-    expect(problemsIn(graph({ schema: 'not json' }))[0].problem).toMatch(/not a JSON Schema object/);
+  it('finds a definition whose example cannot be read', () => {
+    const [problem] = problemsIn(graph({ output: "module.exports = { total: 'one' };" }));
+    expect(problem.problem).toMatch(/^It cannot be read: its example after module.exports is not plain JSON/);
+    expect(problem.fix).toMatch(/✨ Output/);
   });
 
-  it('finds a message placeholder no input fills', () => {
-    const problems = problemsIn(graph({ template: 'There are {{totl}} of {{input}}.' }));
-    expect(problems).toEqual([expect.objectContaining({ problem: 'Its message template asks for {{totl}}, and it has no input "totl".' })]);
+  it('finds a code node with no code, said as a person meets it: its code.js', () => {
+    const made = graph();
+    made.nodes[0].config.code = '';
+    expect(problemsIn(made)).toEqual([{
+      where: 'node "count"',
+      problem: 'Its code.js holds no code yet: it fails the moment it runs.',
+      fix: 'Write it with ✨ Code, or write function run(inputs) { … } in code.js (config.code in a graph file), returning an object keyed by its outputs.',
+    }]);
   });
 
   it('finds two output nodes under one label, with the keys the run really uses', () => {
@@ -116,8 +142,8 @@ describe('what check finds in a setting that would silently do nothing', () => {
       { id: 'page', node_type: 'gui', inputs: [], outputs: [], config: { gui_widgets: [
         { id: 'folder', kind: 'input_picker', mode: 'directory' }, { id: 'shown', kind: 'text_io', mode: 'output' },
       ] } },
-      { id: 'each', node_type: 'ai', inputs: [{ ...port('story', 'input'), ...story }], outputs: [port('output', 'output')],
-        config: { system_prompt: 'Summarise.', prompt_template: '{{story}}', ...config } },
+      { id: 'each', node_type: 'ai', description: 'Summarises one story.', inputs: [{ ...port('story', 'input'), ...story }], outputs: [port('output', 'output')],
+        config: { prompt: 'Summarise the story.', ...config } },
     ],
     edges: [
       { id: 'a', source_node_id: 'page', source_port_id: 'folder_out', target_node_id: 'each', target_port_id: 'story' },
@@ -154,29 +180,29 @@ describe('what check finds on a gate', () => {
 });
 
 describe('what check finds on a wire', () => {
-  // count.total goes into say.total; count's interface says what came out.
+  // count.total goes into say.total; count's output.js says what comes out, by its example.
   const wired = (given: unknown, dataType: string, multi = false): Graph => {
-    const made = graph({ schema: { type: 'object', properties: { total: given } } });
+    const made = graph({ output: `module.exports = ${JSON.stringify({ total: given })};` });
     Object.assign(made.nodes[1].inputs[0], { data_type: dataType, multi });
     return made;
   };
   const said = (made: Graph) => problemsIn(made).map((p) => `${p.where}: ${p.problem}`).join(' ');
 
-  it('finds a list going into a port that takes a number', () => {
-    expect(said(wired({ type: 'object' }, 'number'))).toMatch(/edge "e1".*gives object, and the port takes number/);
+  it('finds a record going into a port that takes a number', () => {
+    expect(said(wired({ a: 1 }, 'number'))).toMatch(/edge "e1".*gives object, and the port takes number/);
   });
 
   it('judges a list by its items where the port is not itself a list', () => {
-    expect(said(wired({ type: 'array', items: { type: 'integer' } }, 'number', true))).toBe('');
-    expect(said(wired({ type: 'array', items: { type: 'string' } }, 'number', true))).toMatch(/gives string/);
-    expect(said(wired({ type: 'array', items: { type: 'integer' } }, 'list'))).toBe('');
+    expect(said(wired([1], 'number', true))).toBe('');
+    expect(said(wired(['one'], 'number', true))).toMatch(/gives string/);
+    expect(said(wired([1], 'list'))).toBe('');
   });
 
-  it('says nothing where one end has said nothing: no run yet, or a port that takes anything', () => {
+  it('says nothing where one end has said nothing: no output.js, or a port that takes anything', () => {
     expect(problemsIn(graph())).toEqual([]);
-    expect(said(wired({ type: 'object' }, 'any'))).toBe('');
-    expect(said(wired({ type: 'object' }, 'text'))).toBe('');
-    expect(said(wired({}, 'number'))).toBe('');
+    expect(said(wired({ a: 1 }, 'any'))).toBe('');
+    expect(said(wired({ a: 1 }, 'text'))).toBe('');
+    expect(said(wired(null, 'number'))).toBe('');
   });
 });
 
@@ -185,14 +211,14 @@ describe('what check finds in a project folder', () => {
     await writeProject(dir, graph());
     await mkdir(join(dir, 'nodes', 'old_step'));
     await writeFile(join(dir, 'nodes', 'old_step', 'code.js'), '');
-    await writeFile(join(dir, 'nodes', 'say', 'prompt.md'), 'Written, never sent.');
+    await writeFile(join(dir, 'nodes', 'say', 'instructions.md'), 'Written, never sent.');
 
     const { problems } = await checkPath(dir);
     expect(problems.map((p) => [p.where, p.problem])).toEqual([
       ['nodes/old_step', 'This folder belongs to no node in flow.json.'],
-      ['nodes/say/prompt.md', 'Nothing reads this file.'],
+      ['nodes/say/instructions.md', 'Nothing reads this file.'],
     ]);
-    expect(problems[1].fix).toMatch(/"system.md"/);
+    expect(problems[1].fix).toMatch(/"prompt.md"/);
   });
 
   it('is content with a folder for a node that keeps no writing yet', async () => {
@@ -210,42 +236,6 @@ describe('what check finds in a project folder', () => {
   });
 });
 
-describe('what check finds in a node\'s examples', () => {
-  const fence = '```';
-  const example = (title: string, input: unknown, expect: unknown) =>
-    `## ${title}\n${fence}json input\n${JSON.stringify(input)}\n${fence}\n${fence}json expect\n${JSON.stringify(expect)}\n${fence}\n`;
-  /** count produces "total"; say consumes it, and its examples say what it expects to be given. */
-  const withExamples = (examples: string, schema: unknown = { type: 'object', properties: { total: { type: 'integer' } } }) => {
-    const g = graph({ schema });
-    g.nodes[1].node_type = 'code';
-    g.nodes[1].config = { code: 'function run(i) { return { output: i.total }; }', examples };
-    return g;
-  };
-
-  it('is content with examples that fit the node and its neighbours', () => {
-    expect(problemsIn(withExamples(example('Seven', { total: 7 }, { output: 7 })))).toEqual([]);
-  });
-
-  it('finds ports an example names that the node does not have', () => {
-    const problems = problemsIn(withExamples(example('Typo', { totl: 7 }, { outptu: 7 })));
-    expect(problems.map((p) => p.problem)).toEqual([
-      'It gives an input "totl", which the node does not have.',
-      'It expects an output "outptu", which the node does not have.',
-    ]);
-  });
-
-  it('finds an example asking for what the node wired into that port does not give', () => {
-    const [problem] = problemsIn(withExamples(example('As text', { total: 'seven' }, { output: 'seven' })));
-    expect(problem.where).toBe('node "say", example "As text"');
-    expect(problem.problem).toBe('"count" is wired into "total", and what this example gives there does not fit its output interface: input "total" is string; the interface says integer.');
-    expect(problem.fix).toMatch(/Either this example asks for the wrong thing, or "count" has to deliver it/);
-  });
-
-  it('reports examples.md it cannot read', () => {
-    expect(problemsIn(withExamples('## Half\n```json input\n{\n```\n'))[0].where).toBe('node "say", examples.md');
-  });
-});
-
 /**
  * A graph inside a node is checked by the same function that checks the one
  * above it, so everything it can get wrong is already covered. What is here is
@@ -253,10 +243,10 @@ describe('what check finds in a node\'s examples', () => {
  * there.
  */
 describe('a graph inside a node', () => {
-  const holder = (inner: unknown, config: Record<string, unknown> = {}) => parseGraph({
+  const holder = (inner: unknown, description = '') => parseGraph({
     metadata: { name: 'Outer' },
     nodes: [
-      { id: 'part', node_type: 'subgraph', label: 'Part', inputs: [], outputs: [], config: { subgraph: inner, ...config } },
+      { id: 'part', node_type: 'subgraph', label: 'Part', description, inputs: [], outputs: [], config: { subgraph: inner } },
       { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: {} },
     ],
     edges: [],
@@ -271,7 +261,7 @@ describe('a graph inside a node', () => {
       { id: 'broken', node_type: 'code', label: 'Broken', inputs: [], outputs: [port('out', 'output')], config: { code: '' } },
       { id: 'out', node_type: 'output', label: 'Out', inputs: [port('value', 'input')], outputs: [], config: {} },
     ])));
-    expect(said(problems)).toContainEqual(expect.stringContaining('node "part" ▸ node "broken": A code node with no config.code'));
+    expect(said(problems)).toContainEqual(expect.stringContaining('node "part" ▸ node "broken": Its code.js holds no code yet'));
   });
 
   it('wants something to come out of it, in its own words', () => {
@@ -303,7 +293,7 @@ describe('a graph inside a node', () => {
   });
 
   it('calls a described but empty part out, because that is a plan and not a graph', () => {
-    const problems = problemsIn(holder(inner([]), { task: 'Summarise the paper.' }));
+    const problems = problemsIn(holder(inner([]), 'Summarise the paper.'));
     expect(said(problems)).toContainEqual(expect.stringContaining('described and empty'));
   });
 

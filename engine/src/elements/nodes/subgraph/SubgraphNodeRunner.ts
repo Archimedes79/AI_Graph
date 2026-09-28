@@ -1,25 +1,13 @@
-import { NodeRunner, type Runners, type DeployNeeds, type TextFile, type WhatRuns } from '../../NodeRunner.ts';
+import { NodeRunner, type Runners, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
 import { errorOutput, type Problem } from '../../../execution/wiring.ts';
 import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedUp } from './boundary.ts';
-import { runBody } from '../../body.ts';
-import { GRAPH_RUNS_PER_BODY, SUBGRAPH_RUN, isStandardGraphRun } from './runTemplate.ts';
 
 export interface SubgraphConfig {
   /** The graph this node holds. An empty one for a node nobody has filled in yet. */
   graph: Graph | null;
-  /** What it is meant to do, for a person and for the day an AI fills it in. */
-  task: string;
-  /** A run.js somebody changed; '' while it is the standard, which runs the graph once. */
-  runCode: string;
 }
-
-/** What this keeps in files of its own in a project folder: see `NodeRunner.texts`. */
-const SUBGRAPH_TEXTS: readonly TextFile[] = [
-  { field: 'task', file: 'task.md' },
-  { field: 'run_code', file: 'run.js', standard: SUBGRAPH_RUN },
-];
 
 /**
  * A node that holds a graph.
@@ -46,13 +34,8 @@ const SUBGRAPH_TEXTS: readonly TextFile[] = [
 export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
   readonly nodeType = 'subgraph' as const;
 
-  override texts(): readonly TextFile[] {
-    return SUBGRAPH_TEXTS;
-  }
-
   config(node: GraphNode): SubgraphConfig {
-    const runCode = String(node.config.run_code ?? '');
-    return { graph: readGraph(node.config.subgraph), task: String(node.config.task ?? ''), runCode: isStandardGraphRun(runCode) ? '' : runCode };
+    return { graph: readGraph(node.config.subgraph) };
   }
 
   /**
@@ -82,39 +65,27 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
     // where an unreadable graph is reported; a node drawn on a canvas is not.
     if (!graph) return { inputs: [], outputs: [] };
     const ports = boundaryPorts(graph, elements);
-    if (!this.catchesErrors(node)) return ports;
-    return {
-      inputs: ports.inputs,
-      outputs: [...ports.outputs, errorOutput('Set when the graph inside failed')],
-    };
+    // Run once per item, the ports say so as a code node's do: an input the
+    // node declares a list is taken an item at a time, and every output hands
+    // on the list of what the runs gave. Which inputs those are is this node's
+    // setting, not the graph inside's, so it is kept from what it declares.
+    const perItem = this.batchMode(node) === 'per_item';
+    const lists = new Set(node.inputs.filter((port) => port.multi).map((port) => port.id));
+    const inputs = ports.inputs.map((port) => (perItem && lists.has(port.id) ? { ...port, multi: true } : port));
+    const outputs = perItem ? ports.outputs.map((port) => ({ ...port, multi: true })) : ports.outputs;
+    return { inputs, outputs: this.catchesErrors(node) ? [...outputs, errorOutput('Set when the graph inside failed')] : outputs };
   }
 
   /**
-   * The standard run.js is one run of the graph, made here. A run.js somebody
-   * changed runs where bodies run, and each `node.graph(inputs)` in it is one
-   * run of the graph, made here too and handed back as its outputs.
+   * "Run once per item" runs the graph inside once for each item of a list
+   * that arrives -- one run of it is one call, as a code node's `run` is --
+   * and the executor fans out and collects, as it does for every kind that
+   * says so.
    */
-  async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
-    const { runCode } = this.config(node);
-    if (!runCode) return this.runHeld(node, inputs, runtime);
-
-    let runs = 0;
-    return runBody(runCode, inputs, runtime, {
-      calls: {
-        graph: async (given) => {
-          runs += 1;
-          if (runs > GRAPH_RUNS_PER_BODY) {
-            throw new Error(`This body has run its graph ${GRAPH_RUNS_PER_BODY} times in one run, which is as often as it may.`);
-          }
-          const values = given && typeof given === 'object' && !Array.isArray(given) ? given as Record<string, unknown> : {};
-          return this.runHeld(node, values, runtime);
-        },
-      },
-    });
-  }
+  override readonly fansOut = true;
 
   /** One run of the graph this node holds, on *inputs* keyed by its input nodes: what reached its output nodes. */
-  private async runHeld(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime): Promise<Record<string, unknown>> {
+  async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime): Promise<Record<string, unknown>> {
     const graph = this.nestedGraph(node);
     if (!graph) throw new Error('This node holds no graph that can be read.');
     if (!runtime.subgraph) throw new Error('A graph inside a node can only be run by the engine that runs graphs.');
@@ -152,24 +123,8 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
 
   // ── Build time ────────────────────────────────────────────────────────────
 
-  override whatRuns(node: GraphNode): WhatRuns {
-    if (this.config(node).runCode) {
-      return { by: 'body', where: 'run.js', does: 'Calls run(inputs, node) in run.js, sandboxed; each node.graph(inputs) in it runs the graph in this folder once and resolves to what reached its output nodes.' };
-    }
+  override whatRuns(): WhatRuns {
     return this.engineRuns('Runs the graph in its folder, whole, with what arrives standing in for its input nodes, and hands on what reaches its output nodes.');
-  }
-
-  /**
-   * A run.js somebody changed is a body, and every body may ask a model: one
-   * that mentions `llm` is taken to, by the rule `NodeRunner.deployNeeds`
-   * applies to every other body. Asked here because this node's body runs
-   * through `execute`, not `logic()`, so the base class never sees it -- and a
-   * bundle of a part that asks a model around a graph with no ai node in it
-   * said nothing about a provider, and stopped at its first question.
-   * What the graph inside needs, `bundleNeeds` follows on its own.
-   */
-  override deployNeeds(node: GraphNode): DeployNeeds {
-    return { needsInterface: false, asksAi: /\bllm\b/.test(this.config(node).runCode) };
   }
 
   /**
@@ -192,7 +147,7 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
 
     const found: Problem[] = [];
     const inside = `${where} ▸ `;
-    if (!held.nodes.length && this.config(node).task.trim()) {
+    if (!held.nodes.length && node.description.trim()) {
       found.push({
         where,
         problem: 'This part is described and empty: it says what it should do and does nothing.',
