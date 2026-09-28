@@ -10,6 +10,8 @@
 // objects with a numeric Population", which is what goes wrong between two
 // nodes; not a validator for everything the standard can express.
 
+import { ERROR_PORT } from './wiring.ts';
+
 /** A JSON Schema, as far as this module writes and reads one. */
 export interface Schema {
   type?: string | string[];
@@ -92,18 +94,20 @@ export function inferInterface(outputs: Record<string, unknown>): Schema {
 
 /**
  * What a node run once per item hands on, from what one call returns
- * (*schema*): on each output port in *collected* -- the ones declared lists --
- * the list the executor collects the calls' answers into, a list one call
- * returns flattened into it (`mergeBatchOutputs`). The other ports as they are.
+ * (*schema*), as `mergeBatchOutputs` collects it: run over a list (*fanned*),
+ * every output but the error port is the list of the calls' answers; with no
+ * input to run over, only the outputs declared lists (*lists*) are. On one of
+ * those, a list one call returns is flattened into it.
  */
-export function collectedInterface(schema: Schema, collected: Set<string>): Schema {
+export function collectedInterface(schema: Schema, lists: Set<string>, fanned: boolean): Schema {
   if (!schema.properties) return schema;
   return {
     ...schema,
-    properties: Object.fromEntries(Object.entries(schema.properties).map(([port, one]) => [
-      port,
-      !collected.has(port) || [one.type].flat().includes('array') ? one : { type: 'array', ...(one.type ? { items: one } : {}) },
-    ])),
+    properties: Object.fromEntries(Object.entries(schema.properties).map(([port, one]) => {
+      const collected = fanned ? port !== ERROR_PORT : lists.has(port);
+      const flattened = lists.has(port) && [one.type].flat().includes('array');
+      return [port, !collected || flattened ? one : { type: 'array', ...(one.type ? { items: one } : {}) }];
+    })),
   };
 }
 

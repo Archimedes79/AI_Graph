@@ -836,7 +836,7 @@ async function runNode(
     return { produced, failures: Object.assign([] as string[], { total: 1 }) };
   }
 
-  const items = batchItems(node, inputs);
+  const { items, fanned } = batchItems(node, inputs);
   const produced: Record<string, unknown>[] = new Array(items.length);
   const failed: { index: number; message: string }[] = [];
   const catches = element.catchesErrors(node);
@@ -872,7 +872,7 @@ async function runNode(
   // Every item failed: that is the node failing, with its own message, not a
   // success made of nulls.
   if (items.length && failed.length === items.length) throw new Error(failed[0].message);
-  const merged = mergeBatchOutputs(node, produced);
+  const merged = mergeBatchOutputs(node, produced, fanned);
   if (catches && failures.length) merged[ERROR_PORT] = itemFailures(failures);
   return { produced: merged, failures };
 }

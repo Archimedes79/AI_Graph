@@ -12,8 +12,12 @@
 // produce no results, and a body that has never seen an empty batch should
 // never be asked to handle one.
 //
-// **A batch of one is not a fan-out.** Its scalar outputs stay scalar, so
-// per-item and whole-list agree wherever there was nothing to fan out.
+// **No list, no fan-out.** Where no list arrived on an input declared one,
+// the node runs once on everything, and its outputs that are not declared
+// lists stay as that call returned them: per-item and whole-list agree
+// wherever there was nothing to fan out. Where one did, every output is the
+// list of what the items gave -- for one item, and for none -- so what a node
+// hands on does not change shape with how many there were.
 
 import type { GraphNode } from '../graph.ts';
 import { ERROR_PORT } from './wiring.ts';
@@ -28,18 +32,21 @@ export function runsPerItem(node: GraphNode, mode: 'whole' | 'per_item'): boolea
   return mode === 'per_item' && node.inputs.some((port) => port.multi);
 }
 
-/** One set of inputs per item, broadcasting whatever is not being fanned out. */
+/**
+ * One set of inputs per item, broadcasting whatever is not being fanned out --
+ * and whether anything was: a list arrived on an input declared one.
+ */
 export function batchItems(
   node: GraphNode,
   inputs: Record<string, unknown>,
-): Record<string, unknown>[] {
+): { items: Record<string, unknown>[]; fanned: boolean } {
   const multi = new Set(node.inputs.filter((p) => p.multi).map((p) => p.id));
   const lengths = Object.entries(inputs)
     .filter(([key, value]) => multi.has(key) && Array.isArray(value))
     .map(([, value]) => (value as unknown[]).length);
   const size = lengths.length ? Math.max(...lengths) : 1;
 
-  return Array.from({ length: size }, (_, index) => {
+  const items = Array.from({ length: size }, (_, index) => {
     const item: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(inputs)) {
       item[key] = multi.has(key) && Array.isArray(value)
@@ -48,20 +55,28 @@ export function batchItems(
     }
     return item;
   });
+  return { items, fanned: lengths.length > 0 };
 }
 
-/** Collect one result per item, flattening only the ports declared multi. */
+/**
+ * Collect one result per item, flattening only the ports declared multi. Run
+ * over a list (*fanned*), every output is a list: one of none on each but the
+ * error port, which says why once for the node, when there were no items.
+ */
 export function mergeBatchOutputs(
   node: GraphNode,
   results: Record<string, unknown>[],
+  fanned: boolean,
 ): Record<string, unknown> {
   const multi = new Set(node.outputs.filter((p) => p.multi).map((p) => p.id));
   const merged: Record<string, unknown> = {};
-  const single = results.length === 1;
+  if (fanned && !results.length) {
+    for (const port of node.outputs) if (port.id !== ERROR_PORT) merged[port.id] = [];
+  }
 
   for (const result of results) {
     for (const [key, value] of Object.entries(result ?? {})) {
-      if (single && !multi.has(key)) {
+      if (!fanned && !multi.has(key)) {
         merged[key] = value;
         continue;
       }

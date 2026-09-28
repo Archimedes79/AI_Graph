@@ -82,11 +82,19 @@ describe('holding a run to its interface', () => {
 });
 
 describe('what a node run once per item hands on', () => {
-  it('is a list on every output declared one, of what one call returns -- a list one call returns, flattened', () => {
-    const one = inferInterface({ name: 'Anna', tags: ['a'], count: 2 });
-    const handed = collectedInterface(one, new Set(['name', 'tags']));
+  const one = inferInterface({ name: 'Anna', tags: ['a'], count: 2, error: '' });
+
+  it('is, run over a list, a list on every output but the error port -- a list one call returns on a port declared one, flattened', () => {
+    const handed = collectedInterface(one, new Set(['name', 'tags']), true);
     expect(handed.properties?.name).toEqual({ type: 'array', items: { type: 'string' } });
     expect(handed.properties?.tags).toEqual({ type: 'array', items: { type: 'string' } });
+    expect(handed.properties?.count).toEqual({ type: 'array', items: { type: 'integer' } });
+    expect(handed.properties?.error).toEqual({ type: 'string' });
+  });
+
+  it('is, with no input to run over, a list only on the outputs declared one', () => {
+    const handed = collectedInterface(one, new Set(['name', 'tags']), false);
+    expect(handed.properties?.name).toEqual({ type: 'array', items: { type: 'string' } });
     expect(handed.properties?.count).toEqual({ type: 'integer' });
   });
 });
@@ -122,5 +130,32 @@ describe('a run held to its output.js', () => {
   it('holds a node run once per item to the list its calls are collected into', () => {
     const node = graphWith('module.exports = { "total": 7 };', true).nodes[0];
     expect(registry.node('code')!.outputInterface(node)?.properties?.total).toEqual({ type: 'array', items: { type: 'integer' } });
+  });
+
+  it('hands on a list, however many items there were, on an output not declared one as well', async () => {
+    // Two items made `summary` a list, one made it a text and none left it
+    // out -- and every clean run of two was told it did not fit its output.js.
+    const run = async (items: string[]) => (await executeGraph(parseGraph({
+      metadata: { name: 't' },
+      nodes: [
+        {
+          id: 'stories', node_type: 'data', config: { data_value: items, data_format: 'structure' },
+          outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any', multi: true }],
+        },
+        {
+          id: 'summarize', node_type: 'code', label: 'Summarize',
+          inputs: [{ id: 'story', name: 'Story', kind: 'input', data_type: 'any', multi: true }],
+          outputs: [{ id: 'summary', name: 'Summary', kind: 'output', data_type: 'text', multi: false }],
+          config: { code: 'x', batch_mode: 'per_item', output_definition: 'module.exports = { "summary": "what it is about" };' },
+        },
+      ],
+      edges: [{ id: 'e', source_node_id: 'stories', source_port_id: 'output', target_node_id: 'summarize', target_port_id: 'story' }],
+    }), { runtime: quietRuntime({ code: { run: async (_body, inputs) => ({ summary: `about ${String(inputs.story)}` }) } }), registry }))
+      .node_results.find((result) => result.node_id === 'summarize')!;
+    for (const [items, summary] of [[['a', 'b'], ['about a', 'about b']], [['a'], ['about a']], [[], []]]) {
+      const summarize = await run(items);
+      expect(summarize.outputs, items.join()).toEqual({ summary });
+      expect(summarize.messages, items.join()).toBeUndefined();
+    }
   });
 });
