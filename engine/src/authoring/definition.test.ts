@@ -17,6 +17,17 @@ describe('a definition\'s example', () => {
     expect(definitionExample('module.exports={"a":1}; // the end')).toEqual({ example: { a: 1 } });
   });
 
+  it('is read as require() reads the file: a comment or a string is not the end of it, nor the start', () => {
+    // A semicolon-separated CSV, and no final semicolon.
+    expect(definitionExample('module.exports = { "csv": "a;b\\n1;2" }')).toEqual({ example: { csv: 'a;b\n1;2' } });
+    // A comment after it, with semicolons of its own.
+    expect(definitionExample('module.exports = { "a": 1 }; // a; b')).toEqual({ example: { a: 1 } });
+    // A JSDoc that mentions module.exports = before the one that is code.
+    expect(definitionExample('/**\n * One example, as module.exports = { … } says it.\n */\nmodule.exports = { "a": 2 };')).toEqual({ example: { a: 2 } });
+    // A string holding it is no assignment either.
+    expect(definitionExample('const note = "module.exports = 1";\nmodule.exports = { "b": [1, { "c": "}" }] };')).toEqual({ example: { b: [1, { c: '}' }] } });
+  });
+
   it('says in a sentence what is wrong with one that is not plain JSON', () => {
     const quoted = definitionExample("module.exports = { csv: 'a,b' };");
     expect('problem' in quoted && quoted.problem).toMatch(/not plain JSON .*double-quoted keys/);

@@ -72,22 +72,69 @@ export function definitionsIn(node: Pick<GraphNode, 'config'>): Definitions {
 /** A definition's example, or the sentence that says why it cannot be read. */
 type DefinitionExample = { example: Record<string, unknown> } | { problem: string };
 
-const EXPORTS = /\bmodule\.exports\s*=/;
+/** Where the string that opens at *start* closes -- a backslash escapes what follows it. */
+function stringEnd(text: string, start: number): number {
+  for (let at = start + 1; at < text.length; at += 1) {
+    if (text[at] === '\\') at += 1;
+    else if (text[at] === text[start]) return at;
+  }
+  return text.length;
+}
 
 /**
- * The example *text* holds: the JSON after `module.exports =`, up to the
- * final `;`, parsed -- or a sentence saying why it is not one, for a person
- * or a model to fix.
+ * Where the value after the last `module.exports =` begins, read as
+ * JavaScript reads it: one in a comment -- a JSDoc that mentions it -- or in a
+ * string is none. -1 where there is none.
+ */
+function exportsAt(text: string): number {
+  let found = -1;
+  for (let at = 0; at < text.length; at += 1) {
+    const two = text.slice(at, at + 2);
+    if (two === '//') at = text.indexOf('\n', at) < 0 ? text.length : text.indexOf('\n', at);
+    else if (two === '/*') at = text.indexOf('*/', at + 2) < 0 ? text.length : text.indexOf('*/', at + 2) + 1;
+    else if (`"'\``.includes(text[at])) at = stringEnd(text, at);
+    else if (text.startsWith('module.exports', at) && !/[\w$.]/.test(text[at - 1] ?? '')) {
+      const assigned = /^module\.exports\s*=(?!=)/.exec(text.slice(at));
+      if (assigned) found = at + assigned[0].length;
+    }
+  }
+  return found;
+}
+
+/**
+ * The value that begins at *start*: an object or a list up to its closing
+ * bracket, the strings in it minded -- so a `;` in a string, or a comment
+ * after the value, is not taken for its end -- and anything else up to the
+ * `;` or the end of its line.
+ */
+function valueFrom(text: string, start: number): string {
+  const from = text.slice(start).search(/\S/);
+  if (from < 0) return '';
+  const begin = start + from;
+  if (text[begin] !== '{' && text[begin] !== '[') {
+    const end = text.slice(begin).search(/;|\n/);
+    return end < 0 ? text.slice(begin) : text.slice(begin, begin + end);
+  }
+  let depth = 0;
+  for (let at = begin; at < text.length; at += 1) {
+    if (text[at] === '"') at = stringEnd(text, at);
+    else if (text[at] === '{' || text[at] === '[') depth += 1;
+    else if ((text[at] === '}' || text[at] === ']') && (depth -= 1) === 0) return text.slice(begin, at + 1);
+  }
+  return text.slice(begin);
+}
+
+/**
+ * The example *text* holds: the JSON after its last `module.exports =` that
+ * is code -- not one a comment mentions -- as far as the value goes, parsed;
+ * or a sentence saying why it is not one, for a person or a model to fix.
  */
 export function definitionExample(text: string): DefinitionExample {
-  const found = EXPORTS.exec(text);
-  if (!found) return { problem: 'it has no "module.exports = { … };" with an example after it' };
-  const rest = text.slice(found.index + found[0].length).trim();
-  // Up to the final `;`: a comment after it is the file's, not the example's.
-  const json = rest.endsWith(';') ? rest.slice(0, -1) : rest.includes(';') ? rest.slice(0, rest.lastIndexOf(';')) : rest;
+  const at = exportsAt(text);
+  if (at < 0) return { problem: 'it has no "module.exports = { … };" with an example after it' };
   let value: unknown;
   try {
-    value = JSON.parse(json);
+    value = JSON.parse(valueFrom(text, at));
   } catch (error) {
     return {
       problem: `its example after module.exports is not plain JSON (${(error as Error).message}): `
