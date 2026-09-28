@@ -102,7 +102,8 @@ Nothing leaves the machine unless the graph itself sends it there.
   all fails the node instead of quietly passing an empty string on.
 - **A project is a folder** — `flow.json` plus one folder per node under `nodes/`: code
   and prompts live there in `.js`/`.md` files, so a language server and `git diff` both
-  work on them.
+  work on them. The page is a folder of its own beside them, `page/`, its blocks in
+  `page.json`.
 - **A page** — built like a document, on the Page tab under the tool's name and
   description: type headings in place, press `/` to
   insert a chat, a file picker, a dropdown, a chart or a table, and deploy it together
@@ -131,6 +132,23 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **Deployment** — a self-contained bundle, a Docker Compose stack, or one executable.
 - **Graph Runner CLI** — run any saved graph from the command line.
 
+## How a tool lives
+
+A tool is a project folder, and the editor is its IDE.
+
+1. **Build it.** The Graph tab is what it does: nodes and wires (`flow.json`,
+   `nodes/<id>/`). The Page tab is what whoever uses it sees: its blocks
+   (`page/page.json`), filled in with what it starts on. A node's text says what it
+   should do; ✨ writes its files, and ▶ Try runs one on its example.
+2. **Run it.** ▶ Run runs the application, as an IDE runs what it builds: with a page the
+   App tab opens with its fields as they are set, and the graph runs when the page is
+   used -- a button, a file chosen. Without one its trigger nodes start it, on their
+   clock, or it runs once, whole. ■ Stop ends it.
+3. **Hand it on.** 🚀 Deploy packs the graph, the engine that ran it and the files its page
+   starts on into a zip; `run.cmd` or `run.sh` starts it on any machine with Node.
+4. **Use it.** Opened there it starts the way ▶ Run started it here: its page waits to be
+   used, and its clock keeps time in its server, whether or not the page is open.
+
 ## The examples
 
 `examples/` holds the graphs, `examples/data/` the files they start on. Open one with
@@ -149,6 +167,7 @@ built *is* the example, and runs it.
 | [chat](examples/chat/) | A chatbot in two nodes: a chat block and a model, with a message template laying out history and message | yes |
 | [file_summarizer](examples/file_summarizer/) | Read a file and summarize it; each control on the page starts the graph where it is wired to | yes |
 | [paper_review_panel](examples/paper_review_panel/) | Several AI reviewers (scientific, adversarial, claims, references, figures) read a manuscript in parallel; a judge merges their findings into ranked advice | yes |
+| [nested_statistics](examples/nested_statistics/) | A part of the work built as its own graph: the counting lives inside one node, and the graph above it reads as a sentence | no |
 
 **Every example is held to the same three things by the test suite**
 (`engine/src/examples.test.ts`), and an example added to the folder is held to them
@@ -157,9 +176,9 @@ defaults; its page events run what they are wired to; and it can be **deployed**
 as a bundle into an empty folder and run from there, with the files it starts on carried
 along.
 
-Each is a project folder: `flow.json` for the wiring, and every node's settings, ports,
-code and prompts as files of their own under `nodes/` — open `nodes/chart/code.js` and
-it is plain JavaScript. The ones that
+Each is a project folder: `flow.json` for the wiring, the page in `page/page.json`, and
+every node's settings, ports, code and prompts as files of their own under `nodes/` — open
+`nodes/chart/code.js` and it is plain JavaScript. The ones that
 need a model call the one you choose in **⚙ Settings → AI** (or in `ai-settings.json`,
 see [docs/ai-providers.md](docs/ai-providers.md)) — Google's free
 `gemini-flash-lite-latest` with a key, or a local LM Studio or Ollama.

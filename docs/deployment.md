@@ -66,7 +66,8 @@ application), opens the graph you are
 editing as the delivered page, in a window of its own — same entry point (`runtime.html`),
 same routes, no editor around it. It answers "what have I actually built" without packing
 a zip first. It is not a deployment: nothing is written, and the window is served by the
-editor you are sitting in. (The App tab shows the same page attached to the document,
+editor you are sitting in -- which keeps no time for it, so a trigger node's clock ticks in
+that window while it is open, as it would in a bundle's server. (The App tab shows the same page attached to the document,
 so a run there still lights up the graph canvas.)
 
 From the toolbar, **🚀 Deploy** gives you a zip holding the vendored

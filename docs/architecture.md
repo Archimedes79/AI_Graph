@@ -269,6 +269,7 @@ engine/src                               editor/src
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
     executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
     triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
+    clock.ts         when a trigger is due
     batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
     runtimeValues.ts  images.ts              DesignerTab …       Page tab, the running app, layout, schemes
     reuse.ts  interface.ts  examples.ts
@@ -356,9 +357,14 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   it -- `page/ApplicationView.tsx`, the delivered page attached to the document -- and the
   graph runs when the page is used; without one, what starts the graph starts it
   (`startEvents`: the trigger nodes set to fire at start, or, with no trigger node and
-  nothing on a page to start it, the whole graph once), and each clock keeps its time. It
-  is ■ Stop while it runs, and ends by itself where nothing is left to happen. A delivered
-  tool starts the same way when it is opened, and has no ▶ Run of its own. Below 1280 pixels its buttons and the
+  nothing on a page to start it, the whole graph once), and each clock keeps its time --
+  the one clock the served tool keeps too (`execution/clock.ts`), so a round comes due in
+  the editor when it would there, and asks nobody anything. It is the document that runs:
+  it is ended by another document opened (`graphStore.opened`), not by a step into a
+  node's graph, and a round waits while the canvas shows one. It is ■ Stop while it runs,
+  and ends by itself where nothing is left to happen. A delivered tool starts the same way
+  when it is opened, and has no ▶ Run of its own; one whose server keeps no time for it --
+  ⧉ Open as a tool -- keeps its clock in its own window. Below 1280 pixels its buttons and the
   palette are their icons, and at 1024 nothing scrolls the page sideways. What Generate
   says stands whole in a line under it until dismissed; what it says of saving and
   opening is kept with the document it was said of, and goes when another is opened.

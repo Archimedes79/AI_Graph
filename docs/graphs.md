@@ -74,14 +74,18 @@ editor, a deployed page, the command line.
 **An event is a boolean that is true for one round.** A trigger's port, a button's port:
 `true` in the round that event started, `false` in every round something else started.
 
-A trigger's time is kept by whatever runs the graph, not by a browser tab. A deployed tool's
-**server** holds the clock (`engine/src/host/schedule.ts`): it runs with nobody watching,
-keeps the last result, and a page opened later shows that result and when the next run is
-due. Several triggers keep their own time; rounds never overlap. On the command line the
-shortest interval applies without a flag, a round is the whole graph, and `--every`
-overrides it. In the editor ▶ Run runs the application: a trigger set to fire at start
-fires then, and a clock keeps its time until ■ Stop. A clock inside a [subgraph](#subgraph-nodes) never ticks,
-and `check` says so: only the outermost graph is held by something that keeps time.
+A trigger's time is kept by whatever runs the graph, with one clock
+(`engine/src/execution/clock.ts`): a trigger set to fire at start fires first, each one
+with an interval then keeps its own time, rounds never overlap, and a trigger is looked up
+again each time it is due -- deleted since, it fires no more. A deployed tool's **server**
+holds that clock (`engine/src/host/schedule.ts`): it runs with nobody watching, keeps the
+last result, and a page opened later shows that result and when the next run is due. In
+the editor ▶ Run holds it, until ■ Stop; so does a tool opened with ⧉ Open as a tool, in
+its own window, while that is open -- no server keeps its time. A round a trigger starts
+asks nobody anything, as nobody is there when a served tool's clock strikes. On the command
+line the shortest interval applies without a flag, a round is the whole graph, and
+`--every` overrides it. A clock inside a [subgraph](#subgraph-nodes) never ticks, and
+`check` says so: only the outermost graph is held by something that keeps time.
 
 **▶ Run runs the application**, as an IDE runs the program it builds — one button, in the
 header, the same on every tab. With a page, the page opens (the **App** tab, there while it
@@ -89,10 +93,16 @@ runs) with its fields as they are set, and the graph runs when the page is used:
 pressed, a file picked, a box ticked *Using this starts the graph*. Without a page, what
 starts the graph starts it: its trigger nodes as they are set — or, with none, the whole
 graph once, as a program runs when it is started. While it runs the button is **■ Stop**,
-which ends it; a graph that only computes ends by itself. Anything a round still needs — a
-file nobody chose, a place to write — is asked for first. A delivered tool starts the same
-way when it is opened, and has no ▶ Run of its own: its page is how it is run, so a page
-that takes something in needs something on it that starts the graph, and `check` says so.
+which ends it; a graph that only computes ends by itself, and opening another graph ends it
+too. It is the document that runs: pressed inside a node's graph, ▶ Run takes the canvas up
+to the top first, and a round due while the canvas shows a node's graph waits until it is
+back there. The App tab opens empty, as a delivered tool does -- not on what the last run
+showed -- and says why a round failed. Anything a round started from the page, or the one
+run at start, still needs — a file nobody chose, a place to write — is asked for first; so
+is a round started by a block on the Page tab, whose blocks are live. A delivered tool
+starts the same way when it is opened, and has no ▶ Run of its own: its page is how it is
+run, so a page that takes something in needs something on it that starts the graph -- a
+block, or a trigger node's clock -- and `check` says so.
 
 After a run every node's card shows what it made, named by its port where it has several:
 a line of text or a number, *214 rows* and the first row for a list of records, a small line
