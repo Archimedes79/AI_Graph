@@ -321,8 +321,12 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   each with its dot. The card that is selected wears the accent, and so do its wires
   (`canvas/wireLook.ts`); the others are soft grey.
 - **Selecting a node opens its panel** docked on the right (`ui/SidePanel.tsx`), in place of
-  the modal dialog it was: `NodeEditor` as it was -- the element's own `Panel`, the ports,
-  Advanced -- with the same write-through and undo steps (`nodePanel.ts`). One click opens
+  the modal dialog it was (`canvas/NodeEditor.tsx`): at its top the node's kind and id, as on
+  its card (`canvas/NodeKind.tsx`), and its heading below them (`authoring/HeadingField.tsx`,
+  never empty); then the element's own `Panel` -- for a code, AI or data node
+  `authoring/NodeDefinition.tsx`: its text, a row per ✨, ▶ Try and history.md -- and
+  Advanced folded under it, with the ports of a node that `definesItself`; what is changed
+  is written through, a step of undo at a time (`canvas/nodePanel.ts`). One click opens
   it, another node shows that one, and ✕, Escape or a click on the empty canvas close it,
   as `graphStore.clearSelection` does; a node's panel opening beside it is kept in view. The
   page's panel is the way to the Page tab, where the page is built. The node the person is
@@ -333,13 +337,15 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   panel in the store (`pendingChange`, `askChange`, `clearChange`); the panel takes them up.
   On the whole graph -- and on a node whose settings are all it is, as a change of that
   node -- ✨ AI Graph is sent the graph (`generateGraph` with `graph`) and asked to change
-  it, keeping its ids; what comes back is shown with what it adds, removes and changes
-  (`app/graphChange.ts`) and what `check` finds in it, and applied as one undo step of the
-  same document (`graphStore.changeGraph`).
-- **The header** (`app/Toolbar.tsx`) holds the views and what is done to the graph as a
-  whole; the file actions and ✨ AI Graph, which designs a new graph, are its File menu
-  (`app/FileMenu.tsx`). At 1024 pixels its buttons and the palette are their icons, and
-  nothing scrolls the page sideways.
+  it, keeping its ids; each node's history comes back from the graph that was sent, and a
+  node the change touched gets the exchange at the end of it. What comes back is shown with
+  what it adds, removes and changes (`app/graphChange.ts`) and what `check` finds in it,
+  and applied as one undo step of the same document (`graphStore.changeGraph`).
+- **The header** (`app/Toolbar.tsx`) holds the app's name, the graph's name, the views
+  (`app/ViewTabs.tsx`) and what is done to the graph as a whole: Undo and Redo as icons,
+  ▶ Run, Generate, Settings, Deploy; the file actions and ✨ AI Graph, which designs a new
+  graph, are its File menu (`app/FileMenu.tsx`). Below 1280 pixels its buttons and the
+  palette are their icons, and at 1024 nothing scrolls the page sideways.
 
 ## Five rules
 
@@ -620,7 +626,8 @@ or a page that has them can do the same.
 
 ## Security boundaries
 
-- Everything binds to loopback; file browsing and "open in my editor" switch off otherwise.
+- Everything binds to loopback; file browsing and a file chip's opening of a node's file in
+  the person's own editor switch off otherwise.
 - The server answers its own page, not every page in the browser: on loopback a request must
   name 127.0.0.1, localhost or [::1] with the server's port (no DNS rebinding); an API call
   that says where it comes from must come from the server's own origin, one the browser

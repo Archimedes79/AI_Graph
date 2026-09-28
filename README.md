@@ -121,8 +121,8 @@ Nothing leaves the machine unless the graph itself sends it there.
   Give ✨ Input real files to write from — from the graph (⟳), a file (📂), or drop one
   on the node; press ▶ Try and see what comes out for input.js's example, held to
   output.js. Then say what to change in one line — ✨ changes the body and the node's
-  text together — or press ✨ Fix where it failed. There is no Save in the dialog: a
-  change is in the graph at once, and Undo takes it back.
+  text together — or press ✨ Fix where it failed. There is no Save in a node's panel:
+  a change is in the graph at once, and Undo takes it back.
 - **An MCP server** — `--mcp` lets Claude Code or Claude Desktop generate, validate, save
   and run graphs, confined to one folder.
 - **Deployment** — a self-contained bundle, a Docker Compose stack, or one executable.

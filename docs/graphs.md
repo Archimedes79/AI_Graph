@@ -227,9 +227,9 @@ module.exports = {
 **The node's panel** is the order the work is done in, the same for both kinds:
 
 ```
+CODE  code                  its kind and its id, atop the panel as on its card
 Code 1                      its heading -- never empty: a new node is its kind and a number,
                             and while nobody changed that, it is written from the text
-CODE  code                  its kind and its id
 What should it do?          a sentence or two, in your words
 ✨ Input                    the prompt it is written with; input.js ↗ and its content, in a
                             box; the files it is written from -- examples, a spec:
@@ -766,6 +766,7 @@ standalone (e.g. from a script or CI) without touching the editor at all, or:
   says *on: the whole graph*: say what to change and press Enter, and the changed graph
   comes back with what it adds, removes and changes and anything `check` finds in it --
   **Apply** takes it as one undo step, **Discard** leaves the graph as it was. With a node
-  selected it says *on: <its heading>*: a code or AI node's panel changes its body as said;
-  for a node that is its settings -- an input's text, an output's file, the page's blocks --
-  the graph is changed, about that node. Its **on:** button goes back to the whole graph.
+  selected it says *on: <its heading>*: a code, AI or data node's panel changes its body --
+  its code, its prompt.md, what it holds -- as said, and restates its text; for a node that
+  is its settings -- an input's text, an output's file, the page's blocks -- the graph is
+  changed, about that node. Its **on:** button goes back to the whole graph.
