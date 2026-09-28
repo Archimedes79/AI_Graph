@@ -214,7 +214,7 @@ describe('a project folder', () => {
     expect(await run()).toEqual({ total: 2 });
   }, 30_000);
 
-  it('runs code.js on its own on the example ▶ Try runs on: input.js read by the same rule, or refused with its reason', async () => {
+  it('runs code.js on its own on the example ▶ Try runs on -- for plain JSON the same example -- or says it has none yet', async () => {
     const graph = sample();
     Object.assign(graph.nodes[1].config, { code: 'function run(inputs) {\n  return inputs;\n}' });
     await writeProject(dir, graph);
@@ -230,16 +230,15 @@ describe('a project folder', () => {
     for (const definition of [
       '/**\n * @typedef {Object} Input\n * @property {string[]} files  the files (module.exports = their names)\n */\nmodule.exports = { "files": ["a;b.csv"] }',
       'const note = "module.exports = 1";\nmodule.exports = { "files": [{ "name": "}" }] }; // one; or two',
-      "module.exports = { files: ['a.csv'] };",
-      'module.exports = ["a.csv"];',
-      '/** @typedef {Object} Input */',
     ]) {
       const read = definitionExample(definition);
-      const ran = await run(definition);
-      if ('example' in read) expect(ran).toEqual({ example: read.example });
-      else expect(ran.failed).toContain(`input.js cannot be read: ${read.problem.split(' (')[0]}`);
+      expect(await run(definition)).toEqual({ example: 'example' in read ? read.example : 'unread' });
     }
-    expect((await run('module.exports = null;')).failed).toContain('input.js has no example yet: write it with ✨ Input.');
+    // Run, not parsed: what Node takes is taken -- check names what is not plain JSON.
+    expect(await run("module.exports = { files: ['a.csv'] };")).toEqual({ example: { files: ['a.csv'] } });
+    for (const none of ['module.exports = null;', 'module.exports = ["a.csv"];', '/** @typedef {Object} Input */']) {
+      expect((await run(none)).failed).toContain('input.js has no example yet');
+    }
   }, 60_000);
 
   it('keeps what a data node holds as JSON where it holds structure, as text otherwise', async () => {
@@ -251,7 +250,8 @@ describe('a project folder', () => {
       nodes: [
         data('count', { data_format: 'structure', data_value: { count: 2, names: ['Ada'] } }),
         data('note', { data_format: 'text', data_value: 'Line one.\nLine two.' }),
-        // A run left a record in a node kept as text: it is written as its JSON, and reads back as that text.
+        // A record set in a node kept as text, by hand or by a model: written as its JSON, it reads
+        // back as that text -- which is why check names such a node (DataNodeRunner.problems).
         data('left', { data_format: 'text', data_value: { count: 3 } }),
       ],
       edges: [],

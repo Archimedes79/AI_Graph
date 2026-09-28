@@ -128,10 +128,8 @@ function valueFrom(text: string, start: number): string {
  * The example *text* holds: the JSON after its last `module.exports =` that
  * is code -- not one a comment mentions -- as far as the value goes, parsed;
  * or a sentence saying why it is not one, for a person or a model to fix.
- *
- * code.js's footer reads input.js with the same lines (`RUN_ON_ITS_OWN`), so
- * that `node code.js` runs on the example ▶ Try runs on: a change here is a
- * change there, and folder.test.ts holds the two to each other.
+ * Read, never run: `node code.js` runs input.js instead (`RUN_ON_ITS_OWN`),
+ * and for plain JSON the two come to the same example.
  */
 export function definitionExample(text: string): DefinitionExample {
   const at = exportsAt(text);

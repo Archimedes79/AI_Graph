@@ -144,7 +144,7 @@ Shared by elements, not drawn: [`authoring/generation.ts`](../engine/src/authori
 [`authoring/logic.ts`](../engine/src/authoring/logic.ts),
 [`authoring/definition.ts`](../engine/src/authoring/definition.ts) (input.js and output.js: a
 typedef, then one example as plain JSON, read without running anything -- code.js's lines
-that run it on its own read input.js by the same rule -- and `textOutput`: one output that
+that run it on its own run input.js apart, in `node:vm` -- and `textOutput`: one output that
 holds text is an ai node's answer as it came),
 [`authoring/prompts.ts`](../engine/src/authoring/prompts.ts) (the standard prompts and their
 variables), [`authoring/history.ts`](../engine/src/authoring/history.ts) (history.md) and
