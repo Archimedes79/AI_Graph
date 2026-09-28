@@ -10,6 +10,8 @@ import ReactFlow, {
   EdgeChange,
   BackgroundVariant,
   ReactFlowInstance,
+  getNodesBounds,
+  getViewportForBounds,
   useStore,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -18,7 +20,7 @@ import { useGraphStore } from '@/store/graphStore';
 import GraphNodeView from './GraphNodeView';
 import { deleteKeys, removalsToApply } from './nodeRemoval';
 import { drawnWire } from './wireLook';
-import { panToShow } from './inView';
+import { panToShow, viewDue, type ViewDue } from './inView';
 import { showsPage } from '@/document/guiWidgets';
 import type { NodeType } from '@/graph';
 import { LINE, PANEL, SUNKEN, SURFACE } from '@/ui/theme';
@@ -42,7 +44,6 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
   const rfEdges = useGraphStore((s) => s.rfEdges);
   const setRFNodes = useGraphStore((s) => s.setRFNodes);
   const setRFEdges = useGraphStore((s) => s.setRFEdges);
-  const addNode = useGraphStore((s) => s.addNode);
   const connect = useGraphStore((s) => s.connect);
   const commit = useGraphStore((s) => s.commit);
   const setEditingNode = useGraphStore((s) => s.setEditingNode);
@@ -61,47 +62,46 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
   // Whether a key pressed now is pressed on the canvas (`deleteKeys`).
   const [focused, setFocused] = React.useState(false);
 
-  // A node added by clicking the palette goes to the right of the others,
-  // which on a wide graph is off the screen: it was there, and looked as if
-  // nothing had happened. When one node appears outside the view, the view
-  // widens to show it -- only then, so a view someone set is left alone.
-  const seen = useRef(rfNodes.length);
-  React.useEffect(() => {
-    const before = seen.current;
-    seen.current = rfNodes.length;
-    if (!rfInstance || !reactFlowWrapper.current || rfNodes.length !== before + 1) return;
-    const added = rfNodes[rfNodes.length - 1];
-    const { x, y, zoom } = rfInstance.getViewport();
-    const bounds = reactFlowWrapper.current.getBoundingClientRect();
-    const left = added.position.x * zoom + x;
-    const top = added.position.y * zoom + y;
-    const width = (added.width ?? 240) * zoom;
-    const height = (added.height ?? 120) * zoom;
-    if (left >= 0 && top >= 0 && left + width <= bounds.width && top + height <= bounds.height) return;
-    // After it is drawn: a node not yet measured is left out of the fit. Not
-    // cancelled when the nodes change again -- measuring it is such a change.
-    window.setTimeout(() => rfInstance.fitView({ padding: 0.2, duration: 300, maxZoom: 1 }), 80);
-  }, [rfNodes, rfInstance]);
-
-  // A node whose panel opens stays in view: the canvas narrows under it as the
-  // panel comes in, so it is looked at once the canvas has its new width.
+  // What the view owes (`viewDue`): another graph fitted whole; a node added,
+  // or one whose panel opens, brought into sight by as little as that takes.
+  // Paid once the canvas is on screen and what it is about is measured, at the
+  // canvas's own size as it is then: a fit on a timer ran before the node was
+  // measured, and did nothing -- a palette node stayed out of sight, and New
+  // kept the last graph's view.
+  const documentOpen = useGraphStore((s) => s.document);
   const openId = useGraphStore((s) => s.editingNodeId);
+  const minZoom = useStore((s) => s.minZoom);
+  const due = useRef<ViewDue>({ document: documentOpen, count: rfNodes.length, open: openId, fit: false, show: null });
   React.useEffect(() => {
-    if (!openId || !rfInstance) return undefined;
-    const timer = window.setTimeout(() => {
-      const node = rfInstance.getNode(openId);
-      const wrapper = reactFlowWrapper.current;
-      if (!node || !wrapper) return;
-      const { x, y, zoom } = rfInstance.getViewport();
-      const at = node.positionAbsolute ?? node.position;
-      const { dx, dy } = panToShow(
-        { x: at.x * zoom + x, y: at.y * zoom + y, width: (node.width ?? 240) * zoom, height: (node.height ?? 120) * zoom },
-        { x: 0, y: 0, width: wrapper.clientWidth, height: wrapper.clientHeight },
-      );
-      if (dx || dy) rfInstance.setViewport({ x: x + dx, y: y + dy, zoom }, { duration: 250 });
-    }, 60);
-    return () => window.clearTimeout(timer);
-  }, [openId, rfInstance]);
+    due.current = viewDue(due.current, { document: documentOpen, ids: rfNodes.map((node) => node.id), open: openId });
+    const owed = due.current;
+    const wrapper = reactFlowWrapper.current;
+    if (!rfInstance || !wrapper || !active || !wrapper.clientWidth || !wrapper.clientHeight) return;
+    const measured = (node: { width?: number | null; height?: number | null }) => !!node.width && !!node.height;
+    if (owed.fit) {
+      const nodes = rfInstance.getNodes();
+      if (!nodes.every(measured)) return;
+      // An empty graph starts where the first node goes (`besideTheRest`) is in sight.
+      rfInstance.setViewport(nodes.length
+        ? getViewportForBounds(getNodesBounds(nodes), wrapper.clientWidth, wrapper.clientHeight, minZoom, 1, 0.25)
+        : { x: 0, y: 0, zoom: 1 });
+      owed.fit = false;
+      owed.show = null;
+      return;
+    }
+    if (!owed.show) return;
+    const node = rfInstance.getNode(owed.show);
+    if (node && !measured(node)) return;
+    owed.show = null;
+    if (!node) return;
+    const { x, y, zoom } = rfInstance.getViewport();
+    const at = node.positionAbsolute ?? node.position;
+    const { dx, dy } = panToShow(
+      { x: at.x * zoom + x, y: at.y * zoom + y, width: node.width! * zoom, height: node.height! * zoom },
+      { x: 0, y: 0, width: wrapper.clientWidth, height: wrapper.clientHeight },
+    );
+    if (dx || dy) rfInstance.setViewport({ x: x + dx, y: y + dy, zoom }, { duration: 250 });
+  }, [rfNodes, rfInstance, active, documentOpen, openId, minZoom]);
   // The map of the whole graph, only where the canvas has room for it beside
   // what it maps: beside a node's panel at 1024 it covered a third of it.
   const roomy = useStore((s) => s.width >= 640);
@@ -130,9 +130,11 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
         y: event.clientY - bounds.top,
       });
 
-      addNode(nodeType, position);
+      // With its panel open, as a palette click adds one: the next click was always on it.
+      const store = useGraphStore.getState();
+      store.setEditingNode(store.addNode(nodeType, position));
     },
-    [rfInstance, addNode]
+    [rfInstance]
   );
 
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {

@@ -50,7 +50,9 @@ the file says, parsed when it is JSON).
 first line of what it should do, and after a run how it went; its ports are dots on its
 edges, named while the pointer is on the card. One click opens the node's panel on the
 right, with everything the node is; ✕, Esc or a click on the empty canvas close it, and a
-click on another node shows that one. The page's card opens the Page tab on a double click,
+click on another node shows that one. A node added from the palette -- clicked or dragged
+-- opens its panel at once and is brought into sight; a graph opened or started anew is
+shown whole. The page's card opens the Page tab on a double click,
 or from its panel. The bar under the canvas says what to change, on the node selected or
 on the whole graph ([below](#generating-whole-graphs-with-ai)).
 

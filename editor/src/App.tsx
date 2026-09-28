@@ -202,9 +202,14 @@ export default function App() {
     };
   }, [handleGraphFileDrop, handleProjectFolderDrop]);
 
-  // Add a node from a palette click: beside what is already there.
+  // Add a node from a palette click: beside what is already there, with its
+  // panel open -- the next click was always on it. The canvas brings it into
+  // sight (`viewDue`).
   const handleAddNode = useCallback(
-    (nodeType: NodeType) => { addNode(nodeType, besideTheRest(useGraphStore.getState().rfNodes)); },
+    (nodeType: NodeType) => {
+      const { rfNodes, setEditingNode } = useGraphStore.getState();
+      setEditingNode(addNode(nodeType, besideTheRest(rfNodes)));
+    },
     [addNode]
   );
 
