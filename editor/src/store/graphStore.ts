@@ -16,6 +16,7 @@ import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
+import { withoutAuthoring } from '@engine/authoring/handedOn.ts';
 import { freeId } from '@/document/ids';
 import { graphEdge } from '@/document/wires';
 import { wireOf } from '@engine/project/flow.ts';
@@ -925,7 +926,10 @@ export const useGraphStore = create<GraphStore>()(
         // blocking request: that is what lets the toolbar name the node in
         // flight and offer Stop. A run against a slow local model is otherwise
         // ten minutes of a spinner with no way out but reloading the page.
-        const { run_id: runId, total } = await call('startRun', trigger ? { ...graph, trigger } : graph);
+        // Posted as what runs (`withoutAuthoring`): a node's history is up to
+        // half a megabyte, and a run reads none of it.
+        const sent = withoutAuthoring(graph);
+        const { run_id: runId, total } = await call('startRun', trigger ? { ...sent, trigger } : sent);
         set((state) => {
           state.currentRunId = runId;
           state.runProgress = {

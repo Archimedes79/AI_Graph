@@ -71,7 +71,9 @@ it is generated: the engine is a verbatim copy of the one the graph was built an
 on, so a bundle runs what was tested rather than a second implementation of it. The graph
 carries what runs, and not how each node was written: its history.md, the ✨ prompts it
 changed and the files ✨ was given stay with the project -- a history holds every prompt and
-reply, and the start of those files -- and a served tool's page is not handed them either.
+reply, and the start of those files -- and a served tool's page is not handed them either,
+nor is a run the editor posts, an answer over MCP, or the model asked to change the graph
+(`withoutAuthoring`, one helper for all of them).
 
 ```bash
 ./run.sh          # or run.cmd on Windows

@@ -5,12 +5,13 @@ import { syncGuiNodePorts } from '@/document/guiWidgets';
 // The server, as far as a run goes: each run waits until the test ends it, so
 // the test can do what a person does meanwhile.
 const runs: { finish: (result: ExecutionResult) => void }[] = [];
-const started = vi.hoisted(() => ({ count: 0 }));
+const started = vi.hoisted(() => ({ count: 0, sent: undefined as unknown }));
 vi.mock('@/api/client', async (actual) => ({
   ...(await actual<typeof import('@/api/client')>()),
-  call: vi.fn(async (route: string) => {
+  call: vi.fn(async (route: string, body?: unknown) => {
     if (route === 'startRun') {
       started.count += 1;
+      started.sent = body;
       return { run_id: `r${started.count}`, total: 1 };
     }
     if (route === 'run') {
@@ -34,6 +35,21 @@ beforeEach(() => {
   runs.length = 0;
   started.count = 0;
   store().newGraph();
+});
+
+describe('what a run is sent', () => {
+  it('is what runs: a node\'s history, up to half a megabyte, stays in the editor', async () => {
+    store().addNode('code', { x: 0, y: 0 });
+    const graph = store().exportGraph();
+    (graph.nodes[0].config as Record<string, unknown>).history = '## 2026-09-28 09:00 · ✨ Code\n\nNothing was sent.';
+    const running = store().runGraph(graph);
+    await polled();
+    runs[0].finish({ status: 'success', outputs: {}, node_results: [] });
+    await running;
+    const sent = started.sent as { nodes: { config: Record<string, unknown> }[] };
+    expect(sent.nodes[0].config).not.toHaveProperty('history');
+    expect(sent.nodes[0].config.batch_mode).toBe('per_item');
+  });
 });
 
 describe('a run that ends after another graph was opened', () => {
