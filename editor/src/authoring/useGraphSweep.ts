@@ -17,7 +17,7 @@ import {
 import { inputFilesOf } from './exampleFile';
 import { missingExamples, sweep, type SweepUnit } from './graphSweep';
 
-export interface SweepState {
+interface SweepState {
   run: () => Promise<void>;
   stop: () => void;
   busy: boolean;

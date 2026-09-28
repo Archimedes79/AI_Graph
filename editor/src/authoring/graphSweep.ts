@@ -24,7 +24,7 @@ import type { GraphEdge, GraphNode } from '@/graph';
 import { NODE_BUILDERS } from '@/elements/registry';
 
 /** What happened to one node. */
-export type SweepStatus =
+type SweepStatus =
   /** Written. */
   | 'generated'
   /** Nothing to generate here — an output node, a page, a node already written. */
@@ -50,7 +50,7 @@ export interface SweepUnit {
   write: () => Promise<void>;
 }
 
-export interface SweepDeps {
+interface SweepDeps {
   /** The unit for this node, or undefined when it has nothing to write. */
   unitFor: (node: GraphNode) => SweepUnit | undefined;
   /** Asked before each node, so a long sweep can be stopped from the toolbar. */

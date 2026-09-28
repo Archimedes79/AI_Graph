@@ -29,7 +29,7 @@ interface PlotPoint {
 }
 
 /** The four shapes the app draws itself. Anything else arrives as SVG, written by a node upstream. */
-export type PlotKind = 'bars' | 'columns' | 'line' | 'donut';
+type PlotKind = 'bars' | 'columns' | 'line' | 'donut';
 
 /**
  * What arrived at a chart, once it is understood.

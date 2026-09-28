@@ -54,7 +54,7 @@ export function uriPath(uri: string): string {
 }
 
 /** How a dropped file is looked for (`findFile`): the files found, and where it looked, in words. */
-export type FindFile = (name: string, size: number) => Promise<{ paths: string[]; searched: string }>;
+type FindFile = (name: string, size: number) => Promise<{ paths: string[]; searched: string }>;
 
 /** The files of *name* and *size* under the folder the engine runs in. */
 const findFile: FindFile = (name, size) => call('findFile', { name, size: String(size) });

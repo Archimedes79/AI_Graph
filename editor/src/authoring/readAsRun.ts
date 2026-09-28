@@ -88,7 +88,7 @@ export async function fileValue(
  * inside it, with forward slashes, so the graph opens the same on another
  * machine and in another checkout. Anywhere else it stays as it is.
  */
-export function relativeTo(home: string, path: string): string {
+function relativeTo(home: string, path: string): string {
   const slashed = (text: string) => text.replace(/\\/g, '/');
   const root = slashed(home).replace(/\/+$/, '');
   const full = slashed(path);

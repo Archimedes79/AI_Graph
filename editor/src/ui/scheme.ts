@@ -25,7 +25,7 @@
 
 export type SchemeId = 'night' | 'paper' | 'office' | 'graphite' | 'anthracite';
 
-export interface Scheme {
+interface Scheme {
   id: SchemeId;
   label: string;
   /** A light scheme. A few affordances need to know which way is up. */
