@@ -33,6 +33,24 @@ export function runsPerItem(node: GraphNode, mode: 'whole' | 'per_item'): boolea
 }
 
 /**
+ * *work* for every index below *count*, in order, no more than *limit* at a
+ * time: how far a fan-out goes at once, for its items and for the files they
+ * are handed. None starts once *signal* has ended the run.
+ */
+export async function atMost(
+  count: number,
+  limit: number,
+  work: (index: number) => Promise<void>,
+  signal?: AbortSignal,
+): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (let index = next++; index < count && !signal?.aborted; index = next++) await work(index);
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, count)) }, worker));
+}
+
+/**
  * One set of inputs per item, broadcasting whatever is not being fanned out --
  * and whether anything was: a list arrived on an input declared one.
  */

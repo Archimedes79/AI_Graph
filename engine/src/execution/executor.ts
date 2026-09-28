@@ -24,8 +24,8 @@
 import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeResult } from '../graph.ts';
 import { resultKeys, type NodeRunner, type Runners } from '../elements/NodeRunner.ts';
 import type { Runtime } from '../elements/Runtime.ts';
-import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
-import { filePorts, readPorts } from './fileInputs.ts';
+import { atMost, batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
+import { Unread, filePorts, readPorts } from './fileInputs.ts';
 import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
 import type { LastOutputs } from './reuse.ts';
 import type { Latch } from './latch.ts';
@@ -396,7 +396,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         // What the run reports having received is what came off the wires --
         // the paths, not the megabytes behind them. Only the element sees the
         // contents.
-        const arrived = await readInputs(node, inputs, runtime, registry);
+        const arrived = await readInputs(element, node, inputs, runtime, registry);
         // An event is a moment: `true` handed back from an earlier round would
         // open gates for a press that is over.
         const key = element.eventPorts(node).length ? undefined : options.reuse?.key(node, arrived);
@@ -638,7 +638,7 @@ export async function executeNode(
   const why = nothingToDo(element, node, inputs, graph.edges, memoryFeedbackEdges(graph.nodes, graph.edges, options.registry));
   if (why) return { node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [why] };
   try {
-    const arrived = await readInputs(node, inputs, options.runtime, options.registry);
+    const arrived = await readInputs(element, node, inputs, options.runtime, options.registry);
     const { produced, failures } = await runNode(
       element, node, arrived, withSubgraph(options.runtime, options, node, options.depth ?? 0),
     );
@@ -756,11 +756,14 @@ export function nodeName(node: GraphNode): string {
  * What the element is given: the wired values, with the file on each input
  * that says "read the file at this path" read into its content.
  *
- * The reading is named in the failure. A node that never got as far as its own
- * work failed at a missing file, and "ENOENT" on its own reads as though the
- * body went looking for one.
+ * Run once per item, a list it runs over is read an item's file at a time, as
+ * many at once as items run at once, and a file that cannot be read costs its
+ * item (`readPorts`). Read before any item runs rather than as each does:
+ * whether a node run only as context hands back what it made last is decided
+ * by what its files say (`reuse.ts`).
  */
 async function readInputs(
+  element: NodeRunner<unknown>,
   node: GraphNode,
   inputs: Record<string, unknown>,
   runtime: Runtime,
@@ -768,11 +771,24 @@ async function readInputs(
 ): Promise<Record<string, unknown>> {
   const ports = filePorts(node, registry);
   if (!ports.length) return inputs;
+  const each = element.batchMode(node) === 'per_item'
+    ? { ports: new Set(node.inputs.filter((port) => port.multi).map((port) => port.id)), atOnce: element.batchConcurrency(node) }
+    : undefined;
   try {
-    return await readPorts(inputs, ports, runtime.files);
+    return await readPorts(inputs, ports, runtime.files, each);
   } catch (error) {
-    throw new Error(`Reading its input files: ${error instanceof Error ? error.message : String(error)}`);
+    throw unreadable(error);
   }
+}
+
+/**
+ * A file that could not be read, as the node's failure -- or an item's. The
+ * reading is named: a node that never got as far as its own work failed at a
+ * missing file, and "ENOENT" on its own reads as though the body went looking
+ * for one.
+ */
+function unreadable(error: unknown): Error {
+  return new Error(`Reading its input files: ${error instanceof Error ? error.message : String(error)}`);
 }
 
 /** The run's own sentence about what went wrong: which nodes, by name, and why. */
@@ -840,31 +856,25 @@ async function runNode(
   const produced: Record<string, unknown>[] = new Array(items.length);
   const failed: { index: number; message: string }[] = [];
   const catches = element.catchesErrors(node);
-  let next = 0;
   let done = 0;
 
-  const worker = async (): Promise<void> => {
-    for (;;) {
-      const index = next++;
-      if (index >= items.length || signal?.aborted) return;
-      try {
-        produced[index] = reconcileOutputs(node, await element.execute(node, items[index], runtime));
-      } catch (error) {
-        // One bad item must not take the other 499 down with it -- but it is
-        // not nothing either: it is counted, and the first is quoted.
-        produced[index] = Object.fromEntries(node.outputs
-          .filter((p) => !(catches && p.id === ERROR_PORT))
-          .map((p) => [p.id, null]));
-        const message = error instanceof Error ? error.message : String(error);
-        failed.push({ index, message });
-        runtime.report?.({ type: 'activity', node_id: node.id, message: `item ${index + 1}: ${message}` });
-      }
-      runtime.report?.({ type: 'batch', node_id: node.id, done: ++done, total: items.length });
+  await atMost(items.length, element.batchConcurrency(node), async (index) => {
+    try {
+      const unread = Object.values(items[index]).find((value) => value instanceof Unread);
+      if (unread) throw unreadable(unread);
+      produced[index] = reconcileOutputs(node, await element.execute(node, items[index], runtime));
+    } catch (error) {
+      // One bad item must not take the other 499 down with it -- but it is
+      // not nothing either: it is counted, and the first is quoted.
+      produced[index] = Object.fromEntries(node.outputs
+        .filter((p) => !(catches && p.id === ERROR_PORT))
+        .map((p) => [p.id, null]));
+      const message = error instanceof Error ? error.message : String(error);
+      failed.push({ index, message });
+      runtime.report?.({ type: 'activity', node_id: node.id, message: `item ${index + 1}: ${message}` });
     }
-  };
-
-  const workers = Math.max(1, Math.min(element.batchConcurrency(node), items.length));
-  await Promise.all(Array.from({ length: workers }, worker));
+    runtime.report?.({ type: 'batch', node_id: node.id, done: ++done, total: items.length });
+  }, signal);
   // In item order, not the order they happened to fail in: the same run says
   // the same thing every time.
   failed.sort((a, b) => a.index - b.index);
