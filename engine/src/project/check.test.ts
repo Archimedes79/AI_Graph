@@ -134,10 +134,15 @@ describe('what check finds in a graph', () => {
       problem: expect.stringContaining('nothing on it starts the graph'),
       fix: expect.stringContaining('Add a Button block'),
     })]);
-    // A button starts it; so does the box itself, told to -- and a trigger node, which reads it at each round.
+    // A button starts it; so does the box itself, told to -- and a trigger node's clock, which reads it at each round.
     expect(withPage([box, { id: 'go', kind: 'button', label: 'Go' }])).toEqual([]);
     expect(withPage([{ ...box, run_on_change: true }])).toEqual([]);
     expect(withPage([box], [{ id: 'clock', node_type: 'trigger', label: 'Clock', config: { trigger_every: '5m' } }])).toEqual([]);
+    // One that fires only at start reads it once, as starting does; one whose interval nobody can read, never.
+    for (const config of [{ trigger_every: '' }, { trigger_every: 'now and then' }]) {
+      expect(withPage([box], [{ id: 'start', node_type: 'trigger', label: 'Start', config }]), JSON.stringify(config))
+        .toContainEqual(expect.objectContaining({ problem: expect.stringContaining('nothing on it starts the graph') }));
+    }
     // A page that only shows takes nothing in: it runs once when the tool starts, which is all it needs.
     expect(withPage([{ id: 'answer', kind: 'text_io', mode: 'output', label: 'Answer' }])).toEqual([]);
   });

@@ -11,9 +11,8 @@
 // round is what the next round starts from, which only works if the rounds
 // share the object. The run settles into it; nothing has to be carried across.
 //
-// The interval counts from the end of one run to the start of the next -- the
-// rule `--every` follows on the command line -- so a run slower than its
-// interval is followed by the next one rather than overtaken by it.
+// When a round is due is the clock's (`execution/clock.ts`), the one the
+// editor's ▶ Run keeps too; what is kept of the rounds is this file's.
 //
 // The last round is kept on disk as well, when the server says where: a tool
 // that restarts overnight should still show this morning's run, not an empty
@@ -21,7 +20,9 @@
 
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { ExecutionResult, Graph } from '../graph.ts';
-import { after, graphTriggers, parseInterval, type Trigger } from '../execution/triggers.ts';
+import type { Trigger } from '../execution/triggers.ts';
+import { startClock } from '../execution/clock.ts';
+import { registry } from '../elements/registry.ts';
 
 export interface ScheduleState {
   /** Whether this graph runs by itself at all. A page that hears `false` has nothing to wait for. */
@@ -86,61 +87,24 @@ function over(before: ExecutionResult | null, fresh: ExecutionResult): Execution
  * and runs what that trigger is wired to. Nothing here knows what a node is.
  * *keptAt*, when given, is the file the last round is written to and read back
  * from at start.
- *
- * Several triggers keep their own time and share one queue: rounds never
- * overlap, and a trigger's interval counts from the end of *its* last round.
  */
 export function schedule(
   graph: () => Graph,
   run: (graph: Graph, signal: AbortSignal, event: Trigger) => Promise<ExecutionResult>,
   keptAt?: string,
 ): Schedule {
-  // Said once, at start, rather than discovered at three in the morning: an
-  // interval nobody can parse means no clock for it, and the reason is in the state.
-  let problem: string | null = null;
-  const clocks = graphTriggers(graph()).map((trigger) => {
-    let seconds = 0;
-    try {
-      seconds = trigger.every ? parseInterval(trigger.every) : 0;
-    } catch (error) {
-      problem = error instanceof Error ? error.message : String(error);
-    }
-    return { ...trigger, seconds, next_at: null as number | null, cancel: undefined as (() => void) | undefined };
-  }).filter((clock) => clock.on_start || clock.seconds > 0);
-
-  const current: ScheduleState = {
-    scheduled: clocks.length > 0,
-    running: false, runs: 0, result: null, error: null, finished_at: null, next_at: null,
-    ...(clocks.length ? recall(keptAt) : {}),
-  };
-  if (problem) current.error = problem;
   const abort = new AbortController();
-  let inFlight: Promise<void> = Promise.resolve();
-
-  const soonest = (): number | null => {
-    const due = clocks.map((clock) => clock.next_at).filter((at): at is number => at !== null);
-    return due.length ? Math.min(...due) : null;
+  const current: ScheduleState = {
+    scheduled: false, running: false, runs: 0, result: null, error: null, finished_at: null, next_at: null,
   };
 
-  type Clock = typeof clocks[number];
-
-  const wind = (clock: Clock): void => {
-    if (clock.seconds <= 0 || abort.signal.aborted) return;
-    clock.next_at = Date.now() + clock.seconds * 1000;
-    // The server is what keeps the process alive, not a pending round.
-    clock.cancel = after(clock.seconds * 1000, () => begin(clock), false);
-    current.next_at = soonest();
-  };
-
-  const round = async (clock: Clock): Promise<void> => {
+  const clock = startClock(graph, registry, async (event) => {
     if (abort.signal.aborted) return;
     current.running = true;
-    clock.next_at = null;
-    current.next_at = soonest();
     let result: ExecutionResult | null = null;
     let failure: string | null = null;
     try {
-      result = await run(graph(), abort.signal, clock.event);
+      result = await run(graph(), abort.signal, event);
     } catch (error) {
       // A round that could not even start -- a cycle, a graph edited into
       // nonsense -- must not end the schedule: the next round may be fine.
@@ -153,27 +117,23 @@ export function schedule(
     if (result) current.result = over(current.result, result);
     // An interval nobody could parse stays said: that clock never runs, and a
     // round of another that went well is not the end of that.
-    current.error = failure ?? problem;
+    current.error = failure ?? clock.problem();
     current.runs += 1;
     current.finished_at = Date.now();
     if (keptAt) keep(keptAt, current);
-    wind(clock);
-  };
+  });
 
-  // One after the other: two clocks due together are two rounds, not one run into another.
-  const begin = (clock: Clock): void => { inFlight = inFlight.then(() => round(clock)); };
-
-  for (const clock of clocks) {
-    if (clock.on_start) begin(clock);
-    else wind(clock);
-  }
+  current.scheduled = clock.runsByItself;
+  if (current.scheduled) Object.assign(current, recall(keptAt));
+  // Said once, at start, rather than discovered at three in the morning: an
+  // interval nobody can parse means no clock for it, and the reason is in the state.
+  current.error = clock.problem() ?? current.error;
 
   return {
-    state: () => ({ ...current }),
+    state: () => ({ ...current, next_at: clock.nextAt() }),
     stop: () => {
       abort.abort();
-      for (const clock of clocks) clock.cancel?.();
-      return inFlight;
+      return clock.stop();
     },
   };
 }
