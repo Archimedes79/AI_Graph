@@ -10,6 +10,7 @@ import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
 import LiveGeneration from '@/authoring/LiveGeneration';
+import { lastAsked } from './lastAsked';
 import SubgraphTrail from './SubgraphTrail';
 import GraphProblems from './GraphProblems';
 import ViewTabs, { type EditorView } from './ViewTabs';
@@ -37,26 +38,6 @@ export function graphBusy(running: boolean, sweeping: boolean): string | null {
   if (running) return 'A run is going: stop it, or wait for it, before opening another graph.';
   if (sweeping) return '✨ Generate is writing this graph: stop it, or wait for it, before opening another.';
   return null;
-}
-
-/**
- * Numbered requests of which only the last is still wanted: `ask` hands out
- * what tells a request whether it still is, and `cancel` makes none of them.
- *
- * ✨ AI Graph's Cancel closed the dialog and left the request running; opened
- * again, the dialog showed the old design as the answer to a new, empty
- * description, ready to load.
- */
-export function lastAsked(): { ask: () => () => boolean; cancel: () => void } {
-  let last = 0;
-  return {
-    ask: () => {
-      last += 1;
-      const mine = last;
-      return () => mine === last;
-    },
-    cancel: () => { last += 1; },
-  };
 }
 
 interface ToolbarProps {

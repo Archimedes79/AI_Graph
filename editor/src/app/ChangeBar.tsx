@@ -7,7 +7,7 @@ import { errorText } from '@/api/errorText';
 import LiveGeneration from '@/authoring/LiveGeneration';
 import { hasDefinitions } from '@/authoring/generation';
 import GraphProblems from './GraphProblems';
-import { lastAsked } from './Toolbar';
+import { lastAsked } from './lastAsked';
 import { changeGoesTo, changeTarget, describeChange, graphChange, graphRequest, targetName } from './graphChange';
 import { ACCENT_TEXT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
