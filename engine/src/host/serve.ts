@@ -19,7 +19,7 @@ import { dirname, join, resolve } from 'node:path';
 import { parseGraph, type Graph } from '../graph.ts';
 import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
 import { registry } from '../elements/registry.ts';
-import { applyRuntimeValues, runtimeRequirements } from '../execution/runtimeValues.ts';
+import { runtimeRequirements } from '../execution/runtimeValues.ts';
 import { triggeredNodes } from '../execution/triggers.ts';
 import { aiSetting, candidatePaths } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
@@ -99,7 +99,6 @@ export async function serve(options: ServeOptions): Promise<Served> {
   };
   const clock = held.graph
     ? schedule(() => held.graph!, (graph, signal, trigger) => {
-      applyRuntimeValues(graph, {}, registry);
       return rounds.turn(graph, () => executeGraph(graph, { runtime: nodeRuntime(), registry, signal, trigger, latch }), signal);
     }, lastRunFile(options.graphPath!))
     : null;

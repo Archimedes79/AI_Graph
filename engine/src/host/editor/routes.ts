@@ -19,7 +19,6 @@ import { runExample } from '../../execution/examples.ts';
 import { registry } from '../../elements/registry.ts';
 import { builtPage, writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
-import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
 import { nodeRuntime } from '../node.ts';
 import { aiSetting } from '../../ai/settings.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
@@ -91,7 +90,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     async nodeInputs(asked) {
       const graph = parseGraph(asked);
-      applyRuntimeValues(graph, {}, registry);
       const { inputs, upstream } = await inputsFor(graph, String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry, reuse });
       const failed = upstream.node_results.find((result) => result.status === 'error');
       return { inputs, error: failed ? `${failed.node_id}: ${failed.error}` : null };
