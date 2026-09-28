@@ -17,7 +17,7 @@ import LiveGeneration from './LiveGeneration';
 import TryExample, { useTryExample, whatCameOf } from './TryExample';
 import { carriesFiles, droppedFile, droppedPath } from './droppedFile';
 import { fileValue } from './readAsRun';
-import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, SUCCESS, TEXT } from '@/ui/theme';
+import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, SUCCESS, SUNKEN, TEXT } from '@/ui/theme';
 
 /**
  * Where a node keeps what *write*'s ✨ writes: the setting, and the file it is
@@ -293,6 +293,7 @@ export default function NodeDefinition({ node, setConfig, updateNode, setDescrip
   const graph = shell?.graph ?? (() => ({ metadata: useGraphStore.getState().metadata, nodes: [node], edges: [] }));
   const trying = useTryExample(node, graph);
   const liveCalls = useLiveGeneration();
+  const isProject = useGraphStore((s) => s.isProject);
   // What the panel still holds goes into the graph before a file is opened, so the file says it.
   const before = () => shell?.flush();
 
@@ -315,6 +316,7 @@ export default function NodeDefinition({ node, setConfig, updateNode, setDescrip
 
   const needs = defined && node.inputs.length && !isWritten(node, 'input')
     ? 'Write its input.js first (✨ Input): its example is what it is tried on.' : undefined;
+  const history = String(node.config.history ?? '');
 
   return (
     <div className="space-y-3">
@@ -328,6 +330,11 @@ export default function NodeDefinition({ node, setConfig, updateNode, setDescrip
           placeholder={`What should this node do? In your own words -- ✨ writes ${defined ? 'its files' : 'what it holds'} from this.`}
           aria-label="What it should do"
         />
+        {!isProject && (
+          <p className="text-xs mt-1" style={{ color: DIMMER }}>
+            Its files are kept in the graph until it is saved as a project (File ▸ Save, a name without .json): then each is a file of its own.
+          </p>
+        )}
       </div>
       {defined && (
         <Row node={node} write="input" setConfig={setConfig} onGenerate={onGenerate} generating={generating} preview={shell?.preview} before={before}>
@@ -357,9 +364,20 @@ export default function NodeDefinition({ node, setConfig, updateNode, setDescrip
           />
         </section>
       )}
-      <div className="flex items-center gap-2 text-xs pt-2" style={{ borderTop: `1px solid ${LINE}` }}>
-        <span style={{ color: MUTED }}>Every exchange with the model about it:</span>
-        <FileChip nodeId={node.id} file="history.md" written={!!String(node.config.history ?? '').trim()} before={before} />
+      <div className="space-y-1 text-xs pt-2" style={{ borderTop: `1px solid ${LINE}` }}>
+        <div className="flex items-center gap-2">
+          <span style={{ color: MUTED }}>Every exchange with the model about it:</span>
+          <FileChip nodeId={node.id} file="history.md" written={!!history.trim()} before={before} />
+        </div>
+        {/* Read here too: in a graph not saved as a project the chip opens nothing. */}
+        {history.trim() && (
+          <details>
+            <summary className="cursor-pointer select-none" style={{ color: MUTED }}>Show it here</summary>
+            <pre className="mt-1 rounded px-2 py-1.5 whitespace-pre-wrap overflow-auto font-mono" style={{ background: SUNKEN, color: TEXT, maxHeight: 260 }}>
+              {history}
+            </pre>
+          </details>
+        )}
       </div>
     </div>
   );

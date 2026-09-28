@@ -87,11 +87,19 @@ describe.each([
     expect(html).toMatch(/<textarea[^>]*placeholder="\/\*\*\n \* output\.js/);
   });
 
-  it('shows each file before it is written: greyed, saying when it will be', () => {
+  it('shows each file before it is written: greyed, and says once when they will be files', () => {
     const html = panel(made(type));
     // Four chips -- input.js, output.js, the body, history.md -- none a file yet in a graph not saved as a project.
-    expect(html.match(/written when the graph is saved as a project/g)).toHaveLength(4);
-    expect(html.match(/<button[^>]*disabled=""[^>]*aria-label="Open [^"]+"/g)).toHaveLength(4);
+    expect(html.match(/<button[^>]*disabled=""[^>]*title="Written when the graph is saved as a project\."[^>]*aria-label="Open [^"]+"/g)).toHaveLength(4);
+    expect(html.match(/until it is saved as a project/g)).toHaveLength(1);
+    expect(html).not.toContain('not written yet');
+  });
+
+  it('shows its history.md in the panel too, folded -- the chip opens nothing in a graph not saved as a project', () => {
+    expect(panel(made(type))).not.toContain('Show it here');
+    const html = panel(made(type, { history: '## 2026-09-28 10:00 ✨ Code\n\nSent: count the words' }));
+    expect(html).toContain('Show it here');
+    expect(html).toContain('Sent: count the words');
   });
 
   it('gives every button a title that says what it does', () => {

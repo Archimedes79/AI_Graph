@@ -13,7 +13,7 @@ import { DIMMER, MUTED, NEUTRAL_BUTTON } from '@/ui/theme';
  * a stub until ✨ writes it (*written* false says so).
  *
  * In a graph not saved as a project there is no file to open: the chip is
- * greyed and says when there will be.
+ * greyed, and its title says when there will be.
  */
 export default function FileChip({ nodeId, file, written, before }: {
   nodeId: string;
@@ -55,7 +55,8 @@ export default function FileChip({ nodeId, file, written, before }: {
       >
         {file} ↗
       </button>
-      {!written && <span className="text-xs" style={{ color: DIMMER }}>{isProject ? 'not written yet' : 'written when the graph is saved as a project'}</span>}
+      {/* Unsaved, every chip would say the same: the panel says it once (`NodeDefinition`). */}
+      {!written && isProject && <span className="text-xs" style={{ color: DIMMER }}>not written yet</span>}
       {status && <span className="text-xs" style={{ color: MUTED }}>{status}</span>}
     </span>
   );
