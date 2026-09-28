@@ -94,6 +94,20 @@ describe('everything else', () => {
       .rejects.toThrow(refusedBy(SETTING));
   }, 30_000);
 
+  it('is where the bar\'s change of the graph goes: the route hands the graph there is on, as what runs of it', async () => {
+    const node = { id: 'count', node_type: 'code', label: 'Count', description: 'Count the words.', inputs: [], outputs: [], config: { code: 'x', history: 'every earlier prompt' } };
+    let refused = { message: '', extra: { calls: [] as { prompt: string }[] } };
+    try {
+      await routes.generateGraph!({ description: 'Count the lines too.', graph: graphOf([node as never]) } as never, loopback);
+    } catch (error) {
+      refused = error as typeof refused;
+    }
+    expect(refused.message).toContain(refusedBy(SETTING));
+    const [sent] = refused.extra.calls;
+    expect(sent.prompt).toMatch(/^This is the graph as it is now:[\s\S]*"id": "count"[\s\S]*Change it as follows:\nCount the lines too\./);
+    expect(sent.prompt).not.toContain('every earlier prompt');
+  }, 30_000);
+
   it('is what the editor is told it is now', async () => {
     const status = await routes.providers!(undefined as never, loopback);
     expect((status as { target: unknown }).target).toEqual({ provider: SETTING, model: 'm' });
