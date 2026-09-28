@@ -254,6 +254,11 @@ written against it. There is no Save and no Cancel: a change is in the graph a m
 after it is made, one undo step per field typed into, and what ✨ writes is a step of its
 own.
 
+**A new node runs once**, on what arrives -- a list whole -- and hands on one value.
+**Run once per item**, under Advanced, is asked once a list arrives (down a wire, or in
+input.js's example): ticked, each item is a call of its own and each output hands on the
+list of what the calls gave.
+
 **The prompts.** Each ✨ is sent a prompt, in sight under its button: the standard one
 until you change it (Reset takes it back; the node keeps only the prompts that differ, in
 `config.prompts`). **What ✨ sends** shows it filled in, word for word, without sending it.

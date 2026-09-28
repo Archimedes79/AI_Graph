@@ -4,6 +4,7 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import {
   exchangeName, generateRequest, generationGuard, isWritten, outputsFrom, resultMessage, unfitDefinition, writeName, writesFor, writtenInto,
 } from './generation';
+import { withPerItem } from './perItem';
 
 /**
  * What a node's ✨ asks and what it writes in: the request built in one place
@@ -120,10 +121,11 @@ describe('the outputs an output definition names', () => {
   });
 
   it('hands on a list from a new port where the node runs once per item', () => {
-    const perItem = made('code');
+    // Ticked "Run once per item": a new node runs once, on what arrives whole.
+    const perItem = withPerItem(made('code'), true);
     expect(perItem.config.batch_mode).toBe('per_item');
     expect(outputsFrom(perItem, OUTPUT)[0].multi).toBe(true);
-    expect(outputsFrom(made('code', { batch_mode: 'whole_list' }), 'module.exports = { "total": 1 };')[0].multi).toBe(false);
+    expect(outputsFrom(made('code'), 'module.exports = { "total": 1 };')[0].multi).toBe(false);
   });
 
   it('leaves the outputs alone for a definition without an example -- a stub, or one that cannot be read', () => {

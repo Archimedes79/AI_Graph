@@ -45,7 +45,7 @@ describe('a node\'s card', () => {
 
   it('has a dot on its edge for each port, named beside it on hover and in its title', () => {
     const single = { ...counter().inputs[0], id: 'stop', name: 'Stop words', description: 'Words not to count', multi: false };
-    const node = { ...counter(), inputs: [{ ...counter().inputs[0], multi: true }, single] };
+    const node = { ...counter(), inputs: [{ ...counter().inputs[0], multi: true }, single], outputs: [{ ...counter().outputs[0], multi: true }] };
     const html = card(node);
     const handles = html.match(/class="react-flow__handle[^"]*"/g) ?? [];
     // The ◆ on top, two inputs, one output.

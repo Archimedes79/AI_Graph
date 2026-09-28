@@ -55,9 +55,10 @@ describe('NodeGuiBuilder.saved', () => {
     expect(saved.gui).toEqual({});
     expect(saved.trigger).toEqual({});
     expect(saved.output).toEqual({});
-    expect(Object.keys(saved.ai)).toEqual(['batch_mode']);
+    // Once, on what arrives: the default `batch_mode`, so nothing to write.
+    expect(saved.ai).toEqual({});
     // No code: code.js is its stub until ✨ Code writes it.
-    expect(Object.keys(saved.code)).toEqual(['batch_mode']);
+    expect(saved.code).toEqual({});
     expect(Object.keys(saved.subgraph)).toEqual(['subgraph']);
   });
 

@@ -74,6 +74,12 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
     },
   },
 
+  // A new ai or code node runs once, on what arrives -- a list whole -- and
+  // hands on one value: single ports and the default `batch_mode`, which is
+  // `withPerItem(node, false)` (`perItem.test.ts` holds them to it). Made to
+  // run once per item, a node split what it was handed: a chart block got a
+  // one-item list, and a sort sorted one item per call. "Run once per item"
+  // is one tick away, asked when a list arrives (`RunOncePerItem`).
   ai: {
     create: (id) => ({
       id,
@@ -90,11 +96,10 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
         // difference that decides whether a wired file is read (`execution/fileInputs.ts`).
         // Created `text`, an AI node wired to a folder picker was handed the file
         // *names* -- the box ticked, the rule looking at a word nobody had said.
-        { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'any', multi: true, required: false, description: 'What to ask. A list asks once per item.' },
+        { id: 'prompt', name: 'Prompt', kind: 'input', data_type: 'any', multi: false, required: false, description: 'What to ask.' },
       ],
-      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: true, required: false, description: 'The answer. One per item when the prompt was a list.' }],
-      // Once per item: a list that arrives is asked about an item at a time.
-      config: { ...baseNodeConfig(), batch_mode: 'per_item' },
+      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: 'The answer.' }],
+      config: baseNodeConfig(),
     }),
     placedAmong: numbered('AI'),
   },
@@ -106,12 +111,10 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       label: 'Code 1',
       description: '',
       position: { x: 0, y: 0 },
-      inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
-      // No description on the output: "one result per item" was true only while
-      // "Run once per item" was ticked, and ✨ is told that by the brief itself.
-      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
+      inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: false, required: false, description: '' }],
+      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }],
       // No code: its code.js is the stub until ✨ Code writes it from the text.
-      config: { ...baseNodeConfig(), batch_mode: 'per_item' },
+      config: baseNodeConfig(),
     }),
     placedAmong: numbered('Code'),
   },
