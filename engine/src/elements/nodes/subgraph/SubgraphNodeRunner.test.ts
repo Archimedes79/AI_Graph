@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { executeGraph } from '../../../execution/executor.ts';
 import { registry } from '../../registry.ts';
+import { NodeRunner } from '../../NodeRunner.ts';
 import { parseGraph, type Graph, type GraphEdge, type GraphNode } from '../../../graph.ts';
 import type { Runtime } from '../../Runtime.ts';
 import { bundleNeeds } from '../../../cli/bundle.ts';
@@ -89,6 +90,29 @@ describe('a node that holds a graph', () => {
     ]);
 
     const result = await executeGraph(outer, { runtime: shouting, registry });
+    expect(result.node_results.find((r) => r.node_id === 'part')?.outputs).toEqual({ loud: 'FROM OUTSIDE' });
+  });
+
+  it('answers it on the output its element gives it, whatever that is called', async () => {
+    // The holder answered every input node inside on `output`, a name only
+    // the input node's own element knows.
+    class SaysText extends NodeRunner {
+      readonly nodeType = 'input' as const;
+      config() { return {}; }
+      override boundaryRole(): 'in' { return 'in'; }
+      override derivedPorts() { return { inputs: [], outputs: [port('text', 'output')] }; }
+      async execute(node: GraphNode) { return { text: String(node.config.value ?? '') }; }
+    }
+    const says = new SaysText();
+    const elements = { node: (type: string) => (type === 'input' ? says : registry.node(type)) };
+    const held = inner() as { edges: GraphEdge[] };
+    held.edges[0] = edge('a', 'subject', 'text', 'shout', 'value');
+    const outer = graph([
+      node('source', 'input', { input_mode: 'text', value: 'from outside' }),
+      node('part', 'subgraph', { subgraph: held }),
+    ], [edge('in', 'source', 'text', 'part', 'subject')]);
+
+    const result = await executeGraph(outer, { runtime: shouting, registry: elements });
     expect(result.node_results.find((r) => r.node_id === 'part')?.outputs).toEqual({ loud: 'FROM OUTSIDE' });
   });
 
