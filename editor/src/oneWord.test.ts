@@ -33,8 +33,8 @@ vi.mock('@/store/graphStore', () => ({
 
 const blank = NODE_KINDS.gui.create('page');
 const page: GraphNode = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [
-  { ...WIDGET_BUILDERS.input_picker.create('CSV file'), id: 'file' },
-  { ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'plot' },
+  WIDGET_BUILDERS.input_picker.create('file', 'CSV file'),
+  WIDGET_BUILDERS.plot_window.create('plot', 'Chart'),
 ] } });
 open.rfNodes = [{ id: 'page', data: { graphNode: page } }];
 
@@ -80,14 +80,14 @@ describe('"block" is the one word for what a page is made of', () => {
       'the page node': [NODE_BUILDERS.gui.label, NODE_BUILDERS.gui.hint, NODE_BUILDERS.gui.describeOutput(page), NODE_KINDS.gui.create('p').label].join(' '),
     };
     for (const builder of Object.values(WIDGET_BUILDERS) as WidgetGuiBuilder[]) {
-      shown[`the editor of a ${builder.widgetKind}`] = read(createElement(WidgetEditor, { widget: { ...builder.create('Block'), id: 'b' }, onChange: () => {} }));
+      shown[`the editor of a ${builder.widgetKind}`] = read(createElement(WidgetEditor, { widget: builder.create('b', 'Block'), onChange: () => {} }));
       const Panel = panelOf(builder);
       // Every kind with settings has its panel read here, not only the one that was.
       expect(!!Panel, builder.widgetKind).toBe(!!builder.Panel);
       if (!Panel) continue;
       for (const { mode } of builder.paletteEntries()) {
         shown[`the settings of a ${builder.widgetKind}${mode ? `, ${mode}` : ''}`] = read(createElement(Panel, {
-          builder, widget: { ...builder.create('Block', mode), id: 'b' }, onUpdate: () => {},
+          builder, widget: builder.create('b', 'Block', mode), onUpdate: () => {},
         }));
       }
     }

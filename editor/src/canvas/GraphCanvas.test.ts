@@ -26,7 +26,7 @@ let screen: HTMLElement;
 
 /** A code node wired to an output node, and to a page of one block that shows what it made. */
 beforeEach(async () => {
-  const answer = { ...WIDGET_BUILDERS.text_io.create('Answer', 'output'), id: 'answer' };
+  const answer = WIDGET_BUILDERS.text_io.create('answer', 'Answer', 'output');
   store().loadGraph({
     metadata: { name: 'Canvas', description: '', gui_scheme: 'night' },
     nodes: [

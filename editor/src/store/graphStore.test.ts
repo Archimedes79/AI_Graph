@@ -75,8 +75,8 @@ describe('graphStore.newGraph', () => {
 
 describe('graphStore.updateNode edge pruning', () => {
   it('removes edges attached to ports no longer present after an update', () => {
-    const w1 = WIDGET_BUILDERS.input_picker.create('A');
-    const w2 = WIDGET_BUILDERS.input_picker.create('B');
+    const w1 = WIDGET_BUILDERS.input_picker.create('a', 'A');
+    const w2 = WIDGET_BUILDERS.input_picker.create('b', 'B');
     const guiNode = graphNode({
       id: 'gui1',
       node_type: 'gui',
@@ -117,7 +117,7 @@ describe('graphStore.updateNode edge pruning', () => {
     // What the designer does on every edit: the page's new blocks, their ports
     // synced, handed to updateNode -- whose pruning cut this wire as soon as
     // anybody renamed a block, because the synced ports had no `_error`.
-    const pick = { ...WIDGET_BUILDERS.select.create('Pick'), catch_errors: true };
+    const pick = { ...WIDGET_BUILDERS.select.create('pick', 'Pick'), catch_errors: true };
     const page = syncGuiNodePorts(graphNode({ id: 'gui1', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [pick] } }));
     const sink = graphNode({
       id: 'sink',
@@ -152,7 +152,7 @@ describe('graphStore.updateNode edge pruning', () => {
 
 describe('graphStore.loadGraph gui port sync', () => {
   it('regenerates a gui node\'s ports from its widget list even if stale ports were provided', () => {
-    const widget = WIDGET_BUILDERS.text_io.create('Text');
+    const widget = WIDGET_BUILDERS.text_io.create('text', 'Text');
     const staleGui = graphNode({
       id: 'gui1',
       node_type: 'gui',
@@ -335,7 +335,7 @@ describe('graphStore: what a run remembered', () => {
   // The store's part is to replay that list into its own long-lived copy of the
   // graph, so the next run starts from it -- and to do nothing else.
   const gui = (kind: 'text_io' | 'chat') => {
-    const widget = WIDGET_BUILDERS[kind].create('Block');
+    const widget = WIDGET_BUILDERS[kind].create('block', 'Block');
     const node = graphNode({
       id: 'gui1', node_type: 'gui',
       config: { ...blankConfig(), gui_widgets: [widget] },

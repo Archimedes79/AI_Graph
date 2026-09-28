@@ -8,7 +8,7 @@ import { WIDGET_BUILDERS } from '@/elements/registry';
 describe('the dialog of a block that shows what arrives', () => {
   it.each(['plot_window', 'table', 'image_view'] as const)('%s says what it shows, and offers no code', (kind) => {
     const builder = WIDGET_BUILDERS[kind];
-    const widget = builder.create('Block');
+    const widget = builder.create('block', 'Block');
     const html = renderToStaticMarkup(createElement(DisplayWidgetPanel, { builder, widget, onUpdate: () => {} }));
     expect(html).toContain('Shows what arrives, which should be ');
     expect(html).toContain('code node wired in before it');

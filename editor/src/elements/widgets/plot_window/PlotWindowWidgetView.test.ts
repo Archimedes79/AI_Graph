@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import PlotWindowWidgetView from './PlotWindowWidgetView';
 
-const widget = WIDGET_BUILDERS.plot_window.create('Temperature');
+const widget = WIDGET_BUILDERS.plot_window.create('temperature', 'Temperature');
 const onPage = (value: unknown, incoming?: unknown) => renderToStaticMarkup(createElement(PlotWindowWidgetView, {
   widget, value, incoming, onChange: () => {},
 }));

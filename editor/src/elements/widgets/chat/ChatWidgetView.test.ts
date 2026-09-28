@@ -11,7 +11,7 @@ describe('a chat on the page', () => {
     // The bug: a stored role other than the two was kept by the page and drawn
     // on the assistant's side, while a run sent the same turn as the person's.
     const value = { messages: [{ role: 'system', text: 'hello there' }], pending: '' };
-    const widget = WIDGET_BUILDERS.chat.create('Chat');
+    const widget = WIDGET_BUILDERS.chat.create('chat', 'Chat');
     const html = renderToStaticMarkup(createElement(ChatWidgetView, { widget, value, onChange: () => {} }));
     expect(transcript(chatValue(value).messages)).toBe('User: hello there');
     expect(html).toMatch(/justify-end[^]*hello there/);

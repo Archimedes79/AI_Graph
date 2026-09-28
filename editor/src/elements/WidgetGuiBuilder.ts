@@ -36,8 +36,6 @@ export interface InlineEditorProps {
   onRows: (rows: number) => void;
 }
 
-let created = 0;
-
 export abstract class WidgetGuiBuilder extends ElementGuiBuilder<WidgetPanelProps> {
   // ── What it is ────────────────────────────────────────────────────────────
 
@@ -121,19 +119,21 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<WidgetPanelProp
   }
 
   /**
-   * A new widget of this kind, as the palette puts it on a page: the
-   * counterpart of `NODE_KINDS[type].create` (document/nodeKinds.ts). No position -- the order of the list is the
-   * position, so a new widget simply goes last.
+   * A new widget of this kind called *id*, as the palette puts it on a page:
+   * the counterpart of `NODE_KINDS[type].create` (document/nodeKinds.ts). The
+   * id is its caller's to give -- the palette's is its kind, numbered where it
+   * is taken (`newBlock`); one made up here was only ever written over. No
+   * position -- the order of the list is the position, so a new widget simply
+   * goes last.
    *
    * What every block has, and then what this kind keeps (`initialSettings`).
    * Every kind's settings used to be spread onto every block, so a divider was
    * saved with a folder selector's code, an options list and an example file,
    * and graph.json carried settings no runner of that kind reads.
    */
-  create(label = '', mode = this.defaultMode): GuiWidget {
-    created += 1;
+  create(id: string, label = '', mode = this.defaultMode): GuiWidget {
     return {
-      id: `widget-${created}-${Date.now()}`,
+      id,
       kind: this.widgetKind,
       label,
       ...(mode ? { mode } : {}),

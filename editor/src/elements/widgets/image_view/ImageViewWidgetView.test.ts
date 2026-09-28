@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ImageViewWidgetView from './ImageViewWidgetView';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 
-const widget = WIDGET_BUILDERS.image_view.create('Cover');
+const widget = WIDGET_BUILDERS.image_view.create('cover', 'Cover');
 const shown = (incoming: unknown) => renderToStaticMarkup(createElement(ImageViewWidgetView, {
   widget, value: undefined, incoming, onChange: () => {},
 }));

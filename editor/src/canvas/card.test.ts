@@ -78,9 +78,9 @@ describe('a node\'s card', () => {
   it('on the page lists what its blocks hand on and what they show as rows, each with its dot', () => {
     const blank = NODE_KINDS.gui.create('page');
     const page = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [
-      { ...WIDGET_BUILDERS.input_picker.create('CSV file'), id: 'file' },
-      { ...WIDGET_BUILDERS.button.create('Go'), id: 'go' },
-      { ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'plot' },
+      WIDGET_BUILDERS.input_picker.create('file', 'CSV file'),
+      WIDGET_BUILDERS.button.create('go', 'Go'),
+      WIDGET_BUILDERS.plot_window.create('plot', 'Chart'),
     ] } });
     const html = card(page);
     for (const name of ['CSV file', 'Go', 'Chart']) expect(html).toMatch(new RegExp(`>${name}(<|$)`, 'm'));

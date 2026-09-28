@@ -22,7 +22,7 @@ const blocks: [string, ComponentType<WidgetViewProps>, 'select' | 'slider' | 'in
 describe('a block that starts the graph, while a round runs', () => {
   it.each(blocks)('%s waits for it -- and one that does not start the graph does not', (_what, View, kind, control) => {
     const drawn = (starts: boolean, busy: boolean) => renderToStaticMarkup(createElement(View, {
-      widget: { ...WIDGET_BUILDERS[kind].create('Block'), options: 'a, b', run_on_change: starts },
+      widget: { ...WIDGET_BUILDERS[kind].create('block', 'Block'), options: 'a, b', run_on_change: starts },
       value: 'a', onChange: () => {}, onTrigger: () => {}, busy,
     }));
     const controls = (html: string) => html.match(new RegExp(control.source, 'g')) ?? [];

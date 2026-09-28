@@ -13,7 +13,7 @@ function page(id: string, blocks: number): GraphNode {
     position: { x: 0, y: 0 }, inputs: [], outputs: [],
     config: {
       ...baseNodeConfig(),
-      gui_widgets: Array.from({ length: blocks }, () => WIDGET_BUILDERS.text.create('Block')),
+      gui_widgets: Array.from({ length: blocks }, (_, at) => WIDGET_BUILDERS.text.create(`block_${at + 1}`, 'Block')),
     },
   };
 }
@@ -43,7 +43,7 @@ describe('what deleting asks first', () => {
 describe('deleting', () => {
   const store = () => useGraphStore.getState();
   beforeEach(() => {
-    const shown = { ...WIDGET_BUILDERS.text_io.create('Answer', 'output'), id: 'answer' };
+    const shown = WIDGET_BUILDERS.text_io.create('answer', 'Answer', 'output');
     store().loadGraph({
       metadata: { name: 'Delete', description: '', gui_scheme: 'night' },
       nodes: [counter, syncGuiNodePorts({ ...NODE_KINDS.gui.create('page'), config: { ...baseNodeConfig(), gui_widgets: [shown] } })],
