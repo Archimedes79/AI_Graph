@@ -60,6 +60,24 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       continue;
     }
 
+    // A node is its heading and its text: the canvas, its panel and every ✨
+    // call it by the one, and what ✨ writes -- its definitions, its body -- is
+    // written from the other. Neither is optional.
+    if (!node.label.trim()) {
+      problems.push({
+        where,
+        problem: 'It has no heading.',
+        fix: 'Give it one (its "label"): a few words saying what it does -- the canvas, its panel and every ✨ call it by that.',
+      });
+    }
+    if (element.generation() && !node.description.trim()) {
+      problems.push({
+        where,
+        problem: 'Its text is empty: nothing says what it should do, and what ✨ writes for it is written from that text.',
+        fix: 'Write its text (its "description"): what it should do, in words.',
+      });
+    }
+
     // A setting that silently does nothing: "once per item" fans out over the inputs
     // declared as lists. With none, the node runs once, on the whole list, and
     // nothing says it was asked to do otherwise. Only where a list really

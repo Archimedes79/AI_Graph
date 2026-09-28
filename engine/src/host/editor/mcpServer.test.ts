@@ -24,7 +24,7 @@ const textInput = (id: string, value = 'hello') => ({
 });
 
 const code = (id: string, body = 'function run(inputs) { return { out: inputs.in }; }') => ({
-  id, node_type: 'code', label: id, description: '', position: { x: 0, y: 0 },
+  id, node_type: 'code', label: id, description: 'Hands on what it is given.', position: { x: 0, y: 0 },
   inputs: [port('in', 'input')], outputs: [port('out', 'output')], config: { code: body } as Record<string, unknown>,
 });
 

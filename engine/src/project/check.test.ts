@@ -16,11 +16,11 @@ function graph(overrides: { output?: string; input?: string } = {}): Graph {
     metadata: { name: 'Checked' },
     nodes: [
       {
-        id: 'count', node_type: 'code', label: 'Count', inputs: [], outputs: [port('total', 'output')],
+        id: 'count', node_type: 'code', label: 'Count', description: 'Counts the rows.', inputs: [], outputs: [port('total', 'output')],
         config: { code: 'function run() { return { total: 1 }; }', ...(overrides.output !== undefined ? { output_definition: overrides.output } : {}) },
       },
       {
-        id: 'say', node_type: 'ai', label: 'Say', inputs: [port('total', 'input')], outputs: [port('output', 'output')],
+        id: 'say', node_type: 'ai', label: 'Say', description: 'Says the total in a sentence.', inputs: [port('total', 'input')], outputs: [port('output', 'output')],
         config: { prompt: 'Report the total.', ...(overrides.input !== undefined ? { input_definition: overrides.input } : {}) },
       },
       { id: 'show', node_type: 'output', label: 'Show', inputs: [port('value', 'input')], outputs: [], config: {} },
@@ -44,6 +44,18 @@ afterEach(async () => {
 describe('what check finds in a graph', () => {
   it('finds nothing in a sound one', () => {
     expect(problemsIn(graph({ output: 'module.exports = { "total": 1 };', input: 'module.exports = { "total": 1 };' }))).toEqual([]);
+  });
+
+  it('finds a node without a heading, and a node ✨ writes for without a text', () => {
+    const made = graph();
+    made.nodes[0].label = ' ';
+    made.nodes[1].description = '';
+    // An output node needs no text: it says nothing ✨ writes.
+    made.nodes[2].description = '';
+    expect(problemsIn(made).map((p) => [p.where, p.problem])).toEqual([
+      ['node "count"', 'It has no heading.'],
+      ['node "say"', 'Its text is empty: nothing says what it should do, and what ✨ writes for it is written from that text.'],
+    ]);
   });
 
   it('finds an output.js whose keys are not the outputs: one it names that is none, one it leaves out', () => {
@@ -120,7 +132,7 @@ describe('what check finds in a setting that would silently do nothing', () => {
       { id: 'page', node_type: 'gui', inputs: [], outputs: [], config: { gui_widgets: [
         { id: 'folder', kind: 'input_picker', mode: 'directory' }, { id: 'shown', kind: 'text_io', mode: 'output' },
       ] } },
-      { id: 'each', node_type: 'ai', inputs: [{ ...port('story', 'input'), ...story }], outputs: [port('output', 'output')],
+      { id: 'each', node_type: 'ai', description: 'Summarises one story.', inputs: [{ ...port('story', 'input'), ...story }], outputs: [port('output', 'output')],
         config: { prompt: 'Summarise the story.', ...config } },
     ],
     edges: [

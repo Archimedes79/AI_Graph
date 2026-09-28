@@ -149,6 +149,9 @@ describe('a project folder', () => {
     const graph = sample();
     graph.nodes[1].config.output_definition = '';
     graph.nodes[2].config.prompt = '';
+    // What check holds a node to that has only its text: its heading and its text.
+    graph.nodes[1].description = 'Counts the files.';
+    graph.nodes[2].description = 'Says how many there are.';
     await writeProject(dir, graph);
     const [inputStub, outputStub] = DEFINITION_TEXTS.map((text) => `${text.standard}\n`);
     expect(await text('nodes/count/output.js')).toBe(outputStub);

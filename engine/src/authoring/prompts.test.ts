@@ -41,8 +41,10 @@ describe('a node described', () => {
       .toBe('# What to plot (ID chart, code node)\n\nReads the CSV.\nLargest first.');
   });
 
-  it('is its id where it has no heading, and the heading alone while it says nothing', () => {
-    expect(nodeDescription({ id: 'n1', label: ' ', description: '  ', node_type: 'ai' })).toBe('# n1 (ID n1, ai node)');
+  it('is the heading alone while it says nothing -- and its heading, never its id in its place', () => {
+    expect(nodeDescription({ id: 'n1', label: 'Ask', description: '  ', node_type: 'ai' })).toBe('# Ask (ID n1, ai node)');
+    // A node without a heading is a problem `check` names, not one this papers over.
+    expect(nodeDescription({ id: 'n1', label: ' ', description: 'Asks.', node_type: 'ai' })).not.toMatch(/^# n1/);
   });
 });
 

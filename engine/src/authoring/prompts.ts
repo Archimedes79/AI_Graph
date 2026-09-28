@@ -110,9 +110,13 @@ export function fillPrompt(text: string, values: Partial<Record<Variable, string
   return text.replace(VARIABLE, (whole, name: Variable) => values[name] ?? whole);
 }
 
-/** What a node is, as {Node Description} says it: its heading, its id and kind, then its text. */
+/**
+ * What a node is, as {Node Description} says it: its heading, its id and kind,
+ * then its text. A node always has a heading (`check` names one without), so
+ * nothing stands in for it here.
+ */
 export function nodeDescription(node: { id: string; label: string; description: string; node_type: string }): string {
-  const heading = `# ${node.label.trim() || node.id} (ID ${node.id}, ${node.node_type} node)`;
+  const heading = `# ${node.label.trim()} (ID ${node.id}, ${node.node_type} node)`;
   const text = node.description.trim();
   return text ? `${heading}\n\n${text}` : heading;
 }

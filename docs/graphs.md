@@ -416,7 +416,8 @@ or on inputs given as JSON (`run-node my_tool count '{"csv": "data/rows.csv"}'`)
 prints what came out. A node of another kind runs on what the nodes feeding it produce.
 
 **Checking a project.** `node engine/src/main.ts check my_tool other_tool` says what is
-wrong without running anything: edges to ports that do not exist, cycles, a code node
+wrong without running anything: a node without a heading, a code, AI or data node without
+a text, edges to ports that do not exist, cycles, a code node
 without code, a folder under `nodes/` that belongs to no node, a file there that nothing
 reads, and definitions that do not fit -- an example that cannot be read, one that names
 an input or output the node does not have, an output.js that leaves an output out, and a
