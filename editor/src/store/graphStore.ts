@@ -59,6 +59,13 @@ export interface GraphStore {
    * (`code`, `ai_2`), and a result landing by id lands on a stranger.
    */
   document: number;
+  /**
+   * Which document is open: one more each time another is loaded -- not when
+   * the canvas goes into a node's graph and out, which `document` counts too.
+   * What belongs to the document as a whole, the application ▶ Run started,
+   * ends with it.
+   */
+  opened: number;
 
   // Serialised graph as of the last load/save, for `isDirty`.
   savedSnapshot: string | null;
@@ -368,6 +375,13 @@ const defaultMetadata = (): GraphMetadata => engineDefaults() as GraphMetadata;
 // with a quick graph, slow enough not to flood a local server during a long one.
 const RUN_POLL_INTERVAL_MS = 400;
 
+/**
+ * ■ Stop pressed while a run is being started, before the server has said
+ * which run it is: sent as soon as it has. The press used to be lost, and the
+ * round ran to its end under a Stop that said it had stopped.
+ */
+let stopAsked = false;
+
 /** How many undo steps are kept. Each entry is a whole serialised graph. */
 const HISTORY_LIMIT = 50;
 
@@ -453,6 +467,7 @@ export const useGraphStore = create<GraphStore>()(
     pendingChange: null,
     subgraphStack: [],
     document: 0,
+    opened: 0,
     savedSnapshot: null,
     past: [],
     future: [],
@@ -678,6 +693,7 @@ export const useGraphStore = create<GraphStore>()(
         state.editingNodeId = null;
         state.pendingChange = null;
         state.document += 1;
+        state.opened += 1;
       });
       // Snapshot through exportGraph() rather than from normalizedGraph: it is
       // the same serialisation isDirty() compares against, so a freshly loaded
@@ -920,6 +936,7 @@ export const useGraphStore = create<GraphStore>()(
       // shows is still true and stays: pressing "Plot" must not blank the
       // summary beside it. A full run starts from a clean slate, as before.
       const previous = trigger ? get().executionResult : null;
+      stopAsked = false;
       set((state) => {
         state.isExecuting = true;
       });
@@ -939,6 +956,7 @@ export const useGraphStore = create<GraphStore>()(
             completed: 0, total, label: '', itemDone: 0, itemTotal: 0, idleSeconds: null,
           };
         });
+        if (stopAsked) void get().stopRun();
 
         let snapshot = await call('run', { id: runId });
         while (!snapshot.done) {
@@ -1004,7 +1022,10 @@ export const useGraphStore = create<GraphStore>()(
 
     stopRun: async () => {
       const runId = get().currentRunId;
-      if (!runId) return;
+      if (!runId) {
+        stopAsked = get().isExecuting;
+        return;
+      }
       try {
         await call('stopRun', { id: runId });
       } catch {

@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { GuiSurfacePage, usePage } from './GuiPage';
+import { GuiSurfacePage } from './GuiPage';
+import { pageStarts } from '@engine/execution/triggers.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { useDeliveredRun } from './useDeliveredRun';
 import DeliveredHeader from './DeliveredHeader';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
@@ -23,7 +25,9 @@ import { DANGER_TEXT, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN } from '@/ui/t
  * file picked, a box that says so; its fields hold what they were set to.
  */
 export default function ApplicationView() {
-  const blocks = usePage().widgets;
+  // Whether using the page starts the graph -- or only shows what its trigger
+  // nodes, or its one run at start, made.
+  const starts = useGraphStore((s) => pageStarts({ metadata: s.metadata, nodes: s.rfNodes.map((node) => node.data.graphNode), edges: [] }, engineRegistry));
   const delivered = useDeliveredRun();
   const [opening, setOpening] = useState('');
 
@@ -73,17 +77,12 @@ export default function ApplicationView() {
           Running
         </span>
         <span className="text-xs" style={{ color: DIMMER }}>
-          As whoever gets it will use it: the graph runs when you use the page. ■ Stop ends it.
+          {starts
+            ? 'As whoever gets it will use it: the graph runs when you use the page. ■ Stop ends it.'
+            : 'As whoever gets it will use it: what starts the graph starts it, and the page shows what it makes. ■ Stop ends it.'}
         </span>
       </div>
 
-      {/* Without blocks the delivered tool shows what it does and what its run
-          hands back, and so does this: it is the same component. */}
-      {blocks.length === 0 && (
-        <p className="px-8 pt-4 text-xs" style={{ color: DIMMER }}>
-          No page yet: until blocks are added on the Page tab, the tool shows this.
-        </p>
-      )}
       <GuiSurfacePage onRun={(trigger) => { void delivered.run(trigger); }} />
 
       <RequirementsDialog

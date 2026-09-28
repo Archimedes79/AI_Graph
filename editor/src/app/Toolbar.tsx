@@ -13,8 +13,8 @@ import LiveGeneration from '@/authoring/LiveGeneration';
 import SubgraphTrail from './SubgraphTrail';
 import GraphProblems from './GraphProblems';
 import ViewTabs, { type EditorView } from './ViewTabs';
-import { startApplication, stopApplication, useApplication } from './application';
-import { usePage } from '@/page/GuiPage';
+import { startApplication, stopApplication, useApplication, useTopHasPage } from './application';
+import { pageOf } from '@/document/guiWidgets';
 import FileMenu, { fileActions } from './FileMenu';
 import { ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
@@ -134,29 +134,33 @@ export default function Toolbar({
    *
    * It is the document that runs: from inside a node's graph, the canvas goes
    * back up to the top first, where the page is and where the results land.
-   * What a round still needs -- a file nobody chose, a place to write -- is
-   * asked first, by the delivered tool's own steps (`useDeliveredRun`).
+   * A graph run whole at start is asked first what it still needs -- a file
+   * nobody chose, a place to write -- by the delivered tool's own steps
+   * (`useDeliveredRun`).
    */
   const appRunning = useApplication((s) => s.running);
-  const hasPage = usePage().widgets.length > 0;
-  // Where ■ Stop goes back to: the view ▶ Run was pressed on.
+  const hasPage = useTopHasPage();
+  // Where the App tab goes back to: the view ▶ Run was pressed on.
   const ranFrom = useRef<EditorView>('graph');
   const handleRun = () => {
     const store = useGraphStore.getState();
     if (store.subgraphStack.length) store.closeSubgraphsTo(0);
-    if (hasPage) {
+    const graph = useGraphStore.getState().rootGraph();
+    if (pageOf(graph.nodes).widgets.length > 0) {
       if (view !== 'app') ranFrom.current = view;
       onViewChange('app');
     }
-    void startApplication(useGraphStore.getState().exportGraph(), (event) => delivered.run(event));
+    void startApplication(graph, () => delivered.run(null));
   };
-  // Stopped -- by ■ Stop, or by itself, having nothing left to do -- it takes its tab with it.
+  // Stopped -- by ■ Stop, or by itself, having nothing left to do -- or its
+  // page gone, it takes its tab with it.
   useEffect(() => {
-    if (!appRunning && view === 'app') onViewChange(ranFrom.current);
-  }, [appRunning, view, onViewChange]);
+    if (view === 'app' && !(appRunning && hasPage)) onViewChange(ranFrom.current);
+  }, [appRunning, hasPage, view, onViewChange]);
   // Another graph opened, or started anew: the application was the last one's.
-  const documentOpen = useGraphStore((s) => s.document);
-  useEffect(() => stopApplication, [documentOpen]);
+  // Not a step into a node's graph and out, which is the same document.
+  const opened = useGraphStore((s) => s.opened);
+  useEffect(() => stopApplication, [opened]);
 
   // Deploying used to have no busy state and no error handling, so a slow or
   // rejecting backend looked exactly like a dead button.

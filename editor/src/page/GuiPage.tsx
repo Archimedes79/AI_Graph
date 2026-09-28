@@ -7,7 +7,7 @@ import { patchBlock } from './pageWrite';
 import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from '@/document/layout';
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
-import { DANGER, DIM, MUTED, TEXT } from '@/ui/theme';
+import { DANGER, DANGER_TEXT, DIM, MUTED, TEXT } from '@/ui/theme';
 import { blockShows, pageOf, widgetFiresRun } from '@/document/guiWidgets';
 import type { RunTrigger } from '@/api/client';
 import RunResult from './RunResult';
@@ -218,11 +218,13 @@ function GuiPage({
  * out must not start runs -- so on the Page tab a chat's Send did nothing and a
  * button was a picture of a button, on the very surface whose promise is that
  * its blocks are live.
+ *
+ * *onRun* starts the round, and every host hands it the delivered tool's
+ * steps (`useDeliveredRun`): what the graph still needs is asked first. The
+ * Page tab once fell back to a bare run, and a button pressed there beside an
+ * empty picker ran on nothing where the delivered tool asked for the file.
  */
-export function usePageEvents(onRun?: (trigger: RunTrigger) => void) {
-  const exportGraph = useGraphStore((s) => s.exportGraph);
-  const runGraph = useGraphStore((s) => s.runGraph);
-
+export function usePageEvents(onRun: (trigger: RunTrigger) => void) {
   // Through `pageWrite`, as every edit of the page: a value and the event that
   // follows it arrive in the same tick, and the page in hand is the one from
   // before either.
@@ -237,9 +239,7 @@ export function usePageEvents(onRun?: (trigger: RunTrigger) => void) {
     const { page } = pageOf(useGraphStore.getState().rfNodes.map((n) => n.data.graphNode as GraphNode));
     if (!page || !widgetFiresRun(widget)) return;
     if (useGraphStore.getState().isExecuting) return;
-    const trigger: RunTrigger = { node_id: page.id, port_id: `${widget.id}_out` };
-    if (onRun) onRun(trigger);
-    else void runGraph(exportGraph(), trigger);
+    onRun({ node_id: page.id, port_id: `${widget.id}_out` });
   };
 
   return { setWidgetValue, fire };
@@ -281,6 +281,25 @@ function WithoutPage() {
 }
 
 /**
+ * Why the last round failed, in the run's own words -- which can be several
+ * lines long, and belong above the page rather than squeezed into the header
+ * beside its "❌ Failed". Part of what the page shows, so both hosts draw it:
+ * the editor's running application once said only "❌ Failed".
+ */
+function RunError() {
+  const error = useGraphStore((s) => (s.executionResult?.status === 'error' ? s.executionResult.error : ''));
+  if (!error) return null;
+  return (
+    <div
+      className="mx-6 mt-4 text-sm rounded-lg px-4 py-3 whitespace-pre-wrap"
+      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: DANGER_TEXT }}
+    >
+      {error}
+    </div>
+  );
+}
+
+/**
  * The page wired to the graph: what a deployed tool serves, and what the
  * editor's running application shows -- or, with no blocks, the tool without a
  * page. One component, so what is tried in the editor cannot flatter.
@@ -290,17 +309,19 @@ export function GuiSurfacePage({ onRun }: {
    * Start a run for a page event. The host supplies it because the host is who
    * knows what has to happen first -- asking for a file nobody chose yet, say --
    * and that must be the same in the editor and in a tool someone was handed.
-   * Without one, the store's plain `runGraph` is used.
    */
-  onRun?: (trigger: RunTrigger) => void;
+  onRun: (trigger: RunTrigger) => void;
 }) {
   const { page, widgets } = usePage();
   const { setWidgetValue, fire } = usePageEvents(onRun);
 
-  if (!page || widgets.length === 0) return <WithoutPage />;
+  if (!page || widgets.length === 0) return <><RunError /><WithoutPage /></>;
   return (
-    <div className="flex-1 overflow-auto px-8 py-6">
-      <GuiPage pageId={page.id} widgets={widgets} onWidgetValue={setWidgetValue} onWidgetTrigger={fire} />
-    </div>
+    <>
+      <RunError />
+      <div className="flex-1 overflow-auto px-8 py-6">
+        <GuiPage pageId={page.id} widgets={widgets} onWidgetValue={setWidgetValue} onWidgetTrigger={fire} />
+      </div>
+    </>
   );
 }

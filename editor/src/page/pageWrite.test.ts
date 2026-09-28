@@ -124,7 +124,7 @@ describe('a block edited on the page', () => {
     insertBlock({ ...WIDGET_BUILDERS.text_io.create('Ask'), id: 'ask', value: 'hello' });
     let events: ReturnType<typeof usePageEvents> | undefined;
     function Using() {
-      events = usePageEvents();
+      events = usePageEvents(() => {});
       return null;
     }
     renderToStaticMarkup(createElement(Using));
