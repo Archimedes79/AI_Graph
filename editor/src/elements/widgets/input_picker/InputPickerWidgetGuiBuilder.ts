@@ -29,8 +29,13 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
     return !String(widget.value ?? '').trim();
   }
 
+  /**
+   * Room for its caption and its path box beside 📂: at 6 x 2 the designer at
+   * 1024 pixels -- cells of 13 pixels there -- drew the path box 18 pixels
+   * wide and the row it stands in 6 pixels high.
+   */
   protected override defaultSpan() {
-    return { w: 6, h: 2 };
+    return { w: 8, h: 3 };
   }
 
   /** Its path, and for a folder the file types it keeps and whether it looks into subfolders. */
