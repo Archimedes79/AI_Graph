@@ -13,6 +13,11 @@ export class InputPickerWidgetGuiBuilder extends WidgetGuiBuilder {
     return [{ label: this.label, icon: '📂', also: 'picker open browse upload' }];
   }
 
+  /** One palette entry for both modes; in a sentence, the one it is in. */
+  override called(widget: GuiWidget): string {
+    return widget.mode === 'directory' ? 'folder picker' : 'file picker';
+  }
+
   override readonly Panel = lazy(() => import('./InputPickerWidgetPanel'));
 
   override readonly defaultMode = 'file';

@@ -14,6 +14,7 @@ import { memoryFeedbackEdges, topologicalLevels } from '@engine/execution/execut
 import { registry } from '@engine/elements/registry.ts';
 import { pageOf } from '@/document/guiWidgets';
 import { blockSize } from '@/document/layout';
+import { WIDGET_BUILDERS } from '@/elements/registry';
 import { graphEdge } from '@/document/wires';
 import { scheme } from '@/ui/scheme';
 
@@ -58,7 +59,9 @@ export function graphContext(nodeId: string, around: { nodes: GraphNode[]; edges
     lines.push('', `Its page (${page.id}), on the ${colours.label} scheme -- background ${colours.sunken}, text ${colours.text}, accent ${colours.accent}:`);
     for (const widget of widgets) {
       const { width, height } = blockSize(widget);
-      lines.push(`- ${widget.id}: a ${widget.kind}${widget.mode ? ` (${widget.mode})` : ''} block${widget.label ? ` "${widget.label}"` : ''}, about ${width} x ${height} px`);
+      // As a person calls it -- "a file picker block" -- not the file format's "input_picker".
+      const called = WIDGET_BUILDERS[widget.kind]?.called(widget) ?? widget.kind;
+      lines.push(`- ${widget.id}: ${/^[aeiou]/i.test(called) ? 'an' : 'a'} ${called} block${widget.label ? ` "${widget.label}"` : ''}, about ${width} x ${height} px`);
     }
   }
 

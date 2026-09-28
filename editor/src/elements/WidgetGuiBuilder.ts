@@ -69,6 +69,18 @@ export abstract class WidgetGuiBuilder extends ElementGuiBuilder<WidgetPanelProp
   abstract paletteEntries(): readonly PaletteEntry[];
 
   /**
+   * What a block of this kind is called in a sentence -- "a chart block", "a
+   * text input block" -- as ✨ is told the page ({Context}): the palette's
+   * name for the mode it is in, not the file format's kind.
+   */
+  called(widget: GuiWidget): string {
+    const mode = widget.mode || this.defaultMode;
+    const entries = this.paletteEntries();
+    const entry = entries.find((one) => (one.mode ?? this.defaultMode) === mode) ?? entries[0];
+    return (entry?.label ?? this.label).toLowerCase();
+  }
+
+  /**
    * The widget *is* its text: a heading, a paragraph. Selected on the page
    * being built, this takes its place, a box to type in where the words stand.
    */

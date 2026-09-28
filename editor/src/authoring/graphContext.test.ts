@@ -38,7 +38,21 @@ describe('{Context}', () => {
     const { width, height } = blockSize(chart);
     const said = graphContext('count', graph());
     expect(said).toContain(`Its page (page), on the ${colours.label} scheme -- background ${colours.sunken}, text ${colours.text}, accent ${colours.accent}:`);
-    expect(said).toContain(`- sizes: a plot_window block "Sizes", about ${width} x ${height} px`);
+    expect(said).toContain(`- sizes: a chart block "Sizes", about ${width} x ${height} px`);
+  });
+
+  it('names each block as a person calls it, in the mode it is in -- not by the file format\'s kind', () => {
+    const blocks = [
+      { id: 'pick', kind: 'input_picker', mode: 'file', label: 'CSV' }, { id: 'dir', kind: 'input_picker', mode: 'directory', label: 'Reports' },
+      { id: 'said', kind: 'text_io', mode: 'output', label: 'Mood' }, { id: 'pic', kind: 'image_view', label: 'Photo' },
+    ] as GuiWidget[];
+    const page = { ...NODE_KINDS.gui.create('page'), config: { ...NODE_KINDS.gui.create('page').config, gui_widgets: blocks } };
+    const said = graphContext('page', { nodes: [page], edges: [], metadata: { name: 'Blocks' } as never });
+    expect(said).toMatch(/- pick: a file picker block "CSV", about/);
+    expect(said).toMatch(/- dir: a folder picker block "Reports", about/);
+    expect(said).toMatch(/- said: a text output block "Mood", about/);
+    expect(said).toMatch(/- pic: an image block "Photo", about/);
+    expect(said).not.toMatch(/input_picker|text_io|image_view/);
   });
 
   it('is cut to its budget, so a large graph leaves a small model room to answer', () => {

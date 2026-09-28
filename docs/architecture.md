@@ -478,7 +478,8 @@ it holds), where an output goes and what the node there wants (`output_targets`,
 ✨ Output's the other, and both say to follow what is wired. The files ✨ is given are
 read here, sharing about 4 000 characters; `{Context}`, the graph around the
 node, is the editor's to say ([`authoring/graphContext.ts`](../editor/src/authoring/graphContext.ts):
-the nodes in run order, the wires, the page with each block's size). After the prompt comes
+the nodes in run order, the wires, the page with each block as a person calls it
+(`WidgetGuiBuilder.called`) and its size). After the prompt comes
 the engine's frame ([`host/editor/generate.ts`](../engine/src/host/editor/generate.ts)): the
 file's format, the keys to return, that the input ids stay as they are named, and that an
 empty input is answered with what to do rather than a failure.
