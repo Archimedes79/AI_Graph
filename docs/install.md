@@ -147,7 +147,10 @@ It runs in its own process, started with Node's permission system on: files stay
 readable and writable, because that is most of what a body is for, while starting
 other programs, loading native addons, spawning workers and opening a debugger port
 are refused. The network is not covered — Node has no flag for it — so a body can
-still reach out. `engine/src/host/sandbox.test.ts` asserts the policy.
+still reach out. Its environment leaves out every variable named like a key, a token or
+a password, so an `OPENAI_API_KEY` set for the engine is not a body's to read; a file
+is, though, `ai-settings.json` included. `engine/src/host/sandbox.test.ts` asserts the
+policy.
 
 ## Tests
 

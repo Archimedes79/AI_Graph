@@ -64,7 +64,7 @@ import { registry } from '../../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';
 import { aiSetting, candidatePaths, configuredMcpServers, configuredSettings, SETTINGS_FILENAME } from '../../ai/settings.ts';
 import { message } from '../http.ts';
-import { nodeRuntime } from '../node.ts';
+import { nodeRuntime, SECRET_NAME } from '../node.ts';
 import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { withoutAuthoring } from '../../authoring/handedOn.ts';
@@ -881,14 +881,13 @@ export function serveStdio(
 /** Every string on this machine that a result must not contain. Read fresh each time: keys change while a server runs. */
 function machineSecrets(): string[] {
   const found: string[] = Object.values(configuredSettings().apiKeys ?? {});
-  const secretive = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTH/i;
   for (const [name, value] of Object.entries(process.env)) {
-    if (value && secretive.test(name)) found.push(value);
+    if (value && SECRET_NAME.test(name)) found.push(value);
   }
   for (const server of Object.values(configuredMcpServers())) {
     if ('headers' in server) found.push(...Object.values(server.headers ?? {}));
     if ('env' in server) {
-      for (const [name, value] of Object.entries(server.env ?? {})) if (secretive.test(name)) found.push(value);
+      for (const [name, value] of Object.entries(server.env ?? {})) if (SECRET_NAME.test(name)) found.push(value);
     }
   }
   return found.filter((value) => typeof value === 'string' && value.length >= 8);

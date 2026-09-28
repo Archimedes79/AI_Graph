@@ -679,9 +679,12 @@ or a page that has them can do the same.
   its AI settings — no generation, no editing, no writing settings.
 - A code body runs in a separate Node process under `--permission`: files yes; child
   processes, addons, workers no. The network is **not** closed (Node has no flag for it).
-  It never holds a key: a model call is *asked for* (`node.llm`) and made by the process
-  that started it, at most 25 times each time it runs. A `code.js` from a folder somebody
-  handed you is never run in the trusted process.
+  Its process is handed no key: its environment is the engine's without a provider's
+  credential or anything named like one (`bodyEnvironment` in `host/node.ts`), and a model
+  call is *asked for* (`node.llm`) and made by the process that started it, at most 25
+  times each time it runs. That is the process, not the disk: a body reads files, and
+  `ai-settings.json`, keys and all, is a file. A `code.js` from a folder somebody handed
+  you is never run in the trusted process.
 - A graph can *name* an MCP tool server; only `ai-settings.json` can say which program a
   name starts. A URL is called directly.
 - The MCP **server** (`host/editor/mcpServer.ts`) confines every path to one root, writes

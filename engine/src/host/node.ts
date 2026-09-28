@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { lent, type CodeService, type FileService, type Runtime } from '../elements/Runtime.ts';
-import { aiService } from '../ai/providers.ts';
+import { aiService, CREDENTIALS } from '../ai/providers.ts';
 import { mcpToolService } from '../ai/mcp.ts';
 import { aiSetting, configuredMcpServers, configuredSettings } from '../ai/settings.ts';
 
@@ -82,6 +82,22 @@ export const nodeFiles: FileService = {
  * does). A body can still reach out. Worth knowing rather than assuming.
  */
 const SANDBOX = ['--permission', '--allow-fs-read=*', '--allow-fs-write=*'];
+
+/** What a variable is called that unlocks something: a key, a token, a password. */
+export const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTH/i;
+
+/**
+ * This process's environment as a body's process is handed it: without a
+ * provider's credential (`CREDENTIALS`) or anything else named like one. This
+ * process asks models, so its environment may hold their keys -- and a body,
+ * one a model wrote or one in a folder somebody handed over, would read them
+ * there, which is what `node.llm` exists to spare it. The rest stays: Node
+ * needs PATH, SYSTEMROOT and TEMP to start at all.
+ */
+export function bodyEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const credentials = new Set(Object.values(CREDENTIALS).map((credential) => credential.env.toUpperCase()));
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !credentials.has(name.toUpperCase()) && !SECRET_NAME.test(name)));
+}
 
 /**
  * What marks a line on a body's stdout as the wrapper's own: a question for
@@ -188,7 +204,7 @@ function converse(
 ): Promise<unknown> {
   return new Promise((fulfil, fail) => {
     if (signal?.aborted) return fail(new Error('Stopped.'));
-    const child = spawn(command, args, { windowsHide: true });
+    const child = spawn(command, args, { windowsHide: true, env: bodyEnvironment() });
     // Text, decoded across chunk boundaries: a line is split on, and a character must not be.
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
