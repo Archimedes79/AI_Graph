@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Graph, GraphNode } from '../graph.ts';
-import { collectInputs, executeGraph, executeNode, inputsFor, memoryFeedbackEdges, runNodeAlone, topologicalLevels } from './executor.ts';
+import { callNode, collectInputs, executeGraph, executeNode, inputsFor, memoryFeedbackEdges, runNodeAlone, topologicalLevels } from './executor.ts';
 import { NodeRunner } from '../elements/NodeRunner.ts';
 import { type Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
@@ -534,5 +534,26 @@ describe('one node tried by itself', () => {
     const runtime = quietRuntime({ code: { run: async () => ({ n: 'not a number' }) } });
     const alone = await executeNode(graphOf([make]), 'make', {}, { runtime, registry });
     expect(alone.messages?.[0]).toBe('Does not fit its output.js: output "n" is text; output.js says a number');
+  });
+
+  it('hands its body the stop it was given, run on inputs or on its example', async () => {
+    // Both took a signal and dropped it: ▶ Try stopped went on grinding.
+    const stop = new AbortController();
+    const handed: (AbortSignal | undefined)[] = [];
+    const runtime = quietRuntime({ code: { run: async (_body, inputs, signal) => { handed.push(signal); return inputs; } } });
+    const graph = graphOf([node('work', 'code', { code: 'x' })]);
+    await executeNode(graph, 'work', {}, { runtime, registry, signal: stop.signal });
+    await callNode(graph, 'work', {}, { runtime, registry, signal: stop.signal });
+    expect(handed).toEqual([stop.signal, stop.signal]);
+  });
+
+  it('starts no more items once it is stopped', async () => {
+    const stop = new AbortController();
+    let ran = 0;
+    const runtime = quietRuntime({ code: { run: async (_body, inputs) => { ran += 1; stop.abort(); return inputs; } } });
+    const each = node('each', 'code', { code: 'x', batch_mode: 'per_item', batch_concurrency: 1 });
+    each.inputs = [{ id: 'item', name: 'item', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }];
+    await executeNode(graphOf([each]), 'each', { item: [1, 2, 3] }, { runtime, registry, signal: stop.signal });
+    expect(ran).toBe(1);
   });
 });

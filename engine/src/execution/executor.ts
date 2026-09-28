@@ -228,6 +228,13 @@ export interface RunOptions {
 }
 
 /**
+ * What running one node by itself honours: its services, a stop, and how deep
+ * it already is. No event, no slice of the graph, nothing held or reused: it
+ * is one node, asked directly.
+ */
+export type NodeRunOptions = Pick<RunOptions, 'runtime' | 'registry' | 'signal' | 'depth'>;
+
+/**
  * Run the graph once.
  *
  * A node that throws is recorded as failed and its dependents are skipped
@@ -514,7 +521,7 @@ export const NESTING_LIMIT = 5;
  * expect ("3 of 7"), and inner nodes it never heard of would count past the
  * end; they are forwarded as activity of the node they happened inside.
  */
-function withSubgraph(runtime: Runtime, options: RunOptions, node: GraphNode, depth: number): Runtime {
+function withSubgraph(runtime: Runtime, options: NodeRunOptions, node: GraphNode, depth: number): Runtime {
   const inner: Runtime = {
     ...runtime,
     ...(runtime.report ? {
@@ -639,7 +646,7 @@ export async function executeNode(
   graph: Graph,
   nodeId: string,
   inputs: Record<string, unknown>,
-  options: RunOptions,
+  options: NodeRunOptions,
 ): Promise<NodeResult> {
   const node = graph.nodes.find((n) => n.id === nodeId);
   const element = node && options.registry.node(node.node_type);
@@ -648,10 +655,11 @@ export async function executeNode(
   }
   const why = nothingToDo(element, node, inputs, graph.edges, memoryFeedbackEdges(graph.nodes, graph.edges, options.registry));
   if (why) return { node_id: nodeId, status: 'skipped', inputs, outputs: {}, error: null, messages: [why] };
+  const runtime = stoppable(options.runtime, options.signal);
   try {
-    const arrived = await readInputs(element, node, inputs, options.runtime, options.registry);
+    const arrived = await readInputs(element, node, inputs, runtime, options.registry);
     const { produced, failures } = await runNode(
-      element, node, arrived, withSubgraph(options.runtime, options, node, options.depth ?? 0),
+      element, node, arrived, withSubgraph(runtime, options, node, options.depth ?? 0), options.signal,
     );
     return ranTo(element, node, inputs, produced, failures);
   } catch (error) {
@@ -670,7 +678,7 @@ export async function callNode(
   graph: Graph,
   nodeId: string,
   inputs: Record<string, unknown>,
-  options: RunOptions,
+  options: NodeRunOptions,
 ): Promise<NodeResult> {
   const node = graph.nodes.find((n) => n.id === nodeId);
   const element = node && options.registry.node(node.node_type);
@@ -678,7 +686,7 @@ export async function callNode(
     return { node_id: nodeId, status: 'error', inputs, outputs: {}, error: `No such node: ${nodeId}` };
   }
   try {
-    const runtime = withSubgraph(options.runtime, options, node, options.depth ?? 0);
+    const runtime = withSubgraph(stoppable(options.runtime, options.signal), options, node, options.depth ?? 0);
     const outputs = reconcileOutputs(node, await element.execute(node, inputs, runtime));
     return { node_id: nodeId, status: 'success', inputs, outputs, error: null };
   } catch (error) {
