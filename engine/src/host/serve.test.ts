@@ -342,10 +342,10 @@ describe('the engine as the front door of the editor', () => {
     }
   }, 60_000);
 
-  it('opens the picker where the editor was started, even beside a graph it serves', async () => {
+  it('opens the picker where the editor was started, even when it serves a graph', async () => {
     // One browse handler serves both; only where an empty path starts differs.
     // A tool starts in its graph's folder, and the editor -- also when it was
-    // started beside a graph.json and so ships one -- where it was started.
+    // given a graph to serve -- where it was started.
     const dist = await mkdtemp(join(tmpdir(), 'editor-dist-'));
     await writeFile(join(dist, 'index.html'), '<!doctype html><title>the editor</title>');
     const ask = async (url: string) => (await asJson(await fetch(`${url}/api/files/browse`, {

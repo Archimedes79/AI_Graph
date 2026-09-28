@@ -111,8 +111,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
     // Where an empty path opens the picker, decided here and nowhere else. A
     // tool's opens where its graph is — a bundle's own folder, which is also
     // what its paths are relative to. The editor's opens where the editor was
-    // started, which is the same idea one level up, even when it was started
-    // beside a graph.json it therefore also serves.
+    // started, which is the same idea one level up, even when it was given a
+    // graph to serve as well.
     ...toolRoutes(held, clock, runs, options.graphPath !== undefined, options.editor || !options.graphPath
       ? process.cwd()
       : (projectFolderOf(options.graphPath) ?? dirname(resolve(options.graphPath)))),

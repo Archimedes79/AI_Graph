@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseGraph } from '../graph.ts';
@@ -218,37 +218,85 @@ describe('--every', () => {
   });
 });
 
-/**
- * A container has nothing to open a browser in -- no `xdg-open` in an Alpine
- * image -- and neither has many a server a bundle is started on. A missing
- * opener is said as an 'error' event, not thrown, and unheard it ended the
- * process right after "Serving on".
- */
-describe('--serve where nothing can open a browser', () => {
-  it('serves all the same', async () => {
-    const probe = createServer();
-    const free = await new Promise<number>((found) => probe.listen(0, '127.0.0.1', () => {
-      const { port: taken } = probe.address() as { port: number };
-      probe.close(() => found(taken));
-    }));
+/** A server started as a person or a launcher starts one: its own process, told nothing opens a browser. */
+function started(args: string[], env: NodeJS.ProcessEnv = { ...process.env, AI_GRAPH_NO_BROWSER: '1' }, cwd?: string) {
+  const child = spawn(process.execPath, [resolve(__dirname, '..', 'main.ts'), ...args], {
+    // Its own settings file, none: what a server says at start must not come from this machine's.
+    env: { ...env, AI_GRAPH_SETTINGS: join(tmpdir(), 'ai-graph-no-settings.json') }, cwd, stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  let said = '';
+  child.stderr.on('data', (chunk: Buffer) => { said += chunk.toString(); });
+  /** Until it serves, or ends, or *ms* have gone by. */
+  const up = async (ms = 10_000): Promise<void> => {
+    for (const until = Date.now() + ms; Date.now() < until && !said.includes('Serving on') && child.exitCode === null;) {
+      await new Promise((wake) => setTimeout(wake, 100));
+    }
+  };
+  return { child, said: () => said, up };
+}
+
+const freePort = () => new Promise<number>((found) => {
+  const probe = createServer();
+  probe.listen(0, '127.0.0.1', () => {
+    const { port: taken } = probe.address() as { port: number };
+    probe.close(() => found(taken));
+  });
+});
+
+const MINIMAL = resolve(__dirname, '..', '..', 'fixtures', 'minimal.json');
+
+describe('--serve and --editor, as they are started', () => {
+  /**
+   * A container has nothing to open a browser in -- no `xdg-open` in an Alpine
+   * image -- and neither has many a server a bundle is started on. A missing
+   * opener is said as an 'error' event, not thrown, and unheard it ended the
+   * process right after "Serving on".
+   */
+  it('serves where nothing can open a browser', async () => {
+    const port = await freePort();
     // No PATH: whatever opens a browser on this machine cannot be found.
     const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(PATH|AI_GRAPH_NO_BROWSER)$/i.test(name)));
-    const entry = resolve(__dirname, '..', 'main.ts');
-    const graph = resolve(__dirname, '..', '..', 'fixtures', 'minimal.json');
-    const server = spawn(process.execPath, [entry, graph, '--serve', '--port', String(free)], {
-      env: { ...env, PATH: '' }, stdio: ['ignore', 'ignore', 'pipe'],
-    });
-    let said = '';
-    server.stderr.on('data', (chunk: Buffer) => { said += chunk.toString(); });
+    const server = started([MINIMAL, '--serve', '--port', String(port)], { ...env, PATH: '' });
     try {
-      for (let attempt = 0; attempt < 100 && !said.includes('Serving on') && server.exitCode === null; attempt += 1) {
-        await new Promise((wake) => setTimeout(wake, 100));
-      }
+      await server.up();
       await new Promise((wake) => setTimeout(wake, 500));
-      expect(server.exitCode, said).toBeNull();
-      expect((await fetch(`http://127.0.0.1:${free}/api/runtime/graph`)).status).toBe(200);
+      expect(server.child.exitCode, server.said()).toBeNull();
+      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(200);
     } finally {
-      server.kill();
+      server.child.kill();
     }
   }, 30_000);
+
+  it('says a graph that was named and is not there, rather than serving nothing', async () => {
+    const server = started([join(tmpdir(), 'no-such-graph.json'), '--serve', '--port', String(await freePort())]);
+    try {
+      await server.up();
+      expect(server.said()).not.toContain('Serving on');
+      expect(server.said()).toMatch(/Nothing at .*no-such-graph.json/);
+    } finally {
+      server.child.kill();
+    }
+  }, 30_000);
+
+  it('as the editor, serves no graph.json it was started beside -- only one it is given', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-editor-'));
+    await writeFile(join(dir, 'graph.json'), await readFile(MINIMAL, 'utf8'));
+    const port = await freePort();
+    const beside = started(['--editor', dir, '--port', String(port)], undefined, dir);
+    try {
+      await beside.up();
+      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(404);
+    } finally {
+      beside.child.kill();
+    }
+    const other = await freePort();
+    const given = started(['graph.json', '--editor', dir, '--port', String(other)], undefined, dir);
+    try {
+      await given.up();
+      expect((await fetch(`http://127.0.0.1:${other}/api/runtime/graph`)).status).toBe(200);
+    } finally {
+      given.child.kill();
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  }, 60_000);
 });

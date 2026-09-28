@@ -41,6 +41,8 @@ import { after, graphTriggers, parseInterval } from '../execution/triggers.ts';
 
 export interface CliOptions {
   graphPath: string;
+  /** Whether the graph was named, rather than taken to be `graph.json`, the way a bundle is laid out. */
+  graphNamed: boolean;
   inputs: Record<string, string>;
   /** Seconds between the end of one run and the start of the next. */
   every?: number;
@@ -71,7 +73,7 @@ const DEFAULT_PORT = 8000;
 const PORTS_TRIED = 10;
 
 export function parseArgs(argv: string[]): CliOptions {
-  const options: CliOptions = { graphPath: '', inputs: {} };
+  const options: CliOptions = { graphPath: '', graphNamed: false, inputs: {} };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--inputs') {
@@ -119,7 +121,8 @@ export function parseArgs(argv: string[]): CliOptions {
       options.graphPath = arg;
     }
   }
-  if (!options.graphPath) options.graphPath = 'graph.json';
+  options.graphNamed = options.graphPath !== '';
+  if (!options.graphNamed) options.graphPath = 'graph.json';
   return options;
 }
 
@@ -233,10 +236,13 @@ async function makeBundle(options: CliOptions): Promise<number> {
  * to know about, let alone read a Node stack trace about.
  */
 async function runServer(options: CliOptions): Promise<number> {
-  // No graph file is a legitimate way to run this. The editor starts it beside
-  // itself purely to execute, and posts the graph being edited with every
-  // request; a bundle is the other case, and there the graph is right here.
-  const hasGraph = existsSync(resolve(options.graphPath));
+  // No graph file is a legitimate way to run this: the editor posts the graph
+  // being edited with every request, and serves one only when it is named --
+  // started in a folder that happened to hold a graph.json, it shipped that
+  // one and kept its clock. A bundle is the other case, and there the graph is
+  // right here. A graph that was named and is not there is a mistake to say,
+  // not an empty server: `serve` says it, where it reads the graph.
+  const hasGraph = options.graphNamed || (!options.editor && existsSync(resolve(options.graphPath)));
   // Beside the graph file, or inside the project folder: where a bundle puts it.
   const folder = projectFolderOf(options.graphPath);
   const pageDir = folder ? join(folder, 'page') : resolve(dirname(resolve(options.graphPath)), 'page');
