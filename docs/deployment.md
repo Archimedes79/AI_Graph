@@ -23,11 +23,11 @@ node engine/src/main.ts examples/folder_summaries
 They ask for their path before running, so any other location works too — the value in
 the graph is only the default.
 
-The same rule bites once more after deployment: **a bundle ships the tool, not the
-data.** It reads its `graph.json` from its own directory, so a relative data path in the
-graph resolves inside the bundle, where the file is not. Either pick the file on the
-tool's own page (what a graph with a picker or a `prompt_at_runtime` input is for),
-or store an absolute path before deploying.
+The same rule holds after deployment: a bundle runs from its own directory, so a relative
+data path in the graph resolves inside the bundle. That is why **a bundle carries the files
+the graph starts on**, at the same relative place (see [What a bundle carries](#what-a-bundle-carries));
+an absolute path, or a file over 50 MB, is the recipient's to bring -- or to pick on the
+tool's own page, which is what a graph with a picker or a `prompt_at_runtime` input is for.
 
 Override an input node:
 
@@ -132,8 +132,9 @@ check for Node 24 before starting and say so when it is missing or too old, `run
 out of the zip executable, and a double-clicked `run.cmd` that fails keeps its window open
 until the reason has been read.
 
-A bundle's server also keeps the graph's own clock (*⚙ Settings → What starts this graph*):
-`on start` and `every 5m` run with nobody watching, and the page shows the latest result.
+A bundle's server also keeps the clock of the graph's trigger nodes: a trigger ticked to
+fire when the tool starts, or given an interval such as `5m`, runs with nobody watching,
+and the page shows the latest result.
 
 **Stopping it.** Ctrl+C in its terminal, `kill`, a supervisor or `docker stop` all ask the
 server to stop rather than ending it where it stands: no new round starts, runs in flight
