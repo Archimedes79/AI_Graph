@@ -73,12 +73,20 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
   const openId = useGraphStore((s) => s.editingNodeId);
   const minZoom = useStore((s) => s.minZoom);
   const due = useRef<ViewDue>({ document: documentOpen, count: rfNodes.length, open: openId, fit: false, show: null, added: false });
+  // The size the node whose panel is open was last measured at.
+  const openSize = useRef({ id: null as string | null, size: '' });
   React.useEffect(() => {
     due.current = viewDue(due.current, { document: documentOpen, ids: rfNodes.map((node) => node.id), open: openId });
     const owed = due.current;
     const wrapper = reactFlowWrapper.current;
     if (!rfInstance || !wrapper || !active || !wrapper.clientWidth || !wrapper.clientHeight) return;
     const measured = (node: { width?: number | null; height?: number | null }) => !!node.width && !!node.height;
+    // The node whose panel is open grew -- ✨ gave it outputs, a longer text --
+    // and its new ports went under the panel: it is brought back into sight.
+    const open = openId ? rfInstance.getNode(openId) : undefined;
+    const size = open && measured(open) ? `${open.width}x${open.height}` : '';
+    if (size && openSize.current.id === openId && openSize.current.size !== size && !owed.show && !owed.fit) owed.show = openId;
+    if (size) openSize.current = { id: openId, size };
     if (owed.fit) {
       const nodes = rfInstance.getNodes();
       if (!nodes.every(measured)) return;
