@@ -164,6 +164,8 @@ describe('a web page elsewhere in the same browser', () => {
     // gets that far, so a page that pointed its own name here must not.
     const { server, url } = await serve({ graphPath: MINIMAL, port: 0, host: '0.0.0.0' });
     started.push(server);
+    // Said as an address a browser opens: 0.0.0.0 is none.
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     const graph = JSON.stringify(JSON.parse(await readFile(MINIMAL, 'utf8')));
     const json = { 'Content-Type': 'application/json' };
     expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'localhost:8000', Origin: 'http://localhost:8000' }, graph)).toBe(200);

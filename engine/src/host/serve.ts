@@ -183,9 +183,14 @@ export async function serve(options: ServeOptions): Promise<Served> {
     });
   });
   self.port = (server.address() as AddressInfo).port;
-  // An IPv6 address in brackets, as a browser takes it.
-  return { server, url: `http://${hostnameOf(host) ?? host}:${self.port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
+  // An IPv6 address in brackets, as a browser takes it -- and every address,
+  // which no browser can open, as this machine's own.
+  const named = WILDCARD.get(host) ?? hostnameOf(host) ?? host;
+  return { server, url: `http://${named}:${self.port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
 }
+
+/** A bind to every address, and the one of them a browser here opens: this machine's own. */
+const WILDCARD = new Map([['0.0.0.0', '127.0.0.1'], ['::', '[::1]']]);
 
 /** Whether a failure to start is "something else is already on that port". */
 export function portTaken(error: unknown): boolean {
