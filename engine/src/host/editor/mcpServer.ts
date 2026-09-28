@@ -5,7 +5,7 @@
 // `ai/mcp.ts` is the other direction -- a graph's model calling out to somebody's
 // tools. This is somebody's model calling in.
 //
-// **One file, one door.** Everything the outside can reach is the six tools
+// **One file, one door.** Everything the outside can reach is the eight tools
 // below, and everything they can reach is one folder. Three layers, so each can
 // be read and tested without the others:
 //
@@ -341,7 +341,7 @@ const KEY_SHAPED = /\b(sk-[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,}|gh[pousr]_[A
 const json = (value: unknown): string => JSON.stringify(value, null, 2);
 
 /**
- * The six tools, over one folder.
+ * The eight tools, over one folder.
  *
  * Everything a tool needs from the machine arrives in *options*; nothing here
  * reads the environment, the settings file or the process. That is what makes

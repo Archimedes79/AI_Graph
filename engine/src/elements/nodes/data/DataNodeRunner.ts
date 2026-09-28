@@ -2,6 +2,7 @@ import { NodeRunner, type TextFile, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { Generation } from '../../../authoring/generation.ts';
+import type { Problem } from '../../../execution/wiring.ts';
 
 export interface DataConfig {
   /** What it holds between runs. */
@@ -68,6 +69,22 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
   override settleMemory(node: GraphNode, _portId: string, value: unknown): void {
     node.config.data_value = value as never;
     if (value !== null && value !== undefined && typeof value !== 'string') node.config.data_format = 'structure';
+  }
+
+  /**
+   * A text node that holds what is not text -- a count, a list, a record, set
+   * so by hand or by a model -- is kept in data.txt as its JSON and read back
+   * from there as that text: the nodes it feeds would be handed a string. A run
+   * makes such a node a structure (`settleMemory`); anything else is named.
+   */
+  override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
+    const value = node.config.data_value;
+    if (node.config.data_format === 'structure' || value === null || value === undefined || typeof value === 'string') return [];
+    return [{
+      where,
+      problem: 'It is kept as text but holds structured data: saved, it comes back from data.txt as text.',
+      fix: 'Set config.data_format to "structure" -- in its panel, Structure (JSON).',
+    }];
   }
 
   // ── Build time ────────────────────────────────────────────────────────────

@@ -59,6 +59,15 @@ describe('a data node is its value', () => {
     expect(element.texts(counter)[0]).toMatchObject({ file: 'data.json', json: true });
   });
 
+  it('is named by check when it is kept as text and holds structure, set so by hand or by a model: it would come back as text', () => {
+    expect(element.problems(dataNode({ data_format: 'text', data_value: [1, 2] }), undefined, 'Node "store"')).toEqual([
+      expect.objectContaining({ where: 'Node "store"', problem: expect.stringContaining('comes back from data.txt as text') }),
+    ]);
+    for (const fine of [{ data_format: 'text', data_value: 'hello' }, { data_format: 'text' }, { data_format: 'structure', data_value: [1] }]) {
+      expect(element.problems(dataNode(fine), undefined, 'Node "store"')).toEqual([]);
+    }
+  });
+
   it('has its value written by ✨ Data, and nothing that runs', () => {
     const node = dataNode({ data_format: 'structure', data_value: { count: 2 } });
     expect(element.logic(node)).toBeUndefined();
