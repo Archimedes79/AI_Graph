@@ -28,6 +28,9 @@ import { errorText } from '@/api/errorText';
 import type { NodeType, Graph } from '@/graph';
 import { DANGER_TEXT, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT, WELL } from '@/ui/theme';
 
+/** The folder *path* is in: all of it before its last part. */
+const folderOf = (path: string): string => path.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '');
+
 export default function App() {
   const addNode = useGraphStore((s) => s.addNode);
   // The node whose panel is open beside the canvas, while it is there...
@@ -229,6 +232,15 @@ export default function App() {
   // A project folder by default: a name without .json. Typing .json saves one file instead.
   const suggestedFileName = () =>
     useGraphStore.getState().metadata.name.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'my_graph';
+
+  // The folder the last graph was opened from or saved to -- '' before one
+  // was: the folder the server was started in. Where the file browser starts
+  // when the path box holds a bare name, a new graph's or one typed, with the
+  // name filled in: it read the name as a folder, and opened on "Directory
+  // not found: …\untitled_graph".
+  const [lastFolder, setLastFolder] = useState('');
+  useEffect(() => { if (currentFilePath) setLastFolder(folderOf(currentFilePath)); }, [currentFilePath]);
+  const typedName = filePrompt && !/[\\/]/.test(filePrompt.path) ? filePrompt.path.trim() : null;
 
   // Open and Save As go straight to the file browser: choosing a file is what
   // they are for, and a path box first -- "/path/to/my_graph" -- asked the
@@ -517,10 +529,10 @@ export default function App() {
         {filePrompt && browsingFor && (
           <FileBrowserDialog
             mode={browsingFor === 'load' ? 'file' : 'save'}
-            initialPath={filePrompt.path}
+            initialPath={typedName === null ? filePrompt.path : lastFolder}
             extensions=".json"
             projects
-            defaultName={suggestedFileName()}
+            defaultName={typedName || suggestedFileName()}
             onPick={(picked) => {
               // Picking a file is the choice: it is loaded, or saved to, straight away.
               setFilePrompt({ ...filePrompt, path: picked, error: '' });

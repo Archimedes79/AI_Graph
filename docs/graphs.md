@@ -329,8 +329,10 @@ decide what to ask, or ask in a loop; for one question, an AI node is the plaine
 
 ### A project is a folder
 
-Save a graph under a name — `my_tool` — and it becomes a folder. The flow is one file,
-and each node is a folder that says everything about that node:
+Save a graph under a name — `my_tool` — and it becomes a folder. (A new graph's Save
+opens the file browser in the folder the last graph was opened from or saved to -- at
+first the folder the server was started in -- with its name filled in.) The flow is one
+file, and each node is a folder that says everything about that node:
 
 ```
 my_tool/
