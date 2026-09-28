@@ -9,16 +9,16 @@ import CodeNodePanel from './code/CodeNodePanel';
 import AiNodePanel from './ai/AiNodePanel';
 
 /**
- * A code and an ai node's panel, drawn: its kind and id, its text, a row per
- * ✨ -- the button, the prompt it is written with, and the file it writes:
- * its content in a box, and a chip beside it -- the files ✨ Input and ✨
- * Output write from, ▶ Try, and its history. Nothing else: its ports, once per
- * item, failures and the model are folded away under Advanced, which the
- * dialog draws. The heading is the dialog's too.
+ * A code and an ai node's panel, drawn: its text, a row per ✨ -- the button,
+ * the prompt it is written with, and the file it writes: its content in a
+ * box, and a chip beside it -- the files ✨ Input and ✨ Output write from,
+ * ▶ Try, and its history. Nothing else: its ports, once per item, failures
+ * and the model are folded away under Advanced, and its kind, id and heading
+ * stand at the top of the side panel (`NodeEditor`), said once.
  *
  * The panels are imported directly, because the builders register them
  * lazily; everything else a panel is handed comes from the builder, as the
- * node dialog hands it. Drawn with no project open, as a new graph is.
+ * side panel hands it. Drawn with no project open, as a new graph is.
  */
 
 const PANELS: Record<'code' | 'ai', ComponentType<NodePanelProps>> = { code: CodeNodePanel, ai: AiNodePanel };
@@ -41,12 +41,15 @@ describe.each([
   ['code', 'CODE', '✨ Code', 'code.js'],
   ['ai', 'AI', '✨ Prompt', 'prompt.md'],
 ] as const)('a %s node\'s panel', (type, kind, body, file) => {
-  it('is its kind and id, its text, a row per ✨, ▶ Try and its history -- in that order, which is the order Tab takes', () => {
+  it('is its text, a row per ✨, ▶ Try and its history -- in that order, which is the order Tab takes', () => {
     const html = panel(made(type));
+    // Its kind and id are said once, above it (`NodeKind`), and not again in it.
+    expect(html).not.toContain(`>${kind}</span>`);
+    expect(html).not.toContain(`>${type}</code>`);
     // Each row: its button, its prompt, its file's chip and the box its content is edited in.
     const box = (from: string) => html.indexOf('data-code-field', html.indexOf(from));
     const at = [
-      `>${kind}</span>`, `>${type}</code>`, 'aria-label="What it should do"',
+      'aria-label="What it should do"',
       '>✨ Input</button>', 'aria-label="✨ Input prompt"', 'input.js ↗', 'aria-label="Files ✨ Input writes from"', '⟳ From the graph', '📂 Add a file…',
       '>✨ Output</button>', 'aria-label="✨ Output prompt"', 'output.js ↗', 'aria-label="Files ✨ Output writes from"',
       `>${body}</button>`, `aria-label="${body} prompt"`, `${file} ↗`,

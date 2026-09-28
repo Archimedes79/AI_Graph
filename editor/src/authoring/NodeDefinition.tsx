@@ -276,19 +276,19 @@ function Row({ node, write, setConfig, onGenerate, generating, preview, before, 
 }
 
 /**
- * What a code, an ai or a data node is, in its panel: its kind and id, its
- * text -- what it should do, the one thing a person writes -- and what ✨
- * writes from that, a row each: its input definition, its output definition,
- * its body (code.js, prompt.md, or what a data node holds). Then ▶ Try, and
- * the node's history.md. The heading is the dialog's; the Advanced settings
- * too. *holds* is what a data node holds, drawn in its ✨ Data row as the
- * box its file is edited in.
+ * What a code, an ai or a data node is, in its panel: its text -- what it
+ * should do, the one thing a person writes -- and what ✨ writes from that, a
+ * row each: its input definition, its output definition, its body (code.js,
+ * prompt.md, or what a data node holds). Then ▶ Try, and the node's
+ * history.md. Its kind, id and heading stand above it, at the top of the
+ * panel (`NodeEditor`); the Advanced settings below it. *holds* is what a
+ * data node holds, drawn in its ✨ Data row as the box its file is edited in.
  *
  * "Say what to change" is the bar under the canvas: when it is asked of this
  * node (`pendingChange`), the body is changed here, as said, with what the
  * last try showed.
  */
-export default function NodeDefinition({ builder, node, setConfig, updateNode, setDescription, generating, message, onGenerate, shell, holds }: NodePanelProps & { holds?: ReactNode }) {
+export default function NodeDefinition({ node, setConfig, updateNode, setDescription, generating, message, onGenerate, shell, holds }: NodePanelProps & { holds?: ReactNode }) {
   const defined = hasDefinitions(node);
   const graph = shell?.graph ?? (() => ({ metadata: useGraphStore.getState().metadata, nodes: [node], edges: [] }));
   const trying = useTryExample(node, graph);
@@ -318,10 +318,6 @@ export default function NodeDefinition({ builder, node, setConfig, updateNode, s
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-xs">
-        <span className="px-1.5 rounded font-semibold" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>{builder.label.toUpperCase()}</span>
-        <code style={{ color: DIMMER }}>{node.id}</code>
-      </div>
       <div>
         <textarea
           className="w-full rounded-lg px-3 py-2 text-sm resize-y"
