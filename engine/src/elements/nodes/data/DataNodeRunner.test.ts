@@ -50,6 +50,15 @@ describe('a data node is its value', () => {
     expect(element.texts(dataNode({ data_format: 'text', data_value: 'hello' }))[0]).toEqual({ field: 'data_value', file: 'data.txt', standard: '' });
   });
 
+  it('holds structure from the moment a run hands it something that is not text: a count stays a count', () => {
+    const counter = dataNode({ data_format: 'text', data_value: '' });
+    element.settleMemory(counter, 'input', 'one');
+    expect(counter.config).toMatchObject({ data_format: 'text', data_value: 'one' });
+    element.settleMemory(counter, 'input', 1);
+    expect(counter.config).toMatchObject({ data_format: 'structure', data_value: 1 });
+    expect(element.texts(counter)[0]).toMatchObject({ file: 'data.json', json: true });
+  });
+
   it('has its value written by ✨ Data, and nothing that runs', () => {
     const node = dataNode({ data_format: 'structure', data_value: { count: 2 } });
     expect(element.logic(node)).toBeUndefined();

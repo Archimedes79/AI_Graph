@@ -59,8 +59,15 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
     return { output: value };
   }
 
+  /**
+   * What arrived is what it holds from now on -- and a text node handed
+   * something that is not text, a count or a list, holds structure from then
+   * on: kept in data.json, it reads back as what it is. In data.txt a
+   * counter's 1 came back "1", and the next round made it "11".
+   */
   override settleMemory(node: GraphNode, _portId: string, value: unknown): void {
     node.config.data_value = value as never;
+    if (value !== null && value !== undefined && typeof value !== 'string') node.config.data_format = 'structure';
   }
 
   // ── Build time ────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import { NotAGraph } from '../errors.ts';
 import { problemsIn } from './check.ts';
 import { RUN_ON_ITS_OWN } from '../elements/nodes/code/CodeNodeRunner.ts';
 import { DEFINITION_TEXTS } from '../authoring/definition.ts';
+import { DataNodeRunner } from '../elements/nodes/data/DataNodeRunner.ts';
 import {
   FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, nodeFileOf, projectFolderOf, readProject, saveGraph, writeProject,
 } from './folder.ts';
@@ -165,6 +166,19 @@ describe('a project folder', () => {
     expect(problemsIn(read)).toEqual([]);
   });
 
+  it('takes the part that runs code.js on its own out wherever it stands: code added after it is the node\'s', async () => {
+    const graph = sample();
+    Object.assign(graph.nodes[1].config, { code: 'function run() { return { total: 1 }; }' });
+    await writeProject(dir, graph);
+    const path = join(dir, 'nodes', 'count', 'code.js');
+    await writeFile(path, `${await readFile(path, 'utf8')}\nfunction helper() { return 2; }\n`);
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes[1].config.code).toBe('function run() { return { total: 1 }; }\n\nfunction helper() { return 2; }');
+    await writeProject(dir, read);
+    expect((await readFile(path, 'utf8')).split(RUN_ON_ITS_OWN)).toHaveLength(2);
+  });
+
   it('writes code.js so it runs on its own on its example, and reads back the code without that part', async () => {
     const graph = sample();
     Object.assign(graph.nodes[1].config, {
@@ -202,6 +216,21 @@ describe('a project folder', () => {
     forgetSeen();
     const read = await readProject(dir);
     expect(read.nodes.map((node) => node.config.data_value)).toEqual([{ count: 2, names: ['Ada'] }, 'Line one.\nLine two.', '{\n  "count": 3\n}']);
+  });
+
+  it('reads a count a run left in a text node back as a count: the node holds structure from then on', async () => {
+    // A counter: a data node, kept as text as a new one is, and a code node adding one.
+    const graph = parseGraph({
+      metadata: { name: 'Count' },
+      nodes: [{ id: 'counter', node_type: 'data', label: 'Counter', inputs: [port('input', 'input')], outputs: [port('output', 'output')], config: { data_format: 'text', data_value: '' } }],
+      edges: [],
+    });
+    new DataNodeRunner().settleMemory(graph.nodes[0], 'input', 1);
+    await writeProject(dir, graph);
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes[0].config.data_value).toBe(1);
+    expect(read.nodes[0].config.data_format).toBe('structure');
   });
 
   it('removes a deleted node\'s files, and nothing a person put there', async () => {

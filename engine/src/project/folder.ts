@@ -192,11 +192,18 @@ function fileFor(value: unknown, text: ProjectText): string | null {
 
 /**
  * What the node holds, for a file of *text* that says *content*: the file
- * without its footer, parsed where it is JSON -- or nothing, for the stub.
+ * without its footer -- wherever it stands: code added after it is the node's,
+ * and a footer kept in the body was written twice by the next save -- parsed
+ * where it is JSON, or nothing, for the stub.
  */
 function heldIn(content: string, text: ProjectText, path: string): { value: unknown } | undefined {
   let said = content.replace(/\r\n/g, '\n').replace(/\n$/, '');
-  if (text.footer && said.endsWith(text.footer)) said = said.slice(0, -text.footer.length).replace(/\n+$/, '');
+  const at = text.footer ? said.indexOf(text.footer) : -1;
+  if (at >= 0) {
+    const before = said.slice(0, at).replace(/\s+$/, '');
+    const after = said.slice(at + text.footer!.length).trim();
+    said = after ? `${before}\n\n${after}` : before;
+  }
   if (text.standard !== undefined && said.trim() === text.standard.trim()) return undefined;
   if (!text.json) return { value: said };
   try {
