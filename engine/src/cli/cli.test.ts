@@ -39,8 +39,8 @@ describe('parseArgs', () => {
     expect(parseArgs(['g.json', '--inputs', 'q=a=b']).inputs).toEqual({ q: 'a=b' });
   });
 
-  it('defaults to graph.json, the way a bundle is laid out', () => {
-    expect(parseArgs([]).graphPath).toBe('graph.json');
+  it('defaults to the project in this folder, the way a bundle is laid out', () => {
+    expect(parseArgs([]).graphPath).toBe('.');
   });
 
   it('reads --mcp with no graph at all, and keeps its root out of the graph path', () => {
@@ -48,7 +48,8 @@ describe('parseArgs', () => {
     expect(options.mcp).toBe(true);
     expect(options.mcpRoot).toBe('./project');
     // The folder is the flag's value, not a positional: it must not become the graph.
-    expect(options.graphPath).toBe('graph.json');
+    expect(options.graphPath).toBe('.');
+    expect(options.graphNamed).toBe(false);
   });
 
   it('is not an MCP server unless asked', () => {

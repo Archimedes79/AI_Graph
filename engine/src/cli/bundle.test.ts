@@ -23,7 +23,7 @@ const REPO = resolve(__dirname, '..', '..', '..');
 
 function run(dir: string, args: string[] = []): Promise<{ code: number; out: string; err: string }> {
   return new Promise((fulfil, fail) => {
-    const child = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), join(dir, 'graph.json'), ...args], {
+    const child = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), dir, ...args], {
       cwd: dir,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -74,7 +74,9 @@ describe('a bundle', () => {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-history-bundle-'));
     try {
       await writeBundle(graph, dir, { dataFrom: REPO });
-      const shipped = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8')) as { nodes: { id: string; config: Record<string, unknown> }[] };
+      // The project folder, as it was built: its code a file, and no history.md.
+      expect(await readdir(join(dir, 'nodes', 'chart'))).not.toContain('history.md');
+      const shipped = await loadGraph(dir);
       const config = shipped.nodes.find((node) => node.id === 'chart')!.config;
       expect(config).not.toHaveProperty('history');
       expect(config.code).toBe(chart.config.code);
@@ -143,7 +145,7 @@ describe('a bundle', () => {
           probe.close(() => found(free));
         });
       });
-      const server = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), 'graph.json', '--serve', '--port', String(port)], {
+      const server = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), '.', '--serve', '--port', String(port)], {
         cwd: dir, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'],
         env: { ...process.env, AI_GRAPH_NO_BROWSER: '1', AI_GRAPH_SETTINGS: join(dir, 'no-settings.json') },
       });
@@ -253,8 +255,8 @@ describe('a bundle', () => {
       const written = await writeBundle(graph, dir, { dataFrom: REPO });
       expect(written).toContain('data/sales.csv');
       expect(await readFile(join(dir, 'data', 'sales.csv'), 'utf8')).toBe('Region,Total\nNorth,3\n');
-      const shipped = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8')) as { nodes: { id: string; config: { gui_widgets?: { id: string; value: string }[] } }[] };
-      expect(shipped.nodes.find((node) => node.id === 'page')!.config.gui_widgets!.find((block) => block.id === 'file')!.value).toBe('data/sales.csv');
+      const shipped = JSON.parse(await readFile(join(dir, 'page', 'page.json'), 'utf8')) as { id: string; value: string }[];
+      expect(shipped.find((block) => block.id === 'file')!.value).toBe('data/sales.csv');
       expect(await readFile(join(dir, 'README.md'), 'utf8')).toContain('- `data/sales.csv`');
 
       // A file that is not there is no bundle at all -- said, and nothing written.

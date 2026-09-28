@@ -118,7 +118,7 @@ const blocksOf = (graph: Graph, nodeId: string) =>
  */
 function runBundle(dir: string): Promise<{ code: number; out: string; err: string }> {
   return new Promise((fulfil, fail) => {
-    const child = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), join(dir, 'graph.json'), '--limit', '1'], {
+    const child = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), dir, '--limit', '1'], {
       cwd: dir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,

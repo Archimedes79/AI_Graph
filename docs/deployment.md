@@ -51,7 +51,7 @@ Serve the graph's own page instead of running it once:
 node engine/src/main.ts my_graph.json --serve --port 8123
 ```
 
-A bundle serves the page it carries, in `web/` beside its `graph.json`; a graph or a
+A bundle serves the page it carries, in `web/` beside its project; a graph or a
 project in a checkout is served the page the checkout built (`npm run build`).
 
 ---
@@ -70,7 +70,8 @@ that window while it is open, as it would in a bundle's server. (The App tab sho
 so a run there still lights up the graph canvas.)
 
 From the toolbar, **🚀 Deploy** gives you a zip holding the vendored
-engine, your graph as `graph.json`, and a `run.sh` / `run.cmd` that starts it. Nothing in
+engine, your graph as the project folder it was built as -- `flow.json`, its page in
+`page/`, a folder per node -- and a `run.sh` / `run.cmd` that starts it. Nothing in
 it is generated: the engine is a verbatim copy of the one the graph was built and tested
 on, so a bundle runs what was tested rather than a second implementation of it. The graph
 carries what runs, and not how each node was written: its history.md, the ✨ prompts it

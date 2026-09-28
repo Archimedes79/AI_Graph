@@ -61,7 +61,7 @@ Nothing leaves the machine unless the graph itself sends it there.
 - API keys are write-only, and the AI setting belongs to your machine rather than to
   the graph — a graph you hand on carries neither a key nor a model choice of yours,
   unless a node names its own.
-- A deploy bundle runs offline: the engine, `graph.json` and the files the graph starts
+- A deploy bundle runs offline: the engine, the project folder and the files the graph starts
   on. A graph on a local model works with no internet access at all.
 
 ---

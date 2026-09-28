@@ -631,7 +631,7 @@ in memory is the same document it always was; only the folder is laid out this w
 or a page that has them can do the same.
 
 - **The file wins over the inline value.** A text is read from its file when there is one.
-  That is why a deploy bundle (one `graph.json` carrying everything inline) and a plain
+  That is why a download (one `.json` carrying everything inline) and a plain
   `.json` file open the same way. A folder is a project only when it has a `flow.json`.
 - **Structure and writing never share a file**, and keys are sorted, so an unchanged
   save changes nothing and a moved node changes only `layout.json`.

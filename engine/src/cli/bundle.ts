@@ -1,6 +1,8 @@
 // Handing the graph to someone else.
 //
-// A bundle is the graph, the engine that runs it, and one command. Nothing is
+// A bundle is the tool as its project folder -- flow.json, its page in page/,
+// a folder per node, as it was built -- the engine that runs it, and one
+// command. One format: what a recipient opens is what the editor opens. Nothing is
 // generated: the engine files are copied verbatim, so what a recipient runs is
 // what was tested here, byte for byte. Code generation would produce a second
 // implementation that is right on the day it is written and drifts from that
@@ -17,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import type { Graph } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
 import { withoutAuthoring } from '../authoring/handedOn.ts';
+import { writeProject } from '../project/folder.ts';
 import { installFolder } from '../ai/settings.ts';
 import { NODE_MAJOR, runCmd, runSh, zipMode } from './launchers.ts';
 
@@ -161,6 +164,17 @@ function moved(graph: Graph, carried: Carried[]): Graph {
   return { ...graph, nodes: graph.nodes.map((node) => ({ ...node, config: retold(node.config) as typeof node.config })) };
 }
 
+/** Every file under *dir*, relative to it, with `/`. */
+async function filesIn(dir: string, under = ''): Promise<string[]> {
+  const found: string[] = [];
+  for (const entry of await readdir(join(dir, under), { withFileTypes: true })) {
+    const path = under ? `${under}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) found.push(...await filesIn(dir, path));
+    else found.push(path);
+  }
+  return found;
+}
+
 /** Every engine source file, so the copy is complete without a list to maintain. */
 async function engineFiles(dir = ENGINE_ROOT): Promise<string[]> {
   const found: string[] = [];
@@ -180,8 +194,8 @@ async function engineFiles(dir = ENGINE_ROOT): Promise<string[]> {
 }
 
 /**
- * Where a bundle keeps the built page, beside its `graph.json`. Not `page/`:
- * in a project folder that is the page itself, its blocks in `page.json`.
+ * Where a bundle keeps the built page, beside the project. Not `page/`: in a
+ * project folder that is the page itself, its blocks in `page.json`.
  */
 export const WEB_DIR = 'web';
 
@@ -241,8 +255,11 @@ export async function writeBundle(
     written.push(relativePath);
   };
 
-  // What only writing the graph needs stays with the project (`withoutAuthoring`).
-  await put('graph.json', `${JSON.stringify(withoutAuthoring(moved(graph, data)), null, 2)}\n`);
+  // The project folder, first, into the empty bundle -- what runs, not how each
+  // node was written (`withoutAuthoring`), and the files it starts on where
+  // they now are.
+  await writeProject(target, withoutAuthoring(moved(graph, data)));
+  written.push(...await filesIn(target));
 
   for (const file of await engineFiles()) {
     const relativePath = join('engine', relative(ENGINE_ROOT, file)).replace(/\\/g, '/');
@@ -276,7 +293,7 @@ export async function writeBundle(
   // The same pair the downloadable package ships (see launchers.ts): from its
   // own folder, with Node checked before it is needed and a window that stays
   // open long enough to read a failure.
-  const command = servesPage ? 'engine/main.ts graph.json --serve' : 'engine/main.ts graph.json';
+  const command = servesPage ? 'engine/main.ts . --serve' : 'engine/main.ts .';
   await put('run.cmd', runCmd({ command }));
   await put('run.sh', runSh({ command }));
   // A no-op on Windows; on a Mac or Linux box it is the difference between
@@ -291,9 +308,11 @@ function readme(name: string, needs: BundleNeeds, servesPage = false, data: Carr
   const lines = [
     `# ${name}`,
     '',
-    'A graph, and the engine that runs it. Nothing here was generated: the',
-    'engine is a verbatim copy of the one the graph was built and tested on, so',
-    'this runs what was tested rather than a second implementation of it.',
+    'A tool, as the project folder it was built as -- flow.json, its page in',
+    'page/, a folder per node with its code -- and the engine that runs it.',
+    'Nothing here was generated: the engine is a verbatim copy of the one the',
+    'graph was built and tested on, so this runs what was tested rather than a',
+    'second implementation of it.',
     '',
     '## Running it',
     '',

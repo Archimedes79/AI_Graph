@@ -6,7 +6,7 @@
 // prompt and reply, with the start of the files its author gave ✨ -- the ✨
 // prompts it changed, and the files its ✨ Input and ✨ Output were given.
 // Nothing a run reads is among them. They stay with the project, where they
-// are the node's own record; a bundle's graph.json carried up to half a
+// are the node's own record; a bundle carried up to half a
 // megabyte of them per node, to whoever it was handed. What comes back from
 // a change of the whole graph takes them from the graph that was sent
 // (`generateGraph`), so leaving them out loses none of them.

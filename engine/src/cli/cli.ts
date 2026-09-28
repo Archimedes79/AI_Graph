@@ -23,7 +23,7 @@
 
 import { createInterface } from 'node:readline/promises';
 import type { Graph } from '../graph.ts';
-import { loadGraph } from '../project/folder.ts';
+import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/folderCheck.ts';
 import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
 import { runExample, testGraph } from '../authoring/examples.ts';
@@ -40,7 +40,7 @@ import { after, graphTriggers, parseInterval } from '../execution/triggers.ts';
 
 export interface CliOptions {
   graphPath: string;
-  /** Whether the graph was named, rather than taken to be `graph.json`, the way a bundle is laid out. */
+  /** Whether the graph was named, rather than taken to be the project in this folder, the way a bundle is laid out. */
   graphNamed: boolean;
   inputs: Record<string, string>;
   /** Seconds between the end of one run and the start of the next. */
@@ -117,7 +117,7 @@ export function parseArgs(argv: string[]): CliOptions {
     }
   }
   options.graphNamed = options.graphPath !== '';
-  if (!options.graphNamed) options.graphPath = 'graph.json';
+  if (!options.graphNamed) options.graphPath = '.';
   return options;
 }
 
@@ -234,7 +234,8 @@ async function runServer(options: CliOptions): Promise<number> {
   // right here. A graph that was named and is not there is a mistake to say,
   // not an empty server: `serve` says it, where it reads the graph.
   const hasGraph = options.graphNamed || (!options.editor && existsSync(resolve(options.graphPath)));
-  const carried = resolve(dirname(resolve(options.graphPath)), WEB_DIR);
+  // Beside the project -- a bundle is one -- or beside a single graph file.
+  const carried = resolve(projectFolderOf(options.graphPath) ?? dirname(resolve(options.graphPath)), WEB_DIR);
   const pageDir = !hasGraph ? undefined : existsSync(join(carried, 'runtime.html')) ? carried : builtPage();
 
   const start = (port: number) => serve({

@@ -28,7 +28,8 @@
 // call it.
 //
 // **One other shape opens.** A single `.json` graph with everything inline --
-// what a download, an import and a deploy bundle carry -- opens as it is.
+// what a download and an import carry -- opens as it is. A deploy bundle is a
+// project folder like this one.
 // Wherever a text has a file, the file wins over the inline value.
 //
 // **Everything reads through here.** The editor, a command line run, a served
