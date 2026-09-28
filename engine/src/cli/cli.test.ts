@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseGraph } from '../graph.ts';
@@ -67,14 +67,28 @@ describe('parseArgs', () => {
   });
 });
 
+const port = (id: string, kind: 'input' | 'output', dataType = 'any') =>
+  ({ id, name: id, kind, data_type: dataType, multi: false, required: false, description: '' });
+
+/** What a command prints: stdout, which is the result, and stderr, which is everything said about it. */
+async function printed(argv: string[]): Promise<{ code: number; out: string; err: string }> {
+  const writes: string[] = [];
+  const said: string[] = [];
+  const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { writes.push(String(chunk)); return true; });
+  const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => { said.push(String(chunk)); return true; });
+  try {
+    return { code: await main(argv), out: writes.join(''), err: said.join('') };
+  } finally {
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
+}
+
 /**
  * One node by itself, from a command line: what its panel tries, with no
  * editor anywhere -- the node's example, and the files its example reads.
  */
 describe('run-node', () => {
-  const port = (id: string, kind: 'input' | 'output', dataType = 'any') =>
-    ({ id, name: id, kind, data_type: dataType, multi: false, required: false, description: '' });
-
   async function project(config: Record<string, unknown>): Promise<string> {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-run-node-'));
     await writeProject(dir, parseGraph({
@@ -86,18 +100,6 @@ describe('run-node', () => {
       edges: [],
     }));
     return dir;
-  }
-
-  async function printed(argv: string[]): Promise<{ code: number; out: string }> {
-    const writes: string[] = [];
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { writes.push(String(chunk)); return true; });
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    try {
-      return { code: await main(argv), out: writes.join('') };
-    } finally {
-      stdout.mockRestore();
-      stderr.mockRestore();
-    }
   }
 
   it('runs a node once on the example in its input.js -- a file\'s text, already read -- and holds it to its output.js', async () => {
@@ -162,6 +164,60 @@ describe('run-node', () => {
   });
 });
 
+/** A clock on the command line: the rule a served tool's clock keeps too. */
+describe('--every', () => {
+  it('runs one graph round after round: what a round leaves in a data node is what the next starts from', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-every-'));
+    await writeProject(dir, parseGraph({
+      metadata: { name: 'Counter' },
+      nodes: [
+        {
+          id: 'count', node_type: 'data', label: 'Count', inputs: [port('input', 'input')], outputs: [port('output', 'output')],
+          config: { data_format: 'structure', data_value: 0 },
+        },
+        {
+          id: 'add', node_type: 'code', label: 'Add one', inputs: [port('n', 'input')], outputs: [port('next', 'output')],
+          config: { code: 'function run(i) { return { next: i.n + 1 }; }' },
+        },
+      ],
+      edges: [
+        { id: 'a', source_node_id: 'count', source_port_id: 'output', target_node_id: 'add', target_port_id: 'n' },
+        { id: 'b', source_node_id: 'add', source_port_id: 'next', target_node_id: 'count', target_port_id: 'input' },
+      ],
+    }));
+    try {
+      const { code, out } = await printed([dir, '--every', '0.01', '--limit', '3']);
+      expect(code).toBe(0);
+      const rounds = out.trim().split(/\n(?=\{)/).map((round) => JSON.parse(round) as { node_results: { node_id: string; outputs: { next?: number } }[] });
+      expect(rounds.map((round) => round.node_results.find((result) => result.node_id === 'add')?.outputs.next)).toEqual([1, 2, 3]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('says a round that could not even start, and goes on to the next', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-every-'));
+    const graph = join(dir, 'loop.json');
+    // Two nodes feeding each other and nothing that remembers: no round can be put in order.
+    const code = (id: string) => ({ id, node_type: 'code', inputs: [port('in', 'input')], outputs: [port('out', 'output')], config: { code: 'function run(i) { return { out: i.in }; }' } });
+    await writeFile(graph, JSON.stringify({
+      metadata: { name: 'Loop' },
+      nodes: [code('a'), code('b')],
+      edges: [
+        { id: 'ab', source_node_id: 'a', source_port_id: 'out', target_node_id: 'b', target_port_id: 'in' },
+        { id: 'ba', source_node_id: 'b', source_port_id: 'out', target_node_id: 'a', target_port_id: 'in' },
+      ],
+    }));
+    try {
+      const { code: exit, err } = await printed([graph, '--every', '0.01', '--limit', '2']);
+      expect(exit).toBe(1);
+      expect(err.match(/This run failed: .*cycle/g)).toHaveLength(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 /**
  * A container has nothing to open a browser in -- no `xdg-open` in an Alpine
  * image -- and neither has many a server a bundle is started on. A missing
@@ -171,15 +227,15 @@ describe('run-node', () => {
 describe('--serve where nothing can open a browser', () => {
   it('serves all the same', async () => {
     const probe = createServer();
-    const port = await new Promise<number>((found) => probe.listen(0, '127.0.0.1', () => {
-      const { port: free } = probe.address() as { port: number };
-      probe.close(() => found(free));
+    const free = await new Promise<number>((found) => probe.listen(0, '127.0.0.1', () => {
+      const { port: taken } = probe.address() as { port: number };
+      probe.close(() => found(taken));
     }));
     // No PATH: whatever opens a browser on this machine cannot be found.
     const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(PATH|AI_GRAPH_NO_BROWSER)$/i.test(name)));
-    const main = resolve(__dirname, '..', 'main.ts');
+    const entry = resolve(__dirname, '..', 'main.ts');
     const graph = resolve(__dirname, '..', '..', 'fixtures', 'minimal.json');
-    const server = spawn(process.execPath, [main, graph, '--serve', '--port', String(port)], {
+    const server = spawn(process.execPath, [entry, graph, '--serve', '--port', String(free)], {
       env: { ...env, PATH: '' }, stdio: ['ignore', 'ignore', 'pipe'],
     });
     let said = '';
@@ -190,7 +246,7 @@ describe('--serve where nothing can open a browser', () => {
       }
       await new Promise((wake) => setTimeout(wake, 500));
       expect(server.exitCode, said).toBeNull();
-      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(200);
+      expect((await fetch(`http://127.0.0.1:${free}/api/runtime/graph`)).status).toBe(200);
     } finally {
       server.kill();
     }

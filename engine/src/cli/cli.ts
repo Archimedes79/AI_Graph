@@ -22,6 +22,7 @@
 // "Text for 'Greeting': " in front of the JSON and nobody could parse it.
 
 import { createInterface } from 'node:readline/promises';
+import type { Graph } from '../graph.ts';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/folderCheck.ts';
 import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
@@ -154,10 +155,7 @@ async function answer(
   return resolved;
 }
 
-async function runOnce(options: CliOptions): Promise<number> {
-  const graph = await loadGraph(options.graphPath);
-  applyRuntimeValues(graph, await answer(runtimeRequirements(graph, registry), options.inputs), registry);
-
+async function runOnce(graph: Graph): Promise<number> {
   const runtime = nodeRuntime({
     report: (event) => {
       if (event.type === 'batch') process.stderr.write(`\r  ${event.done}/${event.total}`);
@@ -174,13 +172,18 @@ async function runOnce(options: CliOptions): Promise<number> {
 }
 
 /**
- * Run repeatedly, *interval* seconds apart.
+ * Run *graph* repeatedly, *interval* seconds apart.
  *
  * Measured between the end of one run and the start of the next, not between
  * starts: a graph that takes longer than its interval would otherwise pile
  * runs on top of each other until something gives.
+ *
+ * One graph for every round, as a served tool's clock holds one: what a round
+ * leaves in a data node is what the next starts from. Read again each round,
+ * a counter counted to one for ever. And a round that could not even start is
+ * said, and the next one is tried: the next may be fine.
  */
-async function runEvery(options: CliOptions): Promise<number> {
+async function runEvery(graph: Graph, options: CliOptions): Promise<number> {
   const seconds = options.every ?? 0;
   let code = 0;
   for (let round = 0; options.limit === undefined || round < options.limit; round += 1) {
@@ -188,7 +191,10 @@ async function runEvery(options: CliOptions): Promise<number> {
       process.stderr.write(`\nWaiting ${seconds}s…\n`);
       await new Promise<void>((wake) => { after(seconds * 1000, wake); });
     }
-    code = await runOnce(options);
+    code = await runOnce(graph).catch((error: unknown) => {
+      process.stderr.write(`\nThis run failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    });
   }
   return code;
 }
@@ -418,15 +424,17 @@ export async function main(argv: string[]): Promise<number> {
   if (options.mcp) return runMcp(options);
   if (options.bundle) return makeBundle(options);
   if (options.serve || options.editor) return runServer(options);
+  const graph = await loadGraph(options.graphPath);
   // The graph's own clock, when the command line names none: a graph saved as
   // "every 5 minutes" is that on any machine, not only where someone remembers
   // the flag. `--every` still wins, which is how one run is made of it.
-  if (!options.every && existsSync(resolve(options.graphPath))) {
-    const graph = await loadGraph(options.graphPath);
+  if (!options.every) {
     // Its shortest interval: on the command line a round is the whole graph,
     // every trigger counted as fired, so one clock is all there is to keep.
     const intervals = graphTriggers(graph).filter((trigger) => trigger.every).map((trigger) => parseInterval(trigger.every));
     if (intervals.length) options.every = Math.min(...intervals);
   }
-  return options.every ? runEvery(options) : runOnce(options);
+  // Asked once, however many rounds follow.
+  applyRuntimeValues(graph, await answer(runtimeRequirements(graph, registry), options.inputs), registry);
+  return options.every ? runEvery(graph, options) : runOnce(graph);
 }
