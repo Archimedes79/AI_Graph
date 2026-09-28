@@ -60,7 +60,7 @@ import type { AiService, Runtime, ToolSpec } from '../../elements/Runtime.ts';
 import { parseGraph, type Graph } from '../../graph.ts';
 import { executeGraph, runNodeAlone } from '../../execution/executor.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
-import { everyGraphIn, testGraph } from '../../execution/examples.ts';
+import { everyGraphIn, testGraph } from '../../authoring/examples.ts';
 import { RUN_PORT, type Trigger } from '../../execution/triggers.ts';
 import { registry } from '../../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';

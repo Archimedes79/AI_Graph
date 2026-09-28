@@ -22,7 +22,7 @@ import type { ExecutionResult, Graph, GraphNode, NodeResult } from '../graph.ts'
 import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/changes.ts';
-import type { ExampleRun } from '../execution/examples.ts';
+import type { ExampleRun } from '../authoring/examples.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 
 export type { TextChange };

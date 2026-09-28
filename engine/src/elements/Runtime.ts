@@ -21,6 +21,12 @@ export interface FileService {
   remove?(path: string): Promise<void>;
   resolve(path: string): string;
   exists(path: string): Promise<boolean>;
+  /**
+   * How many bytes the file at *path* holds, without reading it: what is too
+   * large is refused unread. Optional: a host that cannot say is not asked,
+   * and has nothing refused for its size.
+   */
+  size?(path: string): Promise<number>;
 }
 
 /**
@@ -83,6 +89,11 @@ export interface AiRequest {
 
 export interface AiService {
   complete(request: AiRequest): Promise<string>;
+  /**
+   * The one AI setting as it stands: what answers a request that names no
+   * model of its own. Absent where nobody chooses one -- a test's model.
+   */
+  setting?(): Promise<ModelChoice>;
 }
 
 /** A provider and a model, as a request names them or a default supplies them. */

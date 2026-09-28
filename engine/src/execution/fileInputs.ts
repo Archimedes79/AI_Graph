@@ -18,6 +18,7 @@
 import type { GraphNode } from '../graph.ts';
 import type { FileService } from '../elements/Runtime.ts';
 import type { Runners } from '../elements/NodeRunner.ts';
+import { atMost } from './batching.ts';
 
 /**
  * The input ports of *node* that are read: the ones typed `file_path`, on a
@@ -31,16 +32,25 @@ export function filePorts(node: GraphNode, elements: Runners): string[] {
 }
 
 /**
+ * A file one item was to be handed that could not be read. It stands where the
+ * text would have, and that item fails with it -- that item, not the others.
+ */
+export class Unread extends Error {}
+
+/**
  * *inputs* with the paths on *ports* replaced by what the files say.
  *
- * Its own function because a run is not the only thing that must do this:
- * code generated for such a node is tried on a sample before anyone sees it,
- * and a sample still holding the path tries the code on a filename.
+ * A list on a port in *each* -- one a node runs over an item at a time -- is
+ * read a file per item, no more at once than *atOnce*, as its items run: a
+ * file of it that cannot be read is an `Unread` in its place, and costs its
+ * item. Any other file that cannot be read fails the whole, which every call
+ * is handed.
  */
 export async function readPorts(
   inputs: Record<string, unknown>,
   ports: string[],
   files: FileService,
+  each: { ports: Set<string>; atOnce: number } = { ports: new Set(), atOnce: 1 },
 ): Promise<Record<string, unknown>> {
   const resolved: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(inputs)) {
@@ -52,7 +62,19 @@ export async function readPorts(
     // yet hands on "", and the node is there to say "choose a file" -- it used
     // to be told `ENOENT: open ''` instead, before it ran at all.
     const read = (path: unknown): Promise<string> | string => (String(path ?? '').trim() ? files.read(String(path)) : '');
-    resolved[key] = Array.isArray(value) ? await Promise.all(value.map(read)) : await read(value);
+    if (Array.isArray(value) && each.ports.has(key)) {
+      const texts: unknown[] = new Array(value.length);
+      await atMost(value.length, each.atOnce, async (index) => {
+        try {
+          texts[index] = await read(value[index]);
+        } catch (error) {
+          texts[index] = new Unread(error instanceof Error ? error.message : String(error));
+        }
+      });
+      resolved[key] = texts;
+    } else {
+      resolved[key] = Array.isArray(value) ? await Promise.all(value.map(read)) : await read(value);
+    }
   }
   return resolved;
 }

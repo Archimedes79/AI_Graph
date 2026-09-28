@@ -15,7 +15,7 @@ import { join, resolve } from 'node:path';
 import { parseGraph, type Graph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
-import { runExample } from '../../execution/examples.ts';
+import { runExample } from '../../authoring/examples.ts';
 import { registry } from '../../elements/registry.ts';
 import { builtPage, writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';

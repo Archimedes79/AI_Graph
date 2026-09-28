@@ -1,6 +1,7 @@
 // A widget: the element branch that sits on a page, inside a gui node.
 
 import type { Port, RawConfig, WidgetKind } from '../graph.ts';
+import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 import { ElementRunner } from './ElementRunner.ts';
 import type { Runtime } from './Runtime.ts';
 
@@ -101,6 +102,18 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
     return value;
   }
 
+  /**
+   * What this block needs a person to supply before the graph can run -- a
+   * picker with nothing chosen. Its page asks it under the block's own key,
+   * which is the page's to make; most blocks ask nothing.
+   */
+  runtimeRequirements(_widget: Widget): Omit<RuntimeRequirement, 'key'>[] {
+    return [];
+  }
+
+  /** Keep one supplied value in *stored*, the block as the graph file holds it. Only a block that asked is told. */
+  applyRuntimeValue(_stored: RawConfig, _value: string): void {}
+
   // ── Build time ────────────────────────────────────────────────────────────
   // What building a neighbour asks of it.
 
@@ -124,5 +137,10 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
    */
   graphAuthorNote(): string | undefined {
     return undefined;
+  }
+
+  /** Files and folders this block names as its own defaults, which a bundle carries: what a picker starts on. */
+  referencedPaths(_widget: Widget): string[] {
+    return [];
   }
 }

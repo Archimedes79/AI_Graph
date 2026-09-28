@@ -4,7 +4,7 @@ import { type Widget, type WidgetRunner, type WidgetPresentation } from '../../W
 import type { GraphNode, Port, RawConfig } from '../../../graph.ts';
 import { port } from '../../port.ts';
 import type { Problem } from '../../../execution/wiring.ts';
-import { InputPickerWidgetRunner, WIDGETS } from '../../widgets/roster.ts';
+import { WIDGETS } from '../../widgets/roster.ts';
 
 const BY_KIND = new Map(WIDGETS.map((e) => [e.widgetKind, e as WidgetRunner<unknown>]));
 
@@ -105,11 +105,17 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
 
   override readonly hasInterface = true;
 
-  /** A block that starts the graph does so on its `_out` port: what the page names when it fires. */
+  /**
+   * A block that starts the graph does so on its `_out` port: what the page
+   * names when it fires. One it has -- a block that only shows hands nothing
+   * on, and starts nothing, whatever it was once told.
+   */
   override eventPorts(node: GraphNode): string[] {
-    return this.config(node).widgets
-      .filter((widget) => BY_KIND.get(widget.kind)?.firesRun(widget))
-      .map((widget) => `${widget.id}_out`);
+    return this.config(node).widgets.flatMap((widget) => {
+      const element = BY_KIND.get(widget.kind);
+      const out = `${widget.id}_out`;
+      return element?.firesRun(widget) && element.ports(widget).outputs.some((port) => port.id === out) ? [out] : [];
+    });
   }
 
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
@@ -161,30 +167,19 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     return shown;
   }
 
-  /** A picker with nothing chosen is a question, and its block is who to ask. */
+  /** What its blocks ask before the graph runs, each under the key of the block it belongs to. */
   override runtimeRequirements(node: GraphNode) {
-    const asked = [];
-    for (const widget of this.config(node).widgets) {
-      const element = BY_KIND.get(widget.kind);
-      if (!(element instanceof InputPickerWidgetRunner)) continue;
-      const settings = element.config(widget);
-      if (settings.path) continue;
-      asked.push({
-        key: `${node.id}::${widget.id}`,
-        label: widget.label || widget.id,
-        kind: (settings.directory ? 'directory' : 'file') as 'directory' | 'file',
-        direction: 'input' as const,
-        current: '',
-      });
-    }
-    return asked;
+    return this.config(node).widgets.flatMap((widget) => (BY_KIND.get(widget.kind)?.runtimeRequirements(widget) ?? [])
+      .map((asked) => ({ key: `${node.id}::${widget.id}`, ...asked })));
   }
 
+  /** An answer goes to the block it was asked for, which keeps it where it keeps what it holds. */
   override applyRuntimeValue(node: GraphNode, widgetId: string | null, value: string): void {
     const widgets = node.config.gui_widgets;
     if (!widgetId || !Array.isArray(widgets)) return;
     for (const raw of widgets) {
-      if ((raw as RawConfig)?.id === widgetId) (raw as RawConfig).value = value;
+      const stored = raw as RawConfig;
+      if (stored?.id === widgetId) BY_KIND.get(String(stored.kind) as Widget['kind'])?.applyRuntimeValue(stored, value);
     }
   }
 
@@ -264,15 +259,8 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     return { needsInterface: this.config(node).widgets.length > 0, asksAi: false };
   }
 
-  /** What its pickers start on. */
+  /** What its blocks start on. */
   override referencedPaths(node: GraphNode): string[] {
-    const paths: string[] = [];
-    for (const widget of this.config(node).widgets) {
-      const element = BY_KIND.get(widget.kind);
-      if (!(element instanceof InputPickerWidgetRunner)) continue;
-      const { path } = element.config(widget);
-      if (path) paths.push(path);
-    }
-    return paths;
+    return this.config(node).widgets.flatMap((widget) => BY_KIND.get(widget.kind)?.referencedPaths(widget) ?? []);
   }
 }

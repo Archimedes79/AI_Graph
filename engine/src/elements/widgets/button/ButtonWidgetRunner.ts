@@ -2,11 +2,6 @@ import { WidgetRunner, type Widget } from '../../WidgetRunner.ts';
 import { port } from '../../port.ts';
 import type { Runtime } from '../../Runtime.ts';
 
-export interface ButtonConfig {
-  /** How many times it has been pressed: what the page changes to say "again". Not what the graph reads. */
-  count: number;
-}
-
 /**
  * A press: it starts the graph at whatever the button is wired to.
  *
@@ -21,12 +16,15 @@ export interface ButtonConfig {
  * wants to know which of several events this round is. It used to emit a press
  * count, which nothing could do anything with.
  */
-export class ButtonWidgetRunner extends WidgetRunner<ButtonConfig> {
+export class ButtonWidgetRunner extends WidgetRunner<Record<string, never>> {
   readonly widgetKind = 'button' as const;
 
-  config(widget: Widget): ButtonConfig {
-    const count = Number(widget.config.value);
-    return { count: Number.isFinite(count) && count >= 0 ? Math.floor(count) : 0 };
+  /**
+   * Nothing to set: a press is all it is. The count its value holds is the
+   * page's, so that every press is a change it reports; the graph never reads it.
+   */
+  config(): Record<string, never> {
+    return {};
   }
 
   ports(widget: Widget) {

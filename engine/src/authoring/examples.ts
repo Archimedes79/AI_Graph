@@ -12,8 +12,8 @@
 import type { Graph } from '../graph.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import type { Runners } from '../elements/NodeRunner.ts';
-import { definitionExample, misfits, unreadableOutput } from '../authoring/definition.ts';
-import { callNode } from './executor.ts';
+import { definitionExample, misfits, unreadableOutput } from './definition.ts';
+import { callNode } from '../execution/executor.ts';
 
 /** How one node did on its example. */
 export interface ExampleRun {
