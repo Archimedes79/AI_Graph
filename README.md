@@ -19,9 +19,9 @@ as a tool that runs on their machine: offline, on a local model, with no account
 |---|---|
 | 🔒 **Your data stays on the machine** | Ollama and LM Studio are the default, not a fallback. Everything binds to `127.0.0.1`, and there is no telemetry. Contracts, records or personnel files are processed where they already are. |
 | 💶 **It is free to run** | A 7B model on an ordinary workstation classifies, extracts, summarises and rewrites. Where that is not enough, pin *one* node to a paid provider instead of moving the whole pipeline into the cloud. |
-| ✨ **No AI expertise required** | Describe in plain language what a node should do, and ✨ Generate writes the system prompt or the JavaScript. No prompt engineering, no vector store, no framework, no glue code. |
+| ✨ **No AI expertise required** | Describe in plain language what a node should do, and ✨ writes the rest: what goes in, what comes out, and the JavaScript or the prompt. No prompt engineering, no vector store, no framework, no glue code. |
 | 🚀 **You ship a tool, not a prototype** | 🚀 Deploy packages the graph with the real execution engine. The recipient needs Node and nothing else, and the code nodes run there too. A graph with a page deploys *with its page*. |
-| 🔍 **Nothing is hidden** | Typed ports say what flows between nodes, generated code stays visible and editable, graphs are plain JSON, and a node's body can live in its own `.js`/`.md` file beside the graph — so `git diff` reads like text. |
+| 🔍 **Nothing is hidden** | Every file ✨ writes is a file you can read and change — `input.js`, `output.js`, `code.js`, `prompt.md` — beside the graph in plain JSON, so `git diff` reads like text. |
 
 > **The cheap option is the private one.** Running locally costs nothing *and* keeps the
 > data where it is; the two are not a trade-off.
@@ -84,15 +84,11 @@ Nothing leaves the machine unless the graph itself sends it there.
   stands until it runs again.
 - **The flow in one file** — `flow.json`: which nodes there are, and every wire as one
   line, `"page.file_out -> chart.csv"`. Nothing else is in it.
-- **Every node's folder says what it is** — `node.json` (its settings), `interface.json`
-  (what goes in and what comes out), its prompts or code, and for an AI node `run.js`:
-  the call itself, as a file you can change.
-- **AI generation** — a node's code or system prompt, or an entire graph, written from a
-  plain-language description and left visible and editable. Code
-  generation starts from a typed skeleton of the node's real ports — the types and
-  example values come from the node's example (step 1), or, without one, from the last
-  run — and the result is executed once and repaired
-  before you ever see it.
+- **A node is its text; ✨ writes the rest** — say what a node should do, and ✨ writes
+  its files from that: `input.js` (what one call is handed, with an example), `output.js`
+  (what it returns — its keys are the node's outputs) and the body, `code.js` or an AI
+  node's `prompt.md`. Each is a file you can open, read and change; one press writes
+  what is missing, and new code is tried on the example and repaired before you see it.
 - **Graph DSL** — versioned JSON with typed ports (`data_type`, `multi`, `required`), so a
   node's inputs and outputs are never ambiguous.
 - **Execution engine** — topological order with per-node status, batch items run
@@ -112,20 +108,19 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **Triggers** — a graph starts when the tool opens, on a clock, or from its own page: a
   button, a chat message or a dropdown starts the graph *at the node it is wired to*, so
   one page can hold several tools.
-- **A prompt you can see** — an AI node shows the exact request the model will get,
-  tries it with ▶ Try it, and **Keep this answer's shape** puts an answer you liked into
-  its words ("Answer in this shape: …"), which the model is sent every time.
+- **A prompt you can see** — every ✨ shows the prompt it is written with, and what it
+  sends, word for word; an AI node's instructions are its `prompt.md`, and with an
+  `output.js` it answers in JSON, each key on its own output.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
-- **A real editor** — code and prompts are written in CodeMirror, full-window on ⤢, or
-  in your own editor with one click.
-- **Four steps, the same way everywhere** — an AI node and a code node are built in the
-  same four steps, with the same buttons in the same places: one example of what comes
-  in, what comes out, what it should do, and the body. Get the example from the graph
-  (⟳), a file (📂), or drop a file on the node; press ▶ Try it and see what comes out,
-  whether it is the expected output, and how the node's other examples did. Then say
-  what to change in one line — ✨ changes the request and the body together and tries it
-  again — or press ✨ Fix where it failed. There is no Save in the dialog: a change is in
-  the graph at once, and Undo takes it back.
+- **Your own editor** — a node's files open in it with one click, and what you save
+  there comes back by itself.
+- **The same way everywhere** — an AI node and a code node are built alike: its text,
+  then ✨ Input, ✨ Output and ✨ Code (or ✨ Prompt), each with its prompt and its file.
+  Give ✨ Input real files to write from — from the graph (⟳), a file (📂), or drop one
+  on the node; press ▶ Try and see what comes out for input.js's example, held to
+  output.js. Then say what to change in one line — ✨ changes the body and the node's
+  text together — or press ✨ Fix where it failed. There is no Save in the dialog: a
+  change is in the graph at once, and Undo takes it back.
 - **An MCP server** — `--mcp` lets Claude Code or Claude Desktop generate, validate, save
   and run graphs, confined to one folder.
 - **Deployment** — a self-contained bundle, a Docker Compose stack, or one executable.
@@ -215,11 +210,11 @@ AI-Graph/
 ├── engine/src/             # Runs a graph, serves the editor, ships as a bundle. No React.
 │   ├── elements/           #   one folder per element: nodes/<kind>/<Kind>NodeRunner.ts, widgets/<kind>/<Kind>WidgetRunner.ts
 │   ├── execution/          #   the executor and what starts a run
-│   ├── authoring/          #   how an element's body is written, kept and run
+│   ├── authoring/          #   what ✨ writes for a node, and how its files are read
 │   └── host/  ai/  cli/    #   the server and its contract, model providers, the command line
 ├── editor/src/             # The page: React + ReactFlow, built on the engine
 │   ├── elements/           #   the same folders: <Kind>NodeGuiBuilder.ts, <Kind>WidgetView.tsx, <Kind>…Panel.tsx
-│   ├── authoring/          #   the four steps of a dialog, ✨ Generate, Try it, the live transcript
+│   ├── authoring/          #   a node's text and a row per ✨, ▶ Try, the live transcript
 │   └── app/  canvas/  page/  store/  api/  runtime/  ui/
 ├── examples/               # Example projects, one folder each: flow.json + nodes/
 ├── docs/                   # The documents linked above

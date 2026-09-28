@@ -51,8 +51,9 @@ jobs:
       - name: Check the examples
         run: node engine/src/main.ts check $(ls -d examples/*/ | grep -v '^examples/data/$')
 
-      # The nodes' own examples.md, without a model: there is no key here, so
-      # an AI node's examples and judged expectations are skipped, not failed.
+      # Each node run once on the example in its input.js and held to its
+      # output.js, without a model: there is no key here, so an AI node is
+      # skipped, not failed.
       - name: Test the examples' nodes
         run: node engine/src/main.ts test --offline $(ls -d examples/*/ | grep -v '^examples/data/$')
 

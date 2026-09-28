@@ -39,10 +39,12 @@ node is the run's result — what the command line prints, what a tool without a
 shows — under the node's label ("Result" here), and with `write_mode` `file` or
 `directory` it is also written to a file, or one file per value into a folder. A
 **data** node is a value that survives the run: its kind (`data_format`, text or
-structure) and what it holds (`data_value`). Its dialog is that value: what is typed is
-in the graph as it is typed, a structure that does not parse stays in the box with the
-reason and is not stored, and a file dropped on the box — or on the node on the canvas —
-is what it holds from then on (what the file says, parsed when it is JSON).
+structure) and what it holds (`data_value`, kept in `data.json` or `data.txt`). Its
+dialog is its text and that value -- **✨ Data** writes the value from the text, shaped
+as the nodes it feeds want it: what is typed is in the graph as it is typed, a structure
+that does not parse stays in the box with the reason and is not stored, and a file
+dropped on the box — or on the node on the canvas — is what it holds from then on (what
+the file says, parsed when it is JSON).
 
 ---
 
@@ -186,91 +188,100 @@ starts at the summarizer.
 
 ---
 
-## AI Nodes
+## Code and AI Nodes
 
-A request to a model has three parts, and the node editor shows all three — under
-**What the model receives**, built by the same function the run uses, from the node as it
-stands in the dialog:
-
-```
-Instructions (system)   what you wrote, or had ✨ Generate write from "What this node should do"
-                        + what the answer should look like (step 2's words), when they say anything
-Message (user)          what arrived on the wires, laid out by the message template
-```
-
-**The message template** places inputs with `{{port}}`:
+A code node and an AI node are built the same way: **you say what it should do, and ✨
+writes the rest** -- a file each, every one of them yours to read and change:
 
 ```
-Conversation so far:
-{{history}}
-
-User: {{message}}
+input.js     what one call is handed: a JSDoc typedef, then one example of it as plain JSON
+output.js    what one call returns, the same way -- its keys are the node's outputs
+code.js      a code node's body: function run(inputs), returning an object keyed by output
+prompt.md    an AI node's instructions to its model
+history.md   every exchange with the model about this node, oldest first
 ```
 
-- Empty template: every input is sent as it arrives, joined by blank lines — the box
-  shows that as its greyed-out placeholder, `{{prompt}}` for a new node. **A node
-  nobody has written anything for still forwards its input** — dropping an AI node on the
-  canvas and wiring it is enough.
-- `{{input}}` stands for every input not named elsewhere.
-- **Nothing wired in is ever dropped.** An input the template forgot is sent after it,
-  and the preview says so. A name nothing is wired to is sent as nothing, and the preview
-  says that too.
-- A list becomes paragraphs, not `["…","…"]`.
-
-**▶ Try it** runs this one node on its example — as the dialog shows it, without running
-the graph — and shows first what the model receives, described
-[below](#trying-an-element-out-the-same-way-everywhere).
-
-**`run.js`: what the node does with all that.** In a project folder an AI node keeps
-`run.js` beside its prompts — a few lines that make the one call:
+A definition is JavaScript, so it reads as code and opens with types in an editor; its
+example is plain JSON after `module.exports =`, so the engine reads it without running
+anything:
 
 ```js
-async function run(inputs, node) {
-  const output = await node.llm({
-    system: node.texts.system,      // system.md
-    message: node.texts.message,    // message.md, its {{port}} placeholders filled from the inputs
-    inputs,
-  });
-  return { output };
-}
+/**
+ * @typedef {Object} Input
+ * @property {string} csv  the chosen CSV file's text: a header row, then one row per name
+ */
+module.exports = {
+  "csv": "Country,Population\nChina,1419\nIndia,1450"
+};
 ```
 
-The detail of making the call — keys, providers, tools, images — is behind `node.llm`, and
-the node's settings decide whatever the call does not say. **Left as it is, the file is the
-engine's**: it is written though nobody wrote it, and the engine makes that one call
-itself rather than starting a process per item (a test
-holds the two to the same request). **Changed, it is yours** — a loop, a second call, a
-check of the answer — and runs where every body runs: sandboxed, without this machine's
-keys, asking for each call (25 each time it runs, at most). The panel shows it under *Advanced → What
-this node runs*, with the way back to the standard.
+**The node's dialog** is the order the work is done in, the same for both kinds:
 
-**Do you have to describe the output format?** No. It only matters when something
-downstream has to *parse* the answer, and what the nodes it is wired to want is said
-already: step 2's words field shows it greyed while it is empty, and it is what ✨ is told
-either way. To say more, there is that one field, sent whenever it says anything: write it
-(“a JSON list of {title, score}”), or show it — press ▶ Try it, and if the answer has the
-shape you want, **Keep this answer's shape** puts “Answer in this shape: …” with that answer
-into the words (in place of a shape kept before). The node is then told to answer in that
-same structure with new content, and its neighbours are generated against it. Nothing
-checks the answer afterwards unless its example has a judge; a model that ignores the
-format is caught by a Code node, not by this setting.
+```
+Code 1                      its heading -- never empty: a new node is its kind and a number,
+                            and while nobody changed that, it is written from the text
+CODE  code                  its kind and its id
+What should it do?          a sentence or two, in your words
+✨ Input    input.js ↗      the prompt it is written with; the files it is written from --
+                            examples, a spec: ⟳ from the graph, 📂, or dropped here
+✨ Output   output.js ↗     the prompt, and the files it may be given
+✨ Code     code.js ↗       the prompt (an AI node: ✨ Prompt, prompt.md)
+▶ Try                       one call on input.js's example, held to output.js
+history.md ↗
+Advanced                    its ports, once per item, failures -- an AI node's model too
+```
 
-**An answer in a fixed format.** An AI node whose output is typed `json` (`"type": "json"`
-in its `interface.json`) hands on the answer parsed -- a ```` ```json ```` fence around it
-taken off -- and fails, saying how the answer began, when it is not JSON. So an AI node can
-map a file whose layout nobody knows onto the rows a table or a code node takes, the way a
-code node would, and like a code node it reads a file on an input that says so.
+Each file is a chip that opens it in your own editor -- the project is saved first, and
+what you save there comes back by itself -- shown before it is written, saying so ("not
+written yet"; greyed, while the graph is not saved as a project). **One press does the
+whole node:** the body's ✨ writes what is missing of input.js and output.js first, and
+stops at a definition that does not fit the node -- an example that names an input the
+node does not have, or leaves out an output wired on -- since what came after would be
+written against it. There is no Save and no Cancel: a change is in the graph a moment
+after it is made, one undo step per field typed into, and what ✨ writes is a step of its
+own.
 
-Everything else — model, temperature, tools, vision, batching, failures — has a default
-that is right for most nodes and sits folded under **Advanced**. For tools, see
+**The prompts.** Each ✨ is sent a prompt, in sight under its button: the standard one
+until you change it (Reset takes it back; the node keeps only the prompts that differ, in
+`config.prompts`). **What ✨ sends** shows it filled in, word for word, without sending it.
+A prompt names what the node and the graph hold by variables, filled in by their exact
+names -- anything else in braces is sent as written:
+
+| Variable | Filled with |
+|---|---|
+| `{Node Description}` | `# <heading> (ID <id>, <kind> node)`, then its text |
+| `{Input Definition}` | input.js as it is -- or, while there is none, each input: its type, what it is, where it is wired from |
+| `{Output Definition}` | output.js as it is -- or, while there is none, each output and where it goes |
+| `{Context}` | the graph around the node: its nodes in the order they run, the wires, the page with each block's size -- about 3 000 characters at most |
+| `{Example Files}` | for ✨ Input: the files it is given, each path and the start of it -- about 4 000 characters between them |
+| `{Output Files}` | for ✨ Output: the files it is given, the same way |
+
+After the prompt the engine adds a frame of its own, which is not yours to edit: the
+file's format, how to answer, the keys the code must return -- and that a missing or empty
+input is answered with what to do rather than a failure (a chart gets a figure with no
+points and a title saying what to choose).
+
+**▶ Try** runs this one node once, on the example in its input.js, as a run calls it --
+a model asked where it asks one -- and holds what comes out to output.js: **✓ fits
+output.js**, or where it does not. **✨ Fix** repairs the body from that. ✨ Code does the
+same by itself: what it writes is tried on the example, and sent back once to be repaired
+when it fails or does not fit. To change what a node does, say so in the bar under the
+canvas: its body is changed as said, with what the last try showed, and its text restated
+to match.
+
+**An AI node at run time** sends its prompt.md -- or, while that says nothing of its own,
+the standard instructions -- with `{Node Description}` and `{Output Definition}` filled in,
+and after it everything wired in: one input as it is, several each under its port id. A
+list becomes paragraphs, not `["…","…"]`. **Nothing wired in is ever dropped**, and a node
+nobody has written anything for still works: its text is the question. With an output.js
+the answer is JSON keyed as its example is, and each key goes out on the output of that
+name; without one it is text, on `output`. Everything else -- model, temperature, tools,
+vision, batching, failures -- has a default that is right for most nodes and sits folded
+under **Advanced**. For tools, see
 [ai-providers.md](ai-providers.md#tools-connecting-a-prompt-to-an-mcp-server).
 
----
-
-## Code Nodes
-
-A code node is a JavaScript `run(inputs)` returning an object, run on the Node that
-runs the engine — which is why a bundle needs nothing installed.
+**A code node** is a JavaScript `run(inputs)` returning an object, run on the Node that
+runs the engine -- which is why a bundle needs nothing installed:
 
 ```js
 function run(inputs) {
@@ -279,124 +290,9 @@ function run(inputs) {
 }
 ```
 
-The AI can generate this function for you: just describe what the node should do.
-
-**The node's dialog is the order the work is done in**, with the same sections and the
-same buttons for an AI node -- only the body differs:
-
-```
-1  What comes in        each input: its name, "needed", "Read the file at this path", and
-                        where it is wired from -- run per item, "whole list" too
-                        + ONE example of what arrives: ⟳ From the graph, 📂 From a file…,
-                          or a file dropped on it
-                        + "Run once per item", when a list arrives
-2  What comes out       each output: its name, where it goes and what the node there
-                        wants -- as the graph says it, to read
-                        + what comes out, in words -- greyed, what the graph already says
-                        + the shape a run kept (output_schema in interface.json), to read
-3  What should it do?   a sentence or two, in your words
-4  Code                 the code (an AI node's instructions and message), with ✨ Generate
-                        -- and ▶ Try it on step 1's example, under it: what came out,
-                        ✓/✗ against the expected output, Keep as expected output (an
-                        AI node: Keep this answer's shape), the judge's sentence,
-                        "and 2 more: pass" -- then ✨ Fix where it failed, and "Say
-                        what to change"
-```
-
-There is no Save and no Cancel: a change is in the graph a moment after it is made, one
-undo step per field typed into, and ✕ or Esc close the dialog with nothing lost. What
-cannot be stored yet -- an example that is not JSON, a port name that is empty or taken --
-stays in its field with the reason. A port has no type or "list" box of its own here: an
-input's file is read where it says so, and a list follows "Run once per item" -- beside
-which an input ticked **whole list** is handed its list whole, a stop-word list beside the
-words the node runs over.
-
-The example is kept as the first section of the node's `examples.md`: its input block is
-step 1, its expect block what Try it holds the result to. It is the one sample everything
-uses — ✨ Generate and its verify pass, Try it, the AI node's request, `test` and `run-node`.
-
-**Say what to change.** Under the result, one line: say what to change and press Enter.
-✨ changes the body there is -- from the body, what came of it (the try, else the last run)
-and your words -- restates the request to match, writes both as one undo step and tries it
-at once. A change is not held to the expected output, which was written before it: the try
-shows whether it still gives it, and **Keep** makes what it gives the new one. Where the
-try or the last run failed, or fell short of the expected output or the judge, **✨ Fix**
-repairs the body from the error, the input and the body.
-
-**What ✨ Generate is told** is the node's `prompt.md`: a template, then a line `Prompt:`
-and your request -- step 3 is that request. The template names three variables, which the
-engine fills from steps 1 and 2 and the graph, each fact said once and everything long cut
-to a budget (about 8 000 characters at most), so a small local model still has room to
-answer. A new node's is the standard one:
-
-```
-Input:
-{Input Needs}
-
-Output Example:
-{Output Example}
-
-Graph Context:
-{Graph}
-
-Prompt:
-<what it should do>
-```
-
-- `{Input Needs}`: each input -- its type, where it is wired from and what that node hands
-  on, whether its file is read -- and a sample of it (≤ 700 characters).
-- `{Output Example}`: each output -- where it goes and what the node there wants --
-  `output.md`, the shape a run kept, and the first 3 examples, what must come out.
-- `{Graph}`: the graph around the node; "Not given." until something says it.
-
-Filled, it reads like this -- followed by what the engine adds: for code, the typed
-signature to complete and the keys it must return; for an AI node, where to put its
-instructions and its message layout:
-
-```
-Input:
-- `csv` (text): one row per customer
-  from "Export" (port "Output"), which hands on: text
-  sample, from the last run: "name,email\nAnna,anna@…"
-
-Output Example:
-- `rows`: one object per customer
-  to "Table" (port "Rows"), which wants rows: a list of objects with the same keys…
-Its output definition (output.md):
-<what comes out, in your words>
-The shape it returned so far … keep it: { rows: list of { name: text, email: text } }
-Examples -- the result is checked against these:
-…
-
-Graph Context:
-Not given.
-
-Prompt:
-One row per customer, the e-mail in lower case.
-
-## The function
-…
-```
-
-The template is yours as much as the request: change it in `prompt.md` and ✨ sends it as
-written, the three variables filled by their exact names and any other `{…}` -- JSON in an
-instruction -- left as it is. A request with neither the `Prompt:` line nor a variable is
-sent in the standard template, so one written anywhere -- by ✨ AI Graph, in a graph file's
-`config.prompt` -- is sent with what the node knows. An AI node is written its
-instructions and its message template together, and told that `output.md` is added to them
-at run time.
-
-The **sample** is step 1's example; without one, the last run's value on that port, else
-what the wired node holds (an Input's text — the file it names, where the input it is
-wired into reads its file — or a Data node's value).
-Code is then run on that sample — for a node that runs per item, on one item, as a run
-calls it; files read the way a run reads them — and when the sample is the example, what
-it must return is checked too, and a body that falls short is sent back once to be
-repaired.
-**What ✨ sends** beside the button shows the request word for word, without sending it.
-After ✨ has run the code, what it returned becomes the node's kept shape when it has
-none yet — your format text is never overwritten. A new node's description starts empty:
-what ✨ writes from is what you wrote, never a placeholder.
+`node nodes/count/code.js` runs it by itself on input.js's example and prints what comes
+out: the folder writes a few lines after the body that do that, and takes them off again
+when it reads the file, so neither the engine nor ✨ ever sees them.
 
 **It may ask a model.** `run` may be `async` and is handed a second argument, `node`:
 `await node.llm({ prompt: '…' })` resolves to the answer as text, from the model in
@@ -415,22 +311,18 @@ my_tool/
   layout.json             where each node sits on the canvas
   nodes/
     count/                one folder per node, named by its id
-      node.json           its name and its settings
-      interface.json      what goes in, what comes out, and the shape a run kept
-      examples.md         its example (the first section), and what must come out
-      example/rows.csv    a file its example reads -- the example names it "example/rows.csv"
-      output.md           what goes out: each output, its format, and an example
-      prompt.md           what ✨ Generate is sent: the template, then "Prompt:" and the request
-      prompt.history.md   the requests sent before, newest first
+      node.json           its heading, its text and its settings
+      interface.json      what goes in and what comes out
+      input.js            what one call is handed, and an example
+      output.js           what one call returns, and an example
       code.js             the code
+      history.md          every exchange with the model about it
     summarize/
       node.json
       interface.json
-      output.md           what the answer must look like, sent to the model
-      prompt.md
-      system.md           the instructions sent to the model
-      message.md          the message template, with {{port}} placeholders
-      run.js              the one model call they make
+      input.js
+      output.js
+      prompt.md           the instructions sent to the model
     page/
       node.json           its settings are its blocks
       interface.json
@@ -451,25 +343,23 @@ any node:
 ```
 
 A node's folder says everything about that node, and nothing about its neighbours. A node
-that needs to know what arrives follows the wire and reads the other node's
-`interface.json` — which is what `check` does when it holds a wire to the interface it
-starts from, and what ✨ Generate is told.
+that needs to know what arrives follows the wire and reads the other node's output.js —
+which is what `check` does when it holds a wire to what the node before it hands on, and
+what ✨ is told.
 
 | Node | Files |
 |---|---|
-| Every node | `node.json` — its name, description and settings. `interface.json` — its ports: id, type, whether a list, whether required; and `output_schema`, the shape a run kept, for a node that keeps one |
-| Code | `examples.md`, `example/`, `output.md`, `prompt.md`, `prompt.history.md`, `code.js` |
-| AI | `examples.md`, `example/`, `output.md`, `prompt.md`, `prompt.history.md`, `system.md`, `message.md`, `run.js` |
+| Every node | `node.json` — its heading, its text and its settings. `interface.json` — its ports: id, type, whether a list, whether required |
+| Code | `input.js`, `output.js`, `code.js`, `history.md` |
+| AI | `input.js`, `output.js`, `prompt.md`, `history.md` |
+| Data | `data.json` or `data.txt` — what it holds — and `history.md` |
 
-A code node and an AI node keep the same files in the order they are built -- what comes
-in, what goes out, what ✨ is asked -- and differ only in the body. An input, a data node,
-an output, a trigger and a page keep no writing: all they are is settings — a data node's
-value too — and a page's blocks are settings as well. An empty text has no file — except
-`prompt.md` and `run.js`, which say the standard while nobody has written their own, so the
-folder shows what a node is sent and does. `example/` holds the files the node's example
-reads, as they are: a file the example names `"example/rows.csv"` is read from there by ▶ Try
-it, `test`, `run-node` and ✨, never by a run of the graph, so the example goes where the
-project goes. Settings — the model, the temperature, a node's mode — are in
+**The folder has every file from the start.** A file nothing has been written into yet is
+its stub: a comment saying what the file is and which ✨ writes it -- a definition's stub
+ends `module.exports = null;`, read as no example at all -- so the folder shows what the
+node is made of before any of it exists. `history.md` comes once there is history. An input, an
+output, a trigger and a page keep no writing: all they are is settings, and a page's
+blocks are settings as well. Settings — the model, the temperature, a node's mode — are in
 its `node.json`, and positions in `layout.json`, so moving a node on the canvas is not a
 change to what the graph does, and an unchanged save changes no file. Renaming a node
 renames nothing on disk: folders are named by id. A new node's id is its type — `code`,
@@ -491,65 +381,30 @@ inline, which is what a download, an import and a deploy bundle carry. A folder 
 project only when it has a `flow.json`: a deploy bundle's folder is opened by its
 `graph.json`, and saved back as that one file.
 
-**Output interfaces.** A code or AI node's outputs are described by a JSON Schema,
-`output_schema` in its `interface.json`. You do not write it first: wire the nodes, run the graph, and the
-first successful run sets it from what the node produced. From then on every run is
-checked against it — a node that breaks its interface says so on its result, *Does not
-match its output interface: output.rows[3].Population is string; the interface says
-integer*, rather than the node three steps later failing on the wrong shape — and the
-nodes after it are generated against it; ✨'s verify pass sets it too, from what the code
-returned on the sample. It is shown in step 2 of the node's dialog, to read, and not
-typed: **Clear** there lets the next run measure it again after a deliberate change. A
-code or AI node also keeps `output.md`, its output definition in words (and the shape of an
-answer you kept): ✨ is told it, and an AI node sends it to the model with every request.
-
-**Examples: a node's own tests.** A code or AI node can keep `examples.md` — inputs, and
-what must come out. Optional; they check what was written, whoever wrote it, and ✨
-Generate is shown the first few, so what it writes is written to pass them:
-
-````markdown
-## The three largest, largest first
-
-```json input
-{ "csv": "examples/data/population.csv", "kind": "Horizontal bars", "top": 3 }
-```
-
-```json expect
-{ "rows": [{ "Country": "India" }, { "Country": "China" }, { "Country": "United States" }] }
-```
-````
-
-An `expect` block names only the fields it cares about; anything else the node returns is
-its own business. A model's answer is never the same twice, so an AI node's example can
-have a ````judge` block instead — a sentence (*"about two sentences, in prose"*) that a
-model holds the answer to. In the node's dialog the first example is step 1's, and the
-rest of it lives under ▶ Try it: ⟳ From the graph fills its input with what really
-arrives, Try it says whether a result is the expected output (✓/✗), **Keep as expected
-output** makes what it gave that (an AI node keeps the answer's shape in its words
-instead), and **Judged by a model** takes the judge's sentence. A file with more examples
-keeps them as they are, and `test` runs them all; where there is a judge or more examples,
-▶ Try it runs them the way `test` does and says how the others did in one line — *and 2
-more: pass*.
+**What goes out is what output.js says.** A code or AI node's outputs are the keys of its
+output.js example, and each run is held to it: a result that does not fit is said on
+it -- *Does not fit its output.js: output.rows[3].Population is string; output.js says
+integer* -- rather than by the node three steps later, failing on the wrong shape. The
+nodes after it are written against it: it is what ✨ tells them it hands on.
 
 **Without the editor.** Every file in a node's folder is plain text named for what it is,
 so a node can be read, changed and run with nothing but the engine.
-`node engine/src/main.ts test my_tool` runs every node's examples; `--offline` asks no
-model and skips what needs one, which is how CI runs this repository's examples.
-`node engine/src/main.ts run-node my_tool count` runs one node by itself on its example --
-the first in its `examples.md`, the files it names read from its `example/` folder -- or on
-inputs given as JSON (`run-node my_tool count '{"csv": "data/rows.csv"}'`), and prints what
-came out. A node with no example says so, and what to do.
+`node engine/src/main.ts test my_tool` runs each code and AI node once on the example in
+its input.js and holds what comes out to its output.js; `--offline` asks no model and skips
+what needs one, which is how CI runs this repository's examples.
+`node engine/src/main.ts run-node my_tool count` runs one node by itself on its input.js --
+or on inputs given as JSON (`run-node my_tool count '{"csv": "data/rows.csv"}'`) -- and
+prints what came out. A node with no example says so, and what to do.
 
 **Checking a project.** `node engine/src/main.ts check my_tool other_tool` says what is
 wrong without running anything: edges to ports that do not exist, cycles, a code node
-without code, a message placeholder no input fills, an interface naming an output the
-node does not have, a folder under `nodes/` that belongs to no node, a file there that
-nothing reads (`instructions.md` where an AI node reads `system.md`), and examples that no
-longer fit — an input or output the node does not have, or an input that the node wired
-into that port does not give according to its output interface. That last one is where a
-need meets a supply: either the example asks for the wrong thing, or the node before it
-has to deliver it. It exits with 1 when it finds anything, so a CI job fails on a broken
-graph; this repository checks its examples that way.
+without code, a folder under `nodes/` that belongs to no node, a file there that nothing
+reads, and definitions that do not fit -- an example that cannot be read, one that names
+an input or output the node does not have, an output.js that leaves an output out, and a
+wire into a port that the node wired into it does not supply according to its output.js.
+That last one is where a need meets a supply: either the node asks for the wrong thing, or
+the node before it has to deliver it. It exits with 1 when it finds anything, so a CI job
+fails on a broken graph; this repository checks its examples that way.
 
 ### What runs, and where
 
@@ -565,80 +420,48 @@ Every node's panel ends with *What this node runs*. There are two answers:
 | Node | What runs | In one sentence |
 |---|---|---|
 | Code | `code.js`, sandboxed | Calls `run(inputs, node)` and hands on what it returns. |
-| AI | `run.js` | Unchanged: the engine makes the one model call it describes (`system.md`, `message.md` filled from the inputs). Changed: it runs sandboxed like any body, and each `node.llm(...)` is a call made for it. |
+| AI | `AiNodeRunner.execute` | Sends prompt.md -- or the standard instructions -- with its text and output.js filled in, then what arrived; with an output.js the answer is JSON, each key on its own output. |
 | Input | `InputNodeRunner.execute` | Hands on its text; or lists the folder on `path` — its file types, and its subfolders when it looks into them. |
 | Data | `DataNodeRunner.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
 | GUI | `GuiNodeRunner.execute` | Hands on what each block holds and shows what arrives. |
 | Output | `OutputNodeRunner.execute` | Hands on what arrives as the run's result, under its label; and writes it to its file, or — in directory mode — each value, each item of a list, to a file of its own in a folder it makes when it is not there yet. |
 | Trigger | `TriggerNodeRunner.execute` | `fired`: true in a round it began. The clock is kept by whatever holds the graph. |
-| Subgraph | `SubgraphNodeRunner.execute` | Runs the graph in its folder, whole, by the engine that runs this one. |
+| Subgraph | `SubgraphNodeRunner.execute` | Runs the graph in its folder, whole, with what arrives standing in for its input nodes. |
 
 The sentences come from the elements themselves (`whatRuns`), so the panel, the folder and
 this table cannot drift apart without a test noticing the class or method is gone.
 
-### Trying an element out: the same way everywhere
+### A file, dropped or picked
 
-An AI node and a code node are the same loop — *here is what arrives, here is what I
-wrote, what comes out?* — built in the same four steps:
-
-- **The example**, in step 1: one set of values, keyed by input. **⟳ From the graph**
-  fills it with what really arrives — the last run's values, or, before one, what the
-  nodes that *feed* this element deliver when they are run now (the file picked, the CSV
-  parsed, the page's fields read), not the element itself. **📂 From a file…** fills one
-  input from a file — and so does a file **dropped** on the example field, or on a node
-  with one input on the canvas (on a data node, it is what the node holds), with no
-  dialog on the way: its path where the input says
-  **Read the file at this path** (read as a run reads it, and kept relative to the folder
-  the editor runs in), otherwise what the file says, parsed when it is JSON. A browser
-  never says where a dropped file is; the editor finds the one file of that name and size
-  in its folder and three levels of folders below it (not in `node_modules`, `dist`,
-  `build` or a name beginning with a dot), and says so, and where it looked, when there is
-  none or several. A file's text dropped before its input said **Read the file at this
-  path** -- a wire from a folder's files ticks it -- is no path to read: step 1 says so,
-  and Try it waits for the file to be dropped again. Typing is editing what they
-  filled. A node with no inputs has no example: Try it runs it on nothing.
-- **▶ Try it**, under the body in step 4, runs just this element on that example, through
-  the same steps a run takes (the same model, the files of the inputs that say so read
-  into text, one call per item). Nothing downstream runs. An AI node shows the request
-  first, as the model receives it — put together by the engine, one request per item,
-  when the node runs per item or reads files. The result is set against the example's
-  expected output, and **Keep as expected output** makes it that -- on an AI node, whose
-  answer is never the same twice, **Keep this answer's shape** puts its shape into step 2's
-  words instead.
-- **Say what to change**, under the result, and **✨ Fix** where it failed: the body
-  changed or repaired from what came of it, written as one undo step and tried again at
-  once where there is an example to try it on.
-- **What ✨ sends**, beside the button, shows the request word for word: the brief above.
-  The example is the sample the generated body is then run against, and what it expects
-  is checked before you see it; what falls short goes back to the model for one repair.
+A file dropped on a code or AI node on the canvas -- or on the files line under its
+✨ Input -- is one more file ✨ Input writes its input.js from. **📂 Add a file…** picks
+one, and **⟳ From the graph** takes the one the graph hands the node: what the last run
+brought a file-reading input, or else what is wired to it -- a picked file, a typed path.
+Dropped on a data node, a file is what the node holds, parsed when it is JSON. A path is
+kept relative to the folder the editor runs in. A browser never says where a dropped file
+is; the editor finds the one file of that name and size in its folder and three levels of
+folders below it (not in `node_modules`, `dist`, `build` or a name beginning with a dot),
+and says so, and where it looked, when there is none or several.
 
 ### Every element works the same way
 
-A node that writes a body is configured the same way whatever its kind: a name, one file
-behind it, one example input, and one ✨ **Generate** button that writes the body from
-your words plus what the graph around it says (what the neighbours hand on and want, and
-the example).
-
-What the node emits is said in the same dialog, in step 2: what the next nodes want and
-the shape a run kept, and your words for what they leave out. There is no separate Output
-tab.
+A node ✨ writes for is configured the same way whatever its kind: a heading, a text, and
+a ✨ for each of its files, written from your words and what the graph around it says --
+what the neighbours hand on and want, and the page they feed. What a node emits is its
+output.js; there is no separate Output tab.
 
 A block on a page writes nothing: it has settings, and shows or hands on what it holds. A
 chart, a table or an image shows what arrives, and its dialog says in one sentence what
 that should be; whatever has to be shaped into it first is a code node wired in before
 it.
 
-### Writing a body: two editors
+### Your own editor
 
-The box a body is written in is a real editor (CodeMirror): syntax colours, line
-numbers, folding, bracket matching, search with Ctrl+F, Tab that indents. **⤢** opens the
-same document across the whole window; Esc comes back.
-
-For longer work there is your own editor. In a project, **↗ Open in my editor** in a
-node's dialog saves the project and opens the node's file — in VS Code when
-its `code` command is installed, otherwise in whatever the system opens that file type
-with — and what you save there appears in the graph by itself. Only a project's own
-files under `nodes/` can be opened this way, and only from the machine the editor runs on.
+A node's files are edited where you edit code. In a project, a file's chip in the node's
+dialog saves the project and opens the file — in VS Code when its `code` command is
+installed, otherwise in whatever the system opens that file type with — and what you save
+there appears in the graph by itself. Only a project's own files under `nodes/` can be
+opened this way, and only from the machine the editor runs on.
 
 **Packages.** A code node runs against the standard library of its language and nothing
 else. There is no install step and nothing is fetched while a graph runs, which is what
@@ -691,19 +514,17 @@ nested_statistics/
   layout.json
   nodes/
     statistics/
-      node.json            the node's own settings
+      node.json            the node's own settings, and what this part is for
       interface.json       its ports: the graph's input and output nodes
-      prompt.md            what this part is for: its request, a sentence or two
-      run.js               how the graph is run: once, unless you change it
       flow.json            the graph it holds
       layout.json
       nodes/
-        counts/code.js     a node of that graph, with its body in a file as usual
-        counts/examples.md
+        counts/code.js     a node of that graph, with its files as usual
+        counts/input.js
 ```
 
 `check` descends into it and says where it was (`node "statistics" ▸ edge "text.output -> counts.text"`), `test`
-runs the examples of the nodes in there, and a bundle carries the whole depth: a model
+tries the nodes in there on their input.js, and a bundle carries the whole depth: a model
 called from inside is a model the recipient is told to configure.
 
 ### In the editor
@@ -728,25 +549,6 @@ To let the graph above carry on regardless, tick **Catch a failed run instead of
 subgraph node itself. The reason then arrives on its `error` port, which is where a caught failure
 belongs, and everything wired to that port gets to react.
 
-### Running it more than once: run.js
-
-Like an ai node, a subgraph node keeps a `run.js` in its folder that says what it does, and
-left as it is that is one run of the graph inside. Change it (Advanced ▸ run.js) and it is
-yours: `await node.graph({ subject: word })` runs the graph with those values standing in
-for its input nodes and resolves to what reached its output nodes, keyed the same way.
-
-```js
-async function run(inputs, node) {
-  const loud = [];
-  for (const word of inputs.subject) loud.push((await node.graph({ subject: word })).loud);
-  return { loud };
-}
-```
-
-So a part can run once per item of a list, again until an answer passes a check, or feed
-one run's outputs into the next — at most 100 times a run. The body runs sandboxed, like
-every body; each `node.graph` is run for it by the engine, with the keys where they are.
-
 ### Rules at the boundary
 
 **Events.** From outside, the node has a ◆ like any other. To start something *inside* on an
@@ -756,8 +558,7 @@ shut. A Trigger node inside counts as fired whenever the part runs; one with an 
 reported, because nothing in there keeps time.
 
 A page belongs to the graph at the top, so a `gui` node inside is reported as a mistake.
-A list crosses a port as one value — to run the graph once per item, give it a `run.js`
-that calls `node.graph` per item, as above.
+A list crosses a port as one value: the graph inside runs once, on all of it.
 
 ### What it does not do yet
 
@@ -808,8 +609,8 @@ AI node and the node's answer back into its **reply**, and that is a chatbot —
 message starts the graph at the AI node, the answer closes the turn, and the turn goes
 out again as history with the next message. The turn is written down only when the answer
 arrives: a call that fails leaves the conversation as it was, with the message back in the
-box to send again. See [examples/chat](../examples/chat/); its AI
-node's message template is the one shown under *AI Nodes* above.
+box to send again. See [examples/chat](../examples/chat/): its AI node is sent the
+history and the message each under its port id, after its prompt.md.
 
 ### Picking files and folders
 
