@@ -72,6 +72,28 @@ describe('memoryFeedbackEdges', () => {
     const edges = [edge('e1', 'a', 'o', 'b', 'i'), edge('e2', 'b', 'o', 'a', 'i')];
     expect(memoryFeedbackEdges(nodes, edges, registry).size).toBe(0);
   });
+
+  it('cuts a loop through a page and a data node at the page, whichever comes first', async () => {
+    // Cut at the data node, the page was shown what the data node held from
+    // before, and what it was shown was never kept: a data node keeps what
+    // arrives loop or no loop, a page only what comes back around one.
+    const make = () => ({
+      page: node('page', 'gui', { gui_widgets: [
+        { id: 'q', kind: 'text_io', mode: 'input', value: 'typed now' },
+        { id: 'shown', kind: 'text_io', mode: 'output' },
+      ] }),
+      keep: node('keep', 'data', { data_value: 'from before' }),
+      echo: node('echo', 'code', { code: 'function run(i) { return { out: i.v }; }' }),
+    });
+    const edges = [edge('in', 'page', 'q_out', 'keep', 'input'), edge('on', 'keep', 'output', 'echo', 'v'), edge('back', 'echo', 'out', 'page', 'shown_in')];
+    const runtime = quietRuntime({ code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) } });
+    for (const order of [['page', 'keep', 'echo'], ['keep', 'page', 'echo']] as const) {
+      const nodes = make();
+      const run = await executeGraph(graphOf(order.map((id) => nodes[id]), edges), { runtime, registry });
+      expect(run.node_results.find((r) => r.node_id === 'page')!.display, order.join()).toEqual({ shown: 'typed now' });
+      expect(run.memory, order.join()).toContainEqual({ node_id: 'page', port_id: 'shown_in', value: 'typed now' });
+    }
+  });
 });
 
 describe('collectInputs', () => {

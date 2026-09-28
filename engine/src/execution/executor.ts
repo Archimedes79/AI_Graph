@@ -45,6 +45,10 @@ export function memoryFeedbackEdges(
     const node = byId.get(nodeId);
     return node ? registry.node(node.node_type)?.isMemory === true : false;
   };
+  const settles = (nodeId: string): boolean => {
+    const node = byId.get(nodeId);
+    return node ? registry.node(node.node_type)?.settlesOnArrival === true : false;
+  };
 
   for (;;) {
     const active = edges.filter(
@@ -75,10 +79,13 @@ export function memoryFeedbackEdges(
 
     // Cut one more edge into a node that remembers -- one that closes a loop:
     // a node below a loop is unvisited too, and cutting the wire into it
-    // settles its value a round late for nothing. Chosen by the graph's node
-    // order and then by id, never by the order the wires happen to be stored
-    // in. If there is none, the cycle is a real one and `topologicalLevels`
-    // reports it as such.
+    // settles its value a round late for nothing. Into one that keeps only
+    // what comes back around a loop (a page) before one that keeps whatever
+    // arrives (a data node): cut at the data node, the page would be shown
+    // what it held from before and keep nothing of it. Then by the graph's node
+    // order and by id, never by the order the wires happen to be stored in. If
+    // there is none, the cycle is a real one and `topologicalLevels` reports it
+    // as such.
     const reaches = (from: string, to: string): boolean => {
       const seen = new Set([from]);
       const queue = [from];
@@ -94,7 +101,8 @@ export function memoryFeedbackEdges(
     const order = new Map(nodes.map((n, index) => [n.id, index]));
     const [candidate] = active
       .filter((e) => !visited.has(e.target_node_id) && remembers(e.target_node_id) && reaches(e.target_node_id, e.source_node_id))
-      .sort((a, b) => order.get(a.target_node_id)! - order.get(b.target_node_id)! || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      .sort((a, b) => Number(settles(a.target_node_id)) - Number(settles(b.target_node_id))
+        || order.get(a.target_node_id)! - order.get(b.target_node_id)! || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     if (!candidate) return feedback;
     feedback.add(candidate.id);
   }
