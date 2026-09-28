@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseGraph } from '../graph.ts';
 import { writeProject } from '../project/folder.ts';
-import { main, parseArgs, parseInterval } from './cli.ts';
+import { parseInterval } from '../execution/triggers.ts';
+import { main, parseArgs } from './cli.ts';
 
 describe('parseInterval', () => {
   it('reads a bare number as seconds', () => {

@@ -55,14 +55,6 @@ export interface ServeOptions {
   /** Where the built page lives, if this bundle carries one. */
   pageDir?: string;
   port?: number;
-  /**
-   * Let the page list directories.
-   *
-   * Loopback only, and that is not a detail: on 0.0.0.0 it would expose this
-   * machine's filesystem listing to the network, which is a different thing
-   * from letting the person at the keyboard choose their own file.
-   */
-  allowBrowse?: boolean;
   host?: string;
   /** Serve the editor instead of a deployed page: `dist` is the built editor. */
   editor?: { dist: string };
@@ -82,7 +74,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
   const lifecycle = new Lifecycle();
   const host = options.host ?? '127.0.0.1';
   const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
-  const exchange: Exchange = { loopback: (options.allowBrowse ?? true) && loopback };
+  const exchange: Exchange = { loopback };
   /** Who this server is, for telling its own page from another's: its port is known once it listens. */
   const self = { loopback, port: 0, names: namesFor(host) };
 

@@ -645,8 +645,6 @@ export async function nodeFileOf(folder: string, nodeId: string, file?: string):
 // What changed on disk
 // ---------------------------------------------------------------------------
 
-export type { TextChange };
-
 /**
  * The texts of the project in *folder* whose files changed since this process
  * last read or wrote them -- edited in another editor, restored by git,

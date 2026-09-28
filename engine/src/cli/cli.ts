@@ -62,10 +62,6 @@ export interface CliOptions {
   mcpRoot?: string;
 }
 
-// The interval spelling lives with the triggers now: a graph can name its own
-// clock, and the page that serves it reads the same `5m` this flag does.
-export { parseInterval };
-
 /** Where a served tool looks first. Nothing addresses it from outside, so this is a habit, not a contract. */
 const DEFAULT_PORT = 8000;
 /** How many in a row to try before a busy machine is the user's problem to sort out. */
