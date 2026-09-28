@@ -485,8 +485,10 @@ it.
 ### Writing a file: two editors
 
 The box a file is shown in is a real editor (CodeMirror): syntax colours, line numbers,
-folding, bracket matching, search with Ctrl+F, Tab that indents. **⤢** opens the same
-document across the whole window; Esc comes back.
+folding, bracket matching, search with Ctrl+F, undo and redo of its own (Ctrl+Z,
+Ctrl+Shift+Z or Ctrl+Y). In the panel Tab moves on to the next field and Esc leaves the
+panel open; **⤢** opens the same document across the whole window, where Tab indents, and
+Esc comes back.
 
 For longer work there is your own editor. In a project, a file's chip in the node's
 panel saves the project and opens the file — in VS Code when its `code` command is

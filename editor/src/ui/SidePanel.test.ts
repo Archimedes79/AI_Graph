@@ -19,6 +19,12 @@ describe('Escape and the panel beside the canvas', () => {
     expect(panelHearsEscape(onScreen, page('menu'))).toBe(false);
   });
 
+  it('is left to a file box it is pressed in: it closed the panel from under what was being typed', () => {
+    const inside = (selector: string) => (selector === '.cm-editor' ? ({} as Element) : null);
+    expect(panelHearsEscape(onScreen, page(null), { closest: inside } as unknown as EventTarget)).toBe(false);
+    expect(panelHearsEscape(onScreen, page(null), { closest: () => null } as unknown as EventTarget)).toBe(true);
+  });
+
   it('closes nothing while its view is hidden -- the panel is kept for when the graph is back -- or before it is drawn', () => {
     expect(panelHearsEscape({ offsetParent: null }, page(null))).toBe(false);
     expect(panelHearsEscape(null, page(null))).toBe(false);

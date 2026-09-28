@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState, Compartment } from '@codemirror/state';
 import { keymap, placeholder as placeholderExtension } from '@codemirror/view';
-import { indentWithTab } from '@codemirror/commands';
+import { indentWithTab, redo } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown } from '@codemirror/lang-markdown';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -31,14 +31,19 @@ const FONT = {
  * `value` that changed for any *other* reason (✨ wrote a new file, a file
  * was reloaded from disk) replaces the document. Comparing against the
  * editor's own text is what stops the second from fighting the first.
+ *
+ * *tabIndents*: Tab indents, for the editor across the window. In a box in
+ * the panel Tab moves on, as from any field there: it used to type spaces
+ * into input.js, and there was no key out of the box.
  */
-export default function CodeSurface({ value, onChange, language, placeholder, height, autoFocus }: {
+export default function CodeSurface({ value, onChange, language, placeholder, height, autoFocus, tabIndents }: {
   value: string;
   onChange: (value: string) => void;
   language: CodeLanguage;
   placeholder?: string;
   height: { min: number; max?: string; fill?: boolean };
   autoFocus?: boolean;
+  tabIndents?: boolean;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
@@ -58,7 +63,9 @@ export default function CodeSurface({ value, onChange, language, placeholder, he
         doc: value,
         extensions: [
           basicSetup,
-          keymap.of([indentWithTab]),
+          // Ctrl+Shift+Z redoes here as in every other field and the header's
+          // Redo; CodeMirror's own key for it on Windows is Ctrl+Y alone.
+          keymap.of([{ key: 'Mod-Shift-z', run: redo, preventDefault: true }, ...(tabIndents ? [indentWithTab] : [])]),
           languageSlot.current.of(language === 'javascript' ? javascript() : markdown()),
           ...(light ? [] : [oneDark]),
           EditorView.lineWrapping,

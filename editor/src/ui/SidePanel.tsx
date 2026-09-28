@@ -9,13 +9,16 @@ const SIDE_PANEL_WIDTH = 440;
  * view may be hidden, the panel kept for when it is back -- and while no
  * dialog or menu is open, which hears it first: a file browser opened from
  * the panel, or the File menu, is closed by Escape, and the panel with it was
- * one close too many.
+ * one close too many. Nor one pressed in a file box (*from*, inside a
+ * CodeMirror editor): it closed the panel from under what was being typed.
  */
 export function panelHearsEscape(
   panel: Pick<HTMLElement, 'offsetParent'> | null,
   page: Pick<Document, 'querySelector'>,
+  from?: EventTarget | null,
 ): boolean {
-  return panel !== null && panel.offsetParent !== null && page.querySelector('[role="dialog"], [role="menu"]') === null;
+  const inBox = (from as Partial<Element> | null | undefined)?.closest?.('.cm-editor') != null;
+  return panel !== null && panel.offsetParent !== null && !inBox && page.querySelector('[role="dialog"], [role="menu"]') === null;
 }
 
 /**
@@ -39,7 +42,7 @@ export default function SidePanel({ kicker, title, onClose, children }: {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // One an editor inside took for itself -- closing its search, say -- is not this one's.
-      if (event.key !== 'Escape' || event.defaultPrevented || !panelHearsEscape(panelRef.current, document)) return;
+      if (event.key !== 'Escape' || event.defaultPrevented || !panelHearsEscape(panelRef.current, document, event.target)) return;
       onClose();
     };
     document.addEventListener('keydown', onKeyDown);
