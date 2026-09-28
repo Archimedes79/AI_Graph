@@ -333,8 +333,9 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   it, another node shows that one, and ✕, Escape or a click on the empty canvas close it,
   as `graphStore.clearSelection` does; a node added from the palette opens its panel too.
   What the view owes is kept in one place (`canvas/inView.ts` `viewDue`): another document
-  -- New, Open, a level in or out -- is fitted whole, and a node added or whose panel opens
-  is brought into sight; each once its nodes are measured on a canvas that is on screen. The
+  -- New, Open, a level in or out -- is fitted whole; a node added is shown with the rest where
+  they fit at a zoom that can be read (`READABLE_ZOOM`), else brought into sight alone, as a
+  node whose panel opens is; each once its nodes are measured on a canvas that is on screen. The
   page's panel is the way to the Page tab, where the page is built. The node the person is
   on is `editingNodeId`, which the card, its wires and the bar all read. Delete on the canvas
   deletes only as pressed there (`deleteKeys`): a key pressed in the panel is the panel's.

@@ -20,7 +20,7 @@ import { useGraphStore } from '@/store/graphStore';
 import GraphNodeView from './GraphNodeView';
 import { deleteKeys, removalsToApply } from './nodeRemoval';
 import { drawnWire } from './wireLook';
-import { panToShow, viewDue, type ViewDue } from './inView';
+import { allInView, panToShow, READABLE_ZOOM, viewDue, type ViewDue } from './inView';
 import { showsPage } from '@/document/guiWidgets';
 import type { NodeType } from '@/graph';
 import { LINE, PANEL, SUNKEN, SURFACE } from '@/ui/theme';
@@ -62,8 +62,9 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
   // Whether a key pressed now is pressed on the canvas (`deleteKeys`).
   const [focused, setFocused] = React.useState(false);
 
-  // What the view owes (`viewDue`): another graph fitted whole; a node added,
-  // or one whose panel opens, brought into sight by as little as that takes.
+  // What the view owes (`viewDue`): another graph fitted whole; a node added
+  // shown with the rest where they fit readably; one whose panel opens brought
+  // into sight by as little as that takes.
   // Paid once the canvas is on screen and what it is about is measured, at the
   // canvas's own size as it is then: a fit on a timer ran before the node was
   // measured, and did nothing -- a palette node stayed out of sight, and New
@@ -71,7 +72,7 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
   const documentOpen = useGraphStore((s) => s.document);
   const openId = useGraphStore((s) => s.editingNodeId);
   const minZoom = useStore((s) => s.minZoom);
-  const due = useRef<ViewDue>({ document: documentOpen, count: rfNodes.length, open: openId, fit: false, show: null });
+  const due = useRef<ViewDue>({ document: documentOpen, count: rfNodes.length, open: openId, fit: false, show: null, added: false });
   React.useEffect(() => {
     due.current = viewDue(due.current, { document: documentOpen, ids: rfNodes.map((node) => node.id), open: openId });
     const owed = due.current;
@@ -92,14 +93,30 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
     if (!owed.show) return;
     const node = rfInstance.getNode(owed.show);
     if (node && !measured(node)) return;
+    const added = owed.added;
     owed.show = null;
+    owed.added = false;
     if (!node) return;
     const { x, y, zoom } = rfInstance.getViewport();
-    const at = node.positionAbsolute ?? node.position;
-    const { dx, dy } = panToShow(
-      { x: at.x * zoom + x, y: at.y * zoom + y, width: node.width! * zoom, height: node.height! * zoom },
-      { x: 0, y: 0, width: wrapper.clientWidth, height: wrapper.clientHeight },
-    );
+    const view = { x: 0, y: 0, width: wrapper.clientWidth, height: wrapper.clientHeight };
+    const onScreen = (one: typeof node) => {
+      const at = one.positionAbsolute ?? one.position;
+      return { x: at.x * zoom + x, y: at.y * zoom + y, width: (one.width ?? 0) * zoom, height: (one.height ?? 0) * zoom };
+    };
+    // A node added: the whole graph where it fits, never zoomed in, and still
+    // readable -- else the new node alone, by as little as that takes.
+    if (added) {
+      const nodes = rfInstance.getNodes();
+      if (nodes.every(measured)) {
+        if (allInView(nodes.map(onScreen), view)) return;
+        const whole = getViewportForBounds(getNodesBounds(nodes), view.width, view.height, minZoom, Math.min(zoom, 1), 0.1);
+        if (whole.zoom >= READABLE_ZOOM) {
+          rfInstance.setViewport(whole, { duration: 250 });
+          return;
+        }
+      }
+    }
+    const { dx, dy } = panToShow(onScreen(node), view);
     if (dx || dy) rfInstance.setViewport({ x: x + dx, y: y + dy, zoom }, { duration: 250 });
   }, [rfNodes, rfInstance, active, documentOpen, openId, minZoom]);
   // The map of the whole graph, only where the canvas has room for it beside

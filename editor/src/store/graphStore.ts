@@ -278,13 +278,14 @@ export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult):
  * Where a node goes that nobody put anywhere -- a palette click, the page a
  * first block makes: to the right of what is already there, not on top of it.
  * A random spot put the second node on the first more often than not, and a
- * graph reads left to right anyway. The gap is generous because a node widens
- * once it is configured and must not then cover its neighbour.
+ * graph reads left to right anyway. The gap is room for a wire and no more: a
+ * card keeps its width (260 at most, a page's 320), and three new nodes still
+ * fit beside an open panel at a zoom that can be read (`READABLE_ZOOM`).
  */
 export function besideTheRest(placed: Node[]): { x: number; y: number } {
   if (!placed.length) return { x: 200, y: 120 };
-  const right = Math.max(0, ...placed.map((node) => node.position.x + (node.width ?? 240)));
-  return { x: right + 160, y: Math.min(...placed.map((node) => node.position.y)) };
+  const right = Math.max(0, ...placed.map((node) => node.position.x + (node.width ?? 260)));
+  return { x: right + 80, y: Math.min(...placed.map((node) => node.position.y)) };
 }
 
 let nodeCounter = 1;

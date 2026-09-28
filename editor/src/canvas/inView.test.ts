@@ -1,18 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { panToShow, viewDue, type ViewDue } from './inView';
+import { allInView, panToShow, viewDue, type ViewDue } from './inView';
 
 describe('what the view owes the canvas', () => {
-  const settled: ViewDue = { document: 1, count: 2, open: null, fit: false, show: null };
+  const settled: ViewDue = { document: 1, count: 2, open: null, fit: false, show: null, added: false };
 
   it('fits another graph whole -- New, Open, a level in or out -- and shows nothing of the last', () => {
-    expect(viewDue({ ...settled, show: 'a' }, { document: 2, ids: ['x'], open: null })).toEqual({ document: 2, count: 1, open: null, fit: true, show: null });
+    expect(viewDue({ ...settled, show: 'a' }, { document: 2, ids: ['x'], open: null })).toEqual({ document: 2, count: 1, open: null, fit: true, show: null, added: false });
   });
 
-  it('shows a node added -- from the palette, or the page a block made -- and one whose panel opens', () => {
-    expect(viewDue(settled, { document: 1, ids: ['a', 'b', 'c'], open: null }).show).toBe('c');
-    expect(viewDue(settled, { document: 1, ids: ['a', 'b'], open: 'a' }).show).toBe('a');
-    // Added from the palette, it opens its panel in the same step: the one node either way.
-    expect(viewDue(settled, { document: 1, ids: ['a', 'b', 'c'], open: 'c' }).show).toBe('c');
+  it('shows a node added -- from the palette, or the page a block made -- with the rest, and one whose panel opens', () => {
+    expect(viewDue(settled, { document: 1, ids: ['a', 'b', 'c'], open: null })).toMatchObject({ show: 'c', added: true });
+    expect(viewDue(settled, { document: 1, ids: ['a', 'b'], open: 'a' })).toMatchObject({ show: 'a', added: false });
+    // Added from the palette, it opens its panel in the same step: still a node added.
+    expect(viewDue(settled, { document: 1, ids: ['a', 'b', 'c'], open: 'c' })).toMatchObject({ show: 'c', added: true });
+  });
+
+  it('knows when there is nothing to move for: every node already in view', () => {
+    const view = { x: 0, y: 0, width: 528, height: 645 };
+    expect(allInView([{ x: 30, y: 30, width: 200, height: 80 }, { x: 290, y: 200, width: 200, height: 80 }], view)).toBe(true);
+    expect(allInView([{ x: -120, y: 30, width: 200, height: 80 }, { x: 290, y: 200, width: 200, height: 80 }], view)).toBe(false);
   });
 
   it('owes nothing for a move, a removal or a panel that stays open', () => {

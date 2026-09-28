@@ -13,7 +13,16 @@ export interface ViewDue {
   open: string | null;
   fit: boolean;
   show: string | null;
+  /** *show* is a node just added: the graph is shown whole where it fits readably (`READABLE_ZOOM`). */
+  added: boolean;
 }
+
+/**
+ * The least zoom the whole graph is shown at when a node is added. Brought
+ * into sight alone, the new node pushed the first ones out of it -- the data
+ * node under the palette after a code node and a page card were added.
+ */
+export const READABLE_ZOOM = 0.6;
 
 /**
  * *due* after the canvas changed to *now*. Another graph -- New, Open, a
@@ -24,11 +33,25 @@ export interface ViewDue {
  * canvas under it.
  */
 export function viewDue(due: ViewDue, now: { document: number; ids: string[]; open: string | null }): ViewDue {
-  if (now.document !== due.document) return { document: now.document, count: now.ids.length, open: now.open, fit: true, show: null };
-  let show = due.show;
-  if (now.ids.length === due.count + 1) show = now.ids[now.ids.length - 1];
-  if (now.open && now.open !== due.open) show = now.open;
-  return { ...due, count: now.ids.length, open: now.open, show };
+  if (now.document !== due.document) return { document: now.document, count: now.ids.length, open: now.open, fit: true, show: null, added: false };
+  let { show, added } = due;
+  if (now.ids.length === due.count + 1) {
+    show = now.ids[now.ids.length - 1];
+    added = true;
+  }
+  if (now.open && now.open !== due.open && now.open !== show) {
+    show = now.open;
+    added = false;
+  }
+  return { ...due, count: now.ids.length, open: now.open, show, added };
+}
+
+/** Whether every one of *boxes* is in *view*, *margin* from its edges: nothing to move for. */
+export function allInView(boxes: Box[], view: Box, margin = 24): boolean {
+  return boxes.every((box) => {
+    const { dx, dy } = panToShow(box, view, margin);
+    return !dx && !dy;
+  });
 }
 
 /**
