@@ -1,0 +1,33 @@
+[
+  {
+    "h": 1,
+    "id": "title",
+    "kind": "text",
+    "label": "",
+    "mode": "heading",
+    "tone": "plain",
+    "value": "Summarize a folder",
+    "w": 16
+  },
+  {
+    "extensions": ".txt",
+    "h": 2,
+    "id": "folder",
+    "kind": "input_picker",
+    "label": "Folder",
+    "mode": "directory",
+    "run_on_change": true,
+    "tone": "sunken",
+    "value": "examples/data/stories",
+    "w": 16
+  },
+  {
+    "h": 10,
+    "id": "summaries",
+    "kind": "text_io",
+    "label": "Summaries",
+    "mode": "output",
+    "tone": "raised",
+    "w": 16
+  }
+]

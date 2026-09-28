@@ -352,12 +352,16 @@ decide what to ask, or ask in a loop; for one question, an AI node is the plaine
 Save a graph under a name — `my_tool` — and it becomes a folder. (A new graph's Save
 opens the file browser in the folder the last graph was opened from or saved to -- at
 first the folder the server was started in -- with its name filled in.) The flow is one
-file, and each node is a folder that says everything about that node:
+file, the page is a folder, and each node is a folder that says everything about that node:
 
 ```
 my_tool/
   flow.json               which nodes there are, and every wire
   layout.json             where each node sits on the canvas
+  page/                   the page: what whoever uses the tool sees
+    page.json             its blocks, in order -- each one's kind, label, size and value
+    node.json
+    interface.json        what it hands the graph and what it shows
   nodes/
     count/                one folder per node, named by its id
       node.json           its heading, its text and its settings
@@ -372,9 +376,6 @@ my_tool/
       input.js
       output.js
       prompt.md           the instructions sent to the model
-    page/
-      node.json           its settings are its blocks
-      interface.json
 ```
 
 **Each fact is in one place.** `flow.json` says which node feeds which, and nothing about
@@ -402,14 +403,16 @@ what ✨ is told.
 | Code | `input.js`, `output.js`, `code.js`, `history.md` |
 | AI | `input.js`, `output.js`, `prompt.md`, `history.md` |
 | Data | `data.json` or `data.txt` — what it holds — and `history.md` |
+| The page | its folder is `page/`, beside `nodes/`, whatever its id: `page.json` — its blocks, in order |
 
 **The folder has every file from the start.** A file nothing has been written into yet is
 its stub: a comment saying what the file is and which ✨ writes it -- a definition's stub
 ends `module.exports = null;`, read as no example at all, and code.js's `node code.js`
 says "code.js holds no code yet: write it with ✨ Code." and exits with 1 -- so the folder
 shows what the node is made of before any of it exists. `history.md` comes once there is history. An input, an
-output, a trigger and a page keep no writing: all they are is settings, and a page's
-blocks are settings as well. Settings — the model, the temperature, a node's mode — are in
+output and a trigger keep no writing: all they are is settings. The page is its blocks,
+so they are a file of their own, `page/page.json`, and a tool's page is the one folder
+anybody opening the project looks for. Settings — the model, the temperature, a node's mode — are in
 its `node.json`, and positions in `layout.json`, so moving a node on the canvas is not a
 change to what the graph does, and an unchanged save changes no file. Renaming a node
 renames nothing on disk: folders are named by id. A new node's id is its type — `code`,
@@ -632,8 +635,9 @@ graph is.
 ## The page
 
 A graph has **one page**: an ordered list of **blocks**. In the file it is the one node of
-type `gui`, its blocks in `config.gui_widgets` — the format's names; on screen it is the
-page and its blocks, and nothing else. It is made on the **Page** tab by its first block,
+type `gui`, its blocks in `config.gui_widgets` — the format's names; in a project folder it
+is the folder `page/`, its blocks in `page.json`; on screen it is the page and its blocks,
+and nothing else. It is made on the **Page** tab by its first block,
 not dropped from the palette, and goes with its last: a page is its blocks, and a tool
 whose page has none shows what it does and its run's result, as a tool without a page
 does. A second `gui` node is a problem `check` names, and only the

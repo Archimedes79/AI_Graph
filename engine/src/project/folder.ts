@@ -3,22 +3,29 @@
 //     my_tool/
 //       flow.json           the flow: which nodes there are, and every wire
 //       layout.json         where each node sits on the canvas, and its size
+//       page/               the page: what whoever uses the tool sees
+//         page.json         its blocks, in order
+//         node.json         its name
+//         interface.json    what it hands the graph and what it shows
 //       nodes/
 //         count/            one folder per node, by id
 //           node.json       its name and its settings
 //           interface.json  what goes in and what comes out
 //           input.js …      what the element keeps in files: `NodeRunner.texts`
-//         page/
-//           node.json       a page's blocks are settings: they live here
-//           interface.json
 //
 // **Each fact in one place.** The flow says which node feeds which, and nothing
 // about any node. A node's folder says everything about that node, and nothing
 // about its neighbours: a node that needs to know what arrives follows the wire
 // and reads the other node's `interface.json`. Positions are split off so that
 // moving a node is not a change to what the graph does; writing -- code,
-// prompts -- is a file of its own so it is edited, reviewed and grepped as what
-// it is.
+// prompts, the page's blocks -- is a file of its own so it is edited, reviewed
+// and grepped as what it is.
+//
+// **The page sits beside the nodes, not among them.** A graph has one page --
+// the first node that carries the interface, the one the editor and a tool
+// draw -- and it is what a person using the tool sees, so its folder is the
+// one anybody opening the project looks for. Its id is only what the wires
+// call it.
 //
 // **One other shape opens.** A single `.json` graph with everything inline --
 // what a download, an import and a deploy bundle carry -- opens as it is.
@@ -43,6 +50,7 @@ import { NotAGraph, NotFound } from '../errors.ts';
 export { FLOW_FILE };
 export const LAYOUT_FILE = 'layout.json';
 export const NODES_DIR = 'nodes';
+export const PAGE_DIR = 'page';
 export const NODE_FILE = 'node.json';
 
 export class FileChanged extends Error {
@@ -87,9 +95,14 @@ export function projectFolderOf(path: string): string | null {
   return null;
 }
 
-/** Where a node's writing goes, relative to the project folder. */
-export function nodeFolder(nodeId: string): string {
-  return `${NODES_DIR}/${folderName(nodeId)}`;
+/**
+ * Where each of *nodes* keeps its files, relative to the project folder: the
+ * page in `page/`, every other node in `nodes/<id>/`. A second page -- a
+ * problem `check` names -- is a node like any other until it is the first.
+ */
+export function nodeFolders(nodes: readonly { id: string; node_type: string }[]): (nodeId: string) => string {
+  const page = nodes.find((node) => registry.node(node.node_type)?.hasInterface)?.id;
+  return (nodeId) => (nodeId === page ? PAGE_DIR : `${NODES_DIR}/${folderName(nodeId)}`);
 }
 
 /** One piece of writing in a graph: whose it is, which field holds it, and where its file goes. */
@@ -106,12 +119,10 @@ export interface ProjectText {
   footer?: string;
 }
 
-/**
- * Every piece of writing *graph* can keep in files, whether or not it holds
- * any. Only a node writes: a page's blocks are settings, kept in its node.json.
- */
+/** Every piece of writing *graph* can keep in files, whether or not it holds any. */
 export function projectTexts(graph: Graph): ProjectText[] {
   const found: ProjectText[] = [];
+  const folderOf = nodeFolders(graph.nodes);
   // Each node claims its folder once. Compared without case: on the disk most
   // people use, "Count" and "count" are one folder, and whichever was written
   // last would be the only one there.
@@ -128,7 +139,7 @@ export function projectTexts(graph: Graph): ProjectText[] {
   };
 
   for (const node of graph.nodes) {
-    const folder = claim(nodeFolder(node.id), node.id);
+    const folder = claim(folderOf(node.id), node.id);
     for (const text of registry.node(node.node_type)?.texts(node) ?? []) {
       found.push({
         node_id: node.id, field: text.field, path: `${folder}/${text.file}`,
@@ -163,9 +174,10 @@ export interface NestedGraph {
  */
 export function nestedGraphs(graph: Graph): NestedGraph[] {
   const found: NestedGraph[] = [];
+  const folderOf = nodeFolders(graph.nodes);
   for (const node of graph.nodes) {
     const held = registry.node(node.node_type)?.nestedGraph(node);
-    if (held) found.push({ node, folder: nodeFolder(node.id), graph: held });
+    if (held) found.push({ node, folder: folderOf(node.id), graph: held });
   }
   return found;
 }
@@ -326,8 +338,10 @@ export async function readStructure(folder: string, guard?: Guard): Promise<{ gr
     files.set(path, await signature(path));
     return readIfThere(path, what, guard);
   };
-  for (const id of Object.keys(((flow as { nodes?: unknown })?.nodes ?? {}) as object)) {
-    const dir = join(folder, nodeFolder(id));
+  const listed = Object.entries(((flow as { nodes?: unknown })?.nodes ?? {}) as Record<string, unknown>);
+  const folderOf = nodeFolders(listed.map(([id, type]) => ({ id, node_type: String(type) })));
+  for (const [id] of listed) {
+    const dir = join(folder, folderOf(id));
     read.set(id, {
       about: await readSigned(join(dir, NODE_FILE), 'node'),
       ports: await readSigned(join(dir, INTERFACE_FILE), 'interface'),
@@ -437,20 +451,24 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   }
 
   const files = new Map<string, string | null>();
+  const folderOf = nodeFolders(copy.nodes);
   // A node's ports: its interface, in its own folder.
   const flow = flowOf(copy);
   for (const node of copy.nodes) {
     const element = registry.node(node.node_type);
     // A typo in flow.json must not cost the node its code on the next save.
-    if (!element) untouched.add(join(folder, nodeFolder(node.id)));
+    if (!element) untouched.add(join(folder, folderOf(node.id)));
     else {
       // A node that became another kind -- by ✨ AI Graph, the bar, a model
       // over MCP -- keeps none of the old kind's writing: in node.json it
       // would be a setting nothing reads. Its file goes as one no node keeps.
       const own = new Set(element.texts(node).map((text) => text.field));
       for (const field of textFields(node)) if (!own.has(field)) delete node.config[field];
+      // Each block's keys in one order, so an unchanged page saves unchanged.
+      const blocks = element.blocks(node);
+      if (blocks.length) element.setBlocks(node, blocks.map((block) => sorted(block)));
     }
-    files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(node), true));
+    files.set(join(folder, folderOf(node.id), INTERFACE_FILE), toFile(describeInterface(node), true));
   }
   for (const text of projectTexts(copy)) {
     const value = text.holder[text.field];
@@ -466,16 +484,12 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
       ...(node.width ? { width: Math.round(node.width) } : {}),
       ...(node.height ? { height: Math.round(node.height) } : {}),
     };
-    const settings = { ...node, config: sorted(node.config as Record<string, unknown>) };
-    const element = registry.node(node.node_type);
-    const blocks = element?.blocks(settings) ?? [];
-    if (blocks.length) element!.setBlocks(settings, blocks.map((block) => sorted(block)));
     const about = {
       label: node.label,
       ...(node.description ? { description: node.description } : {}),
-      config: settings.config,
+      config: sorted(node.config as Record<string, unknown>),
     };
-    files.set(join(folder, nodeFolder(node.id), NODE_FILE), toFile(about, true));
+    files.set(join(folder, folderOf(node.id), NODE_FILE), toFile(about, true));
   }
   // Files like the rest, so one changed outside -- another writer added a node
   // and its folder -- refuses the save instead of being written over, and the
@@ -524,7 +538,11 @@ async function commit(plan: Plan, guard?: Guard): Promise<void> {
     }
     await remember(path);
   }
-  await tidy(join(plan.folder, NODES_DIR), new Set(plan.files.keys()), plan.untouched);
+  const claimed = new Set(plan.files.keys());
+  await tidy(join(plan.folder, NODES_DIR), claimed, plan.untouched);
+  // The page's folder goes with the page, unless somebody keeps a file in it.
+  const page = join(plan.folder, PAGE_DIR);
+  if (await tidy(page, claimed, plan.untouched)) await rmdir(page);
 }
 
 /**
@@ -582,12 +600,12 @@ export async function saveGraph(path: string, graph: Graph, guard?: Guard): Prom
 }
 
 /**
- * One of a node's files, relative to the project's `nodes/` folder --
- * `count/code.js`, `count/input.js`, `say/history.md` -- for opening it in the
- * person's own editor. *file* is named from the node's folder, and must be one
- * of the texts the node keeps; without it, the body. A text nothing has been
- * written into yet is created -- its stub, or empty -- so there is something
- * to open.
+ * One of a node's files, relative to the project folder --
+ * `nodes/count/code.js`, `nodes/say/history.md`, `page/page.json` -- for
+ * opening it in the person's own editor. *file* is named from the node's
+ * folder, and must be one of the texts the node keeps; without it, the body. A
+ * text nothing has been written into yet is created -- its stub, or empty --
+ * so there is something to open.
  */
 export async function nodeFileOf(folder: string, nodeId: string, file?: string): Promise<string> {
   const { graph } = await readStructure(folder);
@@ -597,7 +615,7 @@ export async function nodeFileOf(folder: string, nodeId: string, file?: string):
   const logic = registry.node(node.node_type)?.logic(node);
   const body = file === undefined
     ? texts.find((text) => text.field === logic?.fields.body) ?? texts[0]
-    : texts.find((text) => text.path === `${nodeFolder(nodeId)}/${file}`);
+    : texts.find((text) => text.path === `${nodeFolders(graph.nodes)(nodeId)}/${file}`);
   if (!body) {
     const kept = texts.map((text) => text.path.slice(text.path.lastIndexOf('/') + 1));
     throw file === undefined
@@ -610,7 +628,7 @@ export async function nodeFileOf(folder: string, nodeId: string, file?: string):
     await writeFile(path, fileFor(undefined, body) ?? '', 'utf8');
     await remember(path);
   }
-  return body.path.slice(NODES_DIR.length + 1);
+  return body.path;
 }
 
 // ---------------------------------------------------------------------------

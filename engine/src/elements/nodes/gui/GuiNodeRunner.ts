@@ -1,4 +1,4 @@
-import { NodeRunner, type WhatRuns } from '../../NodeRunner.ts';
+import { NodeRunner, type TextFile, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type Widget, type WidgetRunner, type WidgetPresentation } from '../../WidgetRunner.ts';
 import type { GraphNode, Port, RawConfig } from '../../../graph.ts';
@@ -64,6 +64,11 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
   config(node: GraphNode): GuiConfig {
     const raw = node.config.gui_widgets;
     return { widgets: Array.isArray(raw) ? raw.map(parseWidget) : [] };
+  }
+
+  /** Its blocks, in order: `page.json`, the page as a file of its own. */
+  override texts(): readonly TextFile[] {
+    return [{ field: 'gui_widgets', file: 'page.json', json: true }];
   }
 
   /** Derived: the union of its blocks' ports. Nobody names these by hand. */

@@ -18,7 +18,7 @@ import {
 
 const port = (id: string, kind: 'input' | 'output') => ({ id, name: id, kind, data_type: 'any', multi: false, required: false, description: '' });
 
-/** A code node and an ai node, which keep writing, beside a directory input and a page with a chart, which keep none. */
+/** A code node and an ai node, which keep writing, beside a directory input, which keeps none, and a page with a chart. */
 function sample(): Graph {
   return parseGraph({
     metadata: { name: 'Sample', description: 'All the writing there is.' },
@@ -83,9 +83,47 @@ describe('a project folder', () => {
     expect(await text('nodes/count/output.js')).toBe('module.exports = { "total": 1 };\n');
     expect(await text('nodes/count/history.md')).toBe('## 2026-09-28 09:05 · ✨ Code\n\nNothing was sent.\n');
     expect(await text('nodes/say/prompt.md')).toBe('Say how many files there are, in one sentence.\n');
-    // A folder listing and a chart have no writing of their own.
+    // A folder listing has no writing of its own, and a chart is one block of the page's.
     expect(existsSync(join(dir, 'nodes/folder/select.js'))).toBe(false);
-    expect(existsSync(join(dir, 'nodes/page/chart'))).toBe(false);
+    expect(JSON.parse(await text('page/page.json'))).toEqual([{ id: 'chart', kind: 'plot_window', label: 'Chart' }]);
+    expect(existsSync(join(dir, 'page/chart'))).toBe(false);
+  });
+
+  it('keeps the page beside the nodes, in page/, whatever its id: its blocks in page.json, its name and ports as any node\'s', async () => {
+    await writeProject(dir, sample());
+    expect(existsSync(join(dir, 'nodes/page'))).toBe(false);
+    expect(JSON.parse(await text('page/node.json'))).toEqual({ label: 'Page', config: {} });
+    expect(JSON.parse(await text('page/interface.json')).inputs).toEqual([{ port: 'chart_in', type: 'any' }]);
+    // Every block's keys in one order, whatever order they came in.
+    const graph = sample();
+    graph.nodes[3].id = 'screen';
+    graph.nodes[3].config.gui_widgets = [{ value: 'hi', label: 'Hello', kind: 'text', id: 'hello' }];
+    await writeProject(dir, graph);
+    expect(await text('page/page.json')).toBe('[\n  {\n    "id": "hello",\n    "kind": "text",\n    "label": "Hello",\n    "value": "hi"\n  }\n]\n');
+    expect(JSON.parse(await text('flow.json')).nodes.screen).toBe('gui');
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes[3]).toMatchObject({ id: 'screen', config: { gui_widgets: [{ id: 'hello', kind: 'text', label: 'Hello', value: 'hi' }] } });
+  });
+
+  it('keeps a second page among the nodes -- a problem check names -- and takes page/ away with the page', async () => {
+    const graph = sample();
+    graph.nodes.push({ ...graph.nodes[3], id: 'other', config: { gui_widgets: [{ id: 'note', kind: 'text', label: 'Note' }] } });
+    await writeProject(dir, graph);
+    expect(JSON.parse(await text('page/page.json'))[0].id).toBe('chart');
+    expect(JSON.parse(await text('nodes/other/page.json'))[0].id).toBe('note');
+    await writeFile(join(dir, 'page/notes.txt'), 'mine');
+    graph.nodes = graph.nodes.filter((node) => node.node_type !== 'gui');
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'page/page.json'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes/other'))).toBe(false);
+    // A person's file keeps the folder.
+    expect(await text('page/notes.txt')).toBe('mine');
+    await rm(join(dir, 'page/notes.txt'));
+    await writeProject(dir, sample());
+    graph.nodes = graph.nodes.filter((node) => node.node_type !== 'gui');
+    await writeProject(dir, graph);
+    expect(existsSync(join(dir, 'page'))).toBe(false);
   });
 
   it('says the flow once, in flow.json, and nothing about any node there', async () => {
@@ -102,7 +140,7 @@ describe('a project folder', () => {
     await writeProject(dir, sample());
     expect(JSON.parse(await text('nodes/count/node.json'))).toEqual({ label: 'Count', config: { batch_mode: 'whole_list' } });
     expect(JSON.parse(await text('nodes/say/node.json')).config).toEqual({ temperature: 0.2 });
-    expect(JSON.parse(await text('nodes/page/node.json')).config.gui_widgets[0]).toEqual({ id: 'chart', kind: 'plot_window', label: 'Chart' });
+    expect(JSON.parse(await text('page/node.json')).config).toEqual({});
     const ports = JSON.parse(await text('nodes/count/interface.json'));
     expect(ports.inputs).toEqual([{ port: 'files', type: 'any' }]);
     expect(ports.outputs).toEqual([{ port: 'total', type: 'any' }]);
@@ -139,7 +177,7 @@ describe('a project folder', () => {
 
   it('writes the same bytes for the same graph, so an unchanged save is no change', async () => {
     await writeProject(dir, sample());
-    const files = ['flow.json', 'layout.json', 'nodes/count/node.json', 'nodes/count/interface.json', 'nodes/page/node.json'];
+    const files = ['flow.json', 'layout.json', 'nodes/count/node.json', 'nodes/count/interface.json', 'page/node.json', 'page/page.json'];
     const first = await Promise.all(files.map(text));
     await writeProject(dir, await readProject(dir));
     expect(await Promise.all(files.map(text))).toEqual(first);
@@ -364,10 +402,11 @@ describe('a project folder', () => {
 describe('a node\'s files, opened in the person\'s own editor', () => {
   it('can be each text the node keeps -- and nothing else of its folder', async () => {
     await writeProject(dir, sample());
-    expect(await nodeFileOf(dir, 'count')).toBe('count/code.js');
-    expect(await nodeFileOf(dir, 'count', 'output.js')).toBe('count/output.js');
+    expect(await nodeFileOf(dir, 'count')).toBe('nodes/count/code.js');
+    expect(await nodeFileOf(dir, 'count', 'output.js')).toBe('nodes/count/output.js');
+    expect(await nodeFileOf(dir, 'page', 'page.json')).toBe('page/page.json');
     // A text nobody has written yet is there as its stub, so there is something to open.
-    expect(await nodeFileOf(dir, 'say', 'input.js')).toBe('say/input.js');
+    expect(await nodeFileOf(dir, 'say', 'input.js')).toBe('nodes/say/input.js');
     expect(await text('nodes/say/input.js')).toMatch(/module\.exports = null;\n$/);
     for (const file of ['node.json', '../say/prompt.md', 'example/rows.csv']) {
       await expect(nodeFileOf(dir, 'count', file), file).rejects.toThrow(/is not one of the files of "count": it keeps input\.js, output\.js, code\.js, history\.md\./);
@@ -404,7 +443,7 @@ describe('what a folder could write and not read back', () => {
     await expect(writeProject(dir, graph)).rejects.toThrow(/is a number/);
   });
 
-  it('keeps a page\'s blocks in its node.json, with no folder of their own -- two of one id are check\'s to name', async () => {
+  it('keeps a page\'s blocks together in its page.json, with no folder of their own -- two of one id are check\'s to name', async () => {
     const graph = parseGraph({
       metadata: { name: 'Blocks' },
       nodes: [{
@@ -417,7 +456,7 @@ describe('what a folder could write and not read back', () => {
       edges: [],
     });
     await writeProject(dir, graph);
-    expect(existsSync(join(dir, 'nodes/page/chart'))).toBe(false);
+    expect(existsSync(join(dir, 'page/chart'))).toBe(false);
     const blocks = (await readProject(dir)).nodes[0].config.gui_widgets as { value: string }[];
     expect(blocks.map((block) => block.value)).toEqual(['first', 'second']);
     expect(problemsIn(graph)).toEqual([expect.objectContaining({ problem: 'More than one block has the id "chart".' })]);
@@ -520,6 +559,10 @@ describe('two editors on one folder', () => {
 
     await rm(join(dir, 'nodes/count/output.js'));
     expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'output_definition', value: '' }]);
+
+    // The page's blocks, edited in page.json.
+    await touch(join(dir, 'page/page.json'), '[{ "id": "chart", "kind": "plot_window", "label": "Sales" }]\n');
+    expect(await changesOnDisk(dir)).toEqual([{ node_id: 'page', field: 'gui_widgets', value: [{ id: 'chart', kind: 'plot_window', label: 'Sales' }] }]);
 
     // A change taken in is no conflict for the next save.
     const graph = await readProject(dir);

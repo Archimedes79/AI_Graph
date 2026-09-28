@@ -584,8 +584,12 @@ A graph is a folder, and **each fact is in one place**:
   Nothing about its neighbours: a node that needs to know what arrives follows the wire and
   reads the other node's output.js.
 - Every piece of writing is a file of its own beside them. Which fields become which files
-  is element knowledge, so each element declares it (`NodeRunner.texts`, `TextFile`). A
-  page's blocks write nothing: they are settings, in its `node.json`.
+  is element knowledge, so each element declares it (`NodeRunner.texts`, `TextFile`).
+- `page/` — the page: the first node that carries the interface keeps its folder beside
+  `nodes/`, not in it, whatever its id (`nodeFolders`), and its blocks in `page.json`. A
+  graph has one page and it is what a person using the tool sees, so it is the one folder
+  anybody opening the project looks for; a second page is a node like any other, and a
+  problem `check` names.
 
   ```
   nodes/<id>/
@@ -595,6 +599,8 @@ A graph is a folder, and **each fact is in one place**:
     prompt.md     the instructions its model is given            (AI node)
     data.json     what it holds -- data.txt, for a text          (data node)
     history.md    every exchange with the model about it
+  page/
+    page.json     its blocks, in order -- beside node.json and interface.json
   ```
 
   **Every file is there from the start.** A text nothing has been written into is written
@@ -645,7 +651,7 @@ or a page that has them can do the same.
 
 | State | Lives in | Travels as |
 |---|---|---|
-| the graph | a project folder: `flow.json`, `layout.json`, `nodes/<id>/` (`node.json`, `interface.json`, writing) — or one `.json` with everything inline | the document ([`project/folder.ts`](../engine/src/project/folder.ts)) |
+| the graph | a project folder: `flow.json`, `layout.json`, `page/` (`page.json`), `nodes/<id>/` (`node.json`, `interface.json`, writing) — or one `.json` with everything inline | the document ([`project/folder.ts`](../engine/src/project/folder.ts)) |
 | a widget's value, a conversation, a data node's value | inside the graph, in the element's own config | `result.memory` → `applyMemory` |
 | a run in flight | `RunBoard` on the server | `RunSnapshot`, polled |
 | what every node made last, for rounds its ◆ stays shut | `Latch`, in the process holding the graph; gone at restart | `NodeResult.held` |

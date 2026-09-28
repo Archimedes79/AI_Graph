@@ -203,7 +203,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
         const folder = project.projectFolderOf(resolve(expandHome(asked.graph_path)));
         if (!folder) throw new Refusal(400, 'Only a project folder keeps files to open: save the graph as one first.');
         const file = await project.nodeFileOf(folder, asked.node_id, asked.file || undefined);
-        return await files.openExternal(join(folder, project.NODES_DIR), file);
+        return await files.openExternal(folder, file);
       } catch (error) {
         if (error instanceof Refusal) throw error;
         throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));

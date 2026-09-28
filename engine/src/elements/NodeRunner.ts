@@ -154,7 +154,7 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
   /**
    * The blocks this node holds, as the records it keeps them in: a page's
-   * widgets, settings in its `node.json` -- a block writes no file of its own.
+   * widgets, together in its `page.json` -- a block writes no file of its own.
    * None for a node that holds none.
    *
    * The element owns where they are kept; the project folder only asks -- to

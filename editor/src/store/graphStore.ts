@@ -882,6 +882,8 @@ export const useGraphStore = create<GraphStore>()(
             continue;
           }
           (node.config as unknown as Record<string, unknown>)[change.field] = change.value;
+          // A page's page.json is its blocks, and its ports are theirs.
+          Object.assign(node, derivedNodePorts(node) ?? {});
         }
       });
       if (wasClean) get().markSaved();

@@ -243,6 +243,27 @@ describe('what check finds in a project folder', () => {
     expect(problems[1].fix).toMatch(/"prompt.md"/);
   });
 
+  it('finds a page/ folder where flow.json has no page, and a file in the page\'s folder nothing reads', async () => {
+    await writeProject(dir, graph());
+    await mkdir(join(dir, 'page'));
+    await writeFile(join(dir, 'page', 'page.json'), '[]\n');
+    expect((await checkPath(dir)).problems.map((p) => [p.where, p.problem])).toEqual([
+      ['page', 'This folder is a page, and flow.json has none.'],
+    ]);
+
+    const paged = graph();
+    paged.nodes.push(...parseGraph({
+      metadata: { name: 'x' },
+      nodes: [{ id: 'screen', node_type: 'gui', label: 'Page', config: { gui_widgets: [{ id: 'note', kind: 'text', label: 'Note' }] } }],
+      edges: [],
+    }).nodes);
+    await writeProject(dir, paged);
+    await writeFile(join(dir, 'page', 'style.css'), '');
+    expect((await checkPath(dir)).problems.map((p) => [p.where, p.problem])).toEqual([
+      ['page/style.css', 'Nothing reads this file.'],
+    ]);
+  });
+
   it('is content with a folder for a node that keeps no writing yet', async () => {
     await writeProject(dir, graph());
     // Every node has a folder since each is given its interface.json; an empty one is as fine.

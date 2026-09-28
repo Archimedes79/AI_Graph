@@ -13,16 +13,17 @@ import { names, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
 import { INTERFACE_FILE } from './interfaceFile.ts';
 import {
-  FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, isProjectFolder, loadGraph, nodeFolder, projectFolderOf, projectTexts, readStructure,
+  FLOW_FILE, LAYOUT_FILE, NODE_FILE, NODES_DIR, PAGE_DIR, isProjectFolder, loadGraph, nodeFolders, projectFolderOf, projectTexts,
+  readStructure,
 } from './folder.ts';
 import { problemsIn } from './check.ts';
 
 /**
  * What only a project folder can get wrong: a folder under `nodes/` that
  * belongs to no node (the node was deleted, or renamed in `flow.json` by
- * hand), and a file in a node's folder that nothing reads -- `instructions.md`
- * where an AI node reads `prompt.md` is a text somebody wrote and nobody will
- * ever send.
+ * hand) -- or a `page/` with no page --, and a file in a node's folder that
+ * nothing reads -- `instructions.md` where an AI node reads `prompt.md` is a
+ * text somebody wrote and nobody will ever send.
  */
 export async function folderProblems(folder: string): Promise<Problem[]> {
   const { graph } = await readStructure(folder);
@@ -35,8 +36,9 @@ export async function folderProblems(folder: string): Promise<Problem[]> {
     expected.get(dir)!.add(text.path.slice(slash + 1));
   }
   // Every node has a folder it may use, even one that keeps no writing yet.
+  const folderOf = nodeFolders(graph.nodes);
   for (const node of graph.nodes) {
-    const nodeDir = nodeFolder(node.id);
+    const nodeDir = folderOf(node.id);
     if (!expected.has(nodeDir)) expected.set(nodeDir, new Set());
     // Its name and settings, and what goes in and what comes out.
     expected.get(nodeDir)!.add(NODE_FILE).add(INTERFACE_FILE);
@@ -48,7 +50,7 @@ export async function folderProblems(folder: string): Promise<Problem[]> {
   const nested = new Set<string>();
   for (const node of graph.nodes) {
     if (!registry.node(node.node_type)?.nestedGraph(node)) continue;
-    const dir = nodeFolder(node.id);
+    const dir = folderOf(node.id);
     nested.add(dir);
     // Every node's folder is in `expected` already, from the loop above.
     for (const name of [FLOW_FILE, LAYOUT_FILE]) expected.get(dir)!.add(name);
@@ -92,6 +94,10 @@ export async function folderProblems(folder: string): Promise<Problem[]> {
     }
   };
   if (existsSync(join(folder, NODES_DIR))) await walk(NODES_DIR);
+  if (existsSync(join(folder, PAGE_DIR))) {
+    if (expected.has(PAGE_DIR)) await walk(PAGE_DIR);
+    else found.push({ where: PAGE_DIR, problem: 'This folder is a page, and flow.json has none.', fix: 'Delete it, or add the page to flow.json again.' });
+  }
   return found;
 }
 
