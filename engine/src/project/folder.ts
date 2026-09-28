@@ -609,16 +609,30 @@ export async function saveGraph(path: string, graph: Graph, guard?: Guard): Prom
 
 /**
  * One of a node's files, relative to the project folder --
- * `nodes/count/code.js`, `nodes/say/history.md`, `page/page.json` -- for
- * opening it in the person's own editor. *file* is named from the node's
- * folder, and must be one of the texts the node keeps; without it, the body. A
- * text nothing has been written into yet is created -- its stub, or empty --
- * so there is something to open.
+ * `nodes/count/code.js`, `nodes/say/history.md`, `page/page.json`,
+ * `nodes/part/nodes/count/code.js` -- for opening it in the person's own
+ * editor. The node is one of the graph *inside* leads down to: the ids of the
+ * nodes whose graphs hold it, outermost first, and none for the graph at the
+ * top. Ids are each graph's own, so an inner `count` is not the outer one:
+ * the inner node's chip opened the outer node's file. *file* is named from the
+ * node's folder, and must be one of the texts the node keeps; without it, the
+ * body. A text nothing has been written into yet is created -- its stub, or
+ * empty -- so there is something to open.
  */
-export async function nodeFileOf(folder: string, nodeId: string, file?: string): Promise<string> {
-  const { graph } = await readStructure(folder);
+export async function nodeFileOf(folder: string, nodeId: string, file?: string, inside: readonly string[] = []): Promise<string> {
+  // Down through the folders the graphs are kept in, as `nestedGraphs` names them.
+  let level = '';
+  for (const holder of inside) {
+    const { graph: above } = await readStructure(join(folder, level));
+    const held = nestedGraphs(above).find((nested) => nested.node.id === holder);
+    const down = held && (level ? `${level}/${held.folder}` : held.folder);
+    if (!down || !isProjectFolder(join(folder, down))) throw new NotFound(`No graph inside "${holder}" in ${join(folder, level)}. Save the graph first.`);
+    level = down;
+  }
+  const here = join(folder, level);
+  const { graph } = await readStructure(here);
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
-  if (!node) throw new NotFound(`No node "${nodeId}" in ${folder}. Save the graph first.`);
+  if (!node) throw new NotFound(`No node "${nodeId}" in ${here}. Save the graph first.`);
   const texts = projectTexts(graph).filter((text) => text.node_id === nodeId);
   const logic = registry.node(node.node_type)?.logic(node);
   const body = file === undefined
@@ -630,13 +644,13 @@ export async function nodeFileOf(folder: string, nodeId: string, file?: string):
       ? new NotFound(`"${nodeId}" keeps nothing in files.`)
       : new Error(`"${file}" is not one of the files of "${nodeId}": it keeps ${kept.length ? kept.join(', ') : 'none'}.`);
   }
-  const path = join(folder, body.path);
+  const path = join(here, body.path);
   if (!existsSync(path)) {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, fileFor(undefined, body) ?? '', 'utf8');
     await remember(path);
   }
-  return body.path;
+  return level ? `${level}/${body.path}` : body.path;
 }
 
 // ---------------------------------------------------------------------------

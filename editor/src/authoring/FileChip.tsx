@@ -27,13 +27,16 @@ export default function FileChip({ nodeId, file, written, before }: {
   const [status, setStatus] = useState('');
 
   const open = async () => {
-    const graphPath = useGraphStore.getState().currentFilePath;
+    const { currentFilePath: graphPath, subgraphStack } = useGraphStore.getState();
     if (!graphPath) return;
     try {
       setStatus('Saving, then opening…');
       before?.();
       await useGraphStore.getState().save();
-      const opened = await call('openExternal', { graph_path: graphPath, node_id: nodeId, file });
+      // The node is in the graph open now, which may be one a node holds: its
+      // id is that graph's own, and alone it named the outer node of that id.
+      const inside = subgraphStack.map((frame) => frame.nodeId);
+      const opened = await call('openExternal', { graph_path: graphPath, inside, node_id: nodeId, file });
       setStatus(`Opened in ${opened.with}.`);
     } catch (error) {
       setStatus(errorText(error, `Could not open ${file}.`));
