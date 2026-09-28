@@ -307,7 +307,20 @@ function normalizeMetadata(metadata: Partial<GraphMetadata> | undefined): GraphM
 function normalizeGraphNode(rawNode: Partial<GraphNode>): GraphNode {
   const nodeType = rawNode.node_type ?? 'input';
   const nodeId = rawNode.id ?? newId(nodeType);
-  const defaults = NODE_KINDS[nodeType].create(nodeId);
+  const kind = NODE_KINDS[nodeType];
+  // A type this editor does not know -- one of a newer engine, say -- is kept
+  // as it came, as the engine and a project folder keep it: opening such a
+  // graph threw, and a save must not lose the node. `check` names it.
+  if (!kind) {
+    return {
+      label: nodeId, description: '', ...rawNode, id: nodeId, node_type: nodeType,
+      position: { x: 0, y: 0, ...(rawNode.position ?? {}) },
+      inputs: Array.isArray(rawNode.inputs) ? rawNode.inputs : [],
+      outputs: Array.isArray(rawNode.outputs) ? rawNode.outputs : [],
+      config: rawNode.config ?? ({} as GraphNode['config']),
+    };
+  }
+  const defaults = kind.create(nodeId);
 
   const node: GraphNode = {
     ...defaults,

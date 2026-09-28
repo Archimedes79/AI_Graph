@@ -297,6 +297,23 @@ describe('graphStore.isDirty', () => {
   });
 });
 
+describe('graphStore.loadGraph: a node of a type this editor does not know', () => {
+  it('opens the graph, and saves the node as it came, wires and all -- as the engine and a project folder keep it', () => {
+    // Opening such a graph threw "Cannot read properties of undefined".
+    const later = {
+      id: 'later', node_type: 'vision', label: 'Later', description: 'A kind of a newer engine.', position: { x: 5, y: 6 },
+      inputs: [{ id: 'picture', name: 'Picture', kind: 'input', data_type: 'image', multi: false, required: false, description: '' }],
+      outputs: [], config: { batch_mode: 'whole_list', lens: 'wide' },
+    } as unknown as GraphNode;
+    const source = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
+    loadTestGraph([source, later], [{ id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'later', target_port_id: 'picture' }]);
+    const saved = useGraphStore.getState().exportGraph();
+    expect(saved.nodes.find((node) => node.id === 'later')).toEqual(later);
+    expect(saved.edges).toHaveLength(1);
+    expect(useGraphStore.getState().isDirty()).toBe(false);
+  });
+});
+
 describe('graphStore width/height persistence', () => {
   it('round-trips node size through loadGraph -> exportGraph', () => {
     const node = graphNode({ id: 'n1', width: 320, height: 240 });

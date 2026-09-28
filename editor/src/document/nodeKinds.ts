@@ -213,6 +213,8 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
  * that default, and loading fills it back in, so nothing is lost either way.
  */
 export function savedNode(node: GraphNode): GraphNode {
+  // A type this editor does not know was never filled in: it is saved as it came.
+  if (!NODE_KINDS[node.node_type]) return node;
   const defaults: Record<string, unknown> = baseNodeConfig();
   const config = Object.fromEntries(Object.entries(node.config)
     .filter(([key, value]) => value !== undefined && JSON.stringify(value) !== JSON.stringify(defaults[key])));

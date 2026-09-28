@@ -61,4 +61,13 @@ describe('a node\'s panel', () => {
     await act(async () => { store().updateNode(other, { label: 'Shown' }); });
     expect(drawn).toBeGreaterThan(before);
   });
+
+  it('says so of a node of a type this editor does not know, which it keeps as it came', async () => {
+    const later = { id: 'later', node_type: 'vision', label: 'Later', position: { x: 0, y: 0 }, inputs: [], outputs: [], config: {} };
+    await act(async () => {
+      store().loadGraph({ metadata: { name: 'Later', description: '', gui_scheme: 'night' }, nodes: [later as never], edges: [] });
+    });
+    await act(async () => { root.render(createElement(NodeEditor, { nodeId: 'later', onClose: () => {} })); });
+    expect(page.textContent).toContain('This editor does not know nodes of type "vision". The node is kept, and saved, as it came.');
+  });
 });
