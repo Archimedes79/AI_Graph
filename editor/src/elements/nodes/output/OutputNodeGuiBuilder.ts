@@ -27,6 +27,8 @@ export class OutputNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-output, #3a2000)';
 
+  override readonly paletteGroup = 'Output';
+
   override readonly Panel = lazy(() => import('./OutputNodePanel'));
 
   // Its description is what the result is, which the node feeding it is told

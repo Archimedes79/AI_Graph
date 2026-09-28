@@ -100,6 +100,14 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
   abstract readonly color: string;
 
   /**
+   * The heading the node palette offers it under -- "Processing" -- or none,
+   * for a kind it does not offer. The palette's headings are these, in the
+   * registry's order: a kind added is offered without a line in a table of
+   * the palette's own.
+   */
+  readonly paletteGroup?: string;
+
+  /**
    * The settings most people never touch, drawn folded away under everything
    * else, so that opening a node shows what it *does* and not a form.
    */

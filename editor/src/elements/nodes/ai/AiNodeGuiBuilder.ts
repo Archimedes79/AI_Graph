@@ -17,6 +17,8 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-ai, #2d1b4e)';
 
+  override readonly paletteGroup = 'Processing';
+
   // Its text is what it should do, drawn by its panel above what ✨ writes from it.
   override readonly ownsDescription = true;
 

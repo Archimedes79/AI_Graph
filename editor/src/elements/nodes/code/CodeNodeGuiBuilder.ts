@@ -18,6 +18,8 @@ export class CodeNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-code, #1a3a2a)';
 
+  override readonly paletteGroup = 'Processing';
+
   // Its text is what it should do, drawn by its panel above what ✨ writes from it.
   override readonly ownsDescription = true;
 

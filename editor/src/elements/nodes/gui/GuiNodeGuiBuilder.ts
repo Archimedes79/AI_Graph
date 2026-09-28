@@ -36,6 +36,10 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-gui, #4a1d3a)';
 
+  // No paletteGroup: a graph has one page, and the Page tab makes it with its
+  // first block. Dropped from the node palette it was a second way to make it,
+  // and a second page, one nobody would ever see.
+
   // No Panel: the page is edited on the Page tab, under the graph's name and
   // description (`PageHeading`), and no panel is opened for it
   // (App.tsx). It has no name of its own to give: the tool's is the graph's.

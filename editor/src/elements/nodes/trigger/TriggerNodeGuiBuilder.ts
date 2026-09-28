@@ -24,6 +24,8 @@ export class TriggerNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-trigger, #4a3a12)';
 
+  override readonly paletteGroup = 'Input';
+
   override readonly Panel = lazy(() => import('./TriggerNodePanel'));
 
   override describeOutput(): string {
