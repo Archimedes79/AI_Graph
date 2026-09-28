@@ -280,11 +280,6 @@ export default function Toolbar({
               ⏳ {Math.round(runProgress.idleSeconds)}s
             </span>
           )}
-          {sweep.message && (
-            <span className="text-xs truncate" style={{ color: MUTED }} title={sweep.message}>
-              {sweep.message}
-            </span>
-          )}
           {/* A "✅ Saved to …" that survives the next ten edits is a lie about
               what is on disk; it only shows while the graph is actually clean.
               (rfNodes/rfEdges are read above purely to drive this re-render.) */}
@@ -373,6 +368,22 @@ export default function Toolbar({
           framed
         />
       </header>
+
+      {/* What ✨ Generate says, whole, under the header: in it, at 1024
+          pixels, "Nothing to generate. 3 left alone: …" was 77 pixels wide
+          and the rest only a tooltip. */}
+      {sweep.message && (
+        <div className="flex items-start gap-3 px-3 xl:px-5 py-1.5 text-xs flex-shrink-0" role="status"
+          style={{ background: SURFACE, borderBottom: `1px solid ${LINE}`, color: MUTED }}>
+          <span className="flex-1 min-w-0 break-words">{sweep.message}</span>
+          {!sweep.busy && (
+            <button type="button" onClick={sweep.dismiss} className="shrink-0" style={{ color: MUTED }}
+              title="Dismiss what ✨ Generate said" aria-label="Dismiss">
+              ✕
+            </button>
+          )}
+        </div>
+      )}
 
       <RequirementsDialog
         requirements={delivered.requirements}

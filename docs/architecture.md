@@ -351,7 +351,9 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   (`app/ViewTabs.tsx`) and what is done to the graph as a whole: Undo and Redo as icons,
   ▶ Run, Generate, Settings, Deploy; the file actions and ✨ AI Graph, which designs a new
   graph, are its File menu (`app/FileMenu.tsx`). Below 1280 pixels its buttons and the
-  palette are their icons, and at 1024 nothing scrolls the page sideways.
+  palette are their icons, and at 1024 nothing scrolls the page sideways. What Generate
+  says stands whole in a line under it until dismissed; what it says of saving and
+  opening is kept with the document it was said of, and goes when another is opened.
 
 ## Five rules
 

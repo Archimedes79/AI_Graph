@@ -22,6 +22,8 @@ export interface SweepState {
   stop: () => void;
   busy: boolean;
   message: string;
+  /** What it said has been read: it goes. */
+  dismiss: () => void;
 }
 
 /** Said when what came back belongs to a graph that is no longer open. */
@@ -141,6 +143,7 @@ export function useGraphSweep(): SweepState {
   }, []);
 
   const stop = useCallback(() => { stopping.current = true; }, []);
+  const dismiss = useCallback(() => setMessage(''), []);
 
-  return { run, stop, busy, message };
+  return { run, stop, busy, message, dismiss };
 }
