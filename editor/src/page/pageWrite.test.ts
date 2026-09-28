@@ -136,6 +136,19 @@ describe('a block edited on the page', () => {
     expect(store().past.length).toBe(undo + 1);
   });
 
+  it('takes what is typed into a block as one undo step, as a node\'s panel does: fifty characters were fifty', () => {
+    // Fifty steps pushed the node deleted before them out of the undo history.
+    const count = store().addNode('code', { x: 0, y: 0 });
+    insertBlock({ ...WIDGET_BUILDERS.chat.create('Chat'), id: 'chat' });
+    store().deleteNodes([count]);
+    const typed = 'What does this graph count, and where does it look?';
+    for (let at = 1; at <= typed.length; at += 1) patchBlock('chat', { value: { messages: [], pending: typed.slice(0, at) } });
+    store().undo();
+    expect(shown()[0].value).toBeUndefined();
+    store().undo();
+    expect(store().rfNodes.map((n) => n.id)).toContain(count);
+  });
+
   it('changes nothing when the block was deleted meanwhile: not even an undo step', () => {
     insertBlock({ ...WIDGET_BUILDERS.text.create('A'), id: 'a' });
     const before = JSON.stringify(store().exportGraph());

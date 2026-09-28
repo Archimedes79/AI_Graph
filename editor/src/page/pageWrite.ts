@@ -31,25 +31,37 @@ function withBlocks(page: GraphNode, widgets: GuiWidget[]): GraphNode {
 /**
  * The page's blocks as the store holds them now, rewritten by *edit* and
  * stored back, its ports following. Nothing, when the edit changed nothing:
- * no undo step, and no "unsaved".
+ * no undo step, and no "unsaved". *coalesce* names the change, as a node's
+ * panel names its own (`graphStore.commit`).
  *
  * A page is its blocks: the last one taken off takes the node with it, as the
  * first one made it. A page node left with none was a page to a delivered tool
  * and to a bundle, which drew nothing on it -- not even the run's result.
  */
-function rewrite(edit: (widgets: GuiWidget[]) => GuiWidget[]): void {
+function rewrite(edit: (widgets: GuiWidget[]) => GuiWidget[], coalesce?: string): void {
   const page = pageNow();
   if (!page) return;
   const widgets = edit(page.config.gui_widgets);
   if (JSON.stringify(widgets) === JSON.stringify(page.config.gui_widgets)) return;
   const store = useGraphStore.getState();
-  if (widgets.length) store.updateNode(page.id, withBlocks(page, widgets));
+  if (widgets.length) store.updateNode(page.id, withBlocks(page, widgets), undefined, coalesce);
   else store.deleteNodes([page.id]);
 }
 
-/** Give block *widgetId* *patch*. Nothing, when the block is no longer there. */
+/**
+ * Give block *widgetId* *patch*. Nothing, when the block is no longer there.
+ *
+ * One undo step with the change of the same fields of the same block just
+ * before it: what is typed into a block, a slider drawn along, a block's edge
+ * dragged -- each written as it is made, and each was a step of its own. Fifty
+ * characters typed into a chat pushed everything before them out of Undo.
+ * Named without ": ", so it is never taken for a node panel's change.
+ */
 export function patchBlock(widgetId: string, patch: Partial<GuiWidget>): void {
-  rewrite((widgets) => widgets.map((w) => (w.id === widgetId ? { ...w, ...patch } : w)));
+  rewrite(
+    (widgets) => widgets.map((w) => (w.id === widgetId ? { ...w, ...patch } : w)),
+    `block.${widgetId}.${Object.keys(patch).sort().join('+')}`,
+  );
 }
 
 /**
