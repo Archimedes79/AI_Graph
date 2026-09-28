@@ -44,7 +44,7 @@ function rewrite(edit: (widgets: GuiWidget[]) => GuiWidget[]): void {
   if (JSON.stringify(widgets) === JSON.stringify(page.config.gui_widgets)) return;
   const store = useGraphStore.getState();
   if (widgets.length) store.updateNode(page.id, withBlocks(page, widgets));
-  else store.deleteNode(page.id);
+  else store.deleteNodes([page.id]);
 }
 
 /** Give block *widgetId* *patch*. Nothing, when the block is no longer there. */

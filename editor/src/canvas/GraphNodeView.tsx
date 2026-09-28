@@ -13,6 +13,7 @@ import { errorText } from '@/api/errorText';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 import ResultPreview, { ErrorPreview } from './ResultPreview';
 import NodeKind from './NodeKind';
+import { askToDelete } from './nodeRemoval';
 
 // Colour AND a glyph: a red/green 8px dot is unreadable both to a screen
 // reader and to a colour-blind user scanning a canvas for the failed node.
@@ -150,7 +151,6 @@ function PageRows({ node, previews, status, held, lit }: {
  */
 const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const { graphNode } = data;
-  const deleteNode = useGraphStore((s) => s.deleteNode);
   const open = useGraphStore((s) => s.editingNodeId === id);
   const executionResult = useGraphStore((s) =>
     s.executionResult?.node_results.find((r) => r.node_id === id)
@@ -218,24 +218,12 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
     setDropFailed('');
     dropExample(id, dropInto, file).catch((reason) => setDropFailed(errorText(reason, 'The file could not be read.')));
   }, [id, dropInto]);
-  // Deleting is immediate, and it silently takes every attached edge with it
-  // -- so a node that is wired into the graph asks first; Ctrl+Z is not where
-  // anyone should find that out. An unconnected node deletes straight away,
-  // because that is the case where a confirmation is just noise.
-  const connectedEdgeCount = useGraphStore(
-    (s) => s.rfEdges.filter((edge) => edge.source === id || edge.target === id).length
-  );
-  const handleDelete = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (connectedEdgeCount > 0) {
-        const wires = `${connectedEdgeCount} connection${connectedEdgeCount === 1 ? '' : 's'}`;
-        if (!window.confirm(`Delete "${graphNode.label}"? Its ${wires} will be removed too.`)) return;
-      }
-      deleteNode(id);
-    },
-    [connectedEdgeCount, graphNode.label, id, deleteNode]
-  );
+  // The same question Delete on the canvas asks, when there is one to ask:
+  // its wires, a page's blocks (`askToDelete`).
+  const handleDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    askToDelete([id], [], window.confirm);
+  }, [id]);
 
   const failedDrop = statusTone('error');
   const ports = Math.max(graphNode.inputs.length, graphNode.outputs.length);

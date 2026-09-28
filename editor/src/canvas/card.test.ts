@@ -13,7 +13,7 @@ import type { GraphNode } from '@/graph';
 // answered here. (Vitest lifts both of these above the imports.)
 const open = vi.hoisted(() => ({
   executionResult: null, editingNodeId: null as string | null,
-  rfNodes: [] as { id: string; style?: { width?: number } }[], rfEdges: [], deleteNode: () => {},
+  rfNodes: [] as { id: string; style?: { width?: number } }[],
 }));
 vi.mock('@/store/graphStore', () => ({
   useGraphStore: (select: (state: typeof open) => unknown) => select(open),

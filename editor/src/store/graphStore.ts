@@ -140,7 +140,12 @@ export interface GraphStore {
    * build one -- without a mouse. The same wire twice is one wire.
    */
   connect: (wire: { source: string; sourceHandle: string; target: string; targetHandle: string }) => void;
-  deleteNode: (nodeId: string) => void;
+  /**
+   * Take *nodeIds* off the graph with every wire into or out of them, and the
+   * wires *wireIds* besides: one undo step, however much goes. What is worth
+   * asking first is asked before this (`canvas/nodeRemoval.ts`).
+   */
+  deleteNodes: (nodeIds: string[], wireIds?: string[]) => void;
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
   setRFEdges: (edges: Edge[]) => void;
   setEditingNode: (nodeId: string | null) => void;
@@ -187,9 +192,9 @@ export interface GraphStore {
    */
   /**
    * Record the current graph as an undo point, BEFORE the change about to be
-   * made. Committing an identical state twice is a no-op, which is what keeps a
-   * delete that arrives through two paths (the node's own button and ReactFlow's
-   * remove change) from costing two presses of Ctrl+Z.
+   * made. Committing an identical state twice is a no-op: with nothing changed
+   * since the step before, a second step would be a press of Ctrl+Z that undoes
+   * nothing.
    *
    * *coalesce* names the change -- a node and the fields its panel wrote. A
    * change of the same name within a moment of the last one adds to that
@@ -559,7 +564,7 @@ export const useGraphStore = create<GraphStore>()(
 
           // Ports may have shrunk (e.g. a removed GUI widget) -- prune any
           // edges that now dangle off a port id that no longer exists,
-          // mirroring the edge cleanup deleteNode already does.
+          // mirroring the edge cleanup deleteNodes already does.
           if (updates.inputs || updates.outputs) {
             const inputIds = new Set(updated.inputs.map((p) => p.id));
             const outputIds = new Set(updated.outputs.map((p) => p.id));
@@ -574,23 +579,24 @@ export const useGraphStore = create<GraphStore>()(
       });
     },
 
-    deleteNode: (nodeId) => {
+    deleteNodes: (nodeIds, wireIds = []) => {
+      const going = new Set(nodeIds);
+      const cut = new Set(wireIds);
       get().commit();
       set((state) => {
-        state.rfNodes = state.rfNodes.filter((n: RFNode) => n.id !== nodeId);
+        state.rfNodes = state.rfNodes.filter((n: RFNode) => !going.has(n.id));
         state.rfEdges = state.rfEdges.filter(
-          (e: Edge) => e.source !== nodeId && e.target !== nodeId
+          (e: Edge) => !cut.has(e.id) && !going.has(e.source) && !going.has(e.target)
         );
-        if (state.editingNodeId === nodeId) state.editingNodeId = null;
+        // A panel open on a node that went closes with it: left pointing at
+        // the id, it opened again on the next node of that id.
+        if (state.editingNodeId && going.has(state.editingNodeId)) state.editingNodeId = null;
       });
     },
 
     setRFNodes: (nodes) =>
       set((state) => {
         state.rfNodes = nodes as never;
-        // A panel open on a node the canvas just removed closes with it:
-        // left pointing at the id, it opened again on the next node of that id.
-        if (state.editingNodeId && !nodes.some((node) => node.id === state.editingNodeId)) state.editingNodeId = null;
       }),
 
     setRFEdges: (edges) =>

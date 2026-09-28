@@ -48,7 +48,7 @@ describe('undo / redo', () => {
     expect(store().rfEdges).toHaveLength(1);
 
     // Deleting the source must take the edge with it...
-    store().deleteNode(source);
+    store().deleteNodes([source]);
     expect(nodeCount()).toBe(1);
     expect(store().rfEdges).toHaveLength(0);
 
@@ -82,15 +82,13 @@ describe('undo / redo', () => {
     expect(store().future).toHaveLength(0);
   });
 
-  it('a delete that commits twice still costs only one undo', () => {
+  it('takes no second step for a commit with nothing changed since the one before', () => {
     store().addNode('code', { x: 0, y: 0 });
     const id = store().rfNodes[0].id;
 
-    // One deletion can commit twice: the canvas sees a `remove` change and the
-    // node's own delete button calls deleteNode. Both snapshot the same
-    // pre-delete state, so they must collapse into a single history entry.
+    // Both snapshot the same state: a second step would be a Ctrl+Z that undoes nothing.
     store().commit();
-    store().deleteNode(id);
+    store().deleteNodes([id]);
     expect(nodeCount()).toBe(0);
 
     store().undo();

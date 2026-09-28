@@ -9,7 +9,7 @@ import PageHeading from '@/page/PageHeading';
 import WidgetEditor from '@/page/WidgetEditor';
 import TopGraphOnly from '@/page/TopGraphOnly';
 import GraphNodeView from '@/canvas/GraphNodeView';
-import { removalsToApply } from '@/canvas/nodeRemoval';
+import { removalQuestion } from '@/canvas/nodeRemoval';
 import { NODE_BUILDERS, WIDGET_BUILDERS } from '@/elements/registry';
 import type { WidgetGuiBuilder, WidgetPanelProps } from '@/elements/WidgetGuiBuilder';
 import { DisplayWidgetGuiBuilder } from '@/elements/widgets/DisplayWidgetGuiBuilder';
@@ -25,7 +25,7 @@ const open = vi.hoisted(() => ({
   rfNodes: [] as unknown[], rfEdges: [], subgraphStack: [] as unknown[],
   isExecuting: false, executionResult: null,
   exportGraph: () => ({}), updateNode: () => {}, runGraph: async () => {},
-  setEditingNode: () => {}, deleteNode: () => {}, closeSubgraphsTo: () => {},
+  setEditingNode: () => {}, closeSubgraphsTo: () => {},
 }));
 vi.mock('@/store/graphStore', () => ({
   useGraphStore: Object.assign((select: (state: typeof open) => unknown) => select(open), { getState: () => open }),
@@ -101,8 +101,6 @@ describe('"block" is the one word for what a page is made of', () => {
   });
 
   it('is what deleting the page asks about', () => {
-    let asked = '';
-    removalsToApply([{ type: 'remove', id: 'page' }], () => page, (question) => { asked = question; return false; });
-    expect(asked).toBe('Delete the page? Its 2 blocks go with it.');
+    expect(removalQuestion([page], 0)).toBe('Delete the page? Its 2 blocks go with it.');
   });
 });
