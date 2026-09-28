@@ -116,7 +116,7 @@ ElementRunner<Subject, Config>          config() · catchesErrors()
         └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
 
 ElementGuiBuilder<PanelProps>                    Panel
-├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
+├── NodeGuiBuilder                        label · icon · color · hint · paletteGroup · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
 │                                         + definesItself · ownsDescription · portEditing/portHint · wantsOn · restingValue
 │                                           dropPort/withDropped (what a file dropped on the node gives it)
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
