@@ -111,10 +111,10 @@ function reaches(text: string, from?: { pos: number; end: number }): string[] {
 }
 
 describe('what a run calls', () => {
-  // The run, and everything a served tool does with a graph it holds. All of
-  // `execution/` but `examples.ts`, which is the `test` command: building.
+  // The run, and everything a served tool does with a graph it holds: all of
+  // `execution/`, and the files beside it that a run goes through.
   const RUN_TIME = [
-    ...readdirSync(join(SRC, 'execution')).filter((name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name) && name !== 'examples.ts')
+    ...readdirSync(join(SRC, 'execution')).filter((name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name))
       .map((name) => `execution/${name}`),
     'elements/body.ts', 'elements/folderListing.ts', 'authoring/logic.ts',
     'host/serve.ts', 'host/runs.ts', 'host/rounds.ts', 'host/schedule.ts', 'host/node.ts',

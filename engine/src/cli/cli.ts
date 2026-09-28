@@ -25,7 +25,7 @@ import { createInterface } from 'node:readline/promises';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/folderCheck.ts';
 import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
-import { runExample, testGraph } from '../execution/examples.ts';
+import { runExample, testGraph } from '../authoring/examples.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';

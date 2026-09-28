@@ -266,12 +266,13 @@ engine/src                               editor/src
   authoring/         what ✨ writes, and   authoring/          a node's text and what ✨ writes from it:
     definition.ts    how it is read          NodeDefinition      its rows, ▶ Try, the live transcript,
     prompts.ts  history.ts  generation.ts    generation.ts …     the request, the page-wide sweep
+    examples.ts      its example, tried
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
     executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
     triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
     batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
     runtimeValues.ts  images.ts              DesignerTab …       Page tab, the running app, layout, schemes
-    reuse.ts  interface.ts  examples.ts
+    reuse.ts  interface.ts
   project/           a graph on disk
     folder.ts        read · write · watch
     flow.ts          flow.json: nodes and wires
@@ -526,7 +527,7 @@ output.js cannot be read asks for it corrected the same way. Every model call is
 
 **▶ Try, `test` and `run-node` are one call.** `callNode` runs a node's body once on the
 example in its input.js -- no file read, nothing fanned out: the example is one item, as
-a read file gives it -- and [`execution/examples.ts`](../engine/src/execution/examples.ts)
+a read file gives it -- and [`authoring/examples.ts`](../engine/src/authoring/examples.ts)
 holds what comes back to output.js (`runExample`, `testGraph` at every depth). `executeNode`
 runs a node on given inputs as a run does (`run-node` with inputs), and `inputsFor` runs
 what feeds a node, not the node: ⟳ From the graph.

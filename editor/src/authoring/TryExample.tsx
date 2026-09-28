@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Graph, GraphNode } from '@/graph';
 import { call } from '@/api/client';
 import { errorText } from '@/api/errorText';
-import type { ExampleRun } from '@engine/execution/examples.ts';
+import type { ExampleRun } from '@engine/authoring/examples.ts';
 import type { Refine } from './generation';
 import { ACCENT_TEXT, DANGER_TEXT, DIMMER, PRIMARY_BUTTON, SUCCESS, SUNKEN, TEXT } from '@/ui/theme';
 
