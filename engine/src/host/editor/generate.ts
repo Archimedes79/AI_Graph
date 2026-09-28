@@ -180,6 +180,8 @@ interface Shape {
   /** A list arrives one item at a time. */
   perItem: boolean;
   definitions: Definitions | undefined;
+  /** The body is kept as JSON, the element says (`TextFile.json`): a data node holding structure. */
+  json: boolean;
 }
 
 const quoted = (ids: string[]): string => ids.map((id) => `"${id}"`).join(', ');
@@ -226,7 +228,7 @@ const EMPTY_INPUT = 'Handle an input that is missing or empty as well as a full 
  * frame that said "and nothing else" would forbid; *asked*: an output.js may
  * come back after the body too (`OutputAsked`).
  */
-function frame(kind: PromptKind, shape: Shape, node: GraphNode, restating: boolean, asked: OutputAsked): string {
+function frame(kind: PromptKind, shape: Shape, restating: boolean, asked: OutputAsked): string {
   const { inputs, outputs, wired, reads, perItem } = shape;
   const lines = ['## How to answer'];
   switch (kind) {
@@ -298,7 +300,7 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode, restating: boole
     }
     case 'data': {
       const after = restating ? ' -- then, after the block, the node\'s text restated as asked above, and nothing else' : ', and nothing else';
-      lines.push(node.config.data_format === 'structure'
+      lines.push(shape.json
         ? `Answer with what the node holds, in one \`\`\`json block, as plain JSON${after}.`
         : `Answer with what the node holds, in one \`\`\`text block, the text itself${after}.`);
       break;
@@ -645,6 +647,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     reads: filePorts(node, deps.elements),
     perItem: runsPerItem(node, element.batchMode(node)),
     definitions,
+    json: element.texts(node).some((text) => text.field === spec.fields.body && text.json === true),
   };
   const own = (node.config.prompts as Partial<Record<string, string>> | undefined)?.[write];
   const template = own?.trim() ? own : STANDARD_PROMPTS[kind];
@@ -664,7 +667,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     const held = left.output ? { ...shape, outputs: definitionKeys(left.output), definitions: { input: shape.definitions?.input ?? '', output: left.output } } : shape;
     return [
       fillPrompt(template, left.description || left.output ? variables({ ...request, node: now }, shape.reads) : values),
-      evidence, frame(kind, held, now, !!request.refine?.change?.trim(), asked),
+      evidence, frame(kind, held, !!request.refine?.change?.trim(), asked),
     ].filter(Boolean).join('\n\n');
   };
 
@@ -713,7 +716,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     const reply = await ai.complete({ prompt: prompt(evidence, asked), system: SYSTEMS[kind], ...deps.target });
     const { description, rest } = descriptionIn(reply);
     const text = fileIn(rest);
-    if (kind === 'data' && node.config.data_format === 'structure') {
+    if (shape.json) {
       try {
         JSON.parse(text);
       } catch (error) {
