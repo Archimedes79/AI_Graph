@@ -573,6 +573,18 @@ describe('two editors on one folder', () => {
     await expect(writeProject(dir, graph)).resolves.toBeUndefined();
   });
 
+  it('hands over a change that came with a file caught half-written, once that file is whole', async () => {
+    // Marked seen and never handed over, code.js's change was not refused by
+    // the next save either: the editor wrote its old code over it.
+    await writeProject(dir, sample());
+    await touch(join(dir, 'nodes/count/code.js'), 'function run() { return { total: 7 }; }\n');
+    await touch(join(dir, 'page/page.json'), '[{ "id": "chart", ');
+    await expect(changesOnDisk(dir)).rejects.toThrow(NotAGraph);
+
+    await touch(join(dir, 'page/page.json'), '[{ "id": "chart", "kind": "plot_window", "label": "Sales" }]\n');
+    expect((await changesOnDisk(dir)).map((change) => change.field)).toEqual(['code', 'gui_widgets']);
+  });
+
   it('does not overwrite a node\'s interface changed outside since it was read', async () => {
     await writeProject(dir, sample());
     const graph = await readProject(dir);

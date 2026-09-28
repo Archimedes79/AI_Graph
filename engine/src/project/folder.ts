@@ -651,10 +651,15 @@ export type { TextChange };
  * deleted -- with what they say now. Each is then taken as seen: asking twice
  * reports it once. Only texts are watched; the flow, or a node's settings or
  * ports, changing under an open editor is a reload, not a patch.
+ *
+ * Taken as seen only once every one has been read, as `changedUnder` does: a
+ * JSON text caught half-written throws, and a change marked seen on the way to
+ * that was never handed over -- nor refused by the next save, which wrote over it.
  */
 export async function changesOnDisk(folder: string): Promise<TextChange[]> {
   const { graph } = await readStructure(folder);
   const changes: TextChange[] = [];
+  const looked = new Map<string, string>();
   for (const text of projectTexts(graph)) {
     const path = join(folder, text.path);
     const known = seen.get(path);
@@ -662,7 +667,7 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
     if (known === undefined || known === now) continue;
     const held = now === ABSENT ? undefined : heldIn(await readFile(path, 'utf8'), text, text.path);
     const value = held ? held.value : text.json ? null : '';
-    seen.set(path, now);
+    looked.set(path, now);
     changes.push({ node_id: text.node_id, field: text.field, value });
   }
   // A node that holds a graph: anything changed in its folder is that graph
@@ -684,6 +689,7 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
       if (!(error instanceof NotAGraph || error instanceof NotFound)) throw error;
     }
   }
+  for (const [path, signed] of looked) seen.set(path, signed);
   return changes;
 }
 
