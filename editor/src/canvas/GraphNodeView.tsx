@@ -1,5 +1,5 @@
-import React, { memo, useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Handle, Position, NodeProps, NodeResizer, useUpdateNodeInternals } from 'reactflow';
 import type { RFNodeData } from '@/store/nodeData';
 import type { GraphNode, NodeResult, Port } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
@@ -150,6 +150,19 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
 
   const builder = NODE_BUILDERS[graphNode.node_type];
   const lit = selected || open;
+
+  // ReactFlow finds a wire's ends by the handles it measured when the card was
+  // drawn: a port renamed on a card that kept its size was a handle it did not
+  // know, and the wire, still in the graph, was not drawn. Measured again when
+  // the ports change.
+  const updateNodeInternals = useUpdateNodeInternals();
+  const handles = `${graphNode.inputs.map((port) => port.id).join(',')}|${graphNode.outputs.map((port) => port.id).join(',')}`;
+  const measuredHandles = useRef(handles);
+  useEffect(() => {
+    if (measuredHandles.current === handles) return;
+    measuredHandles.current = handles;
+    updateNodeInternals(id);
+  }, [id, handles, updateNodeInternals]);
   const status = executionResult ? statusStyles[executionResult.held ? 'held' : executionResult.status] : undefined;
   // A node that did not run says why, when the run said.
   const statusTitle = executionResult?.status === 'skipped' && !executionResult.held
