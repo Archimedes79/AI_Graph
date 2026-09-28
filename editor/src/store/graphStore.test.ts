@@ -476,11 +476,13 @@ describe('graphStore, a project open on disk', () => {
     useGraphStore.getState().updateNode('count', { label: 'Renamed again' });
     useGraphStore.getState().undo();
     const { past, future } = useGraphStore.getState();
-    const refused = useGraphStore.getState().takeDiskChanges([
+    const { taken, refused } = useGraphStore.getState().takeDiskChanges([
       { node_id: 'gone', field: 'code', value: 'function run() {}' },
       { node_id: 'count', field: 'code', value: nodeById('count').config.code },
       { node_id: 'part', field: NESTED_GRAPH_FIELD, value: { metadata: { name: 'Inner' }, nodes: [graphNode({ id: 'theirs' })], edges: [] } },
     ]);
+    // Nothing taken: a node gone, a change it held already, a graph left on disk.
+    expect(taken).toEqual([]);
     expect(refused).toEqual(['part']);
     expect(useGraphStore.getState().past).toEqual(past);
     expect(useGraphStore.getState().future).toEqual(future);
@@ -737,7 +739,7 @@ describe('a graph inside a node', () => {
     store().markSaved();
     store().addNode('output', { x: 0, y: 0 });   // unsaved work, out here
 
-    const refused = store().takeDiskChanges([{
+    const { refused } = store().takeDiskChanges([{
       node_id: 'part', field: NESTED_GRAPH_FIELD, value: inner([graphNode({ id: 'theirs' })]),
     }]);
 

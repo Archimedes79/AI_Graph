@@ -238,10 +238,10 @@ export interface GraphStore {
    * One undo step, so a change from another editor can be taken back like any
    * other -- and none when nothing of it is taken. What is on disk is saved by
    * definition: a graph that was clean stays clean, and one with unsaved edits
-   * keeps exactly those. Returns the nodes whose graph was left on disk
-   * because there is unsaved work here.
+   * keeps exactly those. Says the nodes whose change it took, and those whose
+   * graph was left on disk because there is unsaved work here.
    */
-  takeDiskChanges: (changes: TextChange[]) => string[];
+  takeDiskChanges: (changes: TextChange[]) => { taken: string[]; refused: string[] };
   /**
    * Execute *graph* and put the whole outcome into the store: the result, the
    * busy flag, and a synthesised error result if the request itself fails.
@@ -926,7 +926,7 @@ export const useGraphStore = create<GraphStore>()(
         if (change.field === NESTED_GRAPH_FIELD) return wasClean;
         return JSON.stringify((node.config as unknown as Record<string, unknown>)[change.field]) !== JSON.stringify(change.value);
       });
-      if (!taken.length) return refused;
+      if (!taken.length) return { taken: [], refused };
       get().commit();
       set((state) => {
         for (const change of taken) {
@@ -939,7 +939,7 @@ export const useGraphStore = create<GraphStore>()(
         }
       });
       if (wasClean) get().markSaved();
-      return refused;
+      return { taken: [...new Set(taken.map((change) => change.node_id))], refused };
     },
 
     markSaved: () => {
