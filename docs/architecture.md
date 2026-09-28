@@ -108,7 +108,7 @@ ElementRunner<Subject, Config>          config() · catchesErrors()
 │   ├── DataNodeRunner    OutputNodeRunner   SubgraphNodeRunner
 │   ├── TriggerNodeRunner        an event with nobody there: the tool starting, a clock
 │   └── GuiNodeRunner            a composite: holds widgets, its ports are theirs
-└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue ┊ receives · graphAuthorNote
+└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue · runtimeRequirements · applyRuntimeValue ┊ receives · graphAuthorNote · referencedPaths
     ├── InputPickerWidgetRunner   TextIoWidgetRunner   SelectWidgetRunner
     ├── SliderWidgetRunner        ButtonWidgetRunner   ChatWidgetRunner
     ├── StaticWidgetRunner       no ports: part of the page, not the graph
@@ -168,7 +168,7 @@ turned out there was nothing to keep apart — see below.)
 | **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
 | `ElementRunner` | `config` | `catchesErrors` | — |
 | `NodeRunner` | `nodeType` · `texts` · `logic` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `resultLabel` · `boundaryRole` · `valuePorts` · `definitions` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `fansOut` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `generation` · `deployNeeds` · `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
-| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | `receives` · `graphAuthorNote` |
+| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` · `runtimeRequirements` · `applyRuntimeValue` | `receives` · `graphAuthorNote` · `referencedPaths` |
 | `NodeGuiBuilder` | `nodeType` | — | **everything**: the palette, panels, what ✨ is told |
 | `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, its panel |
 
