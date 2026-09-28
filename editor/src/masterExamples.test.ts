@@ -79,7 +79,7 @@ const pageId = (): string => pageNow().page!.id;
  * designer's own steps (`newBlock`, `insertBlock`, then `patchBlock`).
  */
 function addBlock(kind: WidgetKind, mode: string | undefined, settings: Partial<GuiWidget>): string {
-  const block = newBlock(kind, mode, pageNow().widgets.map((taken) => taken.id));
+  const block = newBlock(kind, mode, pageNow().widgets);
   insertBlock(block);
   patchBlock(block.id, settings);
   return block.id;

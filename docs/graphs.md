@@ -636,7 +636,8 @@ always reflect exactly what its blocks are capable of.**
 
 Each block's ports are named `<id>_in` / `<id>_out`, so a block's `id` must stay stable
 once assigned — that's the only thing keeping existing edges attached across edits of
-the page.
+the page. A new block is called what it is, and numbered beside another of that name
+("Text output 2"), as nodes are: its name is what its row on the page's card says.
 
 Every block has a *tone* (plain, raised, sunken, accent) drawn from the page's scheme,
 and on top of that its own frame toggle and background colour — set in the block's
