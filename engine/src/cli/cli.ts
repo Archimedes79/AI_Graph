@@ -23,20 +23,19 @@
 
 import { createInterface } from 'node:readline/promises';
 import type { Graph } from '../graph.ts';
-import { loadGraph, projectFolderOf } from '../project/folder.ts';
+import { loadGraph } from '../project/folder.ts';
 import { checkPath } from '../project/folderCheck.ts';
 import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
 import { runExample, testGraph } from '../execution/examples.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
-import { writeBundle } from './bundle.ts';
+import { builtPage, WEB_DIR, writeBundle } from './bundle.ts';
 import { portTaken, serve } from '../host/serve.ts';
 import { untilStopped } from '../host/lifecycle.ts';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { after, graphTriggers, parseInterval } from '../execution/triggers.ts';
 
 export interface CliOptions {
@@ -205,14 +204,9 @@ async function runEvery(graph: Graph, options: CliOptions): Promise<number> {
 /** Write the graph and the engine somewhere someone else can run them. */
 async function makeBundle(options: CliOptions): Promise<number> {
   const graph = await loadGraph(options.graphPath);
-  // The built page, when this checkout has one. A bundle without it still
-  // runs on the terminal; with it, the recipient gets the tool they were
-  // shown. Looked up rather than passed, because the person writing a bundle
-  // should not have to know where a build lands.
-  const built = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', 'editor', 'dist');
-  const written = await writeBundle(graph, options.bundle!, {
-    pageDir: existsSync(join(built, 'runtime.html')) ? built : undefined,
-  });
+  // A bundle without the built page still runs on the terminal; with it, the
+  // recipient gets the tool they were shown.
+  const written = await writeBundle(graph, options.bundle!, { pageDir: builtPage() });
   process.stderr.write(
     `Wrote ${written.length} files to ${options.bundle}
 `
@@ -225,8 +219,9 @@ async function makeBundle(options: CliOptions): Promise<number> {
 /**
  * Serve the page and wait.
  *
- * The page directory is `page/` beside the graph — where a bundle puts it —
- * and its absence is not an error: a graph with no interface, or a bundle
+ * The page is the one a bundle carries beside its graph (`web/`), else the
+ * one this checkout built -- a project run with `--serve` has none of its own
+ * -- and its absence is not an error: a graph with no interface, or a bundle
  * written without a build at hand, still serves its few endpoints, which is
  * enough for anything driving it over HTTP.
  *
@@ -243,13 +238,12 @@ async function runServer(options: CliOptions): Promise<number> {
   // right here. A graph that was named and is not there is a mistake to say,
   // not an empty server: `serve` says it, where it reads the graph.
   const hasGraph = options.graphNamed || (!options.editor && existsSync(resolve(options.graphPath)));
-  // Beside the graph file, or inside the project folder: where a bundle puts it.
-  const folder = projectFolderOf(options.graphPath);
-  const pageDir = folder ? join(folder, 'page') : resolve(dirname(resolve(options.graphPath)), 'page');
+  const carried = resolve(dirname(resolve(options.graphPath)), WEB_DIR);
+  const pageDir = !hasGraph ? undefined : existsSync(join(carried, 'runtime.html')) ? carried : builtPage();
 
   const start = (port: number) => serve({
     ...(hasGraph ? { graphPath: options.graphPath } : {}),
-    pageDir: existsSync(join(pageDir, 'runtime.html')) ? pageDir : undefined,
+    pageDir,
     port,
     ...(options.editor ? { editor: { dist: resolve(options.editor) } } : {}),
     ...(options.host ? { host: options.host } : {}),

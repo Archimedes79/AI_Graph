@@ -226,13 +226,21 @@ function started(args: string[], env: NodeJS.ProcessEnv = { ...process.env, AI_G
   });
   let said = '';
   child.stderr.on('data', (chunk: Buffer) => { said += chunk.toString(); });
-  /** Until it serves, or ends, or *ms* have gone by. */
-  const up = async (ms = 10_000): Promise<void> => {
-    for (const until = Date.now() + ms; Date.now() < until && !said.includes('Serving on') && child.exitCode === null;) {
-      await new Promise((wake) => setTimeout(wake, 100));
-    }
+  const ended = new Promise((done) => child.on('exit', done));
+  return {
+    child,
+    said: () => said,
+    /** Until it serves, or ends, or *ms* have gone by. */
+    async up(ms = 10_000): Promise<void> {
+      for (const until = Date.now() + ms; Date.now() < until && !said.includes('Serving on') && child.exitCode === null;) {
+        await new Promise((wake) => setTimeout(wake, 100));
+      }
+    },
+    async stop(): Promise<void> {
+      child.kill();
+      await ended;
+    },
   };
-  return { child, said: () => said, up };
 }
 
 const freePort = () => new Promise<number>((found) => {
@@ -244,6 +252,7 @@ const freePort = () => new Promise<number>((found) => {
 });
 
 const MINIMAL = resolve(__dirname, '..', '..', 'fixtures', 'minimal.json');
+const REPO = resolve(__dirname, '..', '..', '..');
 
 describe('--serve and --editor, as they are started', () => {
   /**
@@ -263,7 +272,7 @@ describe('--serve and --editor, as they are started', () => {
       expect(server.child.exitCode, server.said()).toBeNull();
       expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(200);
     } finally {
-      server.child.kill();
+      await server.stop();
     }
   }, 30_000);
 
@@ -272,31 +281,47 @@ describe('--serve and --editor, as they are started', () => {
     try {
       await server.up();
       expect(server.said()).not.toContain('Serving on');
-      expect(server.said()).toMatch(/Nothing at .*no-such-graph.json/);
+      expect(server.said()).toMatch(/Nothing at .*no-such-graph\.json/);
     } finally {
-      server.child.kill();
+      await server.stop();
+    }
+  }, 30_000);
+
+  it('serves a project with the page this checkout built: a project carries none of its own', async () => {
+    const port = await freePort();
+    const server = started([join(REPO, 'examples', 'population_plotter'), '--serve', '--port', String(port)]);
+    try {
+      await server.up();
+      const shown = await fetch(`http://127.0.0.1:${port}/`);
+      expect(shown.headers.get('content-type'), server.said()).toContain('text/html');
+      expect(await shown.text()).toBe(await readFile(join(REPO, 'editor', 'dist', 'runtime.html'), 'utf8'));
+    } finally {
+      await server.stop();
     }
   }, 30_000);
 
   it('as the editor, serves no graph.json it was started beside -- only one it is given', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-editor-'));
     await writeFile(join(dir, 'graph.json'), await readFile(MINIMAL, 'utf8'));
-    const port = await freePort();
-    const beside = started(['--editor', dir, '--port', String(port)], undefined, dir);
     try {
-      await beside.up();
-      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(404);
+      const port = await freePort();
+      const beside = started(['--editor', dir, '--port', String(port)], undefined, dir);
+      try {
+        await beside.up();
+        expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(404);
+      } finally {
+        await beside.stop();
+      }
+      const other = await freePort();
+      const given = started(['graph.json', '--editor', dir, '--port', String(other)], undefined, dir);
+      try {
+        await given.up();
+        expect((await fetch(`http://127.0.0.1:${other}/api/runtime/graph`)).status).toBe(200);
+      } finally {
+        await given.stop();
+      }
     } finally {
-      beside.child.kill();
-    }
-    const other = await freePort();
-    const given = started(['graph.json', '--editor', dir, '--port', String(other)], undefined, dir);
-    try {
-      await given.up();
-      expect((await fetch(`http://127.0.0.1:${other}/api/runtime/graph`)).status).toBe(200);
-    } finally {
-      given.child.kill();
-      await rm(dir, { recursive: true, force: true }).catch(() => {});
+      await rm(dir, { recursive: true, force: true });
     }
   }, 60_000);
 });

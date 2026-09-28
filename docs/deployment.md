@@ -52,6 +52,9 @@ Serve the graph's own page instead of running it once:
 node engine/src/main.ts my_graph.json --serve --port 8123
 ```
 
+A bundle serves the page it carries, in `web/` beside its `graph.json`; a graph or a
+project in a checkout is served the page the checkout built (`npm run build`).
+
 ---
 
 There are two, independent kinds of "deploy" in AI-Graph.
@@ -115,7 +118,8 @@ browser that found the port.
 
 ### What a bundle carries
 
-The graph, a verbatim copy of the engine, the page when the graph has one — and **the
+The graph, a verbatim copy of the engine, the page when the graph has one (built, in
+`web/`: a project's `page/` is the page itself, its blocks) — and **the
 files the graph starts on**: what its file pickers and folder inputs name as defaults, copied
 to the same relative place, so a tool handed to someone opens on its example data rather
 than on "no such file". Only relative paths inside the project are carried; an absolute

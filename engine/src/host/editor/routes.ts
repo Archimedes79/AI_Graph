@@ -10,16 +10,14 @@
 // `project/folder.ts`, generation by `generate.ts`, settings by `settings.ts`.
 
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseGraph, type Graph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExample } from '../../execution/examples.ts';
 import { registry } from '../../elements/registry.ts';
-import { writeBundle } from '../../cli/bundle.ts';
+import { builtPage, writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
 import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
 import { nodeRuntime } from '../node.ts';
@@ -32,9 +30,6 @@ import * as settings from './settings.ts';
 import * as project from '../../project/folder.ts';
 import * as gen from './generate.ts';
 import { zip } from './zip.ts';
-
-/** The built editor, when this checkout has one: a bundle from the editor carries the same page `--bundle` does. */
-const BUILT_PAGE = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', '..', 'editor', 'dist');
 
 /**
  * @param held the graph this server serves as a tool — see `holdGraph`. The
@@ -160,8 +155,8 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       const graph = parseGraph(asked);
       const work = await mkdtemp(join(tmpdir(), 'ai-graph-bundle-'));
       try {
-        const pageDir = existsSync(join(BUILT_PAGE, 'runtime.html')) ? BUILT_PAGE : undefined;
-        await writeBundle(graph, work, { pageDir });
+        // The page `--bundle` carries: a bundle from the editor is the same bundle.
+        await writeBundle(graph, work, { pageDir: builtPage() });
         const entries = [];
         for (const file of await allFiles(work)) {
           const path = file.slice(work.length + 1);

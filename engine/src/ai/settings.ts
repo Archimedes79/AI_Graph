@@ -55,7 +55,7 @@ export function candidatePaths(
  * not counted: a bundle keeps `engine/src`'s files in `engine/` itself, and
  * four folders up from here was the folder above the bundle.
  */
-function installFolder(): string {
+export function installFolder(): string {
   let dir = dirname(fileURLToPath(import.meta.url));
   while (basename(dir) !== 'engine' && dirname(dir) !== dir) dir = dirname(dir);
   return dirname(dir);
