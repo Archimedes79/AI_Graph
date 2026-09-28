@@ -9,7 +9,7 @@
 // element that wants to prompt says so in its own file and nothing here changes.
 // What only the wires say -- that a text asked for is a file to read -- is added here.
 
-import type { Graph, GraphNode } from '../graph.ts';
+import type { Graph } from '../graph.ts';
 import type { Runners } from '../elements/NodeRunner.ts';
 import { filePorts } from './fileInputs.ts';
 
@@ -90,5 +90,3 @@ export function withDefaults(
   }
   return resolved;
 }
-
-export type { GraphNode };

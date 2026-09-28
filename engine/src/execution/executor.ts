@@ -21,7 +21,7 @@
 //
 // Everything else — what a node *does* — belongs to its element.
 
-import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeResult, NodeStatus } from '../graph.ts';
+import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeResult } from '../graph.ts';
 import { resultKeys, type NodeRunner, type Runners } from '../elements/NodeRunner.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
@@ -987,5 +987,3 @@ function finalOutputs(
   }
   return final;
 }
-
-export type { NodeStatus };
