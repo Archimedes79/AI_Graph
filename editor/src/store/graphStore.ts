@@ -181,16 +181,6 @@ export interface GraphStore {
    */
   rootGraph: () => Graph;
   /**
-   * Whether the graph differs from the last loaded or saved version.
-   *
-   * Computed by comparing the exported graph against a snapshot rather than
-   * tracked with a flag on every mutation: ReactFlow reports a plain click as a
-   * node change, so a flag would mark a freshly opened graph dirty and train
-   * the user to click through the confirmations that exist to protect them.
-   * Selection is not part of the exported graph, so this cannot fire on it;
-   * moving a node, which is a real change, does.
-   */
-  /**
    * Record the current graph as an undo point, BEFORE the change about to be
    * made. Committing an identical state twice is a no-op: with nothing changed
    * since the step before, a second step would be a press of Ctrl+Z that undoes
@@ -211,6 +201,17 @@ export interface GraphStore {
    * Undo takes back what it changed, and it shows what Undo left.
    */
   applyGraphSnapshot: (json: string, keepEditing?: boolean) => void;
+  /**
+   * Whether the graph differs from the last loaded or saved version.
+   *
+   * Computed by comparing the exported graph against a snapshot rather than
+   * tracked with a flag on every mutation: ReactFlow reports a plain click as a
+   * node change, so a flag would mark a freshly opened graph dirty and train
+   * the user to click through the confirmations that exist to protect them.
+   * Selection is not part of the exported graph, so this cannot fire on it;
+   * moving a node, which is a real change, does. Asked again of the same
+   * document, it answers what it answered (`dirtyAnswer`).
+   */
   isDirty: () => boolean;
   /** Record the current graph as saved (after a successful write to disk). */
   markSaved: () => void;
@@ -385,6 +386,14 @@ export const COALESCE_MS = 2000;
  * store: a change of the same name within `COALESCE_MS` adds to that step.
  */
 let coalescing: { key: string; at: number } | null = null;
+
+/**
+ * What `isDirty` last answered, and the parts of the store it was worked out
+ * from. The header asks on every change of the store -- a tick of a run, a
+ * frame of a drag -- and the answer is the whole document serialised: asked
+ * again of the same document, it is not worked out again.
+ */
+let dirtyAnswer: { of: unknown[]; dirty: boolean } | null = null;
 
 /** The size a node was given, if it was given one, as ReactFlow lays it out. */
 function sizeStyle(node: GraphNode): { style: { width: number; height: number } } | Record<string, never> {
@@ -856,13 +865,16 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     isDirty: () => {
-      const { savedSnapshot } = get();
+      const { rfNodes, rfEdges, metadata, subgraphStack, savedSnapshot } = get();
+      const of = [rfNodes, rfEdges, metadata, subgraphStack, savedSnapshot];
+      if (dirtyAnswer?.of.every((part, at) => part === of[at])) return dirtyAnswer.dirty;
       // The whole document, not the level that happens to be open: going into
       // a node changes nothing, and a change made in there is a change.
       const root = get().rootGraph();
       // A never-saved graph counts as dirty only once it has something in it.
-      if (savedSnapshot === null) return root.nodes.length > 0;
-      return JSON.stringify(root) !== savedSnapshot;
+      const dirty = savedSnapshot === null ? root.nodes.length > 0 : JSON.stringify(root) !== savedSnapshot;
+      dirtyAnswer = { of, dirty };
+      return dirty;
     },
 
     takeDiskChanges: (changes) => {

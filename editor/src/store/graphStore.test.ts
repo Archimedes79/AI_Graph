@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { useGraphStore } from './graphStore';
 import type { Graph, GraphNode } from '@/graph';
 import { guiWidgetPorts, syncGuiNodePorts } from '@/document/guiWidgets';
@@ -270,6 +270,30 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
   it('keeps what the file did say', () => {
     loadTestGraph([graphNode({ id: 'each', node_type: 'code', config: { batch_mode: 'per_item' } as GraphNode['config'] })]);
     expect(useGraphStore.getState().exportGraph().nodes[0].config.batch_mode).toBe('per_item');
+  });
+});
+
+describe('graphStore.isDirty', () => {
+  it('is asked on every tick of a run and frame of a drag, and serialises the document only when it changed', () => {
+    loadTestGraph([graphNode({ id: 'a' })]);
+    const store = () => useGraphStore.getState();
+    store().isDirty();
+    const serialised = vi.spyOn(JSON, 'stringify');
+    try {
+      for (let asked = 0; asked < 10; asked += 1) store().isDirty();
+      useGraphStore.setState({ runProgress: { completed: 1, total: 2, label: 'a', itemDone: 0, itemTotal: 0, idleSeconds: null } });
+      expect(store().isDirty()).toBe(false);
+      expect(serialised).not.toHaveBeenCalled();
+      store().updateNode('a', { label: 'Renamed' });
+      serialised.mockClear();
+      expect(store().isDirty()).toBe(true);
+      expect(serialised).toHaveBeenCalled();
+      store().undo();
+      expect(store().isDirty()).toBe(false);
+    } finally {
+      serialised.mockRestore();
+      useGraphStore.setState({ runProgress: null });
+    }
   });
 });
 

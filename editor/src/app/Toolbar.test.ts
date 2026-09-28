@@ -112,6 +112,19 @@ describe('the header', () => {
     // Each is still named, for a tooltip and a screen reader -- Undo and Redo only ever as icons.
     for (const name of ['Generate', 'Settings', 'Deploy', 'Undo (Ctrl+Z)', 'Redo (Ctrl+Shift+Z)']) expect(button(html, name.replace(/[()+]/g, '\\$&'))).toContain('title=');
   });
+
+  it('marks the document unsaved beside its name, with nothing on the level shown too', () => {
+    // Every node deleted since the last save -- or a node's empty graph gone
+    // into -- hid the dot: it asked for nodes or wires on the canvas as well.
+    const clean = open.isDirty;
+    open.isDirty = () => true;
+    try {
+      expect(toolbar()).toContain('aria-label="Unsaved changes"');
+    } finally {
+      open.isDirty = clean;
+    }
+    expect(toolbar()).not.toContain('aria-label="Unsaved changes"');
+  });
 });
 
 describe('✨ AI Graph\'s Cancel', () => {
