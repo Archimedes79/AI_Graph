@@ -24,6 +24,8 @@ interface PathFieldProps {
   autoFocus?: boolean;
   /** Shown, not typed into: a picker holding a list of files has no one path to edit. */
   readOnly?: boolean;
+  /** Neither typed into nor browsed from, for now: see `InputPickerWidgetView`. */
+  disabled?: boolean;
   /** A path was picked in the browser -- besides `onChange`, for a page where picking is the event. */
   onPicked?: (path: string) => void;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
@@ -51,7 +53,7 @@ export function nameToSave(path: string): string | undefined {
  */
 export default function PathField({
   value, onChange, mode, extensions, placeholder, ariaLabel, id,
-  onSurface, compact, mono, autoFocus, readOnly, onPicked, onKeyDown, children,
+  onSurface, compact, mono, autoFocus, readOnly, disabled, onPicked, onKeyDown, children,
 }: PathFieldProps) {
   const [browsing, setBrowsing] = useState(false);
   const size = onSurface || compact ? 'px-2 py-1.5' : 'px-3 py-2';
@@ -70,11 +72,13 @@ export default function PathField({
           aria-label={ariaLabel}
           autoFocus={autoFocus}
           readOnly={readOnly}
+          disabled={disabled}
         />
         <button
           type="button"
           className={`text-xs ${size} rounded-lg flex-shrink-0`}
-          style={NEUTRAL_BUTTON}
+          style={{ ...NEUTRAL_BUTTON, opacity: disabled ? 0.6 : 1 }}
+          disabled={disabled}
           onClick={() => setBrowsing(true)}
           title={mode === 'directory' ? 'Choose a folder' : mode === 'save' ? 'Choose where to save it' : 'Choose a file'}
         >
