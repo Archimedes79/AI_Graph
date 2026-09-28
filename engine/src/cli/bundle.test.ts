@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -73,7 +73,7 @@ describe('a bundle', () => {
     chart.config.history = '## 2026-09-28 10:00 · ✨ Input\n\nPrompt:\n\n```\nC:/Users/someone/private/customers.csv\n```';
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-history-bundle-'));
     try {
-      await writeBundle(graph, dir, {});
+      await writeBundle(graph, dir, { dataFrom: REPO });
       const shipped = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8')) as { nodes: { id: string; config: Record<string, unknown> }[] };
       const config = shipped.nodes.find((node) => node.id === 'chart')!.config;
       expect(config).not.toHaveProperty('history');
@@ -123,7 +123,7 @@ describe('a bundle', () => {
     const graph = await loadGraph(resolve(REPO, 'examples/population_plotter'));
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-page-bundle-'));
     try {
-      const written = await writeBundle(graph, dir, { pageDir: resolve(REPO, 'editor/dist') });
+      const written = await writeBundle(graph, dir, { pageDir: resolve(REPO, 'editor/dist'), dataFrom: REPO });
       // In web/: a project's page/ is the page itself, its blocks in page.json.
       const page = written.filter((p) => p.startsWith('web/'));
       expect(page).toContain('web/runtime.html');
@@ -235,6 +235,39 @@ describe('a bundle', () => {
     try {
       await expect(writeBundle(parseGraph({ nodes: [], edges: [] }), dir)).rejects.toThrow(/nothing to hand over/);
     } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is handed on whole: a file picked from anywhere comes along, and the tool is told where it is now', async () => {
+    // 📂 Browse… picks an absolute path. Left for the recipient to bring, the
+    // tool opened on somebody else's machine's path and "no such file".
+    const outside = await mkdtemp(join(tmpdir(), 'ai-graph-outside-'));
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-whole-'));
+    try {
+      await writeFile(join(outside, 'sales.csv'), 'Region,Total\nNorth,3\n');
+      const graph = await loadGraph(resolve(REPO, 'examples', 'population_plotter'));
+      const picker = (graph.nodes.find((node) => node.id === 'page')!.config.gui_widgets as { id: string; value: string }[])
+        .find((block) => block.id === 'file')!;
+      picker.value = join(outside, 'sales.csv');
+      const written = await writeBundle(graph, dir, { dataFrom: REPO });
+      expect(written).toContain('data/sales.csv');
+      expect(await readFile(join(dir, 'data', 'sales.csv'), 'utf8')).toBe('Region,Total\nNorth,3\n');
+      const shipped = JSON.parse(await readFile(join(dir, 'graph.json'), 'utf8')) as { nodes: { id: string; config: { gui_widgets?: { id: string; value: string }[] } }[] };
+      expect(shipped.nodes.find((node) => node.id === 'page')!.config.gui_widgets!.find((block) => block.id === 'file')!.value).toBe('data/sales.csv');
+      expect(await readFile(join(dir, 'README.md'), 'utf8')).toContain('- `data/sales.csv`');
+
+      // A file that is not there is no bundle at all -- said, and nothing written.
+      const empty = await mkdtemp(join(tmpdir(), 'ai-graph-refused-'));
+      try {
+        picker.value = join(outside, 'gone.csv');
+        await expect(writeBundle(graph, empty, { dataFrom: REPO })).rejects.toThrow(/cannot be handed on whole: .*gone\.csv" is not there/);
+        expect(await readdir(empty)).toEqual([]);
+      } finally {
+        await rm(empty, { recursive: true, force: true });
+      }
+    } finally {
+      await rm(outside, { recursive: true, force: true });
       await rm(dir, { recursive: true, force: true });
     }
   });

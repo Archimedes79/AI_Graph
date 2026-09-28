@@ -25,9 +25,8 @@ the graph is only the default.
 
 The same rule holds after deployment: a bundle runs from its own directory, so a relative
 data path in the graph resolves inside the bundle. That is why **a bundle carries the files
-the graph starts on**, at the same relative place (see [What a bundle carries](#what-a-bundle-carries));
-an absolute path, or a file over 50 MB, is the recipient's to bring -- or to pick on the
-tool's own page, which is what a graph with a picker or a `prompt_at_runtime` input is for.
+the graph starts on** (see [What a bundle carries](#what-a-bundle-carries)) -- every one of
+them, or there is no bundle: a tool is handed on whole.
 
 Override an input node:
 
@@ -121,12 +120,15 @@ browser that found the port.
 
 The graph, a verbatim copy of the engine, the page when the graph has one (built, in
 `web/`: a project's `page/` is the page itself, its blocks) — and **the
-files the graph starts on**: what its file pickers and folder inputs name as defaults, copied
-to the same relative place, so a tool handed to someone opens on its example data rather
-than on "no such file". Only relative paths inside the project are carried; an absolute
-path, or anything over 50 MB, is listed in the bundle's README as the recipient's to bring.
-A text input is a text to a bundle, even one holding a file's path for the node that reads
-it: pick such a file on the tool's page, or have its recipient bring it.
+files the graph starts on**: what its file pickers and folder inputs name as defaults, so a
+tool handed to someone opens on its example data rather than on "no such file". **A tool is
+handed on whole, or not at all.** A relative path inside the project keeps its place, and
+nothing in the graph changes; a file from anywhere else -- an absolute path, as 📂 Browse…
+picks it, or one through `..` -- goes to `data/` in the bundle, and the graph there names
+it at its new place. A file that is not there, or more than a bundle carries (50 MB), stops
+Deploy before anything is written, and it says which: choose one that is there and
+smaller, or clear the field. A text input is a text to a bundle, even one holding a file's
+path for the node that reads it: pick such a file on the tool's page instead.
 The launchers `cd` into the bundle first, so those relative paths mean the same there.
 They are the same pair the downloadable editor ships (`engine/src/cli/launchers.ts`): they
 check for Node 24 before starting and say so when it is missing or too old, `run.sh` comes
