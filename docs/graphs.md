@@ -307,8 +307,10 @@ function run(inputs) {
 ```
 
 `node nodes/count/code.js` runs it by itself on input.js's example and prints what comes
-out: the folder writes a few lines after the body that do that, and takes them off again
-when it reads the file, so neither the engine nor ✨ ever sees them.
+out: the folder writes lines after the body that do that, and takes them off again when it
+reads the file, so neither the engine nor ✨ ever sees them. They read input.js as text, by
+the rule ▶ Try reads it with, so it works as an ES module too -- a body that uses `import`,
+a folder under a package.json that says `"type": "module"`.
 
 **It may ask a model.** `run` may be `async` and is handed a second argument, `node`:
 `await node.llm({ prompt: '…' })` resolves to the answer as text, from the model in

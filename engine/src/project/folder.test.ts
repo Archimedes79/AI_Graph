@@ -10,7 +10,7 @@ import { parseGraph, type Graph } from '../graph.ts';
 import { NotAGraph } from '../errors.ts';
 import { problemsIn } from './check.ts';
 import { RUN_ON_ITS_OWN } from '../elements/nodes/code/CodeNodeRunner.ts';
-import { DEFINITION_TEXTS } from '../authoring/definition.ts';
+import { DEFINITION_TEXTS, definitionExample } from '../authoring/definition.ts';
 import { DataNodeRunner } from '../elements/nodes/data/DataNodeRunner.ts';
 import {
   FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, nodeFileOf, projectFolderOf, readProject, saveGraph, writeProject,
@@ -194,6 +194,50 @@ describe('a project folder', () => {
     await touch(join(dir, 'nodes/count/code.js'), (await text('nodes/count/code.js')).replace(/\n/g, '\r\n'));
     expect(await changesOnDisk(dir)).toEqual([{ node_id: 'count', field: 'code', value: 'function run(inputs) {\n  return { total: inputs.files.length };\n}' }]);
   }, 30_000);
+
+  it('writes code.js so it runs on its own as an ES module too: a body that imports, a folder whose package.json says "type": "module"', async () => {
+    const graph = sample();
+    Object.assign(graph.nodes[1].config, {
+      code: "import { basename } from 'node:path';\n\nfunction run(inputs) {\n  return { total: inputs.files.map((file) => basename(file)).join(' ') };\n}",
+      input_definition: 'module.exports = { "files": ["data/a.csv", "data/b.csv"] };',
+    });
+    await writeProject(dir, graph);
+    const run = async () => JSON.parse((await promisify(execFile)(process.execPath, [join(dir, 'nodes', 'count', 'code.js')], { cwd: dir })).stdout);
+    expect(await run()).toEqual({ total: 'a.csv b.csv' });
+    // Every .js file under it is an ES module now, input.js among them: it is read as text all the same.
+    await writeFile(join(dir, 'package.json'), '{ "type": "module" }\n');
+    Object.assign(graph.nodes[1].config, { code: 'function run(inputs) {\n  return { total: inputs.files.length };\n}' });
+    await writeProject(dir, graph);
+    expect(await run()).toEqual({ total: 2 });
+  }, 30_000);
+
+  it('runs code.js on its own on the example ▶ Try runs on: input.js read by the same rule, or refused with its reason', async () => {
+    const graph = sample();
+    Object.assign(graph.nodes[1].config, { code: 'function run(inputs) {\n  return inputs;\n}' });
+    await writeProject(dir, graph);
+    const inputs = join(dir, 'nodes', 'count', 'input.js');
+    const run = async (definition: string) => {
+      await writeFile(inputs, definition);
+      try {
+        return { example: JSON.parse((await promisify(execFile)(process.execPath, [join(dir, 'nodes', 'count', 'code.js')], { cwd: dir })).stdout) };
+      } catch (error) {
+        return { failed: String((error as { stderr?: string }).stderr) };
+      }
+    };
+    for (const definition of [
+      '/**\n * @typedef {Object} Input\n * @property {string[]} files  the files (module.exports = their names)\n */\nmodule.exports = { "files": ["a;b.csv"] }',
+      'const note = "module.exports = 1";\nmodule.exports = { "files": [{ "name": "}" }] }; // one; or two',
+      "module.exports = { files: ['a.csv'] };",
+      'module.exports = ["a.csv"];',
+      '/** @typedef {Object} Input */',
+    ]) {
+      const read = definitionExample(definition);
+      const ran = await run(definition);
+      if ('example' in read) expect(ran).toEqual({ example: read.example });
+      else expect(ran.failed).toContain(`input.js cannot be read: ${read.problem.split(' (')[0]}`);
+    }
+    expect((await run('module.exports = null;')).failed).toContain('input.js has no example yet: write it with ✨ Input.');
+  }, 60_000);
 
   it('keeps what a data node holds as JSON where it holds structure, as text otherwise', async () => {
     const data = (id: string, config: Record<string, unknown>) => ({
