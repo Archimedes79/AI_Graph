@@ -27,7 +27,7 @@ import RunResult from './RunResult';
  * properties panel inside a 305 KB chunk it never used. A base class that the
  * runtime extends ships them for the same reason, because the subclass
  * references the base. Only the import graph decides what ends up in a bundle,
- * so the boundary has to be a module boundary — and `runtime.boundary.test.ts`
+ * so the boundary has to be a module boundary — and `runtime/boundary.test.ts`
  * asserts that it stays one.
  *
  * A graph is one tool with one page: the first node that carries an interface
@@ -175,7 +175,7 @@ export function GuiBlock({
   );
 }
 
-/** The page itself: what a deployed tool renders, and what the preview shows. */
+/** The page itself: what a deployed tool renders, and the editor's running application. */
 function GuiPage({
   pageId, widgets, onWidgetValue, onWidgetTrigger,
 }: {

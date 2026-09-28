@@ -100,13 +100,11 @@ export function widgetFiresRun(widget: GuiWidget): boolean {
 }
 
 /**
- * Regenerate a GUI/WIDGET node's inputs/outputs strictly from
- * `config.gui_widgets`, in order. No-op (returns the node unchanged) for any
- * other node type. Call this after any widget-list edit instead of
- * hand-editing `inputs`/`outputs` directly -- widget ids never change, so
- * port ids (`${id}_in` / `${id}_out`) stay stable across re-syncs and
- * existing edges remain attached. A WIDGET node is just a GUI node whose
- * `gui_widgets` holds exactly one widget -- same derivation.
+ * The page's ports worked out again from its blocks (`config.gui_widgets`),
+ * in order; any other node as it is. Called after every edit of the blocks,
+ * rather than the ports edited by hand -- a block's id never changes, and its
+ * ports are named after it (`blockPort`), so they stay the same across
+ * re-syncs and their wires stay attached.
  *
  * The page's ports are the engine's answer (`GuiNodeRunner.derivedPorts`),
  * the same one a load gets. This used to add the blocks' own ports up here,

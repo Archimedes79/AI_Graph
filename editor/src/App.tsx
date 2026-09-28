@@ -45,8 +45,8 @@ export default function App() {
   });
   const clearSelection = useGraphStore((s) => s.clearSelection);
   const loadGraph = useGraphStore((s) => s.loadGraph);
-  // Saving and exporting are about the whole document, whichever level of it
-  // the canvas is showing; running is about the level you are looking at.
+  // Saving, exporting and running are about the whole document, whichever
+  // level of it the canvas is showing.
   const rootGraph = useGraphStore((s) => s.rootGraph);
   const newGraph = useGraphStore((s) => s.newGraph);
   const setMetadata = useGraphStore((s) => s.setMetadata);

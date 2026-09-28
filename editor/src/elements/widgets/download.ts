@@ -1,6 +1,6 @@
 // Saving what a block shows as a file of its own -- a text as .txt, a chart as
 // .svg, a table's rows as .csv -- wherever the page is drawn: the Page tab,
-// Preview and the delivered tool alike. The browser hands the file over, as it
+// the App tab and the delivered tool alike. The browser hands the file over, as it
 // does for any link that says `download`; the page may be open on another
 // machine than the graph, and nothing of the server's is asked.
 //

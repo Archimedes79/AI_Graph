@@ -120,7 +120,7 @@ describe('a block edited on the page', () => {
     expect(shown()[0].tone).toBe('accent');
   });
 
-  it('is changed here when it is used, too -- on the Page tab, in the preview, in a tool: what it holds already is no undo step', () => {
+  it('is changed here when it is used, too -- on the Page tab, in the running application, in a tool: what it holds already is no undo step', () => {
     // A block used on the page wrote the page's blocks itself, beside this
     // file, and took an undo step for a value the block already held.
     insertBlock({ ...WIDGET_BUILDERS.text_io.create('ask', 'Ask'), value: 'hello' });
