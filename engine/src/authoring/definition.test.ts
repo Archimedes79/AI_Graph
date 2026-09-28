@@ -62,10 +62,11 @@ describe('what one call returned, held to an output definition', () => {
     expect(misfits({ figure: { kind: 'line', points: [] } }, OUTPUT)).toEqual([]);
   });
 
-  it('says where it does not', () => {
-    expect(misfits({}, OUTPUT)).toEqual(['output.figure is missing']);
-    expect(misfits({ figure: { kind: 'bars', points: [{ label: 'India', value: 'many' }] } }, OUTPUT).join(' '))
-      .toMatch(/output\.figure\.points\[0\]\.value is string/);
+  it('says where it does not: the output, named once, and the place in it', () => {
+    expect(misfits({}, OUTPUT)).toEqual(['output "figure" is missing']);
+    expect(misfits({ figure: { kind: 'bars', points: [{ label: 'India', value: 'many' }] } }, OUTPUT))
+      .toEqual(['output "figure" at points[0].value is text; output.js says a number']);
+    expect(misfits({ figure: 3 }, OUTPUT)).toEqual(['output "figure" is a number; output.js says an object']);
   });
 
   it('holds nothing to a definition that cannot be read: check says that, once', () => {

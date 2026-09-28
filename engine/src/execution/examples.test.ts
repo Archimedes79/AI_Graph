@@ -46,7 +46,7 @@ describe('a node\'s example', () => {
   it('fails where what came out does not fit output.js, saying where', async () => {
     const run = await runExample(counter({ input_definition: INPUT, output_definition: 'module.exports = { "lines": "three", "words": 2 };' }), 'count', { runtime: running, registry });
     expect(run.status).toBe('fail');
-    expect(run.details).toEqual(['output.words is missing', 'output.lines is integer; output.js says string']);
+    expect(run.details).toEqual(['output "words" is missing', 'output "lines" is a number; output.js says text']);
   });
 
   it('only has to run without an output.js', async () => {

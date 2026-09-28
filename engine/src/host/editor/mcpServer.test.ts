@@ -546,7 +546,7 @@ describe('one node at a time', () => {
     await writeFile(join(root, 'g.json'), JSON.stringify(chain(defined('b', 2))));
     const tested = await answer(toolsWith(), 'test_graph', { path: 'g.json' });
     expect(tested.json.passed).toBe(false);
-    expect(tested.json.results).toEqual([{ node: 'work', status: 'fail', details: ['output.out is string; output.js says integer'] }]);
+    expect(tested.json.results).toEqual([{ node: 'work', status: 'fail', details: ['output "out" is text; output.js says a number'] }]);
   });
 
   it('test_graph also runs a node inside another, as `test` does', async () => {

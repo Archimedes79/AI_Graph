@@ -402,7 +402,7 @@ async function writeVerifiedCode(
     const ran = await probe(runtime, target, body, sample);
     const missing = ran.result ? shape.outputs.filter((port) => !(port in ran.result!)) : [];
     const problems = ran.result
-      ? [...missing.map((port) => `it returns no "${port}"`), ...misfits(ran.result, output).filter((line) => !missing.some((port) => line === `output.${port} is missing`))]
+      ? [...missing.map((port) => `it returns no "${port}"`), ...misfits(ran.result, output).filter((line) => !missing.some((port) => line === `output "${port}" is missing`))]
       : [];
     // How far it got: not at all, with its keys wrong, or all the way.
     const reached = !ran.result ? 0 : problems.length ? 1 : 2;

@@ -107,35 +107,60 @@ export function collectedInterface(schema: Schema, collected: Set<string>): Sche
   };
 }
 
+/** A JSON type as a sentence says it. */
+const TYPE_WORDS: Record<string, string> = {
+  string: 'text', integer: 'a number', number: 'a number', boolean: 'true or false', array: 'a list', object: 'an object', null: 'empty',
+};
+
+/** Types in words, each once -- an integer is "a number" too, unless *whole* asks to tell the two apart. */
+function typeWords(types: string[], whole = false): string {
+  return [...new Set(types.map((type) => (whole && type === 'integer' ? 'a whole number' : TYPE_WORDS[type] ?? type)))].join(' or ');
+}
+
 /**
- * Where *value* breaks *schema*, as sentences naming the place: `output.rows[3].Population
- * is text, output.js says number`. Empty when it fits. Stops after a few:
- * one broken list of a thousand rows is one problem, not a thousand.
+ * Where in what one call returned, as a person reads it: the output, named
+ * once, and the place inside it -- `output "rows" at [3].Population`. *path*
+ * is the keys and list positions down to it; none, for the whole of it.
  */
-export function mismatches(value: unknown, schema: Schema, at = 'output', found: string[] = []): string[] {
+function placeOf(path: string[]): string {
+  if (!path.length) return 'what it returned';
+  const [port, ...inside] = path;
+  const rest = inside.map((part, at) => (part.startsWith('[') || at === 0 ? part : `.${part}`)).join('');
+  return `output "${port}"${rest ? ` at ${rest}` : ''}`;
+}
+
+/**
+ * Where *value* breaks *schema*, as sentences naming the place: `output "rows"
+ * at [3].Population is text; output.js says a number`. Empty when it fits.
+ * Stops after a few: one broken list of a thousand rows is one problem, not a
+ * thousand.
+ */
+export function mismatches(value: unknown, schema: Schema, path: string[] = [], found: string[] = []): string[] {
   if (found.length >= 5 || !schema.type) return found;
   const actual = typeOf(value);
   const allowed = [schema.type].flat();
   const fits = allowed.includes(actual) || (actual === 'integer' && allowed.includes('number'));
   if (!fits) {
-    // Null where something was expected is a missing value, and said as such.
-    found.push(actual === 'null'
-      ? `${at} is empty; output.js says ${allowed.join(' or ')}`
-      : `${at} is ${actual}; output.js says ${allowed.join(' or ')}`);
+    const place = placeOf(path);
+    // Null where something was expected is a missing value, and said as such;
+    // a fraction where only whole numbers were is the one case "a number" does not tell.
+    found.push(actual === 'null' ? `${place} is empty; output.js says ${typeWords(allowed)}`
+      : actual === 'number' && allowed.includes('integer') ? `${place} is a number with a fraction; output.js says ${typeWords(allowed, true)}`
+        : `${place} is ${typeWords([actual])}; output.js says ${typeWords(allowed)}`);
     return found;
   }
   if (actual === 'object') {
     const record = value as Record<string, unknown>;
     for (const key of schema.required ?? []) {
-      if (record[key] === undefined || record[key] === null) found.push(`${at}.${key} is missing`);
+      if (record[key] === undefined || record[key] === null) found.push(`${placeOf([...path, key])} is missing`);
     }
     for (const [key, property] of Object.entries(schema.properties ?? {})) {
-      if (record[key] !== undefined && record[key] !== null) mismatches(record[key], property, `${at}.${key}`, found);
+      if (record[key] !== undefined && record[key] !== null) mismatches(record[key], property, [...path, key], found);
     }
   }
   if (actual === 'array' && schema.items) {
     (value as unknown[]).slice(0, 200).forEach((item, index) => {
-      if (item !== null && item !== undefined) mismatches(item, schema.items!, `${at}[${index}]`, found);
+      if (item !== null && item !== undefined) mismatches(item, schema.items!, [...path, `[${index}]`], found);
     });
   }
   return found.slice(0, 5);

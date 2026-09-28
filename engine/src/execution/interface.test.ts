@@ -43,7 +43,7 @@ describe('inferring an interface from a run', () => {
     // One missing Population must not make the column "anything": a later run
     // with text there has to be caught.
     const schema = inferSchema({ rows: [{ Population: 1450000000 }, { Population: null }] });
-    expect(mismatches({ rows: [{ Population: 'many' }] }, schema)).toEqual(['output.rows[0].Population is string; output.js says integer']);
+    expect(mismatches({ rows: [{ Population: 'many' }] }, schema)).toEqual(['output "rows" at [0].Population is text; output.js says a number']);
     expect(inferSchema([1, null, 2])).toEqual({ type: 'array', items: { type: 'integer' } });
   });
 
@@ -63,9 +63,11 @@ describe('holding a run to its interface', () => {
 
   it('names the place that broke it', () => {
     expect(mismatches({ rows: [{ Population: 'many' }], count: 3 }, schema))
-      .toEqual(['output.rows[0].Population is string; output.js says integer']);
-    expect(mismatches({ rows: [] }, schema)).toEqual(['output.count is missing']);
-    expect(mismatches({ rows: 'none', count: 1 }, schema)).toEqual(['output.rows is string; output.js says array']);
+      .toEqual(['output "rows" at [0].Population is text; output.js says a number']);
+    expect(mismatches({ rows: [] }, schema)).toEqual(['output "count" is missing']);
+    expect(mismatches({ rows: 'none', count: 1 }, schema)).toEqual(['output "rows" is text; output.js says a list']);
+    // The one place "a number" does not tell: a fraction where only whole numbers were.
+    expect(mismatches({ rows: [], count: 2.5 }, schema)).toEqual(['output "count" is a number with a fraction; output.js says a whole number']);
   });
 
   it('reports a few problems, not one per row', () => {
@@ -107,7 +109,7 @@ describe('a run held to its output.js', () => {
     const count = result.node_results[0];
     expect(count.status).toBe('success');
     expect(count.outputs).toEqual({ total: 'seven' });
-    expect(count.messages).toEqual(['Does not fit its output.js: output.total is string; output.js says integer']);
+    expect(count.messages).toEqual(['Does not fit its output.js: output "total" is text; output.js says a number']);
   });
 
   it('says nothing when it fits, or when there is no output.js', async () => {

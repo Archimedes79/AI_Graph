@@ -481,6 +481,6 @@ describe('one node tried by itself', () => {
     make.outputs = [{ id: 'n', name: 'n', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }];
     const runtime = quietRuntime({ code: { run: async () => ({ n: 'not a number' }) } });
     const alone = await executeNode(graphOf([make]), 'make', {}, { runtime, registry });
-    expect(alone.messages?.[0]).toBe('Does not fit its output.js: output.n is string; output.js says number');
+    expect(alone.messages?.[0]).toBe('Does not fit its output.js: output "n" is text; output.js says a number');
   });
 });

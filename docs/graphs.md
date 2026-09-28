@@ -402,8 +402,8 @@ project only when it has a `flow.json`: a deploy bundle's folder is opened by it
 
 **What goes out is what output.js says.** A code or AI node's outputs are the keys of its
 output.js example, and each run is held to it: a result that does not fit is said on
-it -- *Does not fit its output.js: output.rows[3].Population is string; output.js says
-integer* -- rather than by the node three steps later, failing on the wrong shape. The
+it -- *Does not fit its output.js: output "rows" at [3].Population is text; output.js says
+a number* -- rather than by the node three steps later, failing on the wrong shape. The
 nodes after it are written against it: it is what ✨ tells them it hands on.
 
 **Without the editor.** Every file in a node's folder is plain text named for what it is,

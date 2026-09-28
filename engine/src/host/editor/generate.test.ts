@@ -87,7 +87,7 @@ describe('code', () => {
     const reply = await generate({ node: node('code', { input_definition: INPUT, output_definition: OUTPUT }) }, deps(ai, nodeCode));
     expect(reply.probe.status).toBe('repaired');
     expect(ai.asked[1].prompt).toContain('--- what is wrong with what it returned ---');
-    expect(ai.asked[1].prompt).toContain('- output.lines is string; output.js says integer');
+    expect(ai.asked[1].prompt).toContain('- output "lines" is text; output.js says a number');
     expect(ai.asked[1].prompt).toContain('inputs["text"]: string = "a\\nb"');
     expect(reply.result).toContain('i.text.split("\\n").length }');
   }, 30_000);
@@ -98,7 +98,7 @@ describe('code', () => {
       js('function run() { throw new Error("worse"); }'),
     ]);
     const reply = await generate({ node: node('code', { input_definition: INPUT, output_definition: OUTPUT }) }, deps(ai, nodeCode));
-    expect(reply.probe).toMatchObject({ status: 'failed', problems: ['output.lines is string; output.js says integer'] });
+    expect(reply.probe).toMatchObject({ status: 'failed', problems: ['output "lines" is text; output.js says a number'] });
     expect(reply.result).toContain('"two"');
   }, 30_000);
 
