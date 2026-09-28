@@ -287,34 +287,30 @@ interface PortsEditorProps {
   outputs: Port[];
   onChange: (ports: { inputs: Port[]; outputs: Port[] }, step?: UndoStep) => void;
   /** How much of each side is the person's to change: the element says (`NodeGuiBuilder.portEditing`). */
-  editing?: { inputs: PortEditing; outputs: PortEditing };
+  editing: { inputs: PortEditing; outputs: PortEditing };
   /** One line under each side's title, from the element. */
-  hints?: { inputs?: string; outputs?: string };
+  hints: { inputs?: string; outputs?: string };
   /** What each port is wired to, by port id. */
-  wiring?: { inputs: Record<string, string>; outputs: Record<string, string> };
+  wiring: { inputs: Record<string, string>; outputs: Record<string, string> };
   /** Offer "Read the file at this path" on each input: the node's kind reads its files (`readsFileInputs`). */
-  readsFiles?: boolean;
+  readsFiles: boolean;
   /**
    * The node defines itself (`NodeGuiBuilder.definesItself`): no type and no
    * "list" per port. A list follows "Run once per item", which sets it
    * together with what it does nothing without, on both sides.
    */
-  compact?: boolean;
+  compact: boolean;
   /**
    * The node runs once per item (`runsPerItem`): an input can be handed its
    * list whole instead ("whole list", `wholeList`), where another fans out.
    */
-  perItem?: boolean;
+  perItem: boolean;
   /** Whether the node catches its failures, so that its last "error" output is the one that switch added. */
-  caught?: boolean;
+  caught: boolean;
 }
 
-const EDIT_BOTH = { inputs: 'edit', outputs: 'edit' } as const;
-const NO_WIRES = { inputs: {}, outputs: {} };
-
 export default function PortsEditor({
-  inputs, outputs, onChange, editing = EDIT_BOTH, hints = {}, wiring = NO_WIRES, readsFiles = false, compact = false,
-  perItem = false, caught = false,
+  inputs, outputs, onChange, editing, hints, wiring, readsFiles, compact, perItem, caught,
 }: PortsEditorProps) {
   // The Error output belongs to the catch-failures switch, which adds and
   // removes it. Editing it here would let the two disagree.

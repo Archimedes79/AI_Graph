@@ -39,7 +39,7 @@ const nodeTypes = { graphNode: GraphNodeView };
  * looked like it deleted everything. Keys belong to the view you are looking
  * at.
  */
-export default function GraphCanvas({ active = true, onOpenPage }: { active?: boolean; onOpenPage?: () => void }) {
+export default function GraphCanvas({ active, onOpenPage }: { active: boolean; onOpenPage: () => void }) {
   const rfNodes = useGraphStore((s) => s.rfNodes);
   const rfEdges = useGraphStore((s) => s.rfEdges);
   const setRFNodes = useGraphStore((s) => s.setRFNodes);
@@ -197,7 +197,7 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
           setEditingNode(node.id);
         }}
         onNodeDoubleClick={(_, node) => {
-          if (showsPage(node.data.graphNode.node_type)) onOpenPage?.();
+          if (showsPage(node.data.graphNode.node_type)) onOpenPage();
         }}
         onPaneClick={clearSelection}
         nodeTypes={nodeTypes}

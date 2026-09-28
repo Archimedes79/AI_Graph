@@ -9,12 +9,19 @@ import PortsEditor from './PortsEditor';
 
 const needed = (input: Port): Port => ({ ...input, required: true });
 
+/** What the node's panel hands the editor besides its ports: both sides the person's, nothing wired, nothing ticked. */
+const panel = {
+  editing: { inputs: 'edit', outputs: 'edit' } as const, hints: {}, wiring: { inputs: {}, outputs: {} },
+  readsFiles: false, compact: false, perItem: false, caught: false,
+};
+
 describe('the ports editor', () => {
   it('offers "needed" on each input, of a code or an ai node too', () => {
     // The chat example's model is not asked with the history alone because
     // nobody typed a message: its `message` input is needed. Nothing in the
     // editor could say so, so the example could not be built by hand.
     const html = renderToStaticMarkup(createElement(PortsEditor, {
+      ...panel,
       inputs: [port('history', 'history', 'input', 'text'), needed(port('message', 'message', 'input', 'text'))],
       outputs: [port('output', 'output', 'output', 'text')],
       onChange: () => {},
@@ -31,6 +38,7 @@ describe('the ports editor', () => {
     // box as well, folded away under Advanced, which did nothing on a port
     // that did not say `file_path`.
     const drawn = (readsFiles: boolean) => renderToStaticMarkup(createElement(PortsEditor, {
+      ...panel,
       inputs: [port('csv', 'csv', 'input', 'file_path'), port('name', 'name', 'input', 'text')],
       outputs: [], onChange: () => {}, readsFiles,
     }));
@@ -43,6 +51,7 @@ describe('the ports editor', () => {
 
   it('has no type and no "list" per port for a code or an ai node -- its input.js and output.js say them', () => {
     const drawn = (compact: boolean) => renderToStaticMarkup(createElement(PortsEditor, {
+      ...panel,
       inputs: [port('csv', 'csv', 'input', 'file_path')], outputs: [port('rows', 'rows', 'output', 'json')], onChange: () => {}, compact,
     }));
     expect(drawn(true)).not.toContain('aria-label="input type"');
@@ -58,6 +67,7 @@ describe('the ports editor', () => {
     const words = { ...port('words', 'words', 'input', 'any'), multi: true };
     const stop = port('stop', 'stop', 'input', 'any');
     const drawn = (perItem: boolean, inputs: Port[]) => renderToStaticMarkup(createElement(PortsEditor, {
+      ...panel,
       inputs, outputs: [], onChange: () => {}, compact: true, perItem,
     }));
     const ticks = drawn(true, [words, stop]).match(/<input type="checkbox"[^>]*aria-label="whole list"[^>]*>/g) ?? [];
@@ -80,11 +90,7 @@ describe('a port renamed in the ports editor', () => {
     function Held() {
       const [now, setNow] = useState(ports);
       ports = now;
-      return createElement(PortsEditor, {
-        inputs: now.inputs, outputs: now.outputs, onChange: setNow,
-        editing: { inputs: 'edit', outputs: 'edit' }, hints: {}, wiring: { inputs: {}, outputs: {} },
-        readsFiles: false, compact: true, perItem: false, caught: false,
-      });
+      return createElement(PortsEditor, { ...panel, compact: true, inputs: now.inputs, outputs: now.outputs, onChange: setNow });
     }
     const screen = document.createElement('div');
     document.body.appendChild(screen);
