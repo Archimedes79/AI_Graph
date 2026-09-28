@@ -412,6 +412,20 @@ describe('graphStore, a project open on disk', () => {
     expect(nodeById('count').config.code).toContain('total: 1');
   });
 
+  it('takes a page\'s blocks changed in its page.json, and the ports that are theirs', () => {
+    loadTestGraph([syncGuiNodePorts(graphNode({
+      id: 'page', node_type: 'gui',
+      config: { ...blankConfig(), gui_widgets: [{ id: 'note', kind: 'text_io', label: 'Note', mode: 'output', w: 16, h: 2 } as never] },
+    }))]);
+    expect(nodeById('page').inputs.map((port) => port.id)).toEqual(['note_in']);
+    useGraphStore.getState().takeDiskChanges([{
+      node_id: 'page', field: 'gui_widgets',
+      value: [{ id: 'file', kind: 'input_picker', label: 'File', mode: 'file', w: 16, h: 2 }],
+    }]);
+    expect(nodeById('page').inputs).toEqual([]);
+    expect(nodeById('page').outputs.map((port) => port.id)).toEqual(['file_out']);
+  });
+
   it('keeps unsaved edits unsaved when a change comes in from disk', () => {
     loadTestGraph([codeNode()]);
     useGraphStore.getState().markSaved();

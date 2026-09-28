@@ -234,7 +234,8 @@ function readme(
     '',
     ...(servesPage
       ? [
-        'That opens the tool in your browser: fill in the fields, press Run.',
+        'That opens the tool in your browser, and its page runs it: a button',
+        'pressed, a file chosen.',
         '',
         'It takes port 8000, or the next free one if something else is already',
         'there, and prints the address it settled on. `--port 9000` picks one.',
