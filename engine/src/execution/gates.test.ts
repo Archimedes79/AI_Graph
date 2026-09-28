@@ -163,6 +163,27 @@ describe('a code node that returns booleans is a filter', () => {
     expect(result(run, 'n')).toMatchObject({ status: 'success', outputs: { got: 'from a' } });
   });
 
+  it('is computed in an event round when what computes it has a ◆ of its own', async () => {
+    // `y` hangs on `r`, and `r` on `q`: the press ran `r` but not `q`, so
+    // neither `r` nor `y` was ever opened.
+    const graph = graphOf(
+      [
+        node('page', 'gui', { gui_widgets: [{ id: 'go', kind: 'button' }] }),
+        node('x', 'code', { code: 'function run() { return { out: "from x" }; }' }, { in: ['p'], out: ['out'] }),
+        node('q', 'code', { code: 'function run() { return { ok: true }; }' }, { out: ['ok'] }),
+        node('r', 'code', { code: 'function run() { return { open: true }; }' }, { out: ['open'] }),
+        node('y', 'code', { code: 'function run(i) { return { got: i.v }; }' }, { in: ['v'], out: ['got'] }),
+      ],
+      [
+        edge('p', 'page', 'go_out', 'x', 'p'), edge('xy', 'x', 'out', 'y', 'v'),
+        edge('ry', 'r', 'open', 'y', RUN_PORT), edge('qr', 'q', 'ok', 'r', RUN_PORT),
+      ],
+    );
+    const run = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'page', port_id: 'go_out' } });
+    expect(result(run, 'r')).toMatchObject({ status: 'success', outputs: { open: true } });
+    expect(result(run, 'y')).toMatchObject({ status: 'success', outputs: { got: 'from x' } });
+  });
+
   it('opens a gate with true and with nothing else', async () => {
     ran = [];
     const truthy = 'function run() { return { draw: "yes", refresh: 1 }; }';

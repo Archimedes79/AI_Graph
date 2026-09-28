@@ -149,17 +149,10 @@ export function after(ms: number, then: () => void, keepsAlive = true): () => vo
 export function triggeredNodes(graph: Graph, trigger: Trigger, feedback: Set<string>): Set<string> | null {
   const downstream = firedNodes(graph, trigger, feedback);
   if (!downstream) return null;
-  // What decides whether a node the event is for may run is needed as much as
-  // what it runs on: a ◆ computed by a node outside the event would otherwise
-  // never be computed in its round, and never open. Not for a node the event
-  // is wired to itself, which that opens.
-  const live = graph.edges.filter((edge) => !feedback.has(edge.id));
-  const opened = new Set(live.filter((edge) => edge.source_node_id === trigger.node_id
+  // The ◆ of a node the event is wired to is opened by the event itself.
+  const opened = new Set(graph.edges.filter((edge) => !feedback.has(edge.id) && edge.source_node_id === trigger.node_id
     && (!trigger.port_id || edge.source_port_id === trigger.port_id)).map((edge) => edge.target_node_id));
-  const gates = live
-    .filter((edge) => edge.target_port_id === RUN_PORT && downstream.has(edge.target_node_id) && !opened.has(edge.target_node_id))
-    .map((edge) => edge.source_node_id);
-  const needed = upstreamOf(graph, [...downstream, ...gates], feedback);
+  const needed = neededFor(graph, downstream, feedback, opened);
   needed.add(trigger.node_id);
   return needed;
 }
@@ -188,6 +181,26 @@ export function firedNodes(graph: Graph, trigger: Trigger, feedback: Set<string>
 export function upstreamOf(graph: Graph, nodeIds: Iterable<string>, feedback: Set<string>): Set<string> {
   const data = graph.edges.filter((edge) => !feedback.has(edge.id) && edge.target_port_id !== RUN_PORT);
   return walk(nodeIds, data, false);
+}
+
+/**
+ * What running these nodes needs: everything they need an input from, and
+ * whatever computes the ◆ of any of them -- with all that needs in turn,
+ * until nothing more is needed. What decides whether a node may run is needed
+ * as much as what it runs on: a ◆ computed by a node that does not run is
+ * never computed, and never opens -- nor does anything behind it. Not the ◆
+ * of a node in *opened*, which the event opens itself.
+ */
+export function neededFor(graph: Graph, nodeIds: Iterable<string>, feedback: Set<string>, opened: Set<string> = new Set()): Set<string> {
+  const gates = graph.edges.filter((edge) => !feedback.has(edge.id) && edge.target_port_id === RUN_PORT);
+  const needed = new Set<string>();
+  for (let more = [...nodeIds]; more.length;) {
+    for (const id of upstreamOf(graph, more, feedback)) needed.add(id);
+    more = gates
+      .filter((edge) => needed.has(edge.target_node_id) && !opened.has(edge.target_node_id) && !needed.has(edge.source_node_id))
+      .map((edge) => edge.source_node_id);
+  }
+  return needed;
 }
 
 function walk(from: Iterable<string>, edges: GraphEdge[], forward: boolean): Set<string> {

@@ -26,7 +26,7 @@ import { resultKeys, type NodeRunner, type Runners } from '../elements/NodeRunne
 import type { Runtime } from '../elements/Runtime.ts';
 import { atMost, batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
 import { Unread, filePorts, readPorts } from './fileInputs.ts';
-import { RUN_PORT, firedNodes, triggeredNodes, upstreamOf, type Trigger } from './triggers.ts';
+import { RUN_PORT, firedNodes, neededFor, triggeredNodes, type Trigger } from './triggers.ts';
 import type { LastOutputs } from './reuse.ts';
 import type { Latch } from './latch.ts';
 import { mismatches } from './interface.ts';
@@ -589,7 +589,8 @@ function nothingToDo(
  * CSV parsed, the page's fields read, and what would arrive at this node is
  * handed back, without the model call or the chart the node itself would cost.
  * Feedback edges count here, unlike in a run: a chart on a page is fed across
- * one, and "what would this block be shown" is exactly the question.
+ * one, and "what would this block be shown" is exactly the question. What
+ * computes the ◆ of what feeds it runs too (`neededFor`), or that never opens.
  */
 export async function inputsFor(
   graph: Graph,
@@ -598,7 +599,7 @@ export async function inputsFor(
 ): Promise<{ inputs: Record<string, unknown>; upstream: ExecutionResult }> {
   const feedback = memoryFeedbackEdges(graph.nodes, graph.edges, options.registry);
   const into = graph.edges.filter((e) => e.target_node_id === nodeId && e.target_port_id !== RUN_PORT);
-  const only = upstreamOf(graph, into.map((e) => e.source_node_id).filter((id) => id !== nodeId), feedback);
+  const only = neededFor(graph, into.map((e) => e.source_node_id).filter((id) => id !== nodeId), feedback);
   only.delete(nodeId);
   // A page feeds itself through the graph: its own fields are upstream of its
   // own chart. It is cheap to run and has no side effects, so it runs.
@@ -721,8 +722,9 @@ function failedWith(element: NodeRunner, node: GraphNode, inputs: Record<string,
  * answered with what it already holds, as an unattended run answers them.
  * Hands back the inputs it ran on too, since without *given* nobody else knows.
  *
- * What feeds it failing is this node failing to run, as in a run: it is not
- * run on the nothing that arrived and called a success.
+ * What feeds it failing -- or standing still with nothing to hand on, its ◆
+ * shut or nothing for it to do -- is this node failing to run, as in a run: it
+ * is not run on the nothing that arrived and called a success.
  */
 export async function runNodeAlone(
   graph: Graph,
@@ -732,12 +734,12 @@ export async function runNodeAlone(
 ): Promise<{ inputs: Record<string, unknown>; result: NodeResult }> {
   if (given) return { inputs: given, result: await executeNode(graph, nodeId, given, options) };
   const { inputs, upstream } = await inputsFor(graph, nodeId, options);
-  if (upstream.node_results.some((result) => result.status === 'error')) {
-    return {
-      inputs,
-      result: { node_id: nodeId, status: 'error', inputs, outputs: {}, error: `What feeds it failed, so it did not run: ${upstream.error}` },
-    };
-  }
+  const still = upstream.node_results.find((result) => result.status === 'skipped' && !result.held);
+  const stood = still && graph.nodes.find((node) => node.id === still.node_id);
+  const why = upstream.node_results.some((result) => result.status === 'error')
+    ? `What feeds it failed, so it did not run: ${upstream.error}`
+    : stood ? `What feeds it had nothing to hand on, so it did not run: ${nodeName(stood)}: ${still.messages?.[0] ?? 'it stood still.'}` : '';
+  if (why) return { inputs, result: { node_id: nodeId, status: 'error', inputs, outputs: {}, error: why } };
   return { inputs, result: await executeNode(graph, nodeId, inputs, options) };
 }
 

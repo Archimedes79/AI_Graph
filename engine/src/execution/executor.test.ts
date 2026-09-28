@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Graph, GraphNode } from '../graph.ts';
-import { collectInputs, executeGraph, executeNode, memoryFeedbackEdges, runNodeAlone, topologicalLevels } from './executor.ts';
+import { collectInputs, executeGraph, executeNode, inputsFor, memoryFeedbackEdges, runNodeAlone, topologicalLevels } from './executor.ts';
 import { NodeRunner } from '../elements/NodeRunner.ts';
 import { type Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
@@ -474,6 +474,36 @@ describe('one node tried by itself', () => {
     const { result } = await runNodeAlone(graphOf([reader, count], [edge('e', 'reader', 'text', 'count', 'text')]), 'count', undefined, { runtime, registry });
     expect(result.status).toBe('error');
     expect(result.error).toMatch(/ENOENT: data\.csv/);
+  });
+
+  /** `reader` hangs on `flag`'s ◆, and `target` takes what `reader` read. */
+  const flagged = (open: boolean) => graphOf([
+    node('flag', 'code', { code: `function run() { return { open: ${open} }; }` }),
+    node('reader', 'code', { code: 'function run() { return { text: "the file" }; }' }),
+    node('target', 'code', { code: 'function run(i) { return { n: String(i.text ?? "").length }; }' }),
+  ], [edge('g', 'flag', 'open', 'reader', '__run'), edge('t', 'reader', 'text', 'target', 'text')]);
+  const running = () => {
+    const ran: string[] = [];
+    const runtime = quietRuntime({
+      code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) },
+      report: (event) => { if (event.type === 'node_start') ran.push(event.node_id); },
+    });
+    return { ran, runtime };
+  };
+
+  it('runs what computes the ◆ of what feeds it, as ⟳ From the graph asks', async () => {
+    // It used to leave `flag` out, so `reader` never opened and nothing arrived.
+    const { runtime } = running();
+    const { inputs } = await inputsFor(flagged(true), 'target', { runtime, registry });
+    expect(inputs).toEqual({ text: 'the file' });
+  });
+
+  it('does not run when what feeds it stood still, rather than running on nothing and succeeding', async () => {
+    const { ran, runtime } = running();
+    const { result } = await runNodeAlone(flagged(false), 'target', undefined, { runtime, registry });
+    expect(result.status).toBe('error');
+    expect(result.error).toMatch(/"reader".*Nothing opened its ◆/);
+    expect(ran).not.toContain('target');
   });
 
   it('says what does not fit its output.js, as a run says it', async () => {
