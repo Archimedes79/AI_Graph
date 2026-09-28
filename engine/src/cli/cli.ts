@@ -303,11 +303,10 @@ async function open(url: string): Promise<void> {
   if (process.env.AI_GRAPH_NO_BROWSER) return;
   const command = process.platform === 'win32' ? 'cmd' : process.platform === 'darwin' ? 'open' : 'xdg-open';
   const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
-  try {
-    spawn(command, args, { detached: true, stdio: 'ignore' }).unref();
-  } catch {
-    // A headless machine is a fine place to serve from; the URL is printed.
-  }
+  // A headless machine is a fine place to serve from; the URL is printed. A
+  // missing opener is not thrown but said as an 'error' event, and unheard that
+  // event ended the process -- a container's, which has no xdg-open, at start.
+  spawn(command, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
 }
 
 /**

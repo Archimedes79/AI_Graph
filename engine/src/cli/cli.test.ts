@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseGraph } from '../graph.ts';
 import { writeProject } from '../project/folder.ts';
 import { main, parseArgs, parseInterval } from './cli.ts';
@@ -158,4 +160,39 @@ describe('run-node', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+});
+
+/**
+ * A container has nothing to open a browser in -- no `xdg-open` in an Alpine
+ * image -- and neither has many a server a bundle is started on. A missing
+ * opener is said as an 'error' event, not thrown, and unheard it ended the
+ * process right after "Serving on".
+ */
+describe('--serve where nothing can open a browser', () => {
+  it('serves all the same', async () => {
+    const probe = createServer();
+    const port = await new Promise<number>((found) => probe.listen(0, '127.0.0.1', () => {
+      const { port: free } = probe.address() as { port: number };
+      probe.close(() => found(free));
+    }));
+    // No PATH: whatever opens a browser on this machine cannot be found.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(PATH|AI_GRAPH_NO_BROWSER)$/i.test(name)));
+    const main = resolve(__dirname, '..', 'main.ts');
+    const graph = resolve(__dirname, '..', '..', 'fixtures', 'minimal.json');
+    const server = spawn(process.execPath, [main, graph, '--serve', '--port', String(port)], {
+      env: { ...env, PATH: '' }, stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    let said = '';
+    server.stderr.on('data', (chunk: Buffer) => { said += chunk.toString(); });
+    try {
+      for (let attempt = 0; attempt < 100 && !said.includes('Serving on') && server.exitCode === null; attempt += 1) {
+        await new Promise((wake) => setTimeout(wake, 100));
+      }
+      await new Promise((wake) => setTimeout(wake, 500));
+      expect(server.exitCode, said).toBeNull();
+      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(200);
+    } finally {
+      server.kill();
+    }
+  }, 30_000);
 });

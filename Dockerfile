@@ -11,6 +11,8 @@ COPY . .
 RUN npm run build
 
 EXPOSE 8000
+# Nothing to open a browser in: the address is printed.
+ENV AI_GRAPH_NO_BROWSER=1
 # Bound to every interface because a container's loopback is its own -- and so
 # published on the host's loopback only (docker-compose.yml), since nothing here
 # asks who is calling. On such a bind the server answers only as localhost, or a
