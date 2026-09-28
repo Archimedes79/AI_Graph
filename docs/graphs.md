@@ -250,9 +250,11 @@ save there comes back by itself; greyed, while the graph is not saved as a proje
 whole node:** the body's ✨ writes what is missing of input.js and output.js first, and
 stops at a definition that does not fit the node -- an example that names an input the
 node does not have, or leaves out an output wired on -- since what came after would be
-written against it. There is no Save and no Cancel: a change is in the graph a moment
-after it is made, one undo step per field typed into, and what ✨ writes is a step of its
-own.
+written against it. While it writes, what it sends shows as it goes, and **Stop** beside it
+ends the wait: what was written stays, what was still on its way is not written (a model
+call is given up by itself after ten minutes). There is no Save and no Cancel: a change is
+in the graph a moment after it is made, one undo step per field typed into, and what ✨
+writes is a step of its own.
 
 **A new node runs once**, on what arrives -- a list whole -- and hands on one value.
 **Run once per item**, under Advanced, is asked once a list arrives (down a wire, or in

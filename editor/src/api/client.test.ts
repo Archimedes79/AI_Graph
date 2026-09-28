@@ -35,6 +35,25 @@ describe('a watched generation', () => {
     await vi.advanceTimersByTimeAsync(2000);
     expect(asked).toHaveLength(2);
   });
+
+  it('is over at once when it is stopped: nothing more is asked, and what comes back later is dropped', async () => {
+    // A node's ✨ whose model call hung held every ✨ and ▶ Try of the node.
+    vi.useFakeTimers();
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      asked.push(url);
+      return new Response(JSON.stringify({ calls: [] }), { headers: { 'Content-Type': 'application/json' } });
+    }));
+    let finish: (value: string) => void = () => {};
+    const stop = new AbortController();
+    const watching = watchGeneration(() => new Promise<string>((resolve) => { finish = resolve; }), () => {}, stop.signal);
+    await vi.advanceTimersByTimeAsync(600);
+    stop.abort();
+    await expect(watching).rejects.toBe(stop.signal.reason);
+    finish('too late');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(asked).toHaveLength(1);
+  });
 });
 
 /**
