@@ -8,7 +8,7 @@ import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
 import { DANGER, DIM, MUTED, TEXT } from '@/ui/theme';
-import { blockShows, pageOf, widgetFiresRun } from '@/document/guiWidgets';
+import { blockPort, blockShows, pageOf, widgetFiresRun } from '@/document/guiWidgets';
 import type { RunTrigger } from '@/api/client';
 import RunResult from './RunResult';
 
@@ -64,8 +64,8 @@ export function blockValue(
 }
 
 /** What a run put on one block of the page node *nodeId* (`blockShows`). */
-export function shownOn(result: ExecutionResult | null, nodeId: string, widgetId: string): unknown {
-  return blockShows(result?.node_results.find((r) => r.node_id === nodeId), widgetId);
+export function shownOn(result: ExecutionResult | null, nodeId: string, widget: GuiWidget): unknown {
+  return blockShows(result?.node_results.find((r) => r.node_id === nodeId), widget);
 }
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */
@@ -192,7 +192,7 @@ function GuiPage({
     <PageGrid>
       {placements.map((placement) => {
         const { widget } = placement;
-        const incoming = shownOn(executionResult, pageId, widget.id);
+        const incoming = shownOn(executionResult, pageId, widget);
         return (
           <GuiBlock
             key={widget.id}
@@ -235,9 +235,10 @@ export function usePageEvents(onRun?: (trigger: RunTrigger) => void) {
   const fire = (widget: GuiWidget, value?: unknown) => {
     if (value !== undefined) setWidgetValue(widget, value);
     const { page } = pageOf(useGraphStore.getState().rfNodes.map((n) => n.data.graphNode as GraphNode));
-    if (!page || !widgetFiresRun(widget)) return;
+    const port = blockPort(widget, 'out');
+    if (!page || !port || !widgetFiresRun(widget)) return;
     if (useGraphStore.getState().isExecuting) return;
-    const trigger: RunTrigger = { node_id: page.id, port_id: `${widget.id}_out` };
+    const trigger: RunTrigger = { node_id: page.id, port_id: port };
     if (onRun) onRun(trigger);
     else void runGraph(exportGraph(), trigger);
   };

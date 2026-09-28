@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GraphNode } from '@/graph';
-import { derivedNodePorts, syncGuiNodePorts, guiWidgetPorts, widgetFiresRun, widgetOfPort } from './guiWidgets';
+import { blockPort, derivedNodePorts, syncGuiNodePorts, guiWidgetPorts, widgetFiresRun, widgetOfPort } from './guiWidgets';
 import { DEFAULT_WIDGET_SPAN } from './layout';
 import { baseNodeConfig } from './baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
@@ -203,6 +203,15 @@ describe('which block a port belongs to', () => {
     expect(widgetOfPort(node, `${button.id}_out`)?.id).toBe(button.id);
     expect(widgetOfPort(node, `${plot.id}_in`)?.id).toBe(plot.id);
     expect(widgetOfPort(node, 'nothing_out')).toBeUndefined();
+  });
+
+  it('asks the engine which ports a block has, rather than naming them here', () => {
+    // A chart hands nothing on: the name its out port would have is no port of it.
+    const plot = WIDGET_BUILDERS.plot_window.create('Chart');
+    const node = syncGuiNodePorts({ ...blankGuiNode(), config: { ...baseNodeConfig(), gui_widgets: [plot] } });
+    expect(blockPort(plot, 'in')).toBe(guiWidgetPorts(plot).inputs[0].id);
+    expect(blockPort(plot, 'out')).toBeUndefined();
+    expect(widgetOfPort(node, `${plot.id}_out`)).toBeUndefined();
   });
 
   it('says which of them start the graph', () => {

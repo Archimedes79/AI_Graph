@@ -34,15 +34,23 @@ export function guiWidgetPorts(widget: GuiWidget): { inputs: Port[]; outputs: Po
 }
 
 /**
- * The block one of a gui node's ports belongs to.
- *
- * A gui node's ports are named after the block that contributes them
- * (`syncGuiNodePorts` below), and this is where that naming is read back --
- * once, rather than spelled out wherever the canvas wants to know what is
- * behind a port.
+ * The port a block hands on at (*out*) -- the one a page's event names -- or
+ * the one what arrives for it comes in at (*in*); none where it has no such
+ * side. The engine's answer (`WidgetRunner.ports`): a block has at most one
+ * port each way, named after it, and how is the engine's to say.
+ */
+export function blockPort(widget: GuiWidget, side: 'in' | 'out'): string | undefined {
+  const { inputs, outputs } = guiWidgetPorts(widget);
+  return (side === 'in' ? inputs : outputs)[0]?.id;
+}
+
+/**
+ * The block one of a gui node's ports belongs to: the one whose ports the
+ * engine says it is -- once, rather than the naming spelled out wherever the
+ * canvas wants to know what is behind a port.
  */
 export function widgetOfPort(node: GraphNode, portId: string): GuiWidget | undefined {
-  return node.config.gui_widgets.find((w) => `${w.id}_in` === portId || `${w.id}_out` === portId);
+  return node.config.gui_widgets.find((w) => blockPort(w, 'in') === portId || blockPort(w, 'out') === portId);
 }
 
 /**
@@ -52,9 +60,11 @@ export function widgetOfPort(node: GraphNode, portId: string): GuiWidget | undef
  * box that is typed into and shows -- is no display, and shows what arrived
  * on its port. The page and the page's node on the canvas both ask here.
  */
-export function blockShows(result: NodeResult | undefined, widgetId: string): unknown {
-  const shown = result?.display?.[widgetId];
-  return shown !== undefined ? shown : result?.inputs?.[`${widgetId}_in`];
+export function blockShows(result: NodeResult | undefined, widget: GuiWidget): unknown {
+  const shown = result?.display?.[widget.id];
+  if (shown !== undefined) return shown;
+  const port = blockPort(widget, 'in');
+  return port ? result?.inputs?.[port] : undefined;
 }
 
 /**

@@ -124,7 +124,7 @@ export default function DesignerSurface({
       <PageGrid minRows={4} onCell={setCell}>
         {placements.map((placement, index) => {
           const { widget } = placement;
-          const incoming = pageId ? shownOn(executionResult, pageId, widget.id) : undefined;
+          const incoming = pageId ? shownOn(executionResult, pageId, widget) : undefined;
           const selected = widget.id === selectedId;
           // A block that is its own words is typed where it stands: the kind says how.
           const InPlace = selected ? WIDGET_BUILDERS[widget.kind]?.InlineEditor : undefined;

@@ -10,7 +10,7 @@
 import type { GraphNode, GuiWidget, NodeResult } from '@/graph';
 import { call } from '@/api/client';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { derivedNodePorts, syncGuiNodePorts } from '@/document/guiWidgets';
+import { blockPort, derivedNodePorts, syncGuiNodePorts } from '@/document/guiWidgets';
 import { useGraphStore } from '@/store/graphStore';
 
 /**
@@ -49,7 +49,8 @@ export async function listAsRun(node: GraphNode): Promise<string[]> {
 export async function listBlockAsRun(widget: GuiWidget): Promise<string[]> {
   const blank = NODE_KINDS.gui.create('page');
   const page = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [{ ...widget, catch_errors: false }] } });
-  const listed = (await readAlone(page))[`${widget.id}_out`];
+  const out = blockPort(widget, 'out');
+  const listed = out ? (await readAlone(page))[out] : undefined;
   return Array.isArray(listed) ? listed.map(String) : [];
 }
 
