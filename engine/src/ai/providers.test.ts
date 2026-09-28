@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { aiService, EmptyCompletionError, OutOfBudgetError, settingsFromEnv } from './providers.ts';
+import { aiService, DEFAULT_SETTINGS, EmptyCompletionError, OutOfBudgetError, settingsFromEnv, TimedOutError } from './providers.ts';
 
 /** A stand-in for the network: what was asked, and what to answer. */
 function stubFetch(replies: (
@@ -415,6 +415,38 @@ describe('settingsFromEnv', () => {
     expect(settings.apiKeys).toEqual({ openai: 'k' });
     expect(settings.endpoints).toEqual({ ollama: 'http://box:11434' });
     expect(settings.provider).toBeUndefined();
+  });
+});
+
+describe('the clock on a model call', () => {
+  it('is ten minutes, unless AI_GRAPH_TIMEOUT_MS says another -- 0 for none', () => {
+    expect(DEFAULT_SETTINGS.timeoutMs).toBe(600_000);
+    expect(settingsFromEnv({}).timeoutMs).toBeUndefined();
+    expect(settingsFromEnv({ AI_GRAPH_TIMEOUT_MS: '90000' }).timeoutMs).toBe(90_000);
+    expect(settingsFromEnv({ AI_GRAPH_TIMEOUT_MS: '0' }).timeoutMs).toBe(0);
+  });
+
+  it('gives up a call that runs past it, says so, and does not ask the same again', async () => {
+    // A hosted model that hung held a node's ✨ for minutes, and a clock that
+    // ran out said "This operation was aborted" -- after asking twice more.
+    vi.useFakeTimers();
+    try {
+      const asked: string[] = [];
+      vi.stubGlobal('fetch', vi.fn((url: string, init: { signal: AbortSignal }) => {
+        asked.push(url);
+        return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError'))));
+      }));
+      const asking = aiService({ provider: 'lmstudio', model: 'local', retryDelay: 0, timeoutMs: 60_000 }).complete({ prompt: 'x' });
+      const failed = expect(asking).rejects.toThrow(
+        'The model did not answer within 1 minute, so the call was given up. AI_GRAPH_TIMEOUT_MS sets how long a call may take',
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      await failed;
+      await expect(asking).rejects.toBeInstanceOf(TimedOutError);
+      expect(asked).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

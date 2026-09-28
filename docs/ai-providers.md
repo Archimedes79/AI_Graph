@@ -151,5 +151,8 @@ leaves nothing running. The model gets at most eight rounds of tool calls per an
 slow one: a scheduled run has nobody watching it. A tool that genuinely takes longer — a
 crawl, a build — gets more with `AI_GRAPH_MCP_TIMEOUT_MS`, and `0` takes the clock off
 entirely. Stop ends a call either way, so nothing waits forever for a run that was
-abandoned. The model calls themselves have no clock by default (a local model asked for a
-whole graph is simply slow); `AI_GRAPH_TIMEOUT_MS` puts one back on.
+abandoned. A model call is given ten minutes -- generous, since a local model asked for a
+whole graph is slow, and a hosted one that hangs otherwise holds a node's ✨ for as long as
+its connection lives. One that runs past it is given up, not asked again, and says so:
+"The model did not answer within 10 minutes". `AI_GRAPH_TIMEOUT_MS` sets another clock, in
+milliseconds, and `0` takes it off.
