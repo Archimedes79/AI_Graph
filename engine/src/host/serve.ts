@@ -24,7 +24,7 @@ import { triggeredNodes } from '../execution/triggers.ts';
 import { aiSetting, candidatePaths } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
-  Download, Refusal, foreignRequest, message, namesFor, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
+  Download, Refusal, foreignRequest, hostnameOf, message, namesFor, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
 } from './http.ts';
 import { browse } from './browse.ts';
 import { extensionFilter } from '../elements/folderListing.ts';
@@ -128,7 +128,9 @@ export async function serve(options: ServeOptions): Promise<Served> {
   if (missing.length) throw new Error(`No handler for ${missing.join(', ')}: the server and api.ts disagree.`);
 
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const url = new URL(request.url ?? '/', `http://${host}`);
+    // Only the path and the query are read, so the base is any that parses:
+    // the bound address does not, where it is `::1`, and every request was a 500.
+    const url = new URL(request.url ?? '/', 'http://localhost');
     const path = url.pathname;
     const foreign = foreignRequest(request, self, path.startsWith('/api/'));
     if (foreign) return sendJson(response, 403, { detail: foreign });
@@ -188,7 +190,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
     });
   });
   self.port = (server.address() as AddressInfo).port;
-  return { server, url: `http://${host}:${self.port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
+  // An IPv6 address in brackets, as a browser takes it.
+  return { server, url: `http://${hostnameOf(host) ?? host}:${self.port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
 }
 
 /** Whether a failure to start is "something else is already on that port". */

@@ -220,6 +220,20 @@ describe('a port that is already taken', () => {
   });
 });
 
+describe('a server bound to ::1', () => {
+  it('answers, and says its address as a browser takes it', async (context) => {
+    const served = await serve({ graphPath: MINIMAL, port: 0, host: '::1' }).catch((error: { code?: string }) => {
+      // A machine with no IPv6 loopback has nothing to show here.
+      if (error.code === 'EADDRNOTAVAIL' || error.code === 'EAFNOSUPPORT') return null;
+      throw error;
+    });
+    if (!served) return context.skip();
+    started.push(served.server);
+    expect(served.url).toMatch(/^http:\/\/\[::1\]:\d+$/);
+    expect((await fetch(`${served.url}/api/runtime/graph`)).status).toBe(200);
+  });
+});
+
 describe('the page it serves', () => {
   it('serves the built page, and the same page for a deep link', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-page-'));
