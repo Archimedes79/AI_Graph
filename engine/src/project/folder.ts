@@ -230,11 +230,13 @@ function heldIn(content: string, text: ProjectText, path: string): { value: unkn
   }
 }
 
-/** Nothing written: no file for it. A JSON value that is an empty object says nothing either. */
+/**
+ * Nothing written: no file for it, or its stub. An empty record is not
+ * nothing -- a data node's map nobody has put anything in yet -- and taken for
+ * it, it came back null.
+ */
 function isBlank(value: unknown): boolean {
-  if (value === undefined || value === null) return true;
-  if (typeof value === 'string') return !value.trim();
-  return typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0;
+  return value === undefined || value === null || (typeof value === 'string' && !value.trim());
 }
 
 // ---------------------------------------------------------------------------

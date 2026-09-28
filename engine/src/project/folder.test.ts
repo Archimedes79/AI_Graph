@@ -318,6 +318,21 @@ describe('a project folder', () => {
     expect(read.nodes.map((node) => node.config.data_value)).toEqual([{ count: 2, names: ['Ada'] }, 'Line one.\nLine two.', '{\n  "count": 3\n}']);
   });
 
+  it('reads an empty record back as the record it is, and a structure holding nothing as nothing', async () => {
+    // A map nobody has put anything in yet came back null, which `inputs.input.seen` fails on.
+    const data = (id: string, value: unknown) => ({
+      id, node_type: 'data', label: id, inputs: [port('input', 'input')], outputs: [port('output', 'output')],
+      config: { data_format: 'structure', data_value: value },
+    });
+    await writeProject(dir, parseGraph({ metadata: { name: 'Empty' }, nodes: [data('seen', {}), data('fresh', null)], edges: [] }));
+    expect(await text('nodes/seen/data.json')).toBe('{}\n');
+    expect(await text('nodes/fresh/data.json')).toBe('null\n');
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes[0].config.data_value).toEqual({});
+    expect(read.nodes[1].config.data_value).toBeUndefined();
+  });
+
   it('reads a count a run left in a text node back as a count: the node holds structure from then on', async () => {
     // A counter: a data node, kept as text as a new one is, and a code node adding one.
     const graph = parseGraph({
